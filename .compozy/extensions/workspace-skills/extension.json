@@ -1,0 +1,14 @@
+{
+    "extension": {
+        "name": "workspace-skills",
+        "version": "0.1.0",
+        "description": "Workspace-scoped custom skills for this repository.",
+        "min_compozy_version": "0.0.9"
+    },
+    "security": {
+        "capabilities": ["skills.ship"]
+    },
+    "resources": {
+        "skills": ["skills"]
+    }
+}

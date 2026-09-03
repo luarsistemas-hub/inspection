@@ -1,0 +1,80 @@
+name: contract
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: contract-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: contract
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  redis:
+    image: "docker.dragonflydb.io/dragonflydb/dragonfly:v1.34.2"
+    container_name: contract-redis
+    ulimits:
+      memlock: -1
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio:
+    image: minio/minio:latest
+    container_name: contract-minio
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    environment:
+      MINIO_ROOT_USER: contract
+      MINIO_ROOT_PASSWORD: contract
+      # Configurar domínio público para URLs presigned
+      MINIO_SERVER_URL: "http://localhost:9000"
+      # Configurar CORS para permitir localhost:3000 acessar
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Setup MinIO: criar bucket e configurar permissões
+  # Este container roda uma vez para setup e termina (comportamento esperado)
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set minio http://minio:9000 contract contract;
+      mc mb --ignore-existing minio/contract;
+      mc anonymous set public minio/contract;
+      echo 'Bucket configurado: GET e PUT públicos';
+      "
+
+volumes:
+  postgres_data:
+    name: contract-postgres-data
+  redis_data:
+    name: contract-redis-data
+  minio_data:
+    name: contract-minio-data

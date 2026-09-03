@@ -1,0 +1,54 @@
+{
+  "schemes": ["http"],
+  "swagger": "2.0",
+  "info": {
+    "description": "Contract Service API",
+    "title": "Contract Service API",
+    "version": "1.0"
+  },
+  "host": "localhost:4000",
+  "basePath": "/",
+  "paths": {
+    "/create-contract": {
+      "post": {
+        "description": "Creates a contract from the supplied account, client, tenant and product IDs.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "summary": "Create a contract",
+        "parameters": [{
+          "description": "Contract data",
+          "name": "contract",
+          "in": "body",
+          "required": true,
+          "schema": {"$ref": "#/definitions/CreateContractRequest"}
+        }],
+        "responses": {
+          "201": {"description": "Created", "schema": {"$ref": "#/definitions/CreateContractResponse"}},
+          "400": {"description": "Invalid request", "schema": {"$ref": "#/definitions/ErrorResponse"}},
+          "500": {"description": "Storage failure", "schema": {"$ref": "#/definitions/ErrorResponse"}}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "CreateContractRequest": {
+      "type": "object",
+      "properties": {
+        "accountId": {"type": "string", "format": "uuid"},
+        "clientId": {"type": "string", "format": "uuid"},
+        "tenantId": {"type": "string", "format": "uuid"},
+        "productId": {"type": "string", "format": "uuid"},
+        "photos": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["accountId", "clientId", "tenantId", "productId"]
+    },
+    "CreateContractResponse": {
+      "type": "object",
+      "properties": {"contractId": {"type": "string", "format": "uuid"}}
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "properties": {"error": {"type": "string"}}
+    }
+  }
+}

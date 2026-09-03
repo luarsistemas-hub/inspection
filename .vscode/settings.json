@@ -1,0 +1,6 @@
+{
+  "go.alternateTools": {
+    "go": "/opt/homebrew/bin/go"
+  },
+  "go.toolsGopath": "/Users/Payface/go"
+}
