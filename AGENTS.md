@@ -2,9 +2,7 @@
 
 ## Visão geral
 
-Este repositório é um monorepo Go para o projeto `inspection`. Hoje ele contém
-um único módulo (`module inspection`) e um único serviço executável, o Contract
-Service. O workspace e o módulo usam Go 1.26.5.
+Este repositório é um monorepo para o produto `inspection`: API, worker, scheduler, migrador e frontend. O módulo Go usa 1.26.5 e a aplicação web usa Node 22.
 
 O desenho adotado para serviços é Vertical Slice Architecture: cada operação de
 negócio deve manter, na mesma feature, sua borda HTTP, fluxo de aplicação,
@@ -13,14 +11,9 @@ use cases ou repositories.
 
 Estado atual relevante:
 
-- `POST /create-contract` é a única operação de negócio implementada.
-- PostgreSQL é a única dependência de infraestrutura usada pelo código.
-- Dragonfly (compatível com Redis) e MinIO existem no Docker Compose, mas ainda
-  não possuem integração com a aplicação.
-- `photos` existe no request e no OpenAPI, porém `request.toInput` atualmente o
-  descarta; não suponha que fotos são persistidas.
-- Não há Makefile, task runner ou pipeline de CI versionado. Use os comandos Go
-  diretamente a partir da raiz.
+- A API é GraphQL em `services/inspection/schema.graphqls`.
+- PostgreSQL, RabbitMQ, Dragonfly, MinIO, Keycloak, Mailpit, LiteLLM e Gotenberg são compostos em `deploy/docker-compose.yml`.
+- O legado Contract Service foi removido do estado atual; não adicione código a ele.
 
 ## Estrutura
 
@@ -29,43 +22,29 @@ Estado atual relevante:
 ├── go.mod / go.work             # módulo e workspace Go da raiz
 ├── libs/
 │   └── identity/                # IDs UUID compartilhados
-├── services/
-│   └── contract/
-│       ├── cmd/contract-service/ # composition root e main
-│       ├── docs/                 # especificação OpenAPI servida pela aplicação
-│       └── internal/
-│           ├── features/         # slices organizados por domínio/operação
-│           └── platform/         # configuração e preocupações do processo
+├── services/inspection/          # API, worker, scheduler, migrations e slices
+├── apps/web/                     # Next.js dashboard e captura PWA
+├── internal/                     # artefatos GraphQL legados, sem import pelo serviço
 ├── deploy/docker-compose.yml    # PostgreSQL, Dragonfly e MinIO locais
 └── .compozy/                    # metadados, agentes e extensões do Compozy
 ```
 
-Arquivos executáveis chamados `contract-service` são artefatos de build, não
-fonte. Não os edite e não crie novos binários dentro do repositório; prefira
+Não edite binários gerados nem crie executáveis dentro do repositório; prefira
 `go build ./...` ou uma saída explícita em `/tmp`.
 
 ## Arquitetura dos serviços
 
-O exemplo canônico é
-`services/contract/internal/features/contracts/create`:
+O padrão de cada slice está em `services/inspection/internal/features`:
 
 - `setup.go` é a única API pública do slice. `Setup` recebe o router e as
   dependências externas, monta repository, use case e handler e registra a rota.
-- `request.go` e `response.go` contêm somente DTOs e conversões da borda HTTP.
-- `handler.go` traduz HTTP para o caso de uso e o resultado para HTTP. Não coloque
-  regras de negócio no handler.
-- `internal/usecase.go` coordena o fluxo e define input/output independentes de
-  HTTP.
-- `internal/entity.go` concentra entidade e invariantes de domínio.
-- `internal/repository.go` define a porta mínima exigida pelo caso de uso e seu
-  adapter GORM. A interface fica próxima do consumidor.
-- `handler_test.go` testa o slice pela rota usando `httptest` e um repository
-  stub, sem banco real.
+- `setup.go` é a entrada pública e registra o comando/query no mediator.
+- Tipos de input/output, invariantes e adapter ficam próximos da operação.
+- Testes exercitam o setup com stubs e também cobrem adapters de plataforma.
 
-Ao adicionar uma operação de contratos, crie um diretório irmão de `create`
-(`contracts/<operacao>`), em vez de aumentar o slice existente ou criar pacotes
-globais por camada. O composition root em `cmd/<servico>/main.go` deve apenas
-montar dependências, middleware, rotas e ciclo de vida do processo.
+Ao adicionar uma operação, crie um diretório irmão no domínio correspondente,
+sem criar camadas globais de controllers, use cases ou repositories. O
+composition root deve somente montar dependências e ciclo de vida.
 
 Regras de dependência:
 
@@ -76,69 +55,46 @@ Regras de dependência:
 - Compartilhe código em `libs/` somente quando houver reutilização concreta e
   sem dependência de um serviço. Não extraia abstrações preventivamente.
 - Use `libs/identity.NewID` e `libs/identity.ParseID` para UUIDs do projeto.
-- Preserve compatibilidade com os nomes de coluna GORM existentes
-  (`contractid`, `accountid`, `clientid`, `tenantid`, `productid`) ao evoluir o
-  schema.
+- Preserve nomes de tabela/coluna existentes ao evoluir migrations.
 
-## Fluxo do Contract Service
+## Fluxo do Inspection
 
-`services/contract/cmd/contract-service/main.go`:
+Os comandos em `services/inspection/cmd/`:
 
-1. carrega `.env` da raiz;
-2. conecta ao database de manutenção do PostgreSQL e cria `DB_NAME` se faltar;
-3. abre o banco da aplicação com GORM;
-4. configura Chi e seus middlewares;
-5. chama `create.Setup`, que executa `AutoMigrate` e registra a rota;
-6. publica Swagger em `/docs/` e inicia o servidor.
+1. carregam ambiente validado;
+2. abrem PostgreSQL com a role apropriada;
+3. montam slices e adapters;
+4. iniciam GraphQL, consumer/dispatcher ou scheduler;
+5. encerram com shutdown limitado.
 
-O usuário do banco precisa conseguir criar databases. Erros de validação do
-caso de uso são marcados com `ValidationError` e viram HTTP 400; falhas internas
-devem ser encapsuladas com `%w`, não expostas ao cliente, e viram HTTP 500.
+O migrador usa conexão privilegiada; API, scheduler e worker usam roles de
+runtime distintas. Erros de validação viram `userErrors`; falhas internas não
+expõem detalhes ao cliente.
 
 ## Ambiente local
 
-Suba pelo menos o PostgreSQL:
+O fluxo oficial é:
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d postgres
+./scripts/local.sh init
+./scripts/local.sh infra
 ```
 
-Para subir toda a infraestrutura disponível:
+Para subir toda a stack:
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d
+./scripts/local.sh up
 ```
 
-Crie `.env` na raiz. Mesmo com variáveis de ambiente, `config.Load(".")` chama
-`ReadInConfig`, portanto o arquivo precisa existir no estado atual.
-
-```dotenv
-DB_DRIVER=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=contract
-WEB_SERVER_PORT=8000
-```
-
-Esses valores correspondem ao PostgreSQL do Compose. Não versione `.env` nem
-segredos. Execute o serviço a partir da raiz para que o caminho do `.env` seja
-resolvido corretamente:
-
-```sh
-go run ./services/contract/cmd/contract-service
-```
-
-Com a porta acima, a API fica em `http://localhost:8000` e a interface Swagger
-em `http://localhost:8000/docs/index.html`.
+`.env.inspection` é ignorado pelo Git. O Go recebe ambiente exportado pelos
+scripts; não há leitura automática de arquivos `.env`.
 
 ## Implementação e estilo
 
 - Formate todo arquivo Go alterado com `gofmt`.
 - Siga a organização padrão de imports do Go: standard library, imports do
   módulo `inspection`, depois dependências externas.
-- Use lower camel case nos campos JSON (`accountId`, `contractId`).
+- Use lower camel case nos campos GraphQL/JSON (`tenantId`, `businessUnitId`, `clientMutationId`).
 - Faça validação de formato/conversão no caso de uso e invariantes na entidade.
 - Mantenha respostas de erro externas estáveis e genéricas para falhas internas.
 - Documente símbolos exportados e mantenha arquivos pequenos, com uma
@@ -146,10 +102,7 @@ em `http://localhost:8000/docs/index.html`.
 - Não faça refatorações amplas de código legado como efeito colateral de uma
   feature.
 
-Os três artefatos em `services/contract/docs/` (`docs.go`, `swagger.json` e
-`swagger.yaml`) descrevem a mesma API e não há comando de geração versionado.
-Quando o contrato HTTP mudar, mantenha os três sincronizados e confirme que o
-documento servido por `docs.go` reflete a implementação.
+O schema GraphQL é a referência canônica. Arquivos `generated.go`, `models_gen.go` e `src/graphql/generated.ts` devem ser regenerados e verificados pela CI.
 
 ## Testes e verificação
 

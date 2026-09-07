@@ -1,35 +1,46 @@
-# Inspection platform
+# Inspection
 
-The active product is the Inspection API, workers and Next.js web application.
-The legacy Contract Service POC has been retired; its local `.env` is preserved
-outside version control for operators who still need its historical settings.
+Inspection é uma plataforma multi-tenant para planejar inspeções, coletar evidências, processar mídia e publicar relatórios auditáveis. O monorepo contém API GraphQL em Go, worker, scheduler, migrations, PostgreSQL com RLS, integrações locais e aplicação web Next.js.
 
-## Local start
+## Início rápido
 
-Copy [`.env.example`](.env.example) to an untracked `.env` when running Go
-processes on the host. The example documents every consumer and uses host ports
-that do not collide with the legacy POC.
+Requisitos: Docker Desktop/Compose, Go 1.26.5, Node.js 22 e npm.
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d --build
+./scripts/local.sh init
+./scripts/local.sh up
 ```
 
-The browser is available at `http://localhost:3000`; the GraphQL API is at
-`http://localhost:8080/graphql`; Keycloak is at `http://localhost:8081`; and
-Gotenberg is exposed locally on port `3001`. Compose initializes the database,
-the non-privileged runtime role, the private MinIO bucket and Keycloak realm
-idempotently.
+Abra <http://localhost:3000>. Keycloak local usa `admin` / `admin`. Para desenvolver no host, execute `./scripts/local.sh infra` e abra `./scripts/dev.sh api`, `worker`, `scheduler` e `web` em terminais separados.
 
-## Verification
+## Componentes e URLs
 
-Run the single repository gate:
+| Componente | URL/porta |
+| --- | --- |
+| API GraphQL | <http://localhost:8080/graphql> |
+| Frontend | <http://localhost:3000> |
+| Keycloak | <http://localhost:8081> |
+| PostgreSQL | `localhost:5433` |
+| RabbitMQ | `localhost:5673`, painel `15673` |
+| Dragonfly | `localhost:6380` |
+| MinIO | API `9002`, console `9003` |
+| Mailpit | <http://localhost:8026> |
+| Gotenberg | <http://localhost:3001> |
+
+## Primeiro acesso
+
+Faça login no Keycloak e use `createTenant` para provisionar tenant, unidade inicial e membership `TENANT_ADMIN`. O exemplo está em [`docs/graphql.md`](docs/graphql.md). `healthz` indica processo vivo e `readyz` verifica somente banco/schema compatível.
+
+## Comandos
 
 ```sh
+./scripts/local.sh status
+./scripts/local.sh logs inspection-api
+./scripts/local.sh migrate
+./scripts/local.sh down
 ./scripts/verify.sh
 ```
 
-It generates and checks GraphQL code, formats and tests Go, audits/types/tests/
-builds the web app, runs Playwright on production output, validates the Compose
-model, and invokes the pinned Compozy 0.2.14 task validator with an isolated
-Compozy home. CI executes the same component checks and uploads browser traces
-and screenshots on failure.
+## Documentação
+
+Consulte [`docs/README.md`](docs/README.md), [`deploy/README.md`](deploy/README.md), [`services/inspection/README.md`](services/inspection/README.md), [`apps/web/README.md`](apps/web/README.md), [`scripts/README.md`](scripts/README.md) e [`libs/identity/README.md`](libs/identity/README.md). O schema GraphQL em `services/inspection/schema.graphqls` é a referência canônica; arquivos `generated` são verificados pela CI.

@@ -21,6 +21,7 @@ import (
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func unauthenticated() error {
@@ -98,6 +99,9 @@ func (r *mutationResolver) mutateLegalHold(ctx context.Context, input graphql1.L
 	if active {
 		var row database.LegalHold
 		err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+			if err := lockInspectionForLegalHold(tx, meta.TenantID, inspectionID); err != nil {
+				return err
+			}
 			if err := tx.Session(&gorm.Session{}).Where("inspection_id=? AND active=true", inspectionID).First(&row).Error; err == nil {
 				return nil
 			} else if err != gorm.ErrRecordNotFound {
@@ -112,11 +116,19 @@ func (r *mutationResolver) mutateLegalHold(ctx context.Context, input graphql1.L
 		return &graphql1.RetentionMutationPayload{Status: "HELD", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 	}
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		if err := lockInspectionForLegalHold(tx, meta.TenantID, inspectionID); err != nil {
+			return err
+		}
 		return tx.Model(&database.LegalHold{}).Where("inspection_id=? AND active", inspectionID).Updates(map[string]any{"active": false, "released_at": now}).Error
 	}); err != nil {
 		return nil, err
 	}
 	return &graphql1.RetentionMutationPayload{Status: "RELEASED", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+func lockInspectionForLegalHold(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	var inspection database.Inspection
+	return tx.Session(&gorm.Session{}).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&inspection).Error
 }
 
 func firstRole(roles []string) string {

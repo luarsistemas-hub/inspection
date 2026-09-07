@@ -50,7 +50,17 @@ jobs:
       - run: npm run test
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
+      - name: Start acceptance services
+        run: |
+          cd ../..
+          ./scripts/local.sh init
+          ./scripts/local.sh infra
+          docker compose --env-file .env.inspection -f deploy/docker-compose.yml up -d --build inspection-api inspection-worker
+          timeout 180 bash -c 'until curl --silent --show-error --fail http://localhost:8080/healthz >/dev/null && curl --silent --show-error --fail http://localhost:8080/readyz >/dev/null; do sleep 2; done'
       - run: npm run test:e2e
+      - name: Stop acceptance services
+        if: always()
+        run: docker compose --env-file ../../.env.inspection -f ../../deploy/docker-compose.yml down -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:

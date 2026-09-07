@@ -47,6 +47,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 				return err
 			}
 		}
+		if err := lockInspectionAndCheckLegalHold(tx, tenantID, inspectionID); err != nil {
+			return err
+		}
 		var responsibilityIDs []identity.ID
 		if err := tx.Model(&database.Responsibility{}).Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).Pluck("id", &responsibilityIDs).Error; err != nil {
 			return err
@@ -122,13 +125,13 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		}
 		for _, item := range []any{
 			&database.UsageRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{},
-			&database.DeletionRequest{}, &database.LegalHold{},
+			&database.DeletionRequest{},
 		} {
 			var err error
 			switch item.(type) {
 			case *database.UsageRecord:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)
-			case *database.DashboardInspection, *database.ReferenceSnapshot, *database.PolicySnapshot, *database.DeletionRequest, *database.LegalHold:
+			case *database.DashboardInspection, *database.ReferenceSnapshot, *database.PolicySnapshot, *database.DeletionRequest:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)
 			}
 			if err != nil {
@@ -198,6 +201,24 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		return database.PurgeRun{}, err
 	}
 	return result, nil
+}
+
+// lockInspectionAndCheckLegalHold serializes purge with legal-hold changes.
+// Hold creation and release take the same inspection-row lock, so a hold
+// committed concurrently with purge is observed before any data is deleted.
+func lockInspectionAndCheckLegalHold(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	var inspection database.Inspection
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&inspection).Error; err != nil {
+		return err
+	}
+	var activeHolds int64
+	if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND inspection_id=? AND active=true", tenantID, inspectionID).Count(&activeHolds).Error; err != nil {
+		return err
+	}
+	if activeHolds > 0 {
+		return gorm.ErrInvalidData
+	}
+	return nil
 }
 
 func deleteObject(ctx context.Context, store objectstore.Store, key string) error {
