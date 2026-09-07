@@ -1,0 +1,7 @@
+interface:
+  display_name: "Senior Frontend"
+  short_description: "Implement and review production frontend features"
+  default_prompt: "Use $senior-frontend to implement or review a frontend feature in this repository."
+
+policy:
+  allow_implicit_invocation: true

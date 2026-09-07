@@ -1,0 +1,7 @@
+interface:
+  display_name: "UI Design System"
+  short_description: "Create consistent accessible UI systems"
+  default_prompt: "Use $ui-design-system to define or apply accessible design tokens and component states."
+
+policy:
+  allow_implicit_invocation: true
