@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPath": "/forms/chromium/convert/html",
+    "headers": {
+      "Content-Type": { "contains": "multipart/form-data" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/pdf"
+    },
+    "body": "%PDF-1.7\n% inspection local PDF stub\n%%EOF\n"
+  }
+}

@@ -1,3 +1,5 @@
+- [review_fixer investigação](feedback_review_fixer.md) - Mensagem 7
+- [execução real idempotência](feedback_execu_o_real.md) - Mensagem 923
 - [Workspace Checkpoint Summary](project_checkpoint_summary.md) - Continuity checkpoint updated from completed workspace sessions.
 - [sessão filha estado](project_sess_o_filha.md) - seq=57
 - [workspace memory_extraction](project_workspace.md) - Sequence 40 contains only the status “concluído”.

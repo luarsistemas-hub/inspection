@@ -1,0 +1,13 @@
+schema:
+  - schema.graphqls
+exec:
+  filename: internal/platform/graphql/generated.go
+model:
+  filename: internal/platform/graphql/models_gen.go
+models:
+  JSON:
+    model:
+      - github.com/99designs/gqlgen/graphql.Map
+resolver:
+  layout: follow-schema
+  dir: internal/platform/graphql/resolvers

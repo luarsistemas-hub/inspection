@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: "Origin, Capture, Media & Directed Recapture"
 type: backend
 complexity: critical
@@ -35,16 +35,16 @@ Deliver the complete backend journey for accountless origin creation, guided ins
 
 ## Subtasks
 
-- [ ] 5.1 Deliver origin invitation, scoped access, capture, completion, automatic activation, replacement, and lineage slices.
-- [ ] 5.2 Deliver external bootstrap, disclosure/acceptance, responsibility authorization, and confirmation-only terminal behavior.
-- [ ] 5.3 Deliver requirement rendering data, answer drafts, descriptions, impossibility reasons, extras, and completeness decisions.
-- [ ] 5.4 Deliver multipart media create/presign/complete operations and verification/derivative/screening consumers.
-- [ ] 5.5 Deliver provenance, camera/gallery, GPS acquisition, geofence, device, quality, and hash metadata behavior.
-- [ ] 5.6 Deliver sensitive-content block, retake/impossibility, participant false-positive, and audit behavior.
-- [ ] 5.7 Deliver immutable complete/incomplete submission and analysis-event handoff.
-- [ ] 5.8 Deliver system/manual directed recapture, selected-item responsibility, replacement lineage, expiry, and resubmission.
-- [ ] 5.9 Deliver GraphQL external operations, origin/capture/media/recapture schemas, consumers, and contract fixtures.
-- [ ] 5.10 Deliver tenant isolation, interruption, replay, concurrency, quota, session, and three-segment backend integration coverage.
+- [x] 5.1 Deliver origin invitation, scoped access, capture, completion, automatic activation, replacement, and lineage slices.
+- [x] 5.2 Deliver external bootstrap, disclosure/acceptance, responsibility authorization, and confirmation-only terminal behavior.
+- [x] 5.3 Deliver requirement rendering data, answer drafts, descriptions, impossibility reasons, extras, and completeness decisions.
+- [x] 5.4 Deliver multipart media create/presign/complete operations and verification/derivative/screening consumers.
+- [x] 5.5 Deliver provenance, camera/gallery, GPS acquisition, geofence, device, quality, and hash metadata behavior.
+- [x] 5.6 Deliver sensitive-content block, retake/impossibility, participant false-positive, and audit behavior.
+- [x] 5.7 Deliver immutable complete/incomplete submission and analysis-event handoff.
+- [x] 5.8 Deliver system/manual directed recapture, selected-item responsibility, replacement lineage, expiry, and resubmission.
+- [x] 5.9 Deliver GraphQL external operations, origin/capture/media/recapture schemas, consumers, and contract fixtures.
+- [x] 5.10 Deliver tenant isolation, interruption, replay, concurrency, quota, session, and three-segment backend integration coverage.
 
 ## Implementation Details
 
@@ -96,8 +96,8 @@ Keep origin, invitations, capture, media, and recapture operations as separate v
 
 Cases assigned from `_tests.md`, the test contract — read each ID's full definition there before writing tests.
 
-- [ ] Unit: UT-030, UT-031, UT-032, UT-033, UT-060, UT-061, UT-063
-- [ ] Integration: IT-071, IT-072, IT-073, IT-074, IT-075, IT-076, IT-077, IT-078, IT-079, IT-080, IT-081, IT-082, IT-083, IT-084, IT-085, IT-086, IT-087, IT-088, IT-089, IT-090, IT-091, IT-092, IT-093, IT-094, IT-095, IT-096, IT-097, IT-098, IT-099, IT-100, IT-141, IT-142, IT-143, IT-144, IT-145, IT-146, IT-147, IT-148, IT-149, IT-150, IT-151, IT-152, IT-153, IT-154, IT-155, IT-156, IT-157, IT-158, IT-159, IT-160, IT-161, IT-162, IT-163, IT-164, IT-165, IT-166, IT-167, IT-168, IT-169, IT-170, IT-171, IT-172, IT-173, IT-174, IT-175, IT-176, IT-177, IT-178, IT-179, IT-180, IT-181, IT-182, IT-183, IT-184, IT-185, IT-186, IT-187, IT-188, IT-189, IT-190, IT-191, IT-192, IT-193, IT-194, IT-195, IT-196, IT-197, IT-198, IT-199, IT-200, IT-221, IT-222, IT-223, IT-224, IT-225, IT-226, IT-227, IT-228, IT-229, IT-230, IT-231, IT-232, IT-233, IT-234, IT-235, IT-236, IT-237, IT-238, IT-239, IT-240, IT-311, IT-312, IT-313, IT-314, IT-315, IT-316, IT-317, IT-318, IT-319, IT-320, IT-411, IT-412, IT-473, IT-474, IT-475, IT-476, IT-477, IT-478, IT-509, IT-510, IT-511, IT-512, IT-513, IT-514, IT-515, IT-516, IT-517, IT-518, IT-519, IT-520, IT-521, IT-522, IT-523, IT-524, IT-525, IT-526, IT-549, IT-550, IT-555, IT-556, IT-557, IT-558, IT-559, IT-560, IT-563, IT-564, IT-565, IT-566
+- [x] Unit: UT-030, UT-031, UT-032, UT-033, UT-060, UT-061, UT-063
+- [x] Integration: IT-071, IT-072, IT-073, IT-074, IT-075, IT-076, IT-077, IT-078, IT-079, IT-080, IT-081, IT-082, IT-083, IT-084, IT-085, IT-086, IT-087, IT-088, IT-089, IT-090, IT-091, IT-092, IT-093, IT-094, IT-095, IT-096, IT-097, IT-098, IT-099, IT-100, IT-141, IT-142, IT-143, IT-144, IT-145, IT-146, IT-147, IT-148, IT-149, IT-150, IT-151, IT-152, IT-153, IT-154, IT-155, IT-156, IT-157, IT-158, IT-159, IT-160, IT-161, IT-162, IT-163, IT-164, IT-165, IT-166, IT-167, IT-168, IT-169, IT-170, IT-171, IT-172, IT-173, IT-174, IT-175, IT-176, IT-177, IT-178, IT-179, IT-180, IT-181, IT-182, IT-183, IT-184, IT-185, IT-186, IT-187, IT-188, IT-189, IT-190, IT-191, IT-192, IT-193, IT-194, IT-195, IT-196, IT-197, IT-198, IT-199, IT-200, IT-221, IT-222, IT-223, IT-224, IT-225, IT-226, IT-227, IT-228, IT-229, IT-230, IT-231, IT-232, IT-233, IT-234, IT-235, IT-236, IT-237, IT-238, IT-239, IT-240, IT-311, IT-312, IT-313, IT-314, IT-315, IT-316, IT-317, IT-318, IT-319, IT-320, IT-411, IT-412, IT-473, IT-474, IT-475, IT-476, IT-477, IT-478, IT-509, IT-510, IT-511, IT-512, IT-513, IT-514, IT-515, IT-516, IT-517, IT-518, IT-519, IT-520, IT-521, IT-522, IT-523, IT-524, IT-525, IT-526, IT-549, IT-550, IT-555, IT-556, IT-557, IT-558, IT-559, IT-560, IT-563, IT-564, IT-565, IT-566
 
 ## Success Criteria
 

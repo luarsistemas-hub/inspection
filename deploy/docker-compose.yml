@@ -1,15 +1,15 @@
-name: contract
+name: inspection
 
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: contract-postgres
+    container_name: inspection-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: contract
+      POSTGRES_DB: inspection
     ports:
-      - "5432:5432"
+      - "${INSPECTION_POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,14 +20,14 @@ services:
 
   redis:
     image: "docker.dragonflydb.io/dragonflydb/dragonfly:v1.34.2"
-    container_name: contract-redis
+    container_name: inspection-dragonfly
     ulimits:
       memlock: -1
     ports:
-      - "6379:6379"
+      - "${INSPECTION_DRAGONFLY_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
-    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags"]
+    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags", "--proactor_threads=2", "--maxmemory=512mb"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -35,18 +35,14 @@ services:
       retries: 3
 
   minio:
-    image: minio/minio:latest
-    container_name: contract-minio
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: inspection-minio
     ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console
+      - "${INSPECTION_MINIO_PORT:-9002}:9000" # browser-facing API
+      - "${INSPECTION_MINIO_CONSOLE_PORT:-9003}:9001" # local console
     environment:
-      MINIO_ROOT_USER: contract
-      MINIO_ROOT_PASSWORD: contract
-      # Configurar domínio público para URLs presigned
-      MINIO_SERVER_URL: "http://localhost:9000"
-      # Configurar CORS para permitir localhost:3000 acessar
-      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+      MINIO_ROOT_USER: inspection
+      MINIO_ROOT_PASSWORD: inspection-local-secret
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -56,25 +52,266 @@ services:
       timeout: 20s
       retries: 3
 
-  # Setup MinIO: criar bucket e configurar permissões
-  # Este container roda uma vez para setup e termina (comportamento esperado)
+  # Setup MinIO: create a private bucket; access is always scoped and presigned.
   minio-setup:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set minio http://minio:9000 contract contract;
-      mc mb --ignore-existing minio/contract;
-      mc anonymous set public minio/contract;
-      echo 'Bucket configurado: GET e PUT públicos';
+      mc alias set minio http://minio:9000 inspection inspection-local-secret;
+      mc mb --ignore-existing minio/inspection-private;
+      mc anonymous set none minio/inspection-private;
+      echo 'Bucket configured as private';
       "
+
+  inspection-bootstrap:
+    image: postgres:18-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: postgres
+    entrypoint: >
+      /bin/sh -ec "
+      until psql -h postgres -U postgres -d inspection -c 'select 1' >/dev/null; do sleep 1; done;
+      psql -h postgres -U postgres -d inspection -c \"DO \\\$\\\$ BEGIN CREATE ROLE inspection_runtime NOINHERIT NOBYPASSRLS LOGIN PASSWORD 'inspection-runtime-local'; EXCEPTION WHEN duplicate_object THEN ALTER ROLE inspection_runtime LOGIN PASSWORD 'inspection-runtime-local'; END \\\$\\\$;\";
+      "
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/inspection-realm.json:/opt/keycloak/data/import/inspection-realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  inspection-migrate:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-migrate"]
+    depends_on:
+      inspection-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      INSPECTION_ENV: local
+      INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_ALLOWED_ORIGIN: http://localhost:3000
+      INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_OIDC_AUDIENCE: inspection-web
+      INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
+
+  inspection-runtime-bootstrap:
+    image: postgres:18-alpine
+    depends_on:
+      inspection-migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: postgres
+    entrypoint: >
+      /bin/sh -ec "
+      psql -h postgres -U postgres -d inspection -c \"ALTER ROLE inspection_runtime LOGIN PASSWORD 'inspection-runtime-local';\";
+      psql -h postgres -U postgres -d inspection -c \"ALTER ROLE inspection_worker LOGIN PASSWORD 'inspection-worker-local';\";
+      "
+
+  inspection-api:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-api"]
+    depends_on:
+      inspection-runtime-bootstrap:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment: &inspection_runtime_environment
+      INSPECTION_ENV: local
+      INSPECTION_HTTP_ADDR: :8080
+      INSPECTION_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-local@postgres:5432/inspection?sslmode=disable
+      INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
+      INSPECTION_ALLOWED_ORIGIN: http://localhost:3000
+      INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_OIDC_AUDIENCE: inspection-web
+      # Public tokens use localhost. API gets signing keys over its private
+      # network without weakening issuer or audience validation.
+      INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
+      INSPECTION_STORAGE_PUBLIC: "false"
+      INSPECTION_RABBITMQ_URL: amqp://inspection:inspection@rabbitmq:5672/
+      INSPECTION_DRAGONFLY_ADDRESS: redis:6379
+      INSPECTION_MINIO_ENDPOINT: minio:9000
+      INSPECTION_MINIO_PUBLIC_ENDPOINT: localhost:9002
+      INSPECTION_MINIO_ACCESS_KEY: inspection
+      INSPECTION_MINIO_SECRET_KEY: inspection-local-secret
+      INSPECTION_MINIO_BUCKET: inspection-private
+      INSPECTION_MINIO_SECURE: "false"
+      INSPECTION_MINIO_PUBLIC_SECURE: "false"
+      INSPECTION_OTP_PEPPER: local-development-pepper-change-me-32
+      INSPECTION_SMTP_ADDRESS: mailpit:1025
+      INSPECTION_SMTP_FROM: inspection@localhost
+      INSPECTION_TWILIO_BASE_URL: http://twilio-fake:8080
+      INSPECTION_TWILIO_ACCOUNT_SID: AC-local
+      INSPECTION_TWILIO_AUTH_TOKEN: local-token
+      INSPECTION_TWILIO_FROM: "+15550000000"
+      INSPECTION_TWILIO_CALLBACK_URL: http://localhost:8080/webhooks/twilio/status
+      INSPECTION_LITELLM_URL: http://litellm-stub:8080
+      INSPECTION_LITELLM_MODEL_ALIAS: inspection-vision
+      INSPECTION_LITELLM_PROMPT_VERSION: analysis-v1
+      INSPECTION_GOTENBERG_URL: http://gotenberg:3000
+
+  inspection-worker:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-worker"]
+    depends_on:
+      inspection-api:
+        condition: service_started
+    environment:
+      <<: *inspection_runtime_environment
+      INSPECTION_DATABASE_URL: postgres://inspection_worker:inspection-worker-local@postgres:5432/inspection?sslmode=disable
+      INSPECTION_DISPATCHER_DATABASE_URL: postgres://inspection_worker:inspection-worker-local@postgres:5432/inspection?sslmode=disable
+
+  inspection-scheduler:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-scheduler"]
+    depends_on:
+      inspection-api:
+        condition: service_started
+    environment: *inspection_runtime_environment
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:8080/graphql}
+        NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${NEXT_PUBLIC_OIDC_AUTHORIZE_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/auth}
+        NEXT_PUBLIC_OIDC_TOKEN_URL: ${NEXT_PUBLIC_OIDC_TOKEN_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/token}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-inspection-web}
+        NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:9002}
+    depends_on:
+      inspection-api:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: http://localhost:8080/graphql
+      NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
+      NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
+      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-web
+      NEXT_PUBLIC_STORAGE_URL: http://localhost:9002
+
+  gotenberg:
+    image: gotenberg/gotenberg:8.17.0
+    command: ["gotenberg", "--api-port=3000"]
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4.1.3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: inspection
+      RABBITMQ_DEFAULT_PASS: inspection
+    ports:
+      - "${INSPECTION_RABBITMQ_PORT:-5673}:5672"
+      - "${INSPECTION_RABBITMQ_MANAGEMENT_PORT:-15673}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "${INSPECTION_MAILPIT_SMTP_PORT:-1026}:1025"
+      - "${INSPECTION_MAILPIT_UI_PORT:-8026}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  twilio-fake:
+    image: wiremock/wiremock:3.13.1
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      - "${INSPECTION_TWILIO_FAKE_PORT:-1081}:8080"
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
+
+  # Deterministic provider-neutral LiteLLM contract stub. The worker points at
+  # this endpoint in local/test environments; no model credentials are needed.
+  litellm-stub:
+    image: wiremock/wiremock:3.13.1
+    container_name: inspection-litellm-stub
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./wiremock/litellm:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Deterministic PDF contract stub. Production uses a private Gotenberg
+  # deployment with the same /forms/chromium/convert/html contract.
+  gotenberg-stub:
+    image: wiremock/wiremock:3.13.1
+    container_name: inspection-gotenberg-stub
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./wiremock/gotenberg:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
 volumes:
   postgres_data:
-    name: contract-postgres-data
+    name: inspection-postgres-data
   redis_data:
-    name: contract-redis-data
+    name: inspection-dragonfly-data
   minio_data:
-    name: contract-minio-data
+    name: inspection-minio-data
+  rabbitmq_data:
+    # A distinct physical volume avoids reusing the legacy Contract Service
+    # RabbitMQ state when both stacks are running locally.
+    name: inspection-rabbitmq-runtime-data

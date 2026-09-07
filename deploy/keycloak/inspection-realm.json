@@ -1,0 +1,47 @@
+{
+  "realm": "inspection",
+  "enabled": true,
+  "requiredActions": [
+    {"alias": "VERIFY_EMAIL", "enabled": false, "defaultAction": false, "priority": 10},
+    {"alias": "UPDATE_PROFILE", "enabled": false, "defaultAction": false, "priority": 20},
+    {"alias": "CONFIGURE_TOTP", "enabled": false, "defaultAction": false, "priority": 30},
+    {"alias": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 50}
+  ],
+  "clients": [
+    {
+      "clientId": "inspection-web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:3000/auth/callback"],
+      "webOrigins": ["http://localhost:3000"],
+      "protocolMappers": [
+        {
+          "name": "inspection-web audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "inspection-web",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "attributes": {"pkce.code.challenge.method": "S256"}
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@inspection.local",
+      "firstName": "Inspection",
+      "lastName": "Administrator",
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "admin", "temporary": false}]
+    }
+  ]
+}

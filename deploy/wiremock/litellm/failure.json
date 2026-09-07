@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [{"contains": "analysis-failure"}]
+  },
+  "response": {
+    "status": 503,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"error": {"message": "stub provider unavailable"}}
+  }
+}

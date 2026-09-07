@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/forms/chromium/convert/html",
+    "bodyPatterns": [{"contains": "gotenberg-failure"}]
+  },
+  "response": {
+    "status": 503,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {"error": "stub renderer unavailable"}
+  }
+}

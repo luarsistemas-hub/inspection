@@ -1,0 +1,8 @@
+.git
+.next
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/web/playwright-report
+apps/web/test-results
+services/contract/contract-service

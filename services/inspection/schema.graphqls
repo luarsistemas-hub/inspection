@@ -1,0 +1,238 @@
+scalar JSON
+
+type Query {
+  me: Me!
+  tenant: Tenant
+  memberships(first: Int = 25, after: String): MembershipConnection!
+  businessUnits(first: Int = 25, after: String): BusinessUnitConnection!
+  auditEvents(first: Int = 25, after: String): AuditEventConnection!
+  participants(search: String, first: Int = 25, after: String): ParticipantConnection!
+  participant(id: ID!): Participant
+  segmentDefinitions(search: String, first: Int = 25, after: String): SegmentDefinitionConnection!
+  templates(search: String, first: Int = 25, after: String): TemplateConnection!
+  templateVersion(id: ID!): TemplateVersion
+  assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
+  asset(id: ID!): Asset
+  originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
+  schedules(first: Int = 25, after: String): ScheduleConnection!
+  projects(first: Int = 25, after: String): ProjectConnection!
+  project(id: ID!): Project
+  inspections(first: Int = 25, after: String, history: Boolean = false): InspectionConnection!
+  inspection(id: ID!): Inspection
+  report(inspectionId: ID!, version: Int): Report
+  reportDownload(snapshotId: ID!, kind: String = "PDF"): ReportDownload
+  dashboardSummary(projectId: ID, businessUnitId: ID): DashboardSummary!
+  triageInspections(first: Int = 25, after: String, classification: String, status: String): TriageInspectionConnection!
+  projectTimeline(projectId: ID!): ProjectTimeline!
+  notificationDeliveries(first: Int = 25, after: String): NotificationDeliveryConnection!
+  retentionPolicies: RetentionPolicyConnection!
+  usageSummary(from: String, to: String): UsageSummary!
+  externalCapture: ExternalCapture!
+}
+
+type Mutation {
+  createTenant(input: CreateTenantInput!): CreateTenantPayload!
+  updateTenant(input: UpdateTenantInput!): TenantPayload!
+  createBusinessUnit(input: CreateBusinessUnitInput!): BusinessUnitPayload!
+  upsertBusinessUnit(input: UpsertBusinessUnitInput!): BusinessUnitPayload!
+  archiveBusinessUnit(input: ArchiveBusinessUnitInput!): BusinessUnitPayload!
+  inviteInternalUser(input: InviteInternalUserInput!): MembershipPayload!
+  assignRoleScopes(input: AssignRoleScopesInput!): MembershipPayload!
+  disableMembership(input: DisableMembershipInput!): MembershipPayload!
+  upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
+  verifyContact(input: VerifyContactInput!): ParticipantContactPayload!
+  setDeliveryChannels(input: SetDeliveryChannelsInput!): ParticipantPayload!
+  publishSegmentDefinition(input: PublishSegmentDefinitionInput!): SegmentDefinitionPayload!
+  activateSegmentDefinition(input: ActivateSegmentDefinitionInput!): SegmentDefinitionPayload!
+  publishTemplateVersion(input: PublishTemplateVersionInput!): TemplatePayload!
+  activateTemplateVersion(input: ActivateTemplateVersionInput!): TemplatePayload!
+  publishAnalysisProfile(input: PublishAnalysisProfileInput!): AnalysisProfilePayload!
+  registerAsset(input: RegisterAssetInput!): AssetPayload!
+  updateAsset(input: UpdateAssetInput!): AssetPayload!
+  archiveAsset(input: ArchiveAssetInput!): AssetPayload!
+  requestInvitationOtp(input: RequestInvitationOtpInput!): InvitationOtpPayload!
+  verifyInvitationOtp(input: VerifyInvitationOtpInput!): ExternalSessionPayload!
+  revokeInvitation(input: RevokeInvitationInput!): InvitationPayload!
+  inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
+  activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
+  invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
+  createSchedule(input: CreateScheduleInput!): SchedulePayload!
+  updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
+  cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
+  createInspection(input: CreateInspectionInput!): InspectionPayload!
+  cancelInspection(input: InspectionTransitionInput!): InspectionPayload!
+  invalidateInspection(input: InvalidateInspectionInput!): InspectionPayload!
+  createProject(input: CreateProjectInput!): ProjectPayload!
+  addExceptionalStage(input: AddExceptionalStageInput!): ProjectPayload!
+  startProjectStage(input: StartProjectStageInput!): ProjectPayload!
+  skipProjectStage(input: SkipProjectStageInput!): ProjectPayload!
+  closeProject(input: ProjectTransitionInput!): ProjectPayload!
+  reopenProject(input: ReopenProjectInput!): ProjectPayload!
+  acceptProcessing(input: AcceptProcessingInput!): CapturePayload!
+  createMediaUpload(input: CreateMediaUploadInput!): MediaUploadPayload!
+  presignMediaParts(input: PresignMediaPartsInput!): PresignedPartsPayload!
+  completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
+  saveCaptureMetadata(input: SaveCaptureMetadataInput!): MediaPayload!
+  declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
+  submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
+  requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
+  submitRecapture(input: SubmitRecaptureInput!): RecapturePayload!
+  declareSensitiveDetectionFalsePositive(input: SensitiveFalsePositiveInput!): MediaPayload!
+  configureRetentionPolicy(input: ConfigureRetentionPolicyInput!): RetentionPolicyPayload!
+  recordDeletionRequest(input: RecordDeletionRequestInput!): RetentionMutationPayload!
+  applyLegalHold(input: LegalHoldInput!): RetentionMutationPayload!
+  releaseLegalHold(input: LegalHoldInput!): RetentionMutationPayload!
+}
+
+type Scope { kind: String! resourceId: ID! }
+type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
+type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
+type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
+type Me { identityId: ID! tenantId: ID! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! }
+type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
+type BusinessUnit { id: ID! code: String! name: String! status: String! version: Int! }
+type BusinessUnitConnection { nodes: [BusinessUnit!]! pageInfo: PageInfo! }
+type BusinessUnitPayload { businessUnit: BusinessUnit userErrors: [UserError!]! clientMutationId: String! }
+type AuditEvent { id: ID! action: String! targetType: String! targetId: String! outcome: String! reason: String correlationId: String! occurredAt: String! }
+type AuditEventConnection { nodes: [AuditEvent!]! pageInfo: PageInfo! }
+type PageInfo { endCursor: String hasNextPage: Boolean! }
+type UserError { code: String! field: String message: String! correlationId: String! }
+
+type Participant { id: ID! businessUnitId: ID! name: String! segmentRole: String! status: String! version: Int! contacts: [ParticipantContact!]! selectedContactIds: [ID!]! }
+type ParticipantContact { id: ID! channel: String! value: String! active: Boolean! verified: Boolean! }
+type ParticipantConnection { nodes: [Participant!]! pageInfo: PageInfo! }
+type SegmentDefinition { id: ID! key: String! name: String! activeVersionId: ID version: Int! }
+type SegmentDefinitionVersion { id: ID! definitionId: ID! versionNumber: Int! schemaVersion: Int! schema: JSON! uiSchema: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+type SegmentDefinitionConnection { nodes: [SegmentDefinition!]! pageInfo: PageInfo! }
+type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeVersionId: ID version: Int! }
+type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
+type AnalysisProfile { id: ID! key: String! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
+type AssetAssignment { participantId: ID! role: String! active: Boolean! }
+type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
+type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
+type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
+type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisProfileVersionId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
+type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
+type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
+type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
+type Project { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! reportMode: String! status: String! version: Int! stages: [ProjectStage!]! transitions: [StageTransition!]! }
+type ProjectConnection { nodes: [Project!]! pageInfo: PageInfo! }
+type CaptureRequirement {
+  key: String!
+  section: String!
+  label: String!
+  instructions: String
+  evidenceKind: String!
+  required: Boolean!
+  minimumMedia: Int!
+  maximumMedia: Int!
+  descriptionRequired: Boolean!
+  captureSourcePolicy: String!
+  comparisonTarget: String!
+  impossibilityAllowed: Boolean!
+}
+type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type Media { id: ID! status: String! requirementKey: String description: String captureSource: String flags: [String!]! replacesMediaId: ID }
+type MediaUpload { mediaId: ID! uploadId: String! expiresAt: String! partSizeBytes: Int! }
+type PresignedPart { partNumber: Int! url: String! expiresAt: String! }
+type Submission { id: ID! complete: Boolean! requiresAttention: Boolean! submittedAt: String! }
+type Recapture { id: ID! responsibilityId: ID! status: String! deadlineAt: String }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! }
+type ReportDownload { snapshotId: ID! kind: String! objectKey: String! url: String! status: String! sha256: String }
+type DashboardSummary { total: Int! normal: Int! attention: Int! critical: Int! pending: Int! invalidated: Int! }
+type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classification: String! status: String! updatedAt: String! }
+type TriageInspectionConnection { nodes: [TriageInspection!]! pageInfo: PageInfo! }
+type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
+type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
+type NotificationDelivery { id: ID! intentId: ID! status: String! createdAt: String! updatedAt: String! }
+type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: PageInfo! }
+type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
+type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }
+type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float! }
+
+input CreateTenantInput { name: String! language: String = "pt-BR" timezone: String = "America/Sao_Paulo" businessUnitCode: String! businessUnitName: String! clientMutationId: String! }
+input UpdateTenantInput { name: String! language: String! timezone: String! expectedVersion: Int! clientMutationId: String! }
+input CreateBusinessUnitInput { code: String! name: String! expectedTenantVersion: Int! clientMutationId: String! }
+input UpsertBusinessUnitInput { businessUnitId: ID code: String! name: String! expectedVersion: Int expectedTenantVersion: Int clientMutationId: String! }
+input ArchiveBusinessUnitInput { businessUnitId: ID! expectedVersion: Int! clientMutationId: String! }
+input ScopeAssignmentInput { kind: String! resourceId: ID! }
+input InviteInternalUserInput { issuer: String! subject: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input AssignRoleScopesInput { membershipId: ID! role: String! scopes: [ScopeAssignmentInput!]! expectedVersion: Int clientMutationId: String! }
+input DisableMembershipInput { membershipId: ID! expectedVersion: Int! clientMutationId: String! }
+input ContactInput { channel: String! value: String! }
+input UpsertParticipantInput { participantId: ID expectedVersion: Int businessUnitId: ID! name: String! segmentRole: String! contacts: [ContactInput!]! clientMutationId: String! }
+input VerifyContactInput { contactId: ID! verified: Boolean! clientMutationId: String! }
+input SetDeliveryChannelsInput { participantId: ID! contactIds: [ID!]! expectedVersion: Int! clientMutationId: String! }
+input PublishSegmentDefinitionInput { key: String! name: String! schema: JSON! uiSchema: JSON! clientMutationId: String! }
+input ActivateSegmentDefinitionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
+input PublishTemplateVersionInput { key: String! name: String! definition: JSON! clientMutationId: String! }
+input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
+input PublishAnalysisProfileInput { key: String! definition: JSON! clientMutationId: String! }
+input AssetAssignmentInput { participantId: ID! role: String! }
+input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
+input RegisterAssetInput { asset: AssetInput! clientMutationId: String! }
+input UpdateAssetInput { assetId: ID! expectedVersion: Int! asset: AssetInput! clientMutationId: String! }
+input ArchiveAssetInput { assetId: ID! expectedVersion: Int! clientMutationId: String! }
+input RequestInvitationOtpInput { linkToken: String! clientMutationId: String! }
+input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutationId: String! }
+input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
+input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
+input OriginVersionInput { versionId: ID! clientMutationId: String! }
+input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
+input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
+input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
+input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID referenceVersionId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
+input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
+input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
+input CreateProjectInput { assetId: ID! participantId: ID! templateId: ID clientMutationId: String! }
+input AddExceptionalStageInput { projectId: ID! expectedVersion: Int! key: String! label: String! reason: String! plannedAt: String clientMutationId: String! }
+input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! referenceVersionId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! clientMutationId: String! }
+input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
+input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
+input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
+input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
+input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! clientMutationId: String! }
+input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
+input CompletedPartInput { partNumber: Int! etag: String! }
+input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clientMutationId: String! }
+input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
+input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON clientMutationId: String! }
+input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String! expectedVersion: Int clientMutationId: String! }
+input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
+input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
+input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
+input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
+input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
+input ConfigureRetentionPolicyInput { evidenceDays: Int! operationalDays: Int! securityDays: Int clientMutationId: String! }
+input RecordDeletionRequestInput { inspectionId: ID! reason: String clientMutationId: String! }
+input LegalHoldInput { inspectionId: ID! reason: String! clientMutationId: String! }
+
+type CreateTenantPayload { tenant: Tenant userErrors: [UserError!]! clientMutationId: String! }
+type TenantPayload { tenant: Tenant userErrors: [UserError!]! clientMutationId: String! }
+type ParticipantPayload { participant: Participant userErrors: [UserError!]! clientMutationId: String! }
+type ParticipantContactPayload { contact: ParticipantContact userErrors: [UserError!]! clientMutationId: String! }
+type SegmentDefinitionPayload { definition: SegmentDefinition version: SegmentDefinitionVersion userErrors: [UserError!]! clientMutationId: String! }
+type TemplatePayload { template: Template version: TemplateVersion userErrors: [UserError!]! clientMutationId: String! }
+type AnalysisProfilePayload { profile: AnalysisProfile userErrors: [UserError!]! clientMutationId: String! }
+type AssetPayload { asset: Asset userErrors: [UserError!]! clientMutationId: String! }
+type InvitationOtpPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
+type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: String! userErrors: [UserError!]! clientMutationId: String! }
+type InvitationPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
+type OriginInvitationPayload { invitationId: ID originVersionId: ID status: String! userErrors: [UserError!]! clientMutationId: String! }
+type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! clientMutationId: String! }
+type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
+type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
+type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
+type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
+type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }
+type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! clientMutationId: String! }
+type MediaPayload { media: Media userErrors: [UserError!]! clientMutationId: String! }
+type SubmissionPayload { submission: Submission userErrors: [UserError!]! clientMutationId: String! }
+type RecapturePayload { recapture: Recapture userErrors: [UserError!]! clientMutationId: String! }
+type RetentionPolicyPayload { policy: RetentionPolicy userErrors: [UserError!]! clientMutationId: String! }
+type RetentionMutationPayload { status: String! requestId: ID userErrors: [UserError!]! clientMutationId: String! }

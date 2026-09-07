@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: "Foundation, Tenant Isolation, Access & Audit"
 type: infra
 complexity: critical
@@ -36,16 +36,16 @@ Establish the new inspection service and the security/runtime foundation on whic
 
 ## Subtasks
 
-- [ ] 1.1 Establish inspection service directories, four composition roots, dependency injection, lifecycle, and build wiring.
-- [ ] 1.2 Establish pinned local/CI infrastructure definitions and configuration validation required by the foundation.
-- [ ] 1.3 Deliver the dedicated migrator, model registration, schema registry, runtime compatibility gate, and migration test harness.
-- [ ] 1.4 Deliver tenant transaction handling, runtime database roles, forced RLS, and adversarial isolation coverage.
-- [ ] 1.5 Deliver the typed command/query mediator and operation-level registration contracts.
-- [ ] 1.6 Deliver gqlgen/Chi boundaries, stable errors, pagination, idempotency, health, readiness, and metrics.
-- [ ] 1.7 Deliver OIDC verification, local membership resolution, hierarchical authorization, and immediate revocation behavior.
-- [ ] 1.8 Deliver tenant bootstrap, business-unit, internal-access, durable idempotency, and audit vertical slices with their GraphQL operations.
-- [ ] 1.9 Deliver OpenTelemetry-compatible tracing, structured logging, safe metrics, and operational correlation.
-- [ ] 1.10 Integrate CI verification for migrations, generated contracts, Go tests, vet, build, and schema compatibility.
+- [x] 1.1 Establish inspection service directories, four composition roots, dependency injection, lifecycle, and build wiring.
+- [x] 1.2 Establish pinned local/CI infrastructure definitions and configuration validation required by the foundation.
+- [x] 1.3 Deliver the dedicated migrator, model registration, schema registry, runtime compatibility gate, and migration test harness.
+- [x] 1.4 Deliver tenant transaction handling, runtime database roles, forced RLS, and adversarial isolation coverage.
+- [x] 1.5 Deliver the typed command/query mediator and operation-level registration contracts.
+- [x] 1.6 Deliver gqlgen/Chi boundaries, stable errors, pagination, idempotency, health, readiness, and metrics.
+- [x] 1.7 Deliver OIDC verification, local membership resolution, hierarchical authorization, and immediate revocation behavior.
+- [x] 1.8 Deliver tenant bootstrap, business-unit, internal-access, durable idempotency, and audit vertical slices with their GraphQL operations.
+- [x] 1.9 Deliver OpenTelemetry-compatible tracing, structured logging, safe metrics, and operational correlation.
+- [x] 1.10 Integrate CI verification for migrations, generated contracts, Go tests, vet, build, and schema compatibility.
 
 ## Implementation Details
 
@@ -98,8 +98,8 @@ Follow the repository VSA contract and the TechSpec sections “Repository Topol
 
 Cases assigned from `_tests.md`, the test contract — read each ID's full definition there before writing tests.
 
-- [ ] Unit: UT-001, UT-002, UT-003, UT-004, UT-005, UT-006, UT-017, UT-018, UT-042, UT-043, UT-054, UT-055, UT-056, UT-057, UT-058, UT-059, UT-070, UT-071
-- [ ] Integration: IT-001, IT-002, IT-003, IT-004, IT-005, IT-006, IT-007, IT-008, IT-009, IT-010, IT-011, IT-012, IT-013, IT-014, IT-015, IT-016, IT-017, IT-018, IT-019, IT-020, IT-031, IT-032, IT-033, IT-034, IT-035, IT-036, IT-037, IT-038, IT-039, IT-040, IT-341, IT-342, IT-343, IT-344, IT-345, IT-346, IT-347, IT-348, IT-349, IT-350, IT-351, IT-352, IT-353, IT-389, IT-391, IT-392, IT-393, IT-394, IT-395, IT-396, IT-431, IT-432, IT-439, IT-440, IT-441, IT-442, IT-443, IT-444, IT-445, IT-446, IT-447, IT-448, IT-449, IT-450, IT-451, IT-452, IT-535, IT-536, IT-537, IT-538, IT-539, IT-540, IT-587, IT-588, IT-589, IT-590, IT-591, IT-592, IT-593, IT-597, IT-598, IT-599, IT-600
+- [x] Unit: UT-001, UT-002, UT-003, UT-004, UT-005, UT-006, UT-017, UT-018, UT-042, UT-043, UT-054, UT-055, UT-056, UT-057, UT-058, UT-059, UT-070, UT-071
+- [x] Integration: IT-001, IT-002, IT-003, IT-004, IT-005, IT-006, IT-007, IT-008, IT-009, IT-010, IT-011, IT-012, IT-013, IT-014, IT-015, IT-016, IT-017, IT-018, IT-019, IT-020, IT-031, IT-032, IT-033, IT-034, IT-035, IT-036, IT-037, IT-038, IT-039, IT-040, IT-341, IT-342, IT-343, IT-344, IT-345, IT-346, IT-347, IT-348, IT-349, IT-350, IT-351, IT-352, IT-353, IT-389, IT-391, IT-392, IT-393, IT-394, IT-395, IT-396, IT-431, IT-432, IT-439, IT-440, IT-441, IT-442, IT-443, IT-444, IT-445, IT-446, IT-447, IT-448, IT-449, IT-450, IT-451, IT-452, IT-535, IT-536, IT-537, IT-538, IT-539, IT-540, IT-587, IT-588, IT-589, IT-590, IT-591, IT-592, IT-593, IT-597, IT-598, IT-599, IT-600
 
 ## Success Criteria
 

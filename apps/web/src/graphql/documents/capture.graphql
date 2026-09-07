@@ -1,0 +1,50 @@
+query ExternalCaptureBootstrap {
+  externalCapture {
+    responsibilityId recaptureRequestId status confirmationOnly kind disclosureVersion reference policy
+    requirements {
+      key section label instructions evidenceKind required minimumMedia maximumMedia
+      descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed
+    }
+    answers { requirementKey mediaIds impossibilityReason version }
+  }
+}
+
+mutation SubmitCaptureRecapture($input: SubmitRecaptureInput!) {
+  submitRecapture(input: $input) { recapture { id responsibilityId status } userErrors { code field message correlationId } clientMutationId }
+}
+
+mutation AcceptCaptureProcessing($input: AcceptProcessingInput!) {
+  acceptProcessing(input: $input) { status userErrors { code field message correlationId } clientMutationId }
+}
+
+mutation CreateCaptureMediaUpload($input: CreateMediaUploadInput!) {
+  createMediaUpload(input: $input) {
+    upload { mediaId uploadId expiresAt partSizeBytes }
+    userErrors { code field message correlationId }
+    clientMutationId
+  }
+}
+
+mutation PresignCaptureMediaParts($input: PresignMediaPartsInput!) {
+  presignMediaParts(input: $input) {
+    parts { partNumber url expiresAt }
+    userErrors { code field message correlationId }
+    clientMutationId
+  }
+}
+
+mutation CompleteCaptureMediaUpload($input: CompleteMediaUploadInput!) {
+  completeMediaUpload(input: $input) {
+    media { id status requirementKey description captureSource flags replacesMediaId }
+    userErrors { code field message correlationId }
+    clientMutationId
+  }
+}
+
+mutation SaveCaptureMediaMetadata($input: SaveCaptureMetadataInput!) {
+  saveCaptureMetadata(input: $input) {
+    media { id status requirementKey description captureSource flags replacesMediaId }
+    userErrors { code field message correlationId }
+    clientMutationId
+  }
+}

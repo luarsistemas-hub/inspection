@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: "Async Messaging, External Sessions & Storage"
 type: infra
 complexity: critical
@@ -34,15 +34,15 @@ Deliver the durable asynchronous and private-evidence infrastructure used by cap
 
 ## Subtasks
 
-- [ ] 2.1 Deliver the versioned event registry, transactional outbox, dispatcher, publisher confirms, and inbox contract.
-- [ ] 2.2 Deliver RabbitMQ exchange, retry, DLQ, consumer lifecycle, replay, and poison-message behavior.
-- [ ] 2.3 Deliver private S3-compatible multipart storage, scoped signing, verification primitives, and cleanup reconciliation.
-- [ ] 2.4 Deliver normalization and pure-Go sensitive-content detection adapters with pinned model identity.
-- [ ] 2.5 Deliver invitation-token, OTP request/verification GraphQL slices, external-session, revocation, cookie, and CSRF behavior.
-- [ ] 2.6 Deliver Dragonfly-backed rate limits that fail safely without becoming authoritative state.
-- [ ] 2.7 Deliver channel registry, SMTP/Twilio-compatible adapters, independent delivery aggregation, and signed callbacks.
-- [ ] 2.8 Deliver worker registration, bounded concurrency, cancellation, fallback, and telemetry behavior.
-- [ ] 2.9 Deliver Testcontainers and provider fakes for RabbitMQ, MinIO, Dragonfly, Mailpit, and Twilio behavior.
+- [x] 2.1 Deliver the versioned event registry, transactional outbox, dispatcher, publisher confirms, and inbox contract.
+- [x] 2.2 Deliver RabbitMQ exchange, retry, DLQ, consumer lifecycle, replay, and poison-message behavior.
+- [x] 2.3 Deliver private S3-compatible multipart storage, scoped signing, verification primitives, and cleanup reconciliation.
+- [x] 2.4 Deliver normalization and pure-Go sensitive-content detection adapters with pinned model identity.
+- [x] 2.5 Deliver invitation-token, OTP request/verification GraphQL slices, external-session, revocation, cookie, and CSRF behavior.
+- [x] 2.6 Deliver Dragonfly-backed rate limits that fail safely without becoming authoritative state.
+- [x] 2.7 Deliver channel registry, SMTP/Twilio-compatible adapters, independent delivery aggregation, and signed callbacks.
+- [x] 2.8 Deliver worker registration, bounded concurrency, cancellation, fallback, and telemetry behavior.
+- [x] 2.9 Deliver Testcontainers and provider fakes for RabbitMQ, MinIO, Dragonfly, Mailpit, and Twilio behavior.
 
 ## Implementation Details
 
@@ -91,8 +91,8 @@ Implement each dispatcher, consumer, webhook, and cleanup job as an operation-le
 
 Cases assigned from `_tests.md`, the test contract — read each ID's full definition there before writing tests.
 
-- [ ] Unit: UT-007, UT-008, UT-009, UT-010, UT-013, UT-014, UT-019, UT-020, UT-021, UT-038, UT-039, UT-040, UT-041, UT-046, UT-047, UT-068, UT-069
-- [ ] Integration: IT-354, IT-355, IT-356, IT-357, IT-358, IT-359, IT-360, IT-361, IT-362, IT-363, IT-364, IT-365, IT-366, IT-368, IT-369, IT-370, IT-376, IT-377, IT-378, IT-379, IT-383, IT-384, IT-385, IT-503, IT-504, IT-505, IT-506, IT-507, IT-508, IT-541, IT-542, IT-547, IT-548, IT-577, IT-578, IT-579, IT-580, IT-594, IT-595, IT-596
+- [x] Unit: UT-007, UT-008, UT-009, UT-010, UT-013, UT-014, UT-019, UT-020, UT-021, UT-038, UT-039, UT-040, UT-041, UT-046, UT-047, UT-068, UT-069
+- [x] Integration: IT-354, IT-355, IT-356, IT-357, IT-358, IT-359, IT-360, IT-361, IT-362, IT-363, IT-364, IT-365, IT-366, IT-368, IT-369, IT-370, IT-376, IT-377, IT-378, IT-379, IT-383, IT-384, IT-385, IT-503, IT-504, IT-505, IT-506, IT-507, IT-508, IT-541, IT-542, IT-547, IT-548, IT-577, IT-578, IT-579, IT-580, IT-594, IT-595, IT-596
 
 ## Success Criteria
 

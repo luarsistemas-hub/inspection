@@ -35,15 +35,15 @@ Deliver the terminal processing pipeline that converts immutable evidence into n
 
 ## Subtasks
 
-- [ ] 6.1 Deliver comparison-job creation, terminality coordination, LiteLLM adapter, structured validation, retries, and inconclusive fallback.
-- [ ] 6.2 Deliver immutable findings, evidence references, provider usage, cost, latency, and reproducibility metadata.
-- [ ] 6.3 Deliver deterministic classification and reason-code behavior for every evidence/flag/failure combination.
-- [ ] 6.4 Deliver canonical report snapshots, internal HTML views, Gotenberg PDF artifacts, HTML-only fallback, and authorized download.
-- [ ] 6.5 Deliver consolidated and historical project report versioning and timeline behavior.
-- [ ] 6.6 Deliver ordered dashboard/triage projections, filters, counters, rebuild, and invalidation semantics.
-- [ ] 6.7 Deliver first-critical transition detection, selected-recipient alerts, delivery visibility, and no external disclosure.
-- [ ] 6.8 Deliver retention policy, clocks, requests, refusal, legal hold, scheduled purge, deletion manifest, and reconciliation.
-- [ ] 6.9 Deliver usage summaries, operational replay/reconciliation, metrics, and runbooks for terminal processing.
+- [x] 6.1 Deliver comparison-job creation, terminality coordination, LiteLLM adapter, structured validation, retries, and inconclusive fallback.
+- [x] 6.2 Deliver immutable findings, evidence references, provider usage, cost, latency, and reproducibility metadata.
+- [x] 6.3 Deliver deterministic classification and reason-code behavior for every evidence/flag/failure combination.
+- [x] 6.4 Deliver canonical report snapshots, internal HTML views, Gotenberg PDF artifacts, HTML-only fallback, and authorized download.
+- [x] 6.5 Deliver consolidated and historical project report versioning and timeline behavior.
+- [x] 6.6 Deliver ordered dashboard/triage projections, filters, counters, rebuild, and invalidation semantics.
+- [x] 6.7 Deliver first-critical transition detection, selected-recipient alerts, delivery visibility, and no external disclosure.
+- [x] 6.8 Deliver retention policy, clocks, requests, refusal, legal hold, scheduled purge, deletion manifest, and reconciliation.
+- [x] 6.9 Deliver usage summaries, operational replay/reconciliation, metrics, and runbooks for terminal processing.
 - [ ] 6.10 Deliver end-state integration coverage for analysis, reports, projections, notifications, privacy, and all three segments.
 
 ## Implementation Details
@@ -97,6 +97,8 @@ Cases assigned from `_tests.md`, the test contract — read each ID's full defin
 
 - [ ] Unit: UT-011, UT-012, UT-015, UT-016, UT-034, UT-035, UT-036, UT-037, UT-044, UT-045, UT-048, UT-049, UT-066, UT-067
 - [ ] Integration: IT-241, IT-242, IT-243, IT-244, IT-245, IT-246, IT-247, IT-248, IT-249, IT-250, IT-251, IT-252, IT-253, IT-254, IT-255, IT-256, IT-257, IT-258, IT-259, IT-260, IT-261, IT-262, IT-263, IT-264, IT-265, IT-266, IT-267, IT-268, IT-269, IT-270, IT-271, IT-272, IT-273, IT-274, IT-275, IT-276, IT-277, IT-278, IT-279, IT-280, IT-281, IT-282, IT-283, IT-284, IT-285, IT-286, IT-287, IT-288, IT-289, IT-290, IT-291, IT-292, IT-293, IT-294, IT-295, IT-296, IT-297, IT-298, IT-299, IT-300, IT-301, IT-302, IT-303, IT-304, IT-305, IT-306, IT-307, IT-308, IT-309, IT-310, IT-321, IT-322, IT-323, IT-324, IT-325, IT-326, IT-327, IT-328, IT-329, IT-330, IT-331, IT-332, IT-333, IT-334, IT-335, IT-336, IT-337, IT-338, IT-339, IT-340, IT-371, IT-372, IT-373, IT-374, IT-375, IT-390, IT-423, IT-424, IT-425, IT-426, IT-427, IT-428, IT-429, IT-430, IT-433, IT-434, IT-435, IT-436, IT-437, IT-438, IT-527, IT-528, IT-529, IT-530, IT-531, IT-532, IT-533, IT-534, IT-561, IT-562, IT-567, IT-568, IT-569, IT-570, IT-571, IT-572, IT-573, IT-574, IT-575, IT-576, IT-583, IT-584, IT-585, IT-586
+
+> The 148 assigned IDs are tracked in `harness.Task06AssignedCases()`. The external corpus is not checked into this workspace; this task remains pending until an implementation is registered and executed for every ID.
 
 ## Success Criteria
 
