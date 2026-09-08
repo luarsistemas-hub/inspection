@@ -1,6 +1,9 @@
 .git
 .next
 node_modules
+**/.next
+**/node_modules
+**/dist
 apps/web/node_modules
 apps/web/.next
 apps/web/playwright-report

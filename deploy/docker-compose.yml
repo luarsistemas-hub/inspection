@@ -228,7 +228,7 @@ services:
       NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
       NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-http://localhost:3002}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -256,7 +256,7 @@ services:
       NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
       NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:3000}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3002/"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/inspections"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -277,7 +277,7 @@ services:
       NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
       NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3003/"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3003/manifest.webmanifest"]
       interval: 10s
       timeout: 5s
       retries: 12

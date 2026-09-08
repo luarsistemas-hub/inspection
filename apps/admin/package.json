@@ -14,7 +14,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@inspection/design-system": "0.1.0",
+    "@inspection/design-system": "file:../../packages/inspection-design-system",
     "next": "15.5.25",
     "react": "19.1.1",
     "react-dom": "19.1.1"

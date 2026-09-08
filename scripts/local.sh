@@ -113,8 +113,8 @@ case "${1:-help}" in
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API"
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/readyz" "API pronta"
     wait_http "http://localhost:${INSPECTION_ADMIN_PORT:-3000}/" "Admin"
-    wait_http "http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}/" "Dashboard"
-    wait_http "http://localhost:${INSPECTION_CAPTURE_PORT:-3003}/" "Capture"
+    wait_http "http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}/inspections" "Dashboard"
+    wait_http "http://localhost:${INSPECTION_CAPTURE_PORT:-3003}/manifest.webmanifest" "Capture"
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env
