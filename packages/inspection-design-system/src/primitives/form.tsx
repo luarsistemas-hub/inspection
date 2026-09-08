@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, useId, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export type FieldProps = { label: ReactNode; children: ReactNode; hint?: ReactNode; error?: ReactNode; required?: boolean };
 export type InputProps = InputHTMLAttributes<HTMLInputElement>;
@@ -9,9 +9,25 @@ export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 export function Field({ label, children, hint, error, required = false }: FieldProps) {
   const id = useId();
   const descriptionId = hint || error ? `${id}-description` : undefined;
+  const control = Children.map(children, (child) => {
+    if (!isValidElement(child)) return child;
+
+    const childProps = child.props as Record<string, unknown>;
+    const describedBy = [
+      typeof childProps["aria-describedby"] === "string" ? childProps["aria-describedby"] : null,
+      descriptionId,
+    ].filter(Boolean).join(" ") || undefined;
+
+    return cloneElement(child as ReactElement<Record<string, unknown>>, {
+      "aria-describedby": describedBy,
+      ...(error ? { "aria-invalid": true } : {}),
+      ...(required ? { "aria-required": true, required: true } : {}),
+    });
+  });
+
   return <label className="inspection-field">
     <span>{label}{required ? <span aria-hidden="true"> *</span> : null}</span>
-    <span aria-describedby={descriptionId}>{children}</span>
+    <span>{control}</span>
     {hint || error ? <span id={descriptionId}>{hint ? <span className="inspection-hint">{hint}</span> : null}{error ? <span className="inspection-error" role="alert">{error}</span> : null}</span> : null}
   </label>;
 }
