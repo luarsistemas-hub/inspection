@@ -1,6 +1,22 @@
-:root { color-scheme: light; --ink: #102a43; --brand: #075985; --focus: #b45309; --surface: #f8fafc; }
-* { box-sizing: border-box; } body { margin: 0; background: var(--surface); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
-main { max-width: 42rem; margin: auto; padding: 1rem; } button, input, select, textarea { font: inherit; } button, input, select, textarea { min-height: 44px; }
-button { background: var(--brand); color: #fff; border: 0; border-radius: .4rem; padding: .6rem .9rem; cursor: pointer; } button[disabled] { background: #64748b; cursor: not-allowed; }
-button + button { margin-left: .5rem; } label { display: grid; gap: .4rem; margin-block: .75rem; font-weight: 650; } input, select, textarea { width: 100%; border: 1px solid #64748b; border-radius: .3rem; padding: .55rem; color: var(--ink); background: #fff; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; } .card { background: #fff; border: 1px solid #cbd5e1; border-radius: .5rem; margin-block: 1rem; padding: 1rem; } .warning { border-left: .35rem solid #b45309; padding-left: .75rem; } .status { font-weight: 700; } fieldset { border: 0; padding: 0; } @media (max-width: 360px) { main { padding: .75rem; } h1 { font-size: 1.5rem; } }
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-width: 320px; background: var(--inspection-bg); color: var(--inspection-ink); font: 16px/1.5 var(--inspection-font-sans); -webkit-font-smoothing: antialiased; }
+main { inline-size: min(100% - 2rem, 30rem); min-block-size: 100dvh; margin-inline: auto; padding-block: clamp(1.5rem, 6vw, 3rem) 5rem; }
+h1 { margin: 0 0 var(--inspection-space-2); color: var(--inspection-ink); font: 600 clamp(1.75rem, 7vw, 2.25rem)/1.2 var(--inspection-font-sans); letter-spacing: -0.02em; }
+h2 { margin: 0; color: var(--inspection-ink); font: 600 1.4rem/1.25 var(--inspection-font-sans); }
+p { text-wrap: pretty; }
+.warning { margin-block: var(--inspection-space-4); padding: var(--inspection-space-3); border-inline-start: 0.25rem solid var(--inspection-warning); background: color-mix(in oklch, var(--inspection-warning) 10%, var(--inspection-surface-raised)); color: var(--inspection-warning); }
+.card { display: grid; gap: var(--inspection-space-4); margin-block: var(--inspection-space-4); padding: var(--inspection-space-5); background: var(--inspection-surface-raised); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius-large); box-shadow: var(--inspection-shadow-1); }
+.card > p { margin: 0; color: var(--inspection-muted); }
+.status { color: var(--inspection-muted); font: 0.8rem/1.4 var(--inspection-font-mono); }
+label { display: grid; gap: var(--inspection-space-2); color: var(--inspection-ink); font-weight: 600; }
+input, select, textarea { inline-size: 100%; min-block-size: 3rem; padding: var(--inspection-space-2) var(--inspection-space-3); border: 1px solid var(--inspection-muted); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); color: var(--inspection-ink); font: inherit; }
+textarea { min-block-size: 8rem; resize: vertical; }
+button { min-block-size: 3rem; padding: var(--inspection-space-2) var(--inspection-space-4); border: 1px solid transparent; border-radius: var(--inspection-radius); background: var(--inspection-brand); color: var(--inspection-surface-raised); font-weight: 600; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--inspection-brand-strong); }
+button + button { margin-inline-start: var(--inspection-space-2); background: var(--inspection-surface-raised); border-color: var(--inspection-muted); color: var(--inspection-ink); }
+button:disabled { cursor: not-allowed; opacity: .65; }
+hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspection-border); }
+:focus-visible { outline: var(--inspection-focus-ring); outline-offset: 3px; }
+@media (max-width: 22.5rem) { main { inline-size: calc(100% - 1.5rem); padding-block-start: 1rem; } .card { padding: var(--inspection-space-4); } button { inline-size: 100%; } button + button { margin-block-start: var(--inspection-space-2); margin-inline-start: 0; } }
