@@ -15,7 +15,7 @@ const config: NextConfig = {
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "same-origin" },
       { key: "Permissions-Policy", value: "geolocation=(), camera=()" },
-      { key: "Content-Security-Policy", value: `default-src 'self'; connect-src 'self' ${apiOrigin} ${oidcOrigin}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'` }
+      { key: "Content-Security-Policy", value: `default-src 'self'; connect-src 'self' ${apiOrigin} ${oidcOrigin}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'` }
     ] }];
   }
 };

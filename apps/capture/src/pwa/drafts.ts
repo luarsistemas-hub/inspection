@@ -2,6 +2,7 @@ export type PendingPart = { number: number; etag?: string; complete: boolean };
 export type CaptureDraft = {
   schemaVersion?: 1; id: string; responsibilityId: string; blob: Blob; sha256: string;
   uploadId?: string; mediaId?: string; parts: PendingPart[];
+  metadataSaved?: boolean;
   metadata: { requirementKey: string; description: string; source: "camera" | "gallery"; capturedAt: string };
 };
 
@@ -52,4 +53,9 @@ export async function loadDraftsForResponsibility(responsibilityId: string): Pro
 export const removeDraft = (id: string): Promise<unknown> => transact(storeName, "readwrite", (store) => store.delete(id));
 export async function removeDraftsForResponsibility(responsibilityId: string): Promise<void> { await Promise.all((await loadDraftsForResponsibility(responsibilityId)).map((draft) => removeDraft(draft.id))); }
 export async function digest(file: Blob): Promise<string> { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((byte) => byte.toString(16).padStart(2, "0")).join(""); }
-export const readyForSubmission = (drafts: CaptureDraft[], online: boolean): boolean => online && drafts.length > 0 && drafts.every((draft) => !!draft.mediaId && draft.parts.length > 0 && draft.parts.every((part) => part.complete));
+export const readyForSubmission = (drafts: CaptureDraft[], online: boolean, allRequirementsSatisfied?: boolean): boolean => {
+  if (!online) return false;
+  const mediaReady = drafts.length > 0 && drafts.every((draft) => !!draft.mediaId && draft.metadataSaved !== false && draft.parts.length > 0 && draft.parts.every((part) => part.complete));
+  if (allRequirementsSatisfied === undefined) return mediaReady;
+  return allRequirementsSatisfied && (drafts.length === 0 || mediaReady);
+};

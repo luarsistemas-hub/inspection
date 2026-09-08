@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -22,6 +23,10 @@ import (
 
 const sliceName = "development/seed_qa"
 
+// ErrLocalOnboardingMissing tells the local seed command that it may bootstrap
+// the first Keycloak identity before retrying the QA scenario.
+var ErrLocalOnboardingMissing = errors.New("local admin onboarding missing")
+
 // Setup adds one fresh end-to-end QA scenario to the first active local admin
 // onboarding. Catalog rows are stable across runs; capture scenarios are not.
 func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (string, error) {
@@ -34,7 +39,7 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 		Where("issuer = ? AND role = ? AND status = ?", issuer, "TENANT_ADMIN", "ACTIVE").
 		Order("created_at ASC").First(&membership).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return "", fmt.Errorf("slice %s: local admin onboarding not found; sign in to Admin and create the local operation first", sliceName)
+			return "", fmt.Errorf("%w: slice %s: local admin onboarding not found", ErrLocalOnboardingMissing, sliceName)
 		}
 		return "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
 	}

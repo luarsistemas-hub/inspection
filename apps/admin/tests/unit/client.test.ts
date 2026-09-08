@@ -16,4 +16,9 @@ describe("Admin GraphQL transport", () => {
     await expect(graphql("query Me { me { identityId } }")).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(getAccessToken()).toBeUndefined();
   });
+  it("maps a non-JSON expired response to a stable authentication error", async () => {
+    setSession("admin-token"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("authentication required", { status: 401, headers: { "content-type": "text/plain" } })));
+    await expect(graphql("query Me { me { identityId } }")).rejects.toMatchObject({ code: "UNAUTHENTICATED", message: "Sua sessão expirou. Entre novamente." });
+    expect(getAccessToken()).toBeUndefined();
+  });
 });

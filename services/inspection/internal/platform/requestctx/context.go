@@ -53,6 +53,7 @@ type key struct{}
 type idempotencyKey struct{}
 type responseWriterKey struct{}
 type externalCredentialsKey struct{}
+type secureCookiesKey struct{}
 
 type ExternalCredentials struct {
 	SessionToken string
@@ -87,6 +88,21 @@ func WithResponseWriter(ctx context.Context, writer http.ResponseWriter) context
 func ResponseWriter(ctx context.Context) (http.ResponseWriter, bool) {
 	writer, ok := ctx.Value(responseWriterKey{}).(http.ResponseWriter)
 	return writer, ok
+}
+
+// WithSecureCookies records whether the current boundary can use Secure
+// cookies. Local HTTP keeps this false so browser engines can exercise the
+// external flow; deployed HTTPS boundaries set it to true.
+func WithSecureCookies(ctx context.Context, secure bool) context.Context {
+	return context.WithValue(ctx, secureCookiesKey{}, secure)
+}
+
+func SecureCookies(ctx context.Context) bool {
+	secure, ok := ctx.Value(secureCookiesKey{}).(bool)
+	if !ok {
+		return true
+	}
+	return secure
 }
 
 func WithExternalCredentials(ctx context.Context, credentials ExternalCredentials) context.Context {

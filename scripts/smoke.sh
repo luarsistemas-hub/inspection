@@ -10,15 +10,20 @@ health=$(curl -fsS "$api/healthz")
 printf '%s' "$health" | grep -q 'alive'
 ready=$(curl -fsS "$api/readyz")
 printf '%s' "$ready" | grep -q 'ready'
-curl -fsS "$capture/sw.js" | grep -q 'inspection-static-v1'
+curl -fsS "$capture/sw.js" | grep -Eq "const CACHE[[:space:]]*=[[:space:]]*['\"]inspection-capture-shell-[^'\"]+['\"]"
 curl -fsS "$capture/manifest.webmanifest" | grep -q 'Inspe'
 
 headers=$(mktemp)
 trap 'rm -f "$headers"' EXIT
-for product_url in "$admin" "$dashboard" "$capture"; do curl -fsSI "$product_url/" >"$headers"
+for product_url in "$admin" "$dashboard"; do curl -fsSI "$product_url/" >"$headers"
 grep -qi '^x-content-type-options: nosniff' "$headers"
 grep -qi '^x-frame-options: DENY' "$headers"
 grep -qi '^referrer-policy: same-origin' "$headers"
 grep -qi '^content-security-policy:' "$headers"
 done
+curl -fsSI "$capture/healthz" >"$headers"
+grep -qi '^x-content-type-options: nosniff' "$headers"
+grep -qi '^x-frame-options: DENY' "$headers"
+grep -qi '^referrer-policy: same-origin' "$headers"
+grep -qi '^content-security-policy:' "$headers"
 printf '%s\n' 'smoke: health, readiness, PWA shell and security headers passed'

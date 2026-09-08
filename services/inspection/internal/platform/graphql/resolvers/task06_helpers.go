@@ -3,6 +3,7 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/database"
@@ -43,6 +44,33 @@ func mapTriage(row database.DashboardInspection) *graphql1.TriageInspection {
 		assetID = &value
 	}
 	return &graphql1.TriageInspection{InspectionID: row.InspectionID.String(), ProjectID: projectID, AssetID: assetID, Classification: row.Classification, Status: row.Status, UpdatedAt: row.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")}
+}
+
+func mapRecipientNotification(row database.RecipientNotification) *graphql1.RecipientNotification {
+	var resourceID *string
+	if row.ResourceID != nil {
+		value := row.ResourceID.String()
+		resourceID = &value
+	}
+	var readAt *string
+	if row.ReadAt != nil {
+		value := row.ReadAt.UTC().Format(time.RFC3339Nano)
+		readAt = &value
+	}
+	return &graphql1.RecipientNotification{ID: row.ID.String(), Kind: row.Kind, Title: row.Title, Body: row.Body, ResourceKind: row.ResourceKind, ResourceID: resourceID, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), ReadAt: readAt}
+}
+
+func mapReportPublication(row database.ReportPublication) *graphql1.ReportPublication {
+	var publishedAt, invalidatedAt *string
+	if row.PublishedAt != nil {
+		value := row.PublishedAt.UTC().Format(time.RFC3339Nano)
+		publishedAt = &value
+	}
+	if row.InvalidatedAt != nil {
+		value := row.InvalidatedAt.UTC().Format(time.RFC3339Nano)
+		invalidatedAt = &value
+	}
+	return &graphql1.ReportPublication{ID: row.ID.String(), SnapshotID: row.SnapshotID.String(), InspectionID: row.InspectionID.String(), Status: row.Status, Version: int(row.Version), PublishedAt: publishedAt, InvalidatedAt: invalidatedAt}
 }
 
 func strptr(value string) *string { return &value }

@@ -1,11 +1,33 @@
 package graphql
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/requestctx"
+	"log/slog"
 	"strings"
 	"testing"
 )
+
+func TestPresentErrorLogsInternalCauseWithoutLeakingIt(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{CorrelationID: "corr-qa"})
+	public := PresentError(ctx, errors.New("postgres password=secret"))
+	if public.Message != "internal error" || public.Extensions["correlationId"] != "corr-qa" {
+		t.Fatalf("unexpected public error: %+v", public)
+	}
+	if !strings.Contains(output.String(), "corr-qa") || !strings.Contains(output.String(), "postgres password=secret") {
+		t.Fatalf("internal error was not traceable: %s", output.String())
+	}
+	if strings.Contains(public.Message, "password") || strings.Contains(public.Message, "secret") {
+		t.Fatalf("internal detail leaked: %s", public.Message)
+	}
+}
 
 func TestErrorMapperContractsUT042UT043(t *testing.T) {
 	codes := []apperror.Code{apperror.Unauthenticated, apperror.Forbidden, apperror.NotFound, apperror.InvalidInput, apperror.InvalidState, apperror.Conflict, apperror.RateLimited, apperror.SessionExpired, apperror.DependencyUnavailable, apperror.Internal}

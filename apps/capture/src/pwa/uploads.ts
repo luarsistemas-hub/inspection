@@ -6,6 +6,7 @@ type UserErrors = { userErrors: Array<{ message: string }> };
 
 const failOnError = (value: UserErrors): void => { if (value.userErrors[0]) throw new Error(value.userErrors[0].message); };
 const partsFor = (blob: Blob): PendingPart[] => Array.from({ length: Math.ceil(blob.size / partSize) }, (_, index) => ({ number: index + 1, complete: false }));
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function withDraftLock<T>(draftId: string, action: () => Promise<T>): Promise<T> {
   if (navigator.locks) return navigator.locks.request(`capture-upload:${draftId}`, { mode: "exclusive" }, action);
@@ -36,8 +37,21 @@ export function uploadDraft(draft: CaptureDraft): Promise<CaptureDraft> {
     }
     const completed = await graphql<{ completeMediaUpload: UserErrors }>(captureOperations.completeUpload, { mediaId: current.mediaId, parts: current.parts.map((part) => ({ partNumber: part.number, etag: part.etag })), id: `${draft.id}:complete` });
     failOnError(completed.completeMediaUpload);
-    const metadata = await graphql<{ saveCaptureMetadata: UserErrors }>(captureOperations.metadata, { mediaId: current.mediaId, key: current.metadata.requirementKey, description: current.metadata.description, id: `${draft.id}:metadata` });
-    failOnError(metadata.saveCaptureMetadata);
-    return current;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        const metadata = await graphql<{ saveCaptureMetadata: UserErrors }>(captureOperations.metadata, { mediaId: current.mediaId, key: current.metadata.requirementKey, description: current.metadata.description, id: `${draft.id}:metadata` });
+        failOnError(metadata.saveCaptureMetadata);
+        current = { ...current, metadataSaved: true };
+        await saveDraft(current);
+        return current;
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (attempt === 7 || !/pending|verification|screening|processing|network|fetch/i.test(message)) break;
+        await wait(250 * (attempt + 1));
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("A verificação da foto ainda está em processamento. Tente retomar o envio.");
   });
 }

@@ -51,6 +51,7 @@ import (
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
+	publication "inspection/services/inspection/internal/features/reports/publication"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	segmentactivate "inspection/services/inspection/internal/features/segments/activate_definition"
@@ -503,7 +504,7 @@ func (r *mutationResolver) VerifyInvitationOtp(ctx context.Context, input graphq
 	if !ok {
 		return nil, unauthenticated()
 	}
-	http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: session.Token, Path: "/", Expires: session.ExpiresAt, MaxAge: int(time.Until(session.ExpiresAt).Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: session.Token, Path: "/", Expires: session.ExpiresAt, MaxAge: int(time.Until(session.ExpiresAt).Seconds()), Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	return &graphql1.ExternalSessionPayload{Status: "ACTIVE", CsrfToken: session.CSRF, ExpiresAt: session.ExpiresAt.Format(time.RFC3339Nano), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -514,7 +515,7 @@ func (r *mutationResolver) RevokeInvitation(ctx context.Context, input graphql1.
 		return nil, err
 	}
 	if writer, ok := requestctx.ResponseWriter(ctx); ok {
-		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	}
 	return &graphql1.InvitationPayload{Status: raw.(revokeinvitation.Result).Status, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
@@ -1011,7 +1012,7 @@ func (r *mutationResolver) SubmitCapture(ctx context.Context, input graphql1.Sub
 	}
 	submission := raw.(database.SubmissionVersion)
 	if writer, ok := requestctx.ResponseWriter(ctx); ok {
-		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	}
 	return &graphql1.SubmissionPayload{Submission: &graphql1.Submission{ID: submission.ID.String(), Complete: submission.Complete, RequiresAttention: submission.RequiresAttention, SubmittedAt: submission.SubmittedAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
@@ -1218,22 +1219,119 @@ func (r *mutationResolver) ConfigurePublicationPolicy(ctx context.Context, input
 
 // PublishReport is the resolver for the publishReport field.
 func (r *mutationResolver) PublishReport(ctx context.Context, input graphql1.PublishReportInput) (*graphql1.ReportPublicationPayload, error) {
-	return nil, apperror.New(apperror.InvalidState, "publishReport", "publication command is not configured")
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+		return nil, err
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	snapshotID, err := identity.ParseID(input.SnapshotID)
+	if err != nil {
+		return nil, invalidID("snapshotId")
+	}
+	publicationRow, err := r.PublicationService.Publish(ctx, publication.PublishInput{TenantID: meta.TenantID, InspectionID: inspectionID, SnapshotID: snapshotID, ActorID: meta.Principal.IdentityID, ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Final: true})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.ReportPublicationPayload{Publication: mapReportPublication(publicationRow), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // InvalidateReportPublication is the resolver for the invalidateReportPublication field.
 func (r *mutationResolver) InvalidateReportPublication(ctx context.Context, input graphql1.InvalidateReportPublicationInput) (*graphql1.ReportPublicationPayload, error) {
-	return nil, apperror.New(apperror.InvalidState, "invalidateReportPublication", "publication command is not configured")
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+		return nil, err
+	}
+	publicationID, err := identity.ParseID(input.PublicationID)
+	if err != nil {
+		return nil, invalidID("publicationId")
+	}
+	publicationRow, err := r.PublicationService.Invalidate(ctx, publication.InvalidateInput{TenantID: meta.TenantID, PublicationID: publicationID, ActorID: meta.Principal.IdentityID, Reason: input.Reason, ExpectedVersion: int64(input.ExpectedVersion)})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.ReportPublicationPayload{Publication: mapReportPublication(publicationRow), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // MarkNotificationRead is the resolver for the markNotificationRead field.
 func (r *mutationResolver) MarkNotificationRead(ctx context.Context, input graphql1.MarkNotificationReadInput) (*graphql1.RecipientNotificationPayload, error) {
-	return nil, apperror.New(apperror.InvalidState, "markNotificationRead", "notification command is not configured")
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	notificationID, err := identity.ParseID(input.NotificationID)
+	if err != nil {
+		return nil, invalidID("notificationId")
+	}
+	var row database.RecipientNotification
+	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND id=? AND recipient_membership_id=?", meta.TenantID, notificationID, meta.Principal.MembershipID).First(&row).Error; err != nil {
+			return apperror.New(apperror.NotFound, "notificationId", "notification not found")
+		}
+		now := time.Now().UTC()
+		if row.ReadAt == nil {
+			row.ReadAt = &now
+			if err := tx.Save(&row).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.RecipientNotificationPayload{Notification: mapRecipientNotification(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // ConfigureMyNotificationPreferences is the resolver for the configureMyNotificationPreferences field.
 func (r *mutationResolver) ConfigureMyNotificationPreferences(ctx context.Context, input graphql1.ConfigureNotificationPreferencesInput) (*graphql1.NotificationPreferencesPayload, error) {
-	return nil, apperror.New(apperror.InvalidState, "configureMyNotificationPreferences", "notification command is not configured")
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	selected := make(map[identity.ID]bool, len(input.Channels))
+	for _, value := range input.Channels {
+		id, parseErr := identity.ParseID(value)
+		if parseErr != nil {
+			return nil, invalidID("channels")
+		}
+		selected[id] = true
+	}
+	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		var channels []database.RecipientChannel
+		if err := tx.Where("tenant_id=? AND recipient_membership_id=?", meta.TenantID, meta.Principal.MembershipID).Find(&channels).Error; err != nil {
+			return err
+		}
+		for _, channel := range channels {
+			if channel.Version != int64(input.ExpectedVersion) && input.ExpectedVersion != 0 {
+				return apperror.New(apperror.Conflict, "expectedVersion", "stale notification preferences")
+			}
+		}
+		for _, channel := range channels {
+			if err := tx.Model(&database.RecipientChannel{}).Where("tenant_id=? AND id=?", meta.TenantID, channel.ID).Updates(map[string]any{"selected": selected[channel.ID], "version": channel.Version + 1, "updated_at": time.Now().UTC()}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.NotificationPreferencesPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // Me is the resolver for the me field.
@@ -1939,10 +2037,57 @@ func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, f
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
-	return &graphql1.RecipientNotificationConnection{Nodes: []*graphql1.RecipientNotification{}, PageInfo: pageInfo("", false), UnreadCount: 0}, nil
+	if r.DB == nil {
+		return &graphql1.RecipientNotificationConnection{Nodes: []*graphql1.RecipientNotification{}, PageInfo: pageInfo("", false), UnreadCount: 0}, nil
+	}
+	limit := intValue(first)
+	if limit <= 0 {
+		limit = 25
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	var rows []database.RecipientNotification
+	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		query := tx.Where("tenant_id=? AND recipient_membership_id=?", meta.TenantID, meta.Principal.MembershipID)
+		if unreadOnly != nil && *unreadOnly {
+			query = query.Where("read_at IS NULL")
+		}
+		if after != nil && *after != "" {
+			cursorTime, cursorID, err := dashboardcore.DecodeCursor(*after)
+			if err != nil {
+				return invalidID("after")
+			}
+			query = query.Where("(created_at < ?) OR (created_at = ? AND id < ?)", cursorTime, cursorTime, cursorID)
+		}
+		return query.Order("created_at DESC, id DESC").Limit(limit + 1).Find(&rows).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	var unread int64
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.RecipientNotification{}).Where("tenant_id=? AND recipient_membership_id=? AND read_at IS NULL", meta.TenantID, meta.Principal.MembershipID).Count(&unread).Error
+	}); err != nil {
+		return nil, err
+	}
+	hasNext := len(rows) > limit
+	if hasNext {
+		rows = rows[:limit]
+	}
+	nodes := make([]*graphql1.RecipientNotification, 0, len(rows))
+	for _, row := range rows {
+		nodes = append(nodes, mapRecipientNotification(row))
+	}
+	end := ""
+	if len(rows) > 0 {
+		last := rows[len(rows)-1]
+		end = dashboardcore.EncodeCursor(dashboardcore.Projection{InspectionID: last.ID.String(), UpdatedAt: last.CreatedAt})
+	}
+	return &graphql1.RecipientNotificationConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext), UnreadCount: int(unread)}, nil
 }
 
 // RetentionPolicies is the resolver for the retentionPolicies field.

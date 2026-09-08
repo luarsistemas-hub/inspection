@@ -50,8 +50,9 @@ function AdminContent({ section }: { section: string }) {
   const load = async () => {
     try {
       const isPolicy = action === "publicationPolicy";
-      const operation = isPolicy ? `query Admin${action} { ${action} { mode version } }` : `query Admin${action}($first:Int!,$after:String,$search:String){ ${action}(first:$first,after:$after${["participants", "assets"].includes(action) ? ",search:$search" : ""}) { nodes { id } pageInfo { hasNextPage endCursor } } }`;
-      const variables = isPolicy ? undefined : { first: 25, after: null, search: query || null };
+      const searchable = ["participants", "assets"].includes(action);
+      const operation = isPolicy ? `query Admin${action} { ${action} { mode version } }` : `query Admin${action}($first:Int!,$after:String${searchable ? ",$search:String" : ""}){ ${action}(first:$first,after:$after${searchable ? ",search:$search" : ""}) { nodes { id } pageInfo { hasNextPage endCursor } } }`;
+      const variables = isPolicy ? undefined : searchable ? { first: 25, after: null, search: query || null } : { first: 25, after: null };
       const result = await graphql<Record<string, unknown>>(operation, variables);
       setNotice(`${isPolicy ? "Consulta concluída" : "Consulta paginada concluída"}: ${JSON.stringify(result).slice(0, 100)}…`);
     } catch (error) {

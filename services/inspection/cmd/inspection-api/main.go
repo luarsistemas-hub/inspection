@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
@@ -66,6 +68,7 @@ import (
 	recaptureexpire "inspection/services/inspection/internal/features/recapture/expire_request"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
+	publication "inspection/services/inspection/internal/features/reports/publication"
 	schedulecancel "inspection/services/inspection/internal/features/schedules/cancel_schedule"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	schedulecreate "inspection/services/inspection/internal/features/schedules/create_schedule"
@@ -343,14 +346,21 @@ func run() error {
 	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL}); err != nil {
 		return err
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {
 			http.NotFound(w, r)
 			return
 		}
+		correlationID := r.Header.Get("X-Correlation-ID")
+		if correlationID == "" {
+			correlationID = identity.NewID().String()
+		}
+		w.Header().Set("X-Correlation-ID", correlationID)
+		r.Header.Set("X-Correlation-ID", correlationID)
 		ctx := requestctx.WithResponseWriter(r.Context(), w)
+		ctx = requestctx.WithSecureCookies(ctx, cfg.Environment != "local" || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 		_, hasExternalCookie := r.Cookie("inspection_external")
 		if r.Header.Get("Authorization") != "" && hasExternalCookie == nil {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
@@ -371,7 +381,7 @@ func run() error {
 			}
 			ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{
 				TenantID: principal.TenantID, Principal: principal,
-				CorrelationID: r.Header.Get("X-Correlation-ID"), StartedAt: time.Now().UTC(),
+				CorrelationID: correlationID, StartedAt: time.Now().UTC(),
 			})
 		}
 		if cookie, cookieErr := r.Cookie("inspection_external"); cookieErr == nil {

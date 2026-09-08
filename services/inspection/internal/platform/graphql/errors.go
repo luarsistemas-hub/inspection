@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/requestctx"
 
+	gqlgen "github.com/99designs/gqlgen/graphql"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
@@ -28,7 +30,24 @@ func PresentError(ctx context.Context, err error) *gqlerror.Error {
 		correlationID = metadata.CorrelationID
 	}
 	public := MapError(err, correlationID)
+	if public.Code == apperror.Internal {
+		operation := graphqlOperationName(ctx)
+		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "error", err)
+	}
 	return &gqlerror.Error{Message: public.Message, Extensions: map[string]any{"code": string(public.Code), "field": public.Field, "correlationId": public.CorrelationID}}
+}
+
+func graphqlOperationName(ctx context.Context) (operation string) {
+	operation = "unknown"
+	defer func() {
+		if recover() != nil {
+			operation = "unknown"
+		}
+	}()
+	if operationContext := gqlgen.GetOperationContext(ctx); operationContext != nil && operationContext.Operation != nil && operationContext.Operation.Name != "" {
+		return operationContext.Operation.Name
+	}
+	return operation
 }
 
 func MapError(err error, correlationID string) PublicError {

@@ -47,3 +47,23 @@ internos não são registrados com causa/correlation ID nos logs da API.
 - [012-security-smoke-hardening.md](012-security-smoke-hardening.md)
 
 Issues publicadas no GitHub: [#1](https://github.com/luarsistemas-hub/inspection/issues/1), [#2](https://github.com/luarsistemas-hub/inspection/issues/2), [#3](https://github.com/luarsistemas-hub/inspection/issues/3), [#4](https://github.com/luarsistemas-hub/inspection/issues/4), [#5](https://github.com/luarsistemas-hub/inspection/issues/5), [#6](https://github.com/luarsistemas-hub/inspection/issues/6), [#7](https://github.com/luarsistemas-hub/inspection/issues/7), [#8](https://github.com/luarsistemas-hub/inspection/issues/8), [#9](https://github.com/luarsistemas-hub/inspection/issues/9), [#10](https://github.com/luarsistemas-hub/inspection/issues/10), [#11](https://github.com/luarsistemas-hub/inspection/issues/11) e [#12](https://github.com/luarsistemas-hub/inspection/issues/12).
+
+## Revalidação após as correções
+
+Os problemas da tabela acima são o baseline da rodada; a revalidação foi executada em 2026-09-08 contra a stack Docker reconstruída.
+
+| Escopo | Evidência | Resultado |
+| --- | --- | --- |
+| Admin autenticado | `INSPECTION_E2E_AUTH=true npm run test:e2e` | 14 testes passaram; Organização, Acessos e Auditoria consultaram a API sem erros GraphQL |
+| Dashboard autenticado | `INSPECTION_E2E_AUTH=true npm run test:e2e` | 4 testes passaram; triagem, notificações semeadas e leitura passaram |
+| Capture autenticado | `INSPECTION_E2E_AUTH=true npm run test:e2e` | 4 testes passaram em Android/WebKit; OTP Mailpit, consentimento, impossibilidade sem mídia e envio passaram |
+| Seed | `./scripts/local.sh seed` executado duas vezes | Bootstrap local automático via Keycloak/API e cenários novos por execução |
+| Smoke, segurança e carga | `smoke.sh`, `security-smoke.sh`, `load-smoke.sh` | Passaram; carga: 100 requisições, concorrência 20, p95 4 ms |
+| Dependências | `npm audit --audit-level=high` nos três frontends | 0 vulnerabilidades reportadas |
+
+As fixtures autenticadas observam `console.error`, `pageerror` e respostas GraphQL
+com `errors`. O modo é opt-in porque depende da stack local, Keycloak e Mailpit:
+
+```sh
+INSPECTION_E2E_AUTH=true npm run test:e2e
+```
