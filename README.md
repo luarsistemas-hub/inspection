@@ -31,6 +31,16 @@ Abra <http://localhost:3000>. Keycloak local usa `admin` / `admin`. Para desenvo
 
 Faça login no Keycloak e use `createTenant` para provisionar tenant, unidade inicial e membership `TENANT_ADMIN`. O exemplo está em [`docs/graphql.md`](docs/graphql.md). `healthz` indica processo vivo e `readyz` verifica somente banco/schema compatível.
 
+Depois do onboarding, crie um cenário completo para QA manual (participante,
+ativo, projeto, inspeção, notificação e convite de captura):
+
+```sh
+./scripts/local.sh seed
+```
+
+O comando imprime uma URL descartável do Capture. O código OTP é entregue no
+Mailpit local em <http://localhost:8026>.
+
 ## Comandos
 
 ```sh

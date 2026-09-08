@@ -14,6 +14,7 @@ Comandos:
   up               constrói e sobe a stack completa (Admin, Dashboard e Capture)
   infra            sobe somente infraestrutura, bootstrap e migrations
   migrate          executa migrations e recria os papéis locais
+  seed             cria dados locais para QA após o onboarding do Admin
   status           mostra containers e URLs locais
   logs [serviço]   acompanha logs de toda a stack ou de um serviço
   down             para a stack preservando volumes
@@ -130,6 +131,10 @@ case "${1:-help}" in
     compose run --rm inspection-migrate
     compose run --rm inspection-runtime-bootstrap
     printf 'migrations e papéis locais concluídos.\n'
+    ;;
+  seed)
+    require_base; need go; [[ -f "$env_file" ]] || init; load_env
+    go run ./services/inspection/cmd/inspection-seed
     ;;
   status)
     require_base; [[ -f "$env_file" ]] || init; load_env
