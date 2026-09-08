@@ -27,10 +27,11 @@ export async function beginPKCE(authorizeEndpoint: string, returnTo = "/organiza
 
 export function takePKCE(callbackState: string | null): { verifier: string; returnTo: string } | undefined {
   const serialized = sessionStorage.getItem(key);
-  sessionStorage.removeItem(key);
   if (!serialized || !callbackState) return undefined;
   try {
     const saved = JSON.parse(serialized) as { verifier?: string; state?: string; returnTo?: string };
-    return saved.state === callbackState && saved.verifier ? { verifier: saved.verifier, returnTo: safeAdminPath(saved.returnTo) } : undefined;
+    if (saved.state !== callbackState || !saved.verifier) return undefined;
+    sessionStorage.removeItem(key);
+    return { verifier: saved.verifier, returnTo: safeAdminPath(saved.returnTo) };
   } catch { return undefined; }
 }

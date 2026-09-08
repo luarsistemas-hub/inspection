@@ -11,5 +11,9 @@ export function getAccessToken(): string | undefined { return token; }
 export function getIdentity(): AdminIdentity | undefined { return identity; }
 export function clearSession(): void { token = undefined; identity = undefined; }
 export function hasAdminAccess(current = identity): boolean {
-  return Boolean(current?.entitlements.includes("ADMIN") && current.roles.includes("TENANT_ADMIN"));
+  return Boolean(
+    current?.roles.includes("TENANT_ADMIN")
+      && current.entitlements.includes("ADMIN")
+      && current.entitlements.includes("DASHBOARD"),
+  );
 }

@@ -14,7 +14,12 @@ export async function beginPKCE(authorizeEndpoint: string, returnTo = "/tenants/
 }
 
 export function takePKCE(callbackState: string | null): { verifier: string; returnTo: string } | undefined {
-  const serialized = sessionStorage.getItem(key); sessionStorage.removeItem(key);
+  const serialized = sessionStorage.getItem(key);
   if (!serialized || !callbackState) return undefined;
-  try { const saved = JSON.parse(serialized) as { verifier?: string; state?: string; returnTo?: string }; return saved.state === callbackState && saved.verifier ? { verifier: saved.verifier, returnTo: safeDashboardPath(saved.returnTo) } : undefined; } catch { return undefined; }
+  try {
+    const saved = JSON.parse(serialized) as { verifier?: string; state?: string; returnTo?: string };
+    if (saved.state !== callbackState || !saved.verifier) return undefined;
+    sessionStorage.removeItem(key);
+    return { verifier: saved.verifier, returnTo: safeDashboardPath(saved.returnTo) };
+  } catch { return undefined; }
 }

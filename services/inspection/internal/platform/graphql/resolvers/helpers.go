@@ -38,6 +38,9 @@ func graphql1Error(field string) error {
 
 func internalRole(meta requestctx.Metadata, allowed ...string) error {
 	for _, role := range meta.Principal.Roles {
+		if role == auth.TenantAdmin {
+			return nil
+		}
 		for _, candidate := range allowed {
 			if role == candidate {
 				return nil

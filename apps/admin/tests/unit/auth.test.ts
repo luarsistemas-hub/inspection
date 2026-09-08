@@ -20,10 +20,16 @@ describe("Admin authentication safety", () => {
   });
 
   it("UT-055 clears in-memory access after a revoked or inactive session", () => {
-    setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["TENANT_ADMIN"] });
+    setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN", "DASHBOARD"], roles: ["TENANT_ADMIN"] });
     expect(hasAdminAccess()).toBe(true);
     clearSession();
     expect(getAccessToken()).toBeUndefined();
     expect(hasAdminAccess()).toBe(false);
+  });
+
+  it("recognizes only a tenant admin entitled to both products as super admin", () => {
+    expect(hasAdminAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN", "DASHBOARD"], roles: ["TENANT_ADMIN"] })).toBe(true);
+    expect(hasAdminAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["TENANT_ADMIN"] })).toBe(false);
+    expect(hasAdminAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN", "DASHBOARD"], roles: ["MANAGER"] })).toBe(false);
   });
 });

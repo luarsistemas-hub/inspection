@@ -5,6 +5,7 @@ function originOf(value: string | undefined, fallback: string): string {
 }
 
 const apiOrigin = originOf(process.env.NEXT_PUBLIC_INSPECTION_API_URL, "http://localhost:8080/graphql");
+const oidcOrigin = originOf(process.env.NEXT_PUBLIC_OIDC_TOKEN_URL, "http://localhost:8081/realms/inspection/protocol/openid-connect/token");
 
 const config: NextConfig = {
   poweredByHeader: false,
@@ -14,7 +15,7 @@ const config: NextConfig = {
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "same-origin" },
       { key: "Permissions-Policy", value: "geolocation=(), camera=()" },
-      { key: "Content-Security-Policy", value: `default-src 'self'; connect-src 'self' ${apiOrigin}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'` }
+      { key: "Content-Security-Policy", value: `default-src 'self'; connect-src 'self' ${apiOrigin} ${oidcOrigin}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'` }
     ] }];
   }
 };

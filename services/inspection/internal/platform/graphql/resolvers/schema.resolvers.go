@@ -1243,7 +1243,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 		return nil, nil
 	}
 	principal := meta.Principal
-	if r.Authorizer.Store != nil {
+	if r.Authorizer.Store != nil && meta.TenantID != (identity.ID{}) && principal.IdentityID != (identity.ID{}) {
 		resolved, err := r.Authorizer.Store.Resolve(ctx, meta.TenantID, principal.IdentityID)
 		if err != nil {
 			return nil, err
@@ -1254,9 +1254,13 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	for _, scope := range principal.Scopes {
 		scopes = append(scopes, &graphql1.Scope{Kind: scope.Kind, ResourceID: scope.ID.String()})
 	}
+	memberships := []*graphql1.Membership{}
+	if principal.MembershipID != (identity.ID{}) {
+		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), Version: int(principal.MembershipVersion), Scopes: scopes})
+	}
 	return &graphql1.Me{
 		IdentityID: principal.IdentityID.String(), TenantID: principal.TenantID.String(), Audience: principal.Audience, Product: principal.Product, ProductEntitlements: principal.ProductEntitlements, Roles: principal.Roles,
-		Memberships:     []*graphql1.Membership{{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), Version: int(principal.MembershipVersion), Scopes: scopes}},
+		Memberships:     memberships,
 		EffectiveScopes: scopes,
 	}, nil
 }
@@ -1266,6 +1270,9 @@ func (r *queryResolver) Tenant(ctx context.Context) (*graphql1.Tenant, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
+	}
+	if meta.TenantID == (identity.ID{}) {
+		return nil, nil
 	}
 	var row database.Tenant
 	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("tenant_id=?", meta.TenantID).First(&row).Error })
