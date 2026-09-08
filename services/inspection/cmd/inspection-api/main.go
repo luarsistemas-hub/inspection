@@ -118,13 +118,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	verifier, err := auth.NewRemoteVerifier(context.Background(), cfg.OIDCIssuer, cfg.OIDCAudience, cfg.OIDCJWKSURL)
+	verifier, err := auth.NewRemoteVerifier(context.Background(), cfg.OIDCIssuer, cfg.OIDCAudiences, cfg.OIDCJWKSURL)
 	if err != nil {
 		return fmt.Errorf("initialize OIDC verifier: %w", err)
 	}
-	authenticator := auth.Authenticator{Verifier: verifier, Resolver: auth.GORMMembershipStore{DB: db}, Audience: cfg.OIDCAudience}
+	authenticator := auth.Authenticator{Verifier: verifier, Resolver: auth.GORMMembershipStore{DB: db}, Audience: cfg.OIDCAudience, Audiences: cfg.OIDCAudiences}
 	bus := mediator.New()
-	authorizer := auth.Authorizer{Store: auth.GORMMembershipStore{DB: db}}
+	authorizer := auth.Authorizer{Store: auth.GORMMembershipStore{DB: db}, Scopes: auth.GORMScopeResolver{DB: db}}
 	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
 		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom},
 		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
@@ -351,6 +351,11 @@ func run() error {
 			return
 		}
 		ctx := requestctx.WithResponseWriter(r.Context(), w)
+		_, hasExternalCookie := r.Cookie("inspection_external")
+		if r.Header.Get("Authorization") != "" && hasExternalCookie == nil {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 		if cfg.TestAuthEnabled && r.Header.Get("X-Inspection-Test-Tenant") != "" {
 			metadata, authErr := auth.TestMetadataFromHeaders(r)
 			if authErr != nil {
@@ -377,5 +382,5 @@ func run() error {
 	if err := operational.Setup(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken); err != nil {
 		return err
 	}
-	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigin, mux), cfg.ShutdownTimeout)
+	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, mux), cfg.ShutdownTimeout)
 }

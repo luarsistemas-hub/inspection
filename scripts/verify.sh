@@ -11,15 +11,17 @@ go test ./...
 go vet ./...
 go build ./...
 
-cd apps/web
-npm ci
-npm audit --audit-level=high
-npm run codegen:check
-npm run lint
-npm run test
-npm run build
-npx playwright install chromium webkit
-npm run test:e2e
+for product in admin dashboard capture; do
+  cd "$workspace/apps/$product"
+  npm ci
+  npm audit --audit-level=high
+  npm run codegen:check
+  npm run lint
+  npm run test
+  npm run build
+  npx playwright install chromium webkit
+  npm run test:e2e
+done
 
 cd "$workspace"
 docker compose -f deploy/docker-compose.yml config --quiet

@@ -38,14 +38,14 @@ Deliver the shared security foundation required before any standalone product ca
 
 ## Subtasks
 
-- [ ] 1.1 Add compatible access, entitlement, invitation, constraint, index, and RLS migrations/models.
-- [ ] 1.2 Extend runtime configuration, OIDC verification, request metadata, and exact-origin CORS.
-- [ ] 1.3 Replace exact-only authorization with product-, role-, mutation-, tenant-, and hierarchy-aware decisions.
+- [x] 1.1 Add compatible access, entitlement, invitation, constraint, index, and RLS migrations/models.
+- [x] 1.2 Extend runtime configuration, OIDC verification, request metadata, and exact-origin CORS.
+- [x] 1.3 Replace exact-only authorization with product-, role-, mutation-, tenant-, and hierarchy-aware decisions.
 - [ ] 1.4 Deliver effective-access and scope-preview query slices with explainable direct grants.
 - [ ] 1.5 Deliver internal/customer invitation and atomic membership-access command slices.
 - [ ] 1.6 Deliver the Keycloak provisioning adapter and idempotent retrying invitation consumer.
-- [ ] 1.7 Evolve the canonical GraphQL access schema, resolvers, composition roots, and generated Go boundary.
-- [ ] 1.8 Cover security, RLS, migration compatibility, concurrency, idempotency, and revocation contracts.
+- [x] 1.7 Evolve the canonical GraphQL access schema, resolvers, composition roots, and generated Go boundary.
+- [x] 1.8 Cover security, RLS, migration compatibility, concurrency, idempotency, and revocation contracts.
 - [ ] 1.9 Inventory every current GraphQL operation and remove resolver-local authorization bypasses.
 ## Implementation Details
 

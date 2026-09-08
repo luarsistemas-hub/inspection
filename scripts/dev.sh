@@ -5,7 +5,7 @@ workspace="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 env_file="${INSPECTION_ENV_FILE:-$workspace/.env.inspection}"
 usage() {
   cat <<'EOF'
-Uso: ./scripts/dev.sh <api|worker|scheduler|web>
+Uso: ./scripts/dev.sh <api|worker|scheduler|admin|dashboard|capture|all>
 
 A infraestrutura deve estar ativa (./scripts/local.sh infra).
 Cada processo ocupa um terminal e termina com Ctrl+C.
@@ -30,13 +30,15 @@ load_env() {
   if [[ "${NEXT_PUBLIC_INSPECTION_API_URL:-}" == "http://localhost:8080/graphql" && "${INSPECTION_API_PORT:-8080}" != "8080" ]]; then
     export NEXT_PUBLIC_INSPECTION_API_URL="http://localhost:${INSPECTION_API_PORT}/graphql"
   fi
-  if [[ "${INSPECTION_ALLOWED_ORIGIN:-}" == "http://localhost:3000" && "${INSPECTION_WEB_PORT:-3000}" != "3000" ]]; then
-    export INSPECTION_ALLOWED_ORIGIN="http://localhost:${INSPECTION_WEB_PORT}"
+  if [[ -z "${INSPECTION_ALLOWED_ORIGINS:-}" ]]; then
+    export INSPECTION_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3002,http://localhost:3003"
+  elif [[ "$INSPECTION_ALLOWED_ORIGINS" == "http://localhost:3000,http://localhost:3002,http://localhost:3003" && "${INSPECTION_ADMIN_PORT:-3000}" != "3000" ]]; then
+    export INSPECTION_ALLOWED_ORIGINS="http://localhost:${INSPECTION_ADMIN_PORT},http://localhost:${INSPECTION_DASHBOARD_PORT:-3002},http://localhost:${INSPECTION_CAPTURE_PORT:-3003}"
   fi
 }
 component="${1:-help}"
 [[ "$component" == "help" || "$component" == "-h" || "$component" == "--help" ]] && { usage; exit 0; }
-[[ "$component" =~ ^(api|worker|scheduler|web)$ ]] || { usage; die "componente desconhecido: $component"; }
+[[ "$component" =~ ^(api|worker|scheduler|admin|dashboard|capture|all)$ ]] || { usage; die "componente desconhecido: $component"; }
 load_env
 case "$component" in
   api) need go; check_port "${INSPECTION_API_PORT:-8080}" "API"; export INSPECTION_HTTP_ADDR="${INSPECTION_API_ADDR:-:${INSPECTION_API_PORT:-8080}}"; exec go run ./services/inspection/cmd/inspection-api ;;
@@ -46,9 +48,20 @@ case "$component" in
     exec go run ./services/inspection/cmd/inspection-worker
     ;;
   scheduler) need go; check_port "${INSPECTION_SCHEDULER_PORT:-8083}" "scheduler"; export INSPECTION_HTTP_ADDR="${INSPECTION_SCHEDULER_ADDR:-:${INSPECTION_SCHEDULER_PORT:-8083}}"; exec go run ./services/inspection/cmd/inspection-scheduler ;;
-  web)
-    need node; need npm; web_port="${INSPECTION_WEB_PORT:-3000}"; check_port "$web_port" "frontend"; cd "$workspace/apps/web"
+  admin|dashboard|capture)
+    need node; need npm
+    case "$component" in admin) app_port=3000; app_dir=admin;; dashboard) app_port=3002; app_dir=dashboard;; capture) app_port=3003; app_dir=capture;; esac
+    check_port "${app_port}" "$component"; cd "$workspace/apps/$app_dir"
     if [[ ! -d node_modules || package-lock.json -nt node_modules/.package-lock.json ]]; then npm ci; fi
-    exec npm run dev -- --port "$web_port"
+    exec npm run dev -- --port "$app_port"
+    ;;
+  all)
+    need node; need npm
+    for product in admin dashboard capture; do
+      case "$product" in admin) port=3000;; dashboard) port=3002;; capture) port=3003;; esac
+      check_port "$port" "$product"
+      (cd "$workspace/apps/$product" && npm run dev -- --port "$port") &
+    done
+    wait
     ;;
 esac

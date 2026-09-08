@@ -2,6 +2,13 @@
 
 package graphql
 
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+)
+
 type AcceptProcessingInput struct {
 	DisclosureVersion string `json:"disclosureVersion"`
 	PhotoProcessing   bool   `json:"photoProcessing"`
@@ -212,6 +219,18 @@ type CompletedPartInput struct {
 	Etag       string `json:"etag"`
 }
 
+type ConfigureNotificationPreferencesInput struct {
+	Channels         []string `json:"channels"`
+	ExpectedVersion  int      `json:"expectedVersion"`
+	ClientMutationID string   `json:"clientMutationId"`
+}
+
+type ConfigurePublicationPolicyInput struct {
+	Mode             string `json:"mode"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type ConfigureRetentionPolicyInput struct {
 	EvidenceDays     int    `json:"evidenceDays"`
 	OperationalDays  int    `json:"operationalDays"`
@@ -283,6 +302,66 @@ type CreateTenantPayload struct {
 	Tenant           *Tenant      `json:"tenant,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type CustomerEvidenceConnection struct {
+	Nodes    []*CustomerEvidenceItem `json:"nodes"`
+	PageInfo *PageInfo               `json:"pageInfo"`
+}
+
+type CustomerEvidenceItem struct {
+	ID                string  `json:"id"`
+	RequirementKey    string  `json:"requirementKey"`
+	Description       *string `json:"description,omitempty"`
+	CaptureSource     *string `json:"captureSource,omitempty"`
+	State             string  `json:"state"`
+	LineageID         string  `json:"lineageId"`
+	ReplacedBy        *string `json:"replacedBy,omitempty"`
+	MediaAvailability string  `json:"mediaAvailability"`
+	URL               *string `json:"url,omitempty"`
+}
+
+type CustomerPortfolioConnection struct {
+	Nodes    []*CustomerPortfolioItem `json:"nodes"`
+	PageInfo *PageInfo                `json:"pageInfo"`
+}
+
+type CustomerPortfolioFilter struct {
+	AssetID   *string `json:"assetId,omitempty"`
+	ProjectID *string `json:"projectId,omitempty"`
+	Search    *string `json:"search,omitempty"`
+}
+
+type CustomerPortfolioItem struct {
+	AssetID                 string  `json:"assetId"`
+	ProjectID               *string `json:"projectId,omitempty"`
+	PublishedClassification *string `json:"publishedClassification,omitempty"`
+	Status                  string  `json:"status"`
+	Progress                int     `json:"progress"`
+	UpdatedAt               string  `json:"updatedAt"`
+}
+
+type CustomerReport struct {
+	InspectionID   string `json:"inspectionId"`
+	SnapshotID     string `json:"snapshotId"`
+	Version        int    `json:"version"`
+	Classification string `json:"classification"`
+	Advisory       string `json:"advisory"`
+	Status         string `json:"status"`
+	Historical     bool   `json:"historical"`
+}
+
+type CustomerTimelineConnection struct {
+	Nodes    []*CustomerTimelineEntry `json:"nodes"`
+	PageInfo *PageInfo                `json:"pageInfo"`
+}
+
+type CustomerTimelineEntry struct {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Status     string `json:"status"`
+	OccurredAt string `json:"occurredAt"`
+	Historical bool   `json:"historical"`
 }
 
 type DashboardSummary struct {
@@ -374,6 +453,13 @@ type InvalidateInspectionInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type InvalidateReportPublicationInput struct {
+	PublicationID    string `json:"publicationId"`
+	Reason           string `json:"reason"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type InvitationOtpPayload struct {
 	Status           string       `json:"status"`
 	UserErrors       []*UserError `json:"userErrors"`
@@ -407,12 +493,20 @@ type LegalHoldInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type MarkNotificationReadInput struct {
+	NotificationID   string `json:"notificationId"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type Me struct {
-	IdentityID      string        `json:"identityId"`
-	TenantID        string        `json:"tenantId"`
-	Roles           []string      `json:"roles"`
-	Memberships     []*Membership `json:"memberships"`
-	EffectiveScopes []*Scope      `json:"effectiveScopes"`
+	IdentityID          string        `json:"identityId"`
+	TenantID            string        `json:"tenantId"`
+	Audience            string        `json:"audience"`
+	Product             string        `json:"product"`
+	ProductEntitlements []string      `json:"productEntitlements"`
+	Roles               []string      `json:"roles"`
+	Memberships         []*Membership `json:"memberships"`
+	EffectiveScopes     []*Scope      `json:"effectiveScopes"`
 }
 
 type Media struct {
@@ -478,6 +572,11 @@ type NotificationDelivery struct {
 type NotificationDeliveryConnection struct {
 	Nodes    []*NotificationDelivery `json:"nodes"`
 	PageInfo *PageInfo               `json:"pageInfo"`
+}
+
+type NotificationPreferencesPayload struct {
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
 }
 
 type OriginInvitationPayload struct {
@@ -629,10 +728,27 @@ type ProjectTransitionInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type PublicationPolicy struct {
+	Mode    string `json:"mode"`
+	Version int    `json:"version"`
+}
+
+type PublicationPolicyPayload struct {
+	Policy           *PublicationPolicy `json:"policy,omitempty"`
+	UserErrors       []*UserError       `json:"userErrors"`
+	ClientMutationID string             `json:"clientMutationId"`
+}
+
 type PublishAnalysisProfileInput struct {
 	Key              string         `json:"key"`
 	Definition       map[string]any `json:"definition"`
 	ClientMutationID string         `json:"clientMutationId"`
+}
+
+type PublishReportInput struct {
+	InspectionID     string `json:"inspectionId"`
+	SnapshotID       string `json:"snapshotId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type PublishSegmentDefinitionInput struct {
@@ -670,6 +786,29 @@ type RecapturePayload struct {
 	Recapture        *Recapture   `json:"recapture,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type RecipientNotification struct {
+	ID           string  `json:"id"`
+	Kind         string  `json:"kind"`
+	Title        string  `json:"title"`
+	Body         string  `json:"body"`
+	ResourceKind string  `json:"resourceKind"`
+	ResourceID   *string `json:"resourceId,omitempty"`
+	CreatedAt    string  `json:"createdAt"`
+	ReadAt       *string `json:"readAt,omitempty"`
+}
+
+type RecipientNotificationConnection struct {
+	Nodes       []*RecipientNotification `json:"nodes"`
+	PageInfo    *PageInfo                `json:"pageInfo"`
+	UnreadCount int                      `json:"unreadCount"`
+}
+
+type RecipientNotificationPayload struct {
+	Notification     *RecipientNotification `json:"notification,omitempty"`
+	UserErrors       []*UserError           `json:"userErrors"`
+	ClientMutationID string                 `json:"clientMutationId"`
 }
 
 type RecordDeletionRequestInput struct {
@@ -711,6 +850,22 @@ type ReportDownload struct {
 	URL        string  `json:"url"`
 	Status     string  `json:"status"`
 	Sha256     *string `json:"sha256,omitempty"`
+}
+
+type ReportPublication struct {
+	ID            string  `json:"id"`
+	SnapshotID    string  `json:"snapshotId"`
+	InspectionID  string  `json:"inspectionId"`
+	Status        string  `json:"status"`
+	Version       int     `json:"version"`
+	PublishedAt   *string `json:"publishedAt,omitempty"`
+	InvalidatedAt *string `json:"invalidatedAt,omitempty"`
+}
+
+type ReportPublicationPayload struct {
+	Publication      *ReportPublication `json:"publication,omitempty"`
+	UserErrors       []*UserError       `json:"userErrors"`
+	ClientMutationID string             `json:"clientMutationId"`
 }
 
 type RequestInvitationOtpInput struct {
@@ -1036,4 +1191,59 @@ type VerifyInvitationOtpInput struct {
 	LinkToken        string `json:"linkToken"`
 	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type EvidenceMode string
+
+const (
+	EvidenceModeSimple   EvidenceMode = "SIMPLE"
+	EvidenceModeAdvanced EvidenceMode = "ADVANCED"
+)
+
+var AllEvidenceMode = []EvidenceMode{
+	EvidenceModeSimple,
+	EvidenceModeAdvanced,
+}
+
+func (e EvidenceMode) IsValid() bool {
+	switch e {
+	case EvidenceModeSimple, EvidenceModeAdvanced:
+		return true
+	}
+	return false
+}
+
+func (e EvidenceMode) String() string {
+	return string(e)
+}
+
+func (e *EvidenceMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EvidenceMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EvidenceMode", str)
+	}
+	return nil
+}
+
+func (e EvidenceMode) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EvidenceMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EvidenceMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

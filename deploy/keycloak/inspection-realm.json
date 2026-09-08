@@ -9,7 +9,7 @@
   ],
   "clients": [
     {
-      "clientId": "inspection-web",
+      "clientId": "inspection-admin",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
@@ -18,11 +18,11 @@
       "webOrigins": ["http://localhost:3000"],
       "protocolMappers": [
         {
-          "name": "inspection-web audience",
+          "name": "inspection-admin audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "config": {
-            "included.client.audience": "inspection-web",
+            "included.client.audience": "inspection-admin",
             "access.token.claim": "true",
             "id.token.claim": "true",
             "introspection.token.claim": "true"
@@ -30,6 +30,40 @@
         }
       ],
       "attributes": {"pkce.code.challenge.method": "S256"}
+    },
+    {
+      "clientId": "inspection-dashboard",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3002/auth/callback"],
+      "webOrigins": ["http://localhost:3002"],
+      "protocolMappers": [
+        {
+          "name": "inspection-dashboard audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "inspection-dashboard",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "attributes": {"pkce.code.challenge.method": "S256"}
+    },
+    {
+      "clientId": "inspection-provisioning",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "inspection-provisioning-local-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "serviceAccountsRoles": ["query-users", "view-users", "manage-users"]
     }
   ],
   "users": [

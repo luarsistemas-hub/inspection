@@ -10,15 +10,18 @@ import (
 
 // Principal is the authenticated local identity used for authorization.
 type Principal struct {
-	IdentityID        identity.ID
-	MembershipID      identity.ID
-	MembershipVersion int64
-	TenantID          identity.ID
-	Issuer            string
-	Subject           string
-	Roles             []string
-	Scopes            []Scope
-	Disabled          bool
+	IdentityID          identity.ID
+	MembershipID        identity.ID
+	MembershipVersion   int64
+	TenantID            identity.ID
+	Issuer              string
+	Subject             string
+	Audience            string
+	Product             string
+	ProductEntitlements []string
+	Roles               []string
+	Scopes              []Scope
+	Disabled            bool
 }
 
 // Scope limits a principal to one resource subtree.
@@ -34,6 +37,16 @@ type Metadata struct {
 	CorrelationID string
 	CausationID   string
 	StartedAt     time.Time
+}
+
+// ProductEntitled reports whether the current membership may enter a product.
+func (p Principal) ProductEntitled(product string) bool {
+	for _, entitlement := range p.ProductEntitlements {
+		if entitlement == product {
+			return true
+		}
+	}
+	return false
 }
 
 type key struct{}

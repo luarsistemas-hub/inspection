@@ -1,0 +1,7 @@
+query DashboardGate { me { tenantId productEntitlements roles effectiveScopes { kind resourceId } } tenant { id name status } }
+
+query InternalHome($after: String) { dashboardSummary { total normal attention critical pending invalidated } triageInspections(first: 25, after: $after) { nodes { inspectionId projectId assetId classification status updatedAt } pageInfo { endCursor hasNextPage } } }
+
+query CustomerHome($after: String) { customerPortfolio(first: 25, after: $after) { nodes { assetId projectId publishedClassification status progress updatedAt } pageInfo { endCursor hasNextPage } } }
+
+query CustomerNotifications($after: String) { myNotifications(first: 25, after: $after) { nodes { id kind title body resourceKind resourceId createdAt readAt } unreadCount pageInfo { endCursor hasNextPage } } }

@@ -77,6 +77,18 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (int, error) {
 				return err
 			}
 		}
+		if err := tx.Where("tenant_id = ? AND membership_id = ?", cmd.TenantID, cmd.MembershipID).Delete(&database.ProductEntitlement{}).Error; err != nil {
+			return err
+		}
+		products := []string{auth.DashboardProduct}
+		if cmd.Role == auth.TenantAdmin {
+			products = []string{auth.AdminProduct, auth.DashboardProduct}
+		}
+		for _, product := range products {
+			if err := tx.Create(&database.ProductEntitlement{ID: identity.NewID(), TenantID: cmd.TenantID, MembershipID: cmd.MembershipID, Product: product, CreatedAt: time.Now().UTC()}).Error; err != nil {
+				return err
+			}
+		}
 		membership.Role = cmd.Role
 		membership.Version++
 		membership.UpdatedAt = time.Now().UTC()
@@ -88,7 +100,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (int, error) {
 	return len(cmd.Assignments), nil
 }
 func validRole(r string) bool {
-	return r == auth.TenantAdmin || r == auth.Manager || r == auth.Employee || r == auth.Viewer
+	return r == auth.TenantAdmin || r == auth.Manager || r == auth.Employee || r == auth.Viewer || r == auth.CustomerViewer
 }
 func has(v []string, w string) bool {
 	for _, x := range v {
@@ -100,7 +112,7 @@ func has(v []string, w string) bool {
 }
 
 func validateAssignment(tx *gorm.DB, tenantID identity.ID, role string, assignment Assignment) error {
-	if assignment.ResourceID == (identity.ID{}) || (assignment.Kind != "BUSINESS_UNIT" && assignment.Kind != "ASSET" && assignment.Kind != "INSPECTION") {
+	if assignment.ResourceID == (identity.ID{}) || (assignment.Kind != "BUSINESS_UNIT" && assignment.Kind != "ASSET" && assignment.Kind != "PROJECT" && assignment.Kind != "INSPECTION") {
 		return apperror.New(apperror.InvalidInput, "assignments", "unknown resource")
 	}
 	if role == auth.Viewer && assignment.Kind != "BUSINESS_UNIT" {
@@ -118,6 +130,8 @@ func validateAssignment(tx *gorm.DB, tenantID identity.ID, role string, assignme
 		model = &database.Asset{}
 	case "INSPECTION":
 		model = &database.Inspection{}
+	case "PROJECT":
+		model = &database.Project{}
 	}
 	if err := tx.Model(model).Where("tenant_id = ? AND id = ?", tenantID, assignment.ResourceID).Count(&count).Error; err != nil {
 		return err

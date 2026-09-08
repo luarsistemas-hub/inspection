@@ -25,6 +25,12 @@ type Query {
   triageInspections(first: Int = 25, after: String, classification: String, status: String): TriageInspectionConnection!
   projectTimeline(projectId: ID!): ProjectTimeline!
   notificationDeliveries(first: Int = 25, after: String): NotificationDeliveryConnection!
+  publicationPolicy: PublicationPolicy!
+  customerPortfolio(filter: CustomerPortfolioFilter, first: Int = 25, after: String): CustomerPortfolioConnection!
+  customerTimeline(assetId: ID, projectId: ID, first: Int = 25, after: String): CustomerTimelineConnection!
+  customerReport(inspectionId: ID!, version: Int): CustomerReport
+  customerEvidence(inspectionId: ID!, mode: EvidenceMode = SIMPLE, first: Int = 25, after: String): CustomerEvidenceConnection!
+  myNotifications(unreadOnly: Boolean = false, first: Int = 25, after: String): RecipientNotificationConnection!
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
   externalCapture: ExternalCapture!
@@ -82,13 +88,18 @@ type Mutation {
   recordDeletionRequest(input: RecordDeletionRequestInput!): RetentionMutationPayload!
   applyLegalHold(input: LegalHoldInput!): RetentionMutationPayload!
   releaseLegalHold(input: LegalHoldInput!): RetentionMutationPayload!
+  configurePublicationPolicy(input: ConfigurePublicationPolicyInput!): PublicationPolicyPayload!
+  publishReport(input: PublishReportInput!): ReportPublicationPayload!
+  invalidateReportPublication(input: InvalidateReportPublicationInput!): ReportPublicationPayload!
+  markNotificationRead(input: MarkNotificationReadInput!): RecipientNotificationPayload!
+  configureMyNotificationPreferences(input: ConfigureNotificationPreferencesInput!): NotificationPreferencesPayload!
 }
 
 type Scope { kind: String! resourceId: ID! }
 type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
-type Me { identityId: ID! tenantId: ID! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! }
+type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! }
 type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
 type BusinessUnit { id: ID! code: String! name: String! status: String! version: Int! }
 type BusinessUnitConnection { nodes: [BusinessUnit!]! pageInfo: PageInfo! }
@@ -143,6 +154,22 @@ type PresignedPart { partNumber: Int! url: String! expiresAt: String! }
 type Submission { id: ID! complete: Boolean! requiresAttention: Boolean! submittedAt: String! }
 type Recapture { id: ID! responsibilityId: ID! status: String! deadlineAt: String }
 type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! }
+type PublicationPolicy { mode: String! version: Int! }
+type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
+type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
+type ReportPublicationPayload { publication: ReportPublication userErrors: [UserError!]! clientMutationId: String! }
+type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
+type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
+type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
+type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! }
+enum EvidenceMode { SIMPLE ADVANCED }
+type CustomerEvidenceItem { id: ID! requirementKey: String! description: String captureSource: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! url: String }
+type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
+type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String }
+type RecipientNotificationConnection { nodes: [RecipientNotification!]! pageInfo: PageInfo! unreadCount: Int! }
+type NotificationPreferencesPayload { userErrors: [UserError!]! clientMutationId: String! }
+type RecipientNotificationPayload { notification: RecipientNotification userErrors: [UserError!]! clientMutationId: String! }
 type ReportDownload { snapshotId: ID! kind: String! objectKey: String! url: String! status: String! sha256: String }
 type DashboardSummary { total: Int! normal: Int! attention: Int! critical: Int! pending: Int! invalidated: Int! }
 type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classification: String! status: String! updatedAt: String! }
@@ -211,6 +238,12 @@ input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationI
 input ConfigureRetentionPolicyInput { evidenceDays: Int! operationalDays: Int! securityDays: Int clientMutationId: String! }
 input RecordDeletionRequestInput { inspectionId: ID! reason: String clientMutationId: String! }
 input LegalHoldInput { inspectionId: ID! reason: String! clientMutationId: String! }
+input ConfigurePublicationPolicyInput { mode: String! expectedVersion: Int! clientMutationId: String! }
+input PublishReportInput { inspectionId: ID! snapshotId: ID! clientMutationId: String! }
+input InvalidateReportPublicationInput { publicationId: ID! reason: String! expectedVersion: Int! clientMutationId: String! }
+input MarkNotificationReadInput { notificationId: ID! clientMutationId: String! }
+input ConfigureNotificationPreferencesInput { channels: [ID!]! expectedVersion: Int! clientMutationId: String! }
+input CustomerPortfolioFilter { assetId: ID projectId: ID search: String }
 
 type CreateTenantPayload { tenant: Tenant userErrors: [UserError!]! clientMutationId: String! }
 type TenantPayload { tenant: Tenant userErrors: [UserError!]! clientMutationId: String! }

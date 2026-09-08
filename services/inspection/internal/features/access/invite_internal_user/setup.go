@@ -103,6 +103,15 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 				return err
 			}
 		}
+		products := []string{auth.DashboardProduct}
+		if cmd.Role == auth.TenantAdmin {
+			products = []string{auth.AdminProduct, auth.DashboardProduct}
+		}
+		for _, product := range products {
+			if err := tx.Create(&database.ProductEntitlement{ID: identity.NewID(), TenantID: cmd.TenantID, MembershipID: membership.ID, Product: product, CreatedAt: deps.Now().UTC()}).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -112,7 +121,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 }
 
 func validRole(role string) bool {
-	return role == auth.TenantAdmin || role == auth.Manager || role == auth.Employee || role == auth.Viewer
+	return role == auth.TenantAdmin || role == auth.Manager || role == auth.Employee || role == auth.Viewer || role == auth.CustomerViewer
 }
 
 func has(roles []string, wanted string) bool {
@@ -126,7 +135,7 @@ func has(roles []string, wanted string) bool {
 
 func validateScopes(scopes []Scope) error {
 	for _, scope := range scopes {
-		if scope.ResourceID == (identity.ID{}) || (scope.Kind != "BUSINESS_UNIT" && scope.Kind != "ASSET" && scope.Kind != "INSPECTION") {
+		if scope.ResourceID == (identity.ID{}) || (scope.Kind != "BUSINESS_UNIT" && scope.Kind != "ASSET" && scope.Kind != "PROJECT" && scope.Kind != "INSPECTION") {
 			return apperror.New(apperror.InvalidInput, "scopes", "unknown resource scope")
 		}
 	}
@@ -149,6 +158,8 @@ func validateScope(tx *gorm.DB, tenantID identity.ID, scope Scope, role string) 
 		model = &database.Asset{}
 	case "INSPECTION":
 		model = &database.Inspection{}
+	case "PROJECT":
+		model = &database.Project{}
 	default:
 		return apperror.New(apperror.InvalidInput, "scopes", "unknown resource scope")
 	}

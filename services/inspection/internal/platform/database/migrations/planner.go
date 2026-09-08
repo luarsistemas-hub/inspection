@@ -379,5 +379,70 @@ DO $$ BEGIN CREATE ROLE inspection_worker INHERIT BYPASSRLS NOLOGIN; EXCEPTION W
 GRANT inspection_runtime TO inspection_worker;`},
 		{Version: 19, Name: "recapture_responsibility_lineage", Compatible: true, SQL: `
 DROP INDEX IF EXISTS inspections.idx_inspection_responsibility;
-CREATE INDEX IF NOT EXISTS idx_inspection_responsibility ON inspections.responsibilities(tenant_id, inspection_id);`}}
+CREATE INDEX IF NOT EXISTS idx_inspection_responsibility ON inspections.responsibilities(tenant_id, inspection_id);`},
+		{Version: 20, Name: "product_entitlements_and_access_contract", Compatible: true, SQL: `
+CREATE TABLE IF NOT EXISTS access.product_entitlements (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  membership_id uuid NOT NULL,
+  product varchar(16) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_product_entitlement UNIQUE (tenant_id, membership_id, product),
+  CONSTRAINT chk_product_entitlement_product CHECK (product IN ('ADMIN','DASHBOARD'))
+);
+ALTER TABLE access.product_entitlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access.product_entitlements FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON access.product_entitlements;
+CREATE POLICY tenant_isolation ON access.product_entitlements USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE INDEX IF NOT EXISTS idx_product_entitlements_membership ON access.product_entitlements(tenant_id, membership_id);
+INSERT INTO access.product_entitlements (id, tenant_id, membership_id, product)
+SELECT gen_random_uuid(), tenant_id, id, CASE WHEN role='TENANT_ADMIN' THEN 'ADMIN' ELSE 'DASHBOARD' END
+FROM access.memberships WHERE status='ACTIVE'
+ON CONFLICT (tenant_id, membership_id, product) DO NOTHING;
+INSERT INTO access.product_entitlements (id, tenant_id, membership_id, product)
+SELECT gen_random_uuid(), tenant_id, id, 'DASHBOARD'
+FROM access.memberships WHERE status='ACTIVE' AND role='TENANT_ADMIN'
+ON CONFLICT (tenant_id, membership_id, product) DO NOTHING;
+ALTER TABLE access.resource_scopes DROP CONSTRAINT IF EXISTS chk_resource_scope_kind;
+ALTER TABLE access.resource_scopes ADD CONSTRAINT chk_resource_scope_kind CHECK (kind IN ('BUSINESS_UNIT','ASSET','PROJECT','INSPECTION'));
+ALTER TABLE access.memberships DROP CONSTRAINT IF EXISTS chk_membership_role;
+ALTER TABLE access.memberships ADD CONSTRAINT chk_membership_role CHECK (role IN ('TENANT_ADMIN','MANAGER','EMPLOYEE','VIEWER','CUSTOMER_VIEWER'));
+		GRANT SELECT, INSERT, UPDATE, DELETE ON access.product_entitlements TO inspection_runtime;`},
+		{Version: 21, Name: "report_publication_and_recipient_notifications", Compatible: true, SQL: `
+ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS publication_policy_version bigint NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS reports.publication_policies (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL UNIQUE, mode varchar(16) NOT NULL,
+  version bigint NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_publication_policy_mode CHECK (mode IN ('MANUAL','AUTOMATIC'))
+);
+CREATE TABLE IF NOT EXISTS reports.report_publications (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, snapshot_id uuid NOT NULL, inspection_id uuid NOT NULL,
+  policy_version bigint NOT NULL, client_mutation_id varchar(200) NOT NULL, status varchar(20) NOT NULL,
+  actor_id uuid NOT NULL, reason varchar(2000), version bigint NOT NULL DEFAULT 1,
+  published_at timestamptz, invalidated_at timestamptz, superseded_by uuid, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chk_report_publication_status CHECK (status IN ('PUBLISHED','INVALIDATED','SUPERSEDED')),
+  CONSTRAINT uq_report_publication_snapshot UNIQUE (tenant_id, snapshot_id),
+  CONSTRAINT uq_report_publication_mutation UNIQUE (tenant_id, client_mutation_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_report_publication_active ON reports.report_publications(tenant_id, inspection_id) WHERE status='PUBLISHED';
+CREATE TABLE IF NOT EXISTS notifications.recipient_channels (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, recipient_membership_id uuid NOT NULL, channel varchar(20) NOT NULL,
+  destination varchar(320) NOT NULL, verified_at timestamptz, selected boolean NOT NULL DEFAULT false,
+  version bigint NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_recipient_channel UNIQUE (tenant_id, recipient_membership_id, channel, destination)
+);
+CREATE TABLE IF NOT EXISTS notifications.recipient_notifications (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, recipient_membership_id uuid NOT NULL, event_id uuid NOT NULL,
+  kind varchar(100) NOT NULL, title varchar(500) NOT NULL, body varchar(2000) NOT NULL,
+  resource_kind varchar(100) NOT NULL, resource_id uuid, created_at timestamptz NOT NULL DEFAULT now(), read_at timestamptz,
+  CONSTRAINT uq_recipient_notification UNIQUE (tenant_id, recipient_membership_id, event_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_recipient_notifications_cursor ON notifications.recipient_notifications(tenant_id, recipient_membership_id, created_at DESC, id DESC);
+DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['reports.publication_policies','reports.report_publications','notifications.recipient_channels','notifications.recipient_notifications'] LOOP
+  EXECUTE 'ALTER TABLE ' || t || ' ENABLE ROW LEVEL SECURITY'; EXECUTE 'ALTER TABLE ' || t || ' FORCE ROW LEVEL SECURITY';
+  EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON ' || t;
+  EXECUTE 'CREATE POLICY tenant_isolation ON ' || t || ' USING (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid) WITH CHECK (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid)';
+END LOOP; END $$;
+GRANT USAGE ON SCHEMA reports, notifications TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA reports, notifications TO inspection_runtime;`}}
 }

@@ -37,3 +37,25 @@ func TestAuthorizationContractsUT017UT018(t *testing.T) {
 		})
 	}
 }
+
+func TestProductAuthorizationRequiresAudienceAndEntitlement(t *testing.T) {
+	tenant, subject := identity.NewID(), identity.NewID()
+	base := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenant, Principal: requestctx.Principal{IdentityID: subject, TenantID: tenant, Roles: []string{TenantAdmin}, ProductEntitlements: []string{AdminProduct}, Product: AdminProduct}})
+	if _, err := (Authorizer{}).Authorize(base, AuthorizationRequest{TenantID: tenant, Product: AdminProduct, Roles: []string{TenantAdmin}}); err != nil {
+		t.Fatalf("admin access denied: %v", err)
+	}
+	if _, err := (Authorizer{}).Authorize(base, AuthorizationRequest{TenantID: tenant, Product: DashboardProduct, Roles: []string{TenantAdmin}}); err == nil {
+		t.Fatal("missing dashboard entitlement accepted")
+	}
+	if _, err := (Authorizer{}).Authorize(base, AuthorizationRequest{TenantID: identity.NewID(), Product: AdminProduct, Roles: []string{TenantAdmin}}); err == nil {
+		t.Fatal("cross-tenant access accepted")
+	}
+}
+
+func TestProductAuthorizationRejectsCustomerMutation(t *testing.T) {
+	tenant, subject := identity.NewID(), identity.NewID()
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenant, Principal: requestctx.Principal{IdentityID: subject, TenantID: tenant, Roles: []string{CustomerViewer}, ProductEntitlements: []string{DashboardProduct}, Product: DashboardProduct}})
+	if _, err := (Authorizer{}).Authorize(ctx, AuthorizationRequest{TenantID: tenant, Product: DashboardProduct, Roles: []string{CustomerViewer}, Mutate: true}); err == nil {
+		t.Fatal("customer mutation accepted")
+	}
+}

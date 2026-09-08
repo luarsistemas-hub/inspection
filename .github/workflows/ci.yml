@@ -31,18 +31,38 @@ jobs:
       - run: go build ./...
       - run: docker compose -f deploy/docker-compose.yml config --quiet
       - run: ./scripts/validate-compozy-tasks.sh
-  web:
+  design-system:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/web
+        working-directory: packages/inspection-design-system
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: packages/inspection-design-system/package-lock.json
+      - run: npm ci
+      - run: npm run test
+      - run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        product: [admin, dashboard, capture]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.product }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.product }}/package-lock.json
       - run: npm ci
       - run: npm audit --audit-level=high
       - run: npm run codegen:check
@@ -50,21 +70,18 @@ jobs:
       - run: npm run test
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
-      - name: Start acceptance services
-        run: |
-          cd ../..
-          ./scripts/local.sh init
-          ./scripts/local.sh infra
-          docker compose --env-file .env.inspection -f deploy/docker-compose.yml up -d --build inspection-api inspection-worker
-          timeout 180 bash -c 'until curl --silent --show-error --fail http://localhost:8080/healthz >/dev/null && curl --silent --show-error --fail http://localhost:8080/readyz >/dev/null; do sleep 2; done'
-      - run: npm run test:e2e
-      - name: Stop acceptance services
-        if: always()
-        run: docker compose --env-file ../../.env.inspection -f ../../deploy/docker-compose.yml down -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.product }}
           path: |
-            apps/web/playwright-report
-            apps/web/test-results
+            apps/${{ matrix.product }}/playwright-report
+            apps/${{ matrix.product }}/test-results
+
+  cross-product:
+    runs-on: ubuntu-latest
+    needs: [go, design-system, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f deploy/docker-compose.yml config --quiet
+      - run: ./scripts/validate-compozy-tasks.sh

@@ -18,9 +18,12 @@ type Config struct {
 	DispatcherDatabaseURL string
 	MigrationDatabaseURL  string
 	AllowedOrigin         string
+	AllowedOrigins        []string
+	CaptureOrigin         string
 	MetricsToken          string
 	OIDCIssuer            string
 	OIDCAudience          string
+	OIDCAudiences         []string
 	OIDCJWKSURL           string
 	SchemaMin             int
 	SchemaMax             int
@@ -56,9 +59,9 @@ type Config struct {
 func Load() (Config, error) {
 	c := Config{
 		Environment: env("INSPECTION_ENV", "local"), HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
-		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"),
+		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
-		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
+		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
 		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 19), ShutdownTimeout: 10 * time.Second,
 		RuntimeDBRole:    env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
 		StoragePublic:    strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
@@ -73,7 +76,27 @@ func Load() (Config, error) {
 		c.MinIOPublicSecure = c.MinIOSecure
 	}
 	c.TestAuthEnabled = c.Environment == "test" && strings.EqualFold(os.Getenv("INSPECTION_TEST_AUTH_ENABLED"), "true")
+	if len(c.AllowedOrigins) == 0 && c.AllowedOrigin != "" {
+		c.AllowedOrigins = []string{c.AllowedOrigin}
+	} else if c.AllowedOrigin == "" && len(c.AllowedOrigins) > 0 {
+		c.AllowedOrigin = c.AllowedOrigins[0]
+	}
+	if len(c.OIDCAudiences) == 0 && c.OIDCAudience != "" {
+		c.OIDCAudiences = []string{c.OIDCAudience}
+	} else if c.OIDCAudience == "" && len(c.OIDCAudiences) > 0 {
+		c.OIDCAudience = c.OIDCAudiences[0]
+	}
 	return c, c.Validate()
+}
+
+func splitExact(value string) []string {
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 func envDuration(key string, fallback time.Duration) time.Duration {
 	value, err := time.ParseDuration(os.Getenv(key))
@@ -99,12 +122,40 @@ func envInt(key string, fallback int) int {
 
 // Validate fails closed for security-sensitive values.
 func (c Config) Validate() error {
-	if c.DatabaseURL == "" || c.MigrationDatabaseURL == "" || c.AllowedOrigin == "" || c.OIDCIssuer == "" || c.OIDCAudience == "" {
+	if len(c.AllowedOrigins) == 0 && c.AllowedOrigin != "" {
+		c.AllowedOrigins = []string{c.AllowedOrigin}
+	}
+	if len(c.OIDCAudiences) == 0 && c.OIDCAudience != "" {
+		c.OIDCAudiences = []string{c.OIDCAudience}
+	}
+	if c.DatabaseURL == "" || c.MigrationDatabaseURL == "" || len(c.AllowedOrigins) == 0 || c.OIDCIssuer == "" || len(c.OIDCAudiences) == 0 {
 		return fmt.Errorf("configuration: missing required endpoint or OIDC setting")
 	}
-	origin, err := url.Parse(c.AllowedOrigin)
-	if err != nil || origin.Scheme == "" || origin.Host == "" || strings.Contains(c.AllowedOrigin, "*") {
-		return fmt.Errorf("configuration: invalid allowed origin")
+	seenOrigins := map[string]struct{}{}
+	for _, raw := range c.AllowedOrigins {
+		origin, err := url.Parse(raw)
+		if err != nil || origin.Scheme == "" || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" || strings.Contains(raw, "*") || origin.User != nil || (c.Environment != "local" && origin.Scheme != "https") {
+			return fmt.Errorf("configuration: invalid allowed origin")
+		}
+		if _, ok := seenOrigins[raw]; ok {
+			return fmt.Errorf("configuration: duplicate allowed origin")
+		}
+		seenOrigins[raw] = struct{}{}
+	}
+	if c.CaptureOrigin != "" {
+		if _, ok := seenOrigins[c.CaptureOrigin]; !ok {
+			return fmt.Errorf("configuration: capture origin is not allowed")
+		}
+	}
+	seenAudiences := map[string]struct{}{}
+	for _, audience := range c.OIDCAudiences {
+		if audience == "" {
+			return fmt.Errorf("configuration: invalid OIDC audience")
+		}
+		if _, ok := seenAudiences[audience]; ok {
+			return fmt.Errorf("configuration: duplicate OIDC audience")
+		}
+		seenAudiences[audience] = struct{}{}
 	}
 	if c.StoragePublic {
 		return fmt.Errorf("configuration: public storage is forbidden")

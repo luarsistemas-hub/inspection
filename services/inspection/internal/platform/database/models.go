@@ -68,6 +68,17 @@ type Membership struct {
 
 func (Membership) TableName() string { return "access.memberships" }
 
+// ProductEntitlement grants independent access to Admin or Dashboard.
+type ProductEntitlement struct {
+	ID           identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID     identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_entitlements_unique,priority:1"`
+	MembershipID identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_entitlements_unique,priority:2;index"`
+	Product      string      `gorm:"size:16;not null;uniqueIndex:idx_entitlements_unique,priority:3"`
+	CreatedAt    time.Time
+}
+
+func (ProductEntitlement) TableName() string { return "access.product_entitlements" }
+
 // ResourceScope stores an explicit hierarchical assignment.
 type ResourceScope struct {
 	ID           identity.ID `gorm:"type:uuid;primaryKey"`
@@ -839,6 +850,7 @@ type ReportSnapshot struct {
 	ProjectID                                    *identity.ID    `gorm:"type:uuid"`
 	Mode, Classification, JSONDigest, HTMLDigest string          `gorm:"size:64;not null"`
 	VersionNumber                                int             `gorm:"not null"`
+	PublicationPolicyVersion                     int64           `gorm:"not null;default:0"`
 	CanonicalJSON, HTML                          json.RawMessage `gorm:"type:jsonb;not null"`
 	CreatedAt                                    time.Time
 }
@@ -852,6 +864,63 @@ type ReportArtifact struct {
 }
 
 func (ReportArtifact) TableName() string { return "reports.report_artifacts" }
+
+// PublicationPolicy stores the current tenant publication preference. A
+// missing row is intentionally equivalent to MANUAL version zero.
+type PublicationPolicy struct {
+	ID, TenantID identity.ID `gorm:"type:uuid;primaryKey"`
+	Mode         string      `gorm:"size:16;not null"`
+	Version      int64       `gorm:"not null;default:1"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+func (PublicationPolicy) TableName() string { return "reports.publication_policies" }
+
+// ReportPublication is the audited, mutable visibility ledger for an
+// immutable report snapshot.
+type ReportPublication struct {
+	ID, TenantID, SnapshotID, InspectionID identity.ID `gorm:"type:uuid;primaryKey"`
+	PolicyVersion                          int64       `gorm:"not null"`
+	ClientMutationID                       string      `gorm:"size:200;not null"`
+	Status                                 string      `gorm:"size:20;not null;index"`
+	ActorID                                identity.ID `gorm:"type:uuid;not null"`
+	Reason                                 string      `gorm:"size:2000"`
+	Version                                int64       `gorm:"not null;default:1"`
+	PublishedAt                            *time.Time
+	InvalidatedAt                          *time.Time
+	SupersededBy                           *identity.ID `gorm:"type:uuid"`
+	CreatedAt                              time.Time
+	UpdatedAt                              time.Time
+}
+
+func (ReportPublication) TableName() string { return "reports.report_publications" }
+
+// RecipientChannel is owned by a dashboard membership, unlike participant
+// contacts and internal alert recipients.
+type RecipientChannel struct {
+	ID, TenantID, RecipientMembershipID identity.ID `gorm:"type:uuid;primaryKey"`
+	Channel                             string      `gorm:"size:20;not null"`
+	Destination                         string      `gorm:"size:320;not null"`
+	VerifiedAt                          *time.Time
+	Selected                            bool  `gorm:"not null;default:false"`
+	Version                             int64 `gorm:"not null;default:1"`
+	CreatedAt                           time.Time
+	UpdatedAt                           time.Time
+}
+
+func (RecipientChannel) TableName() string { return "notifications.recipient_channels" }
+
+// RecipientNotification is a safe, per-membership in-app notification.
+type RecipientNotification struct {
+	ID, TenantID, RecipientMembershipID, EventID identity.ID  `gorm:"type:uuid;primaryKey"`
+	Kind, Title, Body, ResourceKind              string       `gorm:"size:500;not null"`
+	ResourceID                                   *identity.ID `gorm:"type:uuid"`
+	CreatedAt                                    time.Time
+	ReadAt                                       *time.Time
+}
+
+func (RecipientNotification) TableName() string { return "notifications.recipient_notifications" }
 
 type RetentionPolicy struct {
 	ID, TenantID                  identity.ID `gorm:"type:uuid;primaryKey"`
@@ -936,7 +1005,7 @@ func (PurgeRun) TableName() string { return "retention.purge_runs" }
 
 // Models is the explicit additive migration allowlist.
 func Models() []any {
-	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
+	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ProductEntitlement{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},
 		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisProfile{}, &AnalysisProfileVersion{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
@@ -950,6 +1019,7 @@ func Models() []any {
 		&Project{}, &ProjectStage{}, &StageTransition{},
 		&ComparisonJob{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
 		&ReportSnapshot{}, &ReportArtifact{}, &RetentionPolicy{},
+		&PublicationPolicy{}, &ReportPublication{}, &RecipientChannel{}, &RecipientNotification{},
 		&DashboardInspection{}, &UsageRecord{}, &UsageDailySummary{},
 		&DeletionRequest{}, &LegalHold{}, &PurgeRun{}}
 }

@@ -1,0 +1,7 @@
+query ExternalCaptureBootstrap {
+  externalCapture {
+    responsibilityId recaptureRequestId status confirmationOnly kind disclosureVersion reference policy
+    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired impossibilityAllowed }
+    answers { requirementKey mediaIds impossibilityReason version }
+  }
+}

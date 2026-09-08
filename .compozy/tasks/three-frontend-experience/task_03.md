@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Versioned Shared Design System
 type: frontend
 complexity: medium
@@ -32,12 +32,12 @@ Create the private, semantically versioned UI package that gives Admin, Dashboar
 
 ## Subtasks
 
-- [ ] 3.1 Establish the standalone package metadata, TypeScript/build configuration, export map, and private publication contract.
-- [ ] 3.2 Extract and normalize shared brand, typography, color, spacing, elevation, focus, and responsive tokens.
-- [ ] 3.3 Deliver the minimal accessible form, action, feedback, navigation, overlay, and content primitives required by the products.
-- [ ] 3.4 Deliver icons and product-identification primitives for unambiguous Admin, Dashboard, and Capture context.
-- [ ] 3.5 Document supported exports, versioning, accessibility behavior, and product-specific composition boundaries.
-- [ ] 3.6 Add package contract, accessibility, reduced-motion, and viewport unit coverage.
+- [x] 3.1 Establish the standalone package metadata, TypeScript/build configuration, export map, and private publication contract.
+- [x] 3.2 Extract and normalize shared brand, typography, color, spacing, elevation, focus, and responsive tokens.
+- [x] 3.3 Deliver the minimal accessible form, action, feedback, navigation, overlay, and content primitives required by the products.
+- [x] 3.4 Deliver icons and product-identification primitives for unambiguous Admin, Dashboard, and Capture context.
+- [x] 3.5 Document supported exports, versioning, accessibility behavior, and product-specific composition boundaries.
+- [x] 3.6 Add package contract, accessibility, reduced-motion, and viewport unit coverage.
 ## Implementation Details
 
 Follow ADR-005 and the TechSpec “Frontend Project Structure.” The current `apps/web` styles are input material, not a public API; extract only concrete reuse needed by all three applications and publish a built package that consumers install from the private registry.
@@ -77,7 +77,7 @@ Create `packages/inspection-design-system/package.json`, its independent lockfil
 
 Cases assigned from `_tests.md`; read each full definition before implementation.
 
-- [ ] Unit: UT-067, UT-068, UT-069, UT-070 — primitive accessibility, responsive tokens, reduced motion, and export-boundary enforcement.
+- [x] Unit: UT-067, UT-068, UT-069, UT-070 — primitive accessibility, responsive tokens, reduced motion, and export-boundary enforcement.
 
 ## Success Criteria
 

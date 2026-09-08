@@ -111,6 +111,11 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (Result, error)
 		if err := tx.Create(&membership).Error; err != nil {
 			return err
 		}
+		for _, product := range []string{"ADMIN", "DASHBOARD"} {
+			if err := tx.Create(&database.ProductEntitlement{ID: deps.NewID(), TenantID: result.TenantID, MembershipID: membership.ID, Product: product, CreatedAt: now}).Error; err != nil {
+				return err
+			}
+		}
 		raw, err := json.Marshal(result)
 		if err != nil {
 			return err

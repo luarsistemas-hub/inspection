@@ -26,11 +26,15 @@ type Input struct {
 	Coverage                                                map[string]string
 	Findings                                                []report.Finding
 	Evidence                                                []report.Evidence
+	PublicationPolicyVersion                                int64
+	PublicationMode                                         string
+	ActorID                                                 identity.ID
 }
 type Result struct {
 	SnapshotID             identity.ID
 	Version                int
 	JSONDigest, HTMLDigest string
+	PublicationID          identity.ID
 }
 
 type Dependencies struct {
@@ -88,9 +92,22 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 	if latest.ID != (identity.ID{}) && latest.JSONDigest == jsonDigest {
 		return Result{SnapshotID: latest.ID, Version: latest.VersionNumber, JSONDigest: latest.JSONDigest, HTMLDigest: latest.HTMLDigest}, nil
 	}
-	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, VersionNumber: version, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
+	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, VersionNumber: version, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
 	if err := db.WithContext(ctx).Create(&row).Error; err != nil {
 		return Result{}, err
 	}
-	return Result{SnapshotID: id, Version: version, JSONDigest: jsonDigest, HTMLDigest: htmlDigest}, nil
+	result := Result{SnapshotID: id, Version: version, JSONDigest: jsonDigest, HTMLDigest: htmlDigest}
+	if input.PublicationMode == "AUTOMATIC" && db.Migrator().HasTable(&database.ReportPublication{}) {
+		actor := input.ActorID
+		if actor == (identity.ID{}) {
+			actor = input.TenantID
+		}
+		published := now.UTC()
+		publication := database.ReportPublication{ID: identity.NewID(), TenantID: input.TenantID, SnapshotID: id, InspectionID: input.InspectionID, PolicyVersion: input.PublicationPolicyVersion, Status: "PUBLISHED", ActorID: actor, Version: 1, PublishedAt: &published, CreatedAt: published, UpdatedAt: published}
+		if err := db.WithContext(ctx).Create(&publication).Error; err != nil {
+			return Result{}, err
+		}
+		result.PublicationID = publication.ID
+	}
+	return result, nil
 }

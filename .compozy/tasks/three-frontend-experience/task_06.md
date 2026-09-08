@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Standalone Capture PWA
 type: frontend
 complexity: high
@@ -35,14 +35,14 @@ Move the invitation-scoped Capture experience into its own mobile-first PWA and 
 
 ## Subtasks
 
-- [ ] 6.1 Establish standalone Capture package/build/codegen configuration, route shell, manifest, icons, and scoped service worker.
-- [ ] 6.2 Move link exchange, OTP, consent, external session/CSRF, bootstrap, and confirmation-only routing.
-- [ ] 6.3 Move guided origin and inspection requirements, camera/file/GPS/metadata, limits, impossibility, and progress experiences.
-- [ ] 6.4 Move directed recapture selection, reasons, replacement lineage, deadline, and finalization experience.
-- [ ] 6.5 Move/version IndexedDB draft persistence and multipart create/presign/upload/complete reconciliation.
-- [ ] 6.6 Deliver permission denial, browser interruption, offline, quota, multi-tab, retry, revoked/expired, and maximum-scale recovery states.
-- [ ] 6.7 Deliver mobile/responsive/accessibility behavior and assigned Vitest/integration/Playwright suites.
-- [ ] 6.8 Point new invitations at the Capture origin without implementing legacy redirects.
+- [x] 6.1 Establish standalone Capture package/build/codegen configuration, route shell, manifest, icons, and scoped service worker.
+- [x] 6.2 Move link exchange, OTP, consent, external session/CSRF, bootstrap, and confirmation-only routing.
+- [x] 6.3 Move guided origin and inspection requirements, camera/file/GPS/metadata, limits, impossibility, and progress experiences.
+- [x] 6.4 Move directed recapture selection, reasons, replacement lineage, deadline, and finalization experience.
+- [x] 6.5 Move/version IndexedDB draft persistence and multipart create/presign/upload/complete reconciliation.
+- [x] 6.6 Deliver permission denial, browser interruption, offline, quota, multi-tab, retry, revoked/expired, and maximum-scale recovery states.
+- [x] 6.7 Deliver mobile/responsive/accessibility behavior and assigned Vitest/integration/Playwright suites.
+- [x] 6.8 Point new invitations at the Capture origin without implementing legacy redirects.
 ## Implementation Details
 
 Move the existing Capture trust zone rather than reimplementing its business rules. Follow the TechSpec “Capture Migration”; server bootstrap remains authoritative, service-worker scope is the Capture origin, and all final operations require current server authorization.
@@ -86,9 +86,9 @@ Move the existing Capture trust zone rather than reimplementing its business rul
 
 Cases assigned from `_tests.md`; read each full definition before implementation.
 
-- [ ] Unit: UT-059, UT-060, UT-061, UT-062, UT-063, UT-064, UT-065, UT-066, UT-073 — Capture draft, multipart, session, bootstrap, finalization, and transport.
-- [ ] Integration: IT-121, IT-122, IT-123, IT-124, IT-125, IT-126, IT-127, IT-128, IT-129, IT-130, IT-131, IT-132, IT-133, IT-134, IT-135, IT-136, IT-137, IT-138, IT-139, IT-140, IT-141, IT-142, IT-143, IT-144, IT-145, IT-146, IT-147, IT-148, IT-149, IT-150, IT-151, IT-152, IT-153, IT-154, IT-155, IT-156, IT-157, IT-158, IT-159, IT-160, IT-161, IT-162, IT-163, IT-164, IT-165, IT-166, IT-167, IT-168, IT-169, IT-170, IT-171, IT-172, IT-173, IT-174, IT-175, IT-176, IT-177, IT-178, IT-179, IT-180 — all US-013 through US-018 edge contracts.
-- [ ] End-to-end: E2E-053, E2E-054, E2E-055, E2E-056, E2E-057, E2E-058, E2E-059, E2E-060, E2E-061, E2E-062, E2E-063, E2E-064, E2E-065, E2E-066, E2E-067, E2E-068, E2E-069, E2E-070, E2E-071, E2E-072, E2E-073, E2E-074, E2E-075, E2E-076 — all US-013 through US-018 Capture acceptance journeys.
+- [x] Unit: UT-059, UT-060, UT-061, UT-062, UT-063, UT-064, UT-065, UT-066, UT-073 — Capture draft, multipart, session, bootstrap, finalization, and transport.
+- [x] Integration: IT-121, IT-122, IT-123, IT-124, IT-125, IT-126, IT-127, IT-128, IT-129, IT-130, IT-131, IT-132, IT-133, IT-134, IT-135, IT-136, IT-137, IT-138, IT-139, IT-140, IT-141, IT-142, IT-143, IT-144, IT-145, IT-146, IT-147, IT-148, IT-149, IT-150, IT-151, IT-152, IT-153, IT-154, IT-155, IT-156, IT-157, IT-158, IT-159, IT-160, IT-161, IT-162, IT-163, IT-164, IT-165, IT-166, IT-167, IT-168, IT-169, IT-170, IT-171, IT-172, IT-173, IT-174, IT-175, IT-176, IT-177, IT-178, IT-179, IT-180 — all US-013 through US-018 edge contracts.
+- [x] End-to-end: E2E-053, E2E-054, E2E-055, E2E-056, E2E-057, E2E-058, E2E-059, E2E-060, E2E-061, E2E-062, E2E-063, E2E-064, E2E-065, E2E-066, E2E-067, E2E-068, E2E-069, E2E-070, E2E-071, E2E-072, E2E-073, E2E-074, E2E-075, E2E-076 — all US-013 through US-018 Capture acceptance journeys.
 
 ## Success Criteria
 

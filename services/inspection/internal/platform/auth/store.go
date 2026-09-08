@@ -39,16 +39,27 @@ func (s GORMMembershipStore) Resolve(ctx context.Context, tenantID, identityID i
 		return requestctx.Principal{}, fmt.Errorf("membership store: missing database")
 	}
 	var membership database.Membership
+	var tenant database.Tenant
 	var rows []database.ResourceScope
+	var entitlements []database.ProductEntitlement
 	if err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND identity_id=?", tenantID, identityID).First(&membership).Error; err != nil {
 			return err
 		}
-		return tx.Where("tenant_id=? AND membership_id=?", tenantID, membership.ID).Find(&rows).Error
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, tenantID).First(&tenant).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id=? AND membership_id=?", tenantID, membership.ID).Find(&rows).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id=? AND membership_id=?", tenantID, membership.ID).Find(&entitlements).Error
 	}); err != nil {
 		return requestctx.Principal{}, err
 	}
-	p := requestctx.Principal{IdentityID: identityID, MembershipID: membership.ID, MembershipVersion: membership.Version, TenantID: tenantID, Roles: []string{membership.Role}, Disabled: membership.Status != "ACTIVE"}
+	p := requestctx.Principal{IdentityID: identityID, MembershipID: membership.ID, MembershipVersion: membership.Version, TenantID: tenantID, Roles: []string{membership.Role}, Disabled: membership.Status != "ACTIVE" || tenant.Status != "ACTIVE"}
+	for _, entitlement := range entitlements {
+		p.ProductEntitlements = append(p.ProductEntitlements, entitlement.Product)
+	}
 	for _, row := range rows {
 		p.Scopes = append(p.Scopes, requestctx.Scope{Kind: row.Kind, ID: row.ResourceID})
 	}

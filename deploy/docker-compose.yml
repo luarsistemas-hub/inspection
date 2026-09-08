@@ -110,9 +110,9 @@ services:
       INSPECTION_ENV: local
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
-      INSPECTION_ALLOWED_ORIGIN: ${INSPECTION_ALLOWED_ORIGIN:-http://localhost:${INSPECTION_WEB_PORT:-3000}}
+      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
-      INSPECTION_OIDC_AUDIENCE: inspection-web
+      INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
 
   inspection-runtime-bootstrap:
@@ -150,9 +150,9 @@ services:
       INSPECTION_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-local@postgres:5432/inspection?sslmode=disable
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
-      INSPECTION_ALLOWED_ORIGIN: ${INSPECTION_ALLOWED_ORIGIN:-http://localhost:${INSPECTION_WEB_PORT:-3000}}
+      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
-      INSPECTION_OIDC_AUDIENCE: inspection-web
+      INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       # Public tokens use localhost. API gets signing keys over its private
       # network without weakening issuer or audience validation.
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
@@ -203,15 +203,15 @@ services:
         condition: service_started
     environment: *inspection_runtime_environment
 
-  web:
+  admin:
     build:
       context: ..
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/admin/Dockerfile
       args:
         NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
         NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${NEXT_PUBLIC_OIDC_AUTHORIZE_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/auth}
         NEXT_PUBLIC_OIDC_TOKEN_URL: ${NEXT_PUBLIC_OIDC_TOKEN_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/token}
-        NEXT_PUBLIC_OIDC_CLIENT_ID: ${NEXT_PUBLIC_OIDC_CLIENT_ID:-inspection-web}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-admin
         NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
     depends_on:
       inspection-api:
@@ -219,13 +219,68 @@ services:
       keycloak:
         condition: service_healthy
     ports:
-      - "${INSPECTION_WEB_PORT:-3000}:3000"
+      - "${INSPECTION_ADMIN_PORT:-3000}:3000"
     environment:
       NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
       NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
       NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
-      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-web
+      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-admin
       NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
+      NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-http://localhost:3002}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+        NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${NEXT_PUBLIC_OIDC_AUTHORIZE_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/auth}
+        NEXT_PUBLIC_OIDC_TOKEN_URL: ${NEXT_PUBLIC_OIDC_TOKEN_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/token}
+        NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
+    depends_on:
+      inspection-api:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+    ports:
+      - "${INSPECTION_DASHBOARD_PORT:-3002}:3002"
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+      NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
+      NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
+      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
+      NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3002/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  capture:
+    build:
+      context: ..
+      dockerfile: apps/capture/Dockerfile
+      args:
+        NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+        NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
+    depends_on:
+      inspection-api:
+        condition: service_started
+    ports:
+      - "${INSPECTION_CAPTURE_PORT:-3003}:3003"
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+      NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3003/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   gotenberg:
     image: gotenberg/gotenberg:8.17.0

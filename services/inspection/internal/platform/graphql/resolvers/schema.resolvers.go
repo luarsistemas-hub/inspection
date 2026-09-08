@@ -67,6 +67,7 @@ import (
 	createtenant "inspection/services/inspection/internal/features/tenancy/create_tenant"
 	updatetenant "inspection/services/inspection/internal/features/tenancy/update_tenant"
 	upsertunit "inspection/services/inspection/internal/features/tenancy/upsert_business_unit"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
@@ -1176,6 +1177,65 @@ func (r *mutationResolver) ReleaseLegalHold(ctx context.Context, input graphql1.
 	return r.mutateLegalHold(ctx, input, false)
 }
 
+// ConfigurePublicationPolicy is the resolver for the configurePublicationPolicy field.
+func (r *mutationResolver) ConfigurePublicationPolicy(ctx context.Context, input graphql1.ConfigurePublicationPolicyInput) (*graphql1.PublicationPolicyPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin); err != nil {
+		return nil, err
+	}
+	mode := input.Mode
+	if mode != "MANUAL" && mode != "AUTOMATIC" {
+		return nil, graphql1Error("mode")
+	}
+	var policy database.PublicationPolicy
+	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ?", meta.TenantID).First(&policy).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		current := int64(0)
+		if policy.ID != (identity.ID{}) {
+			current = policy.Version
+		}
+		if int64(input.ExpectedVersion) != current {
+			return apperror.New(apperror.Conflict, "expectedVersion", "stale publication policy version")
+		}
+		if policy.ID == (identity.ID{}) {
+			policy = database.PublicationPolicy{ID: identity.NewID(), TenantID: meta.TenantID, Version: 1}
+		} else {
+			policy.Version++
+		}
+		policy.Mode = mode
+		return tx.Save(&policy).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.PublicationPolicyPayload{Policy: &graphql1.PublicationPolicy{Mode: policy.Mode, Version: int(policy.Version)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// PublishReport is the resolver for the publishReport field.
+func (r *mutationResolver) PublishReport(ctx context.Context, input graphql1.PublishReportInput) (*graphql1.ReportPublicationPayload, error) {
+	return nil, apperror.New(apperror.InvalidState, "publishReport", "publication command is not configured")
+}
+
+// InvalidateReportPublication is the resolver for the invalidateReportPublication field.
+func (r *mutationResolver) InvalidateReportPublication(ctx context.Context, input graphql1.InvalidateReportPublicationInput) (*graphql1.ReportPublicationPayload, error) {
+	return nil, apperror.New(apperror.InvalidState, "invalidateReportPublication", "publication command is not configured")
+}
+
+// MarkNotificationRead is the resolver for the markNotificationRead field.
+func (r *mutationResolver) MarkNotificationRead(ctx context.Context, input graphql1.MarkNotificationReadInput) (*graphql1.RecipientNotificationPayload, error) {
+	return nil, apperror.New(apperror.InvalidState, "markNotificationRead", "notification command is not configured")
+}
+
+// ConfigureMyNotificationPreferences is the resolver for the configureMyNotificationPreferences field.
+func (r *mutationResolver) ConfigureMyNotificationPreferences(ctx context.Context, input graphql1.ConfigureNotificationPreferencesInput) (*graphql1.NotificationPreferencesPayload, error) {
+	return nil, apperror.New(apperror.InvalidState, "configureMyNotificationPreferences", "notification command is not configured")
+}
+
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -1195,7 +1255,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 		scopes = append(scopes, &graphql1.Scope{Kind: scope.Kind, ResourceID: scope.ID.String()})
 	}
 	return &graphql1.Me{
-		IdentityID: principal.IdentityID.String(), TenantID: principal.TenantID.String(), Roles: principal.Roles,
+		IdentityID: principal.IdentityID.String(), TenantID: principal.TenantID.String(), Audience: principal.Audience, Product: principal.Product, ProductEntitlements: principal.ProductEntitlements, Roles: principal.Roles,
 		Memberships:     []*graphql1.Membership{{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), Version: int(principal.MembershipVersion), Scopes: scopes}},
 		EffectiveScopes: scopes,
 	}, nil
@@ -1796,6 +1856,86 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 		end = dashboardcore.EncodeCursor(dashboardcore.Projection{InspectionID: last.ID.String(), UpdatedAt: last.CreatedAt})
 	}
 	return &graphql1.NotificationDeliveryConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
+}
+
+// PublicationPolicy is the resolver for the publicationPolicy field.
+func (r *queryResolver) PublicationPolicy(ctx context.Context) (*graphql1.PublicationPolicy, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	var policy database.PublicationPolicy
+	err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("tenant_id = ?", meta.TenantID).First(&policy).Error })
+	if err == gorm.ErrRecordNotFound {
+		return &graphql1.PublicationPolicy{Mode: "MANUAL", Version: 0}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.PublicationPolicy{Mode: policy.Mode, Version: int(policy.Version)}, nil
+}
+
+// CustomerPortfolio is the resolver for the customerPortfolio field.
+func (r *queryResolver) CustomerPortfolio(ctx context.Context, filter *graphql1.CustomerPortfolioFilter, first *int, after *string) (*graphql1.CustomerPortfolioConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	return &graphql1.CustomerPortfolioConnection{Nodes: []*graphql1.CustomerPortfolioItem{}, PageInfo: pageInfo("", false)}, nil
+}
+
+// CustomerTimeline is the resolver for the customerTimeline field.
+func (r *queryResolver) CustomerTimeline(ctx context.Context, assetID *string, projectID *string, first *int, after *string) (*graphql1.CustomerTimelineConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	return &graphql1.CustomerTimelineConnection{Nodes: []*graphql1.CustomerTimelineEntry{}, PageInfo: pageInfo("", false)}, nil
+}
+
+// CustomerReport is the resolver for the customerReport field.
+func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string, version *int) (*graphql1.CustomerReport, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// CustomerEvidence is the resolver for the customerEvidence field.
+func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID string, mode *graphql1.EvidenceMode, first *int, after *string) (*graphql1.CustomerEvidenceConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	return &graphql1.CustomerEvidenceConnection{Nodes: []*graphql1.CustomerEvidenceItem{}, PageInfo: pageInfo("", false)}, nil
+}
+
+// MyNotifications is the resolver for the myNotifications field.
+func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, first *int, after *string) (*graphql1.RecipientNotificationConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
+		return nil, err
+	}
+	return &graphql1.RecipientNotificationConnection{Nodes: []*graphql1.RecipientNotification{}, PageInfo: pageInfo("", false), UnreadCount: 0}, nil
 }
 
 // RetentionPolicies is the resolver for the retentionPolicies field.
