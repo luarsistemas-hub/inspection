@@ -27,4 +27,32 @@ describe("multipart reconciliation", () => {
     expect(result.metadataSaved).toBe(true);
     vi.unstubAllGlobals();
   });
+
+  it("serializes uploads across tabs when Web Locks are unavailable", async () => {
+    let createCalls = 0;
+    let createRelease: (() => void) | undefined;
+    const createStarted = new Promise<void>((resolve) => { createRelease = resolve; });
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return new Response(null, { status: 200, headers: { etag: "etag" } });
+      const body = String(init?.body ?? "");
+      if (body.includes("createMediaUpload")) {
+        createCalls += 1;
+        createRelease?.();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(JSON.stringify({ data: { createMediaUpload: { upload: { mediaId: "media", uploadId: "upload" }, userErrors: [] } } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: {
+        presignMediaParts: { parts: [{ partNumber: 1, url: "https://upload.test/part" }], userErrors: [] },
+        completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] }
+      } }), { status: 200 });
+    });
+    const draft: CaptureDraft = { id: "cross-tab", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", parts: [{ number: 1, complete: false }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } };
+    vi.stubGlobal("fetch", fetch);
+    const first = uploadDraft(draft);
+    await createStarted;
+    const second = uploadDraft(draft);
+    await Promise.all([first, second]);
+    expect(createCalls).toBe(1);
+    vi.unstubAllGlobals();
+  });
 });

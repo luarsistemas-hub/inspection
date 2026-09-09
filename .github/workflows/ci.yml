@@ -150,7 +150,73 @@ jobs:
   cross-product:
     runs-on: ubuntu-latest
     needs: [go, design-system, frontend, e2e-parity]
+    env:
+      INSPECTION_E2E_AUTH: "true"
+      INSPECTION_E2E_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_E2E_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
+      INSPECTION_SEED_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_SEED_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
+      KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME: ${{ secrets.INSPECTION_KEYCLOAK_BOOTSTRAP_USERNAME }}
+      KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.INSPECTION_KEYCLOAK_BOOTSTRAP_PASSWORD }}
+      INSPECTION_SUPER_ADMIN_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f deploy/docker-compose.yml config --quiet
-      - run: ./scripts/validate-compozy-tasks.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate cross-product gate inputs
+        run: |
+          set -eu
+          test -f apps/dashboard/tests/e2e/recapture-cross-product.spec.ts
+          test -f scripts/lib/parity-evidence.mjs
+          test -f scripts/lib/legacy-inventory.mjs
+      - name: Validate compose and task contracts
+        run: |
+          docker compose -f deploy/docker-compose.yml config --quiet
+          ./scripts/validate-compozy-tasks.sh
+      - name: Start and seed isolated cross-product stack
+        run: |
+          cp .env.example .env.inspection
+          ./scripts/local.sh up
+          ./scripts/local.sh seed
+      - name: Install cross-product browser dependencies
+        run: |
+          for product in dashboard capture; do
+            (cd "apps/$product" && npm ci && npx playwright install --with-deps chromium)
+          done
+      - name: Run Dashboard to Capture recapture journey
+        working-directory: apps/dashboard
+        run: npx playwright test tests/e2e/recapture-cross-product.spec.ts
+      - name: Generate and validate cross-product evidence
+        run: |
+          node scripts/lib/parity-evidence.mjs generate \
+            --journey E2E-027 \
+            --input apps/dashboard/test-results \
+            --output artifacts/cross-product/evidence
+          node scripts/lib/parity-evidence.mjs validate \
+            --input artifacts/cross-product/evidence
+      - name: Validate legacy inventory with drift checks
+        run: |
+          node scripts/lib/legacy-inventory.mjs generate \
+            --legacy-root apps/web \
+            --output artifacts/cross-product/legacy-inventory.json
+          node scripts/lib/legacy-inventory.mjs validate \
+            --input artifacts/cross-product/legacy-inventory.json \
+            --fail-on-unclassified \
+            --fail-on-drift
+      - name: Upload cross-product evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-product-evidence
+          if-no-files-found: warn
+          path: |
+            artifacts/cross-product
+            apps/dashboard/playwright-report
+            apps/dashboard/test-results
+            apps/capture/playwright-report
+            apps/capture/test-results
+      - name: Tear down isolated cross-product stack
+        if: always()
+        run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml down --volumes --remove-orphans

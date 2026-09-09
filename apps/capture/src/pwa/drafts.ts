@@ -40,6 +40,11 @@ export async function saveDraft(draft: CaptureDraft): Promise<void> {
   await transact(storeName, "readwrite", (store) => store.put({ ...draft, schemaVersion: 1 }));
 }
 
+export async function loadDraft(id: string): Promise<CaptureDraft | undefined> {
+  const value = await transact<unknown>(storeName, "readonly", (store) => store.get(id));
+  return valid(value) ? value : undefined;
+}
+
 export async function loadDraftsForResponsibility(responsibilityId: string): Promise<CaptureDraft[]> {
   const db = await open();
   try {

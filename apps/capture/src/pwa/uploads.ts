@@ -1,5 +1,5 @@
 import { captureOperations, graphql } from "@/graphql/client";
-import { type CaptureDraft, type PendingPart, saveDraft } from "@/pwa/drafts";
+import { loadDraft, type CaptureDraft, type PendingPart, saveDraft } from "@/pwa/drafts";
 
 const partSize = 5 * 1024 * 1024;
 type UserErrors = { userErrors: Array<{ message: string }> };
@@ -7,15 +7,82 @@ type UserErrors = { userErrors: Array<{ message: string }> };
 const failOnError = (value: UserErrors): void => { if (value.userErrors[0]) throw new Error(value.userErrors[0].message); };
 const partsFor = (blob: Blob): PendingPart[] => Array.from({ length: Math.ceil(blob.size / partSize) }, (_, index) => ({ number: index + 1, complete: false }));
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const lockDatabaseName = "inspection-capture-locks-v1";
+const lockStoreName = "locks";
+const lockLease = 30_000;
+
+type LockRecord = { name: string; owner: string; expiresAt: number };
+
+function openLockDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(lockDatabaseName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(lockStoreName, { keyPath: "name" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function updateLock(record: LockRecord, replaceExpired: boolean): Promise<boolean> {
+  const db = await openLockDatabase();
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      const transaction = db.transaction(lockStoreName, "readwrite");
+      const store = transaction.objectStore(lockStoreName);
+      const request = store.get(record.name);
+      let acquired = false;
+      request.onsuccess = () => {
+        const current = request.result as LockRecord | undefined;
+        if ((replaceExpired && (!current || current.expiresAt <= Date.now())) || (!replaceExpired && current?.owner === record.owner)) {
+          store.put(record);
+          acquired = true;
+        }
+      };
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve(acquired);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function releaseLock(name: string, owner: string): Promise<void> {
+  const db = await openLockDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(lockStoreName, "readwrite");
+      const store = transaction.objectStore(lockStoreName);
+      const request = store.get(name);
+      request.onsuccess = () => { if ((request.result as LockRecord | undefined)?.owner === owner) store.delete(name); };
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function withIndexedDBLock<T>(name: string, action: () => Promise<T>): Promise<T> {
+  const owner = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  while (!await updateLock({ name, owner, expiresAt: Date.now() + lockLease }, true)) await wait(50);
+  const heartbeat = setInterval(() => {
+    void updateLock({ name, owner, expiresAt: Date.now() + lockLease }, false);
+  }, lockLease / 3);
+  try { return await action(); } finally { clearInterval(heartbeat); await releaseLock(name, owner); }
+}
 
 async function withDraftLock<T>(draftId: string, action: () => Promise<T>): Promise<T> {
-  if (navigator.locks) return navigator.locks.request(`capture-upload:${draftId}`, { mode: "exclusive" }, action);
-  return action();
+  const name = `capture-upload:${draftId}`;
+  if (navigator.locks) return navigator.locks.request(name, { mode: "exclusive" }, action);
+  return withIndexedDBLock(name, action);
 }
 
 export function uploadDraft(draft: CaptureDraft): Promise<CaptureDraft> {
   return withDraftLock(draft.id, async () => {
-    let current = draft;
+    let current = await loadDraft(draft.id) ?? draft;
     if (!current.mediaId || !current.uploadId) {
       const created = await graphql<{ createMediaUpload: { upload?: { mediaId: string; uploadId: string }; userErrors: Array<{ message: string }> } }>(captureOperations.createUpload, { contentType: draft.blob.type, size: draft.blob.size, hash: draft.sha256, id: draft.id });
       failOnError(created.createMediaUpload);
