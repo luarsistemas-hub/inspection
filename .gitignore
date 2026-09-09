@@ -6,6 +6,8 @@ apps/web/test-results/
 .env
 
 node_modules/
+.next/
+*.tsbuildinfo
 
 # IDEs specific
 .idea/
