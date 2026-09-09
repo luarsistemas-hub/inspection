@@ -11,6 +11,12 @@ describe("Dashboard capability composition", () => {
   it("UT-057 never emits mutation controls for viewer audiences", () => {
     for (const role of ["VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canMutate).toBe(false);
   });
+  it("UT-132 keeps unavailable actions hidden without treating the UI as authorization", () => {
+    const viewer = composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] });
+    expect(viewer.canMutate).toBe(false);
+    expect(viewer.canPublish).toBe(false);
+    expect(viewer.links.map(([label]) => label)).toContain("Inspeções");
+  });
   it("offers administration only to a tenant admin entitled to both products", () => {
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["ADMIN", "DASHBOARD"] }).canUseAdmin).toBe(true);
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["DASHBOARD"] }).canUseAdmin).toBe(false);

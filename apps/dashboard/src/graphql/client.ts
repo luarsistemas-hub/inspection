@@ -1,13 +1,16 @@
-import { clearSession, getAccessToken } from "@/auth/session";
+import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { print } from "graphql";
+import { clearSession, getAccessToken, getMembershipId } from "@/auth/session";
 
 export type GraphQLFailure = { message: string; code?: string; field?: string };
 type Response<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 
-export async function graphql<T>(query: string, variables?: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
+export async function graphql<T, V>(query: TypedDocumentNode<T, V>, variables: V, idempotencyKey?: string): Promise<T> {
   const token = getAccessToken();
   if (!token) throw { message: "Autenticação necessária", code: "UNAUTHENTICATED" } satisfies GraphQLFailure;
-  const response = await fetch(endpoint, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify({ query, variables }) });
+  const membershipId = getMembershipId();
+  const response = await fetch(endpoint, { method: "POST", credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(membershipId ? { "X-Inspection-Membership-ID": membershipId } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify({ query: print(query), variables }) });
   let body: Response<T> = {};
   const raw = await response.text();
   if (raw.trimStart().startsWith("{")) { try { body = JSON.parse(raw) as Response<T>; } catch { body = {}; } }

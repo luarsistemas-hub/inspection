@@ -114,7 +114,26 @@ services:
       - -ec
       - |
         /opt/keycloak/bin/kcadm.sh config credentials --server http://keycloak:8080 --realm master --user "$${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}" --password "$${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}"
-        /opt/keycloak/bin/kcadm.sh update users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection -s username="$${INSPECTION_SUPER_ADMIN_USERNAME}" -s enabled=true
+        current_username="$$(/opt/keycloak/bin/kcadm.sh get users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection --fields username --format csv --noquotes)"
+        if [ "$${current_username}" != "$${INSPECTION_SUPER_ADMIN_USERNAME}" ]; then
+          restore_username_policy=false
+          restore_policy() {
+            if [ "$${restore_username_policy}" = true ]; then
+              /opt/keycloak/bin/kcadm.sh update realms/inspection -s editUsernameAllowed=false >/dev/null || true
+            fi
+          }
+          trap restore_policy EXIT
+          edit_username_allowed="$$(/opt/keycloak/bin/kcadm.sh get realms/inspection --fields editUsernameAllowed --format csv --noquotes)"
+          if [ "$${edit_username_allowed}" != true ]; then
+            /opt/keycloak/bin/kcadm.sh update realms/inspection -s editUsernameAllowed=true >/dev/null
+            restore_username_policy=true
+          fi
+          /opt/keycloak/bin/kcadm.sh update users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection -s username="$${INSPECTION_SUPER_ADMIN_USERNAME}"
+          restore_policy
+          restore_username_policy=false
+          trap - EXIT
+        fi
+        /opt/keycloak/bin/kcadm.sh update users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection -s enabled=true
         /opt/keycloak/bin/kcadm.sh set-password -r inspection --userid "$${INSPECTION_SUPER_ADMIN_SUBJECT}" --new-password "$${INSPECTION_SUPER_ADMIN_PASSWORD}"
 
   inspection-migrate:

@@ -1,8 +1,11 @@
 ---
 name: code-reviewer
-provider: claude
+provider: codex
+model: gpt-5.6-sol
+reasoning_effort: high
 permissions: approve-reads
 ---
+
 You are a focused code reviewer.
 
 - Read the relevant files before answering.

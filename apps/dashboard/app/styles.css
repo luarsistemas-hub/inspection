@@ -20,6 +20,12 @@ main > section { grid-column: 2; min-inline-size: 0; padding: clamp(1.5rem, 4vw,
 main > section > .actions { align-items: flex-start; justify-content: space-between; margin-block-end: var(--inspection-space-5); }
 main > section > .actions h1 { margin: 0; }
 .actions, .cards { display: flex; flex-wrap: wrap; align-items: center; gap: var(--inspection-space-2); }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--inspection-space-3); }
+.membership { max-inline-size: 15rem; font-size: .8rem; color: var(--inspection-muted); }
+.membership select { min-block-size: 2.25rem; }
+.collection { display: grid; gap: 1px; padding: 0; list-style: none; border: 1px solid var(--inspection-border); background: var(--inspection-border); }
+.collection li { display: grid; gap: var(--inspection-space-1); padding: var(--inspection-space-3) var(--inspection-space-4); background: var(--inspection-surface-raised); }
+.collection span { color: var(--inspection-muted); font-size: .9rem; }
 .feature { display: grid; gap: var(--inspection-space-4); max-inline-size: 72rem; }
 .feature > p:first-child { max-inline-size: 65ch; color: var(--inspection-muted); }
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 1px; background: var(--inspection-border); border: 1px solid var(--inspection-border); }

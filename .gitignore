@@ -4,3 +4,10 @@ apps/web/playwright-report/
 apps/web/test-results/
 .env.inspection
 .env
+
+
+# IDEs specific
+.idea/
+.vscode/
+.cursor/
+.compozy/
