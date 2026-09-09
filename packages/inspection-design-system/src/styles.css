@@ -64,7 +64,7 @@
 .inspection-breadcrumbs ol, .inspection-pagination { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; margin: 0; padding: 0; list-style: none; }
 .inspection-breadcrumbs li + li::before { content: "/"; margin-inline-end: var(--inspection-space-2); color: var(--inspection-muted); }
 .inspection-breadcrumbs a { color: var(--inspection-brand-strong); }
-.inspection-filter-bar { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: end; padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
+.inspection-filter-bar { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: flex-end; padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
 .inspection-data-table { overflow-x: auto; border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
 .inspection-data-table table { inline-size: 100%; border-collapse: collapse; text-align: start; }
 .inspection-data-table caption { padding: var(--inspection-space-3); text-align: start; font-weight: 700; }
