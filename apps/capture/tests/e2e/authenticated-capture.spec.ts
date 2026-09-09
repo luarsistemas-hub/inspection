@@ -32,7 +32,10 @@ test.describe("authenticated Capture against the local stack", () => {
     await expect.poll(async () => { code = await latestOTP(request, startedAt); return code; }, { timeout: 15_000 }).toMatch(/^\d{6}$/);
     await page.getByLabel("Código de seis dígitos").fill(code);
     await page.getByRole("button", { name: "Confirmar código" }).click();
-    await page.getByRole("button", { name: "Aceito o processamento necessário" }).click();
+    await page.getByLabel("Processamento das fotos").check();
+    await page.getByLabel("Análise por inteligência artificial").check();
+    await page.getByLabel("Uso da localização quando necessário").check();
+    await page.getByRole("button", { name: "Aceito as opções selecionadas" }).click();
     await expect(page.getByRole("heading", { name: "Captura guiada" })).toBeVisible();
     await page.getByLabel("Impossibilidade").fill("A área está inacessível com segurança durante a vistoria.");
     await page.getByRole("button", { name: "Registrar impossibilidade" }).click();

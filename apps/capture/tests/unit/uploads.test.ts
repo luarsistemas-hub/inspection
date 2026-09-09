@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import { uploadDraft } from "@/pwa/uploads";
-import type { CaptureDraft } from "@/pwa/drafts";
+import { loadDraft, type CaptureDraft } from "@/pwa/drafts";
 
 describe("multipart reconciliation", () => {
   it("UT-061 and UT-062 presigns only missing parts and keeps completion idempotent", async () => {
@@ -25,6 +25,38 @@ describe("multipart reconciliation", () => {
     const result = await uploadDraft({ id: "retry", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } });
     expect(metadataAttempts).toBe(3);
     expect(result.metadataSaved).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("requests and persists SCREENED metadata status for the false-positive flow", async () => {
+    const fetch = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      const data = body.includes("saveCaptureMetadata")
+        ? { saveCaptureMetadata: { media: { id: "media", status: "SCREENED" }, userErrors: [] } }
+        : { completeMediaUpload: { userErrors: [] } };
+      return new Response(JSON.stringify({ data }), { status: 200 });
+    });
+    const draft: CaptureDraft = { id: "screened", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } };
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await uploadDraft(draft);
+    const saved = await loadDraft("screened");
+    const metadataRequest = fetch.mock.calls.map((call) => JSON.parse(String(call[1]?.body))).find((body) => String(body.query).includes("saveCaptureMetadata"));
+
+    expect(metadataRequest.query).toContain("media {");
+    expect(result.mediaStatus).toBe("SCREENED");
+    expect(saved?.mediaStatus).toBe("SCREENED");
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the draft source and optional capture metadata unchanged", async () => {
+    const fetch = vi.fn().mockImplementation(() => new Response(JSON.stringify({ data: { completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] } } }), { status: 200 }));
+    const gps = { latitude: -23.55, longitude: -46.63, accuracyMeters: 8, capturedAt: "2026-09-09T10:00:00.000Z", windowStartedAt: "2026-09-09T10:00:00.000Z" };
+    const deviceContext = { platform: "test", language: "pt-BR" };
+    vi.stubGlobal("fetch", fetch);
+    await uploadDraft({ id: "metadata", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "", source: "gallery", capturedAt: gps.capturedAt, gps, deviceContext } });
+    const metadataRequest = fetch.mock.calls.map((call) => JSON.parse(String(call[1]?.body))).find((body) => String(body.query).includes("saveCaptureMetadata"));
+    expect(metadataRequest.variables).toMatchObject({ input: { captureSource: "GALLERY", gps, deviceContext } });
     vi.unstubAllGlobals();
   });
 

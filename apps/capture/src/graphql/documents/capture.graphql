@@ -1,7 +1,7 @@
 query ExternalCaptureBootstrap {
   externalCapture {
     responsibilityId recaptureRequestId status confirmationOnly kind disclosureVersion reference policy
-    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired impossibilityAllowed }
+    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy impossibilityAllowed }
     answers { requirementKey mediaIds impossibilityReason version }
   }
 }
@@ -12,6 +12,8 @@ mutation VerifyInvitationOtp($input: VerifyInvitationOtpInput!) { verifyInvitati
 
 mutation AcceptProcessing($input: AcceptProcessingInput!) { acceptProcessing(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 
+mutation RevokeInvitation($input: RevokeInvitationInput!) { revokeInvitation(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
 mutation CreateMediaUpload($input: CreateMediaUploadInput!) { createMediaUpload(input: $input) { upload { mediaId uploadId expiresAt partSizeBytes } userErrors { code field message correlationId } clientMutationId } }
 
 mutation PresignMediaParts($input: PresignMediaPartsInput!) { presignMediaParts(input: $input) { parts { partNumber url expiresAt } userErrors { code field message correlationId } clientMutationId } }
@@ -21,6 +23,8 @@ mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) { completeMediaU
 mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation DeclareSensitiveDetectionFalsePositive($input: SensitiveFalsePositiveInput!) { declareSensitiveDetectionFalsePositive(input: $input) { media { id status flags } userErrors { code field message correlationId } clientMutationId } }
 
 mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }
 
