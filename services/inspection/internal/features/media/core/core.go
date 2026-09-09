@@ -40,6 +40,16 @@ type Upload struct {
 	ExpiresAt           time.Time
 }
 
+// Reconciliation is the server-confirmed recovery state for an interrupted
+// multipart upload. MissingParts is the only set that may be resumed.
+type Reconciliation struct {
+	MediaID      identity.ID
+	Status       string
+	ExpiresAt    time.Time
+	Received     []objectstore.UploadedPart
+	MissingParts []int
+}
+
 func ValidateAdmission(contentType string, size int64, active int) error {
 	if !objectstore.SupportedType(contentType) {
 		return apperror.New(apperror.InvalidInput, "contentType", "supported media is required")
@@ -178,6 +188,34 @@ func (s Service) Presign(ctx context.Context, tenantID, responsibilityID, mediaI
 		}
 		seen[part] = struct{}{}
 	}
+	if inspector, ok := s.Store.Client.(objectstore.MultipartInspector); ok {
+		received, err := inspector.ListMultipartParts(ctx, s.Store.Bucket, upload.ObjectKey, upload.UploadID)
+		if err != nil {
+			return nil, dependency(err)
+		}
+		receivedParts := make(map[int]struct{}, len(received))
+		for _, receivedPart := range received {
+			if receivedPart.Number < 1 || receivedPart.Number > allowedParts || strings.TrimSpace(receivedPart.ETag) == "" {
+				return nil, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+			}
+			expectedSize := int64(objectstore.PartSizeBytes)
+			if receivedPart.Number == allowedParts {
+				expectedSize = media.SizeBytes - int64(allowedParts-1)*objectstore.PartSizeBytes
+			}
+			if receivedPart.SizeBytes != expectedSize {
+				return nil, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+			}
+			if _, duplicate := receivedParts[receivedPart.Number]; duplicate {
+				return nil, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+			}
+			receivedParts[receivedPart.Number] = struct{}{}
+		}
+		for _, part := range parts {
+			if _, alreadyReceived := receivedParts[part]; alreadyReceived {
+				return nil, apperror.New(apperror.InvalidState, "partNumbers", "upload part is already received")
+			}
+		}
+	}
 	result := make([]objectstore.PresignedPart, 0, len(parts))
 	for _, part := range parts {
 		signed, err := s.Store.PresignPart(ctx, upload.ObjectKey, upload.UploadID, part, 15*time.Minute)
@@ -185,6 +223,83 @@ func (s Service) Presign(ctx context.Context, tenantID, responsibilityID, mediaI
 			return nil, dependency(err)
 		}
 		result = append(result, signed)
+	}
+	return result, nil
+}
+
+// Reconcile compares the durable capture state with the object-store multipart
+// state. It never guesses completed parts from client-local state and only
+// returns missing, valid 5 MiB part positions for an active upload.
+func (s Service) Reconcile(ctx context.Context, tenantID, responsibilityID, mediaID identity.ID) (Reconciliation, error) {
+	if tenantID == (identity.ID{}) || responsibilityID == (identity.ID{}) || mediaID == (identity.ID{}) {
+		return Reconciliation{}, apperror.New(apperror.InvalidInput, "mediaId", "media is required")
+	}
+	inspector, ok := s.Store.Client.(objectstore.MultipartInspector)
+	if !ok {
+		return Reconciliation{}, apperror.New(apperror.DependencyUnavailable, "mediaId", "upload recovery is unavailable")
+	}
+	var media database.MediaObject
+	var upload database.MultipartUpload
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+		}
+		if err := tx.Where("tenant_id=? AND id=? AND responsibility_id=?", tenantID, mediaID, responsibilityID).First(&media).Error; err != nil {
+			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+		}
+		return tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).First(&upload).Error
+	}); err != nil {
+		return Reconciliation{}, err
+	}
+	result := Reconciliation{MediaID: mediaID, Status: media.Status, ExpiresAt: upload.ExpiresAt}
+	if media.Status != "UPLOADING" || upload.Status != "UPLOADING" {
+		return result, nil
+	}
+	if !s.now().Before(upload.ExpiresAt) {
+		return Reconciliation{}, apperror.New(apperror.SessionExpired, "mediaId", "upload expired")
+	}
+	received, err := inspector.ListMultipartParts(ctx, s.Store.Bucket, upload.ObjectKey, upload.UploadID)
+	if err != nil {
+		return Reconciliation{}, dependency(err)
+	}
+	expected := objectstore.ExpectedParts(media.SizeBytes)
+	seen := make(map[int]objectstore.UploadedPart, len(received))
+	for _, part := range received {
+		if part.Number < 1 || part.Number > expected || strings.TrimSpace(part.ETag) == "" {
+			return Reconciliation{}, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+		}
+		expectedSize := int64(objectstore.PartSizeBytes)
+		if part.Number == expected {
+			expectedSize = media.SizeBytes - int64(expected-1)*objectstore.PartSizeBytes
+		}
+		if part.SizeBytes != expectedSize {
+			return Reconciliation{}, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+		}
+		if _, duplicate := seen[part.Number]; duplicate {
+			return Reconciliation{}, apperror.New(apperror.InvalidState, "mediaId", "upload recovery is unavailable")
+		}
+		seen[part.Number] = part
+	}
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND upload_id=?", tenantID, upload.ID).Delete(&database.UploadPart{}).Error; err != nil {
+			return err
+		}
+		for _, part := range received {
+			row := database.UploadPart{ID: identity.NewID(), TenantID: tenantID, UploadID: upload.ID, Part: part.Number, ETag: part.ETag, SizeBytes: part.SizeBytes, CreatedAt: s.now()}
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "upload_id"}, {Name: "part"}}, DoUpdates: clause.AssignmentColumns([]string{"e_tag", "size_bytes"})}).Create(&row).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return Reconciliation{}, err
+	}
+	result.Received = received
+	for part := 1; part <= expected; part++ {
+		if _, present := seen[part]; !present {
+			result.MissingParts = append(result.MissingParts, part)
+		}
 	}
 	return result, nil
 }

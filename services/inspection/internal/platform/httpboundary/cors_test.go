@@ -3,6 +3,7 @@ package httpboundary
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -15,6 +16,9 @@ func TestCORSAllowsOnlyConfiguredOrigin(t *testing.T) {
 	if allowed.Code != http.StatusNoContent || allowed.Header().Get("Access-Control-Allow-Origin") != "https://app.example" {
 		t.Fatalf("allowed origin response = %#v", allowed.Result())
 	}
+	if got := allowed.Header().Get("Access-Control-Allow-Headers"); got == "" || !containsHeader(got, "X-Inspection-Membership-ID") {
+		t.Fatalf("membership header not allowed: %q", got)
+	}
 
 	rejected := httptest.NewRecorder()
 	bad := httptest.NewRequest(http.MethodPost, "/graphql", nil)
@@ -23,6 +27,15 @@ func TestCORSAllowsOnlyConfiguredOrigin(t *testing.T) {
 	if rejected.Code != http.StatusForbidden {
 		t.Fatalf("rejected origin status = %d", rejected.Code)
 	}
+}
+
+func containsHeader(headers, wanted string) bool {
+	for _, header := range strings.Split(headers, ",") {
+		if strings.TrimSpace(header) == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCORSOnlyAllowsCredentialsForCaptureOrigin(t *testing.T) {

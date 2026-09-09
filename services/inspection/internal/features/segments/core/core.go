@@ -103,7 +103,7 @@ func ValidateAttributes(schema Schema, attributes map[string]any) error {
 }
 
 func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, idempotencyKey string, schemaJSON, uiJSON []byte) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin}, nil, true); err != nil {
 		return View{}, err
 	}
 	key, name = strings.TrimSpace(key), strings.TrimSpace(name)
@@ -158,7 +158,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 }
 
 func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, expectedDefinitionVersion int64) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin}, nil, true); err != nil {
 		return View{}, err
 	}
 	var out View
@@ -197,7 +197,7 @@ func (s Service) Resolve(ctx context.Context, tenantID, versionID identity.ID) (
 	return out, err
 }
 func (s Service) List(ctx context.Context, tenantID identity.ID, search string, first int, after string) ([]View, string, bool, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
 		return nil, "", false, err
 	}
 	if first <= 0 {

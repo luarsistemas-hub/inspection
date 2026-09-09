@@ -59,17 +59,17 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 	if cmd.TenantID == (identity.ID{}) || cmd.Issuer == "" || cmd.Subject == "" || cmd.Role == "" || cmd.ClientID == "" {
 		return database.Membership{}, apperror.New(apperror.InvalidInput, "membership", "identity, role, and client mutation id are required")
 	}
-	if !validRole(cmd.Role) {
+	if !auth.IsKnownRole(cmd.Role) {
 		return database.Membership{}, apperror.New(apperror.InvalidInput, "role", "unknown role")
 	}
 	if len(cmd.Scopes) > 100 {
 		return database.Membership{}, apperror.New(apperror.InvalidInput, "scopes", "batch exceeds 100")
 	}
-	principal, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin}, nil, true)
+	principal, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.AccessAdmin}, nil, true)
 	if err != nil {
 		return database.Membership{}, err
 	}
-	if cmd.Role == auth.TenantAdmin && !has(principal.Roles, auth.TenantAdmin) {
+	if !auth.CanDelegateRole(principal.Roles, cmd.Role) {
 		return database.Membership{}, apperror.New(apperror.Forbidden, "role", "access denied")
 	}
 	if err := validateScopes(cmd.Scopes); err != nil {
@@ -103,11 +103,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 				return err
 			}
 		}
-		products := []string{auth.DashboardProduct}
-		if cmd.Role == auth.TenantAdmin {
-			products = []string{auth.AdminProduct, auth.DashboardProduct}
-		}
-		for _, product := range products {
+		for _, product := range auth.ProductsForRole(cmd.Role) {
 			if err := tx.Create(&database.ProductEntitlement{ID: identity.NewID(), TenantID: cmd.TenantID, MembershipID: membership.ID, Product: product, CreatedAt: deps.Now().UTC()}).Error; err != nil {
 				return err
 			}
@@ -118,19 +114,6 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 		return database.Membership{}, err
 	}
 	return membership, nil
-}
-
-func validRole(role string) bool {
-	return role == auth.TenantAdmin || role == auth.Manager || role == auth.Employee || role == auth.Viewer || role == auth.CustomerViewer
-}
-
-func has(roles []string, wanted string) bool {
-	for _, role := range roles {
-		if role == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func validateScopes(scopes []Scope) error {

@@ -51,7 +51,7 @@ import (
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
-	publication "inspection/services/inspection/internal/features/reports/publication"
+	"inspection/services/inspection/internal/features/reports/publication"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	segmentactivate "inspection/services/inspection/internal/features/segments/activate_definition"

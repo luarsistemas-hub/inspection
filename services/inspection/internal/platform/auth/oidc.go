@@ -35,7 +35,9 @@ type Authenticator struct {
 	Now       func() time.Time
 }
 
-// Authenticate verifies the bearer token and reloads local membership state.
+// Authenticate verifies only the bearer identity. Membership selection is a
+// separate per-request boundary: an OIDC subject can hold memberships in more
+// than one tenant, so authentication must never select one implicitly.
 func (a Authenticator) Authenticate(ctx context.Context, authorization string) (requestctx.Principal, error) {
 	if a.Verifier == nil || a.Resolver == nil {
 		return requestctx.Principal{}, fmt.Errorf("OIDC: missing dependency")
@@ -65,11 +67,10 @@ func (a Authenticator) Authenticate(ctx context.Context, authorization string) (
 		}
 		return requestctx.Principal{}, apperror.New(apperror.Unauthenticated, "", "invalid authentication")
 	}
-	if principal.Disabled {
-		return requestctx.Principal{}, apperror.New(apperror.Forbidden, "", "access denied")
-	}
 	principal.Audience = claims.Audience
 	principal.Product = productForAudience(claims.Audience)
+	principal.Issuer = claims.Issuer
+	principal.Subject = claims.Subject
 	return principal, nil
 }
 

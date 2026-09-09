@@ -25,6 +25,9 @@ type Config struct {
 	OIDCAudience          string
 	OIDCAudiences         []string
 	OIDCJWKSURL           string
+	SuperAdminIssuer      string
+	SuperAdminSubject     string
+	SuperAdminPassword    string
 	SchemaMin             int
 	SchemaMax             int
 	ShutdownTimeout       time.Duration
@@ -61,8 +64,8 @@ func Load() (Config, error) {
 		Environment: env("INSPECTION_ENV", "local"), HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
 		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
-		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
-		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 21), ShutdownTimeout: 10 * time.Second,
+		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
+		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 22), ShutdownTimeout: 10 * time.Second,
 		RuntimeDBRole:    env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
 		StoragePublic:    strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
 		RabbitMQURL:      env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
@@ -130,6 +133,9 @@ func (c Config) Validate() error {
 	}
 	if c.DatabaseURL == "" || c.MigrationDatabaseURL == "" || len(c.AllowedOrigins) == 0 || c.OIDCIssuer == "" || len(c.OIDCAudiences) == 0 {
 		return fmt.Errorf("configuration: missing required endpoint or OIDC setting")
+	}
+	if c.SuperAdminIssuer == "" || c.SuperAdminSubject == "" || c.SuperAdminPassword == "" {
+		return fmt.Errorf("configuration: missing super administrator bootstrap secret")
 	}
 	seenOrigins := map[string]struct{}{}
 	for _, raw := range c.AllowedOrigins {

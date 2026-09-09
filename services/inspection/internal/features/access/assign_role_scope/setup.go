@@ -41,17 +41,17 @@ func Setup(deps Dependencies) error {
 	return deps.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) { return handle(ctx, deps, raw.(Command)) })
 }
 func handle(ctx context.Context, deps Dependencies, cmd Command) (int, error) {
-	if !validRole(cmd.Role) {
+	if !auth.IsKnownRole(cmd.Role) {
 		return 0, apperror.New(apperror.InvalidInput, "role", "unknown role")
 	}
 	if len(cmd.Assignments) > maxBatch {
 		return 0, apperror.New(apperror.InvalidInput, "assignments", "batch exceeds 100")
 	}
-	principal, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.Manager}, nil, true)
+	principal, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.AccessAdmin, auth.Manager}, nil, true)
 	if err != nil {
 		return 0, err
 	}
-	if cmd.Role == auth.TenantAdmin && !has(principal.Roles, auth.TenantAdmin) {
+	if !auth.CanDelegateRole(principal.Roles, cmd.Role) {
 		return 0, apperror.New(apperror.Forbidden, "", "access denied")
 	}
 	err = (tenanttx.Runner{DB: deps.DB}).Within(ctx, cmd.TenantID, func(tx *gorm.DB) error {
@@ -80,11 +80,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (int, error) {
 		if err := tx.Where("tenant_id = ? AND membership_id = ?", cmd.TenantID, cmd.MembershipID).Delete(&database.ProductEntitlement{}).Error; err != nil {
 			return err
 		}
-		products := []string{auth.DashboardProduct}
-		if cmd.Role == auth.TenantAdmin {
-			products = []string{auth.AdminProduct, auth.DashboardProduct}
-		}
-		for _, product := range products {
+		for _, product := range auth.ProductsForRole(cmd.Role) {
 			if err := tx.Create(&database.ProductEntitlement{ID: identity.NewID(), TenantID: cmd.TenantID, MembershipID: cmd.MembershipID, Product: product, CreatedAt: time.Now().UTC()}).Error; err != nil {
 				return err
 			}
@@ -99,18 +95,6 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (int, error) {
 	}
 	return len(cmd.Assignments), nil
 }
-func validRole(r string) bool {
-	return r == auth.TenantAdmin || r == auth.Manager || r == auth.Employee || r == auth.Viewer || r == auth.CustomerViewer
-}
-func has(v []string, w string) bool {
-	for _, x := range v {
-		if x == w {
-			return true
-		}
-	}
-	return false
-}
-
 func validateAssignment(tx *gorm.DB, tenantID identity.ID, role string, assignment Assignment) error {
 	if assignment.ResourceID == (identity.ID{}) || (assignment.Kind != "BUSINESS_UNIT" && assignment.Kind != "ASSET" && assignment.Kind != "PROJECT" && assignment.Kind != "INSPECTION") {
 		return apperror.New(apperror.InvalidInput, "assignments", "unknown resource")

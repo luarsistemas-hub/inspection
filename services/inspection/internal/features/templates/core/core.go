@@ -42,7 +42,7 @@ func (r refs) SegmentExists(v string) bool         { return v == r.segment }
 func (r refs) AnalysisProfileExists(v string) bool { return v == r.profile }
 
 func (s Service) PublishProfile(ctx context.Context, tenantID identity.ID, key, idempotencyKey string, payload []byte) (database.AnalysisProfileVersion, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
 		return database.AnalysisProfileVersion{}, err
 	}
 	var doc ProfileDocument
@@ -90,7 +90,7 @@ func (s Service) PublishProfile(ctx context.Context, tenantID identity.ID, key, 
 }
 
 func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, idempotencyKey string, payload []byte) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
 		return View{}, err
 	}
 	if key == "" || !catalog.ValidName(name) || idempotencyKey == "" {
@@ -160,7 +160,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 }
 
 func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, expectedVersion int64) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
 		return View{}, err
 	}
 	var out View
@@ -194,7 +194,7 @@ func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, 
 }
 
 func (s Service) GetVersion(ctx context.Context, tenantID, versionID identity.ID) (View, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
 		return View{}, err
 	}
 	var out View
@@ -218,7 +218,7 @@ func (s Service) ResolveActive(ctx context.Context, tenantID, templateID identit
 	return out, err
 }
 func (s Service) List(ctx context.Context, tenantID identity.ID, search string, first int, after string) ([]View, string, bool, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
 		return nil, "", false, err
 	}
 	if first <= 0 {

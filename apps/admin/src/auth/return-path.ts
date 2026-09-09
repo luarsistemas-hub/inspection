@@ -1,4 +1,4 @@
-const ownedPrefixes = ["/tenants/", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit"];
+const ownedPrefixes = ["/overview", "/tenants/", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit"];
 
 export function safeAdminPath(value: string | null | undefined, fallback = "/organization"): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return fallback;

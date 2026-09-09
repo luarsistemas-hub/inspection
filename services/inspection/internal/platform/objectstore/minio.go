@@ -51,6 +51,26 @@ func (m *MinIOClient) CompleteMultipart(ctx context.Context, bucket, key, upload
 	_, err := m.Core.CompleteMultipartUpload(ctx, bucket, key, uploadID, completed, minio.PutObjectOptions{})
 	return mapMinIOError(err)
 }
+
+// ListMultipartParts returns every part MinIO still retains for an active
+// multipart upload. The caller uses this only to resume missing parts.
+func (m *MinIOClient) ListMultipartParts(ctx context.Context, bucket, key, uploadID string) ([]UploadedPart, error) {
+	parts := make([]UploadedPart, 0)
+	marker := 0
+	for {
+		result, err := m.Core.ListObjectParts(ctx, bucket, key, uploadID, marker, 1000)
+		if err != nil {
+			return nil, mapMinIOError(err)
+		}
+		for _, part := range result.ObjectParts {
+			parts = append(parts, UploadedPart{Number: part.PartNumber, ETag: part.ETag, SizeBytes: part.Size})
+		}
+		if !result.IsTruncated {
+			return parts, nil
+		}
+		marker = result.NextPartNumberMarker
+	}
+}
 func (m *MinIOClient) AbortMultipart(ctx context.Context, bucket, key, uploadID string) error {
 	return mapMinIOError(m.Core.AbortMultipartUpload(ctx, bucket, key, uploadID))
 }

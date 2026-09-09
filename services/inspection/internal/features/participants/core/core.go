@@ -45,7 +45,7 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 	if len([]rune(name)) > 200 || len(contacts) > MaxContacts {
 		return ParticipantView{}, apperror.New(apperror.InvalidInput, "contacts", "participant limit exceeded")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: businessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: businessUnitID}, true); err != nil {
 		return ParticipantView{}, err
 	}
 	if participantID != nil {
@@ -55,7 +55,7 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 		}); err != nil {
 			return ParticipantView{}, apperror.New(apperror.NotFound, "participantId", "participant not found")
 		}
-		if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
+		if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
 			return ParticipantView{}, err
 		}
 	}
@@ -145,7 +145,7 @@ func (s Service) Verify(ctx context.Context, tenantID, contactID identity.ID, su
 	}); err != nil {
 		return database.ContactVerification{}, apperror.New(apperror.NotFound, "contactId", "contact not found")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: unitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: unitID}, true); err != nil {
 		return database.ContactVerification{}, err
 	}
 	var verification database.ContactVerification
@@ -180,7 +180,7 @@ func (s Service) SetChannels(ctx context.Context, tenantID, participantID identi
 	}); err != nil {
 		return ParticipantView{}, apperror.New(apperror.NotFound, "participantId", "participant not found")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
 		return ParticipantView{}, err
 	}
 	var result ParticipantView
@@ -258,7 +258,7 @@ func (s Service) Deactivate(ctx context.Context, tenantID, participantID identit
 	}); err != nil {
 		return apperror.New(apperror.NotFound, "participantId", "participant not found")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
 		return err
 	}
 	return (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -284,14 +284,14 @@ func (s Service) Get(ctx context.Context, tenantID, id identity.ID) (Participant
 	if err != nil {
 		return ParticipantView{}, err
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: v.Participant.BusinessUnitID}, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: v.Participant.BusinessUnitID}, false); err != nil {
 		return ParticipantView{}, err
 	}
 	return v, nil
 }
 
 func (s Service) List(ctx context.Context, tenantID identity.ID, search string, first int, after string) ([]ParticipantView, string, bool, error) {
-	principal, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
+	principal, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
 	if err != nil {
 		return nil, "", false, err
 	}

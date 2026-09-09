@@ -1,7 +1,49 @@
-query DashboardGate { me { tenantId productEntitlements roles effectiveScopes { kind resourceId } } tenant { id name status } }
+query DashboardGate {
+  me { tenantId productEntitlements roles effectiveScopes { kind resourceId } }
+  tenant { id name status }
+}
 
-query InternalHome($after: String) { dashboardSummary { total normal attention critical pending invalidated } triageInspections(first: 25, after: $after) { nodes { inspectionId projectId assetId classification status updatedAt } pageInfo { endCursor hasNextPage } } }
+query DashboardMemberships($after: String) {
+  memberships(first: 25, after: $after) { nodes { id tenantId role status } pageInfo { endCursor hasNextPage } }
+}
 
-query CustomerHome($after: String) { customerPortfolio(first: 25, after: $after) { nodes { assetId projectId publishedClassification status progress updatedAt } pageInfo { endCursor hasNextPage } } }
+query OperationalOverview($after: String, $classification: String, $status: String) {
+  dashboardSummary { total normal attention critical pending invalidated }
+  triageInspections(first: 25, after: $after, classification: $classification, status: $status) {
+    nodes { inspectionId projectId assetId classification status updatedAt }
+    pageInfo { endCursor hasNextPage }
+  }
+}
 
-query CustomerNotifications($after: String) { myNotifications(first: 25, after: $after) { nodes { id kind title body resourceKind resourceId createdAt readAt } unreadCount pageInfo { endCursor hasNextPage } } }
+query Schedules($after: String) { schedules(first: 25, after: $after) { nodes { id assetId participantId templateId rrule timezone startsAt nextDueAt deadlineMinutes reminderOffsetsMinutes status version } pageInfo { endCursor hasNextPage } } }
+query Inspections($after: String, $history: Boolean!) { inspections(first: 25, after: $after, history: $history) { nodes { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } pageInfo { endCursor hasNextPage } } }
+query InspectionDetail($id: ID!) { inspection(id: $id) { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } }
+query Projects($after: String) { projects(first: 25, after: $after) { nodes { id assetId participantId templateId reportMode status version stages { id key label kind position status plannedAt reason inspectionId version } } pageInfo { endCursor hasNextPage } } }
+query ProjectDetail($id: ID!) { project(id: $id) { id assetId participantId templateId reportMode status version stages { id key label kind position status plannedAt reason inspectionId version } transitions { id stageId fromState toState reason occurredAt } } }
+query ProjectTimeline($projectId: ID!) { projectTimeline(projectId: $projectId) { projectId entries { stageId label status inspectionId occurredAt } } }
+query ReportWorkspace($inspectionId: ID!, $version: Int) { report(inspectionId: $inspectionId, version: $version) { id inspectionId projectId version mode classification jsonDigest htmlDigest canonicalJSON html createdAt } }
+query ReportDownload($snapshotId: ID!) { reportDownload(snapshotId: $snapshotId, kind: "PDF") { snapshotId kind objectKey url status sha256 } }
+
+query CustomerPortfolio($after: String) { customerPortfolio(first: 25, after: $after) { nodes { assetId projectId publishedClassification status progress updatedAt } pageInfo { endCursor hasNextPage } } }
+query CustomerTimeline($assetId: ID, $projectId: ID, $after: String) { customerTimeline(assetId: $assetId, projectId: $projectId, first: 25, after: $after) { nodes { id kind status occurredAt historical } pageInfo { endCursor hasNextPage } } }
+query CustomerReport($inspectionId: ID!, $version: Int) { customerReport(inspectionId: $inspectionId, version: $version) { inspectionId snapshotId version classification advisory status historical } }
+query CustomerEvidence($inspectionId: ID!, $mode: EvidenceMode!, $after: String) { customerEvidence(inspectionId: $inspectionId, mode: $mode, first: 25, after: $after) { nodes { id requirementKey description captureSource state lineageId replacedBy mediaAvailability url } pageInfo { endCursor hasNextPage } } }
+query MyNotifications($after: String, $unreadOnly: Boolean!) { myNotifications(first: 25, after: $after, unreadOnly: $unreadOnly) { nodes { id kind title body resourceKind resourceId createdAt readAt } unreadCount pageInfo { endCursor hasNextPage } } }
+
+mutation CreateSchedule($input: CreateScheduleInput!) { createSchedule(input: $input) { schedule { id status nextDueAt version } userErrors { code field message correlationId } clientMutationId } }
+mutation UpdateSchedule($input: UpdateScheduleInput!) { updateSchedule(input: $input) { schedule { id status nextDueAt version } userErrors { code field message correlationId } clientMutationId } }
+mutation CancelSchedule($input: CancelScheduleInput!) { cancelSchedule(input: $input) { schedule { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation CreateInspection($input: CreateInspectionInput!) { createInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation CancelInspection($input: InspectionTransitionInput!) { cancelInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation InvalidateInspection($input: InvalidateInspectionInput!) { invalidateInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation CreateProject($input: CreateProjectInput!) { createProject(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation AddExceptionalStage($input: AddExceptionalStageInput!) { addExceptionalStage(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation StartProjectStage($input: StartProjectStageInput!) { startProjectStage(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation SkipProjectStage($input: SkipProjectStageInput!) { skipProjectStage(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation CloseProject($input: ProjectTransitionInput!) { closeProject(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation ReopenProject($input: ReopenProjectInput!) { reopenProject(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation PublishReport($input: PublishReportInput!) { publishReport(input: $input) { publication { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation InvalidateReportPublication($input: InvalidateReportPublicationInput!) { invalidateReportPublication(input: $input) { publication { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation RequestRecapture($input: RequestRecaptureInput!) { requestRecapture(input: $input) { recapture { id status deadlineAt } userErrors { code field message correlationId } clientMutationId } }
+mutation MarkNotificationRead($input: MarkNotificationReadInput!) { markNotificationRead(input: $input) { notification { id readAt } userErrors { code field message correlationId } clientMutationId } }
+mutation ConfigureNotificationPreferences($input: ConfigureNotificationPreferencesInput!) { configureMyNotificationPreferences(input: $input) { userErrors { code field message correlationId } clientMutationId } }

@@ -10,14 +10,63 @@ import (
 )
 
 const (
-	TenantAdmin      = "TENANT_ADMIN"
-	Manager          = "MANAGER"
-	Employee         = "EMPLOYEE"
-	Viewer           = "VIEWER"
-	CustomerViewer   = "CUSTOMER_VIEWER"
-	AdminProduct     = "ADMIN"
-	DashboardProduct = "DASHBOARD"
+	TenantAdmin           = "TENANT_ADMIN"
+	Manager               = "MANAGER"
+	Employee              = "EMPLOYEE"
+	Viewer                = "VIEWER"
+	CustomerViewer        = "CUSTOMER_VIEWER"
+	OrganizationAdmin     = "ORGANIZATION_ADMIN"
+	AccessAdmin           = "ACCESS_ADMIN"
+	ParticipationAdmin    = "PARTICIPATION_ADMIN"
+	InspectionConfigAdmin = "INSPECTION_CONFIG_ADMIN"
+	GovernanceAdmin       = "GOVERNANCE_ADMIN"
+	Auditor               = "AUDITOR"
+	AdminProduct          = "ADMIN"
+	DashboardProduct      = "DASHBOARD"
 )
+
+// IsKnownRole reports whether role is part of the supported membership model.
+func IsKnownRole(role string) bool {
+	switch role {
+	case TenantAdmin, Manager, Employee, Viewer, CustomerViewer,
+		OrganizationAdmin, AccessAdmin, ParticipationAdmin,
+		InspectionConfigAdmin, GovernanceAdmin, Auditor:
+		return true
+	default:
+		return false
+	}
+}
+
+// ProductsForRole returns the products granted to a newly provisioned role.
+func ProductsForRole(role string) []string {
+	switch role {
+	case TenantAdmin:
+		return []string{AdminProduct, DashboardProduct}
+	case OrganizationAdmin, AccessAdmin, ParticipationAdmin, InspectionConfigAdmin, GovernanceAdmin, Auditor:
+		return []string{AdminProduct}
+	default:
+		return []string{DashboardProduct}
+	}
+}
+
+// CanDelegateRole reports whether a current membership may grant candidate.
+// Tenant administrators retain full authority; access administrators may grant
+// every delegated and operational role but cannot create another tenant admin.
+func CanDelegateRole(grantorRoles []string, candidate string) bool {
+	if !IsKnownRole(candidate) {
+		return false
+	}
+	if contains(grantorRoles, TenantAdmin) {
+		return true
+	}
+	if contains(grantorRoles, AccessAdmin) {
+		return candidate != TenantAdmin
+	}
+	if contains(grantorRoles, Manager) {
+		return candidate == Manager || candidate == Employee || candidate == Viewer || candidate == CustomerViewer
+	}
+	return false
+}
 
 // AuthorizationRequest makes product, role, mutation, tenant, and resource
 // policy explicit at each protected boundary.

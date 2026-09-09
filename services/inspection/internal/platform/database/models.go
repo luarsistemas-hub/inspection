@@ -57,8 +57,8 @@ type Membership struct {
 	ID         identity.ID `gorm:"type:uuid;primaryKey"`
 	TenantID   identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:1"`
 	IdentityID identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:2"`
-	Issuer     string      `gorm:"size:500;not null;uniqueIndex:idx_memberships_oidc,priority:1"`
-	Subject    string      `gorm:"size:500;not null;uniqueIndex:idx_memberships_oidc,priority:2"`
+	Issuer     string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:1"`
+	Subject    string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:2"`
 	Role       string      `gorm:"size:32;not null"`
 	Status     string      `gorm:"size:16;not null"`
 	Version    int64       `gorm:"not null;default:1"`

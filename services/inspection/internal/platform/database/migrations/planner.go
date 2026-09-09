@@ -444,5 +444,14 @@ DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['reports.publication_polici
   EXECUTE 'CREATE POLICY tenant_isolation ON ' || t || ' USING (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid) WITH CHECK (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid)';
 END LOOP; END $$;
 GRANT USAGE ON SCHEMA reports, notifications TO inspection_runtime;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA reports, notifications TO inspection_runtime;`}}
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA reports, notifications TO inspection_runtime;`},
+		{Version: 22, Name: "membership_context_and_delegated_roles", Compatible: true, SQL: `
+DROP INDEX IF EXISTS access.idx_memberships_oidc;
+CREATE INDEX IF NOT EXISTS idx_memberships_oidc ON access.memberships(issuer, subject, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memberships_tenant_identity ON access.memberships(tenant_id, identity_id);
+ALTER TABLE access.memberships DROP CONSTRAINT IF EXISTS chk_membership_role;
+ALTER TABLE access.memberships ADD CONSTRAINT chk_membership_role CHECK (role IN ('TENANT_ADMIN','MANAGER','EMPLOYEE','VIEWER','CUSTOMER_VIEWER','ORGANIZATION_ADMIN','ACCESS_ADMIN','PARTICIPATION_ADMIN','INSPECTION_CONFIG_ADMIN','GOVERNANCE_ADMIN','AUDITOR'));
+DROP POLICY IF EXISTS membership_oidc_lookup ON access.memberships;
+CREATE POLICY membership_oidc_lookup ON access.memberships FOR SELECT TO inspection_runtime
+USING (issuer = current_setting('app.oidc_issuer', true) AND subject = current_setting('app.oidc_subject', true));`}}
 }

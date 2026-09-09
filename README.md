@@ -11,7 +11,7 @@ Requisitos: Docker Desktop/Compose, Go 1.26.5, Node.js 22 e npm.
 ./scripts/local.sh up
 ```
 
-Abra <http://localhost:3000>. Keycloak local usa `admin` / `admin`. Para desenvolver no host, execute `./scripts/local.sh infra` e abra `./scripts/dev.sh api`, `worker`, `scheduler` e `web` em terminais separados.
+Abra <http://localhost:3000>. Configure as credenciais de bootstrap do Keycloak somente em `.env.inspection` antes de subir a stack. Para desenvolver no host, execute `./scripts/local.sh infra` e abra `./scripts/dev.sh api`, `worker`, `scheduler` e `web` em terminais separados.
 
 ## Componentes e URLs
 

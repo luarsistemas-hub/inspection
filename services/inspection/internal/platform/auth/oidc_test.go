@@ -23,18 +23,13 @@ func (f resolverFunc) ResolveOIDC(c context.Context, i, s string) (requestctx.Pr
 }
 func TestOIDCAuthenticationAndImmediateRevocation(t *testing.T) {
 	now := time.Now()
-	disabled := false
 	a := Authenticator{Audience: "inspection", Now: func() time.Time { return now }, Verifier: verifierFunc(func(context.Context, string) (OIDCClaims, error) {
 		return OIDCClaims{Issuer: "issuer", Subject: "subject", Audience: "inspection", ExpiresAt: now.Add(time.Minute)}, nil
 	}), Resolver: resolverFunc(func(context.Context, string, string) (requestctx.Principal, error) {
-		return requestctx.Principal{IdentityID: identity.NewID(), TenantID: identity.NewID(), Disabled: disabled}, nil
+		return requestctx.Principal{IdentityID: identity.NewID()}, nil
 	})}
 	if _, err := a.Authenticate(context.Background(), "Bearer verified"); err != nil {
 		t.Fatal(err)
-	}
-	disabled = true
-	if _, err := a.Authenticate(context.Background(), "Bearer verified"); err == nil {
-		t.Fatal("disabled membership accepted")
 	}
 	a.Verifier = verifierFunc(func(context.Context, string) (OIDCClaims, error) { return OIDCClaims{}, errors.New("bad signature") })
 	_, err := a.Authenticate(context.Background(), "Bearer secret")

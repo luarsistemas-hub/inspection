@@ -51,7 +51,7 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 	if in.TenantID == (identity.ID{}) || in.BusinessUnitID == (identity.ID{}) || in.SegmentVersionID == (identity.ID{}) || in.IdempotencyKey == "" {
 		return View{}, apperror.New(apperror.InvalidInput, "input", "tenant, business unit, segment, and idempotency key are required")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: in.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: in.BusinessUnitID}, true); err != nil {
 		return View{}, err
 	}
 	if s.Bus == nil {
@@ -152,7 +152,7 @@ func (s Service) Update(ctx context.Context, assetID identity.ID, expectedVersio
 	if err != nil {
 		return View{}, apperror.New(apperror.NotFound, "assetId", "asset not found")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: existing.Asset.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: existing.Asset.BusinessUnitID}, true); err != nil {
 		return View{}, err
 	}
 	if existing.Asset.Status == "ARCHIVED" {
@@ -222,7 +222,7 @@ func (s Service) Archive(ctx context.Context, tenantID, assetID identity.ID, exp
 	if asset.Status == "ARCHIVED" {
 		return nil
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 		return err
 	}
 	return (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -260,13 +260,13 @@ func (s Service) Get(ctx context.Context, tenantID, assetID identity.ID) (View, 
 	if err != nil {
 		return View{}, err
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Asset.BusinessUnitID}, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Asset.BusinessUnitID}, false); err != nil {
 		return View{}, err
 	}
 	return out, nil
 }
 func (s Service) List(ctx context.Context, tenantID identity.ID, businessUnitID *identity.ID, search string, first int, after string) ([]View, string, bool, error) {
-	principal, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
+	principal, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
 	if err != nil {
 		return nil, "", false, err
 	}

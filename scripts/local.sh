@@ -147,7 +147,7 @@ URLs locais:
   Capture        http://localhost:${INSPECTION_CAPTURE_PORT:-3003}
   GraphQL        http://localhost:${INSPECTION_API_PORT:-8080}/graphql
   Health/ready   http://localhost:${INSPECTION_API_PORT:-8080}/healthz | /readyz
-  Keycloak       http://localhost:8081 (admin/admin)
+  Keycloak       http://localhost:8081 (credenciais em .env.inspection)
   MinIO API      http://localhost:${INSPECTION_MINIO_PORT:-9002}
   MinIO Console  http://localhost:${INSPECTION_MINIO_CONSOLE_PORT:-9003} (inspection/inspection-local-secret)
   RabbitMQ       http://localhost:${INSPECTION_RABBITMQ_MANAGEMENT_PORT:-15673} (inspection/inspection)

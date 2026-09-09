@@ -44,7 +44,7 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 	if q.From != nil && q.To != nil && q.From.After(*q.To) {
 		return Result{}, apperror.New(apperror.InvalidInput, "dateRange", "invalid date range")
 	}
-	if _, err := deps.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin}, nil, false); err != nil {
+	if _, err := deps.Authorizer.Authorize(ctx, q.TenantID, []string{auth.TenantAdmin, auth.Auditor}, nil, false); err != nil {
 		return Result{}, err
 	}
 	limit, err := graph.PageSize(q.First)

@@ -26,15 +26,23 @@ type Result struct {
 	Status                                 string
 }
 type Dependencies struct {
-	DB    *gorm.DB
-	Bus   *mediator.Bus
-	Now   func() time.Time
-	NewID func() identity.ID
+	DB                *gorm.DB
+	Bus               *mediator.Bus
+	Now               func() time.Time
+	NewID             func() identity.ID
+	Runner            TenantRunner
+	SuperAdminIssuer  string
+	SuperAdminSubject string
+}
+
+// TenantRunner executes the bootstrap in the tenant-scoped transaction.
+type TenantRunner interface {
+	Within(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 // Setup registers the tenant bootstrap command as this slice's sole entry point.
 func Setup(deps Dependencies) error {
-	if deps.DB == nil || deps.Bus == nil {
+	if deps.DB == nil || deps.Bus == nil || deps.SuperAdminIssuer == "" || deps.SuperAdminSubject == "" {
 		return fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
 	if deps.Now == nil {
@@ -42,6 +50,9 @@ func Setup(deps Dependencies) error {
 	}
 	if deps.NewID == nil {
 		deps.NewID = identity.NewID
+	}
+	if deps.Runner == nil {
+		deps.Runner = tenanttx.Runner{DB: deps.DB}
 	}
 	return deps.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) { return handle(ctx, deps, raw.(Command)) })
 }
@@ -81,7 +92,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (Result, error)
 	// indexable bootstrap key.
 	subjectDigest := sha256.Sum256([]byte(cmd.Issuer + "\x00" + cmd.Subject))
 	subjectKey := hex.EncodeToString(subjectDigest[:])
-	err := (tenanttx.Runner{DB: deps.DB}).Within(ctx, result.TenantID, func(tx *gorm.DB) error {
+	err := deps.Runner.Within(ctx, result.TenantID, func(tx *gorm.DB) error {
 		var prior database.BootstrapRequest
 		err := tx.Where("subject_key=? AND idempotency_key=?", subjectKey, cmd.IdempotencyKey).First(&prior).Error
 		if err == nil {
@@ -107,7 +118,8 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (Result, error)
 		if err := tx.Create(&unit).Error; err != nil {
 			return err
 		}
-		membership := database.Membership{ID: result.MembershipID, TenantID: result.TenantID, IdentityID: result.MembershipID, Issuer: cmd.Issuer, Subject: cmd.Subject, Role: "TENANT_ADMIN", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}
+		adminIdentityID := identity.NewDeterministicID("inspection/oidc-identity", deps.SuperAdminIssuer+"\x00"+deps.SuperAdminSubject)
+		membership := database.Membership{ID: result.MembershipID, TenantID: result.TenantID, IdentityID: adminIdentityID, Issuer: deps.SuperAdminIssuer, Subject: deps.SuperAdminSubject, Role: "TENANT_ADMIN", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&membership).Error; err != nil {
 			return err
 		}

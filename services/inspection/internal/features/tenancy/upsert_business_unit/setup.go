@@ -70,7 +70,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Busin
 	if cmd.HasBusinessUnitID && cmd.ExpectedVersion < 1 {
 		return database.BusinessUnit{}, apperror.New(apperror.InvalidInput, "expectedVersion", "expected business unit version is required")
 	}
-	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin}, nil, true); err != nil {
 		return database.BusinessUnit{}, err
 	}
 

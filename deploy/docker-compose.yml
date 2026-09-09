@@ -85,8 +85,8 @@ services:
     image: quay.io/keycloak/keycloak:26.2.5
     command: start-dev --import-realm
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?set in .env.inspection}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?set in .env.inspection}
       KC_HTTP_PORT: 8080
     ports:
       - "8081:8080"
@@ -97,6 +97,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 18
+
+  keycloak-super-admin-bootstrap:
+    image: quay.io/keycloak/keycloak:26.2.5
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?set in .env.inspection}
+      KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_USERNAME: ${INSPECTION_SUPER_ADMIN_USERNAME:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        /opt/keycloak/bin/kcadm.sh config credentials --server http://keycloak:8080 --realm master --user "$${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}" --password "$${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}"
+        /opt/keycloak/bin/kcadm.sh update users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection -s username="$${INSPECTION_SUPER_ADMIN_USERNAME}" -s enabled=true
+        /opt/keycloak/bin/kcadm.sh set-password -r inspection --userid "$${INSPECTION_SUPER_ADMIN_SUBJECT}" --new-password "$${INSPECTION_SUPER_ADMIN_PASSWORD}"
 
   inspection-migrate:
     build:
@@ -114,6 +133,9 @@ services:
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
+      INSPECTION_SUPER_ADMIN_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
 
   inspection-runtime-bootstrap:
     image: postgres:18-alpine
@@ -138,6 +160,8 @@ services:
         condition: service_completed_successfully
       keycloak:
         condition: service_healthy
+      keycloak-super-admin-bootstrap:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       minio-setup:
@@ -156,6 +180,9 @@ services:
       # Public tokens use localhost. API gets signing keys over its private
       # network without weakening issuer or audience validation.
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
+      INSPECTION_SUPER_ADMIN_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
       INSPECTION_STORAGE_PUBLIC: "false"
       INSPECTION_RABBITMQ_URL: amqp://inspection:inspection@rabbitmq:5672/
       INSPECTION_DRAGONFLY_ADDRESS: redis:6379

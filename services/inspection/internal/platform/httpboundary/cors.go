@@ -42,7 +42,7 @@ func CORS(configured interface{}, args ...interface{}) http.Handler {
 			if captureOrigin == "" || origin == captureOrigin {
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 			}
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Correlation-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Correlation-ID, X-Inspection-Membership-ID")
 			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			w.Header().Set("Vary", "Origin")
 		}

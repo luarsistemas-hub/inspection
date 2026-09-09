@@ -44,7 +44,7 @@ func Setup(d Dependencies) error {
 		}); err != nil {
 			return nil, apperror.New(apperror.NotFound, "versionId", "origin version not found")
 		}
-		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 			return nil, err
 		}
 		return d.Service.Invalidate(ctx, command.TenantID, command.VersionID)

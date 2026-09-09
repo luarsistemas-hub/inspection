@@ -1,1842 +1,424 @@
-export type Maybe<T> = T | null;
-export type InputMaybe<T> = Maybe<T>;
-/** All built-in and custom scalars, mapped to their actual values */
-export type Scalars = {
-  ID: { input: string; output: string; }
-  String: { input: string; output: string; }
-  Boolean: { input: boolean; output: boolean; }
-  Int: { input: number; output: number; }
-  Float: { input: number; output: number; }
-  JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
-};
-
-export type AcceptProcessingInput = {
-  aiAnalysis: Scalars['Boolean']['input'];
-  clientMutationId: Scalars['String']['input'];
-  disclosureVersion: Scalars['String']['input'];
-  gpsUse: Scalars['Boolean']['input'];
-  photoProcessing: Scalars['Boolean']['input'];
-};
-
-export type ActivateSegmentDefinitionInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  versionId: Scalars['ID']['input'];
-};
-
-export type ActivateTemplateVersionInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  versionId: Scalars['ID']['input'];
-};
-
+/** Internal type. DO NOT USE DIRECTLY. */
+type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+/** Internal type. DO NOT USE DIRECTLY. */
+export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type AddExceptionalStageInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  key: Scalars['String']['input'];
-  label: Scalars['String']['input'];
-  plannedAt: InputMaybe<Scalars['String']['input']>;
-  projectId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-};
-
-export type AnalysisProfile = {
-  __typename?: 'AnalysisProfile';
-  canonicalDigest: Scalars['String']['output'];
-  definition: Scalars['JSON']['output'];
-  id: Scalars['ID']['output'];
-  key: Scalars['String']['output'];
-  publishedAt: Scalars['String']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  versionNumber: Scalars['Int']['output'];
-};
-
-export type AnalysisProfilePayload = {
-  __typename?: 'AnalysisProfilePayload';
-  clientMutationId: Scalars['String']['output'];
-  profile: Maybe<AnalysisProfile>;
-  userErrors: Array<UserError>;
-};
-
-export type ArchiveAssetInput = {
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-};
-
-export type ArchiveBusinessUnitInput = {
-  businessUnitId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-};
-
-export type Asset = {
-  __typename?: 'Asset';
-  address: Scalars['String']['output'];
-  assignments: Array<AssetAssignment>;
-  attributes: Scalars['JSON']['output'];
-  businessUnitId: Scalars['ID']['output'];
-  externalKey: Scalars['String']['output'];
-  geofenceMeters: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  latitudeE6: Maybe<Scalars['Int']['output']>;
-  longitudeE6: Maybe<Scalars['Int']['output']>;
-  name: Scalars['String']['output'];
-  policyOverrides: Scalars['JSON']['output'];
-  segmentVersionId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  templateId: Maybe<Scalars['ID']['output']>;
-  version: Scalars['Int']['output'];
-};
-
-export type AssetAssignment = {
-  __typename?: 'AssetAssignment';
-  active: Scalars['Boolean']['output'];
-  participantId: Scalars['ID']['output'];
-  role: Scalars['String']['output'];
-};
-
-export type AssetAssignmentInput = {
-  participantId: Scalars['ID']['input'];
-  role: Scalars['String']['input'];
-};
-
-export type AssetConnection = {
-  __typename?: 'AssetConnection';
-  nodes: Array<Asset>;
-  pageInfo: PageInfo;
-};
-
-export type AssetInput = {
-  address: Scalars['String']['input'];
-  assignments: Array<AssetAssignmentInput>;
-  attributes: Scalars['JSON']['input'];
-  businessUnitId: Scalars['ID']['input'];
-  externalKey: Scalars['String']['input'];
-  geofenceMeters: InputMaybe<Scalars['Int']['input']>;
-  latitudeE6: InputMaybe<Scalars['Int']['input']>;
-  longitudeE6: InputMaybe<Scalars['Int']['input']>;
-  name: Scalars['String']['input'];
-  policyOverrides: InputMaybe<Scalars['JSON']['input']>;
-  segmentVersionId: Scalars['ID']['input'];
-  templateId: InputMaybe<Scalars['ID']['input']>;
-};
-
-export type AssetPayload = {
-  __typename?: 'AssetPayload';
-  asset: Maybe<Asset>;
-  clientMutationId: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type AssignRoleScopesInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  membershipId: Scalars['ID']['input'];
-  role: Scalars['String']['input'];
-  scopes: Array<ScopeAssignmentInput>;
-};
-
-export type AuditEvent = {
-  __typename?: 'AuditEvent';
-  action: Scalars['String']['output'];
-  correlationId: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  occurredAt: Scalars['String']['output'];
-  outcome: Scalars['String']['output'];
-  reason: Maybe<Scalars['String']['output']>;
-  targetId: Scalars['String']['output'];
-  targetType: Scalars['String']['output'];
-};
-
-export type AuditEventConnection = {
-  __typename?: 'AuditEventConnection';
-  nodes: Array<AuditEvent>;
-  pageInfo: PageInfo;
-};
-
-export type BusinessUnit = {
-  __typename?: 'BusinessUnit';
-  code: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type BusinessUnitConnection = {
-  __typename?: 'BusinessUnitConnection';
-  nodes: Array<BusinessUnit>;
-  pageInfo: PageInfo;
-};
-
-export type BusinessUnitPayload = {
-  __typename?: 'BusinessUnitPayload';
-  businessUnit: Maybe<BusinessUnit>;
-  clientMutationId: Scalars['String']['output'];
-  userErrors: Array<UserError>;
+  clientMutationId: string;
+  expectedVersion: number;
+  key: string;
+  label: string;
+  plannedAt: string | null | undefined;
+  projectId: string | number;
+  reason: string;
 };
 
 export type CancelScheduleInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  scheduleId: Scalars['ID']['input'];
-};
-
-export type CaptureAnswer = {
-  __typename?: 'CaptureAnswer';
-  impossibilityReason: Maybe<Scalars['String']['output']>;
-  mediaIds: Array<Scalars['ID']['output']>;
-  requirementKey: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type CaptureGpsInput = {
-  accuracyMeters: Scalars['Float']['input'];
-  capturedAt: Scalars['String']['input'];
-  latitude: Scalars['Float']['input'];
-  longitude: Scalars['Float']['input'];
-  windowStartedAt: Scalars['String']['input'];
-};
-
-export type CapturePayload = {
-  __typename?: 'CapturePayload';
-  clientMutationId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type CaptureRequirement = {
-  __typename?: 'CaptureRequirement';
-  captureSourcePolicy: Scalars['String']['output'];
-  comparisonTarget: Scalars['String']['output'];
-  descriptionRequired: Scalars['Boolean']['output'];
-  evidenceKind: Scalars['String']['output'];
-  impossibilityAllowed: Scalars['Boolean']['output'];
-  instructions: Maybe<Scalars['String']['output']>;
-  key: Scalars['String']['output'];
-  label: Scalars['String']['output'];
-  maximumMedia: Scalars['Int']['output'];
-  minimumMedia: Scalars['Int']['output'];
-  required: Scalars['Boolean']['output'];
-  section: Scalars['String']['output'];
-};
-
-export type CompleteMediaUploadInput = {
-  clientMutationId: Scalars['String']['input'];
-  mediaId: Scalars['ID']['input'];
-  parts: Array<CompletedPartInput>;
-};
-
-export type CompletedPartInput = {
-  etag: Scalars['String']['input'];
-  partNumber: Scalars['Int']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  scheduleId: string | number;
 };
 
 export type ConfigureNotificationPreferencesInput = {
-  channels: Array<Scalars['ID']['input']>;
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-};
-
-export type ConfigurePublicationPolicyInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  mode: Scalars['String']['input'];
-};
-
-export type ConfigureRetentionPolicyInput = {
-  clientMutationId: Scalars['String']['input'];
-  evidenceDays: Scalars['Int']['input'];
-  operationalDays: Scalars['Int']['input'];
-  securityDays: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type ContactInput = {
-  channel: Scalars['String']['input'];
-  value: Scalars['String']['input'];
-};
-
-export type CreateBusinessUnitInput = {
-  clientMutationId: Scalars['String']['input'];
-  code: Scalars['String']['input'];
-  expectedTenantVersion: Scalars['Int']['input'];
-  name: Scalars['String']['input'];
+  channels: Array<string | number>;
+  clientMutationId: string;
+  expectedVersion: number;
 };
 
 export type CreateInspectionInput = {
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  deadlineAt: Scalars['String']['input'];
-  dueAt: Scalars['String']['input'];
-  participantId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-  referenceVersionId: InputMaybe<Scalars['ID']['input']>;
-  reminderInstants: Array<Scalars['String']['input']>;
-  templateId: InputMaybe<Scalars['ID']['input']>;
-};
-
-export type CreateMediaUploadInput = {
-  clientMutationId: Scalars['String']['input'];
-  contentType: Scalars['String']['input'];
-  sha256: Scalars['String']['input'];
-  sizeBytes: Scalars['Int']['input'];
+  assetId: string | number;
+  clientMutationId: string;
+  deadlineAt: string;
+  dueAt: string;
+  participantId: string | number;
+  reason: string;
+  referenceVersionId: string | number | null | undefined;
+  reminderInstants: Array<string>;
+  templateId: string | number | null | undefined;
 };
 
 export type CreateProjectInput = {
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  participantId: Scalars['ID']['input'];
-  templateId: InputMaybe<Scalars['ID']['input']>;
+  assetId: string | number;
+  clientMutationId: string;
+  participantId: string | number;
+  templateId: string | number | null | undefined;
 };
 
 export type CreateScheduleInput = {
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  deadlineMinutes: Scalars['Int']['input'];
-  participantId: Scalars['ID']['input'];
-  referenceVersionId: InputMaybe<Scalars['ID']['input']>;
-  reminderOffsetsMinutes: Array<Scalars['Int']['input']>;
-  rrule: Scalars['String']['input'];
-  startsAt: Scalars['String']['input'];
-  templateId: Scalars['ID']['input'];
-  timezone: Scalars['String']['input'];
-};
-
-export type CreateTenantInput = {
-  businessUnitCode: Scalars['String']['input'];
-  businessUnitName: Scalars['String']['input'];
-  clientMutationId: Scalars['String']['input'];
-  language: InputMaybe<Scalars['String']['input']>;
-  name: Scalars['String']['input'];
-  timezone: InputMaybe<Scalars['String']['input']>;
-};
-
-export type CreateTenantPayload = {
-  __typename?: 'CreateTenantPayload';
-  clientMutationId: Scalars['String']['output'];
-  tenant: Maybe<Tenant>;
-  userErrors: Array<UserError>;
-};
-
-export type CustomerEvidenceConnection = {
-  __typename?: 'CustomerEvidenceConnection';
-  nodes: Array<CustomerEvidenceItem>;
-  pageInfo: PageInfo;
-};
-
-export type CustomerEvidenceItem = {
-  __typename?: 'CustomerEvidenceItem';
-  captureSource: Maybe<Scalars['String']['output']>;
-  description: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  lineageId: Scalars['ID']['output'];
-  mediaAvailability: Scalars['String']['output'];
-  replacedBy: Maybe<Scalars['ID']['output']>;
-  requirementKey: Scalars['String']['output'];
-  state: Scalars['String']['output'];
-  url: Maybe<Scalars['String']['output']>;
-};
-
-export type CustomerPortfolioConnection = {
-  __typename?: 'CustomerPortfolioConnection';
-  nodes: Array<CustomerPortfolioItem>;
-  pageInfo: PageInfo;
-};
-
-export type CustomerPortfolioFilter = {
-  assetId: InputMaybe<Scalars['ID']['input']>;
-  projectId: InputMaybe<Scalars['ID']['input']>;
-  search: InputMaybe<Scalars['String']['input']>;
-};
-
-export type CustomerPortfolioItem = {
-  __typename?: 'CustomerPortfolioItem';
-  assetId: Scalars['ID']['output'];
-  progress: Scalars['Int']['output'];
-  projectId: Maybe<Scalars['ID']['output']>;
-  publishedClassification: Maybe<Scalars['String']['output']>;
-  status: Scalars['String']['output'];
-  updatedAt: Scalars['String']['output'];
-};
-
-export type CustomerReport = {
-  __typename?: 'CustomerReport';
-  advisory: Scalars['String']['output'];
-  classification: Scalars['String']['output'];
-  historical: Scalars['Boolean']['output'];
-  inspectionId: Scalars['ID']['output'];
-  snapshotId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type CustomerTimelineConnection = {
-  __typename?: 'CustomerTimelineConnection';
-  nodes: Array<CustomerTimelineEntry>;
-  pageInfo: PageInfo;
-};
-
-export type CustomerTimelineEntry = {
-  __typename?: 'CustomerTimelineEntry';
-  historical: Scalars['Boolean']['output'];
-  id: Scalars['ID']['output'];
-  kind: Scalars['String']['output'];
-  occurredAt: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-};
-
-export type DashboardSummary = {
-  __typename?: 'DashboardSummary';
-  attention: Scalars['Int']['output'];
-  critical: Scalars['Int']['output'];
-  invalidated: Scalars['Int']['output'];
-  normal: Scalars['Int']['output'];
-  pending: Scalars['Int']['output'];
-  total: Scalars['Int']['output'];
-};
-
-export type DeclareCaptureImpossibilityInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  reason: Scalars['String']['input'];
-  requirementKey: Scalars['String']['input'];
-};
-
-export type DisableMembershipInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  membershipId: Scalars['ID']['input'];
+  assetId: string | number;
+  clientMutationId: string;
+  deadlineMinutes: number;
+  participantId: string | number;
+  referenceVersionId: string | number | null | undefined;
+  reminderOffsetsMinutes: Array<number>;
+  rrule: string;
+  startsAt: string;
+  templateId: string | number;
+  timezone: string;
 };
 
 export type EvidenceMode =
   | 'ADVANCED'
   | 'SIMPLE';
 
-export type ExternalCapture = {
-  __typename?: 'ExternalCapture';
-  answers: Array<CaptureAnswer>;
-  confirmationOnly: Scalars['Boolean']['output'];
-  disclosureVersion: Scalars['String']['output'];
-  kind: Scalars['String']['output'];
-  policy: Scalars['JSON']['output'];
-  recaptureRequestId: Maybe<Scalars['ID']['output']>;
-  reference: Scalars['JSON']['output'];
-  requirements: Array<CaptureRequirement>;
-  responsibilityId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  templateVersionId: Scalars['ID']['output'];
-};
-
-export type ExternalSessionPayload = {
-  __typename?: 'ExternalSessionPayload';
-  clientMutationId: Scalars['String']['output'];
-  csrfToken: Scalars['String']['output'];
-  expiresAt: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type Inspection = {
-  __typename?: 'Inspection';
-  analysisProfileVersionId: Scalars['ID']['output'];
-  assetId: Scalars['ID']['output'];
-  businessUnitId: Scalars['ID']['output'];
-  deadlineAt: Scalars['String']['output'];
-  dueAt: Scalars['String']['output'];
-  evidenceCount: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  participantId: Scalars['ID']['output'];
-  projectId: Maybe<Scalars['ID']['output']>;
-  reminderInstants: Array<Scalars['String']['output']>;
-  source: Scalars['String']['output'];
-  sourceReason: Maybe<Scalars['String']['output']>;
-  stageId: Maybe<Scalars['ID']['output']>;
-  stateReason: Maybe<Scalars['String']['output']>;
-  status: Scalars['String']['output'];
-  templateId: Scalars['ID']['output'];
-  templateVersionId: Scalars['ID']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type InspectionConnection = {
-  __typename?: 'InspectionConnection';
-  nodes: Array<Inspection>;
-  pageInfo: PageInfo;
-};
-
-export type InspectionPayload = {
-  __typename?: 'InspectionPayload';
-  clientMutationId: Scalars['String']['output'];
-  inspection: Maybe<Inspection>;
-  userErrors: Array<UserError>;
-};
-
 export type InspectionTransitionInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  inspectionId: Scalars['ID']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  inspectionId: string | number;
 };
 
 export type InvalidateInspectionInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  inspectionId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  inspectionId: string | number;
+  reason: string;
 };
 
 export type InvalidateReportPublicationInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  publicationId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-};
-
-export type InvitationOtpPayload = {
-  __typename?: 'InvitationOtpPayload';
-  clientMutationId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type InvitationPayload = {
-  __typename?: 'InvitationPayload';
-  clientMutationId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type InviteInternalUserInput = {
-  clientMutationId: Scalars['String']['input'];
-  issuer: Scalars['String']['input'];
-  role: Scalars['String']['input'];
-  scopes: Array<ScopeAssignmentInput>;
-  subject: Scalars['String']['input'];
-};
-
-export type InviteOriginCaptureInput = {
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  expiresAt: Scalars['String']['input'];
-  participantId: Scalars['ID']['input'];
-};
-
-export type LegalHoldInput = {
-  clientMutationId: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  publicationId: string | number;
+  reason: string;
 };
 
 export type MarkNotificationReadInput = {
-  clientMutationId: Scalars['String']['input'];
-  notificationId: Scalars['ID']['input'];
-};
-
-export type Me = {
-  __typename?: 'Me';
-  audience: Scalars['String']['output'];
-  effectiveScopes: Array<Scope>;
-  identityId: Scalars['ID']['output'];
-  memberships: Array<Membership>;
-  product: Scalars['String']['output'];
-  productEntitlements: Array<Scalars['String']['output']>;
-  roles: Array<Scalars['String']['output']>;
-  tenantId: Scalars['ID']['output'];
-};
-
-export type Media = {
-  __typename?: 'Media';
-  captureSource: Maybe<Scalars['String']['output']>;
-  description: Maybe<Scalars['String']['output']>;
-  flags: Array<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  replacesMediaId: Maybe<Scalars['ID']['output']>;
-  requirementKey: Maybe<Scalars['String']['output']>;
-  status: Scalars['String']['output'];
-};
-
-export type MediaPayload = {
-  __typename?: 'MediaPayload';
-  clientMutationId: Scalars['String']['output'];
-  media: Maybe<Media>;
-  userErrors: Array<UserError>;
-};
-
-export type MediaUpload = {
-  __typename?: 'MediaUpload';
-  expiresAt: Scalars['String']['output'];
-  mediaId: Scalars['ID']['output'];
-  partSizeBytes: Scalars['Int']['output'];
-  uploadId: Scalars['String']['output'];
-};
-
-export type MediaUploadPayload = {
-  __typename?: 'MediaUploadPayload';
-  clientMutationId: Scalars['String']['output'];
-  upload: Maybe<MediaUpload>;
-  userErrors: Array<UserError>;
-};
-
-export type Membership = {
-  __typename?: 'Membership';
-  id: Scalars['ID']['output'];
-  role: Scalars['String']['output'];
-  scopes: Array<Scope>;
-  status: Scalars['String']['output'];
-  tenantId: Scalars['ID']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type MembershipConnection = {
-  __typename?: 'MembershipConnection';
-  nodes: Array<Membership>;
-  pageInfo: PageInfo;
-};
-
-export type MembershipPayload = {
-  __typename?: 'MembershipPayload';
-  clientMutationId: Scalars['String']['output'];
-  membership: Maybe<Membership>;
-  userErrors: Array<UserError>;
-};
-
-export type Mutation = {
-  __typename?: 'Mutation';
-  acceptProcessing: CapturePayload;
-  activateOriginVersion: OriginVersionPayload;
-  activateSegmentDefinition: SegmentDefinitionPayload;
-  activateTemplateVersion: TemplatePayload;
-  addExceptionalStage: ProjectPayload;
-  applyLegalHold: RetentionMutationPayload;
-  archiveAsset: AssetPayload;
-  archiveBusinessUnit: BusinessUnitPayload;
-  assignRoleScopes: MembershipPayload;
-  cancelInspection: InspectionPayload;
-  cancelSchedule: SchedulePayload;
-  closeProject: ProjectPayload;
-  completeMediaUpload: MediaPayload;
-  configureMyNotificationPreferences: NotificationPreferencesPayload;
-  configurePublicationPolicy: PublicationPolicyPayload;
-  configureRetentionPolicy: RetentionPolicyPayload;
-  createBusinessUnit: BusinessUnitPayload;
-  createInspection: InspectionPayload;
-  createMediaUpload: MediaUploadPayload;
-  createProject: ProjectPayload;
-  createSchedule: SchedulePayload;
-  createTenant: CreateTenantPayload;
-  declareCaptureImpossibility: CapturePayload;
-  declareSensitiveDetectionFalsePositive: MediaPayload;
-  disableMembership: MembershipPayload;
-  invalidateInspection: InspectionPayload;
-  invalidateOriginVersion: OriginVersionPayload;
-  invalidateReportPublication: ReportPublicationPayload;
-  inviteInternalUser: MembershipPayload;
-  inviteOriginCapture: OriginInvitationPayload;
-  markNotificationRead: RecipientNotificationPayload;
-  presignMediaParts: PresignedPartsPayload;
-  publishAnalysisProfile: AnalysisProfilePayload;
-  publishReport: ReportPublicationPayload;
-  publishSegmentDefinition: SegmentDefinitionPayload;
-  publishTemplateVersion: TemplatePayload;
-  recordDeletionRequest: RetentionMutationPayload;
-  registerAsset: AssetPayload;
-  releaseLegalHold: RetentionMutationPayload;
-  reopenProject: ProjectPayload;
-  requestInvitationOtp: InvitationOtpPayload;
-  requestRecapture: RecapturePayload;
-  revokeInvitation: InvitationPayload;
-  saveCaptureMetadata: MediaPayload;
-  setDeliveryChannels: ParticipantPayload;
-  skipProjectStage: ProjectPayload;
-  startProjectStage: ProjectPayload;
-  submitCapture: SubmissionPayload;
-  submitRecapture: RecapturePayload;
-  updateAsset: AssetPayload;
-  updateSchedule: SchedulePayload;
-  updateTenant: TenantPayload;
-  upsertBusinessUnit: BusinessUnitPayload;
-  upsertParticipant: ParticipantPayload;
-  verifyContact: ParticipantContactPayload;
-  verifyInvitationOtp: ExternalSessionPayload;
-};
-
-
-export type MutationAcceptProcessingArgs = {
-  input: AcceptProcessingInput;
-};
-
-
-export type MutationActivateOriginVersionArgs = {
-  input: OriginVersionInput;
-};
-
-
-export type MutationActivateSegmentDefinitionArgs = {
-  input: ActivateSegmentDefinitionInput;
-};
-
-
-export type MutationActivateTemplateVersionArgs = {
-  input: ActivateTemplateVersionInput;
-};
-
-
-export type MutationAddExceptionalStageArgs = {
-  input: AddExceptionalStageInput;
-};
-
-
-export type MutationApplyLegalHoldArgs = {
-  input: LegalHoldInput;
-};
-
-
-export type MutationArchiveAssetArgs = {
-  input: ArchiveAssetInput;
-};
-
-
-export type MutationArchiveBusinessUnitArgs = {
-  input: ArchiveBusinessUnitInput;
-};
-
-
-export type MutationAssignRoleScopesArgs = {
-  input: AssignRoleScopesInput;
-};
-
-
-export type MutationCancelInspectionArgs = {
-  input: InspectionTransitionInput;
-};
-
-
-export type MutationCancelScheduleArgs = {
-  input: CancelScheduleInput;
-};
-
-
-export type MutationCloseProjectArgs = {
-  input: ProjectTransitionInput;
-};
-
-
-export type MutationCompleteMediaUploadArgs = {
-  input: CompleteMediaUploadInput;
-};
-
-
-export type MutationConfigureMyNotificationPreferencesArgs = {
-  input: ConfigureNotificationPreferencesInput;
-};
-
-
-export type MutationConfigurePublicationPolicyArgs = {
-  input: ConfigurePublicationPolicyInput;
-};
-
-
-export type MutationConfigureRetentionPolicyArgs = {
-  input: ConfigureRetentionPolicyInput;
-};
-
-
-export type MutationCreateBusinessUnitArgs = {
-  input: CreateBusinessUnitInput;
-};
-
-
-export type MutationCreateInspectionArgs = {
-  input: CreateInspectionInput;
-};
-
-
-export type MutationCreateMediaUploadArgs = {
-  input: CreateMediaUploadInput;
-};
-
-
-export type MutationCreateProjectArgs = {
-  input: CreateProjectInput;
-};
-
-
-export type MutationCreateScheduleArgs = {
-  input: CreateScheduleInput;
-};
-
-
-export type MutationCreateTenantArgs = {
-  input: CreateTenantInput;
-};
-
-
-export type MutationDeclareCaptureImpossibilityArgs = {
-  input: DeclareCaptureImpossibilityInput;
-};
-
-
-export type MutationDeclareSensitiveDetectionFalsePositiveArgs = {
-  input: SensitiveFalsePositiveInput;
-};
-
-
-export type MutationDisableMembershipArgs = {
-  input: DisableMembershipInput;
-};
-
-
-export type MutationInvalidateInspectionArgs = {
-  input: InvalidateInspectionInput;
-};
-
-
-export type MutationInvalidateOriginVersionArgs = {
-  input: OriginVersionInput;
-};
-
-
-export type MutationInvalidateReportPublicationArgs = {
-  input: InvalidateReportPublicationInput;
-};
-
-
-export type MutationInviteInternalUserArgs = {
-  input: InviteInternalUserInput;
-};
-
-
-export type MutationInviteOriginCaptureArgs = {
-  input: InviteOriginCaptureInput;
-};
-
-
-export type MutationMarkNotificationReadArgs = {
-  input: MarkNotificationReadInput;
-};
-
-
-export type MutationPresignMediaPartsArgs = {
-  input: PresignMediaPartsInput;
-};
-
-
-export type MutationPublishAnalysisProfileArgs = {
-  input: PublishAnalysisProfileInput;
-};
-
-
-export type MutationPublishReportArgs = {
-  input: PublishReportInput;
-};
-
-
-export type MutationPublishSegmentDefinitionArgs = {
-  input: PublishSegmentDefinitionInput;
-};
-
-
-export type MutationPublishTemplateVersionArgs = {
-  input: PublishTemplateVersionInput;
-};
-
-
-export type MutationRecordDeletionRequestArgs = {
-  input: RecordDeletionRequestInput;
-};
-
-
-export type MutationRegisterAssetArgs = {
-  input: RegisterAssetInput;
-};
-
-
-export type MutationReleaseLegalHoldArgs = {
-  input: LegalHoldInput;
-};
-
-
-export type MutationReopenProjectArgs = {
-  input: ReopenProjectInput;
-};
-
-
-export type MutationRequestInvitationOtpArgs = {
-  input: RequestInvitationOtpInput;
-};
-
-
-export type MutationRequestRecaptureArgs = {
-  input: RequestRecaptureInput;
-};
-
-
-export type MutationRevokeInvitationArgs = {
-  input: RevokeInvitationInput;
-};
-
-
-export type MutationSaveCaptureMetadataArgs = {
-  input: SaveCaptureMetadataInput;
-};
-
-
-export type MutationSetDeliveryChannelsArgs = {
-  input: SetDeliveryChannelsInput;
-};
-
-
-export type MutationSkipProjectStageArgs = {
-  input: SkipProjectStageInput;
-};
-
-
-export type MutationStartProjectStageArgs = {
-  input: StartProjectStageInput;
-};
-
-
-export type MutationSubmitCaptureArgs = {
-  input: SubmitCaptureInput;
-};
-
-
-export type MutationSubmitRecaptureArgs = {
-  input: SubmitRecaptureInput;
-};
-
-
-export type MutationUpdateAssetArgs = {
-  input: UpdateAssetInput;
-};
-
-
-export type MutationUpdateScheduleArgs = {
-  input: UpdateScheduleInput;
-};
-
-
-export type MutationUpdateTenantArgs = {
-  input: UpdateTenantInput;
-};
-
-
-export type MutationUpsertBusinessUnitArgs = {
-  input: UpsertBusinessUnitInput;
-};
-
-
-export type MutationUpsertParticipantArgs = {
-  input: UpsertParticipantInput;
-};
-
-
-export type MutationVerifyContactArgs = {
-  input: VerifyContactInput;
-};
-
-
-export type MutationVerifyInvitationOtpArgs = {
-  input: VerifyInvitationOtpInput;
-};
-
-export type NotificationDelivery = {
-  __typename?: 'NotificationDelivery';
-  createdAt: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  intentId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  updatedAt: Scalars['String']['output'];
-};
-
-export type NotificationDeliveryConnection = {
-  __typename?: 'NotificationDeliveryConnection';
-  nodes: Array<NotificationDelivery>;
-  pageInfo: PageInfo;
-};
-
-export type NotificationPreferencesPayload = {
-  __typename?: 'NotificationPreferencesPayload';
-  clientMutationId: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type OriginInvitationPayload = {
-  __typename?: 'OriginInvitationPayload';
-  clientMutationId: Scalars['String']['output'];
-  invitationId: Maybe<Scalars['ID']['output']>;
-  originVersionId: Maybe<Scalars['ID']['output']>;
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type OriginVersion = {
-  __typename?: 'OriginVersion';
-  activatedAt: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  originId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  supersedesId: Maybe<Scalars['ID']['output']>;
-  versionNumber: Scalars['Int']['output'];
-};
-
-export type OriginVersionConnection = {
-  __typename?: 'OriginVersionConnection';
-  nodes: Array<OriginVersion>;
-  pageInfo: PageInfo;
-};
-
-export type OriginVersionInput = {
-  clientMutationId: Scalars['String']['input'];
-  versionId: Scalars['ID']['input'];
-};
-
-export type OriginVersionPayload = {
-  __typename?: 'OriginVersionPayload';
-  clientMutationId: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-  version: Maybe<OriginVersion>;
-};
-
-export type PageInfo = {
-  __typename?: 'PageInfo';
-  endCursor: Maybe<Scalars['String']['output']>;
-  hasNextPage: Scalars['Boolean']['output'];
-};
-
-export type Participant = {
-  __typename?: 'Participant';
-  businessUnitId: Scalars['ID']['output'];
-  contacts: Array<ParticipantContact>;
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  segmentRole: Scalars['String']['output'];
-  selectedContactIds: Array<Scalars['ID']['output']>;
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type ParticipantConnection = {
-  __typename?: 'ParticipantConnection';
-  nodes: Array<Participant>;
-  pageInfo: PageInfo;
-};
-
-export type ParticipantContact = {
-  __typename?: 'ParticipantContact';
-  active: Scalars['Boolean']['output'];
-  channel: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  value: Scalars['String']['output'];
-  verified: Scalars['Boolean']['output'];
-};
-
-export type ParticipantContactPayload = {
-  __typename?: 'ParticipantContactPayload';
-  clientMutationId: Scalars['String']['output'];
-  contact: Maybe<ParticipantContact>;
-  userErrors: Array<UserError>;
-};
-
-export type ParticipantPayload = {
-  __typename?: 'ParticipantPayload';
-  clientMutationId: Scalars['String']['output'];
-  participant: Maybe<Participant>;
-  userErrors: Array<UserError>;
-};
-
-export type PresignMediaPartsInput = {
-  clientMutationId: Scalars['String']['input'];
-  mediaId: Scalars['ID']['input'];
-  partNumbers: Array<Scalars['Int']['input']>;
-};
-
-export type PresignedPart = {
-  __typename?: 'PresignedPart';
-  expiresAt: Scalars['String']['output'];
-  partNumber: Scalars['Int']['output'];
-  url: Scalars['String']['output'];
-};
-
-export type PresignedPartsPayload = {
-  __typename?: 'PresignedPartsPayload';
-  clientMutationId: Scalars['String']['output'];
-  parts: Array<PresignedPart>;
-  userErrors: Array<UserError>;
-};
-
-export type Project = {
-  __typename?: 'Project';
-  assetId: Scalars['ID']['output'];
-  businessUnitId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  participantId: Scalars['ID']['output'];
-  reportMode: Scalars['String']['output'];
-  stages: Array<ProjectStage>;
-  status: Scalars['String']['output'];
-  templateId: Scalars['ID']['output'];
-  templateVersionId: Scalars['ID']['output'];
-  transitions: Array<StageTransition>;
-  version: Scalars['Int']['output'];
-};
-
-export type ProjectConnection = {
-  __typename?: 'ProjectConnection';
-  nodes: Array<Project>;
-  pageInfo: PageInfo;
-};
-
-export type ProjectPayload = {
-  __typename?: 'ProjectPayload';
-  clientMutationId: Scalars['String']['output'];
-  project: Maybe<Project>;
-  userErrors: Array<UserError>;
-};
-
-export type ProjectStage = {
-  __typename?: 'ProjectStage';
-  id: Scalars['ID']['output'];
-  inspectionId: Maybe<Scalars['ID']['output']>;
-  key: Scalars['String']['output'];
-  kind: Scalars['String']['output'];
-  label: Scalars['String']['output'];
-  plannedAt: Maybe<Scalars['String']['output']>;
-  position: Scalars['Int']['output'];
-  reason: Maybe<Scalars['String']['output']>;
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type ProjectTimeline = {
-  __typename?: 'ProjectTimeline';
-  entries: Array<ProjectTimelineEntry>;
-  projectId: Scalars['ID']['output'];
-};
-
-export type ProjectTimelineEntry = {
-  __typename?: 'ProjectTimelineEntry';
-  inspectionId: Maybe<Scalars['ID']['output']>;
-  label: Scalars['String']['output'];
-  occurredAt: Maybe<Scalars['String']['output']>;
-  stageId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
+  clientMutationId: string;
+  notificationId: string | number;
 };
 
 export type ProjectTransitionInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  projectId: Scalars['ID']['input'];
-};
-
-export type PublicationPolicy = {
-  __typename?: 'PublicationPolicy';
-  mode: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type PublicationPolicyPayload = {
-  __typename?: 'PublicationPolicyPayload';
-  clientMutationId: Scalars['String']['output'];
-  policy: Maybe<PublicationPolicy>;
-  userErrors: Array<UserError>;
-};
-
-export type PublishAnalysisProfileInput = {
-  clientMutationId: Scalars['String']['input'];
-  definition: Scalars['JSON']['input'];
-  key: Scalars['String']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  projectId: string | number;
 };
 
 export type PublishReportInput = {
-  clientMutationId: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
-  snapshotId: Scalars['ID']['input'];
-};
-
-export type PublishSegmentDefinitionInput = {
-  clientMutationId: Scalars['String']['input'];
-  key: Scalars['String']['input'];
-  name: Scalars['String']['input'];
-  schema: Scalars['JSON']['input'];
-  uiSchema: Scalars['JSON']['input'];
-};
-
-export type PublishTemplateVersionInput = {
-  clientMutationId: Scalars['String']['input'];
-  definition: Scalars['JSON']['input'];
-  key: Scalars['String']['input'];
-  name: Scalars['String']['input'];
-};
-
-export type Query = {
-  __typename?: 'Query';
-  asset: Maybe<Asset>;
-  assets: AssetConnection;
-  auditEvents: AuditEventConnection;
-  businessUnits: BusinessUnitConnection;
-  customerEvidence: CustomerEvidenceConnection;
-  customerPortfolio: CustomerPortfolioConnection;
-  customerReport: Maybe<CustomerReport>;
-  customerTimeline: CustomerTimelineConnection;
-  dashboardSummary: DashboardSummary;
-  externalCapture: ExternalCapture;
-  inspection: Maybe<Inspection>;
-  inspections: InspectionConnection;
-  me: Me;
-  memberships: MembershipConnection;
-  myNotifications: RecipientNotificationConnection;
-  notificationDeliveries: NotificationDeliveryConnection;
-  originVersions: OriginVersionConnection;
-  participant: Maybe<Participant>;
-  participants: ParticipantConnection;
-  project: Maybe<Project>;
-  projectTimeline: ProjectTimeline;
-  projects: ProjectConnection;
-  publicationPolicy: PublicationPolicy;
-  report: Maybe<Report>;
-  reportDownload: Maybe<ReportDownload>;
-  retentionPolicies: RetentionPolicyConnection;
-  schedules: ScheduleConnection;
-  segmentDefinitions: SegmentDefinitionConnection;
-  templateVersion: Maybe<TemplateVersion>;
-  templates: TemplateConnection;
-  tenant: Maybe<Tenant>;
-  triageInspections: TriageInspectionConnection;
-  usageSummary: UsageSummary;
-};
-
-
-export type QueryAssetArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryAssetsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  businessUnitId: InputMaybe<Scalars['ID']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  search: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryAuditEventsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryBusinessUnitsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryCustomerEvidenceArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  inspectionId: Scalars['ID']['input'];
-  mode?: InputMaybe<EvidenceMode>;
-};
-
-
-export type QueryCustomerPortfolioArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  filter: InputMaybe<CustomerPortfolioFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryCustomerReportArgs = {
-  inspectionId: Scalars['ID']['input'];
-  version: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryCustomerTimelineArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  assetId: InputMaybe<Scalars['ID']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  projectId: InputMaybe<Scalars['ID']['input']>;
-};
-
-
-export type QueryDashboardSummaryArgs = {
-  businessUnitId: InputMaybe<Scalars['ID']['input']>;
-  projectId: InputMaybe<Scalars['ID']['input']>;
-};
-
-
-export type QueryInspectionArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryInspectionsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  history?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-
-export type QueryMembershipsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryMyNotificationsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  unreadOnly?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-
-export type QueryNotificationDeliveriesArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryOriginVersionsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  assetId: Scalars['ID']['input'];
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryParticipantArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryParticipantsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  search: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryProjectArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryProjectTimelineArgs = {
-  projectId: Scalars['ID']['input'];
-};
-
-
-export type QueryProjectsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryReportArgs = {
-  inspectionId: Scalars['ID']['input'];
-  version: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QueryReportDownloadArgs = {
-  kind?: InputMaybe<Scalars['String']['input']>;
-  snapshotId: Scalars['ID']['input'];
-};
-
-
-export type QuerySchedulesArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type QuerySegmentDefinitionsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  search: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryTemplateVersionArgs = {
-  id: Scalars['ID']['input'];
-};
-
-
-export type QueryTemplatesArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  search: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryTriageInspectionsArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  classification: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  status: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryUsageSummaryArgs = {
-  from: InputMaybe<Scalars['String']['input']>;
-  to: InputMaybe<Scalars['String']['input']>;
-};
-
-export type Recapture = {
-  __typename?: 'Recapture';
-  deadlineAt: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  responsibilityId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
+  clientMutationId: string;
+  inspectionId: string | number;
+  snapshotId: string | number;
 };
 
 export type RecaptureItemInput = {
-  originalMediaId: InputMaybe<Scalars['ID']['input']>;
-  reason: Scalars['String']['input'];
-  requirementKey: Scalars['String']['input'];
-};
-
-export type RecapturePayload = {
-  __typename?: 'RecapturePayload';
-  clientMutationId: Scalars['String']['output'];
-  recapture: Maybe<Recapture>;
-  userErrors: Array<UserError>;
-};
-
-export type RecipientNotification = {
-  __typename?: 'RecipientNotification';
-  body: Scalars['String']['output'];
-  createdAt: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  kind: Scalars['String']['output'];
-  readAt: Maybe<Scalars['String']['output']>;
-  resourceId: Maybe<Scalars['ID']['output']>;
-  resourceKind: Scalars['String']['output'];
-  title: Scalars['String']['output'];
-};
-
-export type RecipientNotificationConnection = {
-  __typename?: 'RecipientNotificationConnection';
-  nodes: Array<RecipientNotification>;
-  pageInfo: PageInfo;
-  unreadCount: Scalars['Int']['output'];
-};
-
-export type RecipientNotificationPayload = {
-  __typename?: 'RecipientNotificationPayload';
-  clientMutationId: Scalars['String']['output'];
-  notification: Maybe<RecipientNotification>;
-  userErrors: Array<UserError>;
-};
-
-export type RecordDeletionRequestInput = {
-  clientMutationId: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
-  reason: InputMaybe<Scalars['String']['input']>;
-};
-
-export type RegisterAssetInput = {
-  asset: AssetInput;
-  clientMutationId: Scalars['String']['input'];
+  originalMediaId: string | number | null | undefined;
+  reason: string;
+  requirementKey: string;
 };
 
 export type ReopenProjectInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  projectId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-};
-
-export type Report = {
-  __typename?: 'Report';
-  canonicalJSON: Scalars['JSON']['output'];
-  classification: Scalars['String']['output'];
-  createdAt: Scalars['String']['output'];
-  html: Scalars['String']['output'];
-  htmlDigest: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  inspectionId: Scalars['ID']['output'];
-  jsonDigest: Scalars['String']['output'];
-  mode: Scalars['String']['output'];
-  projectId: Maybe<Scalars['ID']['output']>;
-  version: Scalars['Int']['output'];
-};
-
-export type ReportDownload = {
-  __typename?: 'ReportDownload';
-  kind: Scalars['String']['output'];
-  objectKey: Scalars['String']['output'];
-  sha256: Maybe<Scalars['String']['output']>;
-  snapshotId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  url: Scalars['String']['output'];
-};
-
-export type ReportPublication = {
-  __typename?: 'ReportPublication';
-  id: Scalars['ID']['output'];
-  inspectionId: Scalars['ID']['output'];
-  invalidatedAt: Maybe<Scalars['String']['output']>;
-  publishedAt: Maybe<Scalars['String']['output']>;
-  snapshotId: Scalars['ID']['output'];
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type ReportPublicationPayload = {
-  __typename?: 'ReportPublicationPayload';
-  clientMutationId: Scalars['String']['output'];
-  publication: Maybe<ReportPublication>;
-  userErrors: Array<UserError>;
-};
-
-export type RequestInvitationOtpInput = {
-  clientMutationId: Scalars['String']['input'];
-  linkToken: Scalars['String']['input'];
+  clientMutationId: string;
+  expectedVersion: number;
+  projectId: string | number;
+  reason: string;
 };
 
 export type RequestRecaptureInput = {
-  clientMutationId: Scalars['String']['input'];
-  deadlineAt: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
+  clientMutationId: string;
+  deadlineAt: string;
+  inspectionId: string | number;
   items: Array<RecaptureItemInput>;
 };
 
-export type RetentionMutationPayload = {
-  __typename?: 'RetentionMutationPayload';
-  clientMutationId: Scalars['String']['output'];
-  requestId: Maybe<Scalars['ID']['output']>;
-  status: Scalars['String']['output'];
-  userErrors: Array<UserError>;
-};
-
-export type RetentionPolicy = {
-  __typename?: 'RetentionPolicy';
-  createdAt: Scalars['String']['output'];
-  evidenceDays: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  operationalDays: Scalars['Int']['output'];
-  securityDays: Scalars['Int']['output'];
-  updatedAt: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type RetentionPolicyConnection = {
-  __typename?: 'RetentionPolicyConnection';
-  nodes: Array<RetentionPolicy>;
-  pageInfo: PageInfo;
-};
-
-export type RetentionPolicyPayload = {
-  __typename?: 'RetentionPolicyPayload';
-  clientMutationId: Scalars['String']['output'];
-  policy: Maybe<RetentionPolicy>;
-  userErrors: Array<UserError>;
-};
-
-export type RevokeInvitationInput = {
-  clientMutationId: Scalars['String']['input'];
-  linkToken: Scalars['String']['input'];
-};
-
-export type SaveCaptureMetadataInput = {
-  captureSource: Scalars['String']['input'];
-  clientMutationId: Scalars['String']['input'];
-  description: Scalars['String']['input'];
-  deviceContext: InputMaybe<Scalars['JSON']['input']>;
-  gps: InputMaybe<CaptureGpsInput>;
-  mediaId: Scalars['ID']['input'];
-  requirementKey: Scalars['String']['input'];
-};
-
-export type Schedule = {
-  __typename?: 'Schedule';
-  assetId: Scalars['ID']['output'];
-  businessUnitId: Scalars['ID']['output'];
-  deadlineMinutes: Scalars['Int']['output'];
-  id: Scalars['ID']['output'];
-  nextDueAt: Scalars['String']['output'];
-  participantId: Scalars['ID']['output'];
-  referenceVersionId: Maybe<Scalars['ID']['output']>;
-  reminderOffsetsMinutes: Array<Scalars['Int']['output']>;
-  rrule: Scalars['String']['output'];
-  startsAt: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  templateId: Scalars['ID']['output'];
-  timezone: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type ScheduleConnection = {
-  __typename?: 'ScheduleConnection';
-  nodes: Array<Schedule>;
-  pageInfo: PageInfo;
-};
-
-export type SchedulePayload = {
-  __typename?: 'SchedulePayload';
-  clientMutationId: Scalars['String']['output'];
-  schedule: Maybe<Schedule>;
-  userErrors: Array<UserError>;
-};
-
-export type Scope = {
-  __typename?: 'Scope';
-  kind: Scalars['String']['output'];
-  resourceId: Scalars['ID']['output'];
-};
-
-export type ScopeAssignmentInput = {
-  kind: Scalars['String']['input'];
-  resourceId: Scalars['ID']['input'];
-};
-
-export type SegmentDefinition = {
-  __typename?: 'SegmentDefinition';
-  activeVersionId: Maybe<Scalars['ID']['output']>;
-  id: Scalars['ID']['output'];
-  key: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type SegmentDefinitionConnection = {
-  __typename?: 'SegmentDefinitionConnection';
-  nodes: Array<SegmentDefinition>;
-  pageInfo: PageInfo;
-};
-
-export type SegmentDefinitionPayload = {
-  __typename?: 'SegmentDefinitionPayload';
-  clientMutationId: Scalars['String']['output'];
-  definition: Maybe<SegmentDefinition>;
-  userErrors: Array<UserError>;
-  version: Maybe<SegmentDefinitionVersion>;
-};
-
-export type SegmentDefinitionVersion = {
-  __typename?: 'SegmentDefinitionVersion';
-  canonicalDigest: Scalars['String']['output'];
-  definitionId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  publishedAt: Scalars['String']['output'];
-  schema: Scalars['JSON']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  uiSchema: Scalars['JSON']['output'];
-  versionNumber: Scalars['Int']['output'];
-};
-
-export type SensitiveFalsePositiveInput = {
-  clientMutationId: Scalars['String']['input'];
-  mediaId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-};
-
-export type SetDeliveryChannelsInput = {
-  clientMutationId: Scalars['String']['input'];
-  contactIds: Array<Scalars['ID']['input']>;
-  expectedVersion: Scalars['Int']['input'];
-  participantId: Scalars['ID']['input'];
-};
-
 export type SkipProjectStageInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  projectId: Scalars['ID']['input'];
-  reason: Scalars['String']['input'];
-  stageId: Scalars['ID']['input'];
-};
-
-export type StageTransition = {
-  __typename?: 'StageTransition';
-  fromState: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  occurredAt: Scalars['String']['output'];
-  reason: Maybe<Scalars['String']['output']>;
-  stageId: Maybe<Scalars['ID']['output']>;
-  toState: Scalars['String']['output'];
+  clientMutationId: string;
+  expectedVersion: number;
+  projectId: string | number;
+  reason: string;
+  stageId: string | number;
 };
 
 export type StartProjectStageInput = {
-  clientMutationId: Scalars['String']['input'];
-  deadlineAt: Scalars['String']['input'];
-  dueAt: Scalars['String']['input'];
-  expectedProjectVersion: Scalars['Int']['input'];
-  expectedStageVersion: Scalars['Int']['input'];
-  projectId: Scalars['ID']['input'];
-  referenceVersionId: InputMaybe<Scalars['ID']['input']>;
-  reminderInstants: Array<Scalars['String']['input']>;
-  stageId: Scalars['ID']['input'];
-};
-
-export type Submission = {
-  __typename?: 'Submission';
-  complete: Scalars['Boolean']['output'];
-  id: Scalars['ID']['output'];
-  requiresAttention: Scalars['Boolean']['output'];
-  submittedAt: Scalars['String']['output'];
-};
-
-export type SubmissionPayload = {
-  __typename?: 'SubmissionPayload';
-  clientMutationId: Scalars['String']['output'];
-  submission: Maybe<Submission>;
-  userErrors: Array<UserError>;
-};
-
-export type SubmitCaptureInput = {
-  clientMutationId: Scalars['String']['input'];
-  confirmIncomplete: Scalars['Boolean']['input'];
-};
-
-export type SubmitRecaptureInput = {
-  clientMutationId: Scalars['String']['input'];
-  confirmIncomplete: Scalars['Boolean']['input'];
-  requestId: Scalars['ID']['input'];
-};
-
-export type Template = {
-  __typename?: 'Template';
-  activeVersionId: Maybe<Scalars['ID']['output']>;
-  id: Scalars['ID']['output'];
-  key: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  segmentVersionId: Scalars['ID']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type TemplateConnection = {
-  __typename?: 'TemplateConnection';
-  nodes: Array<Template>;
-  pageInfo: PageInfo;
-};
-
-export type TemplatePayload = {
-  __typename?: 'TemplatePayload';
-  clientMutationId: Scalars['String']['output'];
-  template: Maybe<Template>;
-  userErrors: Array<UserError>;
-  version: Maybe<TemplateVersion>;
-};
-
-export type TemplateVersion = {
-  __typename?: 'TemplateVersion';
-  canonicalDigest: Scalars['String']['output'];
-  definition: Scalars['JSON']['output'];
-  id: Scalars['ID']['output'];
-  publishedAt: Scalars['String']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  templateId: Scalars['ID']['output'];
-  versionNumber: Scalars['Int']['output'];
-};
-
-export type Tenant = {
-  __typename?: 'Tenant';
-  defaultTimezone: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  language: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  status: Scalars['String']['output'];
-  version: Scalars['Int']['output'];
-};
-
-export type TenantPayload = {
-  __typename?: 'TenantPayload';
-  clientMutationId: Scalars['String']['output'];
-  tenant: Maybe<Tenant>;
-  userErrors: Array<UserError>;
-};
-
-export type TriageInspection = {
-  __typename?: 'TriageInspection';
-  assetId: Maybe<Scalars['ID']['output']>;
-  classification: Scalars['String']['output'];
-  inspectionId: Scalars['ID']['output'];
-  projectId: Maybe<Scalars['ID']['output']>;
-  status: Scalars['String']['output'];
-  updatedAt: Scalars['String']['output'];
-};
-
-export type TriageInspectionConnection = {
-  __typename?: 'TriageInspectionConnection';
-  nodes: Array<TriageInspection>;
-  pageInfo: PageInfo;
-};
-
-export type UpdateAssetInput = {
-  asset: AssetInput;
-  assetId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
+  clientMutationId: string;
+  deadlineAt: string;
+  dueAt: string;
+  expectedProjectVersion: number;
+  expectedStageVersion: number;
+  projectId: string | number;
+  referenceVersionId: string | number | null | undefined;
+  reminderInstants: Array<string>;
+  stageId: string | number;
 };
 
 export type UpdateScheduleInput = {
-  clientMutationId: Scalars['String']['input'];
-  deadlineMinutes: Scalars['Int']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  reminderOffsetsMinutes: Array<Scalars['Int']['input']>;
-  rrule: Scalars['String']['input'];
-  scheduleId: Scalars['ID']['input'];
-  startsAt: Scalars['String']['input'];
-  timezone: Scalars['String']['input'];
+  clientMutationId: string;
+  deadlineMinutes: number;
+  expectedVersion: number;
+  reminderOffsetsMinutes: Array<number>;
+  rrule: string;
+  scheduleId: string | number;
+  startsAt: string;
+  timezone: string;
 };
 
-export type UpdateTenantInput = {
-  clientMutationId: Scalars['String']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  language: Scalars['String']['input'];
-  name: Scalars['String']['input'];
-  timezone: Scalars['String']['input'];
-};
+export type DashboardGateQueryVariables = Exact<{ [key: string]: never; }>;
 
-export type UpsertBusinessUnitInput = {
-  businessUnitId: InputMaybe<Scalars['ID']['input']>;
-  clientMutationId: Scalars['String']['input'];
-  code: Scalars['String']['input'];
-  expectedTenantVersion: InputMaybe<Scalars['Int']['input']>;
-  expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  name: Scalars['String']['input'];
-};
 
-export type UpsertParticipantInput = {
-  businessUnitId: Scalars['ID']['input'];
-  clientMutationId: Scalars['String']['input'];
-  contacts: Array<ContactInput>;
-  expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  name: Scalars['String']['input'];
-  participantId: InputMaybe<Scalars['ID']['input']>;
-  segmentRole: Scalars['String']['input'];
-};
+export type DashboardGateQuery = { me: { tenantId: string, productEntitlements: Array<string>, roles: Array<string>, effectiveScopes: Array<{ kind: string, resourceId: string }> }, tenant: { id: string, name: string, status: string } | null };
 
-export type UsageSummary = {
-  __typename?: 'UsageSummary';
-  cost: Scalars['Float']['output'];
-  from: Scalars['String']['output'];
-  inputTokens: Scalars['Int']['output'];
-  outputTokens: Scalars['Int']['output'];
-  requests: Scalars['Int']['output'];
-  to: Scalars['String']['output'];
-};
+export type DashboardMembershipsQueryVariables = Exact<{
+  after: string | null | undefined;
+}>;
 
-export type UserError = {
-  __typename?: 'UserError';
-  code: Scalars['String']['output'];
-  correlationId: Scalars['String']['output'];
-  field: Maybe<Scalars['String']['output']>;
-  message: Scalars['String']['output'];
-};
 
-export type VerifyContactInput = {
-  clientMutationId: Scalars['String']['input'];
-  contactId: Scalars['ID']['input'];
-  verified: Scalars['Boolean']['input'];
-};
+export type DashboardMembershipsQuery = { memberships: { nodes: Array<{ id: string, tenantId: string, role: string, status: string }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
 
-export type VerifyInvitationOtpInput = {
-  clientMutationId: Scalars['String']['input'];
-  code: Scalars['String']['input'];
-  linkToken: Scalars['String']['input'];
-};
+export type OperationalOverviewQueryVariables = Exact<{
+  after: string | null | undefined;
+  classification: string | null | undefined;
+  status: string | null | undefined;
+}>;
+
+
+export type OperationalOverviewQuery = { dashboardSummary: { total: number, normal: number, attention: number, critical: number, pending: number, invalidated: number }, triageInspections: { nodes: Array<{ inspectionId: string, projectId: string | null, assetId: string | null, classification: string, status: string, updatedAt: string }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type SchedulesQueryVariables = Exact<{
+  after: string | null | undefined;
+}>;
+
+
+export type SchedulesQuery = { schedules: { nodes: Array<{ id: string, assetId: string, participantId: string, templateId: string, rrule: string, timezone: string, startsAt: string, nextDueAt: string, deadlineMinutes: number, reminderOffsetsMinutes: Array<number>, status: string, version: number }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type InspectionsQueryVariables = Exact<{
+  after: string | null | undefined;
+  history: boolean;
+}>;
+
+
+export type InspectionsQuery = { inspections: { nodes: Array<{ id: string, assetId: string, participantId: string, projectId: string | null, stageId: string | null, source: string, sourceReason: string | null, stateReason: string | null, status: string, evidenceCount: number, dueAt: string, deadlineAt: string, reminderInstants: Array<string>, version: number }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type InspectionDetailQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type InspectionDetailQuery = { inspection: { id: string, assetId: string, participantId: string, projectId: string | null, stageId: string | null, source: string, sourceReason: string | null, stateReason: string | null, status: string, evidenceCount: number, dueAt: string, deadlineAt: string, reminderInstants: Array<string>, version: number } | null };
+
+export type ProjectsQueryVariables = Exact<{
+  after: string | null | undefined;
+}>;
+
+
+export type ProjectsQuery = { projects: { nodes: Array<{ id: string, assetId: string, participantId: string, templateId: string, reportMode: string, status: string, version: number, stages: Array<{ id: string, key: string, label: string, kind: string, position: number, status: string, plannedAt: string | null, reason: string | null, inspectionId: string | null, version: number }> }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type ProjectDetailQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+
+export type ProjectDetailQuery = { project: { id: string, assetId: string, participantId: string, templateId: string, reportMode: string, status: string, version: number, stages: Array<{ id: string, key: string, label: string, kind: string, position: number, status: string, plannedAt: string | null, reason: string | null, inspectionId: string | null, version: number }>, transitions: Array<{ id: string, stageId: string | null, fromState: string | null, toState: string, reason: string | null, occurredAt: string }> } | null };
+
+export type ProjectTimelineQueryVariables = Exact<{
+  projectId: string | number;
+}>;
+
+
+export type ProjectTimelineQuery = { projectTimeline: { projectId: string, entries: Array<{ stageId: string, label: string, status: string, inspectionId: string | null, occurredAt: string | null }> } };
+
+export type ReportWorkspaceQueryVariables = Exact<{
+  inspectionId: string | number;
+  version: number | null | undefined;
+}>;
+
+
+export type ReportWorkspaceQuery = { report: { id: string, inspectionId: string, projectId: string | null, version: number, mode: string, classification: string, jsonDigest: string, htmlDigest: string, canonicalJSON: Record<string, unknown>, html: string, createdAt: string } | null };
+
+export type ReportDownloadQueryVariables = Exact<{
+  snapshotId: string | number;
+}>;
+
+
+export type ReportDownloadQuery = { reportDownload: { snapshotId: string, kind: string, objectKey: string, url: string, status: string, sha256: string | null } | null };
+
+export type CustomerPortfolioQueryVariables = Exact<{
+  after: string | null | undefined;
+}>;
+
+
+export type CustomerPortfolioQuery = { customerPortfolio: { nodes: Array<{ assetId: string, projectId: string | null, publishedClassification: string | null, status: string, progress: number, updatedAt: string }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type CustomerTimelineQueryVariables = Exact<{
+  assetId: string | number | null | undefined;
+  projectId: string | number | null | undefined;
+  after: string | null | undefined;
+}>;
+
+
+export type CustomerTimelineQuery = { customerTimeline: { nodes: Array<{ id: string, kind: string, status: string, occurredAt: string, historical: boolean }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type CustomerReportQueryVariables = Exact<{
+  inspectionId: string | number;
+  version: number | null | undefined;
+}>;
+
+
+export type CustomerReportQuery = { customerReport: { inspectionId: string, snapshotId: string, version: number, classification: string, advisory: string, status: string, historical: boolean } | null };
+
+export type CustomerEvidenceQueryVariables = Exact<{
+  inspectionId: string | number;
+  mode: EvidenceMode;
+  after: string | null | undefined;
+}>;
+
+
+export type CustomerEvidenceQuery = { customerEvidence: { nodes: Array<{ id: string, requirementKey: string, description: string | null, captureSource: string | null, state: string, lineageId: string, replacedBy: string | null, mediaAvailability: string, url: string | null }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type MyNotificationsQueryVariables = Exact<{
+  after: string | null | undefined;
+  unreadOnly: boolean;
+}>;
+
+
+export type MyNotificationsQuery = { myNotifications: { unreadCount: number, nodes: Array<{ id: string, kind: string, title: string, body: string, resourceKind: string, resourceId: string | null, createdAt: string, readAt: string | null }>, pageInfo: { endCursor: string | null, hasNextPage: boolean } } };
+
+export type CreateScheduleMutationVariables = Exact<{
+  input: CreateScheduleInput;
+}>;
+
+
+export type CreateScheduleMutation = { createSchedule: { clientMutationId: string, schedule: { id: string, status: string, nextDueAt: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type UpdateScheduleMutationVariables = Exact<{
+  input: UpdateScheduleInput;
+}>;
+
+
+export type UpdateScheduleMutation = { updateSchedule: { clientMutationId: string, schedule: { id: string, status: string, nextDueAt: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CancelScheduleMutationVariables = Exact<{
+  input: CancelScheduleInput;
+}>;
+
+
+export type CancelScheduleMutation = { cancelSchedule: { clientMutationId: string, schedule: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CreateInspectionMutationVariables = Exact<{
+  input: CreateInspectionInput;
+}>;
+
+
+export type CreateInspectionMutation = { createInspection: { clientMutationId: string, inspection: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CancelInspectionMutationVariables = Exact<{
+  input: InspectionTransitionInput;
+}>;
+
+
+export type CancelInspectionMutation = { cancelInspection: { clientMutationId: string, inspection: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type InvalidateInspectionMutationVariables = Exact<{
+  input: InvalidateInspectionInput;
+}>;
+
+
+export type InvalidateInspectionMutation = { invalidateInspection: { clientMutationId: string, inspection: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CreateProjectMutationVariables = Exact<{
+  input: CreateProjectInput;
+}>;
+
+
+export type CreateProjectMutation = { createProject: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type AddExceptionalStageMutationVariables = Exact<{
+  input: AddExceptionalStageInput;
+}>;
+
+
+export type AddExceptionalStageMutation = { addExceptionalStage: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type StartProjectStageMutationVariables = Exact<{
+  input: StartProjectStageInput;
+}>;
+
+
+export type StartProjectStageMutation = { startProjectStage: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type SkipProjectStageMutationVariables = Exact<{
+  input: SkipProjectStageInput;
+}>;
+
+
+export type SkipProjectStageMutation = { skipProjectStage: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type CloseProjectMutationVariables = Exact<{
+  input: ProjectTransitionInput;
+}>;
+
+
+export type CloseProjectMutation = { closeProject: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type ReopenProjectMutationVariables = Exact<{
+  input: ReopenProjectInput;
+}>;
+
+
+export type ReopenProjectMutation = { reopenProject: { clientMutationId: string, project: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type PublishReportMutationVariables = Exact<{
+  input: PublishReportInput;
+}>;
+
+
+export type PublishReportMutation = { publishReport: { clientMutationId: string, publication: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type InvalidateReportPublicationMutationVariables = Exact<{
+  input: InvalidateReportPublicationInput;
+}>;
+
+
+export type InvalidateReportPublicationMutation = { invalidateReportPublication: { clientMutationId: string, publication: { id: string, status: string, version: number } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type RequestRecaptureMutationVariables = Exact<{
+  input: RequestRecaptureInput;
+}>;
+
+
+export type RequestRecaptureMutation = { requestRecapture: { clientMutationId: string, recapture: { id: string, status: string, deadlineAt: string | null } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type MarkNotificationReadMutationVariables = Exact<{
+  input: MarkNotificationReadInput;
+}>;
+
+
+export type MarkNotificationReadMutation = { markNotificationRead: { clientMutationId: string, notification: { id: string, readAt: string | null } | null, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+export type ConfigureNotificationPreferencesMutationVariables = Exact<{
+  input: ConfigureNotificationPreferencesInput;
+}>;
+
+
+export type ConfigureNotificationPreferencesMutation = { configureMyNotificationPreferences: { clientMutationId: string, userErrors: Array<{ code: string, field: string | null, message: string, correlationId: string }> } };
+
+
+export const DashboardGateDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DashboardGate"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tenantId"}},{"kind":"Field","name":{"kind":"Name","value":"productEntitlements"}},{"kind":"Field","name":{"kind":"Name","value":"roles"}},{"kind":"Field","name":{"kind":"Name","value":"effectiveScopes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"resourceId"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"tenant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<DashboardGateQuery, DashboardGateQueryVariables>;
+export const DashboardMembershipsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DashboardMemberships"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberships"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"tenantId"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<DashboardMembershipsQuery, DashboardMembershipsQueryVariables>;
+export const OperationalOverviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"OperationalOverview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"classification"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"status"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dashboardSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"normal"}},{"kind":"Field","name":{"kind":"Name","value":"attention"}},{"kind":"Field","name":{"kind":"Name","value":"critical"}},{"kind":"Field","name":{"kind":"Name","value":"pending"}},{"kind":"Field","name":{"kind":"Name","value":"invalidated"}}]}},{"kind":"Field","name":{"kind":"Name","value":"triageInspections"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"classification"},"value":{"kind":"Variable","name":{"kind":"Name","value":"classification"}}},{"kind":"Argument","name":{"kind":"Name","value":"status"},"value":{"kind":"Variable","name":{"kind":"Name","value":"status"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"classification"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<OperationalOverviewQuery, OperationalOverviewQueryVariables>;
+export const SchedulesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Schedules"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedules"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"participantId"}},{"kind":"Field","name":{"kind":"Name","value":"templateId"}},{"kind":"Field","name":{"kind":"Name","value":"rrule"}},{"kind":"Field","name":{"kind":"Name","value":"timezone"}},{"kind":"Field","name":{"kind":"Name","value":"startsAt"}},{"kind":"Field","name":{"kind":"Name","value":"nextDueAt"}},{"kind":"Field","name":{"kind":"Name","value":"deadlineMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"reminderOffsetsMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<SchedulesQuery, SchedulesQueryVariables>;
+export const InspectionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Inspections"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"history"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspections"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"history"},"value":{"kind":"Variable","name":{"kind":"Name","value":"history"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"participantId"}},{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"stageId"}},{"kind":"Field","name":{"kind":"Name","value":"source"}},{"kind":"Field","name":{"kind":"Name","value":"sourceReason"}},{"kind":"Field","name":{"kind":"Name","value":"stateReason"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"evidenceCount"}},{"kind":"Field","name":{"kind":"Name","value":"dueAt"}},{"kind":"Field","name":{"kind":"Name","value":"deadlineAt"}},{"kind":"Field","name":{"kind":"Name","value":"reminderInstants"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<InspectionsQuery, InspectionsQueryVariables>;
+export const InspectionDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InspectionDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"participantId"}},{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"stageId"}},{"kind":"Field","name":{"kind":"Name","value":"source"}},{"kind":"Field","name":{"kind":"Name","value":"sourceReason"}},{"kind":"Field","name":{"kind":"Name","value":"stateReason"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"evidenceCount"}},{"kind":"Field","name":{"kind":"Name","value":"dueAt"}},{"kind":"Field","name":{"kind":"Name","value":"deadlineAt"}},{"kind":"Field","name":{"kind":"Name","value":"reminderInstants"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}}]}}]} as unknown as DocumentNode<InspectionDetailQuery, InspectionDetailQueryVariables>;
+export const ProjectsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Projects"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"projects"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"participantId"}},{"kind":"Field","name":{"kind":"Name","value":"templateId"}},{"kind":"Field","name":{"kind":"Name","value":"reportMode"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"stages"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"plannedAt"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<ProjectsQuery, ProjectsQueryVariables>;
+export const ProjectDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ProjectDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"participantId"}},{"kind":"Field","name":{"kind":"Name","value":"templateId"}},{"kind":"Field","name":{"kind":"Name","value":"reportMode"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"stages"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"plannedAt"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"transitions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"stageId"}},{"kind":"Field","name":{"kind":"Name","value":"fromState"}},{"kind":"Field","name":{"kind":"Name","value":"toState"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}},{"kind":"Field","name":{"kind":"Name","value":"occurredAt"}}]}}]}}]}}]} as unknown as DocumentNode<ProjectDetailQuery, ProjectDetailQueryVariables>;
+export const ProjectTimelineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ProjectTimeline"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"projectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"projectTimeline"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"projectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"projectId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"entries"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stageId"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"occurredAt"}}]}}]}}]}}]} as unknown as DocumentNode<ProjectTimelineQuery, ProjectTimelineQueryVariables>;
+export const ReportWorkspaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ReportWorkspace"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"version"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"report"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"inspectionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"version"},"value":{"kind":"Variable","name":{"kind":"Name","value":"version"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"mode"}},{"kind":"Field","name":{"kind":"Name","value":"classification"}},{"kind":"Field","name":{"kind":"Name","value":"jsonDigest"}},{"kind":"Field","name":{"kind":"Name","value":"htmlDigest"}},{"kind":"Field","name":{"kind":"Name","value":"canonicalJSON"}},{"kind":"Field","name":{"kind":"Name","value":"html"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<ReportWorkspaceQuery, ReportWorkspaceQueryVariables>;
+export const ReportDownloadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ReportDownload"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"snapshotId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reportDownload"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"snapshotId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"snapshotId"}}},{"kind":"Argument","name":{"kind":"Name","value":"kind"},"value":{"kind":"StringValue","value":"PDF","block":false}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"snapshotId"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"objectKey"}},{"kind":"Field","name":{"kind":"Name","value":"url"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"sha256"}}]}}]}}]} as unknown as DocumentNode<ReportDownloadQuery, ReportDownloadQueryVariables>;
+export const CustomerPortfolioDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CustomerPortfolio"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerPortfolio"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"assetId"}},{"kind":"Field","name":{"kind":"Name","value":"projectId"}},{"kind":"Field","name":{"kind":"Name","value":"publishedClassification"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"progress"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<CustomerPortfolioQuery, CustomerPortfolioQueryVariables>;
+export const CustomerTimelineDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CustomerTimeline"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"assetId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"projectId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerTimeline"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"assetId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"assetId"}}},{"kind":"Argument","name":{"kind":"Name","value":"projectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"projectId"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"occurredAt"}},{"kind":"Field","name":{"kind":"Name","value":"historical"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<CustomerTimelineQuery, CustomerTimelineQueryVariables>;
+export const CustomerReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CustomerReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"version"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"inspectionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"version"},"value":{"kind":"Variable","name":{"kind":"Name","value":"version"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspectionId"}},{"kind":"Field","name":{"kind":"Name","value":"snapshotId"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"classification"}},{"kind":"Field","name":{"kind":"Name","value":"advisory"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"historical"}}]}}]}}]} as unknown as DocumentNode<CustomerReportQuery, CustomerReportQueryVariables>;
+export const CustomerEvidenceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"CustomerEvidence"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"mode"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"EvidenceMode"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerEvidence"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"inspectionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"inspectionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"mode"},"value":{"kind":"Variable","name":{"kind":"Name","value":"mode"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"requirementKey"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"captureSource"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"lineageId"}},{"kind":"Field","name":{"kind":"Name","value":"replacedBy"}},{"kind":"Field","name":{"kind":"Name","value":"mediaAvailability"}},{"kind":"Field","name":{"kind":"Name","value":"url"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<CustomerEvidenceQuery, CustomerEvidenceQueryVariables>;
+export const MyNotificationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyNotifications"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"unreadOnly"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Boolean"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myNotifications"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"25"}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"unreadOnly"},"value":{"kind":"Variable","name":{"kind":"Name","value":"unreadOnly"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"body"}},{"kind":"Field","name":{"kind":"Name","value":"resourceKind"}},{"kind":"Field","name":{"kind":"Name","value":"resourceId"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"readAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"unreadCount"}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"endCursor"}},{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}}]}}]}}]}}]} as unknown as DocumentNode<MyNotificationsQuery, MyNotificationsQueryVariables>;
+export const CreateScheduleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateSchedule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateScheduleInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createSchedule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedule"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"nextDueAt"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CreateScheduleMutation, CreateScheduleMutationVariables>;
+export const UpdateScheduleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSchedule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateScheduleInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSchedule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedule"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"nextDueAt"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<UpdateScheduleMutation, UpdateScheduleMutationVariables>;
+export const CancelScheduleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CancelSchedule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CancelScheduleInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancelSchedule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedule"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CancelScheduleMutation, CancelScheduleMutationVariables>;
+export const CreateInspectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateInspection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateInspectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createInspection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspection"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CreateInspectionMutation, CreateInspectionMutationVariables>;
+export const CancelInspectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CancelInspection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"InspectionTransitionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancelInspection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspection"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CancelInspectionMutation, CancelInspectionMutationVariables>;
+export const InvalidateInspectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"InvalidateInspection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"InvalidateInspectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invalidateInspection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inspection"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<InvalidateInspectionMutation, InvalidateInspectionMutationVariables>;
+export const CreateProjectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateProject"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateProjectInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createProject"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CreateProjectMutation, CreateProjectMutationVariables>;
+export const AddExceptionalStageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddExceptionalStage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AddExceptionalStageInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"addExceptionalStage"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<AddExceptionalStageMutation, AddExceptionalStageMutationVariables>;
+export const StartProjectStageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"StartProjectStage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"StartProjectStageInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startProjectStage"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<StartProjectStageMutation, StartProjectStageMutationVariables>;
+export const SkipProjectStageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SkipProjectStage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SkipProjectStageInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"skipProjectStage"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<SkipProjectStageMutation, SkipProjectStageMutationVariables>;
+export const CloseProjectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CloseProject"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ProjectTransitionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"closeProject"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<CloseProjectMutation, CloseProjectMutationVariables>;
+export const ReopenProjectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ReopenProject"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ReopenProjectInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reopenProject"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"project"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<ReopenProjectMutation, ReopenProjectMutationVariables>;
+export const PublishReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PublishReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"PublishReportInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"publishReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"publication"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<PublishReportMutation, PublishReportMutationVariables>;
+export const InvalidateReportPublicationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"InvalidateReportPublication"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"InvalidateReportPublicationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invalidateReportPublication"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"publication"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<InvalidateReportPublicationMutation, InvalidateReportPublicationMutationVariables>;
+export const RequestRecaptureDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RequestRecapture"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RequestRecaptureInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"requestRecapture"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"recapture"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"deadlineAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<RequestRecaptureMutation, RequestRecaptureMutationVariables>;
+export const MarkNotificationReadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"MarkNotificationRead"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MarkNotificationReadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markNotificationRead"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notification"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"readAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<MarkNotificationReadMutation, MarkNotificationReadMutationVariables>;
+export const ConfigureNotificationPreferencesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ConfigureNotificationPreferences"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ConfigureNotificationPreferencesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"configureMyNotificationPreferences"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userErrors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"field"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"correlationId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"clientMutationId"}}]}}]}}]} as unknown as DocumentNode<ConfigureNotificationPreferencesMutation, ConfigureNotificationPreferencesMutationVariables>;

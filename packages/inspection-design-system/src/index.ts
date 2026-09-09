@@ -16,3 +16,7 @@ export { ProductIdentity } from "./primitives/product-identity.js";
 export type { ProductIdentityProps, ProductName } from "./primitives/product-identity.js";
 export { Motion } from "./primitives/motion.js";
 export type { MotionProps } from "./primitives/motion.js";
+export { Breadcrumbs, DataTable, FilterBar, Pagination } from "./primitives/collection.js";
+export type { BreadcrumbsProps, DataTableColumn, DataTableProps, FilterBarProps, PaginationProps } from "./primitives/collection.js";
+export { Confirmation, Recovery, VersionConflict } from "./primitives/recovery.js";
+export type { ConfirmationProps, RecoveryProps, VersionConflictProps } from "./primitives/recovery.js";

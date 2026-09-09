@@ -7,6 +7,13 @@
     {"alias": "CONFIGURE_TOTP", "enabled": false, "defaultAction": false, "priority": 30},
     {"alias": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 50}
   ],
+  "users": [
+    {
+      "id": "6ec9a740-a3dd-5ae5-ae50-9c29d189531b",
+      "username": "inspection-super-admin-bootstrap",
+      "enabled": true
+    }
+  ],
   "clients": [
     {
       "clientId": "inspection-admin",
@@ -58,23 +65,10 @@
       "clientId": "inspection-provisioning",
       "enabled": true,
       "publicClient": false,
-      "secret": "inspection-provisioning-local-secret",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "authorizationServicesEnabled": false
-    }
-  ],
-  "users": [
-    {
-      "username": "admin",
-      "enabled": true,
-      "email": "admin@inspection.local",
-      "firstName": "Inspection",
-      "lastName": "Administrator",
-      "emailVerified": true,
-      "requiredActions": [],
-      "credentials": [{"type": "password", "value": "admin", "temporary": false}]
     }
   ]
 }

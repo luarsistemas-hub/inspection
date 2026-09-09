@@ -1,6 +1,10 @@
-query AdminIdentity { me { identityId tenantId roles productEntitlements } tenant { id name language defaultTimezone status version } }
+query AdminIdentity { me { identityId tenantId roles productEntitlements memberships { id tenantId role status scopes { kind resourceId } } effectiveScopes { kind resourceId } } tenant { id name language defaultTimezone status version } }
 
-query AdminOrganization($first: Int!, $after: String, $search: String) { businessUnits(first: $first, after: $after) { nodes { id code name status version } pageInfo { endCursor hasNextPage } } }
+query AdminGate { me { tenantId roles productEntitlements } tenant { id name status } }
+
+mutation BootstrapTenant($input: CreateTenantInput!) { createTenant(input: $input) { tenant { id name status } userErrors { code field message correlationId } clientMutationId } }
+
+query AdminOrganization($first: Int!, $after: String) { businessUnits(first: $first, after: $after) { nodes { id code name status version } pageInfo { endCursor hasNextPage } } }
 
 query AdminAccess($first: Int!, $after: String) { memberships(first: $first, after: $after) { nodes { id role status version scopes { kind resourceId } } pageInfo { endCursor hasNextPage } } }
 

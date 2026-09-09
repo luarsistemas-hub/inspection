@@ -49,6 +49,15 @@ type PresignedPart struct {
 	PartNumber int
 }
 
+// UploadedPart describes one part currently retained by the multipart provider.
+// It is intentionally separate from Part because recovery also records the
+// provider-reported part size before a client attempts completion.
+type UploadedPart struct {
+	Number    int
+	ETag      string
+	SizeBytes int64
+}
+
 type Client interface {
 	CreateMultipart(context.Context, string, string, string) (string, error)
 	PresignPart(context.Context, string, string, string, int, time.Duration) (string, error)
@@ -65,6 +74,13 @@ type Deleter interface {
 
 type Presigner interface {
 	PresignGet(context.Context, string, string, time.Duration) (string, error)
+}
+
+// MultipartInspector reads the durable provider state required to resume an
+// interrupted multipart upload. It is optional so callers that do not offer
+// multipart recovery remain source compatible, while recovery fails closed.
+type MultipartInspector interface {
+	ListMultipartParts(context.Context, string, string, string) ([]UploadedPart, error)
 }
 
 type Store struct {

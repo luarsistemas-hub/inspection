@@ -44,7 +44,7 @@ func Setup(d Dependencies) error {
 			return nil, err
 		}
 		asset := assetRaw.(assetcore.View)
-		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
 			return nil, err
 		}
 		first := query.First

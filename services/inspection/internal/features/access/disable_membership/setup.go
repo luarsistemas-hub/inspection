@@ -47,7 +47,7 @@ func handle(ctx context.Context, deps Dependencies, cmd Command) (database.Membe
 	if cmd.TenantID == (identity.ID{}) || cmd.MembershipID == (identity.ID{}) || cmd.ExpectedVersion < 1 {
 		return database.Membership{}, apperror.New(apperror.InvalidInput, "membership", "membership and expected version are required")
 	}
-	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin}, nil, true); err != nil {
+	if _, err := deps.Authorizer.Authorize(ctx, cmd.TenantID, []string{auth.TenantAdmin, auth.AccessAdmin}, nil, true); err != nil {
 		return database.Membership{}, err
 	}
 	var membership database.Membership

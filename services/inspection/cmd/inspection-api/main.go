@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -11,7 +13,9 @@ import (
 	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
+	explaineffectiveaccess "inspection/services/inspection/internal/features/access/explain_effective_access"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
+	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
 	archiveasset "inspection/services/inspection/internal/features/assets/archive_asset"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
 	listassets "inspection/services/inspection/internal/features/assets/list_assets"
@@ -42,6 +46,7 @@ import (
 	mediacreate "inspection/services/inspection/internal/features/media/create_upload"
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
+	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
 	receivetwiliostatus "inspection/services/inspection/internal/features/notifications/receive_twilio_status"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
 	origincore "inspection/services/inspection/internal/features/origins/core"
@@ -125,9 +130,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initialize OIDC verifier: %w", err)
 	}
-	authenticator := auth.Authenticator{Verifier: verifier, Resolver: auth.GORMMembershipStore{DB: db}, Audience: cfg.OIDCAudience, Audiences: cfg.OIDCAudiences}
+	membershipStore := auth.GORMMembershipStore{DB: db}
+	authenticator := auth.Authenticator{Verifier: verifier, Resolver: membershipStore, Audience: cfg.OIDCAudience, Audiences: cfg.OIDCAudiences}
 	bus := mediator.New()
-	authorizer := auth.Authorizer{Store: auth.GORMMembershipStore{DB: db}, Scopes: auth.GORMScopeResolver{DB: db}}
+	authorizer := auth.Authorizer{Store: membershipStore, Scopes: auth.GORMScopeResolver{DB: db}}
 	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
 		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom},
 		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
@@ -167,7 +173,12 @@ func run() error {
 		func() error {
 			return revokeinvitation.Setup(revokeinvitation.Dependencies{Bus: bus, Service: invitationService})
 		},
-		func() error { return createtenant.Setup(createtenant.Dependencies{DB: db, Bus: bus}) },
+		func() error {
+			return createtenant.Setup(createtenant.Dependencies{DB: db, Bus: bus, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject})
+		},
+		func() error {
+			return listidentitymemberships.Setup(listidentitymemberships.Dependencies{DB: db, Bus: bus})
+		},
 		func() error { return createunit.Setup(createunit.Dependencies{DB: db, Bus: bus}) },
 		func() error {
 			return upsertunit.Setup(upsertunit.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -186,6 +197,9 @@ func run() error {
 		},
 		func() error {
 			return disablemembership.Setup(disablemembership.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return explaineffectiveaccess.Setup(explaineffectiveaccess.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Scopes: auth.GORMScopeResolver{DB: db}})
 		},
 		func() error { return recordaudit.Setup(recordaudit.Dependencies{DB: db, Bus: bus}) },
 		func() error { return listaudit.Setup(listaudit.Dependencies{DB: db, Bus: bus, Authorizer: authorizer}) },
@@ -323,6 +337,9 @@ func run() error {
 		},
 		func() error { return mediacreate.Setup(mediacreate.Dependencies{Bus: bus, Service: mediaService}) },
 		func() error { return mediapresign.Setup(mediapresign.Dependencies{Bus: bus, Service: mediaService}) },
+		func() error {
+			return mediareconcile.Setup(mediareconcile.Dependencies{Bus: bus, Service: mediaService})
+		},
 		func() error { return mediacomplete.Setup(mediacomplete.Dependencies{Bus: bus, Service: mediaService}) },
 		func() error {
 			return mediafalsepositive.Setup(mediafalsepositive.Dependencies{DB: db, Bus: bus, Service: mediaService})
@@ -379,10 +396,30 @@ func run() error {
 				http.Error(w, "authentication required", http.StatusUnauthorized)
 				return
 			}
-			ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{
-				TenantID: principal.TenantID, Principal: principal,
+			metadata := requestctx.Metadata{
+				Principal:     principal,
 				CorrelationID: correlationID, StartedAt: time.Now().UTC(),
-			})
+			}
+			if r.Header.Get(auth.MembershipHeader) == "" {
+				if !isTenantBootstrapRequest(r) {
+					http.Error(w, "access denied", http.StatusForbidden)
+					return
+				}
+			} else {
+				membershipID, parseErr := identity.ParseID(strings.TrimSpace(r.Header.Get(auth.MembershipHeader)))
+				if parseErr != nil {
+					http.Error(w, "access denied", http.StatusForbidden)
+					return
+				}
+				resolved, resolveErr := membershipStore.ResolveMembership(ctx, principal.Issuer, principal.Subject, membershipID)
+				if resolveErr != nil || resolved.Disabled {
+					http.Error(w, "access denied", http.StatusForbidden)
+					return
+				}
+				resolved.Audience, resolved.Product = principal.Audience, principal.Product
+				metadata.TenantID, metadata.Principal = resolved.TenantID, resolved
+			}
+			ctx = requestctx.WithMetadata(ctx, metadata)
 		}
 		if cookie, cookieErr := r.Cookie("inspection_external"); cookieErr == nil {
 			ctx = requestctx.WithExternalCredentials(ctx, requestctx.ExternalCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
@@ -393,4 +430,19 @@ func run() error {
 		return err
 	}
 	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, mux), cfg.ShutdownTimeout)
+}
+
+// isTenantBootstrapRequest is the sole authenticated request allowed before a
+// membership exists. The GraphQL operation is restored after inspection so the
+// handler sees the original request body.
+func isTenantBootstrapRequest(r *http.Request) bool {
+	if r.Body == nil {
+		return false
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	return strings.Contains(string(body), "createTenant")
 }

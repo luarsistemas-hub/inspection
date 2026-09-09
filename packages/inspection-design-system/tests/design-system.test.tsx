@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { Button, Dialog, Field, Input } from "../src/index.js";
+import { Breadcrumbs, Button, Confirmation, DataTable, Dialog, Field, Input, Pagination, Recovery, VersionConflict } from "../src/index.js";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -186,6 +186,20 @@ describe("design-system public contracts", () => {
     ));
     expect(document.activeElement).toBe(opener);
 
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("provides semantic collection, recovery, conflict, and confirmation primitives", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+    await act(async () => reactRoot.render(<><Breadcrumbs items={[{ href: "/", label: "Início" }, { label: "Registros" }]} /><DataTable caption="Registros" columns={[{ id: "name", label: "Nome" }]}><tr><td data-label="Nome">Ana</td></tr></DataTable><Pagination page={1} hasNextPage onPrevious={() => {}} onNext={() => {}} /><Recovery title="Tente novamente" onRetry={() => {}}>A conexão foi interrompida.</Recovery><VersionConflict currentVersion={2} onReview={() => {}}>O rascunho foi preservado.</VersionConflict><Confirmation target="Unidade A" scope="Tenant A" consequence="Arquivará o registro" onCancel={() => {}} onConfirm={() => {}} /></>));
+    expect(container.querySelector("nav[aria-label='Navegação estrutural']")).not.toBeNull();
+    expect(container.querySelector("table caption")?.textContent).toBe("Registros");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Página 1");
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("versão atual é 2");
+    expect(container.querySelector(".inspection-confirmation dl")?.textContent).toContain("Arquivará o registro");
     await act(async () => reactRoot.unmount());
     container.remove();
   });

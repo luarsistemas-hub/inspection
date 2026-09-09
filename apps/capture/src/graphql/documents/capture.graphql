@@ -5,3 +5,23 @@ query ExternalCaptureBootstrap {
     answers { requirementKey mediaIds impossibilityReason version }
   }
 }
+
+mutation RequestInvitationOtp($input: RequestInvitationOtpInput!) { requestInvitationOtp(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation VerifyInvitationOtp($input: VerifyInvitationOtpInput!) { verifyInvitationOtp(input: $input) { status csrfToken expiresAt userErrors { code field message correlationId } clientMutationId } }
+
+mutation AcceptProcessing($input: AcceptProcessingInput!) { acceptProcessing(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation CreateMediaUpload($input: CreateMediaUploadInput!) { createMediaUpload(input: $input) { upload { mediaId uploadId expiresAt partSizeBytes } userErrors { code field message correlationId } clientMutationId } }
+
+mutation PresignMediaParts($input: PresignMediaPartsInput!) { presignMediaParts(input: $input) { parts { partNumber url expiresAt } userErrors { code field message correlationId } clientMutationId } }
+
+mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) { completeMediaUpload(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
+
+mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
+
+mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }
+
+mutation SubmitRecapture($input: SubmitRecaptureInput!) { submitRecapture(input: $input) { recapture { id status } userErrors { code field message correlationId } clientMutationId } }
