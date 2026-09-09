@@ -12,6 +12,7 @@ import (
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
+	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
 	assetarchive "inspection/services/inspection/internal/features/assets/archive_asset"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
@@ -1355,6 +1356,18 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	memberships := []*graphql1.Membership{}
 	if principal.MembershipID != (identity.ID{}) {
 		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), Version: int(principal.MembershipVersion), Scopes: scopes})
+	} else if principal.Issuer != "" && principal.Subject != "" {
+		raw, err := r.Bus.Ask(ctx, listidentitymemberships.Query{Issuer: principal.Issuer, Subject: principal.Subject, First: 100})
+		if err != nil {
+			return nil, err
+		}
+		for _, summary := range raw.(listidentitymemberships.Result).Nodes {
+			status := summary.MembershipStatus
+			if summary.TenantStatus != "ACTIVE" {
+				status = "INACTIVE"
+			}
+			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Role: summary.Role, Status: status, Version: int(summary.MembershipVersion), Scopes: []*graphql1.Scope{}})
+		}
 	}
 	return &graphql1.Me{
 		IdentityID: principal.IdentityID.String(), TenantID: principal.TenantID.String(), Audience: principal.Audience, Product: principal.Product, ProductEntitlements: principal.ProductEntitlements, Roles: principal.Roles,

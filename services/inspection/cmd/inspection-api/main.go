@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,6 +110,8 @@ import (
 	process "inspection/services/inspection/internal/platform/runtime"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 func main() {
@@ -401,7 +404,7 @@ func run() error {
 				CorrelationID: correlationID, StartedAt: time.Now().UTC(),
 			}
 			if r.Header.Get(auth.MembershipHeader) == "" {
-				if !isTenantBootstrapRequest(r) {
+				if !isMembershipOptionalRequest(r) {
 					http.Error(w, "access denied", http.StatusForbidden)
 					return
 				}
@@ -432,10 +435,10 @@ func run() error {
 	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, mux), cfg.ShutdownTimeout)
 }
 
-// isTenantBootstrapRequest is the sole authenticated request allowed before a
-// membership exists. The GraphQL operation is restored after inspection so the
-// handler sees the original request body.
-func isTenantBootstrapRequest(r *http.Request) bool {
+// isMembershipOptionalRequest allows only identity selection and tenant
+// bootstrap before a membership has established tenant context. The GraphQL
+// operation is restored after inspection so the handler sees the original body.
+func isMembershipOptionalRequest(r *http.Request) bool {
 	if r.Body == nil {
 		return false
 	}
@@ -444,5 +447,73 @@ func isTenantBootstrapRequest(r *http.Request) bool {
 		return false
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
-	return strings.Contains(string(body), "createTenant")
+	var payload struct {
+		Query         string `json:"query"`
+		OperationName string `json:"operationName"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil || strings.TrimSpace(payload.Query) == "" {
+		return false
+	}
+	document, err := parser.ParseQuery(&ast.Source{Name: "request.graphql", Input: payload.Query})
+	if err != nil {
+		return false
+	}
+	var operation *ast.OperationDefinition
+	if payload.OperationName != "" {
+		operation = document.Operations.ForName(payload.OperationName)
+	} else if len(document.Operations) == 1 {
+		operation = document.Operations[0]
+	}
+	if operation == nil {
+		return false
+	}
+	allowed := map[string]struct{}{}
+	switch operation.Operation {
+	case ast.Query:
+		allowed["me"] = struct{}{}
+		allowed["tenant"] = struct{}{}
+	case ast.Mutation:
+		allowed["createTenant"] = struct{}{}
+	default:
+		return false
+	}
+	return rootSelectionsAllowed(operation.SelectionSet, document, allowed, map[string]bool{})
+}
+
+func rootSelectionsAllowed(selections ast.SelectionSet, document *ast.QueryDocument, allowed map[string]struct{}, visiting map[string]bool) bool {
+	if len(selections) == 0 {
+		return false
+	}
+	for _, selection := range selections {
+		switch current := selection.(type) {
+		case *ast.Field:
+			if current.Name == "__typename" {
+				continue
+			}
+			if _, ok := allowed[current.Name]; !ok {
+				return false
+			}
+		case *ast.InlineFragment:
+			if !rootSelectionsAllowed(current.SelectionSet, document, allowed, visiting) {
+				return false
+			}
+		case *ast.FragmentSpread:
+			if visiting[current.Name] {
+				return false
+			}
+			fragment := document.Fragments.ForName(current.Name)
+			if fragment == nil {
+				return false
+			}
+			visiting[current.Name] = true
+			accepted := rootSelectionsAllowed(fragment.SelectionSet, document, allowed, visiting)
+			delete(visiting, current.Name)
+			if !accepted {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }

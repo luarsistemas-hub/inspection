@@ -1,4 +1,4 @@
-import { clearProtectedContext, clearSession, getAccessToken, getIdentity } from "@/auth/session";
+import { clearProtectedContext, clearSession, getAccessToken, restoreMembershipContext } from "@/auth/session";
 import { print } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 
@@ -9,10 +9,10 @@ const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost
 async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variables: V | undefined, signal: AbortSignal | undefined, requiresMembership: boolean): Promise<T> {
   const token = getAccessToken();
   if (!token) throw { message: "Autenticação necessária", code: "UNAUTHENTICATED" } satisfies GraphQLFailure;
-  const membershipId = getIdentity()?.membershipId;
+  const membershipId = requiresMembership ? restoreMembershipContext()?.membershipId : undefined;
   if (requiresMembership && !membershipId) throw { message: "Selecione um contexto de acesso antes de carregar dados.", code: "MEMBERSHIP_REQUIRED" } satisfies GraphQLFailure;
   const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-  if (membershipId) headers["X-Inspection-Membership-ID"] = membershipId;
+  if (requiresMembership && membershipId) headers["X-Inspection-Membership-ID"] = membershipId;
   const response = await fetch(endpoint, { method: "POST", credentials: "omit", signal, headers, body: JSON.stringify({ query: print(document), variables }) });
   let body: Response<T> = {};
   const raw = await response.text();

@@ -11,6 +11,7 @@ import { AdminAccessDocument, AdminAssetsDocument, AdminAuditDocument, AdminCata
 type Section = "Visão administrativa" | "Organização" | "Identidade e acesso" | "Participação" | "Configuração de inspeção" | "Governança" | "Auditoria";
 type Row = Record<string, string | number | null>;
 type PageData = { title: string; responsibility: string; rows: Row[]; hasNextPage: boolean };
+type MembershipOption = AdminIdentityQuery["me"]["memberships"][number];
 
 const pages: Record<string, { title: Section; responsibility: string; href: string; primary: string }> = {
   "/overview": { title: "Visão administrativa", responsibility: "Contexto e saúde da configuração do tenant", href: "/overview", primary: "Revisar contexto" },
@@ -33,6 +34,7 @@ const currentPage = (pathname: string) => pages[pathname] ?? pages["/overview"];
 export function AdminShell({ section }: { section?: string }) {
   const pathname = usePathname(); const page = useMemo(() => currentPage(pathname), [pathname]);
   const [identityData, setIdentityData] = useState<AdminIdentityQuery>(); const [status, setStatus] = useState("Carregando contexto de identidade…");
+  const [membershipOptions, setMembershipOptions] = useState<MembershipOption[]>([]);
   const [query, setQuery] = useState(""); const [data, setData] = useState<PageData>(); const [loading, setLoading] = useState(false); const [error, setError] = useState<string>();
   const [needsBootstrap, setNeedsBootstrap] = useState(false); const [bootstrapBusy, setBootstrapBusy] = useState(false);
 
@@ -44,13 +46,31 @@ export function AdminShell({ section }: { section?: string }) {
     setIdentity(identity); setMembershipContext(selected.id, scope); setStatus(result.tenant?.name ?? "Contexto selecionado");
   }, []);
 
-  useEffect(() => { const controller = new AbortController(); void graphqlIdentity<AdminIdentityQuery>(AdminIdentityDocument, undefined, controller.signal).then((result) => { setIdentityData(result); if (!result.tenant && result.me.tenantId === emptyID) { setNeedsBootstrap(true); setStatus("Primeiro acesso: crie a operação local para continuar."); return; } establishIdentity(result); }).catch((failure: GraphQLFailure) => setError(failure.code === "FORBIDDEN" || failure.code === "UNAUTHENTICATED" ? "Acesso administrativo não autorizado. Nenhuma configuração foi carregada." : failure.message)); return () => controller.abort(); }, [establishIdentity]);
+  const loadIdentity = useCallback(async (signal?: AbortSignal) => {
+    const selector = await graphqlIdentity<AdminIdentityQuery>(AdminIdentityDocument, undefined, signal);
+    const activeMemberships = selector.me.memberships.filter((item) => item.status === "ACTIVE");
+    setMembershipOptions(activeMemberships);
+    if (activeMemberships.length === 0) {
+      setIdentityData(selector);
+      clearProtectedContext();
+      if (selector.me.tenantId === emptyID && selector.me.memberships.length === 0) {
+        setNeedsBootstrap(true); setStatus("Primeiro acesso: crie a operação local para continuar."); return;
+      }
+      setStatus("Selecione uma associação ativa para carregar dados administrativos."); return;
+    }
+    const stored = restoreMembershipContext();
+    const selected = activeMemberships.find((item) => item.id === stored?.membershipId) ?? activeMemberships[0];
+    setMembershipContext(selected.id, stored?.membershipId === selected.id ? stored.scope : "Tenant");
+    const protectedIdentity = await graphql<AdminIdentityQuery>(AdminIdentityDocument, undefined, signal);
+    setNeedsBootstrap(false); setIdentityData(protectedIdentity); establishIdentity(protectedIdentity);
+  }, [establishIdentity]);
 
-  const selectMembership = (membershipId: string) => {
-    if (!identityData) return; clearProtectedContext(); setData(undefined); setError(undefined);
-    const selected = identityData.me.memberships.find((item) => item.id === membershipId); if (!selected) return;
-    const scope = selected.scopes.map((item) => item.kind).join(", ") || "Tenant";
-    setIdentity({ tenantId: selected.tenantId, tenantName: identityData.tenant?.name ?? "Tenant", roles: identityData.me.roles, entitlements: identityData.me.productEntitlements, membershipId: selected.id, scope }); setMembershipContext(selected.id, scope); setStatus("Contexto alterado. Os dados anteriores foram descartados.");
+  useEffect(() => { const controller = new AbortController(); void loadIdentity(controller.signal).catch((failure: GraphQLFailure) => setError(failure.code === "FORBIDDEN" || failure.code === "UNAUTHENTICATED" ? "Acesso administrativo não autorizado. Nenhuma configuração foi carregada." : failure.message)); return () => controller.abort(); }, [loadIdentity]);
+
+  const selectMembership = async (membershipId: string) => {
+    const selected = membershipOptions.find((item) => item.id === membershipId); if (!selected) return;
+    clearProtectedContext(); setData(undefined); setError(undefined); setMembershipContext(selected.id, "Tenant"); setStatus("Trocando o contexto de acesso. Os dados anteriores foram descartados.");
+    try { const result = await graphql<AdminIdentityQuery>(AdminIdentityDocument); setIdentityData(result); establishIdentity(result); } catch (failure) { setError((failure as GraphQLFailure).message); }
   };
 
   const load = useCallback(async () => {
@@ -71,12 +91,12 @@ export function AdminShell({ section }: { section?: string }) {
   }, [identityData, page, query]);
   useEffect(() => { if (identityData && hasAdminAccess()) void load(); }, [identityData, load]);
 
-  const bootstrap = async () => { setBootstrapBusy(true); setError(undefined); try { const result = await graphqlIdentity<BootstrapTenantMutation>(BootstrapTenantDocument, { input: { name: "Minha operação", businessUnitCode: "MATRIZ", businessUnitName: "Matriz", clientMutationId: "local-bootstrap-admin" } }); const issue = result.createTenant.userErrors[0]; if (issue) throw new Error(issue.message); setStatus("Operação local criada. Atualize a sessão para selecionar a associação."); } catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível criar a operação local."); } finally { setBootstrapBusy(false); } };
+  const bootstrap = async () => { setBootstrapBusy(true); setError(undefined); try { const result = await graphqlIdentity<BootstrapTenantMutation>(BootstrapTenantDocument, { input: { name: "Minha operação", businessUnitCode: "MATRIZ", businessUnitName: "Matriz", clientMutationId: "local-bootstrap-admin" } }); const issue = result.createTenant.userErrors[0]; if (issue) throw new Error(issue.message); setStatus("Operação local criada. Carregando o contexto administrativo…"); await loadIdentity(); } catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível criar a operação local."); } finally { setBootstrapBusy(false); } };
   const signIn = () => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname);
   if (needsBootstrap) return <main className="admin-denial"><h1>Primeiro acesso</h1><p role="status">{status}</p><button disabled={bootstrapBusy} onClick={() => void bootstrap()}>{bootstrapBusy ? "Criando…" : "Criar operação local"}</button></main>;
   if (error && !identityData) return <main className="admin-denial"><h1>Administração</h1><p role="alert">{error}</p><button onClick={signIn}>Entrar com conta administrativa</button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Dashboard</a></main>;
   const activeMembership = identityData?.me.memberships.find((item) => item.id === restoreMembershipContext()?.membershipId); const permitted = hasAdminAccess();
-  return <main className="admin-shell"><a className="skip-link" href="#admin-content">Pular para o conteúdo</a><header className="admin-header"><div><strong>Inspection Admin</strong><span>Trilha de evidências · operação precisa</span></div><label>Associação ativa<select value={activeMembership?.id ?? ""} onChange={(event) => selectMembership(event.target.value)}>{identityData?.me.memberships.filter((item) => item.status === "ACTIVE").map((item) => <option key={item.id} value={item.id}>{item.role} · {item.tenantId}</option>)}</select></label><p><b>Tenant:</b> {identityData?.tenant?.name ?? "Não selecionado"}<br /><b>Escopo:</b> {activeMembership?.scopes.map((item) => item.kind).join(", ") || "Tenant"}</p><a className="dashboard-exit" href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Abrir Dashboard</a></header><div className="admin-layout"><nav className="admin-nav" aria-label="Navegação administrativa">{navGroups.map(([group, items]) => <div key={group}><h2>{group}</h2>{items.map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}</div>)}</nav><section id="admin-content" className="admin-content" aria-labelledby="page-title"><p className="breadcrumb">Administração / {page.title}</p><div className="page-heading"><div><h1 id="page-title">{section ?? page.title}</h1><p>{page.responsibility}</p></div><button disabled={!permitted || loading} onClick={() => void load()}>{loading ? "Atualizando…" : "Atualizar"}</button></div><p className="context-line"><b>Responsabilidade:</b> {page.responsibility} · <b>Papel:</b> {identityData?.me.roles.join(", ") || "—"}</p>{!permitted ? <div className="admin-state denied" role="alert">Você não tem permissão para acessar este recurso neste escopo.</div> : <><div className="collection-toolbar"><label>Buscar nesta coleção<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, identificador ou contexto" /></label><button className="secondary" onClick={() => { setQuery(""); void load(); }}>Limpar filtros</button><button>{page.primary}</button></div><p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>{error ? <div className="admin-state error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : <Collection data={data} query={query} />}</>}</section></div></main>;
+  return <main className="admin-shell"><a className="skip-link" href="#admin-content">Pular para o conteúdo</a><header className="admin-header"><div><strong>Inspection Admin</strong><span>Trilha de evidências · operação precisa</span></div><label>Associação ativa<select value={activeMembership?.id ?? ""} onChange={(event) => void selectMembership(event.target.value)}>{membershipOptions.map((item) => <option key={item.id} value={item.id}>{item.role} · {item.tenantId}</option>)}</select></label><p><b>Tenant:</b> {identityData?.tenant?.name ?? "Não selecionado"}<br /><b>Escopo:</b> {activeMembership?.scopes.map((item) => item.kind).join(", ") || "Tenant"}</p><a className="dashboard-exit" href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Abrir Dashboard</a></header><div className="admin-layout"><nav className="admin-nav" aria-label="Navegação administrativa">{navGroups.map(([group, items]) => <div key={group}><h2>{group}</h2>{items.map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}</div>)}</nav><section id="admin-content" className="admin-content" aria-labelledby="page-title"><p className="breadcrumb">Administração / {page.title}</p><div className="page-heading"><div><h1 id="page-title">{section ?? page.title}</h1><p>{page.responsibility}</p></div><button disabled={!permitted || loading} onClick={() => void load()}>{loading ? "Atualizando…" : "Atualizar"}</button></div><p className="context-line"><b>Responsabilidade:</b> {page.responsibility} · <b>Papel:</b> {identityData?.me.roles.join(", ") || "—"}</p>{!permitted ? <div className="admin-state denied" role="alert">Você não tem permissão para acessar este recurso neste escopo.</div> : <><div className="collection-toolbar"><label>Buscar nesta coleção<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, identificador ou contexto" /></label><button className="secondary" onClick={() => { setQuery(""); void load(); }}>Limpar filtros</button><button>{page.primary}</button></div><p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>{error ? <div className="admin-state error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : <Collection data={data} query={query} />}</>}</section></div></main>;
 }
 
 function Collection({ data, query }: { data?: PageData; query: string }) {

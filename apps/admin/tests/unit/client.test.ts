@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { graphql } from "@/graphql/client";
-import { clearSession, getAccessToken, setMembershipContext, setSession } from "@/auth/session";
+import { graphql, graphqlIdentity } from "@/graphql/client";
+import { clearProtectedContext, clearSession, getAccessToken, setMembershipContext, setSession } from "@/auth/session";
 import { AdminIdentityDocument } from "@/graphql/generated";
 
 describe("Admin GraphQL transport", () => {
-  afterEach(() => { clearSession(); vi.unstubAllGlobals(); });
+  afterEach(() => { clearProtectedContext(); clearSession(); vi.unstubAllGlobals(); });
   it("UT-071 sends only the in-memory Admin token and omits credentials", async () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1");
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { id: "1" } } }), { status: 200 }));
@@ -16,6 +16,15 @@ describe("Admin GraphQL transport", () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "Negado", extensions: { code: "FORBIDDEN" } }] }), { status: 200 })));
     await expect(graphql(AdminIdentityDocument)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(getAccessToken()).toBeUndefined();
+  });
+  it("lists identity-owned memberships without sending a tenant selector", async () => {
+    setSession("admin-token"); setMembershipContext("stale-membership");
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { memberships: [] }, tenant: null } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    await graphqlIdentity(AdminIdentityDocument);
+    const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer admin-token");
+    expect(headers["X-Inspection-Membership-ID"]).toBeUndefined();
   });
   it("maps a non-JSON expired response to a stable authentication error", async () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("authentication required", { status: 401, headers: { "content-type": "text/plain" } })));

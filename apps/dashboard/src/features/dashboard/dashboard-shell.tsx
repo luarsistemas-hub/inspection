@@ -22,14 +22,14 @@ export function DashboardShell({ section }: { section: Page }) {
   const router = useRouter();
   const [identity, setCurrentIdentity] = useState<DashboardIdentity>();
   const [capability, setCapability] = useState<Capability>();
-  const [memberships, setMemberships] = useState<DashboardMembershipsQuery["memberships"]["nodes"]>([]);
+  const [memberships, setMemberships] = useState<DashboardMembershipsQuery["me"]["memberships"]>([]);
   const [message, setMessage] = useState("Verificando acesso…");
 
   const loadGate = useCallback(async () => {
     try {
       if (!getMembershipId()) {
-        const membershipData = await graphql<DashboardMembershipsQuery, { after: string | null }>(DashboardMembershipsDocument, { after: null });
-        const activeMemberships = membershipData.memberships.nodes.filter((membership) => membership.status === "ACTIVE");
+        const membershipData = await graphql<DashboardMembershipsQuery, {}>(DashboardMembershipsDocument, {});
+        const activeMemberships = membershipData.me.memberships.filter((membership) => membership.status === "ACTIVE");
         setMemberships(activeMemberships);
         if (activeMemberships.length === 1) { selectMembership(activeMemberships[0].id); setMessage("Contexto de acesso selecionado. Carregando dados protegidos…"); void loadGate(); return; }
         setCurrentIdentity(undefined); setCapability(undefined); setMessage("Selecione o contexto de acesso antes de carregar dados protegidos."); return;
@@ -55,7 +55,7 @@ export function DashboardShell({ section }: { section: Page }) {
   return <main><header><strong>Inspeção · Dashboard</strong><span>{message}</span><div className="actions">{memberships.length > 1 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}{capability.canUseAdmin && <a href={process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000"}>Abrir Administração</a>}<Link href="/notifications">Notificações ({notifications.unreadCount})</Link></div></header><nav aria-label="Dashboard">{capability.links.map(([label, href]) => <Link key={href} aria-current={pathname === href ? "page" : undefined} href={href}>{label}</Link>)}</nav><section><div className="actions"><h1>{section}</h1><button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); }}>Atualizar</button></div>{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
 }
 
-function MembershipPicker({ memberships, selected, onChange }: { memberships: DashboardMembershipsQuery["memberships"]["nodes"]; selected?: string; onChange: (id: string) => void }) {
+function MembershipPicker({ memberships, selected, onChange }: { memberships: DashboardMembershipsQuery["me"]["memberships"]; selected?: string; onChange: (id: string) => void }) {
   return <label className="membership">Contexto de acesso<select aria-label="Contexto de acesso" value={selected ?? ""} onChange={(event) => onChange(event.target.value)}><option value="" disabled>Selecione</option>{memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.role} · {membership.tenantId}</option>)}</select></label>;
 }
 
