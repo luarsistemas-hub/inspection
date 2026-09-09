@@ -78,9 +78,78 @@ jobs:
             apps/${{ matrix.product }}/playwright-report
             apps/${{ matrix.product }}/test-results
 
-  cross-product:
+  e2e-parity:
     runs-on: ubuntu-latest
     needs: [go, design-system, frontend]
+    env:
+      INSPECTION_E2E_AUTH: "true"
+      INSPECTION_E2E_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_E2E_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
+      INSPECTION_SEED_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_SEED_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
+      KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME: ${{ secrets.INSPECTION_KEYCLOAK_BOOTSTRAP_USERNAME }}
+      KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.INSPECTION_KEYCLOAK_BOOTSTRAP_PASSWORD }}
+      INSPECTION_SUPER_ADMIN_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.5
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Configure isolated test environment
+        run: cp .env.example .env.inspection
+      - name: Start and seed parity stack
+        run: |
+          ./scripts/local.sh up
+          ./scripts/local.sh seed
+      - name: Install browser dependencies
+        run: |
+          for product in admin dashboard capture; do
+            (cd "apps/$product" && npm ci && npx playwright install --with-deps chromium webkit)
+          done
+      - name: Run authenticated Playwright suites
+        env:
+          CI: ""
+        run: |
+          status=0
+          for product in admin dashboard capture; do
+            (cd "apps/$product" && npm run test:e2e) || status=$?
+          done
+          exit "$status"
+      - name: Upload parity browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-e2e-parity-artifacts
+          if-no-files-found: warn
+          path: |
+            apps/admin/playwright-report
+            apps/admin/test-results
+            apps/dashboard/playwright-report
+            apps/dashboard/test-results
+            apps/capture/playwright-report
+            apps/capture/test-results
+      - name: Capture stack logs
+        if: always()
+        run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml logs --no-color > e2e-parity-compose.log || true
+      - name: Upload stack logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-e2e-parity-stack-logs
+          path: e2e-parity-compose.log
+          if-no-files-found: warn
+      - name: Tear down isolated parity stack
+        if: always()
+        run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml down --volumes --remove-orphans
+
+  cross-product:
+    runs-on: ubuntu-latest
+    needs: [go, design-system, frontend, e2e-parity]
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f deploy/docker-compose.yml config --quiet

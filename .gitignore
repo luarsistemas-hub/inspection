@@ -5,6 +5,7 @@ apps/web/test-results/
 .env.inspection
 .env
 
+node_modules/
 
 # IDEs specific
 .idea/
