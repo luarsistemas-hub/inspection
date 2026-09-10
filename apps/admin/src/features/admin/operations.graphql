@@ -14,4 +14,12 @@ query AdminAssets($first: Int!, $after: String, $search: String) { assets(first:
 
 query AdminGovernance($first: Int!, $after: String) { publicationPolicy { mode version } retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt } pageInfo { endCursor hasNextPage } } }
 
-query AdminAudit($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason occurredAt } pageInfo { endCursor hasNextPage } } }
+query AdminAudit($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } usageSummary { from to requests inputTokens outputTokens cost } }
+
+query AdminHistory($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } }
+
+mutation AdminCreateBusinessUnit($input: CreateBusinessUnitInput!) { createBusinessUnit(input: $input) { businessUnit { id code name status version } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminInviteInternalUser($input: InviteInternalUserInput!) { inviteInternalUser(input: $input) { membership { id role status version scopes { kind resourceId } } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminUpsertParticipant($input: UpsertParticipantInput!) { upsertParticipant(input: $input) { participant { id name status version contacts { id channel value verified active } } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminRegisterAsset($input: RegisterAssetInput!) { registerAsset(input: $input) { asset { id name externalKey status version } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminConfigurePublicationPolicy($input: ConfigurePublicationPolicyInput!) { configurePublicationPolicy(input: $input) { policy { mode version } userErrors { code field message correlationId } clientMutationId } }

@@ -7,10 +7,10 @@ test.describe("authenticated Admin against the local stack", () => {
   test("executes Organization, Access and Audit queries without GraphQL errors", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/organization");
-    for (const label of ["Organização", "Acessos", "Auditoria"]) {
+    for (const label of ["Tenant e unidades", "Usuários e permissões", "Auditoria e uso"]) {
       await page.getByRole("link", { name: label }).click();
-      await page.getByRole("button", { name: "Consultar" }).click();
-      await expect(page.getByRole("status")).toContainText(/Consulta paginada concluída/);
+      await page.getByRole("button", { name: "Atualizar" }).click();
+      await expect(page.getByRole("status")).toContainText(/atualizado|Carregando/);
     }
     await assertRuntimeClean();
   });

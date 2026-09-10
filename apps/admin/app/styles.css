@@ -3,3 +3,15 @@
 @media (max-width: 920px) { .admin-header { grid-template-columns: 1fr 1fr; padding: 1rem; } .admin-layout { display: block; } .admin-nav { display: flex; gap: .5rem; overflow-x: auto; padding: .7rem 1rem; border-right: 0; border-bottom: 1px solid var(--admin-border); } .admin-nav div { display: contents; } .admin-nav h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .admin-nav a { white-space: nowrap; } }
 @media (max-width: 620px) { .admin-header { grid-template-columns: 1fr; } .admin-content { margin: .75rem; } .collection-toolbar { grid-template-columns: 1fr; } .page-heading { display: grid; } .page-heading button { width: 100%; } table, thead, tbody, tr, th, td { display: block; } thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } tr { padding: .6rem; border-top: 1px solid var(--admin-border); } td { min-height: 0; padding: .3rem; border: 0; } td::before { content: attr(data-label) ": "; color: var(--admin-muted); font-weight: 700; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+.next-page { margin-top: 1rem; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 1rem; background: oklch(.2 .03 205 / .55); }
+.admin-form { display: grid; gap: 1rem; width: min(100%, 45rem); max-height: 90vh; overflow: auto; padding: 1.5rem; background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: .5rem; box-shadow: 0 1rem 3rem oklch(.2 .03 205 / .25); }
+.admin-form h2 { margin: 0; font: 700 1.6rem var(--admin-display); }
+.admin-form p { margin: 0; color: var(--admin-muted); }
+.detail-panel { position: fixed; inset: 0 0 0 auto; z-index: 4; width: min(100%, 34rem); overflow: auto; padding: 1.5rem; background: var(--admin-surface); border-left: 1px solid var(--admin-border); box-shadow: -1rem 0 3rem oklch(.2 .03 205 / .15); }
+.detail-panel h2 { font: 700 1.6rem var(--admin-display); }
+.detail-panel dl { display: grid; gap: .65rem; }
+.detail-panel dl div { padding-bottom: .65rem; border-bottom: 1px solid var(--admin-border); }
+.detail-panel dt { color: var(--admin-muted); font-size: .8rem; font-weight: 700; text-transform: uppercase; }
+.detail-panel dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+.detail-panel li { margin-bottom: .6rem; }

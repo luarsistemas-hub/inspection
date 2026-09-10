@@ -10,4 +10,4 @@ Para falha de startup, confira `docker compose --env-file .env.inspection -f dep
 ./scripts/load-smoke.sh
 ```
 
-Os smoke tests assumem API e web ativos. `down` preserva volumes; não há limpeza destrutiva nos scripts.
+Os smoke tests assumem API, Admin, Dashboard e Capture ativos. `down` preserva volumes; não há limpeza destrutiva nos scripts.

@@ -453,5 +453,10 @@ ALTER TABLE access.memberships DROP CONSTRAINT IF EXISTS chk_membership_role;
 ALTER TABLE access.memberships ADD CONSTRAINT chk_membership_role CHECK (role IN ('TENANT_ADMIN','MANAGER','EMPLOYEE','VIEWER','CUSTOMER_VIEWER','ORGANIZATION_ADMIN','ACCESS_ADMIN','PARTICIPATION_ADMIN','INSPECTION_CONFIG_ADMIN','GOVERNANCE_ADMIN','AUDITOR'));
 DROP POLICY IF EXISTS membership_oidc_lookup ON access.memberships;
 CREATE POLICY membership_oidc_lookup ON access.memberships FOR SELECT TO inspection_runtime
-USING (issuer = current_setting('app.oidc_issuer', true) AND subject = current_setting('app.oidc_subject', true));`}}
+USING (issuer = current_setting('app.oidc_issuer', true) AND subject = current_setting('app.oidc_subject', true));`},
+		{Version: 23, Name: "administrative_collection_cursors", Compatible: true, SQL: `
+CREATE INDEX IF NOT EXISTS idx_participants_cursor ON participants.participants(tenant_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_assets_cursor ON assets.assets(tenant_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_segments_cursor ON segments.definitions(tenant_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_templates_cursor ON templates.templates(tenant_id, created_at, id);`}}
 }

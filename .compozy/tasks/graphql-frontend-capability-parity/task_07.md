@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Complete Capture PWA and Recovery
 type: frontend
 complexity: high
@@ -36,16 +36,16 @@ Complete the standalone Capture PWA for US-031 and US-032 while preserving its i
 
 ## Subtasks
 
-- [ ] 7.1 Complete link exchange, OTP feedback, bootstrap, disclosure consent, public refusal/revoke, expiry, and reauthentication states.
-- [ ] 7.2 Present origin, inspection, and recapture responsibilities as a guided requirement journey with policy, reference, progress, answers, and finality.
-- [ ] 7.3 Complete camera/gallery, description, source, GPS, device context, media format/size/count, and requirement-bound validation experiences.
-- [ ] 7.4 Expand IndexedDB and UI state for local drafts, upload queue, server receipt, capacity, cleanup, and restart recovery.
-- [ ] 7.5 Reconcile multipart uploads across interruption, signed-part expiry, concurrent tabs, and server receipt without duplicate media.
-- [ ] 7.6 Deliver policy-gated impossibility, explicit incomplete confirmation, false-positive declaration, and authoritative state reconciliation.
-- [ ] 7.7 Make final capture and recapture submission idempotent and recover confirmed terminal state after interruption.
-- [ ] 7.8 Replace manual operation typing with Task 4 generated result/variable types and consistent error handling.
-- [ ] 7.9 Deliver externalized pt-BR, Capture-specific mobile composition, and WCAG 2.2 AA behavior.
-- [ ] 7.10 Implement the four assigned Playwright cases and focused state/recovery unit regressions without claiming Task 8 cross-product evidence.
+- [x] 7.1 Complete link exchange, OTP feedback, bootstrap, disclosure consent, public refusal/revoke, expiry, and reauthentication states.
+- [x] 7.2 Present origin, inspection, and recapture responsibilities as a guided requirement journey with policy, reference, progress, answers, and finality.
+- [x] 7.3 Complete camera/gallery, description, source, GPS, device context, media format/size/count, and requirement-bound validation experiences.
+- [x] 7.4 Expand IndexedDB and UI state for local drafts, upload queue, server receipt, capacity, cleanup, and restart recovery.
+- [x] 7.5 Reconcile multipart uploads across interruption, signed-part expiry, concurrent tabs, and server receipt without duplicate media.
+- [x] 7.6 Deliver policy-gated impossibility, explicit incomplete confirmation, false-positive declaration, and authoritative state reconciliation.
+- [x] 7.7 Make final capture and recapture submission idempotent and recover confirmed terminal state after interruption.
+- [x] 7.8 Replace manual operation typing with Task 4 generated result/variable types and consistent error handling.
+- [x] 7.9 Deliver externalized pt-BR, Capture-specific mobile composition, and WCAG 2.2 AA behavior.
+- [x] 7.10 Implement the four assigned Playwright cases and focused state/recovery unit regressions without claiming Task 8 cross-product evidence.
 
 ## Implementation Details
 
@@ -99,10 +99,10 @@ Follow the TechSpec Capture design and fixed operational boundaries. Current fro
 
 Cases assigned from `_tests.md`, the test contract. Task 8 exclusively owns the cross-product recapture journey cases.
 
-- [ ] E2E-031 — OTP, versioned disclosure choices, capture, multipart upload, metadata, and final submission at 320 pixels.
-- [ ] E2E-032 — offline draft resume, permitted impossibility or false-positive, and safe reauthentication after expiry.
-- [ ] E2E-064 — parameterized US-031 EC-1 through EC-10 Capture edge family.
-- [ ] E2E-065 — parameterized US-032 EC-1 through EC-10 recovery edge family.
+- [x] E2E-031 — OTP, versioned disclosure choices, capture, multipart upload, metadata, and final submission at 320 pixels.
+- [x] E2E-032 — offline draft resume, permitted impossibility or false-positive, and safe reauthentication after expiry.
+- [x] E2E-064 — parameterized US-031 EC-1 through EC-10 Capture edge family.
+- [x] E2E-065 — parameterized US-032 EC-1 through EC-10 recovery edge family.
 
 ## Success Criteria
 

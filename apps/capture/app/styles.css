@@ -19,4 +19,5 @@ button + button { margin-inline-start: var(--inspection-space-2); background: va
 button:disabled { cursor: not-allowed; opacity: .65; }
 hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspection-border); }
 :focus-visible { outline: var(--inspection-focus-ring); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
 @media (max-width: 22.5rem) { main { inline-size: calc(100% - 1.5rem); padding-block-start: 1rem; } .card { padding: var(--inspection-space-4); } button { inline-size: 100%; } button + button { margin-block-start: var(--inspection-space-2); margin-inline-start: 0; } }

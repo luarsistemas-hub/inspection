@@ -1,13 +1,13 @@
 # Desenvolvimento e testes
 
-Prepare dependências com `./scripts/local.sh infra`; use quatro terminais com `./scripts/dev.sh api`, `worker`, `scheduler` e `web`. Os servidores locais usam `:8080`, `:8082`, `:8083` e `:3000`.
+Prepare dependências com `./scripts/local.sh infra`; use `./scripts/dev.sh api`, `worker`, `scheduler` e `all` para iniciar as três aplicações. Os servidores locais usam `:8080`, `:8082`, `:8083`, `:3000`, `:3002` e `:3003`.
 
 ```sh
 go test ./...
 go vet ./...
 go build ./...
 (cd services/inspection && go run github.com/99designs/gqlgen@v0.17.95 generate)
-(cd apps/web && npm run codegen:check && npm run lint && npm run test && npm run build)
+for product in admin dashboard capture; do (cd "apps/$product" && npm run codegen:check && npm run lint && npm run test && npm run build); done
 ./scripts/verify.sh
 ```
 

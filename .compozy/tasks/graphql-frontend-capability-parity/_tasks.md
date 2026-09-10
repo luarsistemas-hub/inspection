@@ -42,7 +42,7 @@ graph:
 
 # GraphQL and Frontend Capability Parity Task List
 
-Eight robust tasks complete the backend-first contract, deliver the three product experiences, prove executable parity, and retire the legacy frontend only after the release gate passes.
+Eight robust tasks complete the backend-first contract, deliver the three product experiences, prove executable parity, and retire the legacy frontend only after the release gate passes. The Admin slice (task_05) incorporates the Chrome audit of the seeded local stack: primary actions, history, filtering, pagination, session recovery, governance detail and export must be executable before the Admin is considered complete.
 
 | Task | Title | Type | Complexity | Assigned tests |
 |---|---|---|---|---:|

@@ -32,6 +32,7 @@ Complete the tenant-owned backend capabilities needed by the Admin product from 
 - R10. Retention and purge MUST enforce valid policies, immediate soft deletion, legal-hold visibility, ordered eligibility, final transactional hold recheck, idempotent object deletion, and an allowlisted non-sensitive tombstone.
 - R11. Background import, export, delivery, and purge work MUST use domain-specific operation records and the existing transactional outbox/worker rather than a generic jobs API.
 - R12. Internal failures MUST remain generic externally while logs and audit retain redacted tenant, membership, actor, operation, state, idempotency, causation, and correlation context.
+- R13. Administrative user invitations MUST accept an operator-facing email identity, persist an expiring invitation and delivery state, resolve the recipient identity through the configured OIDC provider, and activate exactly one approved membership after acceptance without exposing provider credentials to the browser.
 </requirements>
 
 ## Subtasks
@@ -46,6 +47,7 @@ Complete the tenant-owned backend capabilities needed by the Admin product from 
 - [ ] 2.8 Complete retention status, deletion request, legal hold, purge eligibility/progress/result, scheduler enqueue, worker processing, and tombstone projection.
 - [ ] 2.9 Complete audit and usage filters, details, stable cursors, freshness, timezone handling, and authorized asynchronous exports.
 - [ ] 2.10 Register every slice and handler in API, worker, and scheduler composition roots and implement all assigned tests.
+- [ ] 2.11 Complete the email-based administrative invitation lifecycle, provider delivery state, acceptance binding, resend/revoke idempotency, and audit events.
 
 ## Implementation Details
 
@@ -155,4 +157,3 @@ Cases assigned from `_tests.md`, the test contract — several compact ranges ar
 - Imports, exports, delivery retries, and purge expose focused recoverable state with the fixed operational limits.
 - Legal hold always wins the final purge transaction, and completed purge exposes only allowlisted tombstone fields.
 - Delegated Admin results agree with server authorization and never disclose cross-tenant or out-of-scope data.
-

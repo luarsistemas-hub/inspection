@@ -3,6 +3,7 @@
 ## Current State
 
 - Implemented delegated administrative-role recognition and product entitlement for the existing access and administrative slices.
+- Administrative participant, asset, segment, and template collections now use opaque `(created_at, id)` cursors with strict decoding and a shared pagination helper.
 - Task tracking remains pending because the broad task contract still lists unimplemented operations beyond this access-policy correction.
 
 ## Decisions and Learnings
@@ -13,6 +14,8 @@
 ## Touched Surfaces
 
 - `internal/platform/auth`: shared role validation, product entitlement, and delegation policy.
+- `internal/platform/pagination` and administrative collection core services: stable cursor encoding/decoding and creation-time pagination.
+- `internal/platform/database/migrations` and `internal/platform/config`: cursor indexes and schema compatibility ceiling.
 - Access, tenancy, participant, segment, template, asset, origin, and audit slices: delegated role authorization.
 
 ## Follow-up Risks

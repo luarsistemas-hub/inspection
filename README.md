@@ -1,6 +1,6 @@
 # Inspection
 
-Inspection é uma plataforma multi-tenant para planejar inspeções, coletar evidências, processar mídia e publicar relatórios auditáveis. O monorepo contém API GraphQL em Go, worker, scheduler, migrations, PostgreSQL com RLS, integrações locais e aplicação web Next.js.
+Inspection é uma plataforma multi-tenant para planejar inspeções, coletar evidências, processar mídia e publicar relatórios auditáveis. O monorepo contém API GraphQL em Go, worker, scheduler, migrations, PostgreSQL com RLS, integrações locais e as aplicações Next.js Admin, Dashboard e Capture.
 
 ## Início rápido
 
@@ -11,7 +11,7 @@ Requisitos: Docker Desktop/Compose, Go 1.26.5, Node.js 22 e npm.
 ./scripts/local.sh up
 ```
 
-Abra <http://localhost:3000>. Configure as credenciais de bootstrap do Keycloak somente em `.env.inspection` antes de subir a stack. Para desenvolver no host, execute `./scripts/local.sh infra` e abra `./scripts/dev.sh api`, `worker`, `scheduler` e `web` em terminais separados.
+Abra <http://localhost:3000>. Configure as credenciais de bootstrap do Keycloak somente em `.env.inspection` antes de subir a stack. Para desenvolver no host, execute `./scripts/local.sh infra` e abra `./scripts/dev.sh api`, `worker`, `scheduler` e `all` em terminais separados.
 
 ## Componentes e URLs
 
@@ -53,4 +53,4 @@ Mailpit local em <http://localhost:8026>.
 
 ## Documentação
 
-Consulte [`docs/README.md`](docs/README.md), [`deploy/README.md`](deploy/README.md), [`services/inspection/README.md`](services/inspection/README.md), [`apps/web/README.md`](apps/web/README.md), [`scripts/README.md`](scripts/README.md) e [`libs/identity/README.md`](libs/identity/README.md). O schema GraphQL em `services/inspection/schema.graphqls` é a referência canônica; arquivos `generated` são verificados pela CI.
+Consulte [`docs/README.md`](docs/README.md), [`deploy/README.md`](deploy/README.md), [`services/inspection/README.md`](services/inspection/README.md), [`scripts/README.md`](scripts/README.md) e [`libs/identity/README.md`](libs/identity/README.md). O schema GraphQL em `services/inspection/schema.graphqls` é a referência canônica; arquivos `generated` são verificados pela CI.

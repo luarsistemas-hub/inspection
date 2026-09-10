@@ -31,6 +31,7 @@ jobs:
       - run: go build ./...
       - run: docker compose -f deploy/docker-compose.yml config --quiet
       - run: ./scripts/validate-compozy-tasks.sh
+      - run: node --test scripts/lib/parity-tools.test.mjs
   design-system:
     runs-on: ubuntu-latest
     defaults:
@@ -203,6 +204,7 @@ jobs:
             --output artifacts/cross-product/legacy-inventory.json
           node scripts/lib/legacy-inventory.mjs validate \
             --input artifacts/cross-product/legacy-inventory.json \
+            --baseline docs/legacy-inventory.json \
             --fail-on-unclassified \
             --fail-on-drift
       - name: Upload cross-product evidence

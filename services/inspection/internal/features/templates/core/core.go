@@ -15,6 +15,7 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
+	"inspection/services/inspection/internal/platform/pagination"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 )
@@ -234,9 +235,13 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, search string, 
 			q = q.Where("name ILIKE ?", "%"+search+"%")
 		}
 		if after != "" {
-			q = q.Where("id > ?", after)
+			at, id, err := pagination.After(after)
+			if err != nil {
+				return err
+			}
+			q = q.Where("(created_at, id) > (?, ?)", at, id)
 		}
-		return q.Order("id").Limit(first + 1).Find(&rows).Error
+		return q.Order("created_at, id").Limit(first + 1).Find(&rows).Error
 	})
 	if err != nil {
 		return nil, "", false, err
@@ -251,7 +256,8 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, search string, 
 	}
 	end := ""
 	if len(rows) > 0 {
-		end = rows[len(rows)-1].ID.String()
+		last := rows[len(rows)-1]
+		end = pagination.Encode(last.CreatedAt, last.ID)
 	}
 	return out, end, has, nil
 }

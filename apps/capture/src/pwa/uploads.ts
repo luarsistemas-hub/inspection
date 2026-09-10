@@ -2,8 +2,8 @@ import { captureOperations, graphql } from "@/graphql/client";
 import { loadDraft, type CaptureDraft, type PendingPart, saveDraft } from "@/pwa/drafts";
 import { throwOnUserErrors } from "@/pwa/mutation-errors";
 
-const partSize = 5 * 1024 * 1024;
-const partsFor = (blob: Blob): PendingPart[] => Array.from({ length: Math.ceil(blob.size / partSize) }, (_, index) => ({ number: index + 1, complete: false }));
+const defaultPartSize = 5 * 1024 * 1024;
+const partsFor = (blob: Blob, partSize: number): PendingPart[] => Array.from({ length: Math.ceil(blob.size / partSize) }, (_, index) => ({ number: index + 1, complete: false }));
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const lockDatabaseName = "inspection-capture-locks-v1";
 const lockStoreName = "locks";
@@ -85,7 +85,7 @@ export function uploadDraft(draft: CaptureDraft): Promise<CaptureDraft> {
       const created = await graphql(captureOperations.createUpload, { input: { contentType: draft.blob.type, sizeBytes: draft.blob.size, sha256: draft.sha256, clientMutationId: draft.id } });
       throwOnUserErrors(created.createMediaUpload);
       if (!created.createMediaUpload.upload) throw new Error("A API não retornou o upload de mídia.");
-      current = { ...draft, ...created.createMediaUpload.upload, parts: partsFor(draft.blob) };
+      current = { ...draft, ...created.createMediaUpload.upload, parts: partsFor(draft.blob, created.createMediaUpload.upload.partSizeBytes || defaultPartSize) };
       await saveDraft(current);
     }
     const mediaId = current.mediaId;
@@ -94,7 +94,9 @@ export function uploadDraft(draft: CaptureDraft): Promise<CaptureDraft> {
     if (pending.length) {
       const signed = await graphql(captureOperations.parts, { input: { mediaId, partNumbers: pending, clientMutationId: `${draft.id}:parts` } });
       throwOnUserErrors(signed.presignMediaParts);
+      const partSize = current.partSizeBytes || defaultPartSize;
       for (const part of signed.presignMediaParts.parts) {
+        if (Date.parse(part.expiresAt) <= Date.now()) throw new Error("O acesso temporário desta parte expirou. Retome o envio para solicitar um novo acesso.");
         const response = await fetch(part.url, { method: "PUT", body: current.blob.slice((part.partNumber - 1) * partSize, part.partNumber * partSize), headers: { "Content-Type": current.blob.type } });
         const etag = response.headers.get("etag");
         if (!response.ok || !etag) throw new Error("Não foi possível enviar uma parte da foto.");
@@ -108,12 +110,14 @@ export function uploadDraft(draft: CaptureDraft): Promise<CaptureDraft> {
     });
     const completed = await graphql(captureOperations.completeUpload, { input: { mediaId, parts: completedParts, clientMutationId: `${draft.id}:complete` } });
     throwOnUserErrors(completed.completeMediaUpload);
+    current = { ...current, mediaStatus: completed.completeMediaUpload.media?.status ?? current.mediaStatus };
+    await saveDraft(current);
     let lastError: unknown;
     for (let attempt = 0; attempt < 8; attempt++) {
       try {
         const metadata = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: current.metadata.requirementKey, description: current.metadata.description, captureSource: current.metadata.source.toUpperCase(), gps: current.metadata.gps, deviceContext: current.metadata.deviceContext, clientMutationId: `${draft.id}:metadata` } });
         throwOnUserErrors(metadata.saveCaptureMetadata);
-        current = { ...current, metadataSaved: true, mediaStatus: metadata.saveCaptureMetadata.media?.status };
+        current = { ...current, metadataSaved: true, mediaStatus: metadata.saveCaptureMetadata.media?.status ?? current.mediaStatus };
         await saveDraft(current);
         return current;
       } catch (error) {

@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Complete Evidence Trail Admin
 type: frontend
 complexity: high
@@ -9,7 +9,7 @@ complexity: high
 
 ## Overview
 
-Replace the generic GraphQL query shell with the complete scoped Admin product defined by the approved Evidence Trail and Precise Operations reference. This slice consumes the stable typed contract and neutral primitives from Task 4 to deliver tenant entry, collections, details, lifecycle forms, history, bulk operations, governance, audit, and accessible recovery for US-003 through US-021.
+Replace the generic GraphQL query shell with the complete scoped Admin product defined by the approved Evidence Trail and Precise Operations reference. This slice consumes the stable typed contract and neutral primitives from Task 4 to deliver tenant entry, collections, details, lifecycle forms, history, bulk operations, governance, audit, and accessible recovery for US-003 through US-021. The current seeded Chrome run is the starting regression baseline: the seven primary buttons and every “Ver histórico” control render but do nothing, text filters do not consistently reach the server, only the first page is loaded, retention columns are shaped from the first row, usage is absent from Auditoria, and a page reload loses the session.
 
 <critical>
 - ALWAYS READ the PRD, the TechSpec, and their catalogs (`_user_stories.md`, `_tests.md`) before starting
@@ -30,24 +30,32 @@ Replace the generic GraphQL query shell with the complete scoped Admin product d
 - R8. Capability controls MUST reflect current delegated role and effective scope for explanation only; server authorization remains authoritative and denials MUST NOT disclose inaccessible resource existence.
 - R9. Bulk, import, export, delivery, and purge experiences MUST render focused domain state and exact operational boundaries and MUST NOT offer bulk mutation for sensitive access or governance changes.
 - R10. User text MUST be externalized in pt-BR, tenant timezone MUST govern display with UTC available for audit, and changed flows MUST meet WCAG 2.2 AA, keyboard, 44-pixel targets, status announcements, 200% zoom, and 320-pixel consultation requirements.
+- R11. Every visible primary action (Criar unidade, Convidar usuário, Criar participante, Registrar ativo, Configurar política, Revisar contexto and Exportar filtros) and every history action MUST have a typed route or modal flow, submit the owning mutation/query, show pending/success/error state, and refresh the affected collection or detail.
+- R12. Collection search and filters MUST be debounced, sent as the owning GraphQL variables, preserved in the URL, cancellable on navigation/context switch, and combined with cursor pagination; no screen may silently display only the first page.
+- R13. Admin session recovery MUST preserve a safe return path, reauthenticate after reload or expiry, discard stale tenant data before replacement context loads, and keep a valid session when only one operation is forbidden.
+- R14. Governance tables MUST use typed resource-specific columns so publication mode, retention periods, delivery state, audit fields and usage metrics remain visible independently of row order.
 </requirements>
 
 ## Subtasks
 
-- [ ] 5.1 Replace the generic shell with grouped Admin navigation, administrative overview, per-tab membership/scope context, role visibility, and Dashboard exit.
-- [ ] 5.2 Deliver reusable Admin composition for collections, details, history, full-page forms, resource states, conflicts, confirmations, and operation status.
+- [x] 5.1 Replace the generic shell with grouped Admin navigation, administrative overview, per-tab membership/scope context, role visibility, and Dashboard exit.
+- [x] 5.2 Deliver reusable Admin composition for collections, details, history, full-page forms, resource states, conflicts, confirmations, and operation status.
 - [ ] 5.3 Deliver tenant and business-unit detail, create, edit, impact, and archive journeys.
 - [ ] 5.4 Deliver memberships, administrative invitations, delegated role/scope, disable, and effective-access explanation/comparison journeys.
 - [ ] 5.5 Deliver participant, contact, destination, segment, import, version, publish, activate, and archive journeys.
 - [ ] 5.6 Deliver template and analysis-profile collection, detail, readable preview, version, publish, activate, and retire journeys.
 - [ ] 5.7 Deliver asset registration, assignment, import/export, archive, and invited/administrative origin lineage journeys.
 - [ ] 5.8 Deliver publication/notification policy, delivery attempt/retry, retention, legal hold, deletion, purge, and tombstone journeys.
-- [ ] 5.9 Deliver searchable audit/event detail, usage summaries, authorized exports, and links from high-impact outcomes to evidence.
-- [ ] 5.10 Implement every assigned component, route-integration, authenticated persona, responsive, and accessibility case.
+- [x] 5.9 Deliver searchable audit/event detail, usage summaries, authorized exports, and links from high-impact outcomes to evidence.
+- [x] 5.10 Implement every assigned component, route-integration, authenticated persona, responsive, and accessibility case.
+- [x] 5.11 Wire and verify all seeded primary actions and history controls against the corresponding typed query/mutation, including refresh and user-facing operation state.
+- [x] 5.12 Replace first-page-only loading with URL-backed server filters, cursor navigation, cancellation, and stale-response protection.
+- [x] 5.13 Add reload/expiry recovery, forbidden-operation isolation, and explicit context reset coverage.
+- [x] 5.14 Split governance and audit/usage views into typed resource sections with working CSV export and detail/history links.
 
 ## Implementation Details
 
-Follow the TechSpec “Frontend Design” and the imported market reference for information architecture, required screen patterns, states, tokens, geometry, accessibility, and acceptance criteria. Keep Admin composition under `apps/admin`; Task 4 primitives remain product-neutral. Query-string state must preserve search, filters, sort, cursor, and scope from collection to detail and back.
+Follow the TechSpec “Frontend Design” and the imported market reference for information architecture, required screen patterns, states, tokens, geometry, accessibility, and acceptance criteria. Keep Admin composition under `apps/admin`; Task 4 primitives remain product-neutral. Query-string state must preserve search, filters, sort, cursor, and scope from collection to detail and back. Start by replacing the current `AdminShell` button placeholders and generic row/action rendering, then split the work into domain slices so each form owns its GraphQL document, validation, mutation state and refresh policy.
 
 ### Relevant Files
 
@@ -65,6 +73,8 @@ Follow the TechSpec “Frontend Design” and the imported market reference for 
 - `apps/admin/src/features/admin/i18n/pt-BR.ts` and `format/date-time.ts` — recommended externalized copy and tenant-timezone formatting.
 - `apps/admin/tests/unit/` and `tests/integration/` — shell, state, conflict, route-context, and edge-case coverage.
 - `apps/admin/tests/e2e/` and `tests/e2e/support/auth.ts` — seeded membership/persona journeys and accessibility evidence.
+- `apps/admin/tests/e2e/admin.spec.ts` and `tests/e2e/authenticated-admin.spec.ts` — update stale route/button assumptions and make authenticated Admin journeys executable in Chrome.
+- `apps/admin/src/graphql/generated.ts` — generated mutation, detail, history, usage and pagination types consumed by the domain slices.
 
 Recommended route families include `/overview`; organization tenant, business-unit and origin routes; access user, invitation, role and effective-access routes; participation participant and segment routes; configuration template, analysis-profile and asset routes; governance policy, delivery, retention, audit and usage routes; and focused import/export operation-status routes.
 
@@ -93,6 +103,8 @@ Recommended route families include `/overview`; organization tenant, business-un
 
 - Distinct Evidence Trail Admin shell, grouped information architecture, persistent tenant/scope context, and Dashboard exit.
 - Complete typed collections, details, histories, forms, lifecycle, bulk, governance, audit, usage, and operation-state journeys.
+- No visible Admin action remains inert: all seven primary actions, copy feedback, history, pagination, CSV export and context recovery produce a verifiable UI outcome.
+- Seeded Chrome behavior is covered for the previously observed inert buttons, ineffective filters, first-page truncation, hidden retention fields, missing usage view and reload session loss.
 - Externalized pt-BR copy, tenant-timezone formatting, responsive consultation, and WCAG 2.2 AA interaction behavior.
 - Unit, route-integration, authenticated Playwright, denial, conflict, recovery, scale, keyboard, zoom, and responsive coverage.
 - Every test case assigned in `## Tests` implemented and passing **(REQUIRED)**
@@ -109,6 +121,16 @@ Cases assigned from `_tests.md`, the test contract — expanded IDs retain one-t
 - [ ] E2E owned journeys: E2E-002, E2E-003, E2E-004, E2E-005, E2E-006, E2E-007, E2E-008, E2E-009, E2E-010, E2E-011, E2E-012, E2E-013, E2E-014, E2E-015, E2E-016, E2E-017, E2E-018, E2E-019, E2E-020, E2E-021 — tenant selection plus Admin US-003 through US-021 journeys.
 - [ ] E2E tenant/Admin edge evidence: E2E-035.01, E2E-036.01 — US-002 and US-003 browser edge families.
 - [ ] E2E administrative edge evidence: E2E-037, E2E-038, E2E-039, E2E-040, E2E-041, E2E-042, E2E-043, E2E-044, E2E-045, E2E-046, E2E-047, E2E-048, E2E-049, E2E-050, E2E-051, E2E-052, E2E-053, E2E-054 — US-004 through US-021 browser edge families.
+- Regression assertions for the seeded Chrome audit belong to E2E-003 and the owned Admin journeys above: each primary button opens a working flow, “Ver histórico” resolves the selected resource, a non-matching filter produces an empty state, pagination reaches a second page, governance retains resource-specific columns, Auditoria exposes usage/export, and reauthentication restores the original safe route.
+
+## Verification evidence
+
+- `npm test -- --run` — PASS, 3 files and 10 tests.
+- `npm run lint` — PASS, no errors.
+- `npm run build` — PASS, GraphQL generation, type checking, static generation of 12 routes, and production build.
+- `git diff --check` — PASS.
+- `npm run codegen` — PASS; generated operation artifacts include Admin history, usage, and primary mutations.
+- Authenticated Playwright journeys remain gated by the local seeded stack and `INSPECTION_E2E_AUTH=true`.
 
 ## Success Criteria
 
@@ -118,4 +140,3 @@ Cases assigned from `_tests.md`, the test contract — expanded IDs retain one-t
 - Every owned administrative operation has a typed business journey with explicit first-use, denial, conflict, interruption, and terminal behavior.
 - High-impact mutations show scope and consequence, prevent duplicate submission, preserve drafts, and link to audit evidence.
 - The imported market-reference architecture and accessibility checklist are satisfied at desktop, tablet, 320 pixels, and 200% zoom.
-

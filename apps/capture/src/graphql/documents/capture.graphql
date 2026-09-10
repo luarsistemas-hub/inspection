@@ -1,7 +1,7 @@
 query ExternalCaptureBootstrap {
   externalCapture {
     responsibilityId recaptureRequestId status confirmationOnly kind disclosureVersion reference policy
-    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy impossibilityAllowed }
+    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed }
     answers { requirementKey mediaIds impossibilityReason version }
   }
 }

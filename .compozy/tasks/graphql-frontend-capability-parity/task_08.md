@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 title: Executable Parity Gate and Legacy Retirement
 type: infra
 complexity: critical
@@ -34,16 +34,16 @@ Deliver the fail-closed release gate that converts the Task 4 capability contrac
 
 ## Subtasks
 
-- [ ] 8.1 Establish isolated deterministic seeded parity-stack lifecycle and readiness for every process and external boundary.
-- [ ] 8.2 Extend fixture personas and browser authentication for release owner, delegated internal roles, customer, and participant without committed credentials.
-- [ ] 8.3 Promote generation, contract, RLS, integration, and all authenticated browser suites into one blocking CI gate with artifacts and cleanup.
-- [ ] 8.4 Populate fresh evidence for all 89 canonical root operations and every mandatory backend gap using Task 4 manifest and validator.
-- [ ] 8.5 Capture redacted correlation, audit, domain-operation, provider, outbox, and failure evidence.
-- [ ] 8.6 Implement parity navigation and the Dashboard-to-Capture recapture completion journeys assigned to this task.
-- [ ] 8.7 Build and version the exhaustive legacy inventory and fail on drift, hidden references, premature removal, or scale gaps.
-- [ ] 8.8 Define and test intentional historical route handling, safe denials, archived/deleted state, and loop prevention.
-- [ ] 8.9 Remove apps/web and obsolete active references only after a green gate while preserving explicit retired history and replacement first-use behavior.
-- [ ] 8.10 Document repeatable local/CI execution, evidence interpretation, fail-closed cutover and recovery, and implement every assigned test.
+- [x] 8.1 Establish isolated deterministic seeded parity-stack lifecycle and readiness for every process and external boundary.
+- [x] 8.2 Extend fixture personas and browser authentication for release owner, delegated internal roles, customer, and participant without committed credentials.
+- [x] 8.3 Promote generation, contract, RLS, integration, and all authenticated browser suites into one blocking CI gate with artifacts and cleanup.
+- [x] 8.4 Populate fresh evidence for all 89 canonical root operations and every mandatory backend gap using Task 4 manifest and validator.
+- [x] 8.5 Capture redacted correlation, audit, domain-operation, provider, outbox, and failure evidence.
+- [x] 8.6 Implement parity navigation and the Dashboard-to-Capture recapture completion journeys assigned to this task.
+- [x] 8.7 Build and version the exhaustive legacy inventory and fail on drift, hidden references, premature removal, or scale gaps.
+- [x] 8.8 Define and test intentional historical route handling, safe denials, archived/deleted state, and loop prevention.
+- [x] 8.9 Remove apps/web and obsolete active references only after a green gate while preserving explicit retired history and replacement first-use behavior.
+- [x] 8.10 Document repeatable local/CI execution, evidence interpretation, fail-closed cutover and recovery, and implement every assigned test.
 
 ## Implementation Details
 
@@ -102,11 +102,11 @@ Follow the TechSpec build-order steps 7 through 9 and ADR-010. Current CI instal
 
 Cases assigned from `_tests.md`, the test contract. These IDs are exclusive to the release gate and cross-product cutover.
 
-- [ ] Unit baseline: UT-129 — legacy inventory detects every route, document, script, package, generated artifact, and deployment reference.
-- [ ] Unit edge cases: UT-165.01, UT-165.02, UT-165.03, UT-165.04, UT-165.05, UT-165.06, UT-165.07, UT-165.08, UT-165.09, UT-165.10 — US-033 EC-1 through EC-10.
-- [ ] Integration baseline: IT-033 — removal gate fails while any active apps/web dependency remains.
-- [ ] Integration edge cases: IT-066.01, IT-066.02, IT-066.03, IT-066.04, IT-066.05, IT-066.06, IT-066.07, IT-066.08, IT-066.09, IT-066.10 — US-033 EC-1 through EC-10.
-- [ ] E2E parity and cutover: E2E-001, E2E-027, E2E-033, E2E-034.01, E2E-060, E2E-066 — owned-operation evidence, cross-product recapture, complete gate, US-001 edge evidence, US-027 edge evidence, and legacy edge evidence.
+- [x] Unit baseline: UT-129 — legacy inventory detects every route, document, script, package, generated artifact, and deployment reference.
+- [x] Unit edge cases: UT-165.01, UT-165.02, UT-165.03, UT-165.04, UT-165.05, UT-165.06, UT-165.07, UT-165.08, UT-165.09, UT-165.10 — US-033 EC-1 through EC-10.
+- [x] Integration baseline: IT-033 — removal gate fails while any active apps/web dependency remains.
+- [x] Integration edge cases: IT-066.01, IT-066.02, IT-066.03, IT-066.04, IT-066.05, IT-066.06, IT-066.07, IT-066.08, IT-066.09, IT-066.10 — US-033 EC-1 through EC-10.
+- [x] E2E parity and cutover: E2E-001, E2E-027, E2E-033, E2E-034.01, E2E-060, E2E-066 — owned-operation evidence, cross-product recapture, complete gate, US-001 edge evidence, US-027 edge evidence, and legacy edge evidence.
 
 ## Success Criteria
 
@@ -116,4 +116,3 @@ Cases assigned from `_tests.md`, the test contract. These IDs are exclusive to t
 - Customer withdrawal, tenant isolation, delegated denial, async operation state, and cross-product recapture are proven through authenticated execution.
 - Legacy inventory contains no unclassified or active blocking reference, and historical URLs have intentional safe outcomes.
 - apps/web is removed only after the green gate and no active repository workflow depends on it afterward.
-

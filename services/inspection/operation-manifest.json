@@ -632,47 +632,77 @@
         {
           "name": "AdminAccess",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminAssets",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminAudit",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminCatalogs",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminConfigurePublicationPolicy",
+          "type": "mutation",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminCreateBusinessUnit",
+          "type": "mutation",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminGate",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminGovernance",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminHistory",
+          "type": "query",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminIdentity",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminInviteInternalUser",
+          "type": "mutation",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "AdminOrganization",
           "type": "query",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminRegisterAsset",
+          "type": "mutation",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
+        },
+        {
+          "name": "AdminUpsertParticipant",
+          "type": "mutation",
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         },
         {
           "name": "BootstrapTenant",
           "type": "mutation",
-          "documentSha256": "ad9730862f457f06deda26bd6d0ffcd8da5b8c4369407a3f310d3f898e5bb27c"
+          "documentSha256": "104cf88e3085bc046c355dfe77d1f9c0e89b2fd491a2f3dd52f8a54ebf09bffd"
         }
       ]
     },
@@ -682,67 +712,67 @@
         {
           "name": "AcceptProcessing",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "CompleteMediaUpload",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "CreateMediaUpload",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "DeclareCaptureImpossibility",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "DeclareSensitiveDetectionFalsePositive",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "ExternalCaptureBootstrap",
           "type": "query",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "PresignMediaParts",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "RequestInvitationOtp",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "RevokeInvitation",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "SaveCaptureMetadata",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "SubmitCapture",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "SubmitRecapture",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         },
         {
           "name": "VerifyInvitationOtp",
           "type": "mutation",
-          "documentSha256": "fe6893eaa339c535b2c47eedc6c8fc35a2841515a5ebaa2466cc7183de1f855d"
+          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
         }
       ]
     },

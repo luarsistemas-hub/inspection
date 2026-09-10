@@ -23,7 +23,9 @@ Estado atual relevante:
 ├── libs/
 │   └── identity/                # IDs UUID compartilhados
 ├── services/inspection/          # API, worker, scheduler, migrations e slices
-├── apps/web/                     # Next.js dashboard e captura PWA
+├── apps/admin/                   # console administrativo
+├── apps/dashboard/               # operações e experiência do cliente
+├── apps/capture/                 # captura PWA link-scoped
 ├── internal/                     # artefatos GraphQL legados, sem import pelo serviço
 ├── deploy/docker-compose.yml    # PostgreSQL, Dragonfly e MinIO locais
 └── .compozy/                    # metadados, agentes e extensões do Compozy

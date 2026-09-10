@@ -3,6 +3,7 @@ export type CaptureGPS = { latitude: number; longitude: number; accuracyMeters: 
 export type CaptureDraft = {
   schemaVersion?: 1; id: string; responsibilityId: string; blob: Blob; sha256: string;
   uploadId?: string; mediaId?: string; parts: PendingPart[];
+  expiresAt?: string; partSizeBytes?: number;
   mediaStatus?: string;
   metadataSaved?: boolean;
   metadata: { requirementKey: string; description: string; source: "camera" | "gallery"; capturedAt: string; gps?: CaptureGPS; deviceContext?: Record<string, unknown> };
@@ -32,6 +33,8 @@ function valid(draft: unknown): draft is CaptureDraft {
   if (!Array.isArray(value.parts)) return false;
   const preUpload = value.parts.length === 0 && value.uploadId === undefined && value.mediaId === undefined && value.metadataSaved === false;
   if (value.parts.length === 0 && !preUpload) return false;
+  if (value.expiresAt !== undefined && !isNonEmptyString(value.expiresAt)) return false;
+  if (value.partSizeBytes !== undefined && (!Number.isInteger(value.partSizeBytes) || value.partSizeBytes < 1)) return false;
   const partNumbers = new Set<number>();
   if (!value.parts.every((part) => {
     if (!isRecord(part) || !Number.isInteger(part.number) || part.number < 1 || typeof part.complete !== "boolean" || (part.etag !== undefined && !isNonEmptyString(part.etag)) || (part.complete && !isNonEmptyString(part.etag))) return false;
@@ -114,7 +117,7 @@ export const mediaCountForRequirement = (requirementKey: string, answers: Captur
 };
 export const readyForSubmission = (drafts: CaptureDraft[], online: boolean, allRequirementsSatisfied?: boolean, confirmIncomplete = false): boolean => {
   if (!online) return false;
-  const mediaReady = drafts.length > 0 && drafts.every((draft) => !["SCREENED", "REJECTED", "PURGED", "ABORTED"].includes(draft.mediaStatus ?? "") && !!draft.mediaId && draft.metadataSaved !== false && draft.parts.length > 0 && draft.parts.every((part) => part.complete));
+  const mediaReady = drafts.length > 0 && drafts.every((draft) => !["SCREENED", "REJECTED", "PURGED", "ABORTED"].includes(draft.mediaStatus ?? "") && !!draft.mediaId && draft.metadataSaved === true && draft.parts.length > 0 && draft.parts.every((part) => part.complete));
   if (allRequirementsSatisfied === undefined) return mediaReady;
   return (confirmIncomplete || allRequirementsSatisfied) && (drafts.length === 0 || mediaReady);
 };

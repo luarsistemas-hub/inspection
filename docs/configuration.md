@@ -14,4 +14,4 @@
 
 Os valores completos estão em [`.env.example`](../.env.example). Copie para `.env.inspection`; host usa portas publicadas (5433, 5673, 6380, 9002, 1026, 1081, 18080 e 3001), enquanto Compose usa hostnames e portas internas. Variáveis já exportadas têm precedência.
 
-Ao trocar `INSPECTION_WEB_PORT`, atualize também o redirect URI e `webOrigins` importados em `deploy/keycloak/inspection-realm.json`. O script ajusta automaticamente a origem CORS da API; o registro do cliente OIDC continua sendo explícito por segurança.
+Ao trocar as portas das aplicações, atualize também o redirect URI e `webOrigins` importados em `deploy/keycloak/inspection-realm.json`. O script ajusta automaticamente a origem CORS da API; o registro do cliente OIDC continua sendo explícito por segurança.

@@ -1,7 +1,6 @@
-apps/web/node_modules/
-apps/web/.next/
-apps/web/playwright-report/
-apps/web/test-results/
+apps/admin/node_modules/
+apps/dashboard/node_modules/
+apps/capture/node_modules/
 .env.inspection
 .env
 

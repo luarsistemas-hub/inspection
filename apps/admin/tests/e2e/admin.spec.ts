@@ -8,6 +8,7 @@ const routes = [
 for (const [caseID, route, heading] of routes) test(`${caseID} keeps ${heading} behind the Admin guard`, async ({ page }) => {
   await page.goto(route);
   await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
-  await expect(page.getByText("Nenhuma configuração foi carregada.")).toBeVisible();
+  await expect(page.getByText("Acesso administrativo não autorizado. Nenhuma configuração foi carregada.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Entrar com conta administrativa" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Ir para o Dashboard" })).toBeVisible();
 });

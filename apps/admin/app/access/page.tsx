@@ -1,2 +1,3 @@
 import { AdminShell } from "@/features/admin/admin-shell";
-export default function Page() { return <AdminShell section="Acessos" />; }
+import { Suspense } from "react";
+export default function Page() { return <Suspense fallback={<main className="admin-denial">Carregando Administração…</main>}><AdminShell section="Identidade e acesso" /></Suspense>; }

@@ -4,8 +4,7 @@ node_modules
 **/.next
 **/node_modules
 **/dist
-apps/web/node_modules
-apps/web/.next
-apps/web/playwright-report
-apps/web/test-results
+apps/admin/node_modules
+apps/dashboard/node_modules
+apps/capture/node_modules
 services/contract/contract-service
