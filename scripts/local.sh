@@ -148,6 +148,7 @@ case "${1:-help}" in
     }
     trap cleanup_seed_api EXIT
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API de seed"
+    wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/readyz" "API de seed pronta"
     compose run --rm --no-deps --build inspection-seed
     trap - EXIT
     cleanup_seed_api

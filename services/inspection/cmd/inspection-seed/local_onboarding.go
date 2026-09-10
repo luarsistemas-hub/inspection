@@ -49,14 +49,14 @@ func bootstrapLocalAdmin(ctx context.Context, apiURL, tokenIssuer, issuer, usern
 	if !strings.HasSuffix(strings.TrimRight(tokenIssuer, "/"), "/token") {
 		tokenEndpoint = strings.TrimRight(tokenIssuer, "/") + "/protocol/openid-connect/token"
 	}
-	token, err := requestLocalToken(ctx, tokenEndpoint, username, password)
+	token, err := requestLocalToken(ctx, tokenEndpoint, issuer, username, password)
 	if err != nil {
 		return err
 	}
 	return createLocalTenant(ctx, apiURL, token, username)
 }
 
-func requestLocalToken(ctx context.Context, endpoint, username, password string) (string, error) {
+func requestLocalToken(ctx context.Context, endpoint, expectedIssuer, username, password string) (string, error) {
 	form := url.Values{
 		"grant_type": {"password"},
 		"client_id":  {"inspection-admin"},
@@ -66,6 +66,12 @@ func requestLocalToken(ctx context.Context, endpoint, username, password string)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("create Keycloak token request: %w", err)
+	}
+	if issuerURL, parseErr := url.Parse(expectedIssuer); parseErr == nil && issuerURL.Host != "" {
+		// Keycloak derives the token issuer from the request host. The seed
+		// reaches Keycloak through its private Docker name, but the API validates
+		// the public issuer used by browser clients.
+		req.Host = issuerURL.Host
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
@@ -102,37 +108,58 @@ func createLocalTenant(ctx context.Context, endpoint, token, username string) er
 	if err != nil {
 		return fmt.Errorf("encode local onboarding: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
-	if err != nil {
-		return fmt.Errorf("create local onboarding request: %w", err)
+	client := &http.Client{Timeout: 15 * time.Second}
+	for attempt := 1; attempt <= 5; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+		if err != nil {
+			return fmt.Errorf("create local onboarding request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("request local onboarding: %w", err)
+		}
+		responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read local onboarding response: %w", readErr)
+		}
+		if resp.StatusCode == http.StatusUnauthorized && attempt < 5 {
+			if err := waitLocalOnboardingRetry(ctx, time.Duration(attempt)*time.Second); err != nil {
+				return fmt.Errorf("wait for local onboarding: %w", err)
+			}
+			continue
+		}
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			return fmt.Errorf("local onboarding returned HTTP %d", resp.StatusCode)
+		}
+		var payload bootstrapResponse
+		if err := json.Unmarshal(responseBody, &payload); err != nil {
+			return fmt.Errorf("decode local onboarding response: %w", err)
+		}
+		if len(payload.Errors) > 0 {
+			return fmt.Errorf("local onboarding GraphQL error: %s", payload.Errors[0].Message)
+		}
+		if len(payload.Data.CreateTenant.UserErrors) > 0 {
+			userError := payload.Data.CreateTenant.UserErrors[0]
+			return fmt.Errorf("local onboarding rejected for %s: %s (%s)", username, userError.Message, userError.Code)
+		}
+		if payload.Data.CreateTenant.Tenant.ID == "" {
+			return fmt.Errorf("local onboarding response did not contain a tenant")
+		}
+		return nil
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return fmt.Errorf("request local onboarding: %w", err)
+	return fmt.Errorf("local onboarding returned HTTP %d", http.StatusUnauthorized)
+}
+
+func waitLocalOnboardingRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
-	defer resp.Body.Close()
-	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return fmt.Errorf("read local onboarding response: %w", err)
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("local onboarding returned HTTP %d", resp.StatusCode)
-	}
-	var payload bootstrapResponse
-	if err := json.Unmarshal(responseBody, &payload); err != nil {
-		return fmt.Errorf("decode local onboarding response: %w", err)
-	}
-	if len(payload.Errors) > 0 {
-		return fmt.Errorf("local onboarding GraphQL error: %s", payload.Errors[0].Message)
-	}
-	if len(payload.Data.CreateTenant.UserErrors) > 0 {
-		userError := payload.Data.CreateTenant.UserErrors[0]
-		return fmt.Errorf("local onboarding rejected for %s: %s (%s)", username, userError.Message, userError.Code)
-	}
-	if payload.Data.CreateTenant.Tenant.ID == "" {
-		return fmt.Errorf("local onboarding response did not contain a tenant")
-	}
-	return nil
 }
