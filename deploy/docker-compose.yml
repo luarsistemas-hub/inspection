@@ -226,6 +226,24 @@ services:
       INSPECTION_GOTENBERG_URL: http://gotenberg:3000
       INSPECTION_PROVIDER_TIMEOUT: 30s
 
+  inspection-seed:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-seed"]
+    environment:
+      INSPECTION_ENV: local
+      INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_OIDC_TOKEN_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/token
+      INSPECTION_API_URL: http://inspection-api:8080/graphql
+      INSPECTION_SEED_USERNAME: ${INSPECTION_SEED_USERNAME:-admin}
+      INSPECTION_SEED_PASSWORD: ${INSPECTION_SEED_PASSWORD:-admin}
+      NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:${INSPECTION_CAPTURE_PORT:-3003}}
+    depends_on:
+      inspection-api:
+        condition: service_started
+
   inspection-worker:
     build:
       context: ..

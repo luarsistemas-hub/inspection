@@ -1,6 +1,6 @@
 # Desenvolvimento e testes
 
-Prepare dependências com `./scripts/local.sh infra`; use `./scripts/dev.sh api`, `worker`, `scheduler` e `all` para iniciar as três aplicações. Os servidores locais usam `:8080`, `:8082`, `:8083`, `:3000`, `:3002` e `:3003`.
+Prepare dependências e dados com `./scripts/local.sh infra` e `./scripts/local.sh seed`; use `./scripts/dev.sh api`, `worker`, `scheduler` e `all` para iniciar as aplicações no host. O seed usa uma API containerizada temporária e libera a porta `:8080` ao terminar. Os servidores locais usam `:8080`, `:8082`, `:8083`, `:3000`, `:3002` e `:3003`.
 
 ```sh
 go test ./...

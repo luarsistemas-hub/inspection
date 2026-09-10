@@ -23,7 +23,7 @@ load_env() {
   [[ -f "$env_file" ]] || die "arquivo $env_file não existe; execute ./scripts/local.sh init"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*$|^[[:space:]]*# ]] && continue
-    [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+    [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
     if printenv "$key" >/dev/null 2>&1; then :; else export "$key=$value"; fi
   done < "$env_file"

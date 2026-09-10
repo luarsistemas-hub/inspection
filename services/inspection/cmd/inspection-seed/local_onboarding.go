@@ -41,11 +41,15 @@ type bootstrapResponse struct {
 	} `json:"errors"`
 }
 
-func bootstrapLocalAdmin(ctx context.Context, apiURL, issuer, username, password string) error {
-	if strings.TrimSpace(apiURL) == "" || strings.TrimSpace(issuer) == "" {
-		return fmt.Errorf("API URL and OIDC issuer are required")
+func bootstrapLocalAdmin(ctx context.Context, apiURL, tokenIssuer, issuer, username, password string) error {
+	if strings.TrimSpace(apiURL) == "" || strings.TrimSpace(tokenIssuer) == "" || strings.TrimSpace(issuer) == "" {
+		return fmt.Errorf("API URL and OIDC token issuer are required")
 	}
-	token, err := requestLocalToken(ctx, strings.TrimRight(issuer, "/")+"/protocol/openid-connect/token", username, password)
+	tokenEndpoint := tokenIssuer
+	if !strings.HasSuffix(strings.TrimRight(tokenIssuer, "/"), "/token") {
+		tokenEndpoint = strings.TrimRight(tokenIssuer, "/") + "/protocol/openid-connect/token"
+	}
+	token, err := requestLocalToken(ctx, tokenEndpoint, username, password)
 	if err != nil {
 		return err
 	}

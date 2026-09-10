@@ -1,6 +1,6 @@
 # Scripts
 
-`local.sh` é o ponto de entrada Docker e `dev.sh` inicia processos no host. Ambos resolvem a raiz pelo próprio caminho e carregam `.env.inspection` sem executar conteúdo.
+`local.sh` é o ponto de entrada Docker e `dev.sh` inicia processos no host. Ambos resolvem a raiz pelo próprio caminho e carregam `.env.inspection` sem executar conteúdo. O `seed` roda como job one-shot no Compose e inicia uma API containerizada temporária quando necessário.
 
 ```sh
 ./scripts/local.sh init|up|infra|migrate|status|logs [serviço]|down

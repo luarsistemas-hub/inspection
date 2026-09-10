@@ -31,7 +31,7 @@ load_env() {
   [[ -f "$env_file" ]] || die "arquivo $env_file não existe; execute ./scripts/local.sh init"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*$|^[[:space:]]*# ]] && continue
-    [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+    [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
     if printenv "$key" >/dev/null 2>&1; then :; else export "$key=$value"; fi
   done < "$env_file"
@@ -119,10 +119,11 @@ case "${1:-help}" in
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env
-    compose up -d postgres redis minio rabbitmq mailpit twilio-fake litellm-stub gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap
+    compose up -d postgres redis minio rabbitmq mailpit twilio-fake litellm-stub gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap keycloak-super-admin-bootstrap
     wait_service_completion inspection-bootstrap
     wait_service_completion inspection-migrate
     wait_service_completion inspection-runtime-bootstrap
+    wait_service_completion keycloak-super-admin-bootstrap
     printf 'infraestrutura e migrations concluídas.\n'
     ;;
   migrate)
@@ -133,8 +134,23 @@ case "${1:-help}" in
     printf 'migrations e papéis locais concluídos.\n'
     ;;
   seed)
-    require_base; need go; [[ -f "$env_file" ]] || init; load_env
-    go run ./services/inspection/cmd/inspection-seed
+    require_base; [[ -f "$env_file" ]] || init; load_env
+    started_api=0
+    if ! compose ps --status running -q inspection-api 2>/dev/null | grep -q .; then
+      check_port "${INSPECTION_API_PORT:-8080}" "API de seed"
+      compose up -d --build inspection-api
+      started_api=1
+    fi
+    cleanup_seed_api() {
+      if [[ "$started_api" == 1 ]]; then
+        compose stop inspection-api >/dev/null 2>&1 || true
+      fi
+    }
+    trap cleanup_seed_api EXIT
+    wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API de seed"
+    compose run --rm --no-deps --build inspection-seed
+    trap - EXIT
+    cleanup_seed_api
     ;;
   status)
     require_base; [[ -f "$env_file" ]] || init; load_env

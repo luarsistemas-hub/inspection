@@ -7,6 +7,7 @@ COPY libs ./libs
 COPY services/inspection ./services/inspection
 RUN CGO_ENABLED=0 go build -trimpath -o /out/inspection-api ./services/inspection/cmd/inspection-api && \
     CGO_ENABLED=0 go build -trimpath -o /out/inspection-migrate ./services/inspection/cmd/inspection-migrate && \
+    CGO_ENABLED=0 go build -trimpath -o /out/inspection-seed ./services/inspection/cmd/inspection-seed && \
     CGO_ENABLED=0 go build -trimpath -o /out/inspection-worker ./services/inspection/cmd/inspection-worker && \
     CGO_ENABLED=0 go build -trimpath -o /out/inspection-scheduler ./services/inspection/cmd/inspection-scheduler
 

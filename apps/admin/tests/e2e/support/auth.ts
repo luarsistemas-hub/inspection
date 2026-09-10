@@ -24,5 +24,5 @@ export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<v
   await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
   await page.locator("button[type=submit]").click();
   await page.waitForURL(`**${returnTo}`);
-  await expect(page.getByRole("heading", { name: /Organização|Acessos|Catálogos|Ativos|Governança|Auditoria/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Organização|Acessos|Catálogos|Ativos|Governança|Auditoria/ })).toBeVisible();
 }

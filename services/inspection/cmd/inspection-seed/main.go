@@ -20,6 +20,10 @@ func main() {
 	if issuer == "" {
 		issuer = "http://localhost:8081/realms/inspection"
 	}
+	tokenIssuer := os.Getenv("INSPECTION_OIDC_TOKEN_URL")
+	if tokenIssuer == "" {
+		tokenIssuer = issuer
+	}
 	captureBaseURL := os.Getenv("NEXT_PUBLIC_CAPTURE_BASE_URL")
 	if captureBaseURL == "" {
 		captureBaseURL = "http://localhost:3003"
@@ -36,7 +40,7 @@ func main() {
 		if apiURL == "" {
 			apiURL = fmt.Sprintf("http://localhost:%s/graphql", envOr("INSPECTION_API_PORT", "8080"))
 		}
-		if bootstrapErr := bootstrapLocalAdmin(ctx, apiURL, issuer, envOr("INSPECTION_SEED_USERNAME", "admin"), envOr("INSPECTION_SEED_PASSWORD", "admin")); bootstrapErr != nil {
+		if bootstrapErr := bootstrapLocalAdmin(ctx, apiURL, tokenIssuer, issuer, envOr("INSPECTION_SEED_USERNAME", "admin"), envOr("INSPECTION_SEED_PASSWORD", "admin")); bootstrapErr != nil {
 			log.Fatalf("local onboarding is missing and automatic bootstrap failed: %v", bootstrapErr)
 		}
 		url, err = seedqa.Setup(ctx, db, issuer, captureBaseURL)

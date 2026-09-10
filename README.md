@@ -32,7 +32,8 @@ Abra <http://localhost:3000>. Configure as credenciais de bootstrap do Keycloak 
 Faça login no Keycloak e use `createTenant` para provisionar tenant, unidade inicial e membership `TENANT_ADMIN`. O exemplo está em [`docs/graphql.md`](docs/graphql.md). `healthz` indica processo vivo e `readyz` verifica somente banco/schema compatível.
 
 Depois do onboarding, crie um cenário completo para QA manual (participante,
-ativo, projeto, inspeção, notificação e convite de captura):
+ativo, projeto, inspeção, notificação e convite de captura). O seed é executado
+em container e faz o bootstrap do Admin automaticamente quando necessário:
 
 ```sh
 ./scripts/local.sh seed
