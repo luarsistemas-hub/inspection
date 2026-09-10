@@ -19,10 +19,14 @@ export function installRuntimeGuards(page: Page) {
 export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<void> {
   await page.goto(returnTo);
   await page.getByRole("button", { name: "Entrar no Dashboard" }).click();
-  await page.waitForURL(/localhost:8081\/realms\/inspection\/protocol\/openid-connect\/auth/);
-  await page.locator("#username").fill(process.env.INSPECTION_E2E_USERNAME ?? "admin");
-  await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
-  await page.locator("button[type=submit]").click();
+  const username = page.locator("#username");
+  const protectedHeading = page.getByRole("heading", { name: /Inspeções|Projetos|Triagem|Portfólio|Relatórios|Notificações/ });
+  await Promise.race([username.waitFor({ state: "visible" }), protectedHeading.waitFor({ state: "visible" })]);
+  if (await username.isVisible()) {
+    await username.fill(process.env.INSPECTION_E2E_USERNAME ?? "admin");
+    await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
+    await page.locator("button[type=submit]").click();
+  }
   await page.waitForURL(`**${returnTo}`);
-  await expect(page.getByRole("heading", { name: /Inspeções|Projetos|Triagem|Portfólio|Relatórios|Notificações/ })).toBeVisible();
+  await expect(protectedHeading).toBeVisible();
 }

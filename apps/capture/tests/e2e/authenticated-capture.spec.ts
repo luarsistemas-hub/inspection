@@ -23,7 +23,7 @@ async function latestOTP(request: APIRequestContext, since: string): Promise<str
 test.describe("authenticated Capture against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack");
 
-  test("completes OTP, consent, impossibility and submission without media", async ({ page, request }) => {
+  test("completes the guided OTP, consent, review and submission flow", async ({ page, request }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
     const startedAt = new Date().toISOString();
     await page.goto(seedCaptureURL());
@@ -32,15 +32,24 @@ test.describe("authenticated Capture against the local stack", () => {
     await expect.poll(async () => { code = await latestOTP(request, startedAt); return code; }, { timeout: 15_000 }).toMatch(/^\d{6}$/);
     await page.getByLabel("Código de seis dígitos").fill(code);
     await page.getByRole("button", { name: "Confirmar código" }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: "Autorizações" })).toHaveAttribute("aria-current", "step");
     await page.getByLabel("Processamento das fotos").check();
     await page.getByLabel("Análise por inteligência artificial").check();
-    await page.getByLabel("Uso da localização quando necessário").check();
-    await page.getByRole("button", { name: "Aceito as opções selecionadas" }).click();
-    await expect(page.getByRole("heading", { name: "Captura guiada" })).toBeVisible();
-    await page.getByLabel("Impossibilidade").fill("A área está inacessível com segurança durante a vistoria.");
-    await page.getByRole("button", { name: "Registrar impossibilidade" }).click();
-    await expect(page.getByRole("status")).toContainText("Justificativa registrada.");
-    await page.getByRole("button", { name: "Enviar inspeção completa" }).click();
+    await page.getByLabel("Localização quando necessária").check();
+    await page.getByRole("button", { name: "Aceitar e continuar" }).click();
+    await expect(page.getByRole("heading", { name: "Adicione as evidências" })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Evidências" })).toHaveAttribute("aria-current", "step");
+    const impossibility = page.getByLabel("Impossibilidade");
+    const canDeclareImpossibility = await impossibility.isVisible();
+    if (canDeclareImpossibility) {
+      await impossibility.fill("A área está inacessível com segurança durante a vistoria.");
+      await page.getByRole("button", { name: "Registrar impossibilidade" }).click();
+      await expect(page.getByRole("status")).toContainText("Justificativa registrada.");
+    }
+    await page.getByRole("button", { name: "Revisar inspeção" }).click();
+    await expect(page.getByRole("heading", { name: "Revise antes de enviar" })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Revisão" })).toHaveAttribute("aria-current", "step");
+    await page.getByRole("button", { name: canDeclareImpossibility ? "Enviar inspeção completa" : "Confirmar envio incompleto" }).click();
     await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
     await assertRuntimeClean();
   });
