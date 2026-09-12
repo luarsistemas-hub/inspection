@@ -44,6 +44,10 @@ type Config struct {
 	MinIOSecure           bool
 	MinIOPublicSecure     bool
 	OTPPepper             string
+	KeycloakAdminURL      string
+	KeycloakRealm         string
+	KeycloakClientID      string
+	KeycloakClientSecret  string
 	SMTPAddress           string
 	SMTPFrom              string
 	TwilioBaseURL         string
@@ -65,13 +69,14 @@ func Load() (Config, error) {
 		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
-		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 23), ShutdownTimeout: 10 * time.Second,
+		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 24), ShutdownTimeout: 10 * time.Second,
 		RuntimeDBRole:    env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
 		StoragePublic:    strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
 		RabbitMQURL:      env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
 		DragonflyAddress: env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
 		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"),
+		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID"), KeycloakClientSecret: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET"),
 		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMModelAlias: env("INSPECTION_LITELLM_MODEL_ALIAS", "inspection-vision"), LiteLLMPromptVersion: env("INSPECTION_LITELLM_PROMPT_VERSION", "analysis-v1"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
 	}
 	if c.MinIOPublicEndpoint == "" {

@@ -458,5 +458,41 @@ USING (issuer = current_setting('app.oidc_issuer', true) AND subject = current_s
 CREATE INDEX IF NOT EXISTS idx_participants_cursor ON participants.participants(tenant_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_assets_cursor ON assets.assets(tenant_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_segments_cursor ON segments.definitions(tenant_id, created_at, id);
-CREATE INDEX IF NOT EXISTS idx_templates_cursor ON templates.templates(tenant_id, created_at, id);`}}
+CREATE INDEX IF NOT EXISTS idx_templates_cursor ON templates.templates(tenant_id, created_at, id);`},
+		{Version: 24, Name: "onboarding_contract_rls", Compatible: true, SQL: `
+CREATE SCHEMA IF NOT EXISTS onboarding;
+DO $$ DECLARE t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['onboarding.sessions','onboarding.otp_challenges','onboarding.step_records','onboarding.requests','onboarding.activation'] LOOP
+    EXECUTE 'ALTER TABLE ' || t || ' ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'ALTER TABLE ' || t || ' FORCE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON ' || t;
+  END LOOP;
+END $$;
+CREATE POLICY tenant_isolation ON onboarding.sessions USING (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR (session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+) WITH CHECK (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR (session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+);
+CREATE POLICY tenant_isolation ON onboarding.otp_challenges USING (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR EXISTS (SELECT 1 FROM onboarding.sessions s WHERE s.id = session_id AND s.session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+) WITH CHECK (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR EXISTS (SELECT 1 FROM onboarding.sessions s WHERE s.id = session_id AND s.session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+);
+CREATE POLICY tenant_isolation ON onboarding.step_records USING (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR EXISTS (SELECT 1 FROM onboarding.sessions s WHERE s.id = session_id AND s.session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+) WITH CHECK (
+  (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  OR EXISTS (SELECT 1 FROM onboarding.sessions s WHERE s.id = session_id AND s.session_locator_digest = decode(nullif(current_setting('app.onboarding_session_digest', true), ''), 'hex'))
+);
+CREATE POLICY tenant_isolation ON onboarding.requests USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY tenant_isolation ON onboarding.activation USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_locator ON onboarding.sessions(session_locator_digest) WHERE tenant_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_onboarding_requests_status ON onboarding.requests(tenant_id, status, updated_at);
+GRANT USAGE ON SCHEMA onboarding TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA onboarding TO inspection_runtime;`}}
 }

@@ -7,6 +7,8 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
@@ -37,6 +39,9 @@ import (
 	mediacreate "inspection/services/inspection/internal/features/media/create_upload"
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
+	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
+	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
+	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
@@ -77,10 +82,146 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// RequestOnboardingOtp is the resolver for the requestOnboardingOtp field.
+func (r *mutationResolver) RequestOnboardingOtp(ctx context.Context, input graphql1.RequestOnboardingOtpInput) (*graphql1.OnboardingPayload, error) {
+	clientIP, _ := requestctx.ClientIP(ctx)
+	result, err := r.Onboarding.RequestOTP(ctx, input.Name, input.Email, clientIP)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.OnboardingPayload{SessionLocator: &result.Locator, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// VerifyOnboardingOtp is the resolver for the verifyOnboardingOtp field.
+func (r *mutationResolver) VerifyOnboardingOtp(ctx context.Context, input graphql1.VerifyOnboardingOtpInput) (*graphql1.OnboardingPayload, error) {
+	result, err := r.Onboarding.VerifyOTP(ctx, input.SessionLocator, input.Code)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	r.setOnboardingCookie(ctx, result.Locator, result.CSRF)
+	return &graphql1.OnboardingPayload{Session: mapOnboardingSession(result), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// SaveOnboardingStep is the resolver for the saveOnboardingStep field.
+func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql1.OnboardingStepInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if strings.EqualFold(input.Step, onboardingsession.StepAgency) {
+		if r.OwnerProvider == nil || r.OnboardingBootstrap.DB == nil {
+			return nil, apperror.New(apperror.DependencyUnavailable, "agency", "owner provisioning unavailable")
+		}
+		if err := r.Onboarding.ValidateCheckpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload); err != nil {
+			return onboardingValidationPayload(err, input.ClientMutationID)
+		}
+		ownerSession, err := r.Onboarding.Load(ctx, credentials.SessionToken)
+		if err != nil {
+			return onboardingValidationPayload(err, input.ClientMutationID)
+		}
+		agencyName := onboardingPayloadString(input.Payload, "agencyName")
+		if agencyName == "" {
+			agencyName = onboardingPayloadString(input.Payload, "name")
+		}
+		unitCode := onboardingPayloadString(input.Payload, "businessUnitCode")
+		if unitCode == "" {
+			unitCode = "main"
+		}
+		unitName := onboardingPayloadString(input.Payload, "businessUnitName")
+		if unitName == "" {
+			unitName = agencyName
+		}
+		owner, err := r.OwnerProvider.EnsureOwner(ctx, ownerSession.Owner.Email, ownerSession.Owner.Name)
+		if err != nil {
+			return nil, apperror.Wrap(apperror.DependencyUnavailable, err)
+		}
+		// The checkpoint version is the concurrency boundary for agency setup.
+		// Client mutation IDs are retry-scoped and may differ between concurrent
+		// requests, so they cannot safely identify this one provisioning attempt.
+		// Hashing the session token keeps the durable idempotency key opaque while
+		// making every retry for the same session/version share one bootstrap row.
+		bootstrapped, err := r.OnboardingBootstrap.Provision(ctx, onboardingbootstrap.Input{Name: agencyName, BusinessUnitCode: unitCode, BusinessUnitName: unitName, Issuer: r.OwnerIssuer, Subject: owner.ID, IdempotencyKey: onboardingAgencyProvisioningKey(credentials.SessionToken, int64(input.ExpectedVersion))})
+		if err != nil {
+			return onboardingValidationPayload(err, input.ClientMutationID)
+		}
+		if err := r.Onboarding.BindOwner(ctx, credentials.SessionToken, r.OwnerIssuer, owner.ID, bootstrapped.TenantID); err != nil {
+			return nil, err
+		}
+	}
+	result, err := r.Onboarding.Checkpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.OnboardingPayload{Session: mapOnboardingSession(result), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// onboardingValidationPayload keeps expected client-correctable failures in
+// the payload contract while preserving dependency and internal failures as
+// top-level GraphQL errors.
+func onboardingValidationPayload(err error, mutationID string) (*graphql1.OnboardingPayload, error) {
+	code, field, message := apperror.Public(err)
+	if code != apperror.InvalidInput && code != apperror.InvalidState && code != apperror.Conflict && code != apperror.RateLimited && code != apperror.SessionExpired {
+		return nil, err
+	}
+	var fieldValue *string
+	if field != "" {
+		fieldValue = &field
+	}
+	return &graphql1.OnboardingPayload{
+		UserErrors:       []*graphql1.UserError{{Code: string(code), Field: fieldValue, Message: message}},
+		ClientMutationID: mutationID,
+	}, nil
+}
+
+func onboardingAgencyProvisioningKey(sessionToken string, expectedVersion int64) string {
+	key := sha256.Sum256([]byte(sessionToken + "\x00" + strconv.FormatInt(expectedVersion, 10)))
+	return "onboarding:agency:" + hex.EncodeToString(key[:])
+}
+
+// RequestAdminActivationOtp is the resolver for the requestAdminActivationOtp field.
+func (r *mutationResolver) RequestAdminActivationOtp(ctx context.Context, input graphql1.RequestAdminActivationOtpInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := r.AdminActivation.RequestOTP(ctx, credentials.SessionToken, credentials.CSRFToken); err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.OnboardingPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// VerifyAdminActivationOtp is the resolver for the verifyAdminActivationOtp field.
+func (r *mutationResolver) VerifyAdminActivationOtp(ctx context.Context, input graphql1.VerifyAdminActivationOtpInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	activation, err := r.AdminActivation.VerifyOTP(ctx, credentials.SessionToken, credentials.CSRFToken, input.Code)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.OnboardingPayload{Activation: mapOnboardingActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// SetAdminInitialPassword is the resolver for the setAdminInitialPassword field.
+func (r *mutationResolver) SetAdminInitialPassword(ctx context.Context, input graphql1.SetAdminInitialPasswordInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	activation, err := r.AdminActivation.SetInitialPasswordForSession(ctx, credentials.SessionToken, credentials.CSRFToken, input.Password)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.OnboardingPayload{Activation: mapOnboardingActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
 
 // CreateTenant is the resolver for the createTenant field.
 func (r *mutationResolver) CreateTenant(ctx context.Context, input graphql1.CreateTenantInput) (*graphql1.CreateTenantPayload, error) {
@@ -1333,6 +1474,44 @@ func (r *mutationResolver) ConfigureMyNotificationPreferences(ctx context.Contex
 		return nil, err
 	}
 	return &graphql1.NotificationPreferencesPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// OnboardingDefinition resolves the public segment contract without requiring
+// an authenticated tenant. The catalog remains the owner of version checks.
+func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string) (*graphql1.OnboardingDefinition, error) {
+	value, err := onboardingcatalog.Resolve(segment)
+	if err != nil {
+		if err == onboardingcatalog.ErrUnsupportedSchemaVersion {
+			return nil, apperror.New(apperror.UnsupportedSchemaVersion, "segment", "unsupported schema version")
+		}
+		return nil, apperror.New(apperror.NotFound, "segment", "onboarding definition not found")
+	}
+	steps := make([]*graphql1.OnboardingStep, 0, len(value.Steps))
+	for _, step := range value.Steps {
+		fields := make([]*graphql1.OnboardingField, 0, len(step.Fields))
+		for _, field := range step.Fields {
+			fields = append(fields, &graphql1.OnboardingField{Key: field.Key, Label: field.Label, Type: field.Type, Required: field.Required, Placeholder: optionalStringValue(field.Placeholder), Options: field.Options})
+		}
+		steps = append(steps, &graphql1.OnboardingStep{Key: step.Key, Label: step.Label, Position: step.Position, Required: step.Required, Fields: fields})
+	}
+	modes := make([]*graphql1.OnboardingOriginMode, 0, len(value.OriginModes))
+	for _, mode := range value.OriginModes {
+		modes = append(modes, &graphql1.OnboardingOriginMode{Key: mode.Key, Label: mode.Label, TemplateKey: mode.TemplateKey, Required: mode.Required})
+	}
+	return &graphql1.OnboardingDefinition{SchemaVersion: value.SchemaVersion, Version: value.Version, Segment: value.Segment, SegmentVersion: value.SegmentVersion, Steps: steps, Purposes: value.Purposes, OriginModes: modes, Templates: value.Templates, AnalysisProfile: value.AnalysisProfile}, nil
+}
+
+// OnboardingSession is the resolver for the onboardingSession field.
+func (r *queryResolver) OnboardingSession(ctx context.Context) (*graphql1.OnboardingSession, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+	value, err := r.Onboarding.Load(ctx, credentials.SessionToken)
+	if err != nil {
+		return nil, err
+	}
+	return mapOnboardingSession(value), nil
 }
 
 // Me is the resolver for the me field.

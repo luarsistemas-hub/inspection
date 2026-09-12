@@ -1,0 +1,13 @@
+query OnboardingDefinition($segment: String!) {
+  onboardingDefinition(segment: $segment) {
+    schemaVersion
+    version
+    segment
+    segmentVersion
+    steps { key label position required fields { key label type required placeholder options } }
+    purposes
+    originModes { key label templateKey required }
+    templates
+    analysisProfile
+  }
+}

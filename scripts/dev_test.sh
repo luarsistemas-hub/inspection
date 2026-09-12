@@ -37,3 +37,8 @@ expected_origin="http://localhost:3100"
   printf 'expected admin port %s, got %s\n' "$expected_origin" "$actual" >&2
   exit 1
 }
+expected_onboarding_origin="http://localhost:3004"
+[[ "$actual" == *"$expected_onboarding_origin"* ]] || {
+  printf 'expected onboarding origin %s, got %s\n' "$expected_onboarding_origin" "$actual" >&2
+  exit 1
+}

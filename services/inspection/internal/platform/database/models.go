@@ -280,6 +280,86 @@ type AnalysisProfileVersion struct {
 
 func (AnalysisProfileVersion) TableName() string { return "templates.analysis_profile_versions" }
 
+// OnboardingSession stores the public journey state. The locator digest is
+// used before tenant provisioning; after provisioning tenant_id scopes access.
+type OnboardingSession struct {
+	ID                   identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID             *identity.ID `gorm:"type:uuid;index:idx_onboarding_sessions_tenant"`
+	Email                string       `gorm:"size:320;not null"`
+	OwnerName            string       `gorm:"size:200;not null"`
+	OwnerSubject         string       `gorm:"size:500"`
+	SessionLocatorDigest []byte       `gorm:"type:bytea;size:32;not null;uniqueIndex"`
+	State                string       `gorm:"size:32;not null;index"`
+	CurrentStep          string       `gorm:"size:64;not null"`
+	Version              int64        `gorm:"not null;default:1"`
+	ExpiresAt            time.Time    `gorm:"not null;index"`
+	CSRFDigest           []byte       `gorm:"type:bytea;size:32"`
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+func (OnboardingSession) TableName() string { return "onboarding.sessions" }
+
+// OnboardingOTPChallenge separates onboarding and activation challenge data.
+type OnboardingOTPChallenge struct {
+	ID         identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID   *identity.ID `gorm:"type:uuid;index:idx_onboarding_otp_tenant"`
+	SessionID  identity.ID  `gorm:"type:uuid;not null;index:idx_onboarding_otp_session"`
+	Purpose    string       `gorm:"size:32;not null;index"`
+	CodeHMAC   []byte       `gorm:"type:bytea;size:32;not null"`
+	Attempts   int          `gorm:"not null;default:0"`
+	ExpiresAt  time.Time    `gorm:"not null;index"`
+	VerifiedAt *time.Time
+	CreatedAt  time.Time
+}
+
+func (OnboardingOTPChallenge) TableName() string { return "onboarding.otp_challenges" }
+
+// OnboardingStepRecord is an immutable, versioned checkpoint payload.
+type OnboardingStepRecord struct {
+	ID            identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID      *identity.ID    `gorm:"type:uuid;index:idx_onboarding_steps_tenant"`
+	SessionID     identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_onboarding_step_version,priority:1"`
+	Step          string          `gorm:"size:64;not null;uniqueIndex:idx_onboarding_step_version,priority:2"`
+	Payload       json.RawMessage `gorm:"type:jsonb;not null"`
+	PayloadDigest string          `gorm:"size:64;not null"`
+	Version       int64           `gorm:"not null;uniqueIndex:idx_onboarding_step_version,priority:3"`
+	CompletedAt   time.Time       `gorm:"not null"`
+}
+
+func (OnboardingStepRecord) TableName() string { return "onboarding.step_records" }
+
+// OnboardingRequest is the durable projection for the first inspection.
+type OnboardingRequest struct {
+	ID              identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID        identity.ID  `gorm:"type:uuid;not null;index:idx_onboarding_requests_tenant"`
+	SessionID       identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_onboarding_request_idempotency,priority:1"`
+	AssetID         *identity.ID `gorm:"type:uuid;index"`
+	ParticipantID   *identity.ID `gorm:"type:uuid;index"`
+	OriginVersionID *identity.ID `gorm:"type:uuid;index"`
+	TemplateID      *identity.ID `gorm:"type:uuid;index"`
+	Status          string       `gorm:"size:32;not null;index"`
+	IdempotencyKey  string       `gorm:"size:200;not null;uniqueIndex:idx_onboarding_request_idempotency,priority:2"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (OnboardingRequest) TableName() string { return "onboarding.requests" }
+
+// OnboardingActivation tracks the separate owner Admin activation challenge.
+type OnboardingActivation struct {
+	TenantID       identity.ID `gorm:"type:uuid;primaryKey"`
+	IdentityID     identity.ID `gorm:"type:uuid;not null;uniqueIndex"`
+	Purpose        string      `gorm:"size:32;not null"`
+	Status         string      `gorm:"size:32;not null;index"`
+	ActivatedAt    *time.Time
+	IdempotencyKey string `gorm:"size:200;not null;uniqueIndex"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (OnboardingActivation) TableName() string { return "onboarding.activation" }
+
 type Asset struct {
 	ID               identity.ID  `gorm:"type:uuid;primaryKey"`
 	TenantID         identity.ID  `gorm:"type:uuid;not null;index:idx_assets_tenant_unit_status,priority:1;uniqueIndex:idx_asset_idempotency,priority:1"`
@@ -1008,6 +1088,7 @@ func Models() []any {
 	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ProductEntitlement{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},
 		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisProfile{}, &AnalysisProfileVersion{},
+		&OnboardingSession{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
 		&Origin{}, &OriginVersion{}, &OriginEvidence{},

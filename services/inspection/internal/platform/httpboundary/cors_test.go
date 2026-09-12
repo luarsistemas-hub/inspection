@@ -38,14 +38,17 @@ func containsHeader(headers, wanted string) bool {
 	return false
 }
 
-func TestCORSOnlyAllowsCredentialsForCaptureOrigin(t *testing.T) {
+func TestCORSAllowsCredentialsAndCSRFHeaderForEveryConfiguredOrigin(t *testing.T) {
 	h := CORS([]string{"https://admin.example", "https://capture.example"}, "https://capture.example", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	admin := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/graphql", nil)
 	req.Header.Set("Origin", "https://admin.example")
 	h.ServeHTTP(admin, req)
-	if admin.Header().Get("Access-Control-Allow-Credentials") != "" {
-		t.Fatal("admin origin received credential permission")
+	if admin.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatal("admin origin missing credential permission")
+	}
+	if admin.Header().Get("Access-Control-Expose-Headers") != "X-CSRF-Token" {
+		t.Fatal("admin origin cannot read CSRF token header")
 	}
 	capture := httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/graphql", nil)
@@ -53,5 +56,8 @@ func TestCORSOnlyAllowsCredentialsForCaptureOrigin(t *testing.T) {
 	h.ServeHTTP(capture, req)
 	if capture.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatal("capture origin missing credential permission")
+	}
+	if capture.Header().Get("Access-Control-Expose-Headers") != "X-CSRF-Token" {
+		t.Fatal("capture origin cannot read CSRF token header")
 	}
 }

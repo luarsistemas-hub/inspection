@@ -53,9 +53,16 @@ type key struct{}
 type idempotencyKey struct{}
 type responseWriterKey struct{}
 type externalCredentialsKey struct{}
+type onboardingCredentialsKey struct{}
 type secureCookiesKey struct{}
+type clientIPKey struct{}
 
 type ExternalCredentials struct {
+	SessionToken string
+	CSRFToken    string
+}
+
+type OnboardingCredentials struct {
 	SessionToken string
 	CSRFToken    string
 }
@@ -105,11 +112,31 @@ func SecureCookies(ctx context.Context) bool {
 	return secure
 }
 
+// WithClientIP attaches the trusted network peer address established by the HTTP boundary.
+func WithClientIP(ctx context.Context, value string) context.Context {
+	return context.WithValue(ctx, clientIPKey{}, value)
+}
+
+// ClientIP returns the trusted network peer address when the boundary provided one.
+func ClientIP(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(clientIPKey{}).(string)
+	return value, ok && value != ""
+}
+
 func WithExternalCredentials(ctx context.Context, credentials ExternalCredentials) context.Context {
 	return context.WithValue(ctx, externalCredentialsKey{}, credentials)
 }
 
+func WithOnboardingCredentials(ctx context.Context, credentials OnboardingCredentials) context.Context {
+	return context.WithValue(ctx, onboardingCredentialsKey{}, credentials)
+}
+
 func ExternalCredentialsFromContext(ctx context.Context) (ExternalCredentials, bool) {
 	credentials, ok := ctx.Value(externalCredentialsKey{}).(ExternalCredentials)
+	return credentials, ok && credentials.SessionToken != ""
+}
+
+func OnboardingCredentialsFromContext(ctx context.Context) (OnboardingCredentials, bool) {
+	credentials, ok := ctx.Value(onboardingCredentialsKey{}).(OnboardingCredentials)
 	return credentials, ok && credentials.SessionToken != ""
 }

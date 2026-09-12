@@ -148,7 +148,7 @@ services:
       INSPECTION_ENV: local
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
-      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003}
+      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       INSPECTION_OIDC_JWKS_URL: http://keycloak:8080/realms/inspection/protocol/openid-connect/certs
@@ -193,7 +193,7 @@ services:
       INSPECTION_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-local@postgres:5432/inspection?sslmode=disable
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
-      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003}
+      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       # Public tokens use localhost. API gets signing keys over its private
@@ -343,6 +343,25 @@ services:
       NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3003/manifest.webmanifest"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  onboarding:
+    build:
+      context: ..
+      dockerfile: apps/onboarding/Dockerfile
+      args:
+        NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+    depends_on:
+      inspection-api:
+        condition: service_started
+    ports:
+      - "${INSPECTION_ONBOARDING_PORT:-3004}:3004"
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3004/"]
       interval: 10s
       timeout: 5s
       retries: 12

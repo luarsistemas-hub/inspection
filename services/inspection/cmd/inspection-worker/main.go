@@ -14,6 +14,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
+	comparative "inspection/services/inspection/internal/features/analysis/comparative"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
@@ -426,7 +427,7 @@ func buildAnalysisRequest(store objectstore.Store, modelAlias, promptVersion str
 		if err := json.Unmarshal(answers[0].MediaIDs, &ids); err != nil || len(ids) == 0 {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis: no evidence")
 		}
-		images := make([]llm.NormalizedImage, 0, len(ids))
+		current := make([]comparative.Evidence, 0, len(ids))
 		for _, mediaID := range ids {
 			var derivative database.MediaDerivative
 			if err := tx.Where("tenant_id=? AND media_id=?", job.TenantID, mediaID).Order("created_at DESC").First(&derivative).Error; err != nil {
@@ -437,9 +438,49 @@ func buildAnalysisRequest(store objectstore.Store, modelAlias, promptVersion str
 				return llm.StructuredRequest{}, err
 			}
 			digest := sha256.Sum256(data)
-			images = append(images, llm.NormalizedImage{EvidenceID: mediaID.String(), Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
+			current = append(current, comparative.Evidence{ID: mediaID, Source: "CURRENT", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
 		}
 		schema := []byte(`{"type":"object","additionalProperties":false,"required":["noRelevantChange","findings"],"properties":{"noRelevantChange":{"type":"boolean"},"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["category","title","description","severity","confidence","evidenceIds","quality","recommendedAction"],"properties":{"category":{"type":"string"},"title":{"type":"string"},"description":{"type":"string"},"severity":{"type":"string","enum":["NONE","LOW","MEDIUM","HIGH","CRITICAL"]},"confidence":{"type":"number","minimum":0,"maximum":1},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"quality":{"type":"string"},"recommendedAction":{"type":"string"}}}}}}`)
+		var reference database.ReferenceSnapshot
+		if err := tx.Where("tenant_id=? AND inspection_id=?", job.TenantID, job.InspectionID).First(&reference).Error; err != nil {
+			return llm.StructuredRequest{}, err
+		}
+		if reference.ReferenceVersionID == nil || reference.ComparisonMode != "FIXED_ORIGIN" {
+			return llm.StructuredRequest{ModelAlias: modelAlias, PromptVersion: promptVersion, JSONSchema: schema, Images: mustCurrentImages(current)}, nil
+		}
+		var snapshot struct {
+			Items []struct {
+				MediaID identity.ID `json:"mediaId"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(reference.Payload, &snapshot); err != nil || len(snapshot.Items) == 0 {
+			return llm.StructuredRequest{}, fmt.Errorf("analysis: pinned origin evidence not found")
+		}
+		origin := make([]comparative.Evidence, 0, len(snapshot.Items))
+		for _, item := range snapshot.Items {
+			var derivative database.MediaDerivative
+			if err := tx.Where("tenant_id=? AND media_id=?", job.TenantID, item.MediaID).Order("created_at DESC").First(&derivative).Error; err != nil {
+				return llm.StructuredRequest{}, err
+			}
+			data, err := store.Read(ctx, derivative.ObjectKey)
+			if err != nil {
+				return llm.StructuredRequest{}, err
+			}
+			digest := sha256.Sum256(data)
+			origin = append(origin, comparative.Evidence{ID: item.MediaID, Source: "ORIGIN", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
+		}
+		images, _, err := comparative.Build(current, origin)
+		if err != nil {
+			return llm.StructuredRequest{}, err
+		}
 		return llm.StructuredRequest{ModelAlias: modelAlias, PromptVersion: promptVersion, JSONSchema: schema, Images: images}, nil
 	}
+}
+
+func mustCurrentImages(evidence []comparative.Evidence) []llm.NormalizedImage {
+	images := make([]llm.NormalizedImage, 0, len(evidence))
+	for _, item := range evidence {
+		images = append(images, llm.NormalizedImage{EvidenceID: item.ID.String(), Source: item.Source, Digest: item.Digest, DataURL: item.DataURL})
+	}
+	return images
 }

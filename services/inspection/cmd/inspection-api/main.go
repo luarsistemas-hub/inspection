@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -49,6 +50,9 @@ import (
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
 	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
 	receivetwiliostatus "inspection/services/inspection/internal/features/notifications/receive_twilio_status"
+	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
+	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
+	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
@@ -101,6 +105,7 @@ import (
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/graphql/resolvers"
 	"inspection/services/inspection/internal/platform/httpboundary"
+	"inspection/services/inspection/internal/platform/keycloak"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/objectstore"
@@ -147,6 +152,10 @@ func run() error {
 	}
 	limits := ratelimit.OTPPolicy{Limiter: ratelimit.Limiter{Store: ratelimit.DragonflyStore{Address: cfg.DragonflyAddress, Password: cfg.DragonflyPassword}}}
 	invitationService := invitationcore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL}}
+	onboardingService := onboardingsession.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}}
+	keycloakClient := keycloak.ProvisioningClient{BaseURL: cfg.KeycloakAdminURL, Realm: cfg.KeycloakRealm, ClientID: cfg.KeycloakClientID, ClientSecret: cfg.KeycloakClientSecret, Timeout: cfg.ProviderTimeout}
+	activationService := adminactivation.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.ActivationProvider{Client: keycloakClient}}
+	bootstrapService := onboardingbootstrap.Service{DB: db}
 	minioClient, err := objectstore.NewMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
 	if err != nil {
 		return err
@@ -366,7 +375,7 @@ func run() error {
 	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL}); err != nil {
 		return err
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {
@@ -380,6 +389,11 @@ func run() error {
 		w.Header().Set("X-Correlation-ID", correlationID)
 		r.Header.Set("X-Correlation-ID", correlationID)
 		ctx := requestctx.WithResponseWriter(r.Context(), w)
+		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
+			ctx = requestctx.WithClientIP(ctx, host)
+		} else if r.RemoteAddr != "" {
+			ctx = requestctx.WithClientIP(ctx, r.RemoteAddr)
+		}
 		ctx = requestctx.WithSecureCookies(ctx, cfg.Environment != "local" || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 		_, hasExternalCookie := r.Cookie("inspection_external")
 		if r.Header.Get("Authorization") != "" && hasExternalCookie == nil {
@@ -427,6 +441,9 @@ func run() error {
 		if cookie, cookieErr := r.Cookie("inspection_external"); cookieErr == nil {
 			ctx = requestctx.WithExternalCredentials(ctx, requestctx.ExternalCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
 		}
+		if cookie, cookieErr := r.Cookie("inspection_onboarding"); cookieErr == nil {
+			ctx = requestctx.WithOnboardingCredentials(ctx, requestctx.OnboardingCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
+		}
 		server.ServeHTTP(w, r.WithContext(requestctx.WithIdempotencyKey(ctx, r.Header.Get("Idempotency-Key"))))
 	}))
 	if err := operational.Setup(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken); err != nil {
@@ -472,8 +489,15 @@ func isMembershipOptionalRequest(r *http.Request) bool {
 	case ast.Query:
 		allowed["me"] = struct{}{}
 		allowed["tenant"] = struct{}{}
+		allowed["onboardingSession"] = struct{}{}
 	case ast.Mutation:
 		allowed["createTenant"] = struct{}{}
+		allowed["requestOnboardingOtp"] = struct{}{}
+		allowed["verifyOnboardingOtp"] = struct{}{}
+		allowed["saveOnboardingStep"] = struct{}{}
+		allowed["requestAdminActivationOtp"] = struct{}{}
+		allowed["verifyAdminActivationOtp"] = struct{}{}
+		allowed["setAdminInitialPassword"] = struct{}{}
 	default:
 		return false
 	}

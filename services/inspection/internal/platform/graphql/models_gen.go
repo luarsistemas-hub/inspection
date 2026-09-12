@@ -214,6 +214,10 @@ type CompleteMediaUploadInput struct {
 	ClientMutationID string                `json:"clientMutationId"`
 }
 
+type CompleteOnboardingInput struct {
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type CompletedPartInput struct {
 	PartNumber int    `json:"partNumber"`
 	Etag       string `json:"etag"`
@@ -579,6 +583,94 @@ type NotificationPreferencesPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type OnboardingActivation struct {
+	TenantID    string  `json:"tenantId"`
+	IdentityID  string  `json:"identityId"`
+	Purpose     string  `json:"purpose"`
+	Status      string  `json:"status"`
+	ActivatedAt *string `json:"activatedAt,omitempty"`
+}
+
+type OnboardingDefinition struct {
+	SchemaVersion   int                     `json:"schemaVersion"`
+	Version         int                     `json:"version"`
+	Segment         string                  `json:"segment"`
+	SegmentVersion  string                  `json:"segmentVersion"`
+	Steps           []*OnboardingStep       `json:"steps"`
+	Purposes        []string                `json:"purposes"`
+	OriginModes     []*OnboardingOriginMode `json:"originModes"`
+	Templates       []string                `json:"templates"`
+	AnalysisProfile string                  `json:"analysisProfile"`
+}
+
+type OnboardingField struct {
+	Key         string   `json:"key"`
+	Label       string   `json:"label"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Placeholder *string  `json:"placeholder,omitempty"`
+	Options     []string `json:"options"`
+}
+
+type OnboardingOriginMode struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	TemplateKey string `json:"templateKey"`
+	Required    bool   `json:"required"`
+}
+
+type OnboardingPayload struct {
+	Session          *OnboardingSession    `json:"session,omitempty"`
+	SessionLocator   *string               `json:"sessionLocator,omitempty"`
+	Request          *OnboardingRequest    `json:"request,omitempty"`
+	Activation       *OnboardingActivation `json:"activation,omitempty"`
+	Status           *OnboardingStatus     `json:"status,omitempty"`
+	UserErrors       []*UserError          `json:"userErrors"`
+	ClientMutationID string                `json:"clientMutationId"`
+}
+
+type OnboardingRequest struct {
+	ID              string  `json:"id"`
+	Status          string  `json:"status"`
+	AssetID         *string `json:"assetId,omitempty"`
+	ParticipantID   *string `json:"participantId,omitempty"`
+	OriginVersionID *string `json:"originVersionId,omitempty"`
+	TemplateID      string  `json:"templateId"`
+}
+
+type OnboardingSession struct {
+	ID          string         `json:"id"`
+	State       string         `json:"state"`
+	CurrentStep string         `json:"currentStep"`
+	Version     int            `json:"version"`
+	ExpiresAt   string         `json:"expiresAt"`
+	Definition  map[string]any `json:"definition"`
+}
+
+type OnboardingStatus struct {
+	State          string  `json:"state"`
+	RequestID      *string `json:"requestId,omitempty"`
+	InspectionID   *string `json:"inspectionId,omitempty"`
+	NextAction     string  `json:"nextAction"`
+	OriginStatus   string  `json:"originStatus"`
+	DeliveryStatus string  `json:"deliveryStatus"`
+}
+
+type OnboardingStep struct {
+	Key      string             `json:"key"`
+	Label    string             `json:"label"`
+	Position int                `json:"position"`
+	Required bool               `json:"required"`
+	Fields   []*OnboardingField `json:"fields"`
+}
+
+type OnboardingStepInput struct {
+	Step             string         `json:"step"`
+	Payload          map[string]any `json:"payload"`
+	ExpectedVersion  int            `json:"expectedVersion"`
+	ClientMutationID string         `json:"clientMutationId"`
+}
+
 type OriginInvitationPayload struct {
 	InvitationID     *string      `json:"invitationId,omitempty"`
 	OriginVersionID  *string      `json:"originVersionId,omitempty"`
@@ -868,8 +960,18 @@ type ReportPublicationPayload struct {
 	ClientMutationID string             `json:"clientMutationId"`
 }
 
+type RequestAdminActivationOtpInput struct {
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type RequestInvitationOtpInput struct {
 	LinkToken        string `json:"linkToken"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type RequestOnboardingOtpInput struct {
+	Name             string `json:"name"`
+	Email            string `json:"email"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -996,6 +1098,11 @@ type SegmentDefinitionVersion struct {
 type SensitiveFalsePositiveInput struct {
 	MediaID          string `json:"mediaId"`
 	Reason           string `json:"reason"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type SetAdminInitialPasswordInput struct {
+	Password         string `json:"password"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -1181,6 +1288,11 @@ type UserError struct {
 	CorrelationID string  `json:"correlationId"`
 }
 
+type VerifyAdminActivationOtpInput struct {
+	Code             string `json:"code"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type VerifyContactInput struct {
 	ContactID        string `json:"contactId"`
 	Verified         bool   `json:"verified"`
@@ -1189,6 +1301,12 @@ type VerifyContactInput struct {
 
 type VerifyInvitationOtpInput struct {
 	LinkToken        string `json:"linkToken"`
+	Code             string `json:"code"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type VerifyOnboardingOtpInput struct {
+	SessionLocator   string `json:"sessionLocator"`
 	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
 }

@@ -51,6 +51,8 @@ Every row must end in one of these verified outcomes:
 | 31 | `retentionPolicies` | Admin | Missing UI | Current policy/history plus legal-hold, deletion, purge eligibility/progress, and tombstone entry points. |
 | 32 | `usageSummary` | Admin | Missing UI | Period-filtered requests, tokens, cost, freshness, timezone, and authorized export context. |
 | 33 | `externalCapture` | Capture | Used | Link-scoped origin/inspection/recapture bootstrap with policy, reference, requirements, answers, and states. |
+| 34 | `onboardingDefinition` | Onboarding | New contract | Versioned segment metadata drives the public real-estate steps, origin modes, purposes, and pinned catalog references. |
+| 35 | `onboardingSession` | Onboarding | New contract | Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state. |
 
 ## Mutations
 
@@ -112,6 +114,12 @@ Every row must end in one of these verified outcomes:
 | 54 | `invalidateReportPublication` | Dashboard | Missing UI | Immediate customer withdrawal, no prior-version fallback, reason, audit, and notification. |
 | 55 | `markNotificationRead` | Dashboard | Used | Idempotent read state and unread-count update. |
 | 56 | `configureMyNotificationPreferences` | Dashboard | Used as raw IDs | Human-readable verified destination preferences with current-version conflict handling. |
+| 57 | `requestOnboardingOtp` | Onboarding | New contract | Public email verification is rate limited, purpose bound, and tenant independent. |
+| 58 | `verifyOnboardingOtp` | Onboarding | New contract | Valid verification rotates to a CSRF-protected opaque server session. |
+| 59 | `saveOnboardingStep` | Onboarding | New contract | Verified owner checkpoints are versioned, ordered, and idempotent. |
+| 60 | `requestAdminActivationOtp` | Onboarding | New contract | Owner activation uses a separate challenge and never reuses onboarding OTPs. |
+| 61 | `verifyAdminActivationOtp` | Onboarding | New contract | Activation verification binds only the owner membership and preserves pending state on failure. |
+| 62 | `setAdminInitialPassword` | Onboarding | New contract | First password is sent only through the confidential Keycloak adapter and activation is retryable. |
 
 ## Required Backend Capabilities Not Yet Represented Adequately
 

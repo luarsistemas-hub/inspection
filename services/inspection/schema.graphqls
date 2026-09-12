@@ -1,6 +1,8 @@
 scalar JSON
 
 type Query {
+	 onboardingDefinition(segment: String!): OnboardingDefinition!
+	 onboardingSession: OnboardingSession
   me: Me!
   tenant: Tenant
   memberships(first: Int = 25, after: String): MembershipConnection!
@@ -36,7 +38,31 @@ type Query {
   externalCapture: ExternalCapture!
 }
 
+type OnboardingField { key: String!, label: String!, type: String!, required: Boolean!, placeholder: String, options: [String!]! }
+type OnboardingStep { key: String!, label: String!, position: Int!, required: Boolean!, fields: [OnboardingField!]! }
+type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
+type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisProfile: String! }
+type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON! }
+type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
+type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
+type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String! }
+type OnboardingPayload { session: OnboardingSession, sessionLocator: String, request: OnboardingRequest, activation: OnboardingActivation, status: OnboardingStatus, userErrors: [UserError!]!, clientMutationId: String! }
+
+input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!, clientMutationId: String! }
+input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
+input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
+input CompleteOnboardingInput { clientMutationId: String! }
+input RequestAdminActivationOtpInput { clientMutationId: String! }
+input VerifyAdminActivationOtpInput { code: String!, clientMutationId: String! }
+input SetAdminInitialPasswordInput { password: String!, clientMutationId: String! }
+
 type Mutation {
+  requestOnboardingOtp(input: RequestOnboardingOtpInput!): OnboardingPayload!
+  verifyOnboardingOtp(input: VerifyOnboardingOtpInput!): OnboardingPayload!
+  saveOnboardingStep(input: OnboardingStepInput!): OnboardingPayload!
+  requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
+  verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
+  setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!
   createTenant(input: CreateTenantInput!): CreateTenantPayload!
   updateTenant(input: UpdateTenantInput!): TenantPayload!
   createBusinessUnit(input: CreateBusinessUnitInput!): BusinessUnitPayload!

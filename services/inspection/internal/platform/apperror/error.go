@@ -6,16 +6,17 @@ import "errors"
 type Code string
 
 const (
-	Unauthenticated       Code = "UNAUTHENTICATED"
-	Forbidden             Code = "FORBIDDEN"
-	NotFound              Code = "NOT_FOUND"
-	InvalidInput          Code = "INVALID_INPUT"
-	InvalidState          Code = "INVALID_STATE"
-	Conflict              Code = "CONFLICT"
-	RateLimited           Code = "RATE_LIMITED"
-	SessionExpired        Code = "SESSION_EXPIRED"
-	DependencyUnavailable Code = "DEPENDENCY_UNAVAILABLE"
-	Internal              Code = "INTERNAL"
+	Unauthenticated          Code = "UNAUTHENTICATED"
+	Forbidden                Code = "FORBIDDEN"
+	NotFound                 Code = "NOT_FOUND"
+	InvalidInput             Code = "INVALID_INPUT"
+	InvalidState             Code = "INVALID_STATE"
+	Conflict                 Code = "CONFLICT"
+	RateLimited              Code = "RATE_LIMITED"
+	SessionExpired           Code = "SESSION_EXPIRED"
+	DependencyUnavailable    Code = "DEPENDENCY_UNAVAILABLE"
+	UnsupportedSchemaVersion Code = "UNSUPPORTED_SCHEMA_VERSION"
+	Internal                 Code = "INTERNAL"
 )
 
 // Error retains a private cause while exposing only stable metadata.

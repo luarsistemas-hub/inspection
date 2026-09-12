@@ -17,6 +17,7 @@ test.describe("authenticated Admin against the local stack", () => {
       await page.getByRole("link", { name: label }).click();
       await expect(page).toHaveURL(new RegExp(`${route}(?:\\?|$)`));
       await expect(page.locator(".status-line")).toContainText("atualizado");
+      await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
     }
     await assertRuntimeClean();
   });

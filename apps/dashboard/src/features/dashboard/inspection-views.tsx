@@ -150,7 +150,6 @@ function InspectionCompactCard({ inspection, actions }: { inspection: Inspection
   return <article className="inspection-record-card" data-inspection-id={inspection.id}>
     <span className="inspection-record-kicker">{inspection.source || "Origem não informada"}</span>
     <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-record-title">{inspectionName(inspection)}</Link>
-    <span>Participante · {shortId(inspection.participantId)}</span>
     <span>Vencimento · {formatInspectionDate(inspection.dueAt)}</span>
     <span>{inspection.evidenceCount} evidência(s) · prazo final {formatInspectionDate(inspection.deadlineAt)} · v{inspection.version}</span>
     <InspectionActions inspection={inspection} actions={actions} />
@@ -182,9 +181,5 @@ function formatAgendaDay(value: string | null | undefined): string {
 }
 
 function inspectionName(inspection: InspectionRecord): string {
-  return `Inspeção ${shortId(inspection.id)}`;
-}
-
-function shortId(value: string): string {
-  return value.length > 12 ? `${value.slice(0, 8)}…` : value;
+  return inspection.source ? "Inspeção" : "Registro de inspeção";
 }

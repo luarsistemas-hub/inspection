@@ -11,7 +11,7 @@ Uso: ./scripts/local.sh <comando>
 
 Comandos:
   init             cria .env.inspection a partir de .env.example
-  up               constrói e sobe a stack completa (Admin, Dashboard e Capture)
+  up               constrói e sobe a stack completa (Admin, Dashboard, Capture e Onboarding)
   infra            sobe somente infraestrutura, bootstrap e migrations
   migrate          executa migrations e recria os papéis locais
   seed             cria dados locais para QA após o onboarding do Admin
@@ -39,9 +39,9 @@ load_env() {
     export NEXT_PUBLIC_INSPECTION_API_URL="http://localhost:${INSPECTION_API_PORT}/graphql"
   fi
   if [[ -z "${INSPECTION_ALLOWED_ORIGINS:-}" ]]; then
-    export INSPECTION_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3002,http://localhost:3003"
-  elif [[ "$INSPECTION_ALLOWED_ORIGINS" == "http://localhost:3000,http://localhost:3002,http://localhost:3003" && "${INSPECTION_ADMIN_PORT:-3000}" != "3000" ]]; then
-    export INSPECTION_ALLOWED_ORIGINS="http://localhost:${INSPECTION_ADMIN_PORT},http://localhost:${INSPECTION_DASHBOARD_PORT:-3002},http://localhost:${INSPECTION_CAPTURE_PORT:-3003}"
+    export INSPECTION_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004"
+  elif [[ "$INSPECTION_ALLOWED_ORIGINS" == "http://localhost:3000,http://localhost:3002,http://localhost:3003" ]]; then
+    export INSPECTION_ALLOWED_ORIGINS="http://localhost:${INSPECTION_ADMIN_PORT},http://localhost:${INSPECTION_DASHBOARD_PORT:-3002},http://localhost:${INSPECTION_CAPTURE_PORT:-3003},http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}"
   fi
 }
 
@@ -109,6 +109,7 @@ case "${1:-help}" in
       check_port "${INSPECTION_ADMIN_PORT:-3000}" "Admin"
       check_port "${INSPECTION_DASHBOARD_PORT:-3002}" "Dashboard"
       check_port "${INSPECTION_CAPTURE_PORT:-3003}" "Capture"
+      check_port "${INSPECTION_ONBOARDING_PORT:-3004}" "Onboarding"
     fi
     compose up -d --build
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API"
@@ -116,6 +117,7 @@ case "${1:-help}" in
     wait_http "http://localhost:${INSPECTION_ADMIN_PORT:-3000}/" "Admin"
     wait_http "http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}/inspections" "Dashboard"
     wait_http "http://localhost:${INSPECTION_CAPTURE_PORT:-3003}/manifest.webmanifest" "Capture"
+    wait_http "http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}/" "Onboarding"
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env
@@ -162,6 +164,7 @@ URLs locais:
   Admin          http://localhost:${INSPECTION_ADMIN_PORT:-3000}
   Dashboard      http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}
   Capture        http://localhost:${INSPECTION_CAPTURE_PORT:-3003}
+  Onboarding     http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}
   GraphQL        http://localhost:${INSPECTION_API_PORT:-8080}/graphql
   Health/ready   http://localhost:${INSPECTION_API_PORT:-8080}/healthz | /readyz
   Keycloak       http://localhost:8081 (credenciais em .env.inspection)

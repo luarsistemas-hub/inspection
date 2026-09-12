@@ -67,9 +67,19 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if len(answers) == 0 {
 			return messaging.ErrPermanent
 		}
+		var reference database.ReferenceSnapshot
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, in.InspectionID).First(&reference).Error; err != nil {
+			return err
+		}
 		now := deps.Now().UTC()
 		for _, answer := range answers {
-			digestBytes := sha256.Sum256(append(append([]byte{}, answer.MediaIDs...), answer.Flags...))
+			// The reference snapshot is pinned at inspection creation. Including
+			// it in the job identity makes a retry or a changed origin produce a
+			// distinct job and prevents current-only input from masquerading as a
+			// comparative request.
+			digestInput := append(append([]byte{}, answer.MediaIDs...), answer.Flags...)
+			digestInput = append(digestInput, reference.Payload...)
+			digestBytes := sha256.Sum256(digestInput)
 			job := database.ComparisonJob{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: in.InspectionID, RequirementKey: answer.RequirementKey, ModelAlias: deps.ModelAlias, PromptVersion: deps.PromptVersion, InputDigest: hex.EncodeToString(digestBytes[:]), Status: "PENDING", CreatedAt: now, UpdatedAt: now}
 			result := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
 			if result.Error != nil {

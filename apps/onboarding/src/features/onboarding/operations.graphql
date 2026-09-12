@@ -1,0 +1,24 @@
+query OnboardingSession {
+  onboardingSession { id state currentStep version expiresAt definition }
+}
+
+mutation RequestOnboardingOtp($input: RequestOnboardingOtpInput!) {
+  requestOnboardingOtp(input: $input) { sessionLocator userErrors { code field message } clientMutationId }
+}
+
+mutation VerifyOnboardingOtp($input: VerifyOnboardingOtpInput!) {
+  verifyOnboardingOtp(input: $input) {
+    session { id state currentStep version expiresAt definition }
+    userErrors { code field message }
+    clientMutationId
+  }
+}
+
+mutation SaveOnboardingStep($input: OnboardingStepInput!) {
+  saveOnboardingStep(input: $input) {
+    session { id state currentStep version expiresAt definition }
+    status { state requestId inspectionId nextAction originStatus deliveryStatus }
+    userErrors { code field message }
+    clientMutationId
+  }
+}

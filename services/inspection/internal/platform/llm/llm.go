@@ -14,7 +14,9 @@ type StructuredRequest struct {
 	Images                    []NormalizedImage
 }
 
-type NormalizedImage struct{ EvidenceID, DataURL, Digest string }
+// NormalizedImage carries explicit lineage so comparative prompts cannot
+// silently mix current evidence with the pinned origin snapshot.
+type NormalizedImage struct{ EvidenceID, Source, DataURL, Digest string }
 
 // StructuredResult records actual provider facts, never estimated usage.
 type StructuredResult struct {

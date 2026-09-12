@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        product: [admin, dashboard, capture]
+        product: [admin, dashboard, capture, onboarding]
     defaults:
       run:
         working-directory: apps/${{ matrix.product }}
@@ -109,7 +109,7 @@ jobs:
           ./scripts/local.sh seed
       - name: Install browser dependencies
         run: |
-          for product in admin dashboard capture; do
+          for product in admin dashboard capture onboarding; do
             (cd "apps/$product" && npm ci && npx playwright install --with-deps chromium webkit)
           done
       - name: Run authenticated Playwright suites
@@ -117,7 +117,7 @@ jobs:
           CI: ""
         run: |
           status=0
-          for product in admin dashboard capture; do
+          for product in admin dashboard capture onboarding; do
             (cd "apps/$product" && npm run test:e2e) || status=$?
           done
           exit "$status"
@@ -134,6 +134,8 @@ jobs:
             apps/dashboard/test-results
             apps/capture/playwright-report
             apps/capture/test-results
+            apps/onboarding/playwright-report
+            apps/onboarding/test-results
       - name: Capture stack logs
         if: always()
         run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml logs --no-color > e2e-parity-compose.log || true
@@ -170,6 +172,7 @@ jobs:
         run: |
           set -eu
           test -f apps/dashboard/tests/e2e/recapture-cross-product.spec.ts
+          test -f apps/admin/tests/e2e/activation.spec.ts
           test -f scripts/lib/parity-evidence.mjs
           test -f scripts/lib/legacy-inventory.mjs
       - name: Validate compose and task contracts
@@ -183,7 +186,7 @@ jobs:
           ./scripts/local.sh seed
       - name: Install cross-product browser dependencies
         run: |
-          for product in dashboard capture; do
+          for product in dashboard capture onboarding; do
             (cd "apps/$product" && npm ci && npx playwright install --with-deps chromium)
           done
       - name: Run Dashboard to Capture recapture journey

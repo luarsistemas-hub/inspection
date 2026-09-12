@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// CORS allows exactly the configured browser origin. Credentials are needed
-// only by the external capture session cookie, so wildcard origins are never
-// permitted.
+// CORS allows exactly the configured browser origins. Credentials are enabled
+// for every allowed origin because the admin and onboarding flows also use
+// cookies. Wildcard origins are never permitted.
 func CORS(configured interface{}, args ...interface{}) http.Handler {
 	allowed := map[string]struct{}{}
 	switch value := configured.(type) {
@@ -19,13 +19,10 @@ func CORS(configured interface{}, args ...interface{}) http.Handler {
 		}
 	}
 	var next http.Handler
-	captureOrigin := ""
 	for _, arg := range args {
 		switch value := arg.(type) {
 		case http.Handler:
 			next = value
-		case string:
-			captureOrigin = value
 		}
 	}
 	if next == nil {
@@ -39,9 +36,8 @@ func CORS(configured interface{}, args ...interface{}) http.Handler {
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			if captureOrigin == "" || origin == captureOrigin {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Correlation-ID, X-Inspection-Membership-ID")
 			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			w.Header().Set("Vary", "Origin")

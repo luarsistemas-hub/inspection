@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "00fd52a0aea0a60119fd141eb9779497b8b1f90c6601a8ac9acf4c9c1135d32b",
+  "schemaSha256": "eb9b6c59a06886b6c1ef7ab4438c7973586791a50bea83c4dfc7bb28d157c125",
   "capabilities": [
     {
       "root": "Query.me",
@@ -230,6 +230,20 @@
       "owner": "Capture",
       "persona": "external participant",
       "journey": "Link-scoped origin/inspection/recapture bootstrap with policy, reference, requirements, answers, and states.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.onboardingDefinition",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Versioned segment metadata drives the public real-estate steps, origin modes, purposes, and pinned catalog references.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.onboardingSession",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state.",
       "evidence": "IT-001"
     },
     {
@@ -622,6 +636,48 @@
       "owner": "Dashboard",
       "persona": "manager, employee, or internal viewer",
       "journey": "Human-readable verified destination preferences with current-version conflict handling.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.requestOnboardingOtp",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Public email verification is rate limited, purpose bound, and tenant independent.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.verifyOnboardingOtp",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Valid verification rotates to a CSRF-protected opaque server session.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.saveOnboardingStep",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Verified owner checkpoints are versioned, ordered, and idempotent.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.requestAdminActivationOtp",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Owner activation uses a separate challenge and never reuses onboarding OTPs.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.verifyAdminActivationOtp",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Activation verification binds only the owner membership and preserves pending state on failure.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.setAdminInitialPassword",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "First password is sent only through the confidential Keycloak adapter and activation is retryable.",
       "evidence": "IT-001"
     }
   ],
