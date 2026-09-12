@@ -220,8 +220,8 @@ services:
       INSPECTION_MINIO_SECURE: "false"
       INSPECTION_MINIO_PUBLIC_SECURE: "false"
       INSPECTION_OTP_PEPPER: local-development-pepper-change-me-32
-      INSPECTION_SMTP_ADDRESS: mailpit:1025
-      INSPECTION_SMTP_FROM: inspection@localhost
+      INSPECTION_SMTP_ADDRESS: ${INSPECTION_SMTP_ADDRESS:-mailpit:1025}
+      INSPECTION_SMTP_FROM: ${INSPECTION_SMTP_FROM:-inspection@localhost}
       INSPECTION_SMTP_USERNAME: ${INSPECTION_SMTP_USERNAME:-}
       INSPECTION_SMTP_PASSWORD: ${INSPECTION_SMTP_PASSWORD:-}
       INSPECTION_SMTP_REPLY_TO: ${INSPECTION_SMTP_REPLY_TO:-}
@@ -242,7 +242,7 @@ services:
       # both values from their secret manager or env file.
       NOTIFICATION_PAYLOAD_KEYS: '${NOTIFICATION_PAYLOAD_KEYS:-{"local-v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}}'
       NOTIFICATION_ACTIVE_PAYLOAD_KEY: ${NOTIFICATION_ACTIVE_PAYLOAD_KEY:-local-v1}
-      SMTP_TLS_MODE: none
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-none}
       NOTIFICATION_WHATSAPP_PROVIDER: twilio
       TWILIO_TEMPLATE_MAP: '{"capture-link:v1:pt-BR":"HX-local","recapture-link:v1:pt-BR":"HX-local","reminder:v1:pt-BR":"HX-local","critical-alert:v1:pt-BR":"HX-local"}'
       META_BASE_URL: http://meta-fake:8080

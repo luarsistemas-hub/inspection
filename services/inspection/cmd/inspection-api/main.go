@@ -161,7 +161,15 @@ func run() error {
 	bus := mediator.New()
 	authorizer := auth.Authorizer{Store: membershipStore, Scopes: auth.GORMScopeResolver{DB: db}}
 	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
-		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom},
+		notifications.Email: notifications.SMTPSender{
+			Address:  cfg.SMTPAddress,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+			ReplyTo:  cfg.SMTPReplyTo,
+			TLSMode:  cfg.Notification.SMTPTLSMode,
+			Timeout:  cfg.ProviderTimeout,
+		},
 		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
 		notifications.SMS:      notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.SMS},
 	})
