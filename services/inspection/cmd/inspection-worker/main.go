@@ -21,7 +21,10 @@ import (
 	processmedia "inspection/services/inspection/internal/features/media/process_verified"
 	consumeevents "inspection/services/inspection/internal/features/messaging/consume_events"
 	dispatchoutbox "inspection/services/inspection/internal/features/messaging/dispatch_outbox"
+	consumedelivery "inspection/services/inspection/internal/features/notifications/consume_delivery"
 	delivercritical "inspection/services/inspection/internal/features/notifications/deliver_critical"
+	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
+	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
 	processdeadline "inspection/services/inspection/internal/features/recapture/process_deadline"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
@@ -35,8 +38,10 @@ import (
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
 	"inspection/services/inspection/internal/platform/pdf"
+	"inspection/services/inspection/internal/platform/rollout"
 	process "inspection/services/inspection/internal/platform/runtime"
 	"inspection/services/inspection/internal/platform/sensitivecontent"
 
@@ -50,6 +55,14 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+func rolloutV2ProducerCount(enabled bool) int {
+	if !enabled {
+		return 0
+	}
+	return 1
+}
+
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -59,7 +72,24 @@ func run() error {
 	// interfaces and cannot construct clients or access provider credentials.
 	llmGateway := llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
 	pdfRenderer := pdf.Gotenberg{BaseURL: cfg.GotenbergURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
+	operationalGateway, err := operationalNotificationGateway(cfg)
+	if err != nil {
+		return err
+	}
 	db, err := database.Open(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	payloadCipher, err := notifications.NewPayloadCipher(cfg.Notification.ActivePayloadKey, cfg.Notification.PayloadKeys)
+	if err != nil {
+		return err
+	}
+	metrics := observability.NewMetrics()
+	providerResolver, err := notifications.NewProviderResolver(notifications.Provider(cfg.Notification.WhatsAppProvider))
+	if err != nil {
+		return err
+	}
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, V2ProducersEnabled: cfg.Notification.V2ProducersEnabled})
 	if err != nil {
 		return err
 	}
@@ -81,7 +111,7 @@ func run() error {
 	}
 	defer channel.Close()
 	contracts := make([]messaging.QueueContract, 0, 24)
-	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-status", "notification.channel_status.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
+	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
 		contract, contractErr := messaging.NewQueueContract(definition[0], definition[1], 32)
 		if contractErr != nil {
 			return contractErr
@@ -91,11 +121,29 @@ func run() error {
 	if err := messaging.DeclareTopology(channel, contracts); err != nil {
 		return fmt.Errorf("rabbitmq topology: %w", err)
 	}
+	rolloutReader := rollout.SnapshotReaderFunc(func(ctx context.Context) (rollout.Snapshot, error) {
+		liveChannel, err := connection.Channel()
+		if err != nil {
+			return rollout.Snapshot{}, err
+		}
+		defer liveChannel.Close()
+		queue, err := liveChannel.QueueInspect("notification-delivery")
+		if err != nil {
+			return rollout.Snapshot{}, err
+		}
+		var durable int64
+		if err := db.WithContext(ctx).Model(&database.OutboxIntent{}).
+			Where("type = ? AND status IN ?", "notification.delivery_requested.v1", []string{"PENDING", "CLAIMED"}).
+			Count(&durable).Error; err != nil {
+			return rollout.Snapshot{}, err
+		}
+		return rollout.Snapshot{CompatibleConsumers: queue.Consumers, V2Producers: rolloutV2ProducerCount(cfg.Notification.V2ProducersEnabled), V1QueueDepth: queue.Messages, V1DurableWork: int(durable)}, nil
+	})
 	publisher, err := messaging.NewRabbitPublisher(channel)
 	if err != nil {
 		return err
 	}
-	dispatch, err := dispatchoutbox.Setup(dispatchoutbox.Dependencies{DB: dispatchDB, Publisher: publisher, BatchSize: 50})
+	dispatch, err := dispatchoutbox.Setup(dispatchoutbox.Dependencies{DB: dispatchDB, Publisher: publisher, BatchSize: 50, Metrics: metrics})
 	if err != nil {
 		return err
 	}
@@ -109,14 +157,14 @@ func run() error {
 		return err
 	}
 	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
-		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom},
+		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, ReplyTo: cfg.SMTPReplyTo, TLSMode: cfg.Notification.SMTPTLSMode, Timeout: cfg.ProviderTimeout},
 		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
 		notifications.SMS:      notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.SMS},
 	})
 	if err != nil {
 		return err
 	}
-	invitationHandler, err := dispatchcapture.Setup(dispatchcapture.Dependencies{Notifications: channelRegistry, CallbackURL: cfg.TwilioCallbackURL})
+	invitationHandler, err := dispatchcapture.Setup(dispatchcapture.Dependencies{Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin})
 	if err != nil {
 		return err
 	}
@@ -137,6 +185,10 @@ func run() error {
 		return err
 	}
 	deliverCritical, err := delivercritical.Setup(delivercritical.Dependencies{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Now: time.Now})
+	if err != nil {
+		return err
+	}
+	deliveryExecutor, err := executedelivery.Setup(executedelivery.Dependencies{DB: db, Gateway: operationalGateway, MaxAttempts: cfg.Notification.MaxAttempts, RetryDelays: cfg.Notification.RetryDelays, LeaseDuration: cfg.ProviderTimeout + 5*time.Second, CallbackURL: cfg.TwilioCallbackURL, ProviderAccounts: map[notifications.Provider]string{notifications.ProviderTwilio: cfg.TwilioAccountSID, notifications.ProviderMeta: cfg.Notification.MetaPhoneNumberID}, Payloads: payloadCipher, Metrics: metrics})
 	if err != nil {
 		return err
 	}
@@ -192,7 +244,7 @@ func run() error {
 		for _, recipient := range configuredRecipients {
 			recipients = append(recipients, requestdelivery.Recipient{ID: recipient.IdentityID.String(), Channel: recipient.Channel, Destination: recipient.Destination, Internal: true, Verified: recipient.Verified, Selected: recipient.Selected})
 		}
-		if err := requestdelivery.Request(ctx, tx, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients, CorrelationID: envelope.CorrelationID}); err != nil {
+		if err := requestdelivery.Request(ctx, tx, notificationService, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients, CorrelationID: envelope.CorrelationID}); err != nil {
 			return err
 		}
 		var reference database.ReferenceSnapshot
@@ -378,6 +430,7 @@ func run() error {
 		"report.snapshot_created.v1":         render,
 		"report.ready.v1":                    dashboardHandler,
 		"notification.delivery_requested.v1": deliverCritical,
+		"notification.delivery_requested.v2": consumedelivery.Setup(),
 		"notification.channel_status.v1":     notificationStatusHandler,
 		"retention.purge_due.v1":             retentionHandler,
 		"retention.purged.v1": func(_ context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
@@ -393,19 +446,54 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
-	if err := operational.Setup(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken); err != nil {
+	if err := operational.SetupWithRollout(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics, func(ctx context.Context) (rollout.Status, error) {
+		return rollout.NewGate(1).ReadStatus(ctx, rolloutReader)
+	}); err != nil {
 		return err
 	}
 	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {
-		errCh := make(chan error, 2)
+		errCh := make(chan error, 3)
 		go func() { errCh <- dispatch(ctx) }()
 		go func() { errCh <- consume(ctx) }()
+		go func() {
+			ticker := time.NewTicker(250 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				if _, err := deliveryExecutor.RunDue(ctx); err != nil {
+					errCh <- err
+					return
+				}
+				select {
+				case <-ctx.Done():
+					errCh <- nil
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
 		select {
 		case <-ctx.Done():
 			return nil
 		case err := <-errCh:
 			return err
 		}
+	})
+}
+
+// operationalNotificationGateway composes operational providers in the worker
+// only. Legacy OTP registries remain independent by design.
+func operationalNotificationGateway(cfg config.Config) (*notifications.Gateway, error) {
+	return notifications.NewGateway(map[notifications.Channel]map[notifications.Provider]notifications.Adapter{
+		notifications.Email: {
+			notifications.ProviderSMTP: notifications.SMTPAdapter(notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, ReplyTo: cfg.SMTPReplyTo, TLSMode: cfg.Notification.SMTPTLSMode, Timeout: cfg.ProviderTimeout}),
+		},
+		notifications.SMS: {
+			notifications.ProviderTwilio: notifications.TwilioSMSSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.Notification.TwilioSMSFrom, StatusCallback: cfg.TwilioCallbackURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}},
+		},
+		notifications.WhatsApp: {
+			notifications.ProviderTwilio: notifications.TwilioWhatsAppSender{TwilioSMSSender: notifications.TwilioSMSSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.Notification.TwilioWhatsAppFrom, StatusCallback: cfg.TwilioCallbackURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}, ContentSIDs: cfg.Notification.TwilioTemplates},
+			notifications.ProviderMeta:   notifications.MetaWhatsAppSender{BaseURL: cfg.Notification.MetaBaseURL, APIVersion: cfg.Notification.MetaAPIVersion, PhoneNumberID: cfg.Notification.MetaPhoneNumberID, AccessToken: cfg.Notification.MetaAccessToken, Templates: cfg.Notification.MetaTemplates, Client: &http.Client{Timeout: cfg.ProviderTimeout}},
+		},
 	})
 }
 

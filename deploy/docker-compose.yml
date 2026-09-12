@@ -183,6 +183,12 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      twilio-fake:
+        condition: service_healthy
+      meta-fake:
+        condition: service_healthy
       minio-setup:
         condition: service_completed_successfully
     ports:
@@ -194,6 +200,7 @@ services:
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
       INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
+      INSPECTION_CAPTURE_ORIGIN: ${INSPECTION_CAPTURE_ORIGIN:-http://localhost:${INSPECTION_CAPTURE_PORT:-3003}}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       # Public tokens use localhost. API gets signing keys over its private
@@ -215,6 +222,9 @@ services:
       INSPECTION_OTP_PEPPER: local-development-pepper-change-me-32
       INSPECTION_SMTP_ADDRESS: mailpit:1025
       INSPECTION_SMTP_FROM: inspection@localhost
+      INSPECTION_SMTP_USERNAME: ${INSPECTION_SMTP_USERNAME:-}
+      INSPECTION_SMTP_PASSWORD: ${INSPECTION_SMTP_PASSWORD:-}
+      INSPECTION_SMTP_REPLY_TO: ${INSPECTION_SMTP_REPLY_TO:-}
       INSPECTION_TWILIO_BASE_URL: http://twilio-fake:8080
       INSPECTION_TWILIO_ACCOUNT_SID: AC-local
       INSPECTION_TWILIO_AUTH_TOKEN: local-token
@@ -225,6 +235,17 @@ services:
       INSPECTION_LITELLM_PROMPT_VERSION: analysis-v1
       INSPECTION_GOTENBERG_URL: http://gotenberg:3000
       INSPECTION_PROVIDER_TIMEOUT: 30s
+      NOTIFICATION_MAX_ATTEMPTS: "4"
+      NOTIFICATION_RETRY_DELAYS: 5s,30s,5m
+      NOTIFICATION_V2_PRODUCERS_ENABLED: ${NOTIFICATION_V2_PRODUCERS_ENABLED:-true}
+      # Fixed local-only AES-256 key; deployment environments must override
+      # both values from their secret manager or env file.
+      NOTIFICATION_PAYLOAD_KEYS: '${NOTIFICATION_PAYLOAD_KEYS:-{"local-v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}}'
+      NOTIFICATION_ACTIVE_PAYLOAD_KEY: ${NOTIFICATION_ACTIVE_PAYLOAD_KEY:-local-v1}
+      SMTP_TLS_MODE: none
+      NOTIFICATION_WHATSAPP_PROVIDER: twilio
+      TWILIO_TEMPLATE_MAP: '{"capture-link:v1:pt-BR":"HX-local","recapture-link:v1:pt-BR":"HX-local","reminder:v1:pt-BR":"HX-local","critical-alert:v1:pt-BR":"HX-local"}'
+      META_BASE_URL: http://meta-fake:8080
 
   inspection-seed:
     build:
@@ -411,6 +432,24 @@ services:
       - "${INSPECTION_TWILIO_FAKE_PORT:-1081}:8080"
     volumes:
       - ./wiremock/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  meta-fake:
+    image: wiremock/wiremock:3.13.1
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      - "${INSPECTION_META_FAKE_PORT:-1082}:8080"
+    volumes:
+      - ./wiremock/meta:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   # Deterministic provider-neutral LiteLLM contract stub. The worker points at
   # this endpoint in local/test environments; no model credentials are needed.

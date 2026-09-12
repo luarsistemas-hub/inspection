@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -85,12 +87,13 @@ func TestIT354AtomicBusinessWriteAndOutbox(t *testing.T) {
 func TestIT355AndIT356ConfirmedOutbox(t *testing.T) {
 	db := sqliteDB(t)
 	now := time.Now().UTC()
-	row := database.OutboxIntent{ID: identity.NewID(), TenantID: identity.NewID(), Type: "participant.channel_verified.v1", SchemaVersion: 1, Payload: eventBody(t, "participant.channel_verified.v1", 1), CorrelationID: "corr", CausationID: "cause", Status: "PENDING", NextAttemptAt: now, CreatedAt: now}
+	row := database.OutboxIntent{ID: identity.NewID(), TenantID: identity.NewID(), Type: "notification.delivery_requested.v2", SchemaVersion: 2, Payload: eventBody(t, "notification.delivery_requested.v2", 2), CorrelationID: "corr", CausationID: "cause", Status: "PENDING", NextAttemptAt: now, CreatedAt: now}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
 	publisher := &publisherStub{err: errors.New("nack")}
-	dispatcher := Dispatcher{DB: db, Publisher: publisher, Clock: func() time.Time { return now.Add(time.Second) }}
+	metrics := observability.NewMetrics()
+	dispatcher := Dispatcher{DB: db, Publisher: publisher, Clock: func() time.Time { return now.Add(time.Second) }, Metrics: metrics}
 	if count, err := dispatcher.Dispatch(context.Background()); err != nil || count != 0 {
 		t.Fatalf("nack result: %d %v", count, err)
 	}
@@ -99,6 +102,9 @@ func TestIT355AndIT356ConfirmedOutbox(t *testing.T) {
 	if pending.Status != "PENDING" {
 		t.Fatal("nack marked published")
 	}
+	if got := metrics.Prometheus(); !strings.Contains(got, `inspection_notification_queue_depth{channel="unknown",provider="unknown",queue="notification-outbox"} 1`) {
+		t.Fatalf("queue depth after nack missing: %s", got)
+	}
 	publisher.err = nil
 	if count, err := dispatcher.Dispatch(context.Background()); err != nil || count != 1 {
 		t.Fatalf("confirm result: %d %v", count, err)
@@ -106,6 +112,9 @@ func TestIT355AndIT356ConfirmedOutbox(t *testing.T) {
 	db.First(&pending, "id=?", row.ID)
 	if pending.Status != "PUBLISHED" || publisher.publication.CorrelationID != "corr" || publisher.publication.CausationID != "cause" || !publisher.publication.Mandatory {
 		t.Fatalf("confirmation metadata lost: %+v %+v", pending, publisher.publication)
+	}
+	if got := metrics.Prometheus(); !strings.Contains(got, `inspection_notification_queue_depth{channel="unknown",provider="unknown",queue="notification-outbox"} 0`) {
+		t.Fatalf("queue depth after confirmation missing: %s", got)
 	}
 }
 func TestIT357IT360IT547IT548IT551ToIT554IT577ToIT582EventConsumers(t *testing.T) {

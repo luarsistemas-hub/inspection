@@ -84,7 +84,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.Membership{ID: f.MembershipID, TenantID: f.TenantID, IdentityID: f.IdentityID, Issuer: "task06-test", Subject: f.IdentityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.ResourceScope{ID: identity.NewID(), TenantID: f.TenantID, MembershipID: f.MembershipID, Kind: "TENANT", ResourceID: f.TenantID, CreatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.ResourceScope{ID: identity.NewID(), TenantID: f.TenantID, MembershipID: f.MembershipID, Kind: "BUSINESS_UNIT", ResourceID: f.BusinessUnitID, CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Participant{ID: f.ParticipantID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, Name: "Task 06 participant", SegmentRole: "OWNER", Status: "ACTIVE", Version: 1, IdempotencyKey: "task06-participant", CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {

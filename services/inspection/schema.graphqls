@@ -202,7 +202,28 @@ type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classificati
 type TriageInspectionConnection { nodes: [TriageInspection!]! pageInfo: PageInfo! }
 type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
 type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
-type NotificationDelivery { id: ID! intentId: ID! status: String! createdAt: String! updatedAt: String! }
+type NotificationDelivery {
+  id: ID!
+  intentId: ID!
+  # status is retained for existing consumers; aggregateStatus makes its role explicit.
+  status: String!
+  aggregateStatus: String!
+  selectedProvider: String!
+  channels: [NotificationChannelDelivery!]!
+  createdAt: String!
+  updatedAt: String!
+}
+type NotificationChannelDelivery {
+  id: ID!
+  channel: String!
+  status: String!
+  provider: String!
+  receiptId: String
+  attempts: Int!
+  lastAttemptAt: String
+  createdAt: String!
+  updatedAt: String!
+}
 type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: PageInfo! }
 type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
 type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }

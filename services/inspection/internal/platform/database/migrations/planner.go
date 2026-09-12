@@ -494,5 +494,70 @@ CREATE POLICY tenant_isolation ON onboarding.activation USING (tenant_id = nulli
 CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_locator ON onboarding.sessions(session_locator_digest) WHERE tenant_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_onboarding_requests_status ON onboarding.requests(tenant_id, status, updated_at);
 GRANT USAGE ON SCHEMA onboarding TO inspection_runtime;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA onboarding TO inspection_runtime;`}}
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA onboarding TO inspection_runtime;`},
+		{Version: 25, Name: "operational_notification_foundation", Compatible: true, SQL: `
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS logical_template varchar(100) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS template_version varchar(32) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS correlation_id varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS idempotency_key varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS request_digest varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS recipient_id varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS selected_provider varchar(50) NOT NULL DEFAULT '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
+ALTER TABLE notifications.channel_attempts ADD COLUMN IF NOT EXISTS template_variables jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE notifications.channel_attempts ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE notifications.channel_attempts ADD COLUMN IF NOT EXISTS lease_expires_at timestamptz;
+ALTER TABLE notifications.channel_attempts ADD COLUMN IF NOT EXISTS last_attempt_at timestamptz;
+ALTER TABLE notifications.provider_callbacks ADD COLUMN IF NOT EXISTS channel_attempt_id uuid;
+CREATE TABLE IF NOT EXISTS notifications.attempt_history (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, channel_attempt_id uuid NOT NULL, sequence integer NOT NULL,
+  provider varchar(50) NOT NULL, status varchar(20) NOT NULL, receipt_id varchar(500), error_code varchar(100),
+  started_at timestamptz NOT NULL, finished_at timestamptz,
+  CONSTRAINT uq_notification_attempt_sequence UNIQUE (tenant_id, channel_attempt_id, sequence)
+);
+CREATE TABLE IF NOT EXISTS notifications.execution_payloads (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, delivery_id uuid NOT NULL, key_id varchar(100) NOT NULL,
+  nonce bytea NOT NULL, ciphertext bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz,
+  CONSTRAINT uq_notification_payload_delivery UNIQUE (tenant_id, delivery_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_idempotency ON notifications.deliveries(tenant_id, idempotency_key) WHERE idempotency_key <> '';
+CREATE INDEX IF NOT EXISTS idx_delivery_correlation ON notifications.deliveries(tenant_id, correlation_id);
+CREATE INDEX IF NOT EXISTS idx_channel_attempt_due ON notifications.channel_attempts(tenant_id, status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_notification_attempt_history ON notifications.attempt_history(tenant_id, channel_attempt_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_notification_payload_expiry ON notifications.execution_payloads(tenant_id, expires_at);
+ALTER TABLE notifications.deliveries DROP CONSTRAINT IF EXISTS chk_notification_delivery_status;
+ALTER TABLE notifications.deliveries ADD CONSTRAINT chk_notification_delivery_status CHECK (status IN ('PENDING','QUEUED','PROCESSING','ACCEPTED','SENT','DELIVERED','FAILED','UNKNOWN','CANCELED'));
+ALTER TABLE notifications.channel_attempts DROP CONSTRAINT IF EXISTS chk_notification_channel_status;
+ALTER TABLE notifications.channel_attempts ADD CONSTRAINT chk_notification_channel_status CHECK (status IN ('PENDING','QUEUED','PROCESSING','ACCEPTED','SENT','DELIVERED','FAILED','UNKNOWN','CANCELED'));
+DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['notifications.attempt_history','notifications.execution_payloads'] LOOP
+  EXECUTE 'ALTER TABLE ' || t || ' ENABLE ROW LEVEL SECURITY';
+  EXECUTE 'ALTER TABLE ' || t || ' FORCE ROW LEVEL SECURITY';
+  EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON ' || t;
+  EXECUTE 'CREATE POLICY tenant_isolation ON ' || t || ' USING (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid) WITH CHECK (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid)';
+END LOOP; END $$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON notifications.attempt_history, notifications.execution_payloads TO inspection_runtime;`},
+		{Version: 26, Name: "notification_callback_scope", Compatible: true, SQL: `
+ALTER TABLE notifications.channel_attempts ADD COLUMN IF NOT EXISTS provider_account varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE notifications.provider_callbacks ADD COLUMN IF NOT EXISTS provider_account varchar(200) NOT NULL DEFAULT '';
+DROP INDEX IF EXISTS notifications.idx_provider_callback;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_callback_scope ON notifications.provider_callbacks(tenant_id, provider, provider_account, callback_id);
+CREATE INDEX IF NOT EXISTS idx_channel_attempt_provider_receipt ON notifications.channel_attempts(tenant_id, provider, provider_account, receipt_id) WHERE receipt_id <> '';
+`},
+		{Version: 27, Name: "meta_callback_tenant_resolution", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION notifications.resolve_meta_callback_tenant(p_account text, p_receipt text)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = notifications, pg_catalog
+AS $function$
+  SELECT tenant_id
+  FROM notifications.channel_attempts
+  WHERE provider = 'meta' AND provider_account = p_account AND receipt_id = p_receipt
+  GROUP BY tenant_id
+  LIMIT 1
+$function$;
+REVOKE ALL ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) TO inspection_runtime;
+`}}
 }

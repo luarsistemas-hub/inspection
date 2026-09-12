@@ -15,7 +15,7 @@ func (h *Harness) ProbeProviders(ctx context.Context) error {
 	if h == nil || h.HTTP == nil {
 		return fmt.Errorf("integration harness: HTTP client unavailable")
 	}
-	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Gotenberg": h.GotenbergURL} {
+	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Gotenberg": h.GotenbergURL, "Twilio simulator": h.TwilioURL, "Meta simulator": h.MetaURL} {
 		endpoint := strings.TrimRight(baseURL, "/") + "/__admin/health"
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
@@ -30,6 +30,18 @@ func (h *Harness) ProbeProviders(ctx context.Context) error {
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			return fmt.Errorf("%s probe status %d", name, response.StatusCode)
 		}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(h.MailpitURL, "/")+"/readyz", nil)
+	if err != nil {
+		return fmt.Errorf("Mailpit probe: %w", err)
+	}
+	response, err := h.HTTP.Do(request)
+	if err != nil {
+		return fmt.Errorf("Mailpit probe: %w", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("Mailpit probe status %d", response.StatusCode)
 	}
 	return nil
 }

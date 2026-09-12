@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/v[0-9.]+/[^/]+/messages",
+    "headers": { "X-Simulator-Scenario": { "equalTo": "transient" } }
+  },
+  "response": {
+    "status": 429,
+    "headers": { "Content-Type": "application/json", "Retry-After": "5" },
+    "jsonBody": { "error": { "code": "simulator_rate_limited" } }
+  }
+}

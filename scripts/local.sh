@@ -121,7 +121,7 @@ case "${1:-help}" in
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env
-    compose up -d postgres redis minio rabbitmq mailpit twilio-fake litellm-stub gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap keycloak-super-admin-bootstrap
+    compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake litellm-stub gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap keycloak-super-admin-bootstrap
     wait_service_completion inspection-bootstrap
     wait_service_completion inspection-migrate
     wait_service_completion inspection-runtime-bootstrap

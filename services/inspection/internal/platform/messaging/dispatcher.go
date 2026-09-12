@@ -10,6 +10,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -34,6 +35,7 @@ type Dispatcher struct {
 	Publisher Publisher
 	BatchSize int
 	Clock     func() time.Time
+	Metrics   *observability.Metrics
 }
 
 func (d Dispatcher) Dispatch(ctx context.Context) (int, error) {
@@ -82,9 +84,32 @@ func (d Dispatcher) Dispatch(ctx context.Context) (int, error) {
 		if result.Error != nil {
 			return published, result.Error
 		}
+		// The outbox envelope intentionally does not contain recipient data. Keep
+		// the dispatch metric useful and bounded by using the safe fallback rather
+		// than exporting empty label values.
+		if d.Metrics != nil {
+			d.Metrics.Dispatch("unknown", "unknown")
+		}
 		published += int(result.RowsAffected)
 	}
+	// Sample durable notification work so the worker metrics endpoint exposes
+	// backlog even when the current dispatch batch is empty.
+	d.observeNotificationQueueDepth(ctx)
 	return published, nil
+}
+
+func (d Dispatcher) observeNotificationQueueDepth(ctx context.Context) {
+	if d.DB == nil || d.Metrics == nil {
+		return
+	}
+	var depth int64
+	if err := d.DB.WithContext(ctx).
+		Model(&database.OutboxIntent{}).
+		Where("type IN ? AND status IN ?", []string{"notification.delivery_requested.v1", "notification.delivery_requested.v2"}, []string{"PENDING", "CLAIMED"}).
+		Count(&depth).Error; err != nil {
+		return
+	}
+	d.Metrics.QueueDepth("notification-outbox", "unknown", "unknown", int(depth))
 }
 
 func safeReason(err error) string {

@@ -115,7 +115,7 @@ func (h *Harness) ResetProviderStubs(ctx context.Context) error {
 	if h == nil || h.HTTP == nil {
 		return errors.New("integration harness: HTTP client unavailable")
 	}
-	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Gotenberg": h.GotenbergURL} {
+	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Gotenberg": h.GotenbergURL, "Twilio simulator": h.TwilioURL, "Meta simulator": h.MetaURL} {
 		endpoint := strings.TrimRight(baseURL, "/") + "/__admin/mappings/reset"
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 		if err != nil {
@@ -129,6 +129,27 @@ func (h *Harness) ResetProviderStubs(ctx context.Context) error {
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			return fmt.Errorf("%s reset status %d", name, response.StatusCode)
 		}
+	}
+	return nil
+}
+
+// ResetNotificationFixtures resets provider mappings and clears Mailpit so a
+// test cannot observe a previous case's message or simulator state.
+func (h *Harness) ResetNotificationFixtures(ctx context.Context) error {
+	if err := h.ResetProviderStubs(ctx); err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodDelete, strings.TrimRight(h.MailpitURL, "/")+"/api/v1/messages", nil)
+	if err != nil {
+		return fmt.Errorf("Mailpit reset: %w", err)
+	}
+	response, err := h.HTTP.Do(request)
+	if err != nil {
+		return fmt.Errorf("Mailpit reset: %w", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("Mailpit reset status %d", response.StatusCode)
 	}
 	return nil
 }

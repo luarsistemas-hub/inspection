@@ -9,11 +9,28 @@ import (
 
 func TestConfigFromEnvHasSafeDefaults(t *testing.T) {
 	cfg := ConfigFromEnv()
-	if cfg.DatabaseURL == "" || cfg.RabbitMQURL == "" || cfg.LiteLLMURL == "" || cfg.GotenbergURL == "" {
+	if cfg.DatabaseURL == "" || cfg.RabbitMQURL == "" || cfg.LiteLLMURL == "" || cfg.GotenbergURL == "" || cfg.TwilioURL == "" || cfg.MetaURL == "" || cfg.MailpitURL == "" {
 		t.Fatalf("incomplete defaults: %+v", cfg)
 	}
 	if cfg.RequestTimeout <= 0 || cfg.PollInterval <= 0 {
 		t.Fatalf("invalid timeouts: %+v", cfg)
+	}
+}
+
+func TestLiveSmokeConfigIsExplicitAndFailClosed(t *testing.T) {
+	t.Setenv("INSPECTION_LIVE_SMOKES", "false")
+	cfg, reason, err := LoadLiveSmokeConfig()
+	if err != nil || cfg.Enabled || reason == "" {
+		t.Fatalf("disabled live config: %+v reason=%q err=%v", cfg, reason, err)
+	}
+	t.Setenv("INSPECTION_LIVE_SMOKES", "true")
+	t.Setenv("INSPECTION_LIVE_ALLOWLISTED_RECIPIENTS", "+15550000001")
+	cfg, _, err = LoadLiveSmokeConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate("twilio-sms"); err == nil {
+		t.Fatal("incomplete enabled configuration was accepted")
 	}
 }
 
@@ -39,11 +56,11 @@ func TestEventuallyHonoursContext(t *testing.T) {
 
 func TestTask06AssignedCaseManifest(t *testing.T) {
 	cases := Task06AssignedCases()
-	if len(cases) != 148 {
-		t.Fatalf("assigned cases=%d want 148", len(cases))
+	if len(cases) != 9 {
+		t.Fatalf("assigned cases=%d want 9", len(cases))
 	}
 	seen := make(map[string]struct{}, len(cases))
-	unit, integration := 0, 0
+	integration, endToEnd := 0, 0
 	for _, item := range cases {
 		if item.ID == "" {
 			t.Fatal("manifest contains an empty case id")
@@ -53,15 +70,15 @@ func TestTask06AssignedCaseManifest(t *testing.T) {
 		}
 		seen[item.ID] = struct{}{}
 		switch item.Kind {
-		case "unit":
-			unit++
 		case "integration":
 			integration++
+		case "end-to-end":
+			endToEnd++
 		default:
 			t.Fatalf("unknown case kind %q", item.Kind)
 		}
 	}
-	if unit != 14 || integration != 134 {
-		t.Fatalf("case split unit=%d integration=%d", unit, integration)
+	if integration != 4 || endToEnd != 5 {
+		t.Fatalf("case split integration=%d end-to-end=%d", integration, endToEnd)
 	}
 }

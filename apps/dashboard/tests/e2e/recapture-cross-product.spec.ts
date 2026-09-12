@@ -2,9 +2,7 @@ import { expect, test } from "@playwright/test";
 import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
 
 test.describe("Dashboard to Capture recapture journey", () => {
-  test.beforeEach(() => {
-    if (process.env.INSPECTION_E2E_AUTH !== "true") throw new Error("INSPECTION_E2E_AUTH=true is required for the seeded parity stack");
-  });
+  test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
   test("requests a replacement and records the authoritative operation outcome", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);

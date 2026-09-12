@@ -1,0 +1,13 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/2010-04-01/Accounts/[^/]+/Messages\\.json",
+    "headers": { "X-Simulator-Scenario": { "equalTo": "permanent" } }
+  },
+  "response": {
+    "status": 400,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "code": "simulator_invalid_recipient" }
+  }
+}

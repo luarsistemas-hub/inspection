@@ -1,31 +1,34 @@
+// Package dispatch_capture_invitation creates central capture-link requests.
 package dispatch_capture_invitation
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	"inspection/services/inspection/internal/features/notifications/core"
+	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
-	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/security"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type Dependencies struct {
-	Notifications *notifications.Registry
-	CallbackURL   string
+	Notifications  core.NotificationService
+	CaptureBaseURL string
 }
 
+// Setup registers the inbox handler that creates capture invitations and
+// durable v2 requests. Provider adapters are intentionally not dependencies.
 func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) error, error) {
-	if d.Notifications == nil {
+	if d.Notifications == nil || strings.TrimSpace(d.CaptureBaseURL) == "" {
 		return nil, fmt.Errorf("slice invitations/dispatch_capture_invitation: missing dependency")
 	}
 	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
@@ -37,22 +40,22 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.ResponsibilityID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
+		if payload.InspectionID == (identity.ID{}) || payload.ParticipantID == (identity.ID{}) {
+			return nil
+		}
 		var existing int64
 		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", envelope.TenantID, payload.ResponsibilityID).Count(&existing).Error; err != nil || existing > 0 {
 			return err
-		}
-		if payload.InspectionID == (identity.ID{}) || payload.ParticipantID == (identity.ID{}) {
-			return nil // Origin invitations are created and delivered synchronously by their slice.
 		}
 		var inspection database.Inspection
 		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
 			return err
 		}
 		delivery, err := loadDelivery(tx, envelope.TenantID, payload.ParticipantID)
-		if err != nil {
-			return err
-		}
-		if len(delivery) == 0 {
+		if err != nil || len(delivery) == 0 {
+			if err != nil {
+				return err
+			}
 			return messaging.ErrPermanent
 		}
 		token, err := security.NewScopedToken(envelope.TenantID)
@@ -60,39 +63,24 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			return err
 		}
 		hash := security.HashToken(token)
+		now := time.Now().UTC()
 		encoded, _ := json.Marshal(delivery)
-		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: encoded, Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: time.Now().UTC()}
+		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: encoded, Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
 		if err := tx.Create(&invitation).Error; err != nil {
 			return err
 		}
-		deliveryRow := database.Delivery{ID: identity.NewID(), TenantID: envelope.TenantID, IntentID: envelope.ID, InspectionID: &payload.InspectionID, Status: "FAILED", CreatedAt: invitation.CreatedAt, UpdatedAt: invitation.CreatedAt}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&deliveryRow).Error; err != nil {
-			return err
-		}
-		succeeded := 0
-		for _, destination := range delivery {
-			sender, senderErr := d.Notifications.Sender(notifications.Channel(destination.Channel))
-			attempt := database.ChannelAttempt{ID: identity.NewID(), TenantID: envelope.TenantID, DeliveryID: deliveryRow.ID, Channel: destination.Channel, Destination: destination.Destination, Status: "FAILED", Attempts: 1, CreatedAt: invitation.CreatedAt, UpdatedAt: invitation.CreatedAt}
-			if senderErr == nil {
-				receipt, sendErr := sender.Send(ctx, notifications.Intent{ID: invitation.ID.String(), Destination: destination.Destination, Template: "inspection-capture-link", Parameters: map[string]string{"body": token, "tenantId": envelope.TenantID.String(), "callbackUrl": d.CallbackURL}})
-				if sendErr == nil {
-					attempt.Status, attempt.Provider, attempt.ReceiptID = "SENT", receipt.Provider, receipt.ID
-					succeeded++
-				} else {
-					attempt.LastError = "delivery unavailable"
-				}
-			}
-			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&attempt).Error; err != nil {
+		for _, target := range delivery {
+			_, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
+				TenantID: envelope.TenantID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
+				Template: core.TemplateRef{Name: "capture-link", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"},
+				CorrelationID: envelope.CorrelationID, IdempotencyKey: invitation.ID.String() + ":" + target.Channel + ":" + target.Destination,
+				Execution: &core.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()},
+			})
+			if err != nil {
 				return err
 			}
 		}
-		if succeeded == 0 {
-			return errors.New("capture invitation delivery unavailable")
-		}
-		if err := tx.Model(&deliveryRow).Update("status", "DELIVERED").Error; err != nil {
-			return err
-		}
-		return tx.Model(&inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": invitation.CreatedAt}).Error
+		return tx.Model(&inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error
 	}, nil
 }
 

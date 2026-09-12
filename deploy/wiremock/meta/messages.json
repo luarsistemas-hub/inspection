@@ -1,0 +1,14 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/v[0-9.]+/[^/]+/messages",
+    "headers": { "Authorization": { "matches": "Bearer .+" } },
+    "bodyPatterns": [{ "matchesJsonPath": "$.messaging_product" }, { "matchesJsonPath": "$.template.name" }]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "messages": [{ "id": "wamid.local-test" }] }
+  }
+}

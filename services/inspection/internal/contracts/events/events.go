@@ -79,7 +79,7 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 }
 
 func validType(eventType string, version int) bool {
-	return version == 1 && strings.HasSuffix(eventType, ".v1") && len(eventType) <= 200
+	return version > 0 && strings.HasSuffix(eventType, fmt.Sprintf(".v%d", version)) && len(eventType) <= 200
 }
 
 func containsForbidden(payload []byte) bool {
@@ -127,5 +127,6 @@ func DefaultRegistry() *Registry {
 	} {
 		_ = r.Register(name, 1)
 	}
+	_ = r.Register("notification.delivery_requested.v2", 2)
 	return r
 }

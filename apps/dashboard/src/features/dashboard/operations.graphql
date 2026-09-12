@@ -29,6 +29,15 @@ query CustomerTimeline($assetId: ID, $projectId: ID, $after: String) { customerT
 query CustomerReport($inspectionId: ID!, $version: Int) { customerReport(inspectionId: $inspectionId, version: $version) { inspectionId snapshotId version classification advisory status historical } }
 query CustomerEvidence($inspectionId: ID!, $mode: EvidenceMode!, $after: String) { customerEvidence(inspectionId: $inspectionId, mode: $mode, first: 25, after: $after) { nodes { id requirementKey description captureSource state lineageId replacedBy mediaAvailability url } pageInfo { endCursor hasNextPage } } }
 query MyNotifications($after: String, $unreadOnly: Boolean!) { myNotifications(first: 25, after: $after, unreadOnly: $unreadOnly) { nodes { id kind title body resourceKind resourceId createdAt readAt } unreadCount pageInfo { endCursor hasNextPage } } }
+query NotificationDeliveries($after: String) {
+  notificationDeliveries(first: 25, after: $after) {
+    nodes {
+      id intentId status aggregateStatus selectedProvider createdAt updatedAt
+      channels { id channel status provider receiptId attempts lastAttemptAt createdAt updatedAt }
+    }
+    pageInfo { endCursor hasNextPage }
+  }
+}
 
 mutation CreateSchedule($input: CreateScheduleInput!) { createSchedule(input: $input) { schedule { id status nextDueAt version } userErrors { code field message correlationId } clientMutationId } }
 mutation UpdateSchedule($input: UpdateScheduleInput!) { updateSchedule(input: $input) { schedule { id status nextDueAt version } userErrors { code field message correlationId } clientMutationId } }

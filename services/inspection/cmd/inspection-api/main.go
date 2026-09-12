@@ -49,7 +49,9 @@ import (
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
 	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
+	receivemetastatus "inspection/services/inspection/internal/features/notifications/receive_meta_status"
 	receivetwiliostatus "inspection/services/inspection/internal/features/notifications/receive_twilio_status"
+	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
@@ -109,6 +111,7 @@ import (
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/requestctx"
@@ -131,6 +134,21 @@ func run() error {
 		return err
 	}
 	db, err := database.Open(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	metrics := observability.NewMetrics()
+	// The operational service is constructed independently from the legacy OTP
+	// notifiers. Producers migrate to this boundary in the next workflow stage.
+	providerResolver, err := notifications.NewProviderResolver(notifications.Provider(cfg.Notification.WhatsAppProvider))
+	if err != nil {
+		return err
+	}
+	payloadCipher, err := notifications.NewPayloadCipher(cfg.Notification.ActivePayloadKey, cfg.Notification.PayloadKeys)
+	if err != nil {
+		return err
+	}
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, V2ProducersEnabled: cfg.Notification.V2ProducersEnabled})
 	if err != nil {
 		return err
 	}
@@ -326,7 +344,7 @@ func run() error {
 			return projectlist.Setup(projectlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
-			return origininvite.Setup(origininvite.Dependencies{DB: db, Bus: bus, Service: originService, Notifications: channelRegistry, Authorizer: authorizer})
+			return origininvite.Setup(origininvite.Dependencies{DB: db, Bus: bus, Service: originService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
 		},
 		func() error {
 			return originactivate.Setup(originactivate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
@@ -357,7 +375,7 @@ func run() error {
 			return mediafalsepositive.Setup(mediafalsepositive.Dependencies{DB: db, Bus: bus, Service: mediaService})
 		},
 		func() error {
-			return recapturerequest.Setup(recapturerequest.Dependencies{DB: db, Bus: bus, Service: recaptureService, Notifications: channelRegistry, Authorizer: authorizer})
+			return recapturerequest.Setup(recapturerequest.Dependencies{DB: db, Bus: bus, Service: recaptureService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
 		},
 		func() error {
 			return recaptureexpire.Setup(recaptureexpire.Dependencies{Bus: bus, Service: recaptureService})
@@ -372,8 +390,13 @@ func run() error {
 		}
 	}
 	mux := http.NewServeMux()
-	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL}); err != nil {
+	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL, AccountID: cfg.TwilioAccountSID, Metrics: metrics}); err != nil {
 		return err
+	}
+	if cfg.Notification.WhatsAppProvider == "meta" {
+		if err := receivemetastatus.Setup(mux, receivemetastatus.Dependencies{DB: db, VerifyToken: cfg.Notification.MetaVerifyToken, AppSecret: cfg.Notification.MetaAppSecret, AccountID: cfg.Notification.MetaPhoneNumberID, Metrics: metrics}); err != nil {
+			return err
+		}
 	}
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
@@ -446,7 +469,7 @@ func run() error {
 		}
 		server.ServeHTTP(w, r.WithContext(requestctx.WithIdempotencyKey(ctx, r.Header.Get("Idempotency-Key"))))
 	}))
-	if err := operational.Setup(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken); err != nil {
+	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
 	}
 	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, mux), cfg.ShutdownTimeout)

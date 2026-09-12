@@ -60,6 +60,30 @@ func mapRecipientNotification(row database.RecipientNotification) *graphql1.Reci
 	return &graphql1.RecipientNotification{ID: row.ID.String(), Kind: row.Kind, Title: row.Title, Body: row.Body, ResourceKind: row.ResourceKind, ResourceID: resourceID, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), ReadAt: readAt}
 }
 
+// mapNotificationChannelDelivery deliberately projects only operational state
+// and provider correlation metadata. Destinations, templates, variables and
+// provider error details are execution data and must not leave the API.
+func mapNotificationChannelDelivery(row database.ChannelAttempt) *graphql1.NotificationChannelDelivery {
+	var receiptID, lastAttemptAt *string
+	if row.ReceiptID != "" {
+		receiptID = strptr(row.ReceiptID)
+	}
+	if row.LastAttemptAt != nil {
+		lastAttemptAt = strptr(row.LastAttemptAt.UTC().Format(time.RFC3339Nano))
+	}
+	return &graphql1.NotificationChannelDelivery{
+		ID:            row.ID.String(),
+		Channel:       row.Channel,
+		Status:        row.Status,
+		Provider:      row.Provider,
+		ReceiptID:     receiptID,
+		Attempts:      row.Attempts,
+		LastAttemptAt: lastAttemptAt,
+		CreatedAt:     row.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:     row.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func mapReportPublication(row database.ReportPublication) *graphql1.ReportPublication {
 	var publishedAt, invalidatedAt *string
 	if row.PublishedAt != nil {

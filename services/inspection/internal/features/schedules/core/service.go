@@ -12,6 +12,9 @@ import (
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
+	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	notificationcore "inspection/services/inspection/internal/features/notifications/core"
+	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -21,6 +24,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/requestctx"
+	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"github.com/google/uuid"
@@ -65,10 +69,12 @@ type ReminderDispatch struct {
 }
 
 type Service struct {
-	DB         *gorm.DB
-	Bus        *mediator.Bus
-	Authorizer auth.Authorizer
-	Now        func() time.Time
+	DB             *gorm.DB
+	Bus            *mediator.Bus
+	Authorizer     auth.Authorizer
+	Now            func() time.Time
+	Notifications  notificationcore.NotificationService
+	CaptureBaseURL string
 }
 
 func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error) {
@@ -169,6 +175,9 @@ func (s Service) Cancel(ctx context.Context, tenantID, scheduleID identity.ID, e
 		return database.Schedule{}, err
 	}
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		if s.Notifications == nil || strings.TrimSpace(s.CaptureBaseURL) == "" {
+			return fmt.Errorf("schedule: notification service is unavailable")
+		}
 		r := tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND version=?", tenantID, scheduleID, expectedVersion).Updates(map[string]any{"status": "CANCELED", "version": expectedVersion + 1, "updated_at": s.now()})
 		if r.Error != nil {
 			return r.Error
@@ -285,20 +294,48 @@ func (s Service) DispatchDueReminders(ctx context.Context, tenantID identity.ID,
 		}
 		metadata, _ := requestctx.FromContext(ctx)
 		for _, plan := range plans {
-			eventID := uuid.NewSHA1(plan.ID, []byte("notification.delivery_requested.v1"))
+			var inspection database.Inspection
+			if err := tx.Where("tenant_id=? AND id=? AND status NOT IN ('COMPLETED','CANCELED','INVALIDATED')", tenantID, plan.InspectionID).First(&inspection).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					_ = tx.Model(&database.ReminderPlan{}).Where("tenant_id=? AND id=?", tenantID, plan.ID).Update("status", "CANCELED")
+					continue
+				}
+				return err
+			}
+			var invitation database.Invitation
+			if err := tx.Joins("JOIN inspections.responsibilities r ON r.id=invitations.responsibility_id AND r.tenant_id=invitations.tenant_id").Where("invitations.tenant_id=? AND r.inspection_id=? AND invitations.status='ACTIVE' AND invitations.revoked_at IS NULL AND invitations.expires_at>?", tenantID, plan.InspectionID, now.UTC()).First(&invitation).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					_ = tx.Model(&database.ReminderPlan{}).Where("tenant_id=? AND id=?", tenantID, plan.ID).Update("status", "CANCELED")
+					continue
+				}
+				return err
+			}
+			var delivery []invitationcore.DeliveryIntent
+			if err := json.Unmarshal(invitation.DeliveryIntents, &delivery); err != nil || len(delivery) == 0 {
+				return fmt.Errorf("schedule: reminder delivery is invalid")
+			}
+			token, err := security.NewScopedToken(tenantID)
+			if err != nil {
+				return err
+			}
+			hash := security.HashToken(token)
+			if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND id=? AND status='ACTIVE' AND expires_at>?", tenantID, invitation.ID, now.UTC()).Updates(map[string]any{"previous_token_hash": gorm.Expr("token_hash"), "token_hash": hash[:]}).Error; err != nil {
+				return err
+			}
 			correlationID := metadata.CorrelationID
 			if correlationID == "" {
-				correlationID = eventID.String()
+				correlationID = "reminder-" + plan.ID.String()
 			}
-			payload, _ := json.Marshal(map[string]any{"inspectionId": plan.InspectionID, "reminderPlanId": plan.ID, "scheduledAt": plan.RemindAt})
-			envelope, _ := json.Marshal(map[string]any{"id": eventID, "type": "notification.delivery_requested.v1", "schemaVersion": 1, "occurredAt": now.UTC(), "tenantId": tenantID, "aggregateId": plan.InspectionID, "correlationId": correlationID, "payload": json.RawMessage(payload)})
-			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&database.OutboxIntent{ID: eventID, TenantID: tenantID, Type: "notification.delivery_requested.v1", SchemaVersion: 1, Payload: envelope, CorrelationID: correlationID, Status: "PENDING", NextAttemptAt: now.UTC(), CreatedAt: now.UTC()}).Error; err != nil {
-				return err
+			for _, target := range delivery {
+				_, err := s.Notifications.Send(notificationrequest.InTransaction(ctx, tx), notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "reminder", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"}, CorrelationID: correlationID, IdempotencyKey: plan.ID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: s.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+				if err != nil {
+					return err
+				}
 			}
 			if err := tx.Model(&database.ReminderPlan{}).Where("tenant_id=? AND id=? AND status='PLANNED'", tenantID, plan.ID).Update("status", "DISPATCHED").Error; err != nil {
 				return err
 			}
-			result = append(result, ReminderDispatch{PlanID: plan.ID, EventID: eventID, InspectionID: plan.InspectionID, RemindAt: plan.RemindAt})
+			result = append(result, ReminderDispatch{PlanID: plan.ID, EventID: identity.ID(uuid.NewSHA1(plan.ID, []byte("notification.delivery_requested.v2"))), InspectionID: plan.InspectionID, RemindAt: plan.RemindAt})
 		}
 		return nil
 	})

@@ -155,6 +155,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			}
 		}
 		criticalIntent := identity.ID(uuid.NewSHA1(uuid.Nil, []byte("critical:"+tenantID.String()+":"+inspectionID.String()+":CRITICAL")))
+		if err := deleteWhere(&database.NotificationPayload{}, "tenant_id=? AND delivery_id IN (SELECT id FROM notifications.deliveries WHERE tenant_id=? AND (intent_id=? OR inspection_id=?))", tenantID, tenantID, criticalIntent, inspectionID); err != nil {
+			return err
+		}
 		if err := deleteWhere(&database.ChannelAttempt{}, "tenant_id=? AND delivery_id IN (SELECT id FROM notifications.deliveries WHERE tenant_id=? AND intent_id=?)", tenantID, tenantID, criticalIntent); err != nil {
 			return err
 		}

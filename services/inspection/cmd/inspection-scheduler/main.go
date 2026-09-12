@@ -10,6 +10,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
 	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
+	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	materializedue "inspection/services/inspection/internal/features/schedules/materialize_due"
@@ -20,6 +21,8 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/notifications"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
 	"inspection/services/inspection/internal/platform/requestctx"
 	process "inspection/services/inspection/internal/platform/runtime"
@@ -45,6 +48,19 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	payloadCipher, err := notifications.NewPayloadCipher(cfg.Notification.ActivePayloadKey, cfg.Notification.PayloadKeys)
+	if err != nil {
+		return err
+	}
+	metrics := observability.NewMetrics()
+	providerResolver, err := notifications.NewProviderResolver(notifications.Provider(cfg.Notification.WhatsAppProvider))
+	if err != nil {
+		return err
+	}
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, V2ProducersEnabled: cfg.Notification.V2ProducersEnabled})
+	if err != nil {
+		return err
+	}
 	bus := mediator.New()
 	internalAuthorizer := auth.Authorizer{}
 	setups := []func() error{
@@ -59,7 +75,9 @@ func run() error {
 			return createoccurrence.Setup(createoccurrence.Dependencies{DB: db, Bus: bus, Authorizer: internalAuthorizer})
 		},
 		func() error { return materializedue.Setup(materializedue.Dependencies{DB: db, Bus: bus}) },
-		func() error { return schedulereminders.Setup(schedulereminders.Dependencies{DB: db, Bus: bus}) },
+		func() error {
+			return schedulereminders.Setup(schedulereminders.Dependencies{DB: db, Bus: bus, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin})
+		},
 	}
 	for _, setup := range setups {
 		if err := setup(); err != nil {
@@ -68,7 +86,7 @@ func run() error {
 	}
 	go runMaterializer(db, bus)
 	mux := http.NewServeMux()
-	if err := operational.Setup(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken); err != nil {
+	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
 	}
 	return process.Serve(cfg.HTTPAddress, mux, cfg.ShutdownTimeout)

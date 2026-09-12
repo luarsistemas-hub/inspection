@@ -5,7 +5,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -36,9 +35,9 @@ func callbackDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
-		`CREATE TABLE notifications.deliveries (id blob primary key,tenant_id blob,intent_id blob,inspection_id blob,status text,created_at datetime,updated_at datetime)`,
-		`CREATE TABLE notifications.channel_attempts (id blob primary key,tenant_id blob,delivery_id blob,channel text,destination text,status text,provider text,receipt_id text,attempts integer,last_error text,created_at datetime,updated_at datetime)`,
-		`CREATE TABLE notifications.provider_callbacks (id blob primary key,tenant_id blob,provider text,callback_id text,receipt_id text,status text,received_at datetime,UNIQUE(provider,callback_id))`,
+		`CREATE TABLE notifications.deliveries (id blob primary key,tenant_id blob,intent_id blob,inspection_id blob,status text,logical_template text,template_version text,correlation_id text,idempotency_key text,request_digest text,recipient_id text,selected_provider text,scheduled_at datetime,lease_expires_at datetime,created_at datetime,updated_at datetime)`,
+		`CREATE TABLE notifications.channel_attempts (id blob primary key,tenant_id blob,delivery_id blob,channel text,destination text,status text,provider text,provider_account text,receipt_id text,attempts integer,last_error text,template_variables blob,next_attempt_at datetime,lease_expires_at datetime,last_attempt_at datetime,created_at datetime,updated_at datetime)`,
+		`CREATE TABLE notifications.provider_callbacks (id blob primary key,tenant_id blob,provider text,provider_account text,callback_id text,receipt_id text,channel_attempt_id blob,status text,received_at datetime,UNIQUE(provider,provider_account,callback_id))`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -59,7 +58,7 @@ func signedCallback(t *testing.T, publicURL, token string, tenantID identity.ID,
 	}
 	req := httptest.NewRequest(http.MethodPost, rawURL, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-Twilio-Request-Timestamp", fmt.Sprint(timestamp.Unix()))
+	_ = timestamp // Twilio's status callback signature has no timestamp contract.
 	req.Header.Set("X-Twilio-Signature", signature)
 	return req
 }
@@ -68,7 +67,7 @@ func TestIT378IT379IT541ValidCallbackUpdatesOnce(t *testing.T) {
 	db := callbackDB(t)
 	tenantID := identity.NewID()
 	delivery := database.Delivery{ID: identity.NewID(), TenantID: tenantID, IntentID: identity.NewID(), Status: "SENT"}
-	attempt := database.ChannelAttempt{ID: identity.NewID(), TenantID: tenantID, DeliveryID: delivery.ID, Channel: "SMS", Destination: "+15550000000", Status: "SENT", Provider: "twilio", ReceiptID: "SM1"}
+	attempt := database.ChannelAttempt{ID: identity.NewID(), TenantID: tenantID, DeliveryID: delivery.ID, Channel: "SMS", Destination: "+15550000000", Status: "SENT", Provider: "twilio", ProviderAccount: "AC-local", ReceiptID: "SM1"}
 	if err := db.Create(&delivery).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +75,7 @@ func TestIT378IT379IT541ValidCallbackUpdatesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(1000, 0).UTC()
-	deps := Dependencies{DB: db, AuthToken: "token", PublicURL: "https://api.example/webhooks/twilio/status", Clock: func() time.Time { return now }, Runner: sqliteRunner{db: db}}
+	deps := Dependencies{DB: db, AuthToken: "token", PublicURL: "https://api.example/webhooks/twilio/status", AccountID: "AC-local", Clock: func() time.Time { return now }, Runner: sqliteRunner{db: db}}
 	for i := 0; i < 2; i++ {
 		w := httptest.NewRecorder()
 		handle(w, signedCallback(t, deps.PublicURL, deps.AuthToken, tenantID, now, ""), deps)
@@ -97,10 +96,9 @@ func TestIT542InvalidCallbackMakesNoMutation(t *testing.T) {
 	db := callbackDB(t)
 	tenantID := identity.NewID()
 	now := time.Unix(1000, 0).UTC()
-	deps := Dependencies{DB: db, AuthToken: "token", PublicURL: "https://api.example/webhooks/twilio/status", Clock: func() time.Time { return now }, Runner: sqliteRunner{db: db}}
+	deps := Dependencies{DB: db, AuthToken: "token", PublicURL: "https://api.example/webhooks/twilio/status", AccountID: "AC-local", Clock: func() time.Time { return now }, Runner: sqliteRunner{db: db}}
 	for name, req := range map[string]*http.Request{
 		"bad signature": signedCallback(t, deps.PublicURL, deps.AuthToken, tenantID, now, "bad"),
-		"stale":         signedCallback(t, deps.PublicURL, deps.AuthToken, tenantID, now.Add(-6*time.Minute), ""),
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := httptest.NewRecorder()

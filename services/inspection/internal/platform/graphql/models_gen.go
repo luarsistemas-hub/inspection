@@ -565,12 +565,27 @@ type MembershipPayload struct {
 type Mutation struct {
 }
 
+type NotificationChannelDelivery struct {
+	ID            string  `json:"id"`
+	Channel       string  `json:"channel"`
+	Status        string  `json:"status"`
+	Provider      string  `json:"provider"`
+	ReceiptID     *string `json:"receiptId,omitempty"`
+	Attempts      int     `json:"attempts"`
+	LastAttemptAt *string `json:"lastAttemptAt,omitempty"`
+	CreatedAt     string  `json:"createdAt"`
+	UpdatedAt     string  `json:"updatedAt"`
+}
+
 type NotificationDelivery struct {
-	ID        string `json:"id"`
-	IntentID  string `json:"intentId"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID               string                         `json:"id"`
+	IntentID         string                         `json:"intentId"`
+	Status           string                         `json:"status"`
+	AggregateStatus  string                         `json:"aggregateStatus"`
+	SelectedProvider string                         `json:"selectedProvider"`
+	Channels         []*NotificationChannelDelivery `json:"channels"`
+	CreatedAt        string                         `json:"createdAt"`
+	UpdatedAt        string                         `json:"updatedAt"`
 }
 
 type NotificationDeliveryConnection struct {

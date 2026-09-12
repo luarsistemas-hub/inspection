@@ -7,8 +7,6 @@ package resolvers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
@@ -82,7 +80,6 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -160,29 +157,6 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
 	return &graphql1.OnboardingPayload{Session: mapOnboardingSession(result), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
-}
-
-// onboardingValidationPayload keeps expected client-correctable failures in
-// the payload contract while preserving dependency and internal failures as
-// top-level GraphQL errors.
-func onboardingValidationPayload(err error, mutationID string) (*graphql1.OnboardingPayload, error) {
-	code, field, message := apperror.Public(err)
-	if code != apperror.InvalidInput && code != apperror.InvalidState && code != apperror.Conflict && code != apperror.RateLimited && code != apperror.SessionExpired {
-		return nil, err
-	}
-	var fieldValue *string
-	if field != "" {
-		fieldValue = &field
-	}
-	return &graphql1.OnboardingPayload{
-		UserErrors:       []*graphql1.UserError{{Code: string(code), Field: fieldValue, Message: message}},
-		ClientMutationID: mutationID,
-	}, nil
-}
-
-func onboardingAgencyProvisioningKey(sessionToken string, expectedVersion int64) string {
-	key := sha256.Sum256([]byte(sessionToken + "\x00" + strconv.FormatInt(expectedVersion, 10)))
-	return "onboarding:agency:" + hex.EncodeToString(key[:])
 }
 
 // RequestAdminActivationOtp is the resolver for the requestAdminActivationOtp field.
@@ -2117,6 +2091,9 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	if !ok {
 		return nil, unauthenticated()
 	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
 	limit := intValue(first)
 	if limit <= 0 {
 		limit = 25
@@ -2126,7 +2103,7 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	}
 	var rows []database.Delivery
 	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		query := tx
+		query := tx.Where("tenant_id=?", meta.TenantID)
 		if after != nil && *after != "" {
 			cursorTime, cursorID, err := dashboardcore.DecodeCursor(*after)
 			if err != nil {
@@ -2143,9 +2120,25 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	if hasNext {
 		rows = rows[:limit]
 	}
+	channelsByDelivery := make(map[identity.ID][]*graphql1.NotificationChannelDelivery, len(rows))
+	if len(rows) > 0 {
+		deliveryIDs := make([]identity.ID, 0, len(rows))
+		for _, row := range rows {
+			deliveryIDs = append(deliveryIDs, row.ID)
+		}
+		var channels []database.ChannelAttempt
+		if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND delivery_id IN ?", meta.TenantID, deliveryIDs).Order("delivery_id ASC, channel ASC, created_at ASC, id ASC").Find(&channels).Error
+		}); err != nil {
+			return nil, err
+		}
+		for _, channel := range channels {
+			channelsByDelivery[channel.DeliveryID] = append(channelsByDelivery[channel.DeliveryID], mapNotificationChannelDelivery(channel))
+		}
+	}
 	nodes := make([]*graphql1.NotificationDelivery, 0, len(rows))
 	for _, row := range rows {
-		nodes = append(nodes, &graphql1.NotificationDelivery{ID: row.ID.String(), IntentID: row.IntentID.String(), Status: row.Status, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)})
+		nodes = append(nodes, &graphql1.NotificationDelivery{ID: row.ID.String(), IntentID: row.IntentID.String(), Status: row.Status, AggregateStatus: row.Status, SelectedProvider: row.SelectedProvider, Channels: channelsByDelivery[row.ID], CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 	}
 	end := ""
 	if len(rows) > 0 {

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var forbidden = []string{"authorization", "cookie", "token", "otp", "password", "secret", "presigned", "contact", "email", "phone", "image", "prompt", "response", "graphql.variables"}
+var forbidden = []string{"authorization", "cookie", "token", "otp", "password", "secret", "presigned", "contact", "email", "phone", "recipient", "destination", "address", "body", "html", "url", "image", "ciphertext", "nonce", "credential", "bearer", "prompt", "response", "graphql.variables"}
 
 // Sanitize removes sensitive and unbounded fields while keeping correlation.
 func Sanitize(fields map[string]any) map[string]any {

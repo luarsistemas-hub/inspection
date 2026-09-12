@@ -5,7 +5,7 @@ O harness fica dentro do serviço para reutilizar contratos de eventos, transaç
 Suba as dependências locais primeiro:
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq minio minio-setup litellm-stub gotenberg-stub
+docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq minio minio-setup mailpit twilio-fake meta-fake litellm-stub gotenberg-stub
 ```
 
 Execute o gate com banco que já possui o schema:
@@ -29,4 +29,4 @@ export INSPECTION_ENV=test
 
 O suite externo deve criar um harness por processo, declarar contratos de fila, semear via `WithinTenant`, publicar com `PublishPayload`, chamar GraphQL por `GraphQL` e aguardar com `Eventually`. Sobrescreva `INSPECTION_TEST_*` na CI; credenciais não ficam no código.
 
-`Task06AssignedCases()` expõe a atribuição das 148 cases (14 unitárias e 134 de integração) como manifesto fail-fast. O runner externo ainda precisa registrar implementação para cada ID.
+`Task06AssignedCases()` expõe as nove cases atribuídas a esta tarefa como manifesto fail-fast: IT-047 a IT-050 e E2E-009/E2E-012 a E2E-015. O runner externo ainda precisa registrar implementação para cada ID.

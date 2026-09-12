@@ -410,12 +410,27 @@ type ComplexityRoot struct {
 		VerifyOnboardingOtp                    func(childComplexity int, input VerifyOnboardingOtpInput) int
 	}
 
+	NotificationChannelDelivery struct {
+		Attempts      func(childComplexity int) int
+		Channel       func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		ID            func(childComplexity int) int
+		LastAttemptAt func(childComplexity int) int
+		Provider      func(childComplexity int) int
+		ReceiptID     func(childComplexity int) int
+		Status        func(childComplexity int) int
+		UpdatedAt     func(childComplexity int) int
+	}
+
 	NotificationDelivery struct {
-		CreatedAt func(childComplexity int) int
-		ID        func(childComplexity int) int
-		IntentID  func(childComplexity int) int
-		Status    func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
+		AggregateStatus  func(childComplexity int) int
+		Channels         func(childComplexity int) int
+		CreatedAt        func(childComplexity int) int
+		ID               func(childComplexity int) int
+		IntentID         func(childComplexity int) int
+		SelectedProvider func(childComplexity int) int
+		Status           func(childComplexity int) int
+		UpdatedAt        func(childComplexity int) int
 	}
 
 	NotificationDeliveryConnection struct {
@@ -2979,6 +2994,73 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.VerifyOnboardingOtp(childComplexity, args["input"].(VerifyOnboardingOtpInput)), true
 
+	case "NotificationChannelDelivery.attempts":
+		if e.ComplexityRoot.NotificationChannelDelivery.Attempts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.Attempts(childComplexity), true
+	case "NotificationChannelDelivery.channel":
+		if e.ComplexityRoot.NotificationChannelDelivery.Channel == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.Channel(childComplexity), true
+	case "NotificationChannelDelivery.createdAt":
+		if e.ComplexityRoot.NotificationChannelDelivery.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.CreatedAt(childComplexity), true
+	case "NotificationChannelDelivery.id":
+		if e.ComplexityRoot.NotificationChannelDelivery.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.ID(childComplexity), true
+	case "NotificationChannelDelivery.lastAttemptAt":
+		if e.ComplexityRoot.NotificationChannelDelivery.LastAttemptAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.LastAttemptAt(childComplexity), true
+	case "NotificationChannelDelivery.provider":
+		if e.ComplexityRoot.NotificationChannelDelivery.Provider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.Provider(childComplexity), true
+	case "NotificationChannelDelivery.receiptId":
+		if e.ComplexityRoot.NotificationChannelDelivery.ReceiptID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.ReceiptID(childComplexity), true
+	case "NotificationChannelDelivery.status":
+		if e.ComplexityRoot.NotificationChannelDelivery.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.Status(childComplexity), true
+	case "NotificationChannelDelivery.updatedAt":
+		if e.ComplexityRoot.NotificationChannelDelivery.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationChannelDelivery.UpdatedAt(childComplexity), true
+
+	case "NotificationDelivery.aggregateStatus":
+		if e.ComplexityRoot.NotificationDelivery.AggregateStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.AggregateStatus(childComplexity), true
+	case "NotificationDelivery.channels":
+		if e.ComplexityRoot.NotificationDelivery.Channels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.Channels(childComplexity), true
 	case "NotificationDelivery.createdAt":
 		if e.ComplexityRoot.NotificationDelivery.CreatedAt == nil {
 			break
@@ -2997,6 +3079,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NotificationDelivery.IntentID(childComplexity), true
+	case "NotificationDelivery.selectedProvider":
+		if e.ComplexityRoot.NotificationDelivery.SelectedProvider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.SelectedProvider(childComplexity), true
 	case "NotificationDelivery.status":
 		if e.ComplexityRoot.NotificationDelivery.Status == nil {
 			break
@@ -5624,7 +5712,28 @@ type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classificati
 type TriageInspectionConnection { nodes: [TriageInspection!]! pageInfo: PageInfo! }
 type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
 type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
-type NotificationDelivery { id: ID! intentId: ID! status: String! createdAt: String! updatedAt: String! }
+type NotificationDelivery {
+  id: ID!
+  intentId: ID!
+  # status is retained for existing consumers; aggregateStatus makes its role explicit.
+  status: String!
+  aggregateStatus: String!
+  selectedProvider: String!
+  channels: [NotificationChannelDelivery!]!
+  createdAt: String!
+  updatedAt: String!
+}
+type NotificationChannelDelivery {
+  id: ID!
+  channel: String!
+  status: String!
+  provider: String!
+  receiptId: String
+  attempts: Int!
+  lastAttemptAt: String
+  createdAt: String!
+  updatedAt: String!
+}
 type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: PageInfo! }
 type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
 type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }
@@ -6345,6 +6454,30 @@ func (ec *executionContext) childFields_MembershipPayload(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type MembershipPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_NotificationChannelDelivery(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_NotificationChannelDelivery_id(ctx, field)
+	case "channel":
+		return ec.fieldContext_NotificationChannelDelivery_channel(ctx, field)
+	case "status":
+		return ec.fieldContext_NotificationChannelDelivery_status(ctx, field)
+	case "provider":
+		return ec.fieldContext_NotificationChannelDelivery_provider(ctx, field)
+	case "receiptId":
+		return ec.fieldContext_NotificationChannelDelivery_receiptId(ctx, field)
+	case "attempts":
+		return ec.fieldContext_NotificationChannelDelivery_attempts(ctx, field)
+	case "lastAttemptAt":
+		return ec.fieldContext_NotificationChannelDelivery_lastAttemptAt(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_NotificationChannelDelivery_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_NotificationChannelDelivery_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type NotificationChannelDelivery", field.Name)
+}
+
 func (ec *executionContext) childFields_NotificationDelivery(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -6353,6 +6486,12 @@ func (ec *executionContext) childFields_NotificationDelivery(ctx context.Context
 		return ec.fieldContext_NotificationDelivery_intentId(ctx, field)
 	case "status":
 		return ec.fieldContext_NotificationDelivery_status(ctx, field)
+	case "aggregateStatus":
+		return ec.fieldContext_NotificationDelivery_aggregateStatus(ctx, field)
+	case "selectedProvider":
+		return ec.fieldContext_NotificationDelivery_selectedProvider(ctx, field)
+	case "channels":
+		return ec.fieldContext_NotificationDelivery_channels(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_NotificationDelivery_createdAt(ctx, field)
 	case "updatedAt":
@@ -16737,6 +16876,213 @@ func (ec *executionContext) fieldContext_Mutation_configureMyNotificationPrefere
 	return fc, nil
 }
 
+func (ec *executionContext) _NotificationChannelDelivery_id(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_channel(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_channel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Channel, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_channel(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_status(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_provider(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_provider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_receiptId(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_receiptId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReceiptID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_receiptId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_attempts(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_attempts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Attempts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_attempts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_lastAttemptAt(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_lastAttemptAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastAttemptAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_lastAttemptAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_createdAt(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationChannelDelivery_updatedAt(ctx context.Context, field graphql.CollectedField, obj *NotificationChannelDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationChannelDelivery_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationChannelDelivery_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationChannelDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _NotificationDelivery_id(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16804,6 +17150,84 @@ func (ec *executionContext) _NotificationDelivery_status(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_NotificationDelivery_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_aggregateStatus(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_aggregateStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AggregateStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_aggregateStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_selectedProvider(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_selectedProvider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SelectedProvider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_selectedProvider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_channels(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_channels(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Channels, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*NotificationChannelDelivery) graphql.Marshaler {
+			return ec.marshalNNotificationChannelDelivery2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationChannelDeliveryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_channels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NotificationDelivery",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_NotificationChannelDelivery(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _NotificationDelivery_createdAt(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
@@ -33301,6 +33725,84 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 	return out
 }
 
+var notificationChannelDeliveryImplementors = []string{"NotificationChannelDelivery"}
+
+func (ec *executionContext) _NotificationChannelDelivery(ctx context.Context, sel ast.SelectionSet, obj *NotificationChannelDelivery) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationChannelDeliveryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NotificationChannelDelivery")
+		case "id":
+			out.Values[i] = ec._NotificationChannelDelivery_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "channel":
+			out.Values[i] = ec._NotificationChannelDelivery_channel(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._NotificationChannelDelivery_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._NotificationChannelDelivery_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "receiptId":
+			out.Values[i] = ec._NotificationChannelDelivery_receiptId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "attempts":
+			out.Values[i] = ec._NotificationChannelDelivery_attempts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastAttemptAt":
+			out.Values[i] = ec._NotificationChannelDelivery_lastAttemptAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._NotificationChannelDelivery_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._NotificationChannelDelivery_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var notificationDeliveryImplementors = []string{"NotificationDelivery"}
 
 func (ec *executionContext) _NotificationDelivery(ctx context.Context, sel ast.SelectionSet, obj *NotificationDelivery) graphql.Marshaler {
@@ -33325,6 +33827,21 @@ func (ec *executionContext) _NotificationDelivery(ctx context.Context, sel ast.S
 			}
 		case "status":
 			out.Values[i] = ec._NotificationDelivery_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "aggregateStatus":
+			out.Values[i] = ec._NotificationDelivery_aggregateStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "selectedProvider":
+			out.Values[i] = ec._NotificationDelivery_selectedProvider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "channels":
+			out.Values[i] = ec._NotificationDelivery_channels(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -39106,6 +39623,32 @@ func (ec *executionContext) marshalNMembershipPayload2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._MembershipPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNotificationChannelDelivery2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationChannelDeliveryᚄ(ctx context.Context, sel ast.SelectionSet, v []*NotificationChannelDelivery) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNNotificationChannelDelivery2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationChannelDelivery(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotificationChannelDelivery2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationChannelDelivery(ctx context.Context, sel ast.SelectionSet, v *NotificationChannelDelivery) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NotificationChannelDelivery(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNNotificationDelivery2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationDeliveryᚄ(ctx context.Context, sel ast.SelectionSet, v []*NotificationDelivery) graphql.Marshaler {

@@ -2,25 +2,29 @@ package receive_twilio_status
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/features/notifications/callbacks"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/notifications"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type Dependencies struct {
-	DB                   *gorm.DB
-	AuthToken, PublicURL string
-	Clock                func() time.Time
-	Runner               TenantRunner
+	DB                              *gorm.DB
+	AuthToken, PublicURL, AccountID string
+	Clock                           func() time.Time
+	Runner                          TenantRunner
+	Metrics                         *observability.Metrics
 }
 
 type TenantRunner interface {
@@ -51,12 +55,11 @@ func handle(w http.ResponseWriter, r *http.Request, deps Dependencies) {
 		http.Error(w, "invalid callback", http.StatusBadRequest)
 		return
 	}
-	timestamp := r.Header.Get("X-Twilio-Request-Timestamp")
 	signedURL := strings.TrimRight(deps.PublicURL, "?")
 	if r.URL.RawQuery != "" {
 		signedURL += "?" + r.URL.RawQuery
 	}
-	if notifications.ValidateCallbackTimestamp(timestamp, deps.Clock().UTC(), 5*time.Minute) != nil || !notifications.VerifyTwilioSignature(deps.AuthToken, signedURL, r.PostForm, r.Header.Get("X-Twilio-Signature")) {
+	if !notifications.VerifyTwilioSignature(deps.AuthToken, signedURL, r.PostForm, r.Header.Get("X-Twilio-Signature")) {
 		http.Error(w, "invalid callback", http.StatusForbidden)
 		return
 	}
@@ -65,38 +68,24 @@ func handle(w http.ResponseWriter, r *http.Request, deps Dependencies) {
 		http.Error(w, "invalid callback", http.StatusBadRequest)
 		return
 	}
-	callbackID := receipt + ":" + status + ":" + timestamp
+	sum := sha256.Sum256([]byte(receipt + "\x00" + status + "\x00" + r.Header.Get("X-Twilio-Signature")))
+	callbackID := fmt.Sprintf("%x", sum[:])
+	correlated := false
 	err = deps.Runner.Within(r.Context(), tenantID, func(tx *gorm.DB) error {
-		var attempt database.ChannelAttempt
-		if err := tx.Where("tenant_id=? AND receipt_id=?", tenantID, receipt).First(&attempt).Error; err != nil {
+		if err := callbacks.Record(r.Context(), tx, tenantID, "twilio", deps.AccountID, callbackID, receipt, status, deps.Clock()); err != nil {
 			return err
 		}
-		callback := database.ProviderCallback{ID: identity.NewID(), TenantID: tenantID, Provider: "twilio", CallbackID: callbackID, ReceiptID: receipt, Status: status, ReceivedAt: deps.Clock().UTC()}
-		result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&callback)
-		if result.Error != nil || result.RowsAffected == 0 {
-			return result.Error
-		}
-		normalized := "SENT"
-		if status == "delivered" {
-			normalized = "DELIVERED"
-		} else if status == "failed" || status == "undelivered" {
-			normalized = "FAILED"
-		}
-		if err := tx.Model(&database.ChannelAttempt{}).Where("id=?", attempt.ID).Updates(map[string]any{"status": normalized, "updated_at": deps.Clock().UTC()}).Error; err != nil {
+		var count int64
+		if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND provider=? AND provider_account=? AND receipt_id=?", tenantID, "twilio", deps.AccountID, receipt).Count(&count).Error; err != nil {
 			return err
 		}
-		if normalized == "DELIVERED" {
-			return tx.Model(&database.Delivery{}).Where("id=?", attempt.DeliveryID).Updates(map[string]any{"status": "DELIVERED", "updated_at": deps.Clock().UTC()}).Error
-		}
+		correlated = count > 0
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			http.Error(w, "callback target unavailable", http.StatusNotFound)
-			return
-		}
 		http.Error(w, "callback unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	deps.Metrics.Callback("twilio", correlated)
 	w.WriteHeader(http.StatusNoContent)
 }

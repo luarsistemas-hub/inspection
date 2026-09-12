@@ -6,7 +6,7 @@ import (
 
 	"inspection/libs/identity"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
-	linkdelivery "inspection/services/inspection/internal/features/invitations/link_delivery"
+	notificationcore "inspection/services/inspection/internal/features/notifications/core"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
@@ -14,7 +14,6 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
-	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
@@ -23,15 +22,16 @@ import (
 
 type Command struct{ Input recapturecore.RequestInput }
 type Dependencies struct {
-	DB            *gorm.DB
-	Bus           *mediator.Bus
-	Service       recapturecore.Service
-	Notifications *notifications.Registry
-	Authorizer    auth.Authorizer
+	DB             *gorm.DB
+	Bus            *mediator.Bus
+	Service        recapturecore.Service
+	Notifications  notificationcore.NotificationService
+	CaptureBaseURL string
+	Authorizer     auth.Authorizer
 }
 
 func Setup(d Dependencies) error {
-	if d.DB == nil || d.Bus == nil || d.Service.DB == nil || d.Notifications == nil {
+	if d.DB == nil || d.Bus == nil || d.Service.DB == nil || d.Notifications == nil || d.CaptureBaseURL == "" {
 		return fmt.Errorf("slice recapture/request: missing dependency")
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
@@ -58,24 +58,8 @@ func Setup(d Dependencies) error {
 			return nil, err
 		}
 		if result.LinkToken != "" {
-			if err := deliverRecapture(ctx, d.DB, d.Notifications, input.TenantID, result.RequestID, result.ResponsibilityID, result.LinkToken, input.Delivery); err != nil {
+			if err := deliverRecapture(ctx, d.DB, d.Notifications, d.CaptureBaseURL, input.TenantID, result.RequestID, result.ResponsibilityID, result.LinkToken, input.Delivery); err != nil {
 				return nil, err
-			}
-		} else {
-			var invitation database.Invitation
-			if err := (tenanttx.Runner{DB: d.DB}).Within(ctx, input.TenantID, func(tx *gorm.DB) error {
-				return tx.Where("tenant_id=? AND responsibility_id=?", input.TenantID, result.ResponsibilityID).First(&invitation).Error
-			}); err != nil {
-				return nil, err
-			}
-			token, err := linkdelivery.RetryToken(ctx, d.DB, input.TenantID, invitation.ID)
-			if err != nil {
-				return nil, err
-			}
-			if token != "" {
-				if err := deliverRecapture(ctx, d.DB, d.Notifications, input.TenantID, result.RequestID, result.ResponsibilityID, token, input.Delivery); err != nil {
-					return nil, err
-				}
 			}
 		}
 		return result, nil
@@ -96,12 +80,18 @@ func deliveries(participant participantcore.ParticipantView) []invitationcore.De
 	return result
 }
 
-func deliverRecapture(ctx context.Context, db *gorm.DB, registry *notifications.Registry, tenantID, requestID, responsibilityID identity.ID, token string, delivery []invitationcore.DeliveryIntent) error {
+func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore.NotificationService, baseURL string, tenantID, requestID, responsibilityID identity.ID, token string, delivery []invitationcore.DeliveryIntent) error {
 	var invitation database.Invitation
 	if err := (tenanttx.Runner{DB: db}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&invitation).Error
 	}); err != nil {
 		return err
 	}
-	return linkdelivery.Deliver(ctx, db, registry, tenantID, invitation.ID, token, delivery, "inspection-recapture-link")
+	for _, target := range delivery {
+		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: requestID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

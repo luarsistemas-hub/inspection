@@ -655,33 +655,77 @@ type RecaptureRequirement struct {
 func (RecaptureRequirement) TableName() string { return "recapture.request_requirements" }
 
 type Delivery struct {
-	ID           identity.ID  `gorm:"type:uuid;primaryKey"`
-	TenantID     identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:1"`
-	IntentID     identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:2"`
-	InspectionID *identity.ID `gorm:"type:uuid;index"`
-	Status       string       `gorm:"size:20;not null;index"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID               identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:1"`
+	IntentID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:2"`
+	InspectionID     *identity.ID `gorm:"type:uuid;index"`
+	Status           string       `gorm:"size:20;not null;index"`
+	LogicalTemplate  string       `gorm:"size:100;not null;default:''"`
+	TemplateVersion  string       `gorm:"size:32;not null;default:''"`
+	CorrelationID    string       `gorm:"size:200;not null;default:''"`
+	IdempotencyKey   string       `gorm:"size:200;not null;default:''"`
+	RequestDigest    string       `gorm:"size:64;not null;default:''"`
+	RecipientID      string       `gorm:"size:200;not null;default:''"`
+	SelectedProvider string       `gorm:"size:50;not null;default:''"`
+	ScheduledAt      *time.Time
+	LeaseExpiresAt   *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 func (Delivery) TableName() string { return "notifications.deliveries" }
 
 type ChannelAttempt struct {
-	ID          identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID    identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_channel_destination,priority:1"`
-	DeliveryID  identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_channel_destination,priority:2"`
-	Channel     string      `gorm:"size:20;not null;uniqueIndex:idx_channel_destination,priority:3"`
-	Destination string      `gorm:"size:320;not null;uniqueIndex:idx_channel_destination,priority:4"`
-	Status      string      `gorm:"size:20;not null;index"`
-	Provider    string      `gorm:"size:50"`
-	ReceiptID   string      `gorm:"size:500;index"`
-	Attempts    int         `gorm:"not null;default:0"`
-	LastError   string      `gorm:"size:200"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID          identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_channel_destination,priority:1"`
+	DeliveryID        identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_channel_destination,priority:2"`
+	Channel           string      `gorm:"size:20;not null;uniqueIndex:idx_channel_destination,priority:3"`
+	Destination       string      `gorm:"size:320;not null;uniqueIndex:idx_channel_destination,priority:4"`
+	Status            string      `gorm:"size:20;not null;index"`
+	Provider          string      `gorm:"size:50"`
+	ProviderAccount   string      `gorm:"size:200;not null;default:''"`
+	ReceiptID         string      `gorm:"size:500;index"`
+	Attempts          int         `gorm:"not null;default:0"`
+	LastError         string      `gorm:"size:200"`
+	TemplateVariables []byte      `gorm:"type:jsonb;default:'{}'"`
+	NextAttemptAt     time.Time
+	LeaseExpiresAt    *time.Time
+	LastAttemptAt     *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func (ChannelAttempt) TableName() string { return "notifications.channel_attempts" }
+
+// NotificationAttempt records a single provider invocation without mutating prior history.
+type NotificationAttempt struct {
+	ID               identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID `gorm:"type:uuid;not null;index:idx_notification_attempts,priority:1"`
+	ChannelAttemptID identity.ID `gorm:"type:uuid;not null;index:idx_notification_attempts,priority:2"`
+	Sequence         int         `gorm:"not null;index:idx_notification_attempts,priority:3"`
+	Provider         string      `gorm:"size:50;not null"`
+	Status           string      `gorm:"size:20;not null"`
+	ReceiptID        string      `gorm:"size:500"`
+	ErrorCode        string      `gorm:"size:100"`
+	StartedAt        time.Time   `gorm:"not null"`
+	FinishedAt       *time.Time
+}
+
+func (NotificationAttempt) TableName() string { return "notifications.attempt_history" }
+
+// NotificationPayload contains encrypted execution-only material.
+type NotificationPayload struct {
+	ID         identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID   identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_notification_payload,priority:1"`
+	DeliveryID identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_notification_payload,priority:2"`
+	KeyID      string      `gorm:"size:100;not null"`
+	Nonce      []byte      `gorm:"type:bytea;not null"`
+	Ciphertext []byte      `gorm:"type:bytea;not null"`
+	CreatedAt  time.Time   `gorm:"not null"`
+	ExpiresAt  *time.Time
+}
+
+func (NotificationPayload) TableName() string { return "notifications.execution_payloads" }
 
 // NotificationRecipient is an explicitly configured internal alert target.
 // It is intentionally separate from participant contacts so external people
@@ -701,13 +745,15 @@ type NotificationRecipient struct {
 func (NotificationRecipient) TableName() string { return "notifications.recipients" }
 
 type ProviderCallback struct {
-	ID         identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID   identity.ID `gorm:"type:uuid;not null;index"`
-	Provider   string      `gorm:"size:50;not null;uniqueIndex:idx_provider_callback,priority:1"`
-	CallbackID string      `gorm:"size:500;not null;uniqueIndex:idx_provider_callback,priority:2"`
-	ReceiptID  string      `gorm:"size:500;not null;index"`
-	Status     string      `gorm:"size:50;not null"`
-	ReceivedAt time.Time   `gorm:"not null"`
+	ID               identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_provider_callback_scope,priority:1"`
+	Provider         string       `gorm:"size:50;not null;uniqueIndex:idx_provider_callback_scope,priority:2"`
+	ProviderAccount  string       `gorm:"size:200;not null;default:'';uniqueIndex:idx_provider_callback_scope,priority:3"`
+	CallbackID       string       `gorm:"size:500;not null;uniqueIndex:idx_provider_callback_scope,priority:4"`
+	ReceiptID        string       `gorm:"size:500;not null;index"`
+	ChannelAttemptID *identity.ID `gorm:"type:uuid;index"`
+	Status           string       `gorm:"size:50;not null"`
+	ReceivedAt       time.Time    `gorm:"not null"`
 }
 
 func (ProviderCallback) TableName() string { return "notifications.provider_callbacks" }
@@ -1094,7 +1140,7 @@ func Models() []any {
 		&Origin{}, &OriginVersion{}, &OriginEvidence{},
 		&MediaObject{}, &MultipartUpload{}, &UploadPart{}, &MediaDerivative{}, &ScreeningRun{},
 		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{},
-		&Delivery{}, &ChannelAttempt{}, &NotificationRecipient{}, &ProviderCallback{},
+		&Delivery{}, &ChannelAttempt{}, &NotificationAttempt{}, &NotificationPayload{}, &NotificationRecipient{}, &ProviderCallback{},
 		&Schedule{}, &OccurrenceMaterialization{}, &ReminderPlan{},
 		&Inspection{}, &Responsibility{}, &PolicySnapshot{}, &ReferenceSnapshot{},
 		&Project{}, &ProjectStage{}, &StageTransition{},

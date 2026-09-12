@@ -981,11 +981,27 @@ export type MutationVerifyOnboardingOtpArgs = {
   input: VerifyOnboardingOtpInput;
 };
 
+export type NotificationChannelDelivery = {
+  __typename?: 'NotificationChannelDelivery';
+  attempts: Scalars['Int']['output'];
+  channel: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  lastAttemptAt: Maybe<Scalars['String']['output']>;
+  provider: Scalars['String']['output'];
+  receiptId: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+};
+
 export type NotificationDelivery = {
   __typename?: 'NotificationDelivery';
+  aggregateStatus: Scalars['String']['output'];
+  channels: Array<NotificationChannelDelivery>;
   createdAt: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   intentId: Scalars['ID']['output'];
+  selectedProvider: Scalars['String']['output'];
   status: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
 };

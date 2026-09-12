@@ -116,7 +116,8 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 	for _, statement := range []string{
 		`CREATE TABLE inspections.inspections (id blob primary key, tenant_id blob not null)`,
 		`CREATE TABLE dashboard.inspections (id blob primary key, tenant_id blob not null, inspection_id blob not null, project_id blob, asset_id blob not null, classification text not null, status text not null, invalidated numeric not null default 0, sequence integer not null, updated_at datetime)`,
-		`CREATE TABLE notifications.deliveries (id blob primary key, tenant_id blob not null, intent_id blob not null, inspection_id blob, status text not null, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE notifications.deliveries (id blob primary key, tenant_id blob not null, intent_id blob not null, inspection_id blob, status text not null, logical_template text, template_version text, correlation_id text, idempotency_key text, request_digest text, recipient_id text, selected_provider text, scheduled_at datetime, lease_expires_at datetime, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE notifications.channel_attempts (id blob primary key, tenant_id blob not null, delivery_id blob not null, channel text not null, destination text not null, status text not null, provider text, provider_account text, receipt_id text, attempts integer not null default 0, last_error text, template_variables blob, next_attempt_at datetime, lease_expires_at datetime, last_attempt_at datetime, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE retention.deletion_requests (id blob primary key, tenant_id blob not null, inspection_id blob not null, status text not null, reason text, requested_at datetime, processed_at datetime)`,
 		`CREATE TABLE retention.legal_holds (id blob primary key, tenant_id blob not null, inspection_id blob not null, reason text, active numeric not null, created_at datetime, released_at datetime)`,
 	} {

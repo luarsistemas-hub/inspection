@@ -229,6 +229,10 @@ export type CompleteMediaUploadInput = {
   parts: Array<CompletedPartInput>;
 };
 
+export type CompleteOnboardingInput = {
+  clientMutationId: Scalars['String']['input'];
+};
+
 export type CompletedPartInput = {
   etag: Scalars['String']['input'];
   partNumber: Scalars['Int']['input'];
@@ -643,10 +647,14 @@ export type Mutation = {
   registerAsset: AssetPayload;
   releaseLegalHold: RetentionMutationPayload;
   reopenProject: ProjectPayload;
+  requestAdminActivationOtp: OnboardingPayload;
   requestInvitationOtp: InvitationOtpPayload;
+  requestOnboardingOtp: OnboardingPayload;
   requestRecapture: RecapturePayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
+  saveOnboardingStep: OnboardingPayload;
+  setAdminInitialPassword: OnboardingPayload;
   setDeliveryChannels: ParticipantPayload;
   skipProjectStage: ProjectPayload;
   startProjectStage: ProjectPayload;
@@ -657,8 +665,10 @@ export type Mutation = {
   updateTenant: TenantPayload;
   upsertBusinessUnit: BusinessUnitPayload;
   upsertParticipant: ParticipantPayload;
+  verifyAdminActivationOtp: OnboardingPayload;
   verifyContact: ParticipantContactPayload;
   verifyInvitationOtp: ExternalSessionPayload;
+  verifyOnboardingOtp: OnboardingPayload;
 };
 
 
@@ -862,8 +872,18 @@ export type MutationReopenProjectArgs = {
 };
 
 
+export type MutationRequestAdminActivationOtpArgs = {
+  input: RequestAdminActivationOtpInput;
+};
+
+
 export type MutationRequestInvitationOtpArgs = {
   input: RequestInvitationOtpInput;
+};
+
+
+export type MutationRequestOnboardingOtpArgs = {
+  input: RequestOnboardingOtpInput;
 };
 
 
@@ -879,6 +899,16 @@ export type MutationRevokeInvitationArgs = {
 
 export type MutationSaveCaptureMetadataArgs = {
   input: SaveCaptureMetadataInput;
+};
+
+
+export type MutationSaveOnboardingStepArgs = {
+  input: OnboardingStepInput;
+};
+
+
+export type MutationSetAdminInitialPasswordArgs = {
+  input: SetAdminInitialPasswordInput;
 };
 
 
@@ -932,6 +962,11 @@ export type MutationUpsertParticipantArgs = {
 };
 
 
+export type MutationVerifyAdminActivationOtpArgs = {
+  input: VerifyAdminActivationOtpInput;
+};
+
+
 export type MutationVerifyContactArgs = {
   input: VerifyContactInput;
 };
@@ -941,11 +976,32 @@ export type MutationVerifyInvitationOtpArgs = {
   input: VerifyInvitationOtpInput;
 };
 
+
+export type MutationVerifyOnboardingOtpArgs = {
+  input: VerifyOnboardingOtpInput;
+};
+
+export type NotificationChannelDelivery = {
+  __typename?: 'NotificationChannelDelivery';
+  attempts: Scalars['Int']['output'];
+  channel: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  lastAttemptAt: Maybe<Scalars['String']['output']>;
+  provider: Scalars['String']['output'];
+  receiptId: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+};
+
 export type NotificationDelivery = {
   __typename?: 'NotificationDelivery';
+  aggregateStatus: Scalars['String']['output'];
+  channels: Array<NotificationChannelDelivery>;
   createdAt: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   intentId: Scalars['ID']['output'];
+  selectedProvider: Scalars['String']['output'];
   status: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
 };
@@ -960,6 +1016,103 @@ export type NotificationPreferencesPayload = {
   __typename?: 'NotificationPreferencesPayload';
   clientMutationId: Scalars['String']['output'];
   userErrors: Array<UserError>;
+};
+
+export type OnboardingActivation = {
+  __typename?: 'OnboardingActivation';
+  activatedAt: Maybe<Scalars['String']['output']>;
+  identityId: Scalars['ID']['output'];
+  purpose: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  tenantId: Scalars['ID']['output'];
+};
+
+export type OnboardingDefinition = {
+  __typename?: 'OnboardingDefinition';
+  analysisProfile: Scalars['String']['output'];
+  originModes: Array<OnboardingOriginMode>;
+  purposes: Array<Scalars['String']['output']>;
+  schemaVersion: Scalars['Int']['output'];
+  segment: Scalars['String']['output'];
+  segmentVersion: Scalars['String']['output'];
+  steps: Array<OnboardingStep>;
+  templates: Array<Scalars['String']['output']>;
+  version: Scalars['Int']['output'];
+};
+
+export type OnboardingField = {
+  __typename?: 'OnboardingField';
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  options: Array<Scalars['String']['output']>;
+  placeholder: Maybe<Scalars['String']['output']>;
+  required: Scalars['Boolean']['output'];
+  type: Scalars['String']['output'];
+};
+
+export type OnboardingOriginMode = {
+  __typename?: 'OnboardingOriginMode';
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  required: Scalars['Boolean']['output'];
+  templateKey: Scalars['String']['output'];
+};
+
+export type OnboardingPayload = {
+  __typename?: 'OnboardingPayload';
+  activation: Maybe<OnboardingActivation>;
+  clientMutationId: Scalars['String']['output'];
+  request: Maybe<OnboardingRequest>;
+  session: Maybe<OnboardingSession>;
+  sessionLocator: Maybe<Scalars['String']['output']>;
+  status: Maybe<OnboardingStatus>;
+  userErrors: Array<UserError>;
+};
+
+export type OnboardingRequest = {
+  __typename?: 'OnboardingRequest';
+  assetId: Maybe<Scalars['ID']['output']>;
+  id: Scalars['ID']['output'];
+  originVersionId: Maybe<Scalars['ID']['output']>;
+  participantId: Maybe<Scalars['ID']['output']>;
+  status: Scalars['String']['output'];
+  templateId: Scalars['ID']['output'];
+};
+
+export type OnboardingSession = {
+  __typename?: 'OnboardingSession';
+  currentStep: Scalars['String']['output'];
+  definition: Scalars['JSON']['output'];
+  expiresAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  state: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type OnboardingStatus = {
+  __typename?: 'OnboardingStatus';
+  deliveryStatus: Scalars['String']['output'];
+  inspectionId: Maybe<Scalars['ID']['output']>;
+  nextAction: Scalars['String']['output'];
+  originStatus: Scalars['String']['output'];
+  requestId: Maybe<Scalars['ID']['output']>;
+  state: Scalars['String']['output'];
+};
+
+export type OnboardingStep = {
+  __typename?: 'OnboardingStep';
+  fields: Array<OnboardingField>;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
+  required: Scalars['Boolean']['output'];
+};
+
+export type OnboardingStepInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  payload: Scalars['JSON']['input'];
+  step: Scalars['String']['input'];
 };
 
 export type OriginInvitationPayload = {
@@ -1187,6 +1340,8 @@ export type Query = {
   memberships: MembershipConnection;
   myNotifications: RecipientNotificationConnection;
   notificationDeliveries: NotificationDeliveryConnection;
+  onboardingDefinition: OnboardingDefinition;
+  onboardingSession: Maybe<OnboardingSession>;
   originVersions: OriginVersionConnection;
   participant: Maybe<Participant>;
   participants: ParticipantConnection;
@@ -1295,6 +1450,11 @@ export type QueryMyNotificationsArgs = {
 export type QueryNotificationDeliveriesArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryOnboardingDefinitionArgs = {
+  segment: Scalars['String']['input'];
 };
 
 
@@ -1491,9 +1651,19 @@ export type ReportPublicationPayload = {
   userErrors: Array<UserError>;
 };
 
+export type RequestAdminActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+};
+
 export type RequestInvitationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   linkToken: Scalars['String']['input'];
+};
+
+export type RequestOnboardingOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
 };
 
 export type RequestRecaptureInput = {
@@ -1632,6 +1802,11 @@ export type SensitiveFalsePositiveInput = {
   clientMutationId: Scalars['String']['input'];
   mediaId: Scalars['ID']['input'];
   reason: Scalars['String']['input'];
+};
+
+export type SetAdminInitialPasswordInput = {
+  clientMutationId: Scalars['String']['input'];
+  password: Scalars['String']['input'];
 };
 
 export type SetDeliveryChannelsInput = {
@@ -1829,6 +2004,11 @@ export type UserError = {
   message: Scalars['String']['output'];
 };
 
+export type VerifyAdminActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+};
+
 export type VerifyContactInput = {
   clientMutationId: Scalars['String']['input'];
   contactId: Scalars['ID']['input'];
@@ -1839,4 +2019,10 @@ export type VerifyInvitationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   code: Scalars['String']['input'];
   linkToken: Scalars['String']['input'];
+};
+
+export type VerifyOnboardingOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+  sessionLocator: Scalars['String']['input'];
 };

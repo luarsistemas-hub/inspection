@@ -33,6 +33,22 @@ func TestUT041RegistryRejectsUnsafeContracts(t *testing.T) {
 	}
 }
 
+func TestNotificationDeliveryV2IsReferenceOnly(t *testing.T) {
+	envelope := Envelope[map[string]string]{ID: identity.NewID(), Type: "notification.delivery_requested.v2", SchemaVersion: 2, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), AggregateID: identity.NewID(), CorrelationID: "corr", Payload: map[string]string{"notificationId": identity.NewID().String()}}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultRegistry().Validate(raw); err != nil {
+		t.Fatalf("v2 reference event rejected: %v", err)
+	}
+	envelope.SchemaVersion = 1
+	raw, _ = json.Marshal(envelope)
+	if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrUnknownContract) {
+		t.Fatalf("wrong v2 version accepted: %v", err)
+	}
+}
+
 func TestLifecycleEventsIT551ToIT554IT581ToIT582(t *testing.T) {
 	registry := DefaultRegistry()
 	for _, eventType := range []string{"inspection.created.v1", "inspection.state_changed.v1", "project.stage_changed.v1"} {

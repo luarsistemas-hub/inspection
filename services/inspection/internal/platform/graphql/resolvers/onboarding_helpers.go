@@ -2,13 +2,17 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
+	"inspection/services/inspection/internal/platform/apperror"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/requestctx"
 )
@@ -68,4 +72,24 @@ func onboardingPayloadString(payload map[string]any, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(value)
+}
+
+func onboardingValidationPayload(err error, mutationID string) (*graphql1.OnboardingPayload, error) {
+	code, field, message := apperror.Public(err)
+	if code != apperror.InvalidInput && code != apperror.InvalidState && code != apperror.Conflict && code != apperror.RateLimited && code != apperror.SessionExpired {
+		return nil, err
+	}
+	var fieldValue *string
+	if field != "" {
+		fieldValue = &field
+	}
+	return &graphql1.OnboardingPayload{
+		UserErrors:       []*graphql1.UserError{{Code: string(code), Field: fieldValue, Message: message}},
+		ClientMutationID: mutationID,
+	}, nil
+}
+
+func onboardingAgencyProvisioningKey(sessionToken string, expectedVersion int64) string {
+	key := sha256.Sum256([]byte(sessionToken + "\x00" + strconv.FormatInt(expectedVersion, 10)))
+	return "onboarding:agency:" + hex.EncodeToString(key[:])
 }

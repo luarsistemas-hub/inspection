@@ -11,7 +11,7 @@ import (
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
-	linkdelivery "inspection/services/inspection/internal/features/invitations/link_delivery"
+	notificationcore "inspection/services/inspection/internal/features/notifications/core"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
@@ -20,7 +20,6 @@ import (
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/mediator"
-	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/requestctx"
 
 	"gorm.io/gorm"
@@ -33,15 +32,16 @@ type Command struct {
 }
 
 type Dependencies struct {
-	DB            *gorm.DB
-	Bus           *mediator.Bus
-	Service       origincore.Service
-	Notifications *notifications.Registry
-	Authorizer    auth.Authorizer
+	DB             *gorm.DB
+	Bus            *mediator.Bus
+	Service        origincore.Service
+	Notifications  notificationcore.NotificationService
+	CaptureBaseURL string
+	Authorizer     auth.Authorizer
 }
 
 func Setup(d Dependencies) error {
-	if d.DB == nil || d.Bus == nil || d.Service.DB == nil || d.Notifications == nil {
+	if d.DB == nil || d.Bus == nil || d.Service.DB == nil || d.Notifications == nil || d.CaptureBaseURL == "" {
 		return fmt.Errorf("slice origins/invite_capture: missing dependency")
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
@@ -105,15 +105,12 @@ func Setup(d Dependencies) error {
 		if err != nil {
 			return nil, err
 		}
-		if created.LinkToken == "" {
-			created.LinkToken, err = linkdelivery.RetryToken(ctx, d.DB, command.TenantID, created.InvitationID)
-			if err != nil {
-				return nil, err
-			}
-		}
 		if created.LinkToken != "" {
-			if err := linkdelivery.Deliver(ctx, d.DB, d.Notifications, command.TenantID, created.InvitationID, created.LinkToken, delivery, "inspection-capture-link"); err != nil {
-				return nil, err
+			for _, target := range delivery {
+				_, err := d.Notifications.Send(ctx, notificationcore.Notification{TenantID: command.TenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "capture-link", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"}, CorrelationID: "origin-invite-" + created.VersionID.String(), IdempotencyKey: created.InvitationID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: created.InvitationID, Token: created.LinkToken, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: command.ExpiresAt.Unix()}})
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 		return created, nil

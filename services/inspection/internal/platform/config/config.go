@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -50,6 +51,9 @@ type Config struct {
 	KeycloakClientSecret  string
 	SMTPAddress           string
 	SMTPFrom              string
+	SMTPUsername          string
+	SMTPPassword          string
+	SMTPReplyTo           string
 	TwilioBaseURL         string
 	TwilioAccountSID      string
 	TwilioAuthToken       string
@@ -60,6 +64,29 @@ type Config struct {
 	LiteLLMPromptVersion  string
 	GotenbergURL          string
 	ProviderTimeout       time.Duration
+	Notification          NotificationConfig
+}
+
+// NotificationConfig contains operational delivery settings. Authentication
+// notifier settings remain in their existing top-level configuration fields.
+type NotificationConfig struct {
+	MaxAttempts        int
+	RetryDelays        []time.Duration
+	V2ProducersEnabled bool
+	SMTPTLSMode        string
+	TwilioSMSFrom      string
+	TwilioWhatsAppFrom string
+	WhatsAppProvider   string
+	MetaBaseURL        string
+	MetaAccessToken    string
+	MetaPhoneNumberID  string
+	MetaAPIVersion     string
+	MetaVerifyToken    string
+	MetaAppSecret      string
+	TwilioTemplates    map[string]string
+	MetaTemplates      map[string]string
+	PayloadKeys        map[string]string
+	ActivePayloadKey   string
 }
 
 // Load reads and validates environment configuration without requiring a file.
@@ -75,10 +102,15 @@ func Load() (Config, error) {
 		RabbitMQURL:      env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
 		DragonflyAddress: env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
 		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
-		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"),
+		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
 		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID"), KeycloakClientSecret: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET"),
 		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMModelAlias: env("INSPECTION_LITELLM_MODEL_ALIAS", "inspection-vision"), LiteLLMPromptVersion: env("INSPECTION_LITELLM_PROMPT_VERSION", "analysis-v1"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
 	}
+	notification, err := loadNotification(c.Environment)
+	if err != nil {
+		return Config{}, err
+	}
+	c.Notification = notification
 	if c.MinIOPublicEndpoint == "" {
 		c.MinIOPublicEndpoint = c.MinIOEndpoint
 		c.MinIOPublicSecure = c.MinIOSecure
@@ -95,6 +127,157 @@ func Load() (Config, error) {
 		c.OIDCAudience = c.OIDCAudiences[0]
 	}
 	return c, c.Validate()
+}
+
+func notificationEnv(key string) (string, bool) {
+	if value, ok := os.LookupEnv(key); ok {
+		return value, true
+	}
+	return os.LookupEnv("INSPECTION_" + key)
+}
+
+func loadNotification(environment string) (NotificationConfig, error) {
+	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, V2ProducersEnabled: false, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", TwilioTemplates: map[string]string{}, MetaTemplates: map[string]string{}, PayloadKeys: map[string]string{}}
+	if raw, ok := notificationEnv("NOTIFICATION_V2_PRODUCERS_ENABLED"); ok {
+		value, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_V2_PRODUCERS_ENABLED")
+		}
+		c.V2ProducersEnabled = value
+	}
+	if raw, ok := notificationEnv("NOTIFICATION_MAX_ATTEMPTS"); ok {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value <= 0 {
+			return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_MAX_ATTEMPTS")
+		}
+		c.MaxAttempts = value
+	}
+	if raw, ok := notificationEnv("NOTIFICATION_RETRY_DELAYS"); ok {
+		parts := strings.Split(raw, ",")
+		if len(parts) == 0 {
+			return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_RETRY_DELAYS")
+		}
+		c.RetryDelays = make([]time.Duration, 0, len(parts))
+		for _, part := range parts {
+			delay, err := time.ParseDuration(strings.TrimSpace(part))
+			if err != nil || delay <= 0 {
+				return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_RETRY_DELAYS")
+			}
+			c.RetryDelays = append(c.RetryDelays, delay)
+		}
+	}
+	if raw, ok := notificationEnv("SMTP_TLS_MODE"); ok {
+		c.SMTPTLSMode = strings.ToLower(strings.TrimSpace(raw))
+	}
+	if raw, ok := notificationEnv("TWILIO_SMS_FROM"); ok {
+		c.TwilioSMSFrom = raw
+	}
+	if c.TwilioSMSFrom == "" {
+		c.TwilioSMSFrom = env("INSPECTION_TWILIO_FROM", "")
+	}
+	if raw, ok := notificationEnv("TWILIO_WHATSAPP_FROM"); ok {
+		c.TwilioWhatsAppFrom = raw
+	}
+	if c.TwilioWhatsAppFrom == "" {
+		c.TwilioWhatsAppFrom = env("INSPECTION_TWILIO_FROM", "")
+	}
+	if raw, ok := notificationEnv("NOTIFICATION_WHATSAPP_PROVIDER"); ok {
+		c.WhatsAppProvider = strings.ToLower(strings.TrimSpace(raw))
+	}
+	if raw, ok := notificationEnv("META_ACCESS_TOKEN"); ok {
+		c.MetaAccessToken = raw
+	}
+	if raw, ok := notificationEnv("META_PHONE_NUMBER_ID"); ok {
+		c.MetaPhoneNumberID = raw
+	}
+	if raw, ok := notificationEnv("META_API_VERSION"); ok {
+		c.MetaAPIVersion = raw
+	}
+	if raw, ok := notificationEnv("META_BASE_URL"); ok {
+		c.MetaBaseURL = raw
+	}
+	if raw, ok := notificationEnv("META_VERIFY_TOKEN"); ok {
+		c.MetaVerifyToken = raw
+	}
+	if raw, ok := notificationEnv("META_APP_SECRET"); ok {
+		c.MetaAppSecret = raw
+	}
+	for _, target := range []struct {
+		key         string
+		destination *map[string]string
+	}{{"TWILIO_TEMPLATE_MAP", &c.TwilioTemplates}, {"META_TEMPLATE_MAP", &c.MetaTemplates}, {"NOTIFICATION_PAYLOAD_KEYS", &c.PayloadKeys}} {
+		if raw, ok := notificationEnv(target.key); ok {
+			if err := json.Unmarshal([]byte(raw), target.destination); err != nil || *target.destination == nil {
+				return NotificationConfig{}, fmt.Errorf("configuration: invalid %s", target.key)
+			}
+		}
+	}
+	if raw, ok := notificationEnv("NOTIFICATION_ACTIVE_PAYLOAD_KEY"); ok {
+		c.ActivePayloadKey = raw
+	}
+	if err := c.Validate(environment); err != nil {
+		return NotificationConfig{}, err
+	}
+	return c, nil
+}
+
+// Validate fails closed only for settings that were explicitly selected.
+func (c NotificationConfig) Validate(environment string) error {
+	if c.MaxAttempts <= 0 {
+		return fmt.Errorf("configuration: invalid NOTIFICATION_MAX_ATTEMPTS")
+	}
+	if len(c.RetryDelays) == 0 {
+		return fmt.Errorf("configuration: invalid NOTIFICATION_RETRY_DELAYS")
+	}
+	for _, delay := range c.RetryDelays {
+		if delay <= 0 {
+			return fmt.Errorf("configuration: invalid NOTIFICATION_RETRY_DELAYS")
+		}
+	}
+	if c.SMTPTLSMode != "none" && c.SMTPTLSMode != "starttls" && c.SMTPTLSMode != "tls" {
+		return fmt.Errorf("configuration: invalid SMTP_TLS_MODE")
+	}
+	if environment != "local" && environment != "test" && c.SMTPTLSMode == "none" {
+		return fmt.Errorf("configuration: SMTP_TLS_MODE none is forbidden outside local")
+	}
+	if c.WhatsAppProvider != "twilio" && c.WhatsAppProvider != "meta" {
+		return fmt.Errorf("configuration: invalid NOTIFICATION_WHATSAPP_PROVIDER")
+	}
+	if c.WhatsAppProvider == "meta" {
+		missing := make([]string, 0, 4)
+		if c.MetaAccessToken == "" {
+			missing = append(missing, "META_ACCESS_TOKEN")
+		}
+		if c.MetaPhoneNumberID == "" {
+			missing = append(missing, "META_PHONE_NUMBER_ID")
+		}
+		if c.MetaAPIVersion == "" {
+			missing = append(missing, "META_API_VERSION")
+		}
+		if c.MetaVerifyToken == "" {
+			missing = append(missing, "META_VERIFY_TOKEN")
+		}
+		if c.MetaAppSecret == "" {
+			missing = append(missing, "META_APP_SECRET")
+		}
+		if len(c.MetaTemplates) == 0 {
+			missing = append(missing, "META_TEMPLATE_MAP")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("configuration: missing %s", strings.Join(missing, ","))
+		}
+	}
+	if c.ActivePayloadKey != "" {
+		if _, ok := c.PayloadKeys[c.ActivePayloadKey]; !ok {
+			return fmt.Errorf("configuration: missing active NOTIFICATION_PAYLOAD_KEYS entry")
+		}
+	}
+	for key, value := range c.PayloadKeys {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			return fmt.Errorf("configuration: invalid NOTIFICATION_PAYLOAD_KEYS")
+		}
+	}
+	return nil
 }
 
 func splitExact(value string) []string {
