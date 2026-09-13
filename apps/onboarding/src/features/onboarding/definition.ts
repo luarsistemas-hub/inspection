@@ -1,4 +1,6 @@
-export type OnboardingField = { key: string; label: string; type: string; required: boolean; placeholder: string | null; options: string[] };
+import type { OnboardingChoice } from "./presentation";
+
+export type OnboardingField = { key: string; label: string; type: string; required: boolean; placeholder: string | null; options: string[]; choices?: OnboardingChoice[] };
 export type OnboardingStep = { key: string; label: string; position: number; required: boolean; fields: OnboardingField[] };
 export type OnboardingDefinition = { schemaVersion: number; segment: string; steps: OnboardingStep[]; originModes: Array<{ key: string; label: string; required: boolean }> };
 export type StepValues = Record<string, string>;

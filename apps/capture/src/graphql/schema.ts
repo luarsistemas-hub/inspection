@@ -620,6 +620,7 @@ export type Mutation = {
   cancelSchedule: SchedulePayload;
   closeProject: ProjectPayload;
   completeMediaUpload: MediaPayload;
+  completeOnboarding: OnboardingPayload;
   configureMyNotificationPreferences: NotificationPreferencesPayload;
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
@@ -734,6 +735,11 @@ export type MutationCloseProjectArgs = {
 
 export type MutationCompleteMediaUploadArgs = {
   input: CompleteMediaUploadInput;
+};
+
+
+export type MutationCompleteOnboardingArgs = {
+  input: CompleteOnboardingInput;
 };
 
 
@@ -1027,6 +1033,15 @@ export type OnboardingActivation = {
   tenantId: Scalars['ID']['output'];
 };
 
+export type OnboardingAgency = {
+  __typename?: 'OnboardingAgency';
+  businessUnitCode: Scalars['String']['output'];
+  businessUnitId: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  tenantId: Scalars['ID']['output'];
+};
+
 export type OnboardingDefinition = {
   __typename?: 'OnboardingDefinition';
   analysisProfile: Scalars['String']['output'];
@@ -1042,12 +1057,20 @@ export type OnboardingDefinition = {
 
 export type OnboardingField = {
   __typename?: 'OnboardingField';
+  choices: Array<OnboardingOption>;
   key: Scalars['String']['output'];
   label: Scalars['String']['output'];
+  /** @deprecated Use choices to obtain user-facing labels */
   options: Array<Scalars['String']['output']>;
   placeholder: Maybe<Scalars['String']['output']>;
   required: Scalars['Boolean']['output'];
   type: Scalars['String']['output'];
+};
+
+export type OnboardingOption = {
+  __typename?: 'OnboardingOption';
+  label: Scalars['String']['output'];
+  value: Scalars['String']['output'];
 };
 
 export type OnboardingOriginMode = {
@@ -1081,8 +1104,10 @@ export type OnboardingRequest = {
 
 export type OnboardingSession = {
   __typename?: 'OnboardingSession';
+  completedSteps: Scalars['JSON']['output'];
   currentStep: Scalars['String']['output'];
   definition: Scalars['JSON']['output'];
+  existingAgency: Maybe<OnboardingAgency>;
   expiresAt: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   state: Scalars['String']['output'];

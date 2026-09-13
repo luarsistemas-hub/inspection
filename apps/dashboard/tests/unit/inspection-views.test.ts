@@ -56,9 +56,9 @@ describe("Inspection views", () => {
     const groups = groupInspectionsByStatus([inspection("unknown", "FUTURE_STATUS", "2026-09-10T10:00:00Z")]);
 
     expect(groups.planejamento.map(({ id }) => id)).toEqual(["unknown"]);
-    expect(formatInspectionStatus("INVITED")).toBe("Convidada");
-    expect(formatInspectionStatus("FUTURE_STATUS")).toBe("Status desconhecido");
-    expect(formatInspectionStatus("")).toBe("Status desconhecido");
+    expect(formatInspectionStatus("INVITED")).toBe("Convite enviado");
+    expect(formatInspectionStatus("FUTURE_STATUS")).toBe("Situação não reconhecida");
+    expect(formatInspectionStatus("")).toBe("Situação não reconhecida");
   });
 
   it("filters the loaded collection locally by context and text", () => {

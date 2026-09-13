@@ -473,12 +473,18 @@ type ComplexityRoot struct {
 	}
 
 	OnboardingField struct {
+		Choices     func(childComplexity int) int
 		Key         func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Options     func(childComplexity int) int
 		Placeholder func(childComplexity int) int
 		Required    func(childComplexity int) int
 		Type        func(childComplexity int) int
+	}
+
+	OnboardingOption struct {
+		Label func(childComplexity int) int
+		Value func(childComplexity int) int
 	}
 
 	OnboardingOriginMode struct {
@@ -3264,6 +3270,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OnboardingDefinition.Version(childComplexity), true
 
+	case "OnboardingField.choices":
+		if e.ComplexityRoot.OnboardingField.Choices == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingField.Choices(childComplexity), true
 	case "OnboardingField.key":
 		if e.ComplexityRoot.OnboardingField.Key == nil {
 			break
@@ -3300,6 +3312,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OnboardingField.Type(childComplexity), true
+
+	case "OnboardingOption.label":
+		if e.ComplexityRoot.OnboardingOption.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingOption.Label(childComplexity), true
+	case "OnboardingOption.value":
+		if e.ComplexityRoot.OnboardingOption.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingOption.Value(childComplexity), true
 
 	case "OnboardingOriginMode.key":
 		if e.ComplexityRoot.OnboardingOriginMode.Key == nil {
@@ -5614,7 +5639,8 @@ type Query {
   externalCapture: ExternalCapture!
 }
 
-type OnboardingField { key: String!, label: String!, type: String!, required: Boolean!, placeholder: String, options: [String!]! }
+type OnboardingOption { value: String!, label: String! }
+type OnboardingField { key: String!, label: String!, type: String!, required: Boolean!, placeholder: String, options: [String!]! @deprecated(reason: "Use choices to obtain user-facing labels"), choices: [OnboardingOption!]! }
 type OnboardingStep { key: String!, label: String!, position: Int!, required: Boolean!, fields: [OnboardingField!]! }
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
 type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisProfile: String! }
@@ -6658,8 +6684,20 @@ func (ec *executionContext) childFields_OnboardingField(ctx context.Context, fie
 		return ec.fieldContext_OnboardingField_placeholder(ctx, field)
 	case "options":
 		return ec.fieldContext_OnboardingField_options(ctx, field)
+	case "choices":
+		return ec.fieldContext_OnboardingField_choices(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OnboardingField", field.Name)
+}
+
+func (ec *executionContext) childFields_OnboardingOption(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "value":
+		return ec.fieldContext_OnboardingOption_value(ctx, field)
+	case "label":
+		return ec.fieldContext_OnboardingOption_label(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OnboardingOption", field.Name)
 }
 
 func (ec *executionContext) childFields_OnboardingOriginMode(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -18132,6 +18170,84 @@ func (ec *executionContext) _OnboardingField_options(ctx context.Context, field 
 }
 func (ec *executionContext) fieldContext_OnboardingField_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("OnboardingField", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingField_choices(ctx context.Context, field graphql.CollectedField, obj *OnboardingField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingField_choices(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Choices, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*OnboardingOption) graphql.Marshaler {
+			return ec.marshalNOnboardingOption2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOptionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingField_choices(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OnboardingField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OnboardingOption(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OnboardingOption_value(ctx context.Context, field graphql.CollectedField, obj *OnboardingOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingOption_value(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingOption_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingOption", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingOption_label(ctx context.Context, field graphql.CollectedField, obj *OnboardingOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingOption_label(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingOption_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingOption", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _OnboardingOriginMode_key(ctx context.Context, field graphql.CollectedField, obj *OnboardingOriginMode) (ret graphql.Marshaler) {
@@ -34521,6 +34637,54 @@ func (ec *executionContext) _OnboardingField(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "choices":
+			out.Values[i] = ec._OnboardingField_choices(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var onboardingOptionImplementors = []string{"OnboardingOption"}
+
+func (ec *executionContext) _OnboardingOption(ctx context.Context, sel ast.SelectionSet, obj *OnboardingOption) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, onboardingOptionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OnboardingOption")
+		case "value":
+			out.Values[i] = ec._OnboardingOption_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._OnboardingOption_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -40127,6 +40291,32 @@ func (ec *executionContext) marshalNOnboardingField2ᚖinspectionᚋservicesᚋi
 		return graphql.Null
 	}
 	return ec._OnboardingField(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOnboardingOption2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*OnboardingOption) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNOnboardingOption2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOption(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOnboardingOption2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOption(ctx context.Context, sel ast.SelectionSet, v *OnboardingOption) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OnboardingOption(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNOnboardingOriginMode2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOriginModeᚄ(ctx context.Context, sel ast.SelectionSet, v []*OnboardingOriginMode) graphql.Marshaler {

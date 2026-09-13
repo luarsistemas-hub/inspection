@@ -820,6 +820,18 @@ ALTER TABLE access.memberships ALTER COLUMN status TYPE varchar(32);
 ALTER TABLE onboarding.requests ADD COLUMN IF NOT EXISTS inspection_id uuid;
 CREATE INDEX IF NOT EXISTS idx_onboarding_requests_inspection ON onboarding.requests (inspection_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_onboarding_request_session ON onboarding.requests (session_id);
+`},
+		{Version: 33, Name: "localized_real_estate_template_names", Compatible: true, SQL: `
+UPDATE templates.templates
+SET name = CASE key
+  WHEN 'real-estate-checklist' THEN 'Primeira vistoria do imóvel'
+  WHEN 'real-estate-fixed-origin' THEN 'Vistoria comparativa do imóvel'
+  ELSE name
+END,
+version = version + 1,
+updated_at = now()
+WHERE key IN ('real-estate-checklist', 'real-estate-fixed-origin')
+  AND name = 'Primeira inspeção imobiliária';
 `}}
 }
 

@@ -1057,12 +1057,20 @@ export type OnboardingDefinition = {
 
 export type OnboardingField = {
   __typename?: 'OnboardingField';
+  choices: Array<OnboardingOption>;
   key: Scalars['String']['output'];
   label: Scalars['String']['output'];
+  /** @deprecated Use choices to obtain user-facing labels */
   options: Array<Scalars['String']['output']>;
   placeholder: Maybe<Scalars['String']['output']>;
   required: Scalars['Boolean']['output'];
   type: Scalars['String']['output'];
+};
+
+export type OnboardingOption = {
+  __typename?: 'OnboardingOption';
+  label: Scalars['String']['output'];
+  value: Scalars['String']['output'];
 };
 
 export type OnboardingOriginMode = {

@@ -4,7 +4,7 @@ query OnboardingDefinition($segment: String!) {
     version
     segment
     segmentVersion
-    steps { key label position required fields { key label type required placeholder options } }
+    steps { key label position required fields { key label type required placeholder options choices { value label } } }
     purposes
     originModes { key label templateKey required }
     templates

@@ -151,7 +151,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	inspection, err := (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectioncore.CreateInput{
 		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
-		Reason: "Primeira inspeção criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
+		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("create onboarding inspection: %w", err)
@@ -205,7 +205,11 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 	if err != nil {
 		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
 	}
-	templateView, err := templates.Publish(ctx, tenantID, key, "Primeira inspeção imobiliária", "onboarding:template:"+key+":v1", payload)
+	templateName := "Primeira vistoria do imóvel"
+	if key == onboardingcatalog.OriginTemplateKey {
+		templateName = "Vistoria comparativa do imóvel"
+	}
+	templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v2", payload)
 	if err != nil {
 		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
 	}

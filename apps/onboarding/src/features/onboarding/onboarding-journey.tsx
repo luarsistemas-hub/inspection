@@ -7,6 +7,7 @@ import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, t
 import { CompleteOnboardingDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery } from "@/graphql/generated";
 import { isSupportedDefinition, sortedSteps, validateStep, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, type OriginUpload } from "./origin-upload";
+import { presentOnboardingLabel, presentOnboardingOption, presentOnboardingStatus } from "./presentation";
 
 type View = "identity" | "verify" | "step" | "review" | "status";
 type Session = NonNullable<OnboardingSessionQuery["onboardingSession"]>;
@@ -94,7 +95,7 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
       const payload = result.completeOnboarding;
       if (payload.userErrors.length) { setError(payload.userErrors[0].message); return; }
       if (!payload.status || !payload.session) throw { message: "O servidor não confirmou o estado da solicitação." } satisfies GraphQLFailure;
-      if (payload.status.state === "SUBMITTED" && !payload.request) throw { message: "O servidor não confirmou a criação da inspeção." } satisfies GraphQLFailure;
+      if (payload.status.state === "SUBMITTED" && !payload.request) throw { message: "O servidor não confirmou a criação da vistoria." } satisfies GraphQLFailure;
       setSession(payload.session); setStatus(payload.status); if (payload.status.state === "SUBMITTED") clearDrafts(); setView("status");
     } catch (cause) { setError(failureText(cause)); } finally { setSubmitting(false); }
   };
@@ -103,7 +104,7 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
   if (error && !definition) return <PageShell title="Não foi possível abrir o cadastro"><Alert tone="danger">{error}</Alert><Button onClick={() => location.reload()}>Tentar novamente</Button></PageShell>;
   if (!definition) return null;
 
-  return <PageShell title={view === "identity" ? "Comece sua primeira inspeção" : view === "verify" ? "Confirme seu e-mail" : view === "review" ? "Revise a solicitação" : view === "status" ? "Acompanhe a solicitação" : step?.label ?? "Cadastro"} steps={steps} currentStep={activeStep}>
+  return <PageShell title={view === "identity" ? "Comece sua primeira vistoria" : view === "verify" ? "Confirme seu e-mail" : view === "review" ? "Revise os dados" : view === "status" ? "Acompanhe a vistoria" : presentOnboardingLabel(step?.label ?? "Cadastro")} steps={steps} currentStep={activeStep}>
     {error ? <Alert tone="danger">{error}</Alert> : null}
     {view === "identity" ? <IdentityForm generation={generation.current} onRequested={(nextLocator, nextEmail, requestGeneration) => { if (requestGeneration !== generation.current) return; clearDrafts(); setLocator(nextLocator); setEmail(nextEmail); setError(""); setView("verify"); }} onError={setError} /> : null}
     {view === "verify" ? <VerificationForm generation={generation.current} email={email} locator={locator} onVerified={(nextSession, requestGeneration) => { if (requestGeneration !== generation.current) return; clearDrafts(); setSession(nextSession); setActiveStep(nextServerStep(definition, nextSession)); setError(""); setView("step"); }} onBack={() => setView("identity")} onError={setError} /> : null}
@@ -114,13 +115,13 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
       const next = steps[nextIndex];
       if (next) setActiveStep(next.key); else setView("review");
     }} onReview={() => setView("review")} onRestart={restart} onError={setError} /> : null}
-    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).map(([key, value]) => ({ label: `${item.label}: ${key}`, value })))} status={status} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={restart} onSubmit={complete} submitting={submitting} /> : null}
+    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).map(([key, value]) => ({ label: `${presentOnboardingLabel(item.label)}: ${presentOnboardingLabel(item.fields.find((field) => field.key === key)?.label ?? key)}`, value: item.fields.find((field) => field.key === key)?.type === "select" ? presentOnboardingOption(value, item.fields.find((field) => field.key === key)?.choices) : value })))} status={status} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={restart} onSubmit={complete} submitting={submitting} /> : null}
     {view === "status" ? <StatusView status={status ?? statusFromSession(session)} submitting={submitting} onRetry={complete} onRestart={restart} /> : null}
   </PageShell>;
 }
 
 function PageShell({ title, children, steps = [], currentStep = "" }: { title: string; children: React.ReactNode; steps?: OnboardingDefinition["steps"]; currentStep?: string }) {
-  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><p>Inspection · Imobiliária</p><h1>{title}</h1><p>Seus dados ficam protegidos nesta sessão. Você pode continuar no mesmo navegador.</p>{steps.length ? <ol className="onboarding-progress" aria-label="Etapas do cadastro">{steps.map((step) => <li key={step.key} data-current={step.key === currentStep}>{step.label}</li>)}</ol> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
+  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><p>Inspection · Imobiliárias</p><h1>{title}</h1><p>Seus dados ficam protegidos nesta sessão. Você pode continuar no mesmo navegador.</p>{steps.length ? <ol className="onboarding-progress" aria-label="Etapas do cadastro">{steps.map((step) => <li key={step.key} data-current={step.key === currentStep}>{presentOnboardingLabel(step.label)}</li>)}</ol> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
 }
 
 function IdentityForm({ generation, onRequested, onError }: { generation: number; onRequested: (locator: string, email: string, generation: number) => void; onError: (message: string) => void }) {
@@ -149,20 +150,20 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
 
 function DynamicField({ field, value, error, onChange }: { field: OnboardingDefinition["steps"][number]["fields"][number]; value: string; error?: string; onChange: (value: string) => void }) {
   const props = { value, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange(event.target.value), placeholder: field.placeholder ?? undefined };
-  if (field.type === "select") return <Field label={field.label} error={error} required={field.required}><Select {...props}><option value="">Selecione</option>{field.options.map((option) => <option key={option} value={option}>{option}</option>)}</Select></Field>;
-  if (field.type === "textarea") return <Field label={field.label} error={error} required={field.required}><Textarea {...props} /></Field>;
-  return <Field label={field.label} error={error} required={field.required}><Input {...props} type={field.type === "number" || field.type === "date" || field.type === "email" ? field.type : "text"} /></Field>;
+  if (field.type === "select") return <Field label={presentOnboardingLabel(field.label)} error={error} required={field.required}><Select {...props}><option value="">Selecione</option>{field.options.map((option) => <option key={option} value={option}>{presentOnboardingOption(option, field.choices)}</option>)}</Select></Field>;
+  if (field.type === "textarea") return <Field label={presentOnboardingLabel(field.label)} error={error} required={field.required}><Textarea {...props} /></Field>;
+  return <Field label={presentOnboardingLabel(field.label)} error={error} required={field.required}><Input {...props} type={field.type === "number" || field.type === "date" || field.type === "email" ? field.type : "text"} /></Field>;
 }
 
 function Review({ values, status, onBack, onRestart, onSubmit, submitting }: { values: Array<{ label: string; value: string }>; status?: Status; onBack: () => void; onRestart: () => void; onSubmit: () => Promise<void>; submitting: boolean }) {
-  return <div className="onboarding-review"><p className="onboarding-step-description">Confira os dados que foram confirmados em cada etapa.</p><dl>{values.length ? values.map((item) => <Fragment key={item.label}><dt>{item.label}</dt><dd>{item.value || "Não informado"}</dd></Fragment>) : <dd>Nenhuma etapa foi confirmada ainda.</dd>}</dl>{status ? <Alert tone={status.originStatus === "PENDING" || status.deliveryStatus === "PENDING" ? "warning" : "info"}>Origem: {status.originStatus}. Entrega: {status.deliveryStatus}. Próxima ação: {status.nextAction}.</Alert> : null}<div className="onboarding-actions"><Button onClick={() => void onSubmit()} disabled={submitting}>{submitting ? "Criando inspeção…" : "Criar primeira inspeção"}</Button><Button variant="secondary" onClick={onBack}>Voltar à etapa</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
+  return <div className="onboarding-review"><p className="onboarding-step-description">Confira os dados que foram confirmados em cada etapa.</p><dl>{values.length ? values.map((item) => <Fragment key={item.label}><dt>{item.label}</dt><dd>{item.value || "Não informado"}</dd></Fragment>) : <dd>Nenhuma etapa foi confirmada ainda.</dd>}</dl>{status ? <Alert tone={status.originStatus === "PENDING" || status.deliveryStatus === "PENDING" ? "warning" : "info"}>Origem: {presentOnboardingStatus(status.originStatus)}. Entrega: {presentOnboardingStatus(status.deliveryStatus)}. Próxima ação: {presentOnboardingStatus(status.nextAction)}.</Alert> : null}<div className="onboarding-actions"><Button onClick={() => void onSubmit()} disabled={submitting}>{submitting ? "Criando vistoria…" : "Criar primeira vistoria"}</Button><Button variant="secondary" onClick={onBack}>Voltar à etapa</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
 }
 
 function StatusView({ status, submitting, onRetry, onRestart }: { status?: Status; submitting: boolean; onRetry: () => Promise<void>; onRestart: () => void }) {
   const created = status?.state === "SUBMITTED" && Boolean(status.inspectionId);
   const pending = !created || status?.originStatus === "PENDING" || status?.deliveryStatus === "PENDING";
   const waitingForOrigin = status?.state === "ORIGIN_PENDING" || status?.originStatus === "PENDING";
-  return <div className="onboarding-form"><Alert tone={created ? "success" : "warning"} title={created ? "Primeira inspeção criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{created ? `A inspeção ${status.inspectionId} foi criada. ${pending ? "O link de captura está sendo entregue ao participante." : "O link de captura foi entregue ao participante."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor."}</Alert>{status?.state === "FAILED" ? <Alert tone="danger">A operação falhou de forma recuperável. Revise os dados e tente novamente quando o serviço estiver disponível.</Alert> : null}<div className="onboarding-actions">{waitingForOrigin ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : "Tentar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
+  return <div className="onboarding-form"><Alert tone={created ? "success" : "warning"} title={created ? "Primeira vistoria criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{created ? `A vistoria ${status.inspectionId} foi criada. ${pending ? "O link de captura está sendo entregue ao responsável pela vistoria." : "O link de captura foi entregue ao responsável pela vistoria."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor."}</Alert>{status?.state === "FAILED" ? <Alert tone="danger">A operação falhou de forma recuperável. Revise os dados e tente novamente quando o serviço estiver disponível.</Alert> : null}<div className="onboarding-actions">{waitingForOrigin ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : "Tentar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
 }
 
 function Fragment({ children }: { children: React.ReactNode }) { return <>{children}</>; }

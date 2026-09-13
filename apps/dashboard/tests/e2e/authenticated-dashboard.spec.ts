@@ -9,7 +9,7 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await loginAsLocalAdmin(page, "/triage");
     await page.getByRole("button", { name: "Atualizar prioridades" }).click();
     await expect(page.getByRole("status")).toContainText(/Resumo e fila atualizados|Não há trabalho/);
-    await page.getByRole("navigation", { name: "Dashboard" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
+    await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
     const notice = page.getByRole("listitem").filter({ hasText: "Inspeção QA disponível" }).first();
     await expect(notice).toBeVisible();
     const markAsRead = notice.getByRole("button", { name: "Marcar como lida" });
@@ -26,7 +26,7 @@ test.describe("authenticated Dashboard against the local stack", () => {
     });
     await loginAsLocalAdmin(page, "/inspections");
     await page.getByRole("button", { name: "Carregar inspeções" }).click();
-    await expect(page.getByText(/Inspeções atualizadas|Nenhuma inspeção encontrada/)).toBeVisible();
+    await expect(page.getByText(/Vistorias atualizadas|Nenhuma vistoria encontrada/)).toBeVisible();
 
     const selector = page.getByRole("group", { name: "Visualização das inspeções" });
     const records = page.locator("[data-inspection-id]");

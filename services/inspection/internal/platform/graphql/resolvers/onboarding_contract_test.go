@@ -111,7 +111,7 @@ func TestOnboardingSessionWithExpiredCookieReturnsNullAndClearsCookie(t *testing
 func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
 	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", Version: 2})
 
-	if value == nil || value.Definition["schemaVersion"] != 1 || value.Definition["version"] != 1 {
+	if value == nil || value.Definition["schemaVersion"] != 1 || value.Definition["version"] != 2 {
 		t.Fatalf("session definition versions: %#v", value.Definition)
 	}
 	if value.Definition["segment"] != "REAL_ESTATE" || value.Definition["segmentVersion"] != "real-estate-v1" {

@@ -35,7 +35,7 @@ func Setup(d Dependencies) error {
 			if err != nil {
 				return nil, err
 			}
-			published, err := d.Bus.Send(ctx, publishtemplate.Command{TenantID: cmd.TenantID, Key: seed.TemplateKey, Name: seed.TemplateKey, IdempotencyKey: "curated-seed:" + seed.TemplateKey + ":" + seed.Document.SegmentVersionID, DefinitionJSON: payload})
+			published, err := d.Bus.Send(ctx, publishtemplate.Command{TenantID: cmd.TenantID, Key: seed.TemplateKey, Name: curatedTemplateName(seed.TemplateKey), IdempotencyKey: "curated-seed:" + seed.TemplateKey + ":" + seed.Document.SegmentVersionID, DefinitionJSON: payload})
 			if err != nil {
 				return nil, err
 			}
@@ -43,4 +43,16 @@ func Setup(d Dependencies) error {
 		}
 		return result, nil
 	})
+}
+
+func curatedTemplateName(key string) string {
+	names := map[string]string{
+		"property-periodic":     "Vistoria periódica do imóvel",
+		"construction-progress": "Acompanhamento de obra",
+		"cleaning-quality":      "Vistoria de limpeza",
+	}
+	if name, ok := names[key]; ok {
+		return name
+	}
+	return "Modelo de vistoria"
 }

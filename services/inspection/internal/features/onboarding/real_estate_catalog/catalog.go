@@ -13,7 +13,7 @@ import (
 const (
 	Segment              = "REAL_ESTATE"
 	DefinitionSchema     = 1
-	DefinitionVersion    = 1
+	DefinitionVersion    = 2
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = "real-estate-fixed-origin"
 	AnalysisProfileKey   = "real-estate-default"
@@ -22,12 +22,13 @@ const (
 var ErrUnsupportedSchemaVersion = errors.New("unsupported schema version")
 
 type Field struct {
-	Key         string   `json:"key"`
-	Label       string   `json:"label"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Placeholder string   `json:"placeholder,omitempty"`
-	Options     []string `json:"options,omitempty"`
+	Key          string            `json:"key"`
+	Label        string            `json:"label"`
+	Type         string            `json:"type"`
+	Required     bool              `json:"required"`
+	Placeholder  string            `json:"placeholder,omitempty"`
+	Options      []string          `json:"options,omitempty"`
+	OptionLabels map[string]string `json:"optionLabels,omitempty"`
 }
 
 type Step struct {
@@ -62,12 +63,22 @@ var definition = Definition{
 	SegmentVersion: "real-estate-v1", Purposes: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"},
 	Templates: []string{ChecklistTemplateKey, OriginTemplateKey}, AnalysisProfile: AnalysisProfileKey,
 	Steps: []Step{
-		{Key: "agency", Label: "Agency", Position: 1, Required: true, Fields: []Field{{Key: "name", Label: "Agency name", Type: "text", Required: true}}},
-		{Key: "property", Label: "Property", Position: 2, Required: true, Fields: []Field{{Key: "address", Label: "Property address", Type: "textarea", Required: true}, {Key: "propertyType", Label: "Property type", Type: "select", Required: true, Options: []string{"APARTMENT", "HOUSE", "COMMERCIAL", "LAND"}}, {Key: "rooms", Label: "Rooms", Type: "number", Required: true}, {Key: "purpose", Label: "Purpose", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}}, {Key: "deadline", Label: "Inspection deadline", Type: "date", Required: true}}},
-		{Key: "origin", Label: "Reference photos", Position: 3, Required: true, Fields: []Field{{Key: "mode", Label: "Reference mode", Type: "select", Required: true, Options: []string{"CHECKLIST_ONLY", "FIXED_ORIGIN"}}}},
-		{Key: "participant", Label: "Participant", Position: 4, Required: true, Fields: []Field{{Key: "mode", Label: "Who will inspect", Type: "select", Required: true, Options: []string{"SELF", "DELEGATE"}}, {Key: "name", Label: "Participant name", Type: "text", Required: false}, {Key: "email", Label: "Participant email", Type: "email", Required: false}}},
+		{Key: "agency", Label: "Imobiliária", Position: 1, Required: true, Fields: []Field{{Key: "name", Label: "Nome da imobiliária", Type: "text", Required: true}}},
+		{Key: "property", Label: "Imóvel", Position: 2, Required: true, Fields: []Field{
+			{Key: "address", Label: "Endereço do imóvel", Type: "textarea", Required: true},
+			{Key: "propertyType", Label: "Tipo de imóvel", Type: "select", Required: true, Options: []string{"APARTMENT", "HOUSE", "COMMERCIAL", "LAND"}, OptionLabels: map[string]string{"APARTMENT": "Apartamento", "HOUSE": "Casa", "COMMERCIAL": "Imóvel comercial", "LAND": "Terreno"}},
+			{Key: "rooms", Label: "Quantidade de cômodos", Type: "number", Required: true},
+			{Key: "purpose", Label: "Finalidade da vistoria", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}, OptionLabels: map[string]string{"SALE": "Venda", "RENTAL": "Locação", "MAINTENANCE": "Manutenção", "INSURANCE": "Seguro"}},
+			{Key: "deadline", Label: "Prazo para concluir a vistoria", Type: "date", Required: true},
+		}},
+		{Key: "origin", Label: "Fotos de referência", Position: 3, Required: true, Fields: []Field{{Key: "mode", Label: "Base de comparação", Type: "select", Required: true, Options: []string{"CHECKLIST_ONLY", "FIXED_ORIGIN"}, OptionLabels: map[string]string{"CHECKLIST_ONLY": "Primeira vistoria do imóvel", "FIXED_ORIGIN": "Comparar com fotos de referência"}}}},
+		{Key: "participant", Label: "Responsável pela vistoria", Position: 4, Required: true, Fields: []Field{
+			{Key: "mode", Label: "Quem realizará a vistoria?", Type: "select", Required: true, Options: []string{"SELF", "DELEGATE"}, OptionLabels: map[string]string{"SELF": "Eu farei a vistoria", "DELEGATE": "Outra pessoa fará a vistoria"}},
+			{Key: "name", Label: "Nome do responsável", Type: "text", Required: false},
+			{Key: "email", Label: "E-mail do responsável", Type: "email", Required: false},
+		}},
 	},
-	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "First inspection", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Compare with previous photos", TemplateKey: OriginTemplateKey, Required: true}},
+	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "Primeira vistoria do imóvel", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Comparar com fotos de referência", TemplateKey: OriginTemplateKey, Required: true}},
 }
 
 // Resolve returns a copy of a supported definition. Unsupported schema
@@ -111,7 +122,7 @@ func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
 			SchemaVersion: DefinitionSchema, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, ComparisonMode: mode,
-			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Property overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
+			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
 			ReportMode:   "HISTORICAL", AnalysisProfile: AnalysisProfileKey,
 			Policy: templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: true},
 		}
@@ -141,6 +152,12 @@ func clone(value Definition) Definition {
 		result.Steps[i].Fields = append([]Field(nil), value.Steps[i].Fields...)
 		for j := range result.Steps[i].Fields {
 			result.Steps[i].Fields[j].Options = append([]string(nil), value.Steps[i].Fields[j].Options...)
+			if value.Steps[i].Fields[j].OptionLabels != nil {
+				result.Steps[i].Fields[j].OptionLabels = make(map[string]string, len(value.Steps[i].Fields[j].OptionLabels))
+				for key, label := range value.Steps[i].Fields[j].OptionLabels {
+					result.Steps[i].Fields[j].OptionLabels[key] = label
+				}
+			}
 		}
 	}
 	result.Purposes = append([]string(nil), value.Purposes...)

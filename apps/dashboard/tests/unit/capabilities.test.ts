@@ -6,7 +6,7 @@ describe("Dashboard capability composition", () => {
     expect(composeCapabilities({ roles: ["MANAGER"], entitlements: ["DASHBOARD"] }).canPublish).toBe(true);
     expect(composeCapabilities({ roles: ["EMPLOYEE"], entitlements: ["DASHBOARD"] }).canMutate).toBe(true);
     expect(composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] }).home).toContain("somente leitura");
-    expect(composeCapabilities({ roles: ["CUSTOMER_VIEWER"], entitlements: ["DASHBOARD"] }).links.map(([label]) => label)).toEqual(["Portfólio", "Relatórios publicados", "Notificações"]);
+    expect(composeCapabilities({ roles: ["CUSTOMER_VIEWER"], entitlements: ["DASHBOARD"] }).links.map(([label]) => label)).toEqual(["Portfólio", "Laudos publicados", "Notificações"]);
   });
   it("UT-057 never emits mutation controls for viewer audiences", () => {
     for (const role of ["VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canMutate).toBe(false);
@@ -15,7 +15,7 @@ describe("Dashboard capability composition", () => {
     const viewer = composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] });
     expect(viewer.canMutate).toBe(false);
     expect(viewer.canPublish).toBe(false);
-    expect(viewer.links.map(([label]) => label)).toContain("Inspeções");
+    expect(viewer.links.map(([label]) => label)).toContain("Vistorias");
   });
   it("offers administration only to a tenant admin entitled to both products", () => {
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["ADMIN", "DASHBOARD"] }).canUseAdmin).toBe(true);

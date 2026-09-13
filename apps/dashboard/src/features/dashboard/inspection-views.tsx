@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { getMembershipId } from "@/auth/session";
 import type { InspectionsQuery } from "@/graphql/generated";
+import { presentDashboardStatus, presentInspectionSource } from "./presentation";
 
 export type InspectionView = "lista" | "quadro" | "agenda";
 export type InspectionRecord = InspectionsQuery["inspections"]["nodes"][number];
@@ -33,7 +34,7 @@ const inspectionStatusLabels: Record<string, string> = {
   IN_PROGRESS: "Em andamento",
   SUBMITTED: "Enviada",
   ANALYZING: "Em análise",
-  RECAPTURE_PENDING: "Recaptura pendente",
+  RECAPTURE_PENDING: "Complemento solicitado",
   COMPLETED: "Concluída",
   CANCELED: "Cancelada",
   INVALIDATED: "Invalidada",
@@ -94,7 +95,7 @@ export function filterInspections(inspections: InspectionRecord[], query: string
 }
 
 export function formatInspectionStatus(status: string): string {
-  return inspectionStatusLabels[status] ?? "Status desconhecido";
+  return presentDashboardStatus(status);
 }
 
 export function formatInspectionDate(value: string | null | undefined): string {
@@ -121,7 +122,7 @@ export function useInspectionView(): [InspectionView, (view: InspectionView) => 
 }
 
 export function InspectionViewSelector({ view, onChange }: { view: InspectionView; onChange: (view: InspectionView) => void }) {
-  return <div className="inspection-view-selector" role="group" aria-label="Visualização das inspeções">
+  return <div className="inspection-view-selector" role="group" aria-label="Visualização das vistorias">
     {inspectionViewOptions.map((option) => <button key={option.value} type="button" aria-controls="inspection-collection" aria-pressed={view === option.value} onClick={() => onChange(option.value)}>{option.label}</button>)}
   </div>;
 }
@@ -133,22 +134,22 @@ export function InspectionViews({ inspections, view, actions }: { inspections: I
 }
 
 function InspectionList({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
-  return inspections.length ? <div className="inspection-table-box"><table className="inspection-table"><thead><tr><th>Inspeção</th><th>Situação</th><th>Vencimento</th><th>Ação</th></tr></thead><tbody>{inspections.map((inspection) => <tr key={inspection.id} data-inspection-id={inspection.id}><td data-label="Inspeção"><strong>{inspectionName(inspection)}</strong><span>{inspection.source || "Origem não informada"} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span></td><td data-label="Situação"><InspectionStatus status={inspection.status} /></td><td data-label="Vencimento"><strong>{formatInspectionDate(inspection.dueAt)}</strong><span>Prazo final · {formatInspectionDate(inspection.deadlineAt)}</span></td><td data-label="Ação"><Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir inspeção →</Link><InspectionActions inspection={inspection} actions={actions} /></td></tr>)}</tbody></table></div> : <EmptyInspections />;
+  return inspections.length ? <div className="inspection-table-box"><table className="inspection-table"><thead><tr><th>Vistoria</th><th>Situação</th><th>Vencimento</th><th>Ação</th></tr></thead><tbody>{inspections.map((inspection) => <tr key={inspection.id} data-inspection-id={inspection.id}><td data-label="Vistoria"><strong>{inspectionName(inspection)}</strong><span>{presentInspectionSource(inspection.source)} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span></td><td data-label="Situação"><InspectionStatus status={inspection.status} /></td><td data-label="Vencimento"><strong>{formatInspectionDate(inspection.dueAt)}</strong><span>Prazo final · {formatInspectionDate(inspection.deadlineAt)}</span></td><td data-label="Ação"><Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir vistoria →</Link><InspectionActions inspection={inspection} actions={actions} /></td></tr>)}</tbody></table></div> : <EmptyInspections />;
 }
 
 function InspectionBoard({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
   const groups = groupInspectionsByStatus(inspections);
-  return <div className="inspection-board">{inspectionColumns.map((column) => <section className="inspection-column" key={column.key} aria-labelledby={`inspection-column-${column.key}`}><h2 id={`inspection-column-${column.key}`}>{column.label}<span aria-label={`${groups[column.key].length} inspeções`}>{groups[column.key].length}</span></h2>{groups[column.key].length ? <div className="inspection-column-list">{groups[column.key].map((inspection) => <InspectionCompactCard key={inspection.id} inspection={inspection} actions={actions} />)}</div> : <p className="inspection-column-empty">Nenhuma inspeção nesta situação.</p>}</section>)}</div>;
+  return <div className="inspection-board">{inspectionColumns.map((column) => <section className="inspection-column" key={column.key} aria-labelledby={`inspection-column-${column.key}`}><h2 id={`inspection-column-${column.key}`}>{column.label}<span aria-label={`${groups[column.key].length} vistorias`}>{groups[column.key].length}</span></h2>{groups[column.key].length ? <div className="inspection-column-list">{groups[column.key].map((inspection) => <InspectionCompactCard key={inspection.id} inspection={inspection} actions={actions} />)}</div> : <p className="inspection-column-empty">Nenhuma vistoria nesta situação.</p>}</section>)}</div>;
 }
 
 function InspectionAgenda({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
   const sorted = sortInspectionsByDueAt(inspections);
-  return sorted.length ? <div className="inspection-agenda-layout"><ol className="inspection-agenda">{sorted.map((inspection) => <li key={inspection.id}><div className="inspection-agenda-date"><span>Vencimento</span><strong>{formatAgendaDay(inspection.dueAt)}</strong><small>{formatInspectionStatus(inspection.status)}</small></div><InspectionCompactCard inspection={inspection} actions={actions} /></li>)}</ol><aside className="inspection-agenda-context"><span>Leitura da agenda</span><h2>Do prazo à ação.</h2><p>Selecione um registro para consultar a situação, o vencimento e o prazo final.</p><hr /><p>A triagem continua disponível para acompanhar a classificação das inspeções.</p><Link href="/triage">Abrir triagem →</Link></aside></div> : <EmptyInspections />;
+  return sorted.length ? <div className="inspection-agenda-layout"><ol className="inspection-agenda">{sorted.map((inspection) => <li key={inspection.id}><div className="inspection-agenda-date"><span>Vencimento</span><strong>{formatAgendaDay(inspection.dueAt)}</strong><small>{formatInspectionStatus(inspection.status)}</small></div><InspectionCompactCard inspection={inspection} actions={actions} /></li>)}</ol><aside className="inspection-agenda-context"><span>Leitura da agenda</span><h2>Do prazo à ação.</h2><p>Selecione um registro para consultar a situação, o vencimento e o prazo final.</p><hr /><p>A triagem continua disponível para acompanhar a classificação das vistorias.</p><Link href="/triage">Abrir triagem →</Link></aside></div> : <EmptyInspections />;
 }
 
 function InspectionCompactCard({ inspection, actions }: { inspection: InspectionRecord; actions?: InspectionActionHandlers }) {
   return <article className="inspection-record-card" data-inspection-id={inspection.id}>
-    <span className="inspection-record-kicker">{inspection.source || "Origem não informada"}</span>
+    <span className="inspection-record-kicker">{presentInspectionSource(inspection.source)}</span>
     <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-record-title">{inspectionName(inspection)}</Link>
     <span>Vencimento · {formatInspectionDate(inspection.dueAt)}</span>
     <span>{inspection.evidenceCount} evidência(s) · prazo final {formatInspectionDate(inspection.deadlineAt)} · v{inspection.version}</span>
@@ -157,16 +158,16 @@ function InspectionCompactCard({ inspection, actions }: { inspection: Inspection
 }
 
 function InspectionStatus({ status }: { status: string }) {
-  return <span className="inspection-status" title={status || "UNKNOWN"}>{formatInspectionStatus(status)}</span>;
+  return <span className="inspection-status" title={formatInspectionStatus(status)}>{formatInspectionStatus(status)}</span>;
 }
 
 function InspectionActions({ inspection, actions }: { inspection: InspectionRecord; actions?: InspectionActionHandlers }) {
   if (!actions) return null;
-  return <details className="inspection-action-menu"><summary>Ações</summary><div><button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button><button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar recaptura</button></div></details>;
+  return <details className="inspection-action-menu"><summary>Ações</summary><div><button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button><button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar complemento</button></div></details>;
 }
 
 function EmptyInspections() {
-  return <p role="status">Nenhuma inspeção encontrada neste escopo.</p>;
+  return <p role="status">Nenhuma vistoria encontrada nesta abrangência.</p>;
 }
 
 function parseDate(value: string | null | undefined): Date | undefined {
@@ -181,5 +182,5 @@ function formatAgendaDay(value: string | null | undefined): string {
 }
 
 function inspectionName(inspection: InspectionRecord): string {
-  return inspection.source ? "Inspeção" : "Registro de inspeção";
+  return inspection.source ? "Vistoria" : "Registro de vistoria";
 }

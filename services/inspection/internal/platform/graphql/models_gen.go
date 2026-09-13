@@ -627,12 +627,18 @@ type OnboardingDefinition struct {
 }
 
 type OnboardingField struct {
-	Key         string   `json:"key"`
-	Label       string   `json:"label"`
-	Type        string   `json:"type"`
-	Required    bool     `json:"required"`
-	Placeholder *string  `json:"placeholder,omitempty"`
-	Options     []string `json:"options"`
+	Key         string              `json:"key"`
+	Label       string              `json:"label"`
+	Type        string              `json:"type"`
+	Required    bool                `json:"required"`
+	Placeholder *string             `json:"placeholder,omitempty"`
+	Options     []string            `json:"options"`
+	Choices     []*OnboardingOption `json:"choices"`
+}
+
+type OnboardingOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
 type OnboardingOriginMode struct {

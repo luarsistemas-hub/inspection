@@ -24,5 +24,5 @@ export default function CallbackPage() {
       .then(({ access_token }) => { setSession(access_token); router.replace(attempt.returnTo); })
       .catch((error: unknown) => { console.error("Dashboard authentication failed", error); setMessage("Não foi possível concluir a autenticação. Tente novamente."); });
   }, [router]);
-  return <main className="denial"><h1>Autenticação do Dashboard</h1><p role="status">{message}</p></main>;
+  return <main className="denial"><h1>Autenticação do Painel</h1><p role="status">{message}</p></main>;
 }

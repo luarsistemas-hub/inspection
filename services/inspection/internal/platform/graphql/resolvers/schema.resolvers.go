@@ -1491,7 +1491,15 @@ func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string
 	for _, step := range value.Steps {
 		fields := make([]*graphql1.OnboardingField, 0, len(step.Fields))
 		for _, field := range step.Fields {
-			fields = append(fields, &graphql1.OnboardingField{Key: field.Key, Label: field.Label, Type: field.Type, Required: field.Required, Placeholder: optionalStringValue(field.Placeholder), Options: field.Options})
+			choices := make([]*graphql1.OnboardingOption, 0, len(field.Options))
+			for _, option := range field.Options {
+				label := field.OptionLabels[option]
+				if label == "" {
+					label = option
+				}
+				choices = append(choices, &graphql1.OnboardingOption{Value: option, Label: label})
+			}
+			fields = append(fields, &graphql1.OnboardingField{Key: field.Key, Label: field.Label, Type: field.Type, Required: field.Required, Placeholder: optionalStringValue(field.Placeholder), Options: field.Options, Choices: choices})
 		}
 		steps = append(steps, &graphql1.OnboardingStep{Key: step.Key, Label: step.Label, Position: step.Position, Required: step.Required, Fields: fields})
 	}

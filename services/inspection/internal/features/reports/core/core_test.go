@@ -6,7 +6,7 @@ import (
 )
 
 func validSnapshot() Snapshot {
-	return Snapshot{SchemaVersion: 1, ReportID: "report-1", InspectionID: "inspection-1", TemplateVersionID: "template-v1", ReferenceVersionID: "reference-v1", ProfileVersionID: "profile-v1", Mode: "HISTORICAL", Classification: "ATTENTION", Advisory: "Internal advisory triage; not a finding of fault."}
+	return Snapshot{SchemaVersion: 1, ReportID: "report-1", InspectionID: "inspection-1", TemplateVersionID: "template-v1", ReferenceVersionID: "reference-v1", ProfileVersionID: "profile-v1", Mode: "HISTORICAL", Classification: "ATTENTION", Advisory: "Esta triagem interna não atribui culpa."}
 }
 
 func TestSnapshotRejectsMutableURLs(t *testing.T) {
@@ -41,7 +41,10 @@ func TestHTMLIsInternalAndEscaped(t *testing.T) {
 	if strings.Contains(string(html), "<script>") {
 		t.Fatal("unescaped report text")
 	}
-	if !strings.Contains(string(html), "Internal advisory inspection report") {
-		t.Fatal("missing internal advisory marker")
+	if !strings.Contains(string(html), "Laudo interno de vistoria") {
+		t.Fatal("missing localized report marker")
+	}
+	if presentClassification("UNKNOWN") != "Situação não reconhecida" || presentSeverity("UNKNOWN") != "Situação não reconhecida" {
+		t.Fatal("unknown report codes must use the safe fallback")
 	}
 }

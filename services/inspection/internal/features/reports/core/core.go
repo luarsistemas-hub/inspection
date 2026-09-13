@@ -122,8 +122,11 @@ func HTML(snapshot Snapshot) ([]byte, error) {
 	if err := Validate(snapshot); err != nil {
 		return nil, err
 	}
-	const source = `<!doctype html><html><body><h1>Internal advisory inspection report</h1><p>{{.Advisory}}</p><p>Classification: {{.Classification}}</p><h2>Reasons</h2><ul>{{range .ReasonCodes}}<li>{{.}}</li>{{end}}</ul><h2>Evidence</h2><ul>{{range .Evidence}}<li data-evidence-id="{{.ID}}">{{.RequirementKey}}: {{.Description}} ({{.CaptureSource}}){{range .Flags}} [{{.}}]{{end}}</li>{{end}}</ul><h2>Findings</h2><ul>{{range .Findings}}<li><strong>{{.Title}}</strong> — {{.Description}} (severity {{.Severity}}, confidence {{.Confidence}}; action: {{.RecommendedAction}})</li>{{end}}</ul></body></html>`
-	t, err := template.New("report").Parse(source)
+	const source = `<!doctype html><html lang="pt-BR"><body><h1>Laudo interno de vistoria</h1><p>{{.Advisory}}</p><p>Classificação: {{classification .Classification}} · Modalidade: {{mode .Mode}}</p><h2>Motivos</h2><ul>{{range .ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2><ul>{{range .Evidence}}<li data-evidence-id="{{.ID}}">{{requirement .RequirementKey}}: {{.Description}} ({{captureSource .CaptureSource}}){{range .Flags}} [{{flag .}}]{{end}}</li>{{end}}</ul><h2>Constatações</h2><ul>{{range .Findings}}<li><strong>{{.Title}}</strong> — {{.Description}} (severidade {{severity .Severity}}, confiança {{.Confidence}}, ação recomendada: {{action .RecommendedAction}})</li>{{end}}</ul></body></html>`
+	t, err := template.New("report").Funcs(template.FuncMap{
+		"classification": presentClassification, "mode": presentMode, "reason": presentReason,
+		"requirement": presentRequirement, "captureSource": presentCaptureSource, "flag": presentFlag, "severity": presentSeverity, "action": presentAction,
+	}).Parse(source)
 	if err != nil {
 		return nil, err
 	}
@@ -132,4 +135,38 @@ func HTML(snapshot Snapshot) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(rendered.String()), nil
+}
+
+func presentClassification(value string) string {
+	return reportLabel(map[string]string{"NORMAL": "Sem alterações relevantes", "ATTENTION": "Requer atenção", "CRITICAL": "Crítica"}, value)
+}
+func presentMode(value string) string {
+	return reportLabel(map[string]string{"CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico"}, value)
+}
+func presentReason(value string) string {
+	return reportLabel(map[string]string{"MISSING_EVIDENCE": "Evidência ausente", "QUALITY_LOW": "Qualidade insuficiente", "CLASSIFICATION_CRITICAL": "Classificação crítica"}, value)
+}
+func presentRequirement(value string) string {
+	if value == "overview" || value == "Property overview" {
+		return "Visão geral do imóvel"
+	}
+	return "Requisito não reconhecido"
+}
+func presentCaptureSource(value string) string {
+	return reportLabel(map[string]string{"CAMERA": "Câmera", "CAMERA_ONLY": "Câmera obrigatória", "GALLERY": "Galeria", "CAMERA_DEFAULT": "Câmera ou galeria conforme a política"}, value)
+}
+func presentFlag(value string) string {
+	return reportLabel(map[string]string{"GPS_MISSING": "Localização ausente", "LOW_QUALITY": "Qualidade insuficiente", "SENSITIVE_DETECTION": "Detecção sensível"}, value)
+}
+func presentSeverity(value string) string {
+	return reportLabel(map[string]string{"LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica"}, value)
+}
+func presentAction(value string) string {
+	return reportLabel(map[string]string{"REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional"}, value)
+}
+func reportLabel(labels map[string]string, value string) string {
+	if label, ok := labels[value]; ok {
+		return label
+	}
+	return "Situação não reconhecida"
 }

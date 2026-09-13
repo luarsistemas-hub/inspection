@@ -55,16 +55,16 @@ func DefaultCatalog() Catalog {
 	all := map[Channel]struct{}{ChannelEmail: {}, ChannelSMS: {}, ChannelWhatsApp: {}}
 	return Catalog{templates: map[string]Template{
 		"capture-link:v1": {Ref: TemplateRef{Name: "capture-link", Version: "v1"}, Channels: all, Required: []string{"captureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
-			return RenderedTemplate{Subject: "Sua inspeção está disponível", Text: "Olá " + v["recipientName"] + ", acesse " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["captureUrl"] + "\">sua inspeção</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
+			return RenderedTemplate{Subject: "Sua vistoria está disponível", Text: "Olá " + v["recipientName"] + ", acesse " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["captureUrl"] + "\">sua vistoria</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
 		}},
 		"recapture-link:v1": {Ref: TemplateRef{Name: "recapture-link", Version: "v1"}, Channels: all, Required: []string{"recaptureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
-			return RenderedTemplate{Subject: "Recaptura solicitada", Text: "Olá " + v["recipientName"] + ", acesse " + v["recaptureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["recaptureUrl"] + "\">a recaptura</a>.</p>", Parameters: []string{v["recaptureUrl"], v["recipientName"]}}
+			return RenderedTemplate{Subject: "Complemento de vistoria solicitado", Text: "Olá " + v["recipientName"] + ", acesse " + v["recaptureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["recaptureUrl"] + "\">o complemento da vistoria</a>.</p>", Parameters: []string{v["recaptureUrl"], v["recipientName"]}}
 		}},
 		"critical-alert:v1": {Ref: TemplateRef{Name: "critical-alert", Version: "v1"}, Channels: all, Required: []string{"inspectionName", "dashboardUrl"}, render: func(v map[string]string) RenderedTemplate {
-			return RenderedTemplate{Subject: "Alerta crítico", Text: "A inspeção " + v["inspectionName"] + " requer revisão: " + v["dashboardUrl"], HTML: "<p>A inspeção " + v["inspectionName"] + " requer <a href=\"" + v["dashboardUrl"] + "\">revisão</a>.</p>", Parameters: []string{v["inspectionName"], v["dashboardUrl"]}}
+			return RenderedTemplate{Subject: "Alerta crítico", Text: "A vistoria " + v["inspectionName"] + " requer revisão: " + v["dashboardUrl"], HTML: "<p>A vistoria " + v["inspectionName"] + " requer <a href=\"" + v["dashboardUrl"] + "\">revisão</a>.</p>", Parameters: []string{v["inspectionName"], v["dashboardUrl"]}}
 		}},
 		"reminder:v1": {Ref: TemplateRef{Name: "reminder", Version: "v1"}, Channels: all, Required: []string{"captureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
-			return RenderedTemplate{Subject: "Lembrete de inspeção", Text: "Olá " + v["recipientName"] + ", lembrete: " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", <a href=\"" + v["captureUrl"] + "\">conclua sua inspeção</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
+			return RenderedTemplate{Subject: "Lembrete de vistoria", Text: "Olá " + v["recipientName"] + ", lembrete: " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", <a href=\"" + v["captureUrl"] + "\">conclua sua vistoria</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
 		}},
 	}}
 }

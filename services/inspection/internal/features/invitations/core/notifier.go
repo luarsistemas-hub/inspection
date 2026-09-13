@@ -17,7 +17,7 @@ func (n ChannelNotifier) SendOTP(ctx context.Context, tenantID, invitationID ide
 	intents := make(map[notifications.Channel]notifications.Intent, len(destinations))
 	for _, destination := range destinations {
 		channel := notifications.Channel(destination.Channel)
-		intents[channel] = notifications.Intent{ID: invitationID.String() + ":" + destination.Channel, Destination: destination.Destination, Template: "Seu codigo de acesso", Parameters: map[string]string{"body": "Codigo: " + code, "tenantId": tenantID.String(), "callbackUrl": n.CallbackURL}}
+		intents[channel] = notifications.Intent{ID: invitationID.String() + ":" + destination.Channel, Destination: destination.Destination, Template: "Seu código de acesso", Parameters: map[string]string{"body": "Código: " + code, "tenantId": tenantID.String(), "callbackUrl": n.CallbackURL}}
 	}
 	result := notifications.Deliver(ctx, n.Registry, intents)
 	if result.Status != "DELIVERED" {
