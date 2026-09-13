@@ -8,7 +8,7 @@ query AdminOrganization($first: Int!, $after: String) { businessUnits(first: $fi
 
 query AdminAccess($first: Int!, $after: String) { memberships(first: $first, after: $after) { nodes { id role status version scopes { kind resourceId } } pageInfo { endCursor hasNextPage } } }
 
-query AdminCatalogs($first: Int!, $after: String, $search: String) { participants(first: $first, after: $after, search: $search) { nodes { id name status version contacts { id channel value verified active } } pageInfo { endCursor hasNextPage } } segmentDefinitions(first: $first, after: $after, search: $search) { nodes { id key name activeVersionId version } pageInfo { endCursor hasNextPage } } templates(first: $first, after: $after, search: $search) { nodes { id key name activeVersionId version } pageInfo { endCursor hasNextPage } } }
+query AdminCatalogs($first: Int!, $after: String, $search: String) { participants(first: $first, after: $after, search: $search) { nodes { id name status version contacts { id channel value verified active } } pageInfo { endCursor hasNextPage } } segmentDefinitions(first: $first, after: $after, search: $search) { nodes { id key name activeVersionId version } pageInfo { endCursor hasNextPage } } templates(first: $first, after: $after, search: $search) { nodes { id key name segmentVersionId activeVersionId version } pageInfo { endCursor hasNextPage } } }
 
 query AdminAssets($first: Int!, $after: String, $search: String) { assets(first: $first, after: $after, search: $search) { nodes { id name externalKey address status businessUnitId version } pageInfo { endCursor hasNextPage } } }
 

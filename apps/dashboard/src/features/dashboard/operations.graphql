@@ -7,6 +7,12 @@ query DashboardMemberships {
   me { memberships { id tenantId role status } }
 }
 
+query DashboardFormOptions {
+  assets(first: 100) { nodes { id name externalKey businessUnitId segmentVersionId templateId status assignments { participantId role active } } pageInfo { endCursor hasNextPage } }
+  participants(first: 100) { nodes { id businessUnitId name status } pageInfo { endCursor hasNextPage } }
+  templates(first: 100) { nodes { id key name segmentVersionId activeVersionId version } pageInfo { endCursor hasNextPage } }
+}
+
 query OperationalOverview($after: String, $classification: String, $status: String) {
   dashboardSummary { total normal attention critical pending invalidated }
   triageInspections(first: 25, after: $after, classification: $classification, status: $status) {

@@ -19,7 +19,7 @@ import "@inspection/design-system/styles.css";
 
 ## Public exports
 
-- `@inspection/design-system`: `Alert`, `Button`, `Card`, `Container`, `Dialog`, `Field`, `Icon`, `Inline`, `Input`, `Motion`, `Navigation`, `ProductIdentity`, `Select`, `Stack`, `Status`, and `Textarea`, plus their public prop types.
+- `@inspection/design-system`: `Alert`, `Button`, `Card`, `Combobox`, `Container`, `Dialog`, `Field`, `Icon`, `Inline`, `Input`, `Motion`, `Navigation`, `ProductIdentity`, `Select`, `Stack`, `Status`, and `Textarea`, plus their public prop types.
 - `@inspection/design-system/styles.css`: opt-in reset, brand, typography, color, spacing, focus, elevation, layout, and reduced-motion tokens.
 
 No auth, GraphQL, routing, product pages, authorization decisions, or domain rules are exported.

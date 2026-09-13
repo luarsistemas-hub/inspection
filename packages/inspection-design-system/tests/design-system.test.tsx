@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { Breadcrumbs, Button, Confirmation, DataTable, Dialog, Field, Input, Pagination, Recovery, VersionConflict } from "../src/index.js";
+import { Breadcrumbs, Button, Combobox, Confirmation, DataTable, Dialog, Field, Input, Pagination, Recovery, VersionConflict } from "../src/index.js";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -117,6 +117,28 @@ describe("design-system public contracts", () => {
     expect(input?.required).toBe(true);
     expect(description?.textContent).toContain("Use seu nome completo");
     expect(description?.textContent).toContain("Nome obrigatório");
+
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("provides a searchable accessible combobox with keyboard semantics", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+    let selected = "";
+
+    await act(async () => reactRoot.render(<Combobox value={selected} options={[{ value: "asset-1", label: "Imóvel QA", description: "QA-001" }]} onChange={(value) => { selected = value; }} required aria-label="Ativo" />));
+    const input = container.querySelector<HTMLInputElement>("[role='combobox']");
+    expect(input?.getAttribute("aria-autocomplete")).toBe("list");
+    expect(input?.getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => input?.focus());
+    const option = container.querySelector<HTMLElement>("[role='option']");
+    expect(input?.getAttribute("aria-expanded")).toBe("true");
+    expect(option?.textContent).toContain("Imóvel QA");
+    await act(async () => option?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(selected).toBe("asset-1");
 
     await act(async () => reactRoot.unmount());
     container.remove();
