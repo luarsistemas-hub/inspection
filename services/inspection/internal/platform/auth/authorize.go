@@ -125,7 +125,7 @@ func (a Authorizer) Authorize(ctx context.Context, first interface{}, legacy ...
 		return requestctx.Principal{}, apperror.New(apperror.NotFound, "", "resource not found")
 	}
 	principal := metadata.Principal
-	if a.Store != nil {
+	if a.Store != nil && !principal.Internal {
 		var err error
 		principal, err = a.Store.Resolve(ctx, tenantID, principal.IdentityID)
 		if err != nil {

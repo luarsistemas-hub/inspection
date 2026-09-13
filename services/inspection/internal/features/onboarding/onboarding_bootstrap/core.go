@@ -96,7 +96,13 @@ func (s Service) Provision(ctx context.Context, input Input) (Result, error) {
 		}
 		var existing database.BootstrapRequest
 		if err := tx.Where("subject_key=?", subjectKey).First(&existing).Error; err == nil {
-			return apperror.New(apperror.Conflict, "identity", "identity is already provisioned")
+			// Provisioning is permanent for an OIDC identity. A restarted
+			// onboarding session must recover that result even when its
+			// session-scoped idempotency key is different.
+			if len(existing.Result) == 0 {
+				return errors.New("onboarding bootstrap: existing result is empty")
+			}
+			return json.Unmarshal(existing.Result, &result)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}

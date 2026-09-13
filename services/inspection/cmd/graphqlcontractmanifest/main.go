@@ -14,7 +14,7 @@ import (
 func main() {
 	schemaPath := flag.String("schema", "schema.graphqls", "canonical GraphQL schema")
 	outputPath := flag.String("out", "operation-manifest.json", "manifest output path")
-	products := flag.String("products", "admin=../../apps/admin/src/features/admin/operations.graphql,dashboard=../../apps/dashboard/src/features/dashboard/operations.graphql,capture=../../apps/capture/src/graphql/documents/capture.graphql", "comma-separated product=document path entries")
+	products := flag.String("products", "admin=../../apps/admin/src/features/admin/operations.graphql,dashboard=../../apps/dashboard/src/features/dashboard/operations.graphql,capture=../../apps/capture/src/graphql/documents/capture.graphql,onboarding=../../apps/onboarding/src/features/onboarding/operations.graphql", "comma-separated product=document path entries")
 	matrixPath := flag.String("matrix", "../../.compozy/tasks/graphql-frontend-capability-parity/_capability_matrix.md", "capability matrix source")
 	flag.Parse()
 
@@ -46,7 +46,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	if err := graphqlcontract.ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture"}); err != nil {
+	if err := graphqlcontract.ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture", "onboarding"}); err != nil {
 		fail(err)
 	}
 	payload, err := json.MarshalIndent(manifest, "", "  ")

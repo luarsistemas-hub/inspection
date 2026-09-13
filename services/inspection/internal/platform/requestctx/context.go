@@ -22,6 +22,10 @@ type Principal struct {
 	Roles               []string
 	Scopes              []Scope
 	Disabled            bool
+	// Internal marks a server-side orchestration context. It is never derived
+	// from HTTP input and lets one feature compose other domains without
+	// re-resolving a not-yet-activated onboarding membership.
+	Internal bool
 }
 
 // Scope limits a principal to one resource subtree.

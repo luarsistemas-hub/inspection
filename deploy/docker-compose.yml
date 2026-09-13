@@ -136,6 +136,18 @@ services:
         /opt/keycloak/bin/kcadm.sh update users/$${INSPECTION_SUPER_ADMIN_SUBJECT} -r inspection -s enabled=true
         /opt/keycloak/bin/kcadm.sh set-password -r inspection --userid "$${INSPECTION_SUPER_ADMIN_SUBJECT}" --new-password "$${INSPECTION_SUPER_ADMIN_PASSWORD}"
 
+        provisioning_client_id="$$(/opt/keycloak/bin/kcadm.sh get clients -r inspection -q clientId=inspection-provisioning --fields id --format csv --noquotes | head -n 1)"
+        if [ -z "$${provisioning_client_id}" ]; then
+          echo 'inspection-provisioning client was not found' >&2
+          exit 1
+        fi
+        provisioning_user_id="$$(/opt/keycloak/bin/kcadm.sh get clients/$${provisioning_client_id}/service-account-user -r inspection --fields id --format csv --noquotes)"
+        if [ -z "$${provisioning_user_id}" ]; then
+          echo 'inspection-provisioning service account was not found' >&2
+          exit 1
+        fi
+        /opt/keycloak/bin/kcadm.sh add-roles -r inspection --uid "$${provisioning_user_id}" --cclientid realm-management --rolename view-users --rolename query-users --rolename manage-users
+
   inspection-migrate:
     build:
       context: ..
@@ -195,6 +207,7 @@ services:
       - "${INSPECTION_API_PORT:-8080}:8080"
     environment: &inspection_runtime_environment
       INSPECTION_ENV: local
+      STAGE: ${STAGE:-production}
       INSPECTION_HTTP_ADDR: :8080
       INSPECTION_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-local@postgres:5432/inspection?sslmode=disable
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
@@ -209,6 +222,12 @@ services:
       INSPECTION_SUPER_ADMIN_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
       INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
+      # The API runs inside the Compose network, so owner provisioning must
+      # use Keycloak's service address instead of the browser-facing localhost.
+      INSPECTION_KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      INSPECTION_KEYCLOAK_REALM: inspection
+      INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID: ${INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID:-inspection-provisioning}
+      INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET: ${INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET:-inspection-provisioning-local-secret}
       INSPECTION_STORAGE_PUBLIC: "false"
       INSPECTION_RABBITMQ_URL: amqp://inspection:inspection@rabbitmq:5672/
       INSPECTION_DRAGONFLY_ADDRESS: redis:6379

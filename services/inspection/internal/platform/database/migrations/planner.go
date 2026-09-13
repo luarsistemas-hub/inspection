@@ -587,5 +587,249 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) TO inspection_runtime;
+`},
+		{Version: 29, Name: "onboarding_email_attempt_coordination", Compatible: true, SQL: `
+ALTER TABLE onboarding.sessions ADD COLUMN IF NOT EXISTS replaced_at timestamptz;
+ALTER TABLE onboarding.sessions ADD COLUMN IF NOT EXISTS replacement_reason varchar(64) NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_onboarding_sessions_replaced_at ON onboarding.sessions(replaced_at);
+CREATE TABLE IF NOT EXISTS onboarding.email_states (
+  email varchar(320) PRIMARY KEY,
+  pending_session_id uuid,
+  verified_session_id uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+REVOKE ALL ON TABLE onboarding.email_states FROM PUBLIC;
+REVOKE ALL ON TABLE onboarding.email_states FROM inspection_runtime;
+
+CREATE OR REPLACE FUNCTION onboarding.prepare_email_attempt(p_email text, p_session_id uuid, p_now timestamptz)
+RETURNS TABLE(previous_pending_session_id uuid, verified_session_id uuid)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+DECLARE
+  v_pending uuid;
+  v_verified uuid;
+BEGIN
+  INSERT INTO onboarding.email_states(email, created_at, updated_at)
+  VALUES (p_email, p_now, p_now)
+  ON CONFLICT (email) DO NOTHING;
+
+  SELECT e.pending_session_id, e.verified_session_id
+    INTO v_pending, v_verified
+  FROM onboarding.email_states e
+  WHERE e.email = p_email
+  FOR UPDATE;
+
+  IF v_verified IS NULL THEN
+    SELECT s.id INTO v_verified
+    FROM onboarding.sessions s
+    WHERE s.email = p_email AND s.state NOT IN ('IDENTITY_PENDING', 'IDENTITY_REPLACED')
+    ORDER BY s.created_at DESC, s.id DESC
+    LIMIT 1;
+    IF v_verified IS NOT NULL THEN
+      UPDATE onboarding.email_states SET verified_session_id = v_verified, updated_at = p_now WHERE email = p_email;
+    END IF;
+  END IF;
+
+  IF v_pending IS NOT NULL THEN
+    UPDATE onboarding.sessions
+       SET state = 'IDENTITY_REPLACED', replaced_at = p_now,
+           replacement_reason = 'NEW_ATTEMPT', expires_at = LEAST(expires_at, p_now), updated_at = p_now
+     WHERE id = v_pending AND state = 'IDENTITY_PENDING';
+    UPDATE onboarding.otp_challenges
+       SET expires_at = LEAST(expires_at, p_now)
+     WHERE session_id = v_pending AND purpose = 'ONBOARDING' AND verified_at IS NULL;
+  END IF;
+
+  UPDATE onboarding.email_states
+     SET pending_session_id = p_session_id, updated_at = p_now
+   WHERE email = p_email;
+
+  RETURN QUERY SELECT v_pending, v_verified;
+END
+$function$;
+REVOKE ALL ON FUNCTION onboarding.prepare_email_attempt(text, uuid, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.prepare_email_attempt(text, uuid, timestamptz) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION onboarding.abort_email_attempt(p_email text, p_session_id uuid, p_reason text, p_now timestamptz)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+BEGIN
+  UPDATE onboarding.sessions
+     SET state = 'IDENTITY_REPLACED', replaced_at = p_now,
+         replacement_reason = left(coalesce(p_reason, 'ABORTED'), 64), expires_at = LEAST(expires_at, p_now), updated_at = p_now
+   WHERE id = p_session_id AND state = 'IDENTITY_PENDING';
+  UPDATE onboarding.otp_challenges
+     SET expires_at = LEAST(expires_at, p_now)
+   WHERE session_id = p_session_id AND purpose = 'ONBOARDING' AND verified_at IS NULL;
+  UPDATE onboarding.email_states
+     SET pending_session_id = NULL, updated_at = p_now
+   WHERE email = p_email AND pending_session_id = p_session_id;
+END
+$function$;
+REVOKE ALL ON FUNCTION onboarding.abort_email_attempt(text, uuid, text, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.abort_email_attempt(text, uuid, text, timestamptz) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION onboarding.promote_email_session(p_email text, p_session_id uuid, p_locator_digest bytea, p_csrf_digest bytea, p_now timestamptz)
+RETURNS TABLE(accepted boolean, owner_subject text, agency_tenant_id uuid, agency_business_unit_id uuid, agency_name text, agency_code text, agency_status text)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+DECLARE
+  v_pending uuid;
+  v_verified uuid;
+  v_owner_subject text;
+  v_tenant_id uuid;
+  v_unit_id uuid;
+  v_unit_name text;
+  v_unit_code text;
+  v_unit_status text;
+BEGIN
+  SELECT e.pending_session_id, e.verified_session_id
+    INTO v_pending, v_verified
+  FROM onboarding.email_states e
+  WHERE e.email = p_email
+  FOR UPDATE;
+
+  IF v_pending IS DISTINCT FROM p_session_id THEN
+    RETURN QUERY SELECT false, NULL::text, NULL::uuid, NULL::uuid, NULL::text, NULL::text, NULL::text;
+    RETURN;
+  END IF;
+
+  IF v_verified IS NOT NULL THEN
+    SELECT s.owner_subject, s.tenant_id
+      INTO v_owner_subject, v_tenant_id
+    FROM onboarding.sessions s
+    WHERE s.id = v_verified;
+
+    SELECT b.id, b.name, b.code, b.status
+      INTO v_unit_id, v_unit_name, v_unit_code, v_unit_status
+    FROM tenancy.business_units b
+    WHERE b.tenant_id = v_tenant_id
+    ORDER BY b.created_at, b.id
+    LIMIT 1;
+
+    UPDATE onboarding.sessions
+       SET state = 'IDENTITY_REPLACED', replaced_at = p_now,
+           replacement_reason = 'NEW_VERIFIED_ATTEMPT', updated_at = p_now
+     WHERE id = v_verified AND id <> p_session_id;
+  END IF;
+
+  UPDATE onboarding.otp_challenges
+     SET verified_at = p_now
+   WHERE session_id = p_session_id AND purpose = 'ONBOARDING' AND verified_at IS NULL;
+
+  UPDATE onboarding.sessions
+     SET session_locator_digest = p_locator_digest,
+         csrf_digest = p_csrf_digest,
+         owner_subject = v_owner_subject,
+         tenant_id = v_tenant_id,
+         state = 'IDENTITY_VERIFIED', current_step = 'AGENCY',
+         version = version + 1, updated_at = p_now
+   WHERE id = p_session_id;
+
+  UPDATE onboarding.email_states
+     SET pending_session_id = NULL, verified_session_id = p_session_id, updated_at = p_now
+   WHERE email = p_email;
+
+  RETURN QUERY SELECT true, v_owner_subject, v_tenant_id, v_unit_id, v_unit_name, v_unit_code, v_unit_status;
+END
+$function$;
+REVOKE ALL ON FUNCTION onboarding.promote_email_session(text, uuid, bytea, bytea, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.promote_email_session(text, uuid, bytea, bytea, timestamptz) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION onboarding.is_current_verified_session(p_email text, p_session_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+  SELECT CASE
+    WHEN NOT EXISTS (SELECT 1 FROM onboarding.email_states WHERE email = p_email)
+      THEN EXISTS (SELECT 1 FROM onboarding.sessions WHERE id = p_session_id AND email = p_email AND state NOT IN ('IDENTITY_PENDING', 'IDENTITY_REPLACED') AND replaced_at IS NULL)
+    ELSE EXISTS (
+    SELECT 1
+    FROM onboarding.email_states e
+    JOIN onboarding.sessions s ON s.id = e.verified_session_id
+    WHERE e.email = p_email AND e.verified_session_id = p_session_id
+      AND s.state <> 'IDENTITY_REPLACED' AND s.replaced_at IS NULL
+    )
+  END
+$function$;
+REVOKE ALL ON FUNCTION onboarding.is_current_verified_session(text, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.is_current_verified_session(text, uuid) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION onboarding.load_session_agency(p_session_id uuid)
+RETURNS TABLE(tenant_id uuid, business_unit_id uuid, name text, code text, status text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+  SELECT s.tenant_id, b.id, b.name, b.code, b.status
+  FROM onboarding.sessions s
+  LEFT JOIN LATERAL (
+    SELECT bu.id, bu.name, bu.code, bu.status
+    FROM tenancy.business_units bu
+    WHERE bu.tenant_id = s.tenant_id
+    ORDER BY bu.created_at, bu.id
+    LIMIT 1
+  ) b ON true
+  WHERE s.id = p_session_id AND s.tenant_id IS NOT NULL
+$function$;
+REVOKE ALL ON FUNCTION onboarding.load_session_agency(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.load_session_agency(uuid) TO inspection_runtime;
+`},
+		{Version: 30, Name: "onboarding_agency_locator_proof", Compatible: true, SQL: `
+DROP FUNCTION IF EXISTS onboarding.load_session_agency(uuid);
+CREATE OR REPLACE FUNCTION onboarding.load_session_agency(p_session_id uuid, p_locator_digest bytea)
+RETURNS TABLE(tenant_id uuid, business_unit_id uuid, name text, code text, status text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = onboarding, pg_catalog
+AS $function$
+  SELECT s.tenant_id, b.id, b.name, b.code, b.status
+  FROM onboarding.sessions s
+  LEFT JOIN LATERAL (
+    SELECT bu.id, bu.name, bu.code, bu.status
+    FROM tenancy.business_units bu
+    WHERE bu.tenant_id = s.tenant_id
+    ORDER BY bu.created_at, bu.id
+    LIMIT 1
+  ) b ON true
+  WHERE s.id = p_session_id
+    AND s.session_locator_digest = p_locator_digest
+    AND s.state NOT IN ('IDENTITY_PENDING', 'IDENTITY_REPLACED')
+    AND s.replaced_at IS NULL
+$function$;
+REVOKE ALL ON FUNCTION onboarding.load_session_agency(uuid, bytea) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION onboarding.load_session_agency(uuid, bytea) TO inspection_runtime;
+`},
+		{Version: 31, Name: "pending_membership_status_width", Compatible: true, SQL: `
+ALTER TABLE access.memberships ALTER COLUMN status TYPE varchar(32);
+`},
+		{Version: 32, Name: "onboarding_request_inspection", Compatible: true, SQL: `
+ALTER TABLE onboarding.requests ADD COLUMN IF NOT EXISTS inspection_id uuid;
+CREATE INDEX IF NOT EXISTS idx_onboarding_requests_inspection ON onboarding.requests (inspection_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_onboarding_request_session ON onboarding.requests (session_id);
 `}}
+}
+
+// LatestVersion returns the highest schema version known by the application.
+func LatestVersion() int {
+	latest := 0
+	for _, step := range Foundation() {
+		if step.Version > latest {
+			latest = step.Version
+		}
+	}
+	return latest
 }

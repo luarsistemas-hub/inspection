@@ -58,6 +58,10 @@ Regras de dependência:
   sem dependência de um serviço. Não extraia abstrações preventivamente.
 - Use `libs/identity.NewID` e `libs/identity.ParseID` para UUIDs do projeto.
 - Preserve nomes de tabela/coluna existentes ao evoluir migrations.
+- Ao criar uma migration, registre-a no catálogo canônico em
+  `services/inspection/internal/platform/database/migrations/planner.go`.
+  Não duplique manualmente a versão máxima em configurações; o runtime deve
+  derivá-la de `migrations.LatestVersion()`.
 
 ## Fluxo do Inspection
 

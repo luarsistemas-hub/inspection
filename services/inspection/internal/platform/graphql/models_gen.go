@@ -606,6 +606,14 @@ type OnboardingActivation struct {
 	ActivatedAt *string `json:"activatedAt,omitempty"`
 }
 
+type OnboardingAgency struct {
+	TenantID         string `json:"tenantId"`
+	BusinessUnitID   string `json:"businessUnitId"`
+	Name             string `json:"name"`
+	BusinessUnitCode string `json:"businessUnitCode"`
+	Status           string `json:"status"`
+}
+
 type OnboardingDefinition struct {
 	SchemaVersion   int                     `json:"schemaVersion"`
 	Version         int                     `json:"version"`
@@ -654,12 +662,14 @@ type OnboardingRequest struct {
 }
 
 type OnboardingSession struct {
-	ID          string         `json:"id"`
-	State       string         `json:"state"`
-	CurrentStep string         `json:"currentStep"`
-	Version     int            `json:"version"`
-	ExpiresAt   string         `json:"expiresAt"`
-	Definition  map[string]any `json:"definition"`
+	ID             string            `json:"id"`
+	State          string            `json:"state"`
+	CurrentStep    string            `json:"currentStep"`
+	Version        int               `json:"version"`
+	ExpiresAt      string            `json:"expiresAt"`
+	Definition     map[string]any    `json:"definition"`
+	CompletedSteps map[string]any    `json:"completedSteps"`
+	ExistingAgency *OnboardingAgency `json:"existingAgency,omitempty"`
 }
 
 type OnboardingStatus struct {

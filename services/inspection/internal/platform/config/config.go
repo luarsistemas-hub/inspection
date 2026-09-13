@@ -8,11 +8,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"inspection/services/inspection/internal/platform/database/migrations"
 )
 
 // Config contains only process-wide, validated runtime configuration.
 type Config struct {
 	Environment           string
+	Stage                 string
 	TestAuthEnabled       bool
 	HTTPAddress           string
 	DatabaseURL           string
@@ -91,19 +94,27 @@ type NotificationConfig struct {
 
 // Load reads and validates environment configuration without requiring a file.
 func Load() (Config, error) {
+	environment := env("INSPECTION_ENV", "local")
+	stage := stageFromEnvironment()
+	keycloakClientID := os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID")
+	keycloakClientSecret := os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET")
+	if environment == "local" {
+		keycloakClientID = env("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID", "inspection-provisioning")
+		keycloakClientSecret = env("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET", "inspection-provisioning-local-secret")
+	}
 	c := Config{
-		Environment: env("INSPECTION_ENV", "local"), HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
+		Environment: environment, Stage: stage, HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
 		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
-		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", 27), ShutdownTimeout: 10 * time.Second,
+		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", migrations.LatestVersion()), ShutdownTimeout: 10 * time.Second,
 		RuntimeDBRole:    env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
 		StoragePublic:    strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
 		RabbitMQURL:      env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
 		DragonflyAddress: env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
 		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
-		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID"), KeycloakClientSecret: os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET"),
+		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: keycloakClientID, KeycloakClientSecret: keycloakClientSecret,
 		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMModelAlias: env("INSPECTION_LITELLM_MODEL_ALIAS", "inspection-vision"), LiteLLMPromptVersion: env("INSPECTION_LITELLM_PROMPT_VERSION", "analysis-v1"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
 	}
 	notification, err := loadNotification(c.Environment)
@@ -303,6 +314,15 @@ func env(key, fallback string) string {
 	}
 	return fallback
 }
+
+func stageFromEnvironment() string {
+	stage := strings.ToLower(strings.TrimSpace(env("STAGE", "production")))
+	if stage == "" {
+		return "production"
+	}
+	return stage
+}
+
 func envInt(key string, fallback int) int {
 	value, err := strconv.Atoi(os.Getenv(key))
 	if err == nil {

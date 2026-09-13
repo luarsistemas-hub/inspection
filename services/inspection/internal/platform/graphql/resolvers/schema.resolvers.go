@@ -93,6 +93,7 @@ func (r *mutationResolver) RequestOnboardingOtp(ctx context.Context, input graph
 	if err != nil {
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
+	clearOnboardingCookie(ctx)
 	return &graphql1.OnboardingPayload{SessionLocator: &result.Locator, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -113,9 +114,6 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		return nil, unauthenticated()
 	}
 	if strings.EqualFold(input.Step, onboardingsession.StepAgency) {
-		if r.OwnerProvider == nil || r.OnboardingBootstrap.DB == nil {
-			return nil, apperror.New(apperror.DependencyUnavailable, "agency", "owner provisioning unavailable")
-		}
 		if err := r.Onboarding.ValidateCheckpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload); err != nil {
 			return onboardingValidationPayload(err, input.ClientMutationID)
 		}
@@ -123,9 +121,15 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		if err != nil {
 			return onboardingValidationPayload(err, input.ClientMutationID)
 		}
+		if ownerSession.ExistingAgency == nil && (r.OwnerProvider == nil || r.OnboardingBootstrap.DB == nil) {
+			return nil, apperror.New(apperror.DependencyUnavailable, "agency", "owner provisioning unavailable")
+		}
 		agencyName := onboardingPayloadString(input.Payload, "agencyName")
 		if agencyName == "" {
 			agencyName = onboardingPayloadString(input.Payload, "name")
+		}
+		if ownerSession.ExistingAgency != nil && agencyName != ownerSession.ExistingAgency.Name {
+			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "agencyName", "the existing agency cannot be changed"), input.ClientMutationID)
 		}
 		unitCode := onboardingPayloadString(input.Payload, "businessUnitCode")
 		if unitCode == "" {
@@ -135,21 +139,25 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		if unitName == "" {
 			unitName = agencyName
 		}
-		owner, err := r.OwnerProvider.EnsureOwner(ctx, ownerSession.Owner.Email, ownerSession.Owner.Name)
-		if err != nil {
-			return nil, apperror.Wrap(apperror.DependencyUnavailable, err)
-		}
-		// The checkpoint version is the concurrency boundary for agency setup.
-		// Client mutation IDs are retry-scoped and may differ between concurrent
-		// requests, so they cannot safely identify this one provisioning attempt.
-		// Hashing the session token keeps the durable idempotency key opaque while
-		// making every retry for the same session/version share one bootstrap row.
-		bootstrapped, err := r.OnboardingBootstrap.Provision(ctx, onboardingbootstrap.Input{Name: agencyName, BusinessUnitCode: unitCode, BusinessUnitName: unitName, Issuer: r.OwnerIssuer, Subject: owner.ID, IdempotencyKey: onboardingAgencyProvisioningKey(credentials.SessionToken, int64(input.ExpectedVersion))})
-		if err != nil {
-			return onboardingValidationPayload(err, input.ClientMutationID)
-		}
-		if err := r.Onboarding.BindOwner(ctx, credentials.SessionToken, r.OwnerIssuer, owner.ID, bootstrapped.TenantID); err != nil {
-			return nil, err
+		if ownerSession.ExistingAgency == nil {
+			owner, err := r.OwnerProvider.EnsureOwner(ctx, ownerSession.Owner.Email, ownerSession.Owner.Name)
+			if err != nil {
+				return nil, apperror.Wrap(apperror.DependencyUnavailable, err)
+			}
+			// The checkpoint version is the concurrency boundary for agency setup.
+			// Client mutation IDs are retry-scoped and may differ between concurrent
+			// requests, so they cannot safely identify this one provisioning attempt.
+			// Hashing the session token keeps the durable idempotency key opaque while
+			// making every retry for the same session/version share one bootstrap row.
+			bootstrapped, err := r.OnboardingBootstrap.Provision(ctx, onboardingbootstrap.Input{Name: agencyName, BusinessUnitCode: unitCode, BusinessUnitName: unitName, Issuer: r.OwnerIssuer, Subject: owner.ID, IdempotencyKey: onboardingAgencyProvisioningKey(credentials.SessionToken, int64(input.ExpectedVersion))})
+			if err != nil {
+				return onboardingValidationPayload(err, input.ClientMutationID)
+			}
+			if err := r.Onboarding.BindOwner(ctx, credentials.SessionToken, r.OwnerIssuer, owner.ID, bootstrapped.TenantID); err != nil {
+				return nil, err
+			}
+		} else if onboardingPayloadString(input.Payload, "existingAgencyId") != ownerSession.ExistingAgency.TenantID.String() {
+			return onboardingValidationPayload(apperror.New(apperror.InvalidInput, "existingAgencyId", "confirm the existing agency"), input.ClientMutationID)
 		}
 	}
 	result, err := r.Onboarding.Checkpoint(ctx, credentials.SessionToken, credentials.CSRFToken, input.Step, int64(input.ExpectedVersion), input.Payload)
@@ -157,6 +165,25 @@ func (r *mutationResolver) SaveOnboardingStep(ctx context.Context, input graphql
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
 	return &graphql1.OnboardingPayload{Session: mapOnboardingSession(result), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// CompleteOnboarding is the resolver for the completeOnboarding field.
+func (r *mutationResolver) CompleteOnboarding(ctx context.Context, input graphql1.CompleteOnboardingInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	result, err := r.OnboardingComplete.Complete(ctx, credentials.SessionToken, credentials.CSRFToken, input.ClientMutationID)
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	request, status := mapOnboardingCompletion(result)
+	return &graphql1.OnboardingPayload{
+		Session:    mapOnboardingSession(result.Session),
+		Request:    request,
+		Status:     status,
+		UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID,
+	}, nil
 }
 
 // RequestAdminActivationOtp is the resolver for the requestAdminActivationOtp field.
@@ -1481,9 +1508,16 @@ func (r *queryResolver) OnboardingSession(ctx context.Context) (*graphql1.Onboar
 	if !ok {
 		return nil, nil
 	}
-	value, err := r.Onboarding.Load(ctx, credentials.SessionToken)
+	value, err := r.Onboarding.LoadAndRefreshCSRF(ctx, credentials.SessionToken)
 	if err != nil {
+		if code, _, _ := apperror.Public(err); code == apperror.SessionExpired {
+			clearOnboardingCookie(ctx)
+			return nil, nil
+		}
 		return nil, err
+	}
+	if writer, ok := requestctx.ResponseWriter(ctx); ok {
+		writer.Header().Set("X-CSRF-Token", value.CSRF)
 	}
 	return mapOnboardingSession(value), nil
 }

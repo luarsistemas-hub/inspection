@@ -9,6 +9,7 @@ import (
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
+	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	projectcore "inspection/services/inspection/internal/features/projects/core"
@@ -33,6 +34,7 @@ type Resolver struct {
 	Store               objectstore.Store
 	Authorizer          auth.Authorizer
 	Onboarding          onboardingsession.Service
+	OnboardingComplete  onboardingcomplete.Service
 	AdminActivation     adminactivation.Service
 	OnboardingBootstrap onboardingbootstrap.Service
 	OwnerProvider       keycloak.OwnerIdentityProvider

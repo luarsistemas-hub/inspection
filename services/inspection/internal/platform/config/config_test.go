@@ -4,6 +4,18 @@ import "testing"
 
 import "time"
 
+func TestStageFromEnvironmentDefaultsToProduction(t *testing.T) {
+	t.Setenv("STAGE", "")
+	if got := stageFromEnvironment(); got != "production" {
+		t.Fatalf("empty stage = %q, want production", got)
+	}
+
+	t.Setenv("STAGE", " StAgInG ")
+	if got := stageFromEnvironment(); got != "staging" {
+		t.Fatalf("normalized stage = %q, want staging", got)
+	}
+}
+
 func TestConfigContractsUT058UT059(t *testing.T) {
 	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime"}
 	if err := valid.Validate(); err != nil {

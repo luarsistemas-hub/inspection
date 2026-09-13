@@ -42,7 +42,8 @@ type OnboardingField { key: String!, label: String!, type: String!, required: Bo
 type OnboardingStep { key: String!, label: String!, position: Int!, required: Boolean!, fields: [OnboardingField!]! }
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
 type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisProfile: String! }
-type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON! }
+type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, businessUnitCode: String!, status: String! }
+type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
 type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
 type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String! }
@@ -60,6 +61,7 @@ type Mutation {
   requestOnboardingOtp(input: RequestOnboardingOtpInput!): OnboardingPayload!
   verifyOnboardingOtp(input: VerifyOnboardingOtpInput!): OnboardingPayload!
   saveOnboardingStep(input: OnboardingStepInput!): OnboardingPayload!
+  completeOnboarding(input: CompleteOnboardingInput!): OnboardingPayload!
   requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
   verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
   setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!

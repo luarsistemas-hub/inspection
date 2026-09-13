@@ -1,0 +1,44 @@
+package session
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"inspection/services/inspection/internal/platform/notifications"
+)
+
+type recordingSender struct {
+	intent notifications.Intent
+}
+
+func (s *recordingSender) Send(_ context.Context, intent notifications.Intent) (notifications.Receipt, error) {
+	s.intent = intent
+	return notifications.Receipt{Provider: "smtp", ID: "mail-1"}, nil
+}
+
+func TestRegistryNotifierSendsReadableOTPEmail(t *testing.T) {
+	sender := &recordingSender{}
+	registry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
+		notifications.Email: sender,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (RegistryNotifier{Registry: registry}).SendOTP(context.Background(), "ana@example.test", "123456"); err != nil {
+		t.Fatal(err)
+	}
+
+	if sender.intent.Template != "Seu código de confirmação | Inspection" {
+		t.Fatalf("subject=%q", sender.intent.Template)
+	}
+	if sender.intent.Parameters["body"] == "" || sender.intent.Parameters["html"] == "" {
+		t.Fatalf("email content is incomplete: %#v", sender.intent.Parameters)
+	}
+	for _, content := range sender.intent.Parameters {
+		if !strings.Contains(content, "123456") {
+			t.Fatalf("code missing from email content: %q", content)
+		}
+	}
+}

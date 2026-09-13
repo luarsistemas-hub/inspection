@@ -4,6 +4,7 @@ package session
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ const (
 	PurposeActivation         = "ADMIN_ACTIVATION"
 	StatePending              = "IDENTITY_PENDING"
 	StateVerified             = "IDENTITY_VERIFIED"
+	StateReplaced             = "IDENTITY_REPLACED"
 	StepIdentity              = "IDENTITY"
 	StepAgency                = "AGENCY"
 	StepProperty              = "PROPERTY"
@@ -38,20 +40,64 @@ const (
 )
 
 var ErrPurposeMismatch = apperror.New(apperror.InvalidInput, "code", "invalid code")
+var ErrAttemptReplaced = apperror.New(apperror.SessionExpired, "session", "onboarding session replaced")
 
 type Owner struct {
 	Name, Email, Subject, Issuer string
 }
 
 type Session struct {
-	ID          identity.ID
-	Locator     string
-	CSRF        string
-	Owner       Owner
-	State       string
-	CurrentStep string
-	Version     int64
-	ExpiresAt   time.Time
+	ID             identity.ID
+	TenantID       *identity.ID
+	Locator        string
+	CSRF           string
+	Owner          Owner
+	ExistingAgency *Agency
+	CompletedSteps map[string]coordinator.StepPayload
+	State          string
+	CurrentStep    string
+	Version        int64
+	ExpiresAt      time.Time
+}
+
+// Submission is the authenticated, server-confirmed onboarding aggregate used
+// by the completion slice. Draft values from the browser are never trusted.
+type Submission struct {
+	Session Session
+	Steps   map[string]coordinator.StepPayload
+}
+
+// Agency is an existing permanent onboarding resource associated with the
+// verified email. It is informational during a restarted onboarding journey.
+type Agency struct {
+	TenantID         identity.ID
+	BusinessUnitID   identity.ID
+	Name             string
+	BusinessUnitCode string
+	Status           string
+}
+
+type promotionResult struct {
+	Accepted             bool
+	OwnerSubject         sql.NullString
+	AgencyTenantID       sql.NullString
+	AgencyBusinessUnitID sql.NullString
+	AgencyName           sql.NullString
+	AgencyCode           sql.NullString
+	AgencyStatus         sql.NullString
+}
+
+type prepareResult struct {
+	PreviousPendingSessionID sql.NullString
+	VerifiedSessionID        sql.NullString
+}
+
+type agencyResult struct {
+	TenantID       sql.NullString
+	BusinessUnitID sql.NullString
+	Name           sql.NullString
+	Code           sql.NullString
+	Status         sql.NullString
 }
 
 type Notifier interface {
@@ -69,6 +115,7 @@ type Service struct {
 	Pepper   []byte
 	Limits   Limits
 	Notifier Notifier
+	Stage    string
 	Clock    func() time.Time
 	NewID    func() identity.ID
 }
@@ -143,11 +190,13 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (Reques
 	if ip == "" {
 		return RequestResult{}, apperror.New(apperror.InvalidInput, "", "client address required")
 	}
-	for _, key := range requestOTPLimitKeys(owner.Email, ip) {
-		if result, err := s.Limits.AllowSend(ctx, key); err != nil {
-			return RequestResult{}, apperror.Wrap(apperror.DependencyUnavailable, err)
-		} else if !result.Allowed {
-			return RequestResult{}, apperror.New(apperror.RateLimited, "", "retry later")
+	if s.enforcesRateLimit() {
+		for _, key := range requestOTPLimitKeys(owner.Email, ip) {
+			if result, err := s.Limits.AllowSend(ctx, key); err != nil {
+				return RequestResult{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+			} else if !result.Allowed {
+				return RequestResult{}, apperror.New(apperror.RateLimited, "", "retry later")
+			}
 		}
 	}
 	code, err := newCode()
@@ -170,6 +219,10 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (Reques
 		if err := setSessionDigest(tx, locatorDigest); err != nil {
 			return err
 		}
+		var prepared prepareResult
+		if err := tx.Raw(`SELECT * FROM onboarding.prepare_email_attempt(?, ?, ?)`, owner.Email, row.ID, now).Scan(&prepared).Error; err != nil {
+			return err
+		}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -177,8 +230,11 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (Reques
 	}); err != nil {
 		return RequestResult{}, apperror.Wrap(apperror.Internal, err)
 	}
-	if err := s.Notifier.SendOTP(ctx, owner.Email, code); err != nil {
-		return RequestResult{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+	if s.sendsOTPEmail() {
+		if err := s.Notifier.SendOTP(ctx, owner.Email, code); err != nil {
+			_ = s.DB.WithContext(ctx).Exec(`SELECT onboarding.abort_email_attempt(?, ?, ?, ?)`, owner.Email, row.ID, "DELIVERY_FAILED", s.now()).Error
+			return RequestResult{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+		}
 	}
 	return RequestResult{SessionID: row.ID, Locator: locator, Status: "SENT"}, nil
 }
@@ -191,34 +247,46 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		return Session{}, apperror.New(apperror.InvalidInput, "sessionLocator", "invalid session")
 	}
 	locatorDigest := digest(locator)
-	if result, err := s.Limits.AllowAttempt(ctx, hex.EncodeToString(locatorDigest[:])); err != nil {
-		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
-	} else if !result.Allowed {
-		return Session{}, apperror.New(apperror.RateLimited, "", "retry later")
+	if s.enforcesRateLimit() {
+		if result, err := s.Limits.AllowAttempt(ctx, hex.EncodeToString(locatorDigest[:])); err != nil {
+			return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+		} else if !result.Allowed {
+			return Session{}, apperror.New(apperror.RateLimited, "", "retry later")
+		}
 	}
 	now := s.now()
 	var result Session
+	invalidCode := false
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := setSessionDigest(tx, digest(locator)); err != nil {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
 			return err
 		}
 		var row database.OnboardingSession
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", digest(locator)).First(&row).Error; err != nil {
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			}
+			return err
 		}
-		if !security.Active(now, row.ExpiresAt, nil) || row.State != StatePending {
+		if !security.Active(now, row.ExpiresAt, nil) || row.State != StatePending || row.ReplacedAt != nil {
 			return apperror.New(apperror.SessionExpired, "", "session expired")
 		}
 		var challenge database.OnboardingOTPChallenge
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_id=? AND purpose=? AND verified_at IS NULL", row.ID, PurposeOnboarding).Order("created_at DESC").First(&challenge).Error; err != nil || !security.Active(now, challenge.ExpiresAt, nil) || challenge.Attempts >= 5 {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_id=? AND purpose=? AND verified_at IS NULL", row.ID, PurposeOnboarding).Order("created_at DESC").First(&challenge).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			}
+			return err
+		}
+		if !security.Active(now, challenge.ExpiresAt, nil) || challenge.Attempts >= 5 {
 			return apperror.New(apperror.InvalidInput, "code", "invalid code")
 		}
-		actual, hashErr := security.HashOTP(strings.TrimSpace(code), s.Pepper)
-		if hashErr != nil || !security.Equal(actual, bytes32(challenge.CodeHMAC)) {
+		if !s.acceptsOTPCode(code, challenge.CodeHMAC) {
 			if err := tx.Model(&challenge).UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error; err != nil {
 				return err
 			}
-			return apperror.New(apperror.InvalidInput, "code", "invalid code")
+			invalidCode = true
+			return nil
 		}
 		newLocator, err := security.NewOpaqueToken()
 		if err != nil {
@@ -233,17 +301,37 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		if err != nil {
 			return err
 		}
-		if err := tx.Model(&challenge).Updates(map[string]any{"verified_at": now}).Error; err != nil {
+		var promoted promotionResult
+		if err := tx.Raw(`SELECT * FROM onboarding.promote_email_session(?, ?, ?, ?, ?)`, row.Email, row.ID, newDigest[:], csrfDigest[:], now).Scan(&promoted).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&row).Updates(map[string]any{"session_locator_digest": newDigest[:], "csrf_digest": csrfDigest[:], "state": StateVerified, "current_step": StepAgency, "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
-			return err
+		if !promoted.Accepted {
+			return ErrAttemptReplaced
 		}
-		result = Session{ID: row.ID, Locator: newLocator, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: StateVerified, CurrentStep: StepAgency, Version: row.Version + 1, ExpiresAt: row.ExpiresAt}
+		var agency *Agency
+		if promoted.AgencyTenantID.Valid && promoted.AgencyBusinessUnitID.Valid {
+			agencyTenantID, err := identity.ParseID(promoted.AgencyTenantID.String)
+			if err != nil {
+				return err
+			}
+			agencyBusinessUnitID, err := identity.ParseID(promoted.AgencyBusinessUnitID.String)
+			if err != nil {
+				return err
+			}
+			agency = &Agency{TenantID: agencyTenantID, BusinessUnitID: agencyBusinessUnitID, Name: promoted.AgencyName.String, BusinessUnitCode: promoted.AgencyCode.String, Status: promoted.AgencyStatus.String}
+		}
+		subject := row.OwnerSubject
+		if promoted.OwnerSubject.Valid {
+			subject = promoted.OwnerSubject.String
+		}
+		result = Session{ID: row.ID, TenantID: row.TenantID, Locator: newLocator, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: subject}, ExistingAgency: agency, State: StateVerified, CurrentStep: StepAgency, Version: row.Version + 1, ExpiresAt: row.ExpiresAt}
 		return nil
 	})
 	if err != nil {
 		return Session{}, err
+	}
+	if invalidCode {
+		return Session{}, apperror.New(apperror.InvalidInput, "code", "invalid code")
 	}
 	return result, nil
 }
@@ -253,17 +341,164 @@ func (s Service) Load(ctx context.Context, locator string) (Session, error) {
 		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
 	}
 	now := s.now()
+	locatorDigest := digest(locator)
 	var row database.OnboardingSession
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := setSessionDigest(tx, digest(locator)); err != nil {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
 			return err
 		}
-		return tx.Where("session_locator_digest = ?", digest(locator)).First(&row).Error
+		return tx.Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error
 	})
-	if err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending {
+	if err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
 		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
 	}
-	return Session{ID: row.ID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+	agency, err := s.loadAgency(ctx, row.ID, locator)
+	if err != nil {
+		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+	}
+	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+}
+
+// LoadAndRefreshCSRF restores a verified browser session and rotates its CSRF
+// proof. The proof is returned in a response header, so a cross-site caller
+// cannot read it even when the HttpOnly session cookie is sent by the browser.
+func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Session, error) {
+	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
+		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	csrf, err := security.NewOpaqueToken()
+	if err != nil {
+		return Session{}, apperror.Wrap(apperror.Internal, err)
+	}
+	now := s.now()
+	locatorDigest := digest(locator)
+	var row database.OnboardingSession
+	steps := map[string]coordinator.StepPayload{}
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil {
+			return err
+		}
+		if err := s.validateCurrentSession(tx, row, now); err != nil {
+			return err
+		}
+		proof, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&row).Updates(map[string]any{"csrf_digest": proof[:], "updated_at": now}).Error; err != nil {
+			return err
+		}
+		var records []database.OnboardingStepRecord
+		if err := tx.Where("session_id = ?", row.ID).Order("version ASC").Find(&records).Error; err != nil {
+			return err
+		}
+		for _, record := range records {
+			var payload coordinator.StepPayload
+			if err := json.Unmarshal(record.Payload, &payload); err != nil {
+				return err
+			}
+			steps[strings.ToLower(record.Step)] = payload
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	agency, err := s.loadAgency(ctx, row.ID, locator)
+	if err != nil {
+		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
+	}
+	return Session{ID: row.ID, TenantID: row.TenantID, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, CompletedSteps: steps, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+}
+
+// LoadSubmission authenticates the mutation proof and returns the immutable
+// checkpoint records that make up the onboarding request.
+func (s Service) LoadSubmission(ctx context.Context, locator, csrf string) (Submission, error) {
+	if s.DB == nil || len(s.Pepper) < 32 || locator == "" {
+		return Submission{}, apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	now := s.now()
+	locatorDigest := digest(locator)
+	var row database.OnboardingSession
+	steps := map[string]coordinator.StepPayload{}
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil {
+			return err
+		}
+		if err := s.validateCurrentSession(tx, row, now); err != nil {
+			return err
+		}
+		proof, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
+		if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
+			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		}
+		var records []database.OnboardingStepRecord
+		if err := tx.Where("session_id = ?", row.ID).Order("version ASC").Find(&records).Error; err != nil {
+			return err
+		}
+		for _, record := range records {
+			var payload coordinator.StepPayload
+			if err := json.Unmarshal(record.Payload, &payload); err != nil {
+				return fmt.Errorf("decode onboarding step %s: %w", record.Step, err)
+			}
+			steps[record.Step] = payload
+		}
+		return nil
+	})
+	if err != nil {
+		return Submission{}, err
+	}
+	return Submission{Session: Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, Steps: steps}, nil
+}
+
+// MarkSubmitted persists the terminal public-onboarding transition after
+// the durable request and inspection have been created.
+func (s Service) MarkSubmitted(ctx context.Context, locator, csrf string) (Session, error) {
+	submission, err := s.LoadSubmission(ctx, locator, csrf)
+	if err != nil {
+		return Session{}, err
+	}
+	locatorDigest := digest(locator)
+	now := s.now()
+	row := submission.Session
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
+			return err
+		}
+		result := tx.Model(&database.OnboardingSession{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(map[string]any{"state": coordinator.StateSubmitted, "current_step": StepReady, "version": row.Version + 1, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return apperror.New(apperror.Conflict, "session", "stale onboarding session")
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	row.State, row.CurrentStep, row.Version = coordinator.StateSubmitted, StepReady, row.Version+1
+	return row, nil
+}
+
+func (s Service) validateCurrentSession(tx *gorm.DB, row database.OnboardingSession, now time.Time) error {
+	if !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
+		return apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	var current bool
+	if err := tx.Raw(`SELECT onboarding.is_current_verified_session(?, ?)`, row.Email, row.ID).Scan(&current).Error; err != nil {
+		return err
+	}
+	if !current {
+		return ErrAttemptReplaced
+	}
+	return nil
 }
 
 func (s Service) Checkpoint(ctx context.Context, locator, csrf, step string, expectedVersion int64, payload map[string]any) (Session, error) {
@@ -304,13 +539,44 @@ func (s Service) Checkpoint(ctx context.Context, locator, csrf, step string, exp
 		if err := tx.Model(&row).Updates(map[string]any{"current_step": step, "state": nextState, "version": expectedVersion + 1, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		result = Session{ID: row.ID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: nextState, CurrentStep: step, Version: expectedVersion + 1, ExpiresAt: row.ExpiresAt}
+		result = Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: nextState, CurrentStep: step, Version: expectedVersion + 1, ExpiresAt: row.ExpiresAt}
 		return nil
 	})
 	if err != nil {
 		return Session{}, err
 	}
+	if agency, agencyErr := s.loadAgency(ctx, result.ID, locator); agencyErr != nil {
+		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, agencyErr)
+	} else {
+		result.ExistingAgency = agency
+	}
 	return result, nil
+}
+
+func (s Service) loadAgency(ctx context.Context, sessionID identity.ID, locator string) (*Agency, error) {
+	var value agencyResult
+	locatorDigest := digest(locator)
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
+			return err
+		}
+		return tx.Raw(`SELECT * FROM onboarding.load_session_agency(?, ?)`, sessionID, locatorDigest[:]).Scan(&value).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !value.TenantID.Valid || !value.BusinessUnitID.Valid {
+		return nil, nil
+	}
+	tenantID, err := identity.ParseID(value.TenantID.String)
+	if err != nil {
+		return nil, err
+	}
+	unitID, err := identity.ParseID(value.BusinessUnitID.String)
+	if err != nil {
+		return nil, err
+	}
+	return &Agency{TenantID: tenantID, BusinessUnitID: unitID, Name: value.Name.String, BusinessUnitCode: value.Code.String, Status: value.Status.String}, nil
 }
 
 // ValidateCheckpoint performs the session, CSRF, version, ordering, and
@@ -338,9 +604,17 @@ func (s Service) validateCheckpoint(tx *gorm.DB, locator, csrf, step string, exp
 	if err := setSessionDigest(tx, digest(locator)); err != nil {
 		return database.OnboardingSession{}, err
 	}
+	locatorDigest := digest(locator)
 	var row database.OnboardingSession
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", digest(locator)).First(&row).Error; err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("session_locator_digest = ?", locatorDigest[:]).First(&row).Error; err != nil || !security.Active(now, row.ExpiresAt, nil) || row.State == StatePending || row.State == StateReplaced || row.ReplacedAt != nil {
 		return database.OnboardingSession{}, apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	var current bool
+	if err := tx.Raw(`SELECT onboarding.is_current_verified_session(?, ?)`, row.Email, row.ID).Scan(&current).Error; err != nil {
+		return database.OnboardingSession{}, err
+	}
+	if !current {
+		return database.OnboardingSession{}, ErrAttemptReplaced
 	}
 	proof, err := security.CSRFProof(digest(locator), csrf, s.Pepper)
 	if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
@@ -378,16 +652,27 @@ func (s Service) BindOwner(ctx context.Context, locator, issuer, subject string,
 		if err := tx.Exec("SELECT set_config('app.onboarding_session_digest', ?, true)", hex.EncodeToString(locatorDigest[:])).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&database.OnboardingSession{}).Where("session_locator_digest=? AND state <> ?", locatorDigest[:], StatePending).Updates(map[string]any{"owner_subject": subject, "tenant_id": tenantID, "updated_at": s.now()})
+		result := tx.Model(&database.OnboardingSession{}).Where("session_locator_digest=? AND state <> ? AND state <> ?", locatorDigest[:], StatePending, StateReplaced).Updates(map[string]any{"owner_subject": subject, "tenant_id": tenantID, "updated_at": s.now()})
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return apperror.New(apperror.Unauthenticated, "session", "verified onboarding session required")
 		}
+		var current bool
+		if err := tx.Raw(`SELECT onboarding.is_current_verified_session((SELECT email FROM onboarding.sessions WHERE session_locator_digest = ?), (SELECT id FROM onboarding.sessions WHERE session_locator_digest = ?))`, locatorDigest[:], locatorDigest[:]).Scan(&current).Error; err != nil {
+			return err
+		}
+		if !current {
+			return ErrAttemptReplaced
+		}
 		return nil
 	})
 	if err != nil {
+		var public *apperror.Error
+		if errors.As(err, &public) {
+			return err
+		}
 		return apperror.Wrap(apperror.DependencyUnavailable, err)
 	}
 	return nil
@@ -435,4 +720,36 @@ func newCode() (string, error) {
 		number = number*31 + uint64(char)
 	}
 	return fmt.Sprintf("%06d", number%1000000), nil
+}
+
+func (s Service) sendsOTPEmail() bool {
+	return s.enforcesRateLimit()
+}
+
+func (s Service) enforcesRateLimit() bool {
+	stage := strings.TrimSpace(s.Stage)
+	return stage == "" || strings.EqualFold(stage, "production")
+}
+
+func (s Service) acceptsOTPCode(code string, expected []byte) bool {
+	if !validOTPCode(code) {
+		return false
+	}
+	if !s.sendsOTPEmail() {
+		return true
+	}
+	actual, err := security.HashOTP(code, s.Pepper)
+	return err == nil && security.Equal(actual, bytes32(expected))
+}
+
+func validOTPCode(code string) bool {
+	if len(code) != 6 {
+		return false
+	}
+	for _, char := range code {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
 }

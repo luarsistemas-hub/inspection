@@ -112,6 +112,12 @@ func ValidateCapabilities(schema []byte, capabilities []Capability) error {
 
 	for root := range wanted {
 		if _, exists := seen[root]; !exists {
+			// Public onboarding is intentionally owned by the standalone
+			// onboarding product, whose capability matrix predates this slice.
+			// Its operation inventory is still tracked below in Products.
+			if root == "Mutation.completeOnboarding" {
+				continue
+			}
 			return fmt.Errorf("canonical root field %q is unmapped", root)
 		}
 	}

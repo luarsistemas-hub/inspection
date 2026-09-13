@@ -60,7 +60,7 @@ type Membership struct {
 	Issuer     string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:1"`
 	Subject    string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:2"`
 	Role       string      `gorm:"size:32;not null"`
-	Status     string      `gorm:"size:16;not null"`
+	Status     string      `gorm:"size:32;not null"`
 	Version    int64       `gorm:"not null;default:1"`
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
@@ -294,11 +294,25 @@ type OnboardingSession struct {
 	Version              int64        `gorm:"not null;default:1"`
 	ExpiresAt            time.Time    `gorm:"not null;index"`
 	CSRFDigest           []byte       `gorm:"type:bytea;size:32"`
+	ReplacedAt           *time.Time   `gorm:"index"`
+	ReplacementReason    string       `gorm:"size:64;not null;default:''"`
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }
 
 func (OnboardingSession) TableName() string { return "onboarding.sessions" }
+
+// OnboardingEmailState serializes the active onboarding attempt for an email.
+// The runtime accesses it only through the restricted coordination functions.
+type OnboardingEmailState struct {
+	Email             string       `gorm:"size:320;primaryKey"`
+	PendingSessionID  *identity.ID `gorm:"type:uuid"`
+	VerifiedSessionID *identity.ID `gorm:"type:uuid"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+func (OnboardingEmailState) TableName() string { return "onboarding.email_states" }
 
 // OnboardingOTPChallenge separates onboarding and activation challenge data.
 type OnboardingOTPChallenge struct {
@@ -333,7 +347,8 @@ func (OnboardingStepRecord) TableName() string { return "onboarding.step_records
 type OnboardingRequest struct {
 	ID              identity.ID  `gorm:"type:uuid;primaryKey"`
 	TenantID        identity.ID  `gorm:"type:uuid;not null;index:idx_onboarding_requests_tenant"`
-	SessionID       identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_onboarding_request_idempotency,priority:1"`
+	SessionID       identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_onboarding_request_session;uniqueIndex:idx_onboarding_request_idempotency,priority:1"`
+	InspectionID    *identity.ID `gorm:"type:uuid;index"`
 	AssetID         *identity.ID `gorm:"type:uuid;index"`
 	ParticipantID   *identity.ID `gorm:"type:uuid;index"`
 	OriginVersionID *identity.ID `gorm:"type:uuid;index"`
@@ -1134,7 +1149,7 @@ func Models() []any {
 	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ProductEntitlement{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},
 		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisProfile{}, &AnalysisProfileVersion{},
-		&OnboardingSession{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
+		&OnboardingSession{}, &OnboardingEmailState{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
 		&Origin{}, &OriginVersion{}, &OriginEvidence{},

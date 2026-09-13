@@ -7,10 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"inspection/libs/identity"
+	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
+	"inspection/services/inspection/internal/features/onboarding/coordinator"
 	real_estate_catalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
+	"inspection/services/inspection/internal/platform/requestctx"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 )
@@ -82,6 +87,27 @@ func TestOnboardingSessionWithoutCookieReturnsNull(t *testing.T) {
 	}
 }
 
+func TestOnboardingSessionWithExpiredCookieReturnsNullAndClearsCookie(t *testing.T) {
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{}}))
+	server.SetErrorPresenter(graph.PresentError)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(`{"query":"{ onboardingSession { id } }"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "inspection_onboarding", Value: "expired-locator"})
+	ctx := requestctx.WithResponseWriter(req.Context(), w)
+	ctx = requestctx.WithOnboardingCredentials(ctx, requestctx.OnboardingCredentials{SessionToken: "expired-locator"})
+	server.ServeHTTP(w, req.WithContext(ctx))
+
+	response := w.Body.String()
+	if !strings.Contains(response, `"onboardingSession":null`) || strings.Contains(response, `"errors"`) {
+		t.Fatalf("expired onboarding session response: %s", response)
+	}
+	if cookie := w.Header().Get("Set-Cookie"); !strings.Contains(cookie, "inspection_onboarding=") || !strings.Contains(cookie, "Max-Age=0") {
+		t.Fatalf("expired onboarding cookie was not cleared: %s", cookie)
+	}
+}
+
 func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
 	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", Version: 2})
 
@@ -106,5 +132,27 @@ func TestOnboardingAgencyProvisioningKeyIsStablePerSessionVersion(t *testing.T) 
 	}
 	if first == onboardingAgencyProvisioningKey("other-session-token", 2) {
 		t.Fatal("different onboarding sessions must not share the provisioning key")
+	}
+}
+
+func TestMapOnboardingCompletionKeepsPendingOriginResourceIDsNull(t *testing.T) {
+	request, status := mapOnboardingCompletion(onboardingcomplete.Result{
+		State: coordinator.StateOriginPending, NextAction: coordinator.NextActionWaitForOrigin,
+		OriginStatus: "PENDING", Delivery: "PENDING",
+	})
+	if request != nil || status.RequestID != nil || status.InspectionID != nil {
+		t.Fatalf("pending origin claimed completed resources: request=%#v status=%#v", request, status)
+	}
+	if status.State != coordinator.StateOriginPending || status.NextAction != coordinator.NextActionWaitForOrigin || status.OriginStatus != "PENDING" {
+		t.Fatalf("unexpected pending status: %#v", status)
+	}
+
+	id := identity.NewID()
+	request, status = mapOnboardingCompletion(onboardingcomplete.Result{
+		Request: database.OnboardingRequest{ID: id}, InspectionID: id,
+		State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", Delivery: "PENDING",
+	})
+	if request == nil || status.RequestID == nil || status.InspectionID == nil || *status.RequestID != id.String() || *status.InspectionID != id.String() {
+		t.Fatalf("submitted resources were not projected: request=%#v status=%#v", request, status)
 	}
 }

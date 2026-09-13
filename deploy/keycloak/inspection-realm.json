@@ -12,6 +12,14 @@
       "id": "6ec9a740-a3dd-5ae5-ae50-9c29d189531b",
       "username": "inspection-super-admin-bootstrap",
       "enabled": true
+    },
+    {
+      "username": "service-account-inspection-provisioning",
+      "serviceAccountClientId": "inspection-provisioning",
+      "enabled": true,
+      "clientRoles": {
+        "realm-management": ["view-users", "query-users", "manage-users"]
+      }
     }
   ],
   "clients": [
@@ -63,6 +71,7 @@
     },
     {
       "clientId": "inspection-provisioning",
+      "secret": "inspection-provisioning-local-secret",
       "enabled": true,
       "publicClient": false,
       "serviceAccountsEnabled": true,

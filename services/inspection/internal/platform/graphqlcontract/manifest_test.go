@@ -23,14 +23,15 @@ func TestOperationManifestIT001(t *testing.T) {
 	if err := json.Unmarshal(payload, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture"}); err != nil {
+	if err := ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture", "onboarding"}); err != nil {
 		t.Fatalf("IT-001: %v", err)
 	}
 	documents := map[string][]byte{}
 	for product, path := range map[string]string{
-		"admin":     filepath.Join(root, "apps", "admin", "src", "features", "admin", "operations.graphql"),
-		"dashboard": filepath.Join(root, "apps", "dashboard", "src", "features", "dashboard", "operations.graphql"),
-		"capture":   filepath.Join(root, "apps", "capture", "src", "graphql", "documents", "capture.graphql"),
+		"admin":      filepath.Join(root, "apps", "admin", "src", "features", "admin", "operations.graphql"),
+		"dashboard":  filepath.Join(root, "apps", "dashboard", "src", "features", "dashboard", "operations.graphql"),
+		"capture":    filepath.Join(root, "apps", "capture", "src", "graphql", "documents", "capture.graphql"),
+		"onboarding": filepath.Join(root, "apps", "onboarding", "src", "features", "onboarding", "operations.graphql"),
 	} {
 		documents[product], err = os.ReadFile(path)
 		if err != nil {
@@ -60,9 +61,10 @@ func TestUS001EdgeContractsIT034(t *testing.T) {
 	}
 	documents := map[string][]byte{}
 	for product, path := range map[string]string{
-		"admin":     filepath.Join(root, "apps", "admin", "src", "features", "admin", "operations.graphql"),
-		"dashboard": filepath.Join(root, "apps", "dashboard", "src", "features", "dashboard", "operations.graphql"),
-		"capture":   filepath.Join(root, "apps", "capture", "src", "graphql", "documents", "capture.graphql"),
+		"admin":      filepath.Join(root, "apps", "admin", "src", "features", "admin", "operations.graphql"),
+		"dashboard":  filepath.Join(root, "apps", "dashboard", "src", "features", "dashboard", "operations.graphql"),
+		"capture":    filepath.Join(root, "apps", "capture", "src", "graphql", "documents", "capture.graphql"),
+		"onboarding": filepath.Join(root, "apps", "onboarding", "src", "features", "onboarding", "operations.graphql"),
 	} {
 		documents[product], err = os.ReadFile(path)
 		if err != nil {
@@ -94,7 +96,7 @@ func TestUS001EdgeContractsIT034(t *testing.T) {
 			}
 		}},
 		{"IT-034.02 empty data contract remains valid", func(t *testing.T) {
-			if err := ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture"}); err != nil {
+			if err := ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture", "onboarding"}); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -116,7 +118,7 @@ func TestUS001EdgeContractsIT034(t *testing.T) {
 		{"IT-034.06 incomplete product generation is rejected", func(t *testing.T) {
 			partial := manifest
 			partial.Products = partial.Products[:2]
-			if err := ValidateManifest(schema, partial, []string{"admin", "dashboard", "capture"}); err == nil {
+			if err := ValidateManifest(schema, partial, []string{"admin", "dashboard", "capture", "onboarding"}); err == nil {
 				t.Fatal("expected missing product")
 			}
 		}},
@@ -126,8 +128,8 @@ func TestUS001EdgeContractsIT034(t *testing.T) {
 			}
 		}},
 		{"IT-034.08 prerequisite state is represented by an owned operation", func(t *testing.T) {
-			if len(manifest.Products) != 3 {
-				t.Fatalf("expected three products, got %d", len(manifest.Products))
+			if len(manifest.Products) != 4 {
+				t.Fatalf("expected four products, got %d", len(manifest.Products))
 			}
 		}},
 		{"IT-034.09 lifecycle state is represented by an owned operation", func(t *testing.T) {
