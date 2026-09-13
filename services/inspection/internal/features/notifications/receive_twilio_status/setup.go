@@ -86,6 +86,8 @@ func handle(w http.ResponseWriter, r *http.Request, deps Dependencies) {
 		http.Error(w, "callback unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	deps.Metrics.Callback("twilio", correlated)
+	if deps.Metrics != nil {
+		deps.Metrics.Callback("twilio", correlated)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }

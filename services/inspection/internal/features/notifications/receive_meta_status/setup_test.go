@@ -108,3 +108,29 @@ func TestMetaStatusSuccessfulCallbackWithoutMetrics(t *testing.T) {
 		t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
 	}
 }
+
+func TestMetaStatusPersistsEarlyCallbackBeforeReceiptCorrelation(t *testing.T) {
+	db := metaCallbackDB(t)
+	tenantID := identity.NewID()
+	deps := Dependencies{
+		DB:        db,
+		AppSecret: "secret",
+		Runner:    metaSQLiteRunner{db: db},
+		Resolver:  metaResolver{tenantID: tenantID},
+		Clock:     func() time.Time { return time.Unix(1000, 0).UTC() },
+	}
+
+	w := httptest.NewRecorder()
+	handle(w, signedMetaCallback(t, deps.AppSecret), deps)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
+	}
+
+	var count int64
+	if err := db.Table("notifications.provider_callbacks").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("early callback count=%d, want 1", count)
+	}
+}

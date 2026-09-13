@@ -559,5 +559,33 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) TO inspection_runtime;
+
+`},
+		{Version: 28, Name: "meta_callback_early_tenant_resolution", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION notifications.resolve_meta_callback_tenant(p_account text, p_receipt text)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = notifications, pg_catalog
+AS $function$
+  WITH receipt_candidates AS (
+    SELECT tenant_id
+    FROM notifications.channel_attempts
+    WHERE provider = 'meta' AND provider_account = p_account AND receipt_id = p_receipt
+    GROUP BY tenant_id
+  ), candidates AS (
+    SELECT tenant_id FROM receipt_candidates
+    UNION ALL
+    SELECT tenant_id
+    FROM notifications.channel_attempts
+    WHERE provider = 'meta' AND provider_account = p_account
+      AND NOT EXISTS (SELECT 1 FROM receipt_candidates)
+    GROUP BY tenant_id
+  )
+  SELECT CASE WHEN count(*) = 1 THEN min(tenant_id::text)::uuid END
+  FROM candidates
+$function$;
+REVOKE ALL ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION notifications.resolve_meta_callback_tenant(text, text) TO inspection_runtime;
 `}}
 }
