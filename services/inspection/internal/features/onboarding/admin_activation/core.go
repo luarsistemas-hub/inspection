@@ -74,6 +74,12 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) error {
 		return err
 	}
 	if err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// RLS context is transaction-local. The session validation above ran in
+		// another transaction, so restore the locator proof before touching the
+		// tenant-less onboarding rows.
+		if err := setSessionDigest(tx, locator); err != nil {
+			return err
+		}
 		if err := tx.Model(&database.OnboardingOTPChallenge{}).Where("session_id=? AND purpose=? AND verified_at IS NULL", owner.ID, session.PurposeActivation).Update("expires_at", now).Error; err != nil {
 			return err
 		}
@@ -258,7 +264,8 @@ func activationSessionState(state string) bool {
 		coordinator.StateAgencySaved,
 		coordinator.StatePropertySaved,
 		coordinator.StateParticipantSaved,
-		coordinator.StateReadyToSubmit:
+		coordinator.StateReadyToSubmit,
+		coordinator.StateSubmitted:
 		return true
 	default:
 		return false

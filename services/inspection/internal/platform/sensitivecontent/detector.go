@@ -17,6 +17,12 @@ import (
 
 const MaxDecodedPixels = 40_000_000
 
+const (
+	minFaceComponentPercent = 8
+	minFaceAspectRatio      = 0.25
+	maxFaceAspectRatio      = 1.60
+)
+
 type Region struct {
 	Kind                string `json:"kind"`
 	X, Y, Width, Height float64
@@ -38,7 +44,9 @@ func NewEmbeddedDetector() Detector { return Detector{Model: embeddedModel{}} }
 func (embeddedModel) Detect(ctx context.Context, source image.Image) ([]Region, error) {
 	bounds := source.Bounds()
 	step := max(1, max(bounds.Dx(), bounds.Dy())/128)
-	skin := newCandidate(bounds)
+	gridWidth := (bounds.Dx() + step - 1) / step
+	gridHeight := (bounds.Dy() + step - 1) / step
+	skinMask := make([]bool, gridWidth*gridHeight)
 	document := newCandidate(bounds)
 	for y := bounds.Min.Y; y < bounds.Max.Y; y += step {
 		if err := ctx.Err(); err != nil {
@@ -48,7 +56,8 @@ func (embeddedModel) Detect(ctx context.Context, source image.Image) ([]Region, 
 			r, g, b, _ := color.NRGBAModel.Convert(source.At(x, y)).(color.NRGBA).RGBA()
 			r8, g8, b8 := int(r>>8), int(g>>8), int(b>>8)
 			if skinTone(r8, g8, b8) {
-				skin.add(x, y)
+				gridX, gridY := (x-bounds.Min.X)/step, (y-bounds.Min.Y)/step
+				skinMask[gridY*gridWidth+gridX] = true
 			}
 			if max(r8, g8, b8)-min(r8, g8, b8) <= 24 && (r8+g8+b8)/3 >= 210 {
 				document.add(x, y)
@@ -57,8 +66,8 @@ func (embeddedModel) Detect(ctx context.Context, source image.Image) ([]Region, 
 	}
 	total := ((bounds.Dx() + step - 1) / step) * ((bounds.Dy() + step - 1) / step)
 	regions := make([]Region, 0, 2)
-	if skin.count*100 >= total*2 {
-		regions = append(regions, skin.region("FACE", bounds, step))
+	if face, ok := faceComponent(skinMask, gridWidth, gridHeight, total); ok {
+		regions = append(regions, face.region("FACE", bounds, step))
 	}
 	if document.count*100 >= total*35 {
 		regions = append(regions, document.region("DOCUMENT", bounds, step))
@@ -66,8 +75,59 @@ func (embeddedModel) Detect(ctx context.Context, source image.Image) ([]Region, 
 	return regions, nil
 }
 
+type skinComponent struct {
+	minX, minY, maxX, maxY int
+	count                  int
+}
+
+func faceComponent(mask []bool, width, height, total int) (skinComponent, bool) {
+	visited := make([]bool, len(mask))
+	var best skinComponent
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			index := y*width + x
+			if !mask[index] || visited[index] {
+				continue
+			}
+			component := skinComponent{minX: x, minY: y, maxX: x, maxY: y}
+			queue := []int{index}
+			visited[index] = true
+			for len(queue) > 0 {
+				current := queue[0]
+				queue = queue[1:]
+				currentX, currentY := current%width, current/width
+				component.count++
+				component.minX, component.maxX = min(component.minX, currentX), max(component.maxX, currentX)
+				component.minY, component.maxY = min(component.minY, currentY), max(component.maxY, currentY)
+				for _, neighbor := range []int{current - 1, current + 1, current - width, current + width} {
+					if neighbor < 0 || neighbor >= len(mask) || visited[neighbor] || !mask[neighbor] {
+						continue
+					}
+					neighborX, neighborY := neighbor%width, neighbor/width
+					if abs(neighborX-currentX)+abs(neighborY-currentY) != 1 {
+						continue
+					}
+					visited[neighbor] = true
+					queue = append(queue, neighbor)
+				}
+			}
+			if component.count > best.count {
+				best = component
+			}
+		}
+	}
+	if best.count*100 < total*minFaceComponentPercent {
+		return skinComponent{}, false
+	}
+	aspectRatio := float64(best.maxX-best.minX+1) / float64(best.maxY-best.minY+1)
+	if aspectRatio < minFaceAspectRatio || aspectRatio > maxFaceAspectRatio {
+		return skinComponent{}, false
+	}
+	return best, true
+}
+
 func (embeddedModel) Bytes() []byte {
-	return []byte("inspection-sensitive-region-model-v2:skin-r95-g40-b20:document-gray24-luma210")
+	return []byte("inspection-sensitive-region-model-v3:skin-component-r8-aspect25-160:document-gray24-luma210")
 }
 
 type candidate struct {
@@ -87,6 +147,12 @@ func (c *candidate) add(x, y int) {
 
 func (c candidate) region(kind string, bounds image.Rectangle, step int) Region {
 	return Region{Kind: kind, X: float64(c.minX-bounds.Min.X) / float64(bounds.Dx()), Y: float64(c.minY-bounds.Min.Y) / float64(bounds.Dy()), Width: float64(min(bounds.Max.X, c.maxX+step)-c.minX) / float64(bounds.Dx()), Height: float64(min(bounds.Max.Y, c.maxY+step)-c.minY) / float64(bounds.Dy())}
+}
+
+func (c skinComponent) region(kind string, bounds image.Rectangle, step int) Region {
+	minX, minY := bounds.Min.X+c.minX*step, bounds.Min.Y+c.minY*step
+	maxX, maxY := bounds.Min.X+(c.maxX+1)*step, bounds.Min.Y+(c.maxY+1)*step
+	return Region{Kind: kind, X: float64(minX-bounds.Min.X) / float64(bounds.Dx()), Y: float64(minY-bounds.Min.Y) / float64(bounds.Dy()), Width: float64(min(bounds.Max.X, maxX)-minX) / float64(bounds.Dx()), Height: float64(min(bounds.Max.Y, maxY)-minY) / float64(bounds.Dy())}
 }
 
 func skinTone(r, g, b int) bool {

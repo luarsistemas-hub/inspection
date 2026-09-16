@@ -58,7 +58,8 @@ func Setup(d Dependencies) error {
 			return nil, err
 		}
 		if result.LinkToken != "" {
-			if err := deliverRecapture(ctx, d.DB, d.Notifications, d.CaptureBaseURL, input.TenantID, result.RequestID, result.ResponsibilityID, result.LinkToken, input.Delivery); err != nil {
+			participant := participantRaw.(participantcore.ParticipantView)
+			if err := deliverRecapture(ctx, d.DB, d.Notifications, d.CaptureBaseURL, input.TenantID, result.RequestID, result.ResponsibilityID, result.LinkToken, participant.Participant.Name, input.Delivery); err != nil {
 				return nil, err
 			}
 		}
@@ -80,7 +81,7 @@ func deliveries(participant participantcore.ParticipantView) []invitationcore.De
 	return result
 }
 
-func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore.NotificationService, baseURL string, tenantID, requestID, responsibilityID identity.ID, token string, delivery []invitationcore.DeliveryIntent) error {
+func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore.NotificationService, baseURL string, tenantID, requestID, responsibilityID identity.ID, token, recipientName string, delivery []invitationcore.DeliveryIntent) error {
 	var invitation database.Invitation
 	if err := (tenanttx.Runner{DB: db}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&invitation).Error
@@ -88,7 +89,7 @@ func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore
 		return err
 	}
 	for _, target := range delivery {
-		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: requestID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": recipientName}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: requestID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
 		if err != nil {
 			return err
 		}

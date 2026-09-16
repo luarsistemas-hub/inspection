@@ -213,6 +213,7 @@ services:
       INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
       INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
       INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
+      INSPECTION_ADMIN_ORIGIN: ${INSPECTION_ADMIN_ORIGIN:-http://localhost:${INSPECTION_ADMIN_PORT:-3000}}
       INSPECTION_CAPTURE_ORIGIN: ${INSPECTION_CAPTURE_ORIGIN:-http://localhost:${INSPECTION_CAPTURE_PORT:-3003}}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard

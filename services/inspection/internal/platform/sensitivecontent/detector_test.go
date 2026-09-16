@@ -62,3 +62,27 @@ func TestEmbeddedModelDetectsFaceAndDocumentSignals(t *testing.T) {
 		t.Fatalf("embedded detection failed: %+v %v", result, err)
 	}
 }
+
+func TestEmbeddedModelIgnoresDistributedWarmTones(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.RGBA{R: 240, G: 240, B: 240, A: 255})
+		}
+	}
+	for _, origin := range [][2]int{{5, 5}, {70, 8}, {8, 70}, {72, 72}} {
+		for y := origin[1]; y < origin[1]+20; y++ {
+			for x := origin[0]; x < origin[0]+20; x++ {
+				img.Set(x, y, color.RGBA{R: 210, G: 150, B: 110, A: 255})
+			}
+		}
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewEmbeddedDetector().Detect(context.Background(), encoded.Bytes())
+	if err != nil || len(result.Regions) != 1 || result.Regions[0].Kind != "DOCUMENT" {
+		t.Fatalf("distributed warm tones were treated as a face: %+v %v", result, err)
+	}
+}

@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
-import { uploadDraft } from "@/pwa/uploads";
+import { uploadDraft, type UploadProgress } from "@/pwa/uploads";
 import { loadDraft, type CaptureDraft } from "@/pwa/drafts";
 
 describe("multipart reconciliation", () => {
@@ -25,6 +25,82 @@ describe("multipart reconciliation", () => {
     const result = await uploadDraft({ id: "retry", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } });
     expect(metadataAttempts).toBe(3);
     expect(result.metadataSaved).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("retries the API INVALID_STATE envelope and reports monotonic progress", async () => {
+    let metadataAttempts = 0;
+    const progress: UploadProgress[] = [];
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      if (body.includes("saveCaptureMetadata")) {
+        metadataAttempts += 1;
+        if (metadataAttempts < 3) return new Response(JSON.stringify({ errors: [{ message: "media verification and screening are pending", extensions: { code: "INVALID_STATE", field: "mediaId" } }] }), { status: 200 });
+        return new Response(JSON.stringify({ data: { saveCaptureMetadata: { media: { id: "media", status: "READY" }, userErrors: [] } } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { completeMediaUpload: { media: { id: "media", status: "VERIFIED" }, userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    const result = await uploadDraft({ id: "progress", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } }, (value) => progress.push(value));
+
+    expect(metadataAttempts).toBe(3);
+    expect(result.metadataSaved).toBe(true);
+    expect(progress.map((value) => value.phase)).toEqual(["preparing", "uploading", "verifying", "saving", "verifying", "saving", "verifying", "saving", "complete"]);
+    expect(progress.map((value) => value.percent)).toEqual([...progress.map((value) => value.percent)].sort((left, right) => left - right));
+    expect(progress.at(-1)).toMatchObject({ phase: "complete", percent: 100 });
+    vi.unstubAllGlobals();
+  });
+
+  it("waits for post-upload verification before the first metadata mutation", async () => {
+    const waits: number[] = [];
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      if (body.includes("saveCaptureMetadata")) return new Response(JSON.stringify({ data: { saveCaptureMetadata: { media: { id: "media", status: "READY" }, userErrors: [] } } }), { status: 200 });
+      return new Response(JSON.stringify({ data: { completeMediaUpload: { media: { id: "media", status: "VERIFIED" }, userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await uploadDraft({ id: "initial-wait", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } }, undefined, { wait: async (milliseconds) => { waits.push(milliseconds); } });
+
+    expect(waits[0]).toBe(1000);
+    expect(fetch.mock.calls.map((call) => String(call[1]?.body)).findIndex((body) => body.includes("saveCaptureMetadata"))).toBeGreaterThan(-1);
+    vi.unstubAllGlobals();
+  });
+
+  it("does not retry a definitive INVALID_STATE error", async () => {
+    let metadataAttempts = 0;
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      if (body.includes("saveCaptureMetadata")) {
+        metadataAttempts += 1;
+        return new Response(JSON.stringify({ errors: [{ message: "capture is unavailable", extensions: { code: "INVALID_STATE", field: "responsibility" } }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { completeMediaUpload: { media: { id: "media", status: "VERIFIED" }, userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(uploadDraft({ id: "definitive-error", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } })).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(metadataAttempts).toBe(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the draft resumable after exhausting media processing retries", async () => {
+    let metadataAttempts = 0;
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      const body = String(init?.body ?? "");
+      if (body.includes("saveCaptureMetadata")) {
+        metadataAttempts += 1;
+        return new Response(JSON.stringify({ errors: [{ message: "media verification and screening are pending", extensions: { code: "INVALID_STATE", field: "mediaId" } }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { completeMediaUpload: { media: { id: "media", status: "VERIFIED" }, userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    const promise = uploadDraft({ id: "retry-limit", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } }, undefined, { wait: async () => undefined });
+    await expect(promise).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(metadataAttempts).toBe(30);
+    expect((await loadDraft("retry-limit"))?.metadataSaved).not.toBe(true);
     vi.unstubAllGlobals();
   });
 

@@ -456,7 +456,7 @@ func run() error {
 		go func() { errCh <- dispatch(ctx) }()
 		go func() { errCh <- consume(ctx) }()
 		go func() {
-			ticker := time.NewTicker(250 * time.Millisecond)
+			ticker := time.NewTicker(1000 * time.Millisecond)
 			defer ticker.Stop()
 			for {
 				if _, err := deliveryExecutor.RunDue(ctx); err != nil {

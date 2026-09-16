@@ -1,6 +1,6 @@
 # Desenvolvimento e testes
 
-Prepare dependências e dados com `./scripts/local.sh infra` e `./scripts/local.sh seed`; use `./scripts/dev.sh api`, `worker`, `scheduler` e `all` para iniciar as aplicações no host. O seed usa uma API containerizada temporária e libera a porta `:8080` ao terminar. Os servidores locais usam `:8080`, `:8082`, `:8083`, `:3000`, `:3002` e `:3003`.
+Prepare dependências e dados com `./scripts/local.sh infra` e `./scripts/local.sh seed`; use `./scripts/dev.sh all` para iniciar API, worker, scheduler e os quatro frontends no host. Para alterar somente o backend e manter os frontends, execute `./scripts/dev.sh api` em um terminal e `./scripts/dev.sh all` em outro; o segundo comando detecta e reutiliza a API já disponível. Os demais processos também podem ser iniciados individualmente. O seed usa uma API containerizada temporária e libera a porta `:8080` ao terminar. Os servidores locais usam `:8080`, `:8082`, `:8083`, `:3000`, `:3002`, `:3003` e `:3004`.
 
 ```sh
 go test ./...

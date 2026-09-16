@@ -108,6 +108,33 @@ func TestIT161IT162IT163GPSUsesFixedPolicyAndFlagsOptionalFailure(t *testing.T) 
 	}
 }
 
+func TestNonProductionCaptureDoesNotRequireGPS(t *testing.T) {
+	f := newSubmissionFixture(t)
+	f.service.DisableRequiredGPS = true
+	setRequirements(t, f, []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 10, DescriptionRequired: true}})
+	if err := f.db.Model(&database.CaptureDraft{}).Where("id=?", f.draft.ID).Update("policy_payload", json.RawMessage(`{"gpsRequired":true,"allowGallery":true}`)).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	view, err := f.service.Load(context.Background(), f.draft.TenantID, f.draft.ResponsibilityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policy map[string]any
+	if err := json.Unmarshal(view.Draft.PolicyPayload, &policy); err != nil {
+		t.Fatal(err)
+	}
+	if required, _ := policy["gpsRequired"].(bool); required {
+		t.Fatalf("non-production bootstrap still requires GPS: %s", view.Draft.PolicyPayload)
+	}
+
+	media := f.addMedia(t, "READY", "", "", false)
+	input := capturecore.MetadataInput{TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, MediaID: media.ID, RequirementKey: "room", Description: "room", CaptureSource: "CAMERA", WindowStartedAt: f.now}
+	if _, err := f.service.SaveMetadata(context.Background(), input); err != nil {
+		t.Fatalf("non-production capture rejected missing GPS: %v", err)
+	}
+}
+
 func containsString(values []string, wanted string) bool {
 	for _, value := range values {
 		if value == wanted {

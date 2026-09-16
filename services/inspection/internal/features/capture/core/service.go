@@ -21,10 +21,11 @@ import (
 )
 
 type Service struct {
-	DB        *gorm.DB
-	Now       func() time.Time
-	Within    func(context.Context, identity.ID, func(*gorm.DB) error) error
-	Finalizer SubmissionFinalizer
+	DB                 *gorm.DB
+	Now                func() time.Time
+	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
+	Finalizer          SubmissionFinalizer
+	DisableRequiredGPS bool
 }
 
 type SubmissionFinalizer interface {
@@ -66,6 +67,13 @@ func (s Service) Load(ctx context.Context, tenantID, responsibilityID identity.I
 		if err := json.Unmarshal(result.Draft.Requirements, &result.Requirements); err != nil {
 			return err
 		}
+		if s.DisableRequiredGPS {
+			policy, err := withoutRequiredGPS(result.Draft.PolicyPayload)
+			if err != nil {
+				return err
+			}
+			result.Draft.PolicyPayload = policy
+		}
 		return tx.Where("tenant_id=? AND draft_id=?", tenantID, result.Draft.ID).Find(&result.Answers).Error
 	})
 	return result, err
@@ -103,7 +111,7 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if err := json.Unmarshal(draft.PolicyPayload, &snapshot); err != nil {
 			return err
 		}
-		policy := GPSPolicy{Required: snapshot.Required, AllowGallery: snapshot.AllowGallery, GeofenceMeters: snapshot.GeofenceMeters}
+		policy := GPSPolicy{Required: snapshot.Required && !s.DisableRequiredGPS, AllowGallery: snapshot.AllowGallery, GeofenceMeters: snapshot.GeofenceMeters}
 		if snapshot.Latitude != nil && snapshot.Longitude != nil {
 			lat, lon := float64(*snapshot.Latitude)/1e6, float64(*snapshot.Longitude)/1e6
 			policy.AssetLatitude, policy.AssetLongitude = &lat, &lon
@@ -200,6 +208,18 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		return tx.Model(&answer).Updates(map[string]any{"media_ids": encoded, "flags": flags, "version": answer.Version + 1, "updated_at": s.now()}).Error
 	})
 	return out, err
+}
+
+func withoutRequiredGPS(payload json.RawMessage) (json.RawMessage, error) {
+	var policy map[string]any
+	if err := json.Unmarshal(payload, &policy); err != nil {
+		return nil, err
+	}
+	if policy == nil {
+		policy = map[string]any{}
+	}
+	policy["gpsRequired"] = false
+	return json.Marshal(policy)
 }
 
 func metadataMatches(media database.MediaObject, in MetadataInput, reading *GPSReading, device json.RawMessage, capturedAtProvided bool) bool {

@@ -23,6 +23,7 @@ type Config struct {
 	MigrationDatabaseURL  string
 	AllowedOrigin         string
 	AllowedOrigins        []string
+	AdminOrigin           string
 	CaptureOrigin         string
 	MetricsToken          string
 	OIDCIssuer            string
@@ -104,7 +105,7 @@ func Load() (Config, error) {
 	}
 	c := Config{
 		Environment: environment, Stage: stage, HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
-		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
+		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), AdminOrigin: os.Getenv("INSPECTION_ADMIN_ORIGIN"), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
 		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", migrations.LatestVersion()), ShutdownTimeout: 10 * time.Second,
@@ -131,6 +132,9 @@ func Load() (Config, error) {
 		c.AllowedOrigins = []string{c.AllowedOrigin}
 	} else if c.AllowedOrigin == "" && len(c.AllowedOrigins) > 0 {
 		c.AllowedOrigin = c.AllowedOrigins[0]
+	}
+	if c.AdminOrigin == "" && len(c.AllowedOrigins) > 0 {
+		c.AdminOrigin = c.AllowedOrigins[0]
 	}
 	if len(c.OIDCAudiences) == 0 && c.OIDCAudience != "" {
 		c.OIDCAudiences = []string{c.OIDCAudience}
@@ -336,6 +340,9 @@ func (c Config) Validate() error {
 	if len(c.AllowedOrigins) == 0 && c.AllowedOrigin != "" {
 		c.AllowedOrigins = []string{c.AllowedOrigin}
 	}
+	if c.AdminOrigin == "" && len(c.AllowedOrigins) > 0 {
+		c.AdminOrigin = c.AllowedOrigins[0]
+	}
 	if len(c.OIDCAudiences) == 0 && c.OIDCAudience != "" {
 		c.OIDCAudiences = []string{c.OIDCAudience}
 	}
@@ -360,6 +367,12 @@ func (c Config) Validate() error {
 		if _, ok := seenOrigins[c.CaptureOrigin]; !ok {
 			return fmt.Errorf("configuration: capture origin is not allowed")
 		}
+	}
+	if c.AdminOrigin == "" {
+		return fmt.Errorf("configuration: missing admin origin")
+	}
+	if _, ok := seenOrigins[c.AdminOrigin]; !ok {
+		return fmt.Errorf("configuration: admin origin is not allowed")
 	}
 	seenAudiences := map[string]struct{}{}
 	for _, audience := range c.OIDCAudiences {

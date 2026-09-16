@@ -123,7 +123,7 @@ func (s service) persist(ctx context.Context, tx *gorm.DB, notification core.Not
 		IdempotencyKey: notification.IdempotencyKey, RequestDigest: digest,
 		RecipientID: notification.Recipient.ID, SelectedProvider: string(provider), CreatedAt: now, UpdatedAt: now,
 	}
-	create := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "idempotency_key"}}, DoNothing: true}).Create(&delivery)
+	create := tx.WithContext(ctx).Clauses(deliveryIdempotencyConflict()).Create(&delivery)
 	if create.Error != nil {
 		return core.NotificationResult{}, create.Error
 	}
@@ -192,6 +192,16 @@ func (s service) persist(ctx context.Context, tx *gorm.DB, notification core.Not
 	}
 	s.metrics.Request(string(notification.Channel), string(provider))
 	return core.NotificationResult{ID: delivery.ID, State: core.StateQueued}, nil
+}
+
+func deliveryIdempotencyConflict() clause.OnConflict {
+	return clause.OnConflict{
+		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "idempotency_key"}},
+		TargetWhere: clause.Where{Exprs: []clause.Expression{
+			clause.Expr{SQL: "idempotency_key <> ''"},
+		}},
+		DoNothing: true,
+	}
 }
 
 func payloadAAD(tenantID, deliveryID identity.ID) []byte {

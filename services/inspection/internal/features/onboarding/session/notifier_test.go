@@ -42,3 +42,27 @@ func TestRegistryNotifierSendsReadableOTPEmail(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistryNotifierSendsAdminActivationLink(t *testing.T) {
+	sender := &recordingSender{}
+	registry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
+		notifications.Email: sender,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activationURL := "https://admin.example.test/activate"
+	if err := (RegistryNotifier{Registry: registry}).SendActivationInvitation(context.Background(), "ana@example.test", activationURL); err != nil {
+		t.Fatal(err)
+	}
+
+	if sender.intent.Template != "Ative seu acesso administrativo | Inspection" {
+		t.Fatalf("subject=%q", sender.intent.Template)
+	}
+	for _, content := range sender.intent.Parameters {
+		if !strings.Contains(content, activationURL) || !strings.Contains(content, "criar") && !strings.Contains(content, "Criar") {
+			t.Fatalf("activation instructions are incomplete: %q", content)
+		}
+	}
+}

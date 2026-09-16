@@ -25,7 +25,24 @@ async function execute(operation: string, input: Record<string, string>): Promis
   return payload;
 }
 
+async function refreshActivationProof(): Promise<void> {
+  if (csrfToken) return;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: "query AdminActivationSession { onboardingSession { id } }" }),
+  });
+  const nextCsrf = response.headers.get("x-csrf-token");
+  const body = await response.json().catch(() => ({})) as { data?: { onboardingSession?: { id: string } | null }; errors?: Array<{ message: string }> };
+  if (!response.ok || body.errors?.[0] || !body.data?.onboardingSession || !nextCsrf) {
+    throw new Error(body.errors?.[0]?.message ?? "Sua sessão de ativação expirou. Conclua novamente o cadastro da imobiliária.");
+  }
+  csrfToken = nextCsrf;
+}
+
 export async function requestActivationCode(): Promise<UserError[]> {
+  await refreshActivationProof();
   return (await execute("RequestAdminActivationOtp", {})).userErrors;
 }
 

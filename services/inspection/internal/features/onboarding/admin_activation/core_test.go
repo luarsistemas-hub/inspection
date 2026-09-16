@@ -15,6 +15,7 @@ func TestActivationSessionStateAcceptsActiveTenantBoundOnboardingStates(t *testi
 		coordinator.StatePropertySaved,
 		coordinator.StateParticipantSaved,
 		coordinator.StateReadyToSubmit,
+		coordinator.StateSubmitted,
 	} {
 		if !activationSessionState(state) {
 			t.Errorf("activation state %q rejected", state)

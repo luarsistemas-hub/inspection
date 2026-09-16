@@ -2,6 +2,7 @@
 set -eu
 
 workspace=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+env_file=${INSPECTION_ENV_FILE:-$workspace/.env.inspection}
 cd "$workspace"
 
 (cd services/inspection && go run github.com/99designs/gqlgen@v0.17.95 generate --config gqlgen.yml)
@@ -24,7 +25,7 @@ for product in admin dashboard capture onboarding; do
 done
 
 cd "$workspace"
-docker compose -f deploy/docker-compose.yml config --quiet
+docker compose --env-file "$env_file" -f deploy/docker-compose.yml config --quiet
 ./scripts/smoke.sh
 ./scripts/security-smoke.sh
 ./scripts/load-smoke.sh

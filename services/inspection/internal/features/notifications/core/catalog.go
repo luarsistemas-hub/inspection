@@ -2,8 +2,10 @@ package core
 
 import (
 	"fmt"
+	"html"
 	"sort"
 	"strings"
+	"time"
 )
 
 // RenderedTemplate is provider-neutral content ready for a channel adapter.
@@ -57,6 +59,16 @@ func DefaultCatalog() Catalog {
 		"capture-link:v1": {Ref: TemplateRef{Name: "capture-link", Version: "v1"}, Channels: all, Required: []string{"captureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
 			return RenderedTemplate{Subject: "Sua vistoria está disponível", Text: "Olá " + v["recipientName"] + ", acesse " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["captureUrl"] + "\">sua vistoria</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
 		}},
+		"capture-link:v2": {Ref: TemplateRef{Name: "capture-link", Version: "v2"}, Channels: map[Channel]struct{}{ChannelEmail: {}}, Required: []string{"captureUrl", "recipientName", "assetName", "assetAddress", "expiresAt"}, render: func(v map[string]string) RenderedTemplate {
+			name, assetName, address, expiresAt, captureURL := v["recipientName"], v["assetName"], v["assetAddress"], v["expiresAt"], v["captureUrl"]
+			text := fmt.Sprintf("Olá %s,\n\nA vistoria do imóvel %s está disponível para você.\n\nEndereço: %s\nPrazo para concluir: %s\n\nAcesse sua vistoria: %s", name, assetName, address, expiresAt, captureURL)
+			return RenderedTemplate{
+				Subject:    "Sua vistoria está disponível",
+				Text:       text,
+				HTML:       fmt.Sprintf("<p>Olá %s,</p><p>A vistoria do imóvel <strong>%s</strong> está disponível para você.</p><p><strong>Endereço:</strong> %s<br><strong>Prazo para concluir:</strong> %s</p><p><a href=\"%s\">Acessar sua vistoria</a></p>", html.EscapeString(name), html.EscapeString(assetName), html.EscapeString(address), html.EscapeString(expiresAt), html.EscapeString(captureURL)),
+				Parameters: []string{captureURL, name, assetName, address, expiresAt},
+			}
+		}},
 		"recapture-link:v1": {Ref: TemplateRef{Name: "recapture-link", Version: "v1"}, Channels: all, Required: []string{"recaptureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
 			return RenderedTemplate{Subject: "Complemento de vistoria solicitado", Text: "Olá " + v["recipientName"] + ", acesse " + v["recaptureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["recaptureUrl"] + "\">o complemento da vistoria</a>.</p>", Parameters: []string{v["recaptureUrl"], v["recipientName"]}}
 		}},
@@ -67,6 +79,19 @@ func DefaultCatalog() Catalog {
 			return RenderedTemplate{Subject: "Lembrete de vistoria", Text: "Olá " + v["recipientName"] + ", lembrete: " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", <a href=\"" + v["captureUrl"] + "\">conclua sua vistoria</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
 		}},
 	}}
+}
+
+// CaptureLinkNotification selects the rich email revision while preserving
+// the existing compact contract for SMS and WhatsApp providers.
+func CaptureLinkNotification(channel Channel, recipientName, assetName, assetAddress string, expiresAt time.Time) (TemplateRef, map[string]string) {
+	variables := map[string]string{"recipientName": recipientName}
+	if channel != ChannelEmail {
+		return TemplateRef{Name: "capture-link", Version: "v1"}, variables
+	}
+	variables["assetName"] = assetName
+	variables["assetAddress"] = assetAddress
+	variables["expiresAt"] = expiresAt.Format("02/01/2006 às 15:04")
+	return TemplateRef{Name: "capture-link", Version: "v2"}, variables
 }
 
 // Resolve returns an exact template revision enabled for channel.

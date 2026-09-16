@@ -202,7 +202,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer}
+	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer, DisableRequiredGPS: cfg.Stage != "production"}
 	setups := []func() error{
 		func() error {
 			return acceptprocessing.Setup(acceptprocessing.Dependencies{Bus: bus, Service: invitationService})
@@ -407,7 +407,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {

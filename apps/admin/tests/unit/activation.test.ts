@@ -6,7 +6,8 @@ describe("Admin activation transport", () => {
 
   it("keeps the activation proof in a header and never sends a password until password setup", async () => {
     const fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { requestAdminActivationOtp: { userErrors: [] } } }), { headers: { "X-CSRF-Token": "activation-proof" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { onboardingSession: { id: "session-1" } } }), { headers: { "X-CSRF-Token": "activation-proof" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { requestAdminActivationOtp: { userErrors: [] } } })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: { verifyAdminActivationOtp: { userErrors: [] } } })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: { setAdminInitialPassword: { userErrors: [] } } })));
     vi.stubGlobal("fetch", fetch);
@@ -15,9 +16,11 @@ describe("Admin activation transport", () => {
     await verifyActivationCode("123456");
     await setInitialPassword("uma-senha-longa");
 
-    expect(String(fetch.mock.calls[0][1].body)).not.toContain("uma-senha-longa");
+    expect(String(fetch.mock.calls[0][1].body)).toContain("onboardingSession");
+    expect(String(fetch.mock.calls[1][1].body)).not.toContain("uma-senha-longa");
     expect((fetch.mock.calls[1][1] as RequestInit).headers).toMatchObject({ "X-CSRF-Token": "activation-proof" });
-    expect(String(fetch.mock.calls[2][1].body)).toContain("uma-senha-longa");
+    expect((fetch.mock.calls[2][1] as RequestInit).headers).toMatchObject({ "X-CSRF-Token": "activation-proof" });
+    expect(String(fetch.mock.calls[3][1].body)).toContain("uma-senha-longa");
   });
 
   it("returns stable user errors without starting PKCE", async () => {

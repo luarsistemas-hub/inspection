@@ -10,5 +10,5 @@ for (const [caseID, route, heading] of routes) test(`${caseID} keeps ${heading} 
   await expect(page.getByRole("heading", { name: "Administração" })).toBeVisible();
   await expect(page.getByText("Acesso administrativo não autorizado. Nenhuma configuração foi carregada.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Entrar com conta administrativa" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Ir para o Dashboard" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ir para o Painel" })).toBeVisible();
 });

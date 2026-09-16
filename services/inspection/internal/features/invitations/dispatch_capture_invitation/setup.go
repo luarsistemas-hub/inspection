@@ -3,6 +3,8 @@ package dispatch_capture_invitation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -51,6 +53,14 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
 			return err
 		}
+		var participant database.Participant
+		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.ParticipantID).First(&participant).Error; err != nil {
+			return err
+		}
+		var asset database.Asset
+		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, inspection.AssetID).First(&asset).Error; err != nil {
+			return err
+		}
 		delivery, err := loadDelivery(tx, envelope.TenantID, payload.ParticipantID)
 		if err != nil || len(delivery) == 0 {
 			if err != nil {
@@ -70,10 +80,11 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			return err
 		}
 		for _, target := range delivery {
+			template, variables := core.CaptureLinkNotification(core.Channel(target.Channel), participant.Name, asset.Name, asset.Address, invitation.ExpiresAt)
 			_, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
 				TenantID: envelope.TenantID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
-				Template: core.TemplateRef{Name: "capture-link", Version: "v1"}, Variables: map[string]string{"recipientName": "participante"},
-				CorrelationID: envelope.CorrelationID, IdempotencyKey: invitation.ID.String() + ":" + target.Channel + ":" + target.Destination,
+				Template: template, Variables: variables,
+				CorrelationID: envelope.CorrelationID, IdempotencyKey: deliveryIdempotencyKey(invitation.ID, target),
 				Execution: &core.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()},
 			})
 			if err != nil {
@@ -82,6 +93,11 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		}
 		return tx.Model(&inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error
 	}, nil
+}
+
+func deliveryIdempotencyKey(invitationID identity.ID, target invitationcore.DeliveryIntent) string {
+	digest := sha256.Sum256([]byte(target.Channel + "\x00" + target.Destination))
+	return invitationID.String() + ":" + target.Channel + ":" + hex.EncodeToString(digest[:])
 }
 
 func loadDelivery(tx *gorm.DB, tenantID, participantID identity.ID) ([]invitationcore.DeliveryIntent, error) {

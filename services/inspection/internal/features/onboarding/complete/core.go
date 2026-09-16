@@ -35,9 +35,17 @@ import (
 )
 
 const (
-	requestStatusSubmitted = "SUBMITTED"
-	deliveryPending        = "PENDING"
+	requestStatusSubmitted      = "SUBMITTED"
+	deliveryPending             = "PENDING"
+	activationInvitationPending = "INVITATION_PENDING"
+	activationInvitationSent    = "INVITED"
 )
+
+// ActivationInvitationNotifier sends the verified agency owner to the Admin
+// password-creation flow after onboarding is durably complete.
+type ActivationInvitationNotifier interface {
+	SendActivationInvitation(context.Context, string, string) error
+}
 
 // Result is the durable public result of completing onboarding.
 type Result struct {
@@ -52,17 +60,20 @@ type Result struct {
 
 // Service coordinates existing domain services for the first inspection.
 type Service struct {
-	DB       *gorm.DB
-	Bus      *mediator.Bus
-	Sessions onboardingsession.Service
-	Now      func() time.Time
+	DB                 *gorm.DB
+	Bus                *mediator.Bus
+	Sessions           onboardingsession.Service
+	ActivationNotifier ActivationInvitationNotifier
+	AdminOrigin        string
+	Now                func() time.Time
+	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 // Complete is idempotent per onboarding session. Browser values are ignored;
 // only immutable checkpoints loaded through the verified cookie/CSRF pair are
 // materialized.
 func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey string) (Result, error) {
-	if s.DB == nil || s.Bus == nil {
+	if s.DB == nil || s.Bus == nil || s.ActivationNotifier == nil || strings.TrimSpace(s.AdminOrigin) == "" {
 		return Result{}, errors.New("onboarding complete: missing dependency")
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
@@ -85,6 +96,13 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 			if err != nil {
 				return Result{}, err
 			}
+		}
+		_, member, err := s.onboardingOwner(ctx, tenantID, submission.Session.Owner.Subject)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := s.ensureActivationInvitation(ctx, current, member); err != nil {
+			return Result{}, err
 		}
 		return completedResult(current, existing, *existing.InspectionID), nil
 	}
@@ -175,7 +193,56 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	if err != nil {
 		return Result{}, err
 	}
+	if err := s.ensureActivationInvitation(ctx, current, member); err != nil {
+		return Result{}, err
+	}
 	return completedResult(current, request, *request.InspectionID), nil
+}
+
+func (s Service) ensureActivationInvitation(ctx context.Context, current onboardingsession.Session, member database.Membership) error {
+	if current.TenantID == nil || member.IdentityID == (identity.ID{}) {
+		return errors.New("onboarding complete: owner activation is unavailable")
+	}
+	tenantID := *current.TenantID
+	now := s.now()
+	shouldSend := false
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var activation database.OnboardingActivation
+		err := tx.Where("tenant_id = ?", tenantID).First(&activation).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			activation = database.OnboardingActivation{
+				TenantID: tenantID, IdentityID: member.IdentityID, Purpose: onboardingsession.PurposeActivation,
+				Status: activationInvitationPending, IdempotencyKey: current.ID.String(), CreatedAt: now, UpdatedAt: now,
+			}
+			if err := tx.Create(&activation).Error; err != nil {
+				return err
+			}
+			shouldSend = true
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		shouldSend = activation.Status == activationInvitationPending
+		return nil
+	}); err != nil {
+		return fmt.Errorf("prepare owner activation invitation: %w", err)
+	}
+	if !shouldSend {
+		return nil
+	}
+	activationURL := strings.TrimRight(s.AdminOrigin, "/") + "/activate"
+	if err := s.ActivationNotifier.SendActivationInvitation(ctx, current.Owner.Email, activationURL); err != nil {
+		return fmt.Errorf("send owner activation invitation: %w", err)
+	}
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.OnboardingActivation{}).
+			Where("tenant_id = ? AND status = ?", tenantID, activationInvitationPending).
+			Updates(map[string]any{"status": activationInvitationSent, "updated_at": s.now()}).Error
+	}); err != nil {
+		return fmt.Errorf("confirm owner activation invitation: %w", err)
+	}
+	return nil
 }
 
 func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.ID, mode templatecatalog.ComparisonMode) (database.SegmentDefinitionVersion, database.AnalysisProfileVersion, database.Template, error) {
@@ -269,6 +336,13 @@ func (s Service) now() time.Time {
 		return s.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (s Service) within(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {
+	if s.Within != nil {
+		return s.Within(ctx, tenantID, fn)
+	}
+	return (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, fn)
 }
 
 func completedResult(session onboardingsession.Session, request database.OnboardingRequest, inspectionID identity.ID) Result {
