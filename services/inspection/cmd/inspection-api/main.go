@@ -476,6 +476,9 @@ func run() error {
 		if cookie, cookieErr := r.Cookie("inspection_onboarding"); cookieErr == nil {
 			ctx = requestctx.WithOnboardingCredentials(ctx, requestctx.OnboardingCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
 		}
+		if cookie, cookieErr := r.Cookie("inspection_admin_activation"); cookieErr == nil {
+			ctx = requestctx.WithAdminActivationCredentials(ctx, requestctx.AdminActivationCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
+		}
 		server.ServeHTTP(w, r.WithContext(requestctx.WithIdempotencyKey(ctx, r.Header.Get("Idempotency-Key"))))
 	}))
 	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {

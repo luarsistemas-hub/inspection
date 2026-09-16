@@ -992,7 +992,8 @@ type ReportPublicationPayload struct {
 }
 
 type RequestAdminActivationOtpInput struct {
-	ClientMutationID string `json:"clientMutationId"`
+	ActivationToken  *string `json:"activationToken,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type RequestInvitationOtpInput struct {

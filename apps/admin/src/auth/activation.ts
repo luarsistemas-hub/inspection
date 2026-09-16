@@ -36,12 +36,19 @@ async function refreshActivationProof(): Promise<void> {
   const nextCsrf = response.headers.get("x-csrf-token");
   const body = await response.json().catch(() => ({})) as { data?: { onboardingSession?: { id: string } | null }; errors?: Array<{ message: string }> };
   if (!response.ok || body.errors?.[0] || !body.data?.onboardingSession || !nextCsrf) {
-    throw new Error(body.errors?.[0]?.message ?? "Sua sessão de ativação expirou. Conclua novamente o cadastro da imobiliária.");
+    throw new Error(body.errors?.[0]?.message ?? "Abra o link de ativação enviado para o seu e-mail. O link pode estar ausente, inválido ou expirado.");
   }
   csrfToken = nextCsrf;
 }
 
-export async function requestActivationCode(): Promise<UserError[]> {
+export async function requestActivationCode(token?: string | null): Promise<UserError[]> {
+  if (token) {
+    const payload = await execute("RequestAdminActivationOtp", { activationToken: token });
+    if (csrfToken && typeof window !== "undefined") {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    return payload.userErrors.map((error) => error.code === "SESSION_EXPIRED" ? { ...error, message: "Este link de ativação é inválido, já foi utilizado ou expirou." } : error);
+  }
   await refreshActivationProof();
   return (await execute("RequestAdminActivationOtp", {})).userErrors;
 }

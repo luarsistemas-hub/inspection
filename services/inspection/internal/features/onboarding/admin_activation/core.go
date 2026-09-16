@@ -44,6 +44,91 @@ type Activation struct {
 	ActivatedAt          *time.Time
 }
 
+const activationClaimed = "CLAIMED"
+
+// ClaimInvitation exchanges the one-time e-mail token for a short-lived,
+// cookie-backed activation session. Only token digests are stored.
+func (s Service) ClaimInvitation(ctx context.Context, token string) (session.Session, error) {
+	if s.DB == nil || len(s.Pepper) < 32 {
+		return session.Session{}, errors.New("admin activation: missing dependency")
+	}
+	token = strings.TrimSpace(token)
+	if len(token) != 43 {
+		return session.Session{}, apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+	}
+	locator, err := security.NewOpaqueToken()
+	if err != nil {
+		return session.Session{}, apperror.Wrap(apperror.Internal, err)
+	}
+	csrf, err := security.NewOpaqueToken()
+	if err != nil {
+		return session.Session{}, apperror.Wrap(apperror.Internal, err)
+	}
+	tokenDigest := security.HashToken(token)
+	locatorDigest := security.HashToken(locator)
+	csrfDigest, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
+	if err != nil {
+		return session.Session{}, apperror.Wrap(apperror.Internal, err)
+	}
+	now := s.now()
+	expiresAt := now.Add(security.SessionTTL)
+	var owner database.OnboardingSession
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setActivationDigest(tx, tokenDigest); err != nil {
+			return err
+		}
+		var invitation database.OnboardingActivation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("invitation_token_digest = ?", tokenDigest[:]).First(&invitation).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+			}
+			return err
+		}
+		if invitation.Status != "INVITED" || invitation.InvitationExpiresAt == nil || !security.Active(now, *invitation.InvitationExpiresAt, invitation.InvitationClaimedAt) {
+			return apperror.New(apperror.SessionExpired, "token", "activation link is invalid or expired")
+		}
+		if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", invitation.TenantID.String()).Error; err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND tenant_id = ?", invitation.SessionID, invitation.TenantID).First(&owner).Error; err != nil {
+			return err
+		}
+		if owner.OwnerSubject == "" || owner.State != coordinator.StateSubmitted {
+			return apperror.New(apperror.InvalidState, "activation", "owner activation is not ready")
+		}
+		result := tx.Model(&owner).Updates(map[string]any{
+			"session_locator_digest": locatorDigest[:],
+			"csrf_digest":            csrfDigest[:],
+			"expires_at":             expiresAt,
+			"updated_at":             now,
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return apperror.New(apperror.Conflict, "activation", "activation link was already used")
+		}
+		result = tx.Model(&invitation).
+			Where("invitation_claimed_at IS NULL AND status = ?", "INVITED").
+			Updates(map[string]any{"invitation_claimed_at": now, "status": activationClaimed, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return apperror.New(apperror.Conflict, "activation", "activation link was already used")
+		}
+		return nil
+	})
+	if err != nil {
+		return session.Session{}, err
+	}
+	return session.Session{
+		ID: owner.ID, TenantID: owner.TenantID, Locator: locator, CSRF: csrf,
+		Owner: session.Owner{Name: owner.OwnerName, Email: owner.Email, Subject: owner.OwnerSubject},
+		State: owner.State, CurrentStep: owner.CurrentStep, Version: owner.Version, ExpiresAt: expiresAt,
+	}, nil
+}
+
 func (s Service) RequestOTP(ctx context.Context, locator, csrf string) error {
 	if s.DB == nil || len(s.Pepper) < 32 || s.Limits == nil || s.Notifier == nil {
 		return errors.New("admin activation: missing dependency")
@@ -53,7 +138,10 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) error {
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var err error
 		owner, err = s.validateSession(tx, locator, csrf, now, false)
-		return err
+		if err != nil {
+			return err
+		}
+		return requireActivationStatus(tx, owner, activationClaimed, "OTP_SENT")
 	})
 	if err != nil {
 		return err
@@ -80,10 +168,16 @@ func (s Service) RequestOTP(ctx context.Context, locator, csrf string) error {
 		if err := setSessionDigest(tx, locator); err != nil {
 			return err
 		}
+		if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", owner.TenantID.String()).Error; err != nil {
+			return err
+		}
 		if err := tx.Model(&database.OnboardingOTPChallenge{}).Where("session_id=? AND purpose=? AND verified_at IS NULL", owner.ID, session.PurposeActivation).Update("expires_at", now).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OnboardingOTPChallenge{ID: identity.NewID(), TenantID: owner.TenantID, SessionID: owner.ID, Purpose: session.PurposeActivation, CodeHMAC: codeHash[:], ExpiresAt: now.Add(security.OTPTTL), CreatedAt: now}).Error
+		if err := tx.Create(&database.OnboardingOTPChallenge{ID: identity.NewID(), TenantID: owner.TenantID, SessionID: owner.ID, Purpose: session.PurposeActivation, CodeHMAC: codeHash[:], ExpiresAt: now.Add(security.OTPTTL), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.OnboardingActivation{}).Where("tenant_id=? AND session_id=?", *owner.TenantID, owner.ID).Updates(map[string]any{"status": "OTP_SENT", "updated_at": now}).Error
 	}); err != nil {
 		return err
 	}
@@ -99,6 +193,9 @@ func (s Service) VerifyOTP(ctx context.Context, locator, csrf, code string) (Act
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		owner, err := s.validateSession(tx, locator, csrf, now, false)
 		if err != nil {
+			return err
+		}
+		if err := requireActivationStatus(tx, owner, activationClaimed, "OTP_SENT"); err != nil {
 			return err
 		}
 		if limit, err := s.Limits.AllowAttempt(ctx, owner.Email+":activation"); err != nil {
@@ -284,6 +381,27 @@ func bytes32(value []byte) [32]byte { var result [32]byte; copy(result[:], value
 func setSessionDigest(tx *gorm.DB, locator string) error {
 	digest := security.HashToken(locator)
 	return tx.Exec("SELECT set_config('app.onboarding_session_digest', ?, true)", fmt.Sprintf("%x", digest[:])).Error
+}
+func setActivationDigest(tx *gorm.DB, digest [32]byte) error {
+	return tx.Exec("SELECT set_config('app.admin_activation_digest', ?, true)", fmt.Sprintf("%x", digest[:])).Error
+}
+func requireActivationStatus(tx *gorm.DB, owner database.OnboardingSession, statuses ...string) error {
+	if owner.TenantID == nil {
+		return apperror.New(apperror.SessionExpired, "session", "admin activation session required")
+	}
+	if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", owner.TenantID.String()).Error; err != nil {
+		return err
+	}
+	var count int64
+	if err := tx.Model(&database.OnboardingActivation{}).
+		Where("tenant_id=? AND session_id=? AND purpose=? AND status IN ?", *owner.TenantID, owner.ID, session.PurposeActivation, statuses).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count != 1 {
+		return apperror.New(apperror.SessionExpired, "session", "admin activation session required")
+	}
+	return nil
 }
 func normalizeCode(value string) string {
 	value = strings.TrimSpace(value)

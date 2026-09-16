@@ -1,7 +1,9 @@
 package complete
 
 import (
+	"bytes"
 	"context"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/security"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -93,14 +96,20 @@ func TestEnsureActivationInvitationIsRetrySafe(t *testing.T) {
 	if err := service.ensureActivationInvitation(context.Background(), current, member); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.count != 1 || recorder.destination != current.Owner.Email || recorder.url != "https://admin.example.test/activate" {
+	activationURL, err := url.Parse(recorder.url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := activationURL.Query().Get("token")
+	if recorder.count != 1 || recorder.destination != current.Owner.Email || activationURL.Scheme != "https" || activationURL.Host != "admin.example.test" || activationURL.Path != "/activate" || token == "" {
 		t.Fatalf("unexpected invitation: %#v", recorder)
 	}
 	var activation database.OnboardingActivation
 	if err := db.First(&activation, "tenant_id = ?", tenantID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if activation.Status != activationInvitationSent || activation.IdentityID != identityID {
+	tokenDigest := security.HashToken(token)
+	if activation.Status != activationInvitationSent || activation.IdentityID != identityID || activation.SessionID != sessionID || !bytes.Equal(activation.InvitationTokenDigest, tokenDigest[:]) || activation.InvitationExpiresAt == nil {
 		t.Fatalf("unexpected activation marker: %#v", activation)
 	}
 }

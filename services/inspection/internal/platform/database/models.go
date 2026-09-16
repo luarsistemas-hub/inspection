@@ -363,14 +363,18 @@ func (OnboardingRequest) TableName() string { return "onboarding.requests" }
 
 // OnboardingActivation tracks the separate owner Admin activation challenge.
 type OnboardingActivation struct {
-	TenantID       identity.ID `gorm:"type:uuid;primaryKey"`
-	IdentityID     identity.ID `gorm:"type:uuid;not null;uniqueIndex"`
-	Purpose        string      `gorm:"size:32;not null"`
-	Status         string      `gorm:"size:32;not null;index"`
-	ActivatedAt    *time.Time
-	IdempotencyKey string `gorm:"size:200;not null;uniqueIndex"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	TenantID              identity.ID `gorm:"type:uuid;primaryKey"`
+	IdentityID            identity.ID `gorm:"type:uuid;not null;uniqueIndex"`
+	SessionID             identity.ID `gorm:"type:uuid"`
+	Purpose               string      `gorm:"size:32;not null"`
+	Status                string      `gorm:"size:32;not null;index"`
+	InvitationTokenDigest []byte      `gorm:"type:bytea;size:32"`
+	InvitationExpiresAt   *time.Time
+	InvitationClaimedAt   *time.Time
+	ActivatedAt           *time.Time
+	IdempotencyKey        string `gorm:"size:200;not null;uniqueIndex"`
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 func (OnboardingActivation) TableName() string { return "onboarding.activation" }

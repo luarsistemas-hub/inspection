@@ -832,6 +832,33 @@ version = version + 1,
 updated_at = now()
 WHERE key IN ('real-estate-checklist', 'real-estate-fixed-origin')
   AND name = 'Primeira inspeção imobiliária';
+`},
+		{Version: 34, Name: "admin_activation_invitation_token", Compatible: true, SQL: `
+ALTER TABLE onboarding.activation ADD COLUMN IF NOT EXISTS session_id uuid;
+ALTER TABLE onboarding.activation ADD COLUMN IF NOT EXISTS invitation_token_digest bytea;
+ALTER TABLE onboarding.activation ADD COLUMN IF NOT EXISTS invitation_expires_at timestamptz;
+ALTER TABLE onboarding.activation ADD COLUMN IF NOT EXISTS invitation_claimed_at timestamptz;
+UPDATE onboarding.activation
+SET session_id = idempotency_key::uuid
+WHERE session_id IS NULL
+  AND idempotency_key ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+ALTER TABLE onboarding.activation DROP CONSTRAINT IF EXISTS chk_onboarding_activation_session_id;
+ALTER TABLE onboarding.activation ADD CONSTRAINT chk_onboarding_activation_session_id CHECK (session_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_onboarding_activation_session ON onboarding.activation(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_onboarding_activation_invitation_token
+  ON onboarding.activation(invitation_token_digest)
+  WHERE invitation_token_digest IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_onboarding_activation_invitation_expiry
+  ON onboarding.activation(invitation_expires_at)
+  WHERE invitation_claimed_at IS NULL;
+DROP POLICY IF EXISTS tenant_isolation ON onboarding.activation;
+CREATE POLICY tenant_isolation ON onboarding.activation USING (
+  tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+  OR invitation_token_digest = decode(nullif(current_setting('app.admin_activation_digest', true), ''), 'hex')
+) WITH CHECK (
+  tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+  OR invitation_token_digest = decode(nullif(current_setting('app.admin_activation_digest', true), ''), 'hex')
+);
 `}}
 }
 

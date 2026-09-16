@@ -1677,6 +1677,7 @@ export type ReportPublicationPayload = {
 };
 
 export type RequestAdminActivationOtpInput = {
+  activationToken: InputMaybe<Scalars['String']['input']>;
   clientMutationId: Scalars['String']['input'];
 };
 

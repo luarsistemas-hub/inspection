@@ -1,11 +1,15 @@
 package admin_activation
 
 import (
+	"context"
 	"testing"
 
 	"inspection/services/inspection/internal/features/onboarding/coordinator"
 	"inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/security"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestActivationSessionStateAcceptsActiveTenantBoundOnboardingStates(t *testing.T) {
@@ -54,5 +58,17 @@ func TestValidateCSRFRejectsMissingOrWrongProof(t *testing.T) {
 				t.Fatal("invalid proof accepted")
 			}
 		})
+	}
+}
+
+func TestClaimInvitationRejectsMalformedTokenBeforeDatabaseAccess(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901")}
+	_, err = service.ClaimInvitation(context.Background(), "short")
+	if err == nil {
+		t.Fatal("malformed activation token accepted")
 	}
 }

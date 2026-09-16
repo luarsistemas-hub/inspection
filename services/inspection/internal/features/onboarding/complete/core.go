@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/requestctx"
+	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
@@ -39,6 +41,7 @@ const (
 	deliveryPending             = "PENDING"
 	activationInvitationPending = "INVITATION_PENDING"
 	activationInvitationSent    = "INVITED"
+	activationInvitationTTL     = 24 * time.Hour
 )
 
 // ActivationInvitationNotifier sends the verified agency owner to the Admin
@@ -206,13 +209,20 @@ func (s Service) ensureActivationInvitation(ctx context.Context, current onboard
 	tenantID := *current.TenantID
 	now := s.now()
 	shouldSend := false
+	token, err := security.NewOpaqueToken()
+	if err != nil {
+		return fmt.Errorf("prepare owner activation token: %w", err)
+	}
+	tokenDigest := security.HashToken(token)
+	tokenExpiresAt := now.Add(activationInvitationTTL)
 	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var activation database.OnboardingActivation
 		err := tx.Where("tenant_id = ?", tenantID).First(&activation).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			activation = database.OnboardingActivation{
-				TenantID: tenantID, IdentityID: member.IdentityID, Purpose: onboardingsession.PurposeActivation,
-				Status: activationInvitationPending, IdempotencyKey: current.ID.String(), CreatedAt: now, UpdatedAt: now,
+				TenantID: tenantID, IdentityID: member.IdentityID, SessionID: current.ID, Purpose: onboardingsession.PurposeActivation,
+				Status: activationInvitationPending, InvitationTokenDigest: tokenDigest[:], InvitationExpiresAt: &tokenExpiresAt,
+				IdempotencyKey: current.ID.String(), CreatedAt: now, UpdatedAt: now,
 			}
 			if err := tx.Create(&activation).Error; err != nil {
 				return err
@@ -223,22 +233,36 @@ func (s Service) ensureActivationInvitation(ctx context.Context, current onboard
 		if err != nil {
 			return err
 		}
-		shouldSend = activation.Status == activationInvitationPending
-		return nil
+		shouldSend = activation.Status == activationInvitationPending || (activation.Status == activationInvitationSent && len(activation.InvitationTokenDigest) == 0)
+		if !shouldSend {
+			return nil
+		}
+		return tx.Model(&activation).Updates(map[string]any{
+			"identity_id": member.IdentityID, "session_id": current.ID, "status": activationInvitationPending,
+			"invitation_token_digest": tokenDigest[:], "invitation_expires_at": tokenExpiresAt,
+			"invitation_claimed_at": nil, "updated_at": now,
+		}).Error
 	}); err != nil {
 		return fmt.Errorf("prepare owner activation invitation: %w", err)
 	}
 	if !shouldSend {
 		return nil
 	}
-	activationURL := strings.TrimRight(s.AdminOrigin, "/") + "/activate"
-	if err := s.ActivationNotifier.SendActivationInvitation(ctx, current.Owner.Email, activationURL); err != nil {
+	activationURL, err := url.Parse(strings.TrimRight(s.AdminOrigin, "/") + "/activate")
+	if err != nil {
+		return fmt.Errorf("prepare owner activation URL: %w", err)
+	}
+	query := activationURL.Query()
+	query.Set("token", token)
+	activationURL.RawQuery = query.Encode()
+	if err := s.ActivationNotifier.SendActivationInvitation(ctx, current.Owner.Email, activationURL.String()); err != nil {
 		return fmt.Errorf("send owner activation invitation: %w", err)
 	}
 	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.OnboardingActivation{}).
-			Where("tenant_id = ? AND status = ?", tenantID, activationInvitationPending).
+		result := tx.Model(&database.OnboardingActivation{}).
+			Where("tenant_id = ? AND status = ? AND invitation_token_digest = ?", tenantID, activationInvitationPending, tokenDigest[:]).
 			Updates(map[string]any{"status": activationInvitationSent, "updated_at": s.now()}).Error
+		return result
 	}); err != nil {
 		return fmt.Errorf("confirm owner activation invitation: %w", err)
 	}

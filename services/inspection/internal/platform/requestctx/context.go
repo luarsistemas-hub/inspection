@@ -58,6 +58,7 @@ type idempotencyKey struct{}
 type responseWriterKey struct{}
 type externalCredentialsKey struct{}
 type onboardingCredentialsKey struct{}
+type adminActivationCredentialsKey struct{}
 type secureCookiesKey struct{}
 type clientIPKey struct{}
 
@@ -67,6 +68,11 @@ type ExternalCredentials struct {
 }
 
 type OnboardingCredentials struct {
+	SessionToken string
+	CSRFToken    string
+}
+
+type AdminActivationCredentials struct {
 	SessionToken string
 	CSRFToken    string
 }
@@ -135,6 +141,10 @@ func WithOnboardingCredentials(ctx context.Context, credentials OnboardingCreden
 	return context.WithValue(ctx, onboardingCredentialsKey{}, credentials)
 }
 
+func WithAdminActivationCredentials(ctx context.Context, credentials AdminActivationCredentials) context.Context {
+	return context.WithValue(ctx, adminActivationCredentialsKey{}, credentials)
+}
+
 func ExternalCredentialsFromContext(ctx context.Context) (ExternalCredentials, bool) {
 	credentials, ok := ctx.Value(externalCredentialsKey{}).(ExternalCredentials)
 	return credentials, ok && credentials.SessionToken != ""
@@ -142,5 +152,10 @@ func ExternalCredentialsFromContext(ctx context.Context) (ExternalCredentials, b
 
 func OnboardingCredentialsFromContext(ctx context.Context) (OnboardingCredentials, bool) {
 	credentials, ok := ctx.Value(onboardingCredentialsKey{}).(OnboardingCredentials)
+	return credentials, ok && credentials.SessionToken != ""
+}
+
+func AdminActivationCredentialsFromContext(ctx context.Context) (AdminActivationCredentials, bool) {
+	credentials, ok := ctx.Value(adminActivationCredentialsKey{}).(AdminActivationCredentials)
 	return credentials, ok && credentials.SessionToken != ""
 }

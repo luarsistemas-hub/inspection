@@ -54,7 +54,7 @@ input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!
 input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
-input RequestAdminActivationOtpInput { clientMutationId: String! }
+input RequestAdminActivationOtpInput { activationToken: String, clientMutationId: String! }
 input VerifyAdminActivationOtpInput { code: String!, clientMutationId: String! }
 input SetAdminInitialPasswordInput { password: String!, clientMutationId: String! }
 

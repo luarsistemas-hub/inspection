@@ -188,7 +188,17 @@ func (r *mutationResolver) CompleteOnboarding(ctx context.Context, input graphql
 
 // RequestAdminActivationOtp is the resolver for the requestAdminActivationOtp field.
 func (r *mutationResolver) RequestAdminActivationOtp(ctx context.Context, input graphql1.RequestAdminActivationOtpInput) (*graphql1.OnboardingPayload, error) {
-	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	credentials, ok := requestctx.AdminActivationCredentialsFromContext(ctx)
+	if input.ActivationToken != nil && strings.TrimSpace(*input.ActivationToken) != "" {
+		claimed, err := r.AdminActivation.ClaimInvitation(ctx, *input.ActivationToken)
+		if err != nil {
+			return onboardingValidationPayload(err, input.ClientMutationID)
+		}
+		clearOnboardingCookie(ctx)
+		setAdminActivationCookie(ctx, claimed.Locator, claimed.CSRF)
+		credentials = requestctx.AdminActivationCredentials{SessionToken: claimed.Locator, CSRFToken: claimed.CSRF}
+		ok = true
+	}
 	if !ok {
 		return nil, unauthenticated()
 	}
@@ -200,7 +210,7 @@ func (r *mutationResolver) RequestAdminActivationOtp(ctx context.Context, input 
 
 // VerifyAdminActivationOtp is the resolver for the verifyAdminActivationOtp field.
 func (r *mutationResolver) VerifyAdminActivationOtp(ctx context.Context, input graphql1.VerifyAdminActivationOtpInput) (*graphql1.OnboardingPayload, error) {
-	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	credentials, ok := requestctx.AdminActivationCredentialsFromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
 	}
@@ -213,7 +223,7 @@ func (r *mutationResolver) VerifyAdminActivationOtp(ctx context.Context, input g
 
 // SetAdminInitialPassword is the resolver for the setAdminInitialPassword field.
 func (r *mutationResolver) SetAdminInitialPassword(ctx context.Context, input graphql1.SetAdminInitialPasswordInput) (*graphql1.OnboardingPayload, error) {
-	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	credentials, ok := requestctx.AdminActivationCredentialsFromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
 	}
@@ -221,6 +231,7 @@ func (r *mutationResolver) SetAdminInitialPassword(ctx context.Context, input gr
 	if err != nil {
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
+	clearAdminActivationCookie(ctx)
 	return &graphql1.OnboardingPayload{Activation: mapOnboardingActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -1513,13 +1524,19 @@ func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string
 // OnboardingSession is the resolver for the onboardingSession field.
 func (r *queryResolver) OnboardingSession(ctx context.Context) (*graphql1.OnboardingSession, error) {
 	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	clearCookie := clearOnboardingCookie
 	if !ok {
-		return nil, nil
+		activationCredentials, activationOK := requestctx.AdminActivationCredentialsFromContext(ctx)
+		if !activationOK {
+			return nil, nil
+		}
+		credentials = requestctx.OnboardingCredentials{SessionToken: activationCredentials.SessionToken, CSRFToken: activationCredentials.CSRFToken}
+		clearCookie = clearAdminActivationCookie
 	}
 	value, err := r.Onboarding.LoadAndRefreshCSRF(ctx, credentials.SessionToken)
 	if err != nil {
 		if code, _, _ := apperror.Public(err); code == apperror.SessionExpired {
-			clearOnboardingCookie(ctx)
+			clearCookie(ctx)
 			return nil, nil
 		}
 		return nil, err

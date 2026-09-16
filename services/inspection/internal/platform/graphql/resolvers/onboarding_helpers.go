@@ -123,6 +123,23 @@ func clearOnboardingCookie(ctx context.Context) {
 	http.SetCookie(writer, &http.Cookie{Name: "inspection_onboarding", Value: "", Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0).UTC()})
 }
 
+func setAdminActivationCookie(ctx context.Context, locator, csrf string) {
+	writer, ok := requestctx.ResponseWriter(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_admin_activation", Value: locator, Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, Expires: time.Now().UTC().Add(onboardingsessionCookieTTL)})
+	writer.Header().Set("X-CSRF-Token", csrf)
+}
+
+func clearAdminActivationCookie(ctx context.Context) {
+	writer, ok := requestctx.ResponseWriter(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_admin_activation", Value: "", Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0).UTC()})
+}
+
 const onboardingsessionCookieTTL = 2 * time.Hour
 
 func onboardingPayloadString(payload map[string]any, key string) string {

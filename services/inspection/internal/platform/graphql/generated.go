@@ -5655,7 +5655,7 @@ input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!
 input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
-input RequestAdminActivationOtpInput { clientMutationId: String! }
+input RequestAdminActivationOtpInput { activationToken: String, clientMutationId: String! }
 input VerifyAdminActivationOtpInput { code: String!, clientMutationId: String! }
 input SetAdminInitialPasswordInput { password: String!, clientMutationId: String! }
 
@@ -30292,13 +30292,20 @@ func (ec *executionContext) unmarshalInputRequestAdminActivationOtpInput(ctx con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"clientMutationId"}
+	fieldsInOrder := [...]string{"activationToken", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "activationToken":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("activationToken"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ActivationToken = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)

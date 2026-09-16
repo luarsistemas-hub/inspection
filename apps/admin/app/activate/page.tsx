@@ -13,7 +13,8 @@ export default function ActivatePage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
-      const errors = stage === "request" ? await requestActivationCode() : stage === "verify" ? await verifyActivationCode(code) : await setInitialPassword(password);
+      const activationToken = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("token");
+      const errors = stage === "request" ? await requestActivationCode(activationToken) : stage === "verify" ? await verifyActivationCode(code) : await setInitialPassword(password);
       if (errors.length) { setMessage(errors[0].message); return; }
       setStage(stage === "request" ? "verify" : stage === "verify" ? "password" : "ready");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível concluir a ativação."); } finally { setBusy(false); }
