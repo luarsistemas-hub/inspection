@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"inspection/libs/identity"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 )
@@ -132,11 +133,23 @@ func TestValidateCheckpointPayloadRejectsInvalidStepData(t *testing.T) {
 }
 
 func TestValidateCheckpointPayloadAcceptsSupportedModes(t *testing.T) {
-	if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "fixed_origin"}, time.Now().UTC()); err != nil {
+	if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "fixed_origin", "mediaIds": []any{identity.NewID().String()}}, time.Now().UTC()); err != nil {
 		t.Fatalf("fixed origin rejected: %v", err)
 	}
 	if err := ValidateCheckpointPayload("PARTICIPANT", StepPayload{"mode": "self"}, time.Now().UTC()); err != nil {
 		t.Fatalf("self participant rejected: %v", err)
+	}
+}
+
+func TestOriginRequiresDistinctUploadedMediaIdentifiers(t *testing.T) {
+	id := identity.NewID().String()
+	for _, ids := range [][]any{nil, {id, id}, {"not-an-id"}} {
+		if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "FIXED_ORIGIN", "mediaIds": ids}, time.Now().UTC()); code(err) != apperror.InvalidInput {
+			t.Fatalf("invalid reference selection %v accepted: %v", ids, err)
+		}
+	}
+	if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "CHECKLIST_ONLY", "mediaIds": []any{id}}, time.Now().UTC()); code(err) != apperror.InvalidInput {
+		t.Fatalf("checklist accepted reference media: %v", err)
 	}
 }
 

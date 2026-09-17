@@ -55,6 +55,7 @@ import (
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
+	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
 	origincore "inspection/services/inspection/internal/features/origins/core"
@@ -178,10 +179,10 @@ func run() error {
 		return err
 	}
 	limits := ratelimit.OTPPolicy{Limiter: ratelimit.Limiter{Store: ratelimit.DragonflyStore{Address: cfg.DragonflyAddress, Password: cfg.DragonflyPassword}}}
-	invitationService := invitationcore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL}}
+	invitationService := invitationcore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Stage: cfg.Stage}, Stage: cfg.Stage}
 	onboardingService := onboardingsession.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Stage: cfg.Stage}
 	keycloakClient := keycloak.ProvisioningClient{BaseURL: cfg.KeycloakAdminURL, Realm: cfg.KeycloakRealm, ClientID: cfg.KeycloakClientID, ClientSecret: cfg.KeycloakClientSecret, Timeout: cfg.ProviderTimeout}
-	activationService := adminactivation.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.ActivationProvider{Client: keycloakClient}}
+	activationService := adminactivation.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.ActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}
 	bootstrapService := onboardingbootstrap.Service{DB: db}
 	minioClient, err := objectstore.NewMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
 	if err != nil {
@@ -399,6 +400,9 @@ func run() error {
 		}
 	}
 	mux := http.NewServeMux()
+	if err := onboardingphotos.Setup(mux, onboardingphotos.Dependencies{DB: db, Sessions: onboardingService, Store: mediaStore}); err != nil {
+		return err
+	}
 	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL, AccountID: cfg.TwilioAccountSID, Metrics: metrics}); err != nil {
 		return err
 	}

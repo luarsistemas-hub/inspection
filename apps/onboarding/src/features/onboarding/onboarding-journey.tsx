@@ -3,7 +3,7 @@
 import { Alert, Button, Card, Container, Field, Input, Select, Stack, Textarea } from "@inspection/design-system";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
-import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, type GraphQLFailure } from "@/graphql/client";
+import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
 import { CompleteOnboardingDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery } from "@/graphql/generated";
 import { isSupportedDefinition, sortedSteps, validateStep, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, type OriginUpload } from "./origin-upload";
@@ -142,10 +142,44 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
   const existingAgency = step.key === "agency" ? session.existingAgency : null;
   const [values, setValues] = useState<StepValues>(() => existingAgency ? { name: existingAgency.name, agencyName: existingAgency.name, existingAgencyId: existingAgency.tenantId } : readDraft(session.id, step.key)); const [errors, setErrors] = useState<Record<string, string>>({}); const [uploads, setUploads] = useState<OriginUpload[]>([]); const [saving, setSaving] = useState(false);
   const update = (key: string, value: string) => { const next = { ...values, [key]: value }; setValues(next); writeDraft(session.id, step.key, next); };
-  const submit = async (event: FormEvent) => { event.preventDefault(); const localErrors = validateStep(step, values); if (step.key === "origin" && values.mode === "FIXED_ORIGIN" && (!uploads.length || uploads.some((upload) => !upload.description.trim()))) localErrors.referencePhotos = "Adicione e descreva ao menos uma foto de referência."; setErrors(localErrors); if (Object.keys(localErrors).length) return; setSaving(true); onError("");
-    try { const payload = { ...values, ...(step.key === "origin" ? { uploads: uploads.map((upload) => ({ name: upload.file.name, description: upload.description })) } : {}) }; const result = await graphql(SaveOnboardingStepDocument, { input: { step: step.key, payload, expectedVersion: session.version, clientMutationId: clientMutationId() } }); const response = result.saveOnboardingStep; if (showUserErrors(response.userErrors, setErrors, onError)) return; if (!response.session) throw { message: "O servidor não confirmou esta etapa." } satisfies GraphQLFailure; sessionStorage.removeItem(draftKey(session.id, step.key)); onSaved(response.session, response.status ?? undefined, values); } catch (cause) { onError(failureText(cause)); } finally { setSaving(false); }
+  const uploadOne = async (upload: OriginUpload) => {
+    if (upload.mediaId) return upload.mediaId;
+    setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, sending: true, failed: false } : item));
+    try {
+      const mediaId = await uploadReferencePhoto(upload.file, upload.description, upload.id);
+      setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, mediaId, sending: false } : item));
+      return mediaId;
+    } catch (cause) {
+      setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, sending: false, failed: true } : item));
+      throw cause;
+    }
   };
-  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => update(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
+  const retry = (id: string) => {
+    const upload = uploads.find((item) => item.id === id);
+    if (upload && !upload.sending) void uploadOne(upload).catch((cause) => onError(failureText(cause)));
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const localErrors = validateStep(step, values);
+    if (step.key === "origin" && values.mode === "FIXED_ORIGIN" && (!uploads.length || uploads.some((upload) => !upload.description.trim()))) localErrors.referencePhotos = "Adicione e descreva ao menos uma foto de referência.";
+    setErrors(localErrors);
+    if (Object.keys(localErrors).length) return;
+    setSaving(true); onError("");
+    try {
+      const mediaIds: string[] = [];
+      if (step.key === "origin" && values.mode === "FIXED_ORIGIN") {
+        for (const upload of uploads) mediaIds.push(await uploadOne(upload));
+      }
+      const payload = { ...values, ...(step.key === "origin" ? { mediaIds } : {}) };
+      const result = await graphql(SaveOnboardingStepDocument, { input: { step: step.key, payload, expectedVersion: session.version, clientMutationId: clientMutationId() } });
+      const response = result.saveOnboardingStep;
+      if (showUserErrors(response.userErrors, setErrors, onError)) return;
+      if (!response.session) throw { message: "O servidor não confirmou esta etapa." } satisfies GraphQLFailure;
+      sessionStorage.removeItem(draftKey(session.id, step.key));
+      onSaved(response.session, response.status ?? undefined, values);
+    } catch (cause) { onError(failureText(cause)); } finally { setSaving(false); }
+  };
+  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => update(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
 }
 
 function DynamicField({ field, value, error, onChange }: { field: OnboardingDefinition["steps"][number]["fields"][number]; value: string; error?: string; onChange: (value: string) => void }) {
@@ -163,15 +197,17 @@ function StatusView({ status, submitting, onRetry, onRestart }: { status?: Statu
   const created = status?.state === "SUBMITTED" && Boolean(status.inspectionId);
   const pending = !created || status?.originStatus === "PENDING" || status?.deliveryStatus === "PENDING";
   const waitingForOrigin = status?.state === "ORIGIN_PENDING" || status?.originStatus === "PENDING";
-  return <div className="onboarding-form"><Alert tone={created ? "success" : "warning"} title={created ? "Primeira vistoria criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{created ? `A vistoria ${status.inspectionId} foi criada. ${pending ? "O link de captura está sendo entregue ao responsável pela vistoria." : "O link de captura foi entregue ao responsável pela vistoria."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor."}</Alert>{status?.state === "FAILED" ? <Alert tone="danger">A operação falhou de forma recuperável. Revise os dados e tente novamente quando o serviço estiver disponível.</Alert> : null}<div className="onboarding-actions">{waitingForOrigin ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : "Tentar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
+  return <div className="onboarding-form"><Alert tone={created ? "success" : "warning"} title={created ? "Primeira vistoria criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{created ? `A vistoria ${status.inspectionId} foi criada. ${pending ? "O link de captura está sendo entregue ao responsável pela vistoria." : "O link de captura foi entregue ao responsável pela vistoria."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor."}</Alert>{status?.state === "FAILED" ? <Alert tone="danger">A operação falhou de forma recuperável. Revise os dados e tente novamente quando o serviço estiver disponível.</Alert> : null}<div className="onboarding-actions">{!created ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : waitingForOrigin ? "Tentar novamente" : "Consultar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
 }
 
 function Fragment({ children }: { children: React.ReactNode }) { return <>{children}</>; }
 
 function statusFromSession(session: Session | undefined): Status | undefined {
   if (!session) return undefined;
+  const selectedOrigin = confirmedSteps(session.completedSteps).origin;
+  const originPending = selectedOrigin?.mode === "FIXED_ORIGIN" && session.state !== "SUBMITTED";
   if (session.state === "FAILED") return { state: session.state, nextAction: "RETRY", originStatus: "FAILED", deliveryStatus: "PENDING", inspectionId: null };
-  if (session.state === "SUBMITTED") return { state: session.state, nextAction: "WAIT_FOR_DELIVERY", originStatus: "READY", deliveryStatus: "PENDING", inspectionId: null };
+  if (session.state === "SUBMITTED") return { state: session.state, nextAction: "WAIT_FOR_DELIVERY", originStatus: selectedOrigin?.mode === "FIXED_ORIGIN" ? "ACTIVE" : "NOT_REQUIRED", deliveryStatus: "PENDING", inspectionId: null };
   if (session.state === "READY_TO_SUBMIT") return { state: session.state, nextAction: "REVIEW_AND_SUBMIT", originStatus: "READY", deliveryStatus: "PENDING", inspectionId: null };
-  return { state: session.state, nextAction: "CONTINUE_ONBOARDING", originStatus: session.state === "ORIGIN_PENDING" ? "PENDING" : "NOT_REQUIRED", deliveryStatus: "NOT_STARTED", inspectionId: null };
+  return { state: session.state, nextAction: originPending ? "WAIT_FOR_ORIGIN" : "CONTINUE_ONBOARDING", originStatus: originPending || session.state === "ORIGIN_PENDING" ? "PENDING" : "NOT_REQUIRED", deliveryStatus: "NOT_STARTED", inspectionId: null };
 }

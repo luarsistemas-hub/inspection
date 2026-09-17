@@ -114,9 +114,17 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	originMode := strings.ToUpper(stepString(submission.Steps[onboardingsession.StepOrigin], "mode"))
 	templateMode := templatecatalog.ChecklistOnly
 	originStatus := "NOT_REQUIRED"
+	var originMediaIDs []identity.ID
 	if originMode == string(templatecatalog.FixedOrigin) {
 		templateMode = templatecatalog.FixedOrigin
-		originStatus = "PENDING"
+		originMediaIDs, err = coordinator.OriginMediaIDs(submission.Steps[onboardingsession.StepOrigin])
+		if err != nil || len(originMediaIDs) == 0 {
+			return Result{}, apperror.New(apperror.InvalidState, "referencePhotos", "As fotos deste cadastro não foram enviadas. Inicie um novo cadastro e selecione-as novamente.")
+		}
+		originStatus, err = s.originMediaStatus(ctx, tenantID, submission.Session.ID, originMediaIDs)
+		if err != nil {
+			return Result{}, err
+		}
 	}
 	decision, err := coordinator.ValidateSubmit(coordinator.SubmitInput{Now: now, Steps: submission.Steps, OriginStatus: originStatus, DeliveryState: deliveryPending, TemplateMode: templateMode, IdempotencyKey: idempotencyKey})
 	if err != nil {
@@ -165,12 +173,23 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	if err != nil {
 		return Result{}, fmt.Errorf("prepare onboarding asset: %w", err)
 	}
+	var referenceVersionID *identity.ID
+	if templateMode == templatecatalog.FixedOrigin {
+		if template.ActiveVersionID == nil {
+			return Result{}, errors.New("onboarding origin template has no active version")
+		}
+		versionID, err := s.ensureOrigin(ctx, tenantID, submission.Session.ID, asset.Asset.ID, template.ID, *template.ActiveVersionID, originMediaIDs)
+		if err != nil {
+			return Result{}, fmt.Errorf("prepare onboarding origin: %w", err)
+		}
+		referenceVersionID = &versionID
+	}
 	deadline, err := deadlineAt(property)
 	if err != nil {
 		return Result{}, err
 	}
 	inspection, err := (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectioncore.CreateInput{
-		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID,
+		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ReferenceVersionID: referenceVersionID,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
 		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
 	})
@@ -182,7 +201,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	request := database.OnboardingRequest{
 		ID: identity.NewID(), TenantID: tenantID, SessionID: submission.Session.ID,
 		InspectionID: &inspection.Inspection.ID, AssetID: &asset.Asset.ID, ParticipantID: &participant.Participant.ID,
-		TemplateID: &template.ID, Status: requestStatusSubmitted, IdempotencyKey: idempotencyKey, CreatedAt: now, UpdatedAt: now,
+		TemplateID: &template.ID, OriginVersionID: referenceVersionID, Status: requestStatusSubmitted, IdempotencyKey: idempotencyKey, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := (tenanttx.Runner{DB: s.DB}).Within(domainCtx, tenantID, func(tx *gorm.DB) error {
 		return tx.Where("session_id = ?", submission.Session.ID).Attrs(request).FirstOrCreate(&request).Error
@@ -370,7 +389,11 @@ func (s Service) within(ctx context.Context, tenantID identity.ID, fn func(*gorm
 }
 
 func completedResult(session onboardingsession.Session, request database.OnboardingRequest, inspectionID identity.ID) Result {
-	return Result{Session: session, Request: request, InspectionID: inspectionID, State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", Delivery: deliveryPending}
+	originStatus := "NOT_REQUIRED"
+	if request.OriginVersionID != nil {
+		originStatus = "ACTIVE"
+	}
+	return Result{Session: session, Request: request, InspectionID: inspectionID, State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: originStatus, Delivery: deliveryPending}
 }
 
 func pendingResult(session onboardingsession.Session, decision coordinator.SubmitResult) Result {

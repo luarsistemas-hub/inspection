@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"inspection/libs/identity"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 )
@@ -97,8 +99,8 @@ func ValidateOriginMedia(contentType string, size int64, description string) err
 	if size <= 0 || size > catalog.MaxOriginalBytes {
 		return apperror.New(apperror.InvalidInput, "sizeBytes", "origin media exceeds the size limit")
 	}
-	if strings.TrimSpace(description) == "" {
-		return apperror.New(apperror.InvalidInput, "description", "origin media description is required")
+	if strings.TrimSpace(description) == "" || utf8.RuneCountInString(strings.TrimSpace(description)) > catalog.MaxTextCodePoints {
+		return apperror.New(apperror.InvalidInput, "description", "origin media description is required within the text limit")
 	}
 	return nil
 }
@@ -122,6 +124,16 @@ func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) 
 		if mode != "CHECKLIST_ONLY" && mode != "FIXED_ORIGIN" {
 			return apperror.New(apperror.InvalidInput, "mode", "invalid origin mode")
 		}
+		ids, err := OriginMediaIDs(payload)
+		if err != nil {
+			return err
+		}
+		if mode == "FIXED_ORIGIN" && len(ids) == 0 {
+			return apperror.New(apperror.InvalidInput, "referencePhotos", "reference photos are required")
+		}
+		if mode == "CHECKLIST_ONLY" && len(ids) != 0 {
+			return apperror.New(apperror.InvalidInput, "referencePhotos", "checklist-only cannot include reference photos")
+		}
 	case "PARTICIPANT":
 		mode := strings.ToUpper(stringValue(payload, "mode"))
 		switch mode {
@@ -136,6 +148,33 @@ func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) 
 		return apperror.New(apperror.InvalidInput, "step", "invalid step")
 	}
 	return nil
+}
+
+// OriginMediaIDs parses the immutable identifiers saved in the origin step.
+func OriginMediaIDs(payload StepPayload) ([]identity.ID, error) {
+	raw, ok := payload["mediaIds"]
+	if !ok {
+		return nil, nil
+	}
+	values, ok := raw.([]any)
+	if !ok || len(values) > capturecore.MaxActivePhotos {
+		return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
+	}
+	ids := make([]identity.ID, 0, len(values))
+	seen := make(map[identity.ID]bool, len(values))
+	for _, value := range values {
+		formatted, ok := value.(string)
+		if !ok {
+			return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
+		}
+		id, err := identity.ParseID(formatted)
+		if err != nil || seen[id] {
+			return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // ValidateSubmit enforces ordering and truthful pending states. It is pure so

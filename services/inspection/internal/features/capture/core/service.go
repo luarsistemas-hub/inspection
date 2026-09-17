@@ -142,7 +142,10 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if !owned && (draft.Kind == "RECAPTURE" || !strings.HasPrefix(in.RequirementKey, "extra:")) {
 			return apperror.New(apperror.Forbidden, "requirementKey", "requirement is outside this responsibility")
 		}
-		if err := ValidateDescription(in.Description, selected.DescriptionRequired || strings.HasPrefix(in.RequirementKey, "extra:")); err != nil {
+		// Descriptions enrich evidence but are optional for declared requirements,
+		// including requirements from older templates. Ad-hoc extra evidence
+		// remains self-describing for the existing extra-evidence contract.
+		if err := ValidateDescription(in.Description, strings.HasPrefix(in.RequirementKey, "extra:")); err != nil {
 			return err
 		}
 		if in.CaptureSource == "GALLERY" && (!policy.AllowGallery || selected.CaptureSourcePolicy == "CAMERA_ONLY") {
@@ -322,12 +325,12 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			if item.Status != "READY" {
 				return apperror.New(apperror.InvalidState, item.ID.String(), "media verification and screening must complete before submission")
 			}
-			requirement, owned := byKey[item.RequirementKey]
+			_, owned := byKey[item.RequirementKey]
 			extra := strings.HasPrefix(item.RequirementKey, "extra:") && draft.Kind != "RECAPTURE"
 			if !owned && !extra {
 				return apperror.New(apperror.InvalidInput, item.ID.String(), "media must belong to an applicable requirement")
 			}
-			if err := ValidateDescription(item.Description, requirement.DescriptionRequired || extra); err != nil {
+			if err := ValidateDescription(item.Description, strings.HasPrefix(item.RequirementKey, "extra:")); err != nil {
 				return apperror.New(apperror.InvalidInput, item.ID.String(), "media description is invalid")
 			}
 			ready[item.ID] = item

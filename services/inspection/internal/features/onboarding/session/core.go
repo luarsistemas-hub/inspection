@@ -632,7 +632,38 @@ func (s Service) validateCheckpoint(tx *gorm.DB, locator, csrf, step string, exp
 	if err := coordinator.ValidateCheckpointPayload(step, coordinator.StepPayload(payload), now); err != nil {
 		return database.OnboardingSession{}, err
 	}
+	if step == StepOrigin {
+		if err := validateOriginPhotoSelection(tx, row, coordinator.StepPayload(payload)); err != nil {
+			return database.OnboardingSession{}, err
+		}
+	}
 	return row, nil
+}
+
+func validateOriginPhotoSelection(tx *gorm.DB, session database.OnboardingSession, payload coordinator.StepPayload) error {
+	ids, err := coordinator.OriginMediaIDs(payload)
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+	if session.TenantID == nil {
+		return apperror.New(apperror.InvalidState, "referencePhotos", "agency setup is incomplete")
+	}
+	if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", session.TenantID.String()).Error; err != nil {
+		return err
+	}
+	var media []database.MediaObject
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND id IN ?", *session.TenantID, session.ID, ids).Find(&media).Error; err != nil {
+		return err
+	}
+	if len(media) != len(ids) {
+		return apperror.New(apperror.InvalidInput, "referencePhotos", "reference photos were not uploaded")
+	}
+	for _, photo := range media {
+		if strings.TrimSpace(photo.Description) == "" || photo.RequirementKey != "reference" || (photo.Status != "VERIFIED" && photo.Status != "READY") {
+			return apperror.New(apperror.InvalidState, "referencePhotos", "reference photo is unavailable")
+		}
+	}
+	return nil
 }
 
 func marshalCheckpointPayload(payload map[string]any) ([]byte, error) {

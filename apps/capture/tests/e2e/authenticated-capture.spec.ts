@@ -39,17 +39,18 @@ test.describe("authenticated Capture against the local stack", () => {
     await page.getByRole("button", { name: "Aceitar e continuar" }).click();
     await expect(page.getByRole("heading", { name: "Adicione as evidências" })).toBeVisible();
     await expect(page.getByRole("listitem").filter({ hasText: "Evidências" })).toHaveAttribute("aria-current", "step");
-    const impossibility = page.getByLabel("Impossibilidade");
+    const impossibility = page.getByRole("button", { name: "Não consegue fotografar?" });
     const canDeclareImpossibility = await impossibility.isVisible();
     if (canDeclareImpossibility) {
-      await impossibility.fill("A área está inacessível com segurança durante a vistoria.");
+      await impossibility.click();
+      await page.getByLabel("Justificativa da impossibilidade").fill("A área está inacessível com segurança durante a vistoria.");
       await page.getByRole("button", { name: "Registrar impossibilidade" }).click();
       await expect(page.getByRole("status")).toContainText("Justificativa registrada.");
     }
-    await page.getByRole("button", { name: "Revisar inspeção" }).click();
+    await page.getByRole("button", { name: "Revisar vistoria" }).click();
     await expect(page.getByRole("heading", { name: "Revise antes de enviar" })).toBeVisible();
     await expect(page.getByRole("listitem").filter({ hasText: "Revisão" })).toHaveAttribute("aria-current", "step");
-    await page.getByRole("button", { name: canDeclareImpossibility ? "Enviar inspeção completa" : "Confirmar envio incompleto" }).click();
+    await page.getByRole("button", { name: canDeclareImpossibility ? "Enviar vistoria completa" : "Confirmar envio incompleto" }).click();
     await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
     await assertRuntimeClean();
   });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getOnboardingCsrfToken, setOnboardingCsrfToken } from "@/auth/onboarding-session";
-import { graphql, mapUserErrors } from "@/graphql/client";
+import { graphql, mapUserErrors, uploadReferencePhoto } from "@/graphql/client";
 import { OnboardingDefinitionDocument } from "@/graphql/generated";
 import { resolveResume, validateStep } from "@/features/onboarding/definition";
 
@@ -25,6 +25,23 @@ describe("onboarding session client", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { onboardingDefinition: {} } }), { status: 200, headers: { "X-CSRF-Token": "rotated-proof" } })));
     await graphql(OnboardingDefinitionDocument, { segment: "REAL_ESTATE" });
     expect(getOnboardingCsrfToken()).toBe("rotated-proof");
+  });
+
+  it("sends the actual reference photo privately and requires a confirmed media ID", async () => {
+    setOnboardingCsrfToken("csrf-proof");
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ mediaId: "media-1" }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ message: "upload failed" }), { status: 503 }));
+    vi.stubGlobal("fetch", fetch);
+    const file = new File(["photo bytes"], "quarto.jpg", { type: "image/jpeg" });
+    await expect(uploadReferencePhoto(file, "Quarto", "photo-1")).resolves.toBe("media-1");
+    const [url, init] = fetch.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe("/onboarding/reference-photos");
+    expect(init.credentials).toBe("include");
+    expect(init.headers).toMatchObject({ "X-CSRF-Token": "csrf-proof" });
+    const form = init.body as FormData;
+    expect(form.get("file")).toBe(file);
+    expect(form.get("description")).toBe("Quarto");
+    expect(form.get("clientMutationId")).toBe("photo-1");
+    await expect(uploadReferencePhoto(file, "Quarto", "photo-1")).rejects.toMatchObject({ message: "upload failed" });
   });
 
   it("UT-041 maps a server field error without changing unrelated values", () => {

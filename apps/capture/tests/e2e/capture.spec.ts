@@ -58,10 +58,12 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
   await page.getByLabel("Análise por inteligência artificial").check();
   await page.getByLabel("Localização quando necessária").check();
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await page.getByLabel("Capturar com a câmera").setInputFiles({ name: "overview.jpg", mimeType: "image/jpeg", buffer: Buffer.from("image") });
+  await expect(page.getByText("Escolher da galeria")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Adicionar descrição" })).toBeVisible();
+  await page.getByLabel("Tirar foto").setInputFiles({ name: "overview.jpg", mimeType: "image/jpeg", buffer: Buffer.from("image") });
 
   await expect(page.getByRole("progressbar", { name: "Progresso do envio de Visão geral do imóvel" })).toBeVisible();
   await expect(page.getByText(/aguardando (envio|verificação)/i).first()).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "Upload concluído" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Upload concluído" })).toBeVisible({ timeout: 15_000 });
   expect(metadataAttempts).toBe(2);
 });

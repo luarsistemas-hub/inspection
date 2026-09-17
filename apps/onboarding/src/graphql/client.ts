@@ -8,6 +8,27 @@ type Response<T> = { data?: T; errors?: Array<{ message: string; extensions?: { 
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 const sessionErrors = new Set(["UNAUTHENTICATED", "SESSION_EXPIRED"]);
 
+/** Sends a reference image through the private onboarding media endpoint. */
+export async function uploadReferencePhoto(file: File, description: string, id: string): Promise<string> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("description", description);
+  form.set("clientMutationId", id);
+  const response = await fetch(new URL("/onboarding/reference-photos", endpoint), {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRF-Token": getOnboardingCsrfToken() ?? "" },
+    body: form,
+  });
+  const result = await response.json().catch(() => ({})) as { mediaId?: string; message?: string; code?: string };
+  if (!response.ok || !result.mediaId) {
+    const failure: GraphQLFailure = { message: result.message ?? "Não foi possível enviar a foto.", code: result.code };
+    if (isOnboardingSessionFailure(failure)) clearOnboardingSession();
+    throw failure;
+  }
+  return result.mediaId;
+}
+
 export const isOnboardingSessionFailure = (error: unknown): error is GraphQLFailure =>
   typeof error === "object" && error !== null && "code" in error && sessionErrors.has(String(error.code));
 

@@ -11,7 +11,7 @@ type Seed struct {
 func CuratedSeeds(analysisProfile, propertySegment, constructionSegment, cleaningSegment string) []Seed {
 	base := func(segment string, mode ComparisonMode, multi bool, report string, roles []string) TemplateDocument {
 		return TemplateDocument{SchemaVersion: SchemaVersion, SegmentVersionID: segment, ParticipantRoles: roles, ComparisonMode: mode,
-			Requirements: []CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
+			Requirements: []CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: false, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
 			MultiStage:   multi, ReportMode: report, AnalysisProfile: analysisProfile, Policy: Policy{GPSRequired: true, GeofenceMeters: DefaultGeofence, AllowGallery: true}}
 	}
 	construction := base(constructionSegment, PlannedStage, true, "CONSOLIDATED", []string{"CONSTRUCTION_RESPONSIBLE", "CONTRACTOR"})

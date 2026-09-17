@@ -14,6 +14,15 @@ func TestUT030CompletenessAcceptsEvidenceAndPermittedImpossibility(t *testing.T)
 	}
 }
 
+func TestValidateDescriptionAllowsBlankDeclaredRequirementDescription(t *testing.T) {
+	if err := ValidateDescription("   ", false); err != nil {
+		t.Fatalf("blank optional description rejected: %v", err)
+	}
+	if err := ValidateDescription("<script>alert(1)</script>", false); err == nil {
+		t.Fatal("unsafe optional description accepted")
+	}
+}
+
 func TestUT031CompletenessNamesMissingAndBlockedRequirements(t *testing.T) {
 	requirements := []Requirement{{Key: "photo", Required: true, MinimumMedia: 1}, {Key: "blocked", Required: true, MinimumMedia: 1}, {Key: "reason", Required: true, ImpossibilityAllowed: true, MinimumMedia: 1}}
 	result, err := Evaluate(requirements, []Answer{{RequirementKey: "photo", ReadyMedia: 1}, {RequirementKey: "blocked", FailedMedia: 1}, {RequirementKey: "reason", Impossibility: "sem acesso"}}, false)

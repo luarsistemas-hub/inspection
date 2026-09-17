@@ -144,6 +144,34 @@ func (s Store) CreateMultipart(ctx context.Context, tenantID identity.ID, mediaI
 	return key, uploadID, nil
 }
 
+// PutOriginal stores a validated original through the private client.
+// Public onboarding uploads use this path because they have no capture draft yet.
+func (s Store) PutOriginal(ctx context.Context, tenantID, mediaID identity.ID, contentType string, data []byte) (string, string, error) {
+	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || !SupportedType(contentType) || len(data) == 0 || len(data) > MaxOriginalBytes {
+		return "", "", ErrInvalid
+	}
+	detected, err := detectMediaType(data)
+	if err != nil || !sameMediaType(detected, contentType) {
+		return "", "", ErrInvalid
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 40_000_000 {
+		return "", "", ErrInvalid
+	}
+	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
+		return "", "", ErrInvalid
+	}
+	key, err := opaqueKey(tenantID, mediaID)
+	if err != nil {
+		return "", "", err
+	}
+	if err := s.Client.Put(ctx, s.Bucket, key, bytes.NewReader(data), int64(len(data)), contentType); err != nil {
+		return "", "", mapError(err)
+	}
+	digest := sha256.Sum256(data)
+	return key, hex.EncodeToString(digest[:]), nil
+}
+
 func (s Store) PresignPart(ctx context.Context, key, uploadID string, part int, ttl time.Duration) (PresignedPart, error) {
 	if s.Client == nil || key == "" || uploadID == "" || part < 1 || ttl <= 0 || ttl > 15*time.Minute {
 		return PresignedPart{}, ErrInvalid

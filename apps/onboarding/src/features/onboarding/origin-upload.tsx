@@ -1,32 +1,42 @@
 "use client";
 
 import { Button, Field, Input, Status } from "@inspection/design-system";
-import { useState } from "react";
+import Image from "next/image";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
-export type OriginUpload = { id: string; file: File; description: string; progress: number; failed: boolean };
+export type OriginUpload = { id: string; file: File; description: string; mediaId?: string; sending: boolean; failed: boolean };
 
-export function OriginUploadCards({ uploads, onChange }: { uploads: OriginUpload[]; onChange: (uploads: OriginUpload[]) => void }) {
+export function OriginUploadCards({ uploads, onChange, onRetry }: { uploads: OriginUpload[]; onChange: Dispatch<SetStateAction<OriginUpload[]>>; onRetry: (id: string) => void }) {
   const addFiles = (files: FileList | null) => {
     if (!files) return;
-    onChange([...uploads, ...Array.from(files).filter((file) => file.type.startsWith("image/")).map((file) => ({ id: crypto.randomUUID(), file, description: "", progress: 0, failed: false }))]);
+    const selected = Array.from(files).filter((file) => /^image\/(jpeg|png|webp|heic|heif)$/.test(file.type));
+    onChange((current) => [...current, ...selected.map((file) => ({ id: crypto.randomUUID(), file, description: "", sending: false, failed: false }))]);
   };
   return <div className="onboarding-upload-list">
     <Field label="Fotos de referência" hint="Cada foto precisa de uma descrição antes de ser enviada.">
-      <Input type="file" accept="image/*" multiple onChange={(event) => addFiles(event.target.files)} />
+      <Input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
     </Field>
-    {uploads.map((upload) => <UploadCard key={upload.id} upload={upload} onChange={(next) => onChange(uploads.map((item) => item.id === next.id ? next : item))} />)}
+    {uploads.map((upload) => <UploadCard key={upload.id} upload={upload} onChange={(next) => onChange((current) => current.map((item) => item.id === next.id ? next : item))} onRemove={() => onChange((current) => current.filter((item) => item.id !== upload.id))} onRetry={() => onRetry(upload.id)} />)}
   </div>;
 }
 
-function UploadCard({ upload, onChange }: { upload: OriginUpload; onChange: (upload: OriginUpload) => void }) {
-  const [sending, setSending] = useState(false);
-  const retry = () => { setSending(true); onChange({ ...upload, failed: false, progress: 20 }); window.setTimeout(() => { onChange({ ...upload, failed: false, progress: 100 }); setSending(false); }, 250); };
+function UploadCard({ upload, onChange, onRemove, onRetry }: { upload: OriginUpload; onChange: (upload: OriginUpload) => void; onRemove: () => void; onRetry: () => void }) {
+  const [preview, setPreview] = useState("");
+  useEffect(() => {
+    const url = URL.createObjectURL(upload.file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [upload.file]);
   return <article className="onboarding-upload">
+    {preview ? <Image className="onboarding-upload-preview" src={preview} width={800} height={600} unoptimized alt={`Prévia de ${upload.file.name}`} /> : null}
     <strong>{upload.file.name}</strong>
-    <progress value={upload.progress} max="100" aria-label={`Progresso de ${upload.file.name}`} />
     <Field label={`Descrição de ${upload.file.name}`} error={upload.failed ? "O envio falhou. Tente novamente." : undefined} required>
-      <Input value={upload.description} onChange={(event) => onChange({ ...upload, description: event.target.value })} />
+      <Input value={upload.description} maxLength={2000} disabled={upload.sending || Boolean(upload.mediaId)} onChange={(event) => onChange({ ...upload, description: event.target.value })} />
     </Field>
-    {upload.failed ? <Button onClick={retry} disabled={sending}>Tentar enviar novamente</Button> : <Status tone={upload.progress === 100 ? "warning" : "info"}>{upload.progress === 100 ? "Pronta para confirmar" : "Aguardando envio privado"}</Status>}
+    <div className="onboarding-upload-actions">
+      <Status tone={upload.failed ? "danger" : upload.mediaId ? "success" : upload.sending ? "warning" : "info"}>{upload.failed ? "Falha no envio" : upload.mediaId ? "Foto recebida com segurança" : upload.sending ? "Enviando foto…" : "Aguardando envio privado"}</Status>
+      {upload.failed ? <Button variant="secondary" onClick={onRetry} disabled={upload.sending}>Tentar enviar novamente</Button> : null}
+      {!upload.mediaId && !upload.sending ? <Button variant="secondary" onClick={onRemove}>Remover</Button> : null}
+    </div>
   </article>;
 }

@@ -196,6 +196,29 @@ func TestExternalAccessContractsIT141ToIT150(t *testing.T) {
 			t.Fatalf("second participant inherited limit: %v", err)
 		}
 	})
+	t.Run("non-production accepts any valid OTP without weakening format validation", func(t *testing.T) {
+		_, token, notifier, _, _, service := newService(t)
+		service.Stage = "dev"
+		if err := service.RequestOTP(context.Background(), token); err != nil {
+			t.Fatal(err)
+		}
+		code := "654321"
+		if code == notifier.code {
+			code = "123456"
+		}
+		if _, err := service.VerifyOTP(context.Background(), token, code); err != nil {
+			t.Fatalf("arbitrary valid OTP rejected: %v", err)
+		}
+
+		_, token, _, _, _, service = newService(t)
+		service.Stage = "dev"
+		if err := service.RequestOTP(context.Background(), token); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.VerifyOTP(context.Background(), token, "12345a"); appCode(err) != apperror.InvalidInput {
+			t.Fatalf("malformed OTP accepted in non-production: %v", err)
+		}
+	})
 }
 
 func testWithin(db *gorm.DB) func(context.Context, identity.ID, func(*gorm.DB) error) error {

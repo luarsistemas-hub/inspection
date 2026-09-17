@@ -10,7 +10,9 @@ body { background: var(--inspection-bg); }
 .onboarding-actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; }
 .onboarding-upload-list { display: grid; gap: var(--inspection-space-3); }
 .onboarding-upload { display: grid; gap: var(--inspection-space-2); padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
-.onboarding-upload progress { inline-size: 100%; }
+.onboarding-upload-preview { display: block; inline-size: 100%; block-size: auto; max-block-size: 18rem; object-fit: contain; border-radius: var(--inspection-radius); background: var(--inspection-bg); }
+.onboarding-upload-actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; }
+.onboarding-upload .inspection-status svg { inline-size: 1.25rem; block-size: 1.25rem; flex: none; }
 .onboarding-review { display: grid; gap: var(--inspection-space-3); }
 .onboarding-review dl { display: grid; grid-template-columns: minmax(8rem, .45fr) 1fr; gap: var(--inspection-space-2); margin: 0; }
 .onboarding-review dt { color: var(--inspection-muted); }

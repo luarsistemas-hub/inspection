@@ -2537,7 +2537,10 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 			Key: req.Key, Section: req.Section, Label: req.Label, Instructions: instructions,
 			EvidenceKind: req.EvidenceKind, Required: req.Required,
 			MinimumMedia: req.MinimumMedia, MaximumMedia: req.MaximumMedia,
-			DescriptionRequired:  req.DescriptionRequired,
+			// Descriptions are optional in the capture experience. Keep the
+			// GraphQL field for compatibility with older clients, but do not
+			// advertise a legacy requirement as mandatory in the bootstrap.
+			DescriptionRequired:  false,
 			CaptureSourcePolicy:  req.CaptureSourcePolicy,
 			ComparisonTarget:     req.ComparisonTarget,
 			ImpossibilityAllowed: req.ImpossibilityAllowed,

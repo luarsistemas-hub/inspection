@@ -49,8 +49,24 @@ func (c *clientStub) Head(context.Context, string, string) (Head, error)        
 func (c *clientStub) Get(context.Context, string, string) (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(c.body)), c.err
 }
-func (c *clientStub) Put(context.Context, string, string, io.Reader, int64, string) error {
+func (c *clientStub) Put(_ context.Context, _, key string, body io.Reader, _ int64, contentType string) error {
+	c.key, c.content = key, contentType
+	c.body, _ = io.ReadAll(body)
 	return c.err
+}
+
+func TestPutOriginalValidatesImageBeforePrivateStorage(t *testing.T) {
+	client := &clientStub{}
+	store := Store{Bucket: "private", Client: client}
+	body := validJPEG(t)
+	key, hash, err := store.PutOriginal(context.Background(), identity.NewID(), identity.NewID(), "image/jpeg", body)
+	if err != nil || !strings.Contains(key, "/original/") || hash == "" || !bytes.Equal(client.body, body) {
+		t.Fatalf("original was not stored: %q %q %v", key, hash, err)
+	}
+	client.body = nil
+	if _, _, err := store.PutOriginal(context.Background(), identity.NewID(), identity.NewID(), "image/png", body); !errors.Is(err, ErrInvalid) || client.body != nil {
+		t.Fatalf("mismatched image type reached storage: %v", err)
+	}
 }
 func TestUT007ExactMultipartMapping(t *testing.T) {
 	client := &clientStub{}
