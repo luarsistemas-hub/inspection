@@ -314,15 +314,20 @@ type CustomerEvidenceConnection struct {
 }
 
 type CustomerEvidenceItem struct {
-	ID                string  `json:"id"`
-	RequirementKey    string  `json:"requirementKey"`
-	Description       *string `json:"description,omitempty"`
-	CaptureSource     *string `json:"captureSource,omitempty"`
-	State             string  `json:"state"`
-	LineageID         string  `json:"lineageId"`
-	ReplacedBy        *string `json:"replacedBy,omitempty"`
-	MediaAvailability string  `json:"mediaAvailability"`
-	URL               *string `json:"url,omitempty"`
+	ID                string   `json:"id"`
+	RequirementKey    string   `json:"requirementKey"`
+	Section           *string  `json:"section,omitempty"`
+	Label             *string  `json:"label,omitempty"`
+	Role              string   `json:"role"`
+	Description       *string  `json:"description,omitempty"`
+	CaptureSource     *string  `json:"captureSource,omitempty"`
+	CapturedAt        *string  `json:"capturedAt,omitempty"`
+	State             string   `json:"state"`
+	LineageID         string   `json:"lineageId"`
+	ReplacedBy        *string  `json:"replacedBy,omitempty"`
+	MediaAvailability string   `json:"mediaAvailability"`
+	Flags             []string `json:"flags"`
+	URL               *string  `json:"url,omitempty"`
 }
 
 type CustomerPortfolioConnection struct {
@@ -346,13 +351,15 @@ type CustomerPortfolioItem struct {
 }
 
 type CustomerReport struct {
-	InspectionID   string `json:"inspectionId"`
-	SnapshotID     string `json:"snapshotId"`
-	Version        int    `json:"version"`
-	Classification string `json:"classification"`
-	Advisory       string `json:"advisory"`
-	Status         string `json:"status"`
-	Historical     bool   `json:"historical"`
+	InspectionID   string               `json:"inspectionId"`
+	SnapshotID     string               `json:"snapshotId"`
+	Version        int                  `json:"version"`
+	Classification string               `json:"classification"`
+	Advisory       string               `json:"advisory"`
+	Status         string               `json:"status"`
+	Historical     bool                 `json:"historical"`
+	Context        *ReportContext       `json:"context"`
+	Requirements   []*ReportRequirement `json:"requirements"`
 }
 
 type CustomerTimelineConnection struct {
@@ -953,17 +960,38 @@ type ReopenProjectInput struct {
 }
 
 type Report struct {
-	ID             string         `json:"id"`
-	InspectionID   string         `json:"inspectionId"`
-	ProjectID      *string        `json:"projectId,omitempty"`
-	Version        int            `json:"version"`
-	Mode           string         `json:"mode"`
-	Classification string         `json:"classification"`
-	JSONDigest     string         `json:"jsonDigest"`
-	HTMLDigest     string         `json:"htmlDigest"`
-	CanonicalJSON  map[string]any `json:"canonicalJSON"`
-	HTML           string         `json:"html"`
-	CreatedAt      string         `json:"createdAt"`
+	ID             string                 `json:"id"`
+	InspectionID   string                 `json:"inspectionId"`
+	ProjectID      *string                `json:"projectId,omitempty"`
+	Version        int                    `json:"version"`
+	Mode           string                 `json:"mode"`
+	Classification string                 `json:"classification"`
+	JSONDigest     string                 `json:"jsonDigest"`
+	HTMLDigest     string                 `json:"htmlDigest"`
+	CanonicalJSON  map[string]any         `json:"canonicalJSON"`
+	HTML           string                 `json:"html"`
+	CreatedAt      string                 `json:"createdAt"`
+	Advisory       string                 `json:"advisory"`
+	Context        *ReportContext         `json:"context"`
+	Requirements   []*ReportRequirement   `json:"requirements"`
+	Evidence       []*ReportEvidence      `json:"evidence"`
+	Findings       []*ReportFinding       `json:"findings"`
+	Timeline       []*ReportTimelineEntry `json:"timeline"`
+	PDFStatus      string                 `json:"pdfStatus"`
+}
+
+type ReportAssetContext struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ExternalKey string `json:"externalKey"`
+	Address     string `json:"address"`
+}
+
+type ReportContext struct {
+	Asset       *ReportAssetContext       `json:"asset"`
+	Participant *ReportParticipantContext `json:"participant"`
+	Template    *ReportTemplateContext    `json:"template"`
+	Inspection  *ReportInspectionContext  `json:"inspection"`
 }
 
 type ReportDownload struct {
@@ -973,6 +1001,44 @@ type ReportDownload struct {
 	URL        string  `json:"url"`
 	Status     string  `json:"status"`
 	Sha256     *string `json:"sha256,omitempty"`
+}
+
+type ReportEvidence struct {
+	ID             string   `json:"id"`
+	RequirementKey string   `json:"requirementKey"`
+	Role           string   `json:"role"`
+	Description    *string  `json:"description,omitempty"`
+	CaptureSource  *string  `json:"captureSource,omitempty"`
+	CapturedAt     *string  `json:"capturedAt,omitempty"`
+	DisplayDigest  *string  `json:"displayDigest,omitempty"`
+	Availability   string   `json:"availability"`
+	Flags          []string `json:"flags"`
+	URL            *string  `json:"url,omitempty"`
+}
+
+type ReportFinding struct {
+	ID                *string  `json:"id,omitempty"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	Severity          string   `json:"severity"`
+	Confidence        float64  `json:"confidence"`
+	Quality           string   `json:"quality"`
+	RecommendedAction string   `json:"recommendedAction"`
+	EvidenceIds       []string `json:"evidenceIds"`
+}
+
+type ReportInspectionContext struct {
+	ProjectID   *string `json:"projectId,omitempty"`
+	StageID     *string `json:"stageId,omitempty"`
+	StageLabel  *string `json:"stageLabel,omitempty"`
+	DueAt       *string `json:"dueAt,omitempty"`
+	SubmittedAt *string `json:"submittedAt,omitempty"`
+	GeneratedAt string  `json:"generatedAt"`
+}
+
+type ReportParticipantContext struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type ReportPublication struct {
@@ -989,6 +1055,28 @@ type ReportPublicationPayload struct {
 	Publication      *ReportPublication `json:"publication,omitempty"`
 	UserErrors       []*UserError       `json:"userErrors"`
 	ClientMutationID string             `json:"clientMutationId"`
+}
+
+type ReportRequirement struct {
+	Key                 string  `json:"key"`
+	Section             string  `json:"section"`
+	Label               string  `json:"label"`
+	Instructions        *string `json:"instructions,omitempty"`
+	Coverage            *string `json:"coverage,omitempty"`
+	ImpossibilityReason *string `json:"impossibilityReason,omitempty"`
+}
+
+type ReportTemplateContext struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version int    `json:"version"`
+}
+
+type ReportTimelineEntry struct {
+	StageID        string  `json:"stageId"`
+	Classification *string `json:"classification,omitempty"`
+	Status         string  `json:"status"`
+	Position       int     `json:"position"`
 }
 
 type RequestAdminActivationOtpInput struct {

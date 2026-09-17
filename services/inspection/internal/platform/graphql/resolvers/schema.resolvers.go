@@ -1960,6 +1960,9 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	if !ok {
 		return nil, unauthenticated()
 	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
 	id, err := identity.ParseID(inspectionID)
 	if err != nil {
 		return nil, invalidID("inspectionId")
@@ -1974,7 +1977,19 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	}); err != nil {
 		return nil, err
 	}
-	return mapReport(row), nil
+	view := mapReport(row)
+	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
+		return nil, err
+	}
+	var artifact database.ReportArtifact
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("snapshot_id=? AND kind='PDF'", row.ID).First(&artifact).Error
+	}); err == nil {
+		view.PDFStatus = artifact.Status
+	} else if err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return view, nil
 }
 
 // ReportDownload is the resolver for the reportDownload field.
@@ -1991,8 +2006,20 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	if kind != nil && *kind != "" {
 		value = *kind
 	}
+	isCustomer := hasRole(meta, auth.CustomerViewer)
+	if isCustomer {
+		value = "PDF_CUSTOMER"
+	} else if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
 	var row database.ReportArtifact
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		if isCustomer {
+			var publication database.ReportPublication
+			if err := tx.Where("tenant_id=? AND snapshot_id=? AND status='PUBLISHED'", meta.TenantID, id).First(&publication).Error; err != nil {
+				return err
+			}
+		}
 		return tx.Where("snapshot_id=? AND kind=?", id, value).First(&row).Error
 	}); err != nil {
 		return nil, err
@@ -2003,7 +2030,7 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 			url = signed
 		}
 	}
-	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: row.Kind, ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
+	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: "PDF", ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
 }
 
 // DashboardSummary is the resolver for the dashboardSummary field.
@@ -2260,7 +2287,15 @@ func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string,
 	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, version)
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	view := mapReport(row)
+	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, Advisory: view.Advisory, Status: "PUBLISHED", Historical: false, Context: view.Context, Requirements: view.Requirements}, nil
 }
 
 // CustomerEvidence is the resolver for the customerEvidence field.
@@ -2272,7 +2307,62 @@ func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID strin
 	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
-	return &graphql1.CustomerEvidenceConnection{Nodes: []*graphql1.CustomerEvidenceItem{}, PageInfo: pageInfo("", false)}, nil
+	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, nil)
+	if err == gorm.ErrRecordNotFound {
+		return &graphql1.CustomerEvidenceConnection{Nodes: []*graphql1.CustomerEvidenceItem{}, PageInfo: pageInfo("", false)}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	view := mapReport(row)
+	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
+		return nil, err
+	}
+	labels := make(map[string]*graphql1.ReportRequirement, len(view.Requirements))
+	for _, requirement := range view.Requirements {
+		labels[requirement.Key] = requirement
+	}
+	limit := intValue(first)
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	start := stringValue(after)
+	nodes := make([]*graphql1.CustomerEvidenceItem, 0, limit)
+	for _, item := range view.Evidence {
+		if start != "" && item.ID <= start {
+			continue
+		}
+		if len(nodes) == limit {
+			break
+		}
+		var section, label *string
+		if requirement := labels[item.RequirementKey]; requirement != nil {
+			section, label = optional(requirement.Section), optional(requirement.Label)
+		}
+		nodes = append(nodes, &graphql1.CustomerEvidenceItem{ID: item.ID, RequirementKey: item.RequirementKey, Section: section, Label: label, Role: item.Role, Description: item.Description, CaptureSource: item.CaptureSource, CapturedAt: item.CapturedAt, State: "CURRENT", LineageID: item.ID, MediaAvailability: item.Availability, Flags: item.Flags, URL: item.URL})
+	}
+	hasNext := len(view.Evidence) > len(nodes)
+	end := ""
+	if len(nodes) > 0 {
+		end = nodes[len(nodes)-1].ID
+	}
+	return &graphql1.CustomerEvidenceConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
+}
+
+func (r *queryResolver) publishedSnapshot(ctx context.Context, tenantID identity.ID, inspectionID string, version *int) (database.ReportSnapshot, error) {
+	id, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return database.ReportSnapshot{}, invalidID("inspectionId")
+	}
+	var row database.ReportSnapshot
+	err = withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
+		query := tx.Joins("JOIN reports.report_publications p ON p.snapshot_id=reports.report_snapshots.id AND p.tenant_id=reports.report_snapshots.tenant_id").Where("reports.report_snapshots.inspection_id=? AND p.status='PUBLISHED'", id).Order("reports.report_snapshots.version_number DESC")
+		if version != nil {
+			query = query.Where("reports.report_snapshots.version_number=?", *version)
+		}
+		return query.First(&row).Error
+	})
+	return row, err
 }
 
 // MyNotifications is the resolver for the myNotifications field.

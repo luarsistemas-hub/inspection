@@ -182,7 +182,16 @@ type MediaUpload { mediaId: ID! uploadId: String! expiresAt: String! partSizeByt
 type PresignedPart { partNumber: Int! url: String! expiresAt: String! }
 type Submission { id: ID! complete: Boolean! requiresAttention: Boolean! submittedAt: String! }
 type Recapture { id: ID! responsibilityId: ID! status: String! deadlineAt: String }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! }
+type ReportAssetContext { id: ID! name: String! externalKey: String! address: String! }
+type ReportParticipantContext { id: ID! name: String! }
+type ReportTemplateContext { id: ID! name: String! version: Int! }
+type ReportInspectionContext { projectId: ID stageId: ID stageLabel: String dueAt: String submittedAt: String generatedAt: String! }
+type ReportContext { asset: ReportAssetContext! participant: ReportParticipantContext! template: ReportTemplateContext! inspection: ReportInspectionContext! }
+type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String }
+type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! flags: [String!]! url: String }
+type ReportFinding { id: ID title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
+type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
@@ -191,9 +200,9 @@ type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification:
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
-type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! }
 enum EvidenceMode { SIMPLE ADVANCED }
-type CustomerEvidenceItem { id: ID! requirementKey: String! description: String captureSource: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! url: String }
+type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
 type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String }
 type RecipientNotificationConnection { nodes: [RecipientNotification!]! pageInfo: PageInfo! unreadCount: Int! }

@@ -50,6 +50,15 @@ func internalRole(meta requestctx.Metadata, allowed ...string) error {
 	return apperror.New(apperror.Forbidden, "", "access denied")
 }
 
+func hasRole(meta requestctx.Metadata, wanted string) bool {
+	for _, role := range meta.Principal.Roles {
+		if role == wanted {
+			return true
+		}
+	}
+	return false
+}
+
 func intValue(value *int) int {
 	if value == nil {
 		return 0

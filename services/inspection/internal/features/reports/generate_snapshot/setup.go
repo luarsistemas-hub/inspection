@@ -24,6 +24,8 @@ type Input struct {
 	ReasonCodes                                             []string
 	Timeline                                                []report.TimelineEntry
 	Coverage                                                map[string]string
+	Context                                                 report.Context
+	Requirements                                            []report.Requirement
 	Findings                                                []report.Finding
 	Evidence                                                []report.Evidence
 	PublicationPolicyVersion                                int64
@@ -71,7 +73,7 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 	if latest.ID != (identity.ID{}) {
 		reportID = latest.ID.String()
 	}
-	snapshot := report.Snapshot{SchemaVersion: 1, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, ProfileVersionID: input.ProfileVersionID, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Findings: input.Findings, Evidence: input.Evidence, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
+	snapshot := report.Snapshot{SchemaVersion: 1, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, ProfileVersionID: input.ProfileVersionID, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Context: input.Context, Requirements: input.Requirements, Findings: input.Findings, Evidence: input.Evidence, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
 	if input.ProjectID != nil {
 		snapshot.ProjectID = input.ProjectID.String()
 	}

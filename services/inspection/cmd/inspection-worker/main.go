@@ -32,6 +32,7 @@ import (
 	renderpdf "inspection/services/inspection/internal/features/reports/render_pdf"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	purgedata "inspection/services/inspection/internal/features/retention/purge_data"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/config"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
@@ -288,7 +289,7 @@ func run() error {
 				for _, row := range rows {
 					var evidenceIDs []string
 					_ = json.Unmarshal(row.Evidence, &evidenceIDs)
-					findings = append(findings, reportcore.Finding{Category: row.Category, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
+					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
 				}
 			} else if err != gorm.ErrRecordNotFound {
 				return err
@@ -305,11 +306,21 @@ func run() error {
 			var flags []string
 			_ = json.Unmarshal(answer.Flags, &flags)
 			for _, mediaID := range mediaIDs {
-				item := reportcore.Evidence{ID: mediaID.String(), RequirementKey: job.RequirementKey, Flags: append([]string(nil), flags...)}
+				item := reportcore.Evidence{ID: mediaID.String(), RequirementKey: job.RequirementKey, Role: "CURRENT", Flags: append([]string(nil), flags...)}
 				var media database.MediaObject
 				if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, mediaID).First(&media).Error; err == nil {
 					item.Description = media.Description
 					item.CaptureSource = media.CaptureSource
+					if media.CapturedAt != nil {
+						item.CapturedAt = media.CapturedAt.UTC().Format(time.RFC3339Nano)
+					}
+					item.Availability = "MISSING"
+					var derivative database.MediaDerivative
+					if err := tx.Where("tenant_id=? AND media_id=? AND kind=?", envelope.TenantID, mediaID, "DISPLAY").First(&derivative).Error; err == nil {
+						item.DisplayDigest, item.Availability = derivative.SHA256, "AVAILABLE"
+					} else if err != gorm.ErrRecordNotFound {
+						return err
+					}
 					var mediaFlags []string
 					if json.Unmarshal(media.Flags, &mediaFlags) == nil && len(mediaFlags) > 0 {
 						item.Flags = append(item.Flags, mediaFlags...)
@@ -320,7 +331,12 @@ func run() error {
 				evidence = append(evidence, item)
 			}
 		}
-		result, err := createReport(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, ProfileVersionID: inspection.AnalysisProfileVersionID.String(), ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Findings: findings, Evidence: evidence})
+		context, requirements, referenceEvidence, err := reportSnapshotContext(ctx, tx, envelope.TenantID, inspection, reference, envelope.OccurredAt)
+		if err != nil {
+			return err
+		}
+		evidence = append(referenceEvidence, evidence...)
+		result, err := createReport(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, ProfileVersionID: inspection.AnalysisProfileVersionID.String(), ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence})
 		if err != nil {
 			return err
 		}
@@ -571,4 +587,96 @@ func mustCurrentImages(evidence []comparative.Evidence) []llm.NormalizedImage {
 		images = append(images, llm.NormalizedImage{EvidenceID: item.ID.String(), Source: item.Source, Digest: item.Digest, DataURL: item.DataURL})
 	}
 	return images
+}
+
+// reportSnapshotContext freezes the human-readable context and reference
+// evidence needed to understand a report after operational records evolve.
+func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, reference database.ReferenceSnapshot, generatedAt time.Time) (reportcore.Context, []reportcore.Requirement, []reportcore.Evidence, error) {
+	var asset database.Asset
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, inspection.AssetID).First(&asset).Error; err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+	var participant database.Participant
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, inspection.ParticipantID).First(&participant).Error; err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+	var templateRow database.Template
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, inspection.TemplateID).First(&templateRow).Error; err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+	var version database.TemplateVersion
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, inspection.TemplateVersionID).First(&version).Error; err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+
+	context := reportcore.Context{Asset: reportcore.AssetContext{ID: asset.ID.String(), Name: asset.Name, ExternalKey: asset.ExternalKey, Address: asset.Address}, Participant: reportcore.ParticipantContext{ID: participant.ID.String(), Name: participant.Name}, Template: reportcore.TemplateContext{ID: templateRow.ID.String(), Name: templateRow.Name, Version: version.VersionNumber}, Inspection: reportcore.InspectionContext{DueAt: inspection.DueAt.UTC().Format(time.RFC3339Nano), GeneratedAt: generatedAt.UTC().Format(time.RFC3339Nano)}}
+	if inspection.ProjectID != nil {
+		context.Inspection.ProjectID = inspection.ProjectID.String()
+	}
+	if inspection.StageID != nil {
+		context.Inspection.StageID = inspection.StageID.String()
+		var stage database.ProjectStage
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, *inspection.StageID).First(&stage).Error; err == nil {
+			context.Inspection.StageLabel = stage.Label
+		} else if err != gorm.ErrRecordNotFound {
+			return reportcore.Context{}, nil, nil, err
+		}
+	}
+	var submission database.SubmissionVersion
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspection.ID).Order("submitted_at DESC").First(&submission).Error; err == nil {
+		context.Inspection.SubmittedAt = submission.SubmittedAt.UTC().Format(time.RFC3339Nano)
+	} else if err != gorm.ErrRecordNotFound {
+		return reportcore.Context{}, nil, nil, err
+	}
+
+	var document catalog.TemplateDocument
+	if err := json.Unmarshal(version.DefinitionJSON, &document); err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+	requirements := make([]reportcore.Requirement, 0, len(document.Requirements))
+	for _, value := range document.Requirements {
+		requirements = append(requirements, reportcore.Requirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: value.Instructions})
+	}
+
+	var payload struct {
+		Items []struct {
+			MediaID     identity.ID `json:"mediaId"`
+			Category    string      `json:"category"`
+			Description string      `json:"description"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(reference.Payload, &payload); err != nil {
+		return reportcore.Context{}, nil, nil, err
+	}
+	evidence := make([]reportcore.Evidence, 0, len(payload.Items))
+	for _, item := range payload.Items {
+		if item.MediaID == (identity.ID{}) {
+			continue
+		}
+		var media database.MediaObject
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, item.MediaID).First(&media).Error; err == gorm.ErrRecordNotFound {
+			evidence = append(evidence, reportcore.Evidence{ID: item.MediaID.String(), RequirementKey: item.Category, Role: "REFERENCE", Description: item.Description, Availability: "MISSING"})
+			continue
+		} else if err != nil {
+			return reportcore.Context{}, nil, nil, err
+		}
+		value := reportcore.Evidence{ID: media.ID.String(), RequirementKey: item.Category, Role: "REFERENCE", Description: item.Description, CaptureSource: media.CaptureSource, Availability: "MISSING"}
+		if value.Description == "" {
+			value.Description = media.Description
+		}
+		if media.CapturedAt != nil {
+			value.CapturedAt = media.CapturedAt.UTC().Format(time.RFC3339Nano)
+		}
+		var derivative database.MediaDerivative
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=? AND kind=?", tenantID, media.ID, "DISPLAY").First(&derivative).Error; err == nil {
+			value.DisplayDigest, value.Availability = derivative.SHA256, "AVAILABLE"
+		} else if err != gorm.ErrRecordNotFound {
+			return reportcore.Context{}, nil, nil, err
+		}
+		var flags []string
+		_ = json.Unmarshal(media.Flags, &flags)
+		value.Flags = flags
+		evidence = append(evidence, value)
+	}
+	return context, requirements, evidence, nil
 }

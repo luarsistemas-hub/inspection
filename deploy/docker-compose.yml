@@ -348,6 +348,7 @@ services:
         NEXT_PUBLIC_OIDC_TOKEN_URL: ${NEXT_PUBLIC_OIDC_TOKEN_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/token}
         NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
         NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:3000}
+        NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
     depends_on:
       inspection-api:
         condition: service_started
@@ -361,6 +362,7 @@ services:
       NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
       NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
       NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:-http://localhost:3000}
+      NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/inspections"]
       interval: 10s

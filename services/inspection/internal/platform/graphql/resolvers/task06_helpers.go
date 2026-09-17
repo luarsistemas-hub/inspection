@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	reportcore "inspection/services/inspection/internal/features/reports/core"
 	"inspection/services/inspection/internal/platform/database"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
+	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
@@ -26,7 +28,70 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 		value := row.ProjectID.String()
 		projectID = &value
 	}
-	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")}
+	var snapshot reportcore.Snapshot
+	_ = json.Unmarshal(row.CanonicalJSON, &snapshot)
+	context := &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{ID: snapshot.Context.Asset.ID, Name: snapshot.Context.Asset.Name, ExternalKey: snapshot.Context.Asset.ExternalKey, Address: snapshot.Context.Asset.Address}, Participant: &graphql1.ReportParticipantContext{ID: snapshot.Context.Participant.ID, Name: snapshot.Context.Participant.Name}, Template: &graphql1.ReportTemplateContext{ID: snapshot.Context.Template.ID, Name: snapshot.Context.Template.Name, Version: snapshot.Context.Template.Version}, Inspection: &graphql1.ReportInspectionContext{ProjectID: optional(snapshot.Context.Inspection.ProjectID), StageID: optional(snapshot.Context.Inspection.StageID), StageLabel: optional(snapshot.Context.Inspection.StageLabel), DueAt: optional(snapshot.Context.Inspection.DueAt), SubmittedAt: optional(snapshot.Context.Inspection.SubmittedAt), GeneratedAt: snapshot.Context.Inspection.GeneratedAt}}
+	requirements := make([]*graphql1.ReportRequirement, 0, len(snapshot.Requirements))
+	for _, value := range snapshot.Requirements {
+		requirements = append(requirements, &graphql1.ReportRequirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: optional(value.Instructions), Coverage: optional(value.Coverage), ImpossibilityReason: optional(value.ImpossibilityReason)})
+	}
+	evidence := make([]*graphql1.ReportEvidence, 0, len(snapshot.Evidence))
+	for _, value := range snapshot.Evidence {
+		evidence = append(evidence, &graphql1.ReportEvidence{ID: value.ID, RequirementKey: value.RequirementKey, Role: value.Role, Description: optional(value.Description), CaptureSource: optional(value.CaptureSource), CapturedAt: optional(value.CapturedAt), DisplayDigest: optional(value.DisplayDigest), Availability: reportAvailability(value.Availability), Flags: value.Flags})
+	}
+	findings := make([]*graphql1.ReportFinding, 0, len(snapshot.Findings))
+	for _, value := range snapshot.Findings {
+		findings = append(findings, &graphql1.ReportFinding{ID: optional(value.ID), Title: value.Title, Description: value.Description, Severity: value.Severity, Confidence: value.Confidence, Quality: value.Quality, RecommendedAction: value.RecommendedAction, EvidenceIds: value.EvidenceIDs})
+	}
+	timeline := make([]*graphql1.ReportTimelineEntry, 0, len(snapshot.Timeline))
+	for _, value := range snapshot.Timeline {
+		timeline = append(timeline, &graphql1.ReportTimelineEntry{StageID: value.StageID, Classification: optional(value.Classification), Status: value.Status, Position: value.Position})
+	}
+	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Evidence: evidence, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+}
+
+func optional(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+func reportAvailability(value string) string {
+	if value == "" {
+		return "AVAILABLE"
+	}
+	return value
+}
+
+func hydrateReportMedia(ctx context.Context, db *gorm.DB, store objectstore.Store, tenantID identity.ID, report *graphql1.Report) error {
+	return withTask06Tenant(ctx, db, tenantID, func(tx *gorm.DB) error {
+		for _, evidence := range report.Evidence {
+			if evidence.Availability != "AVAILABLE" {
+				continue
+			}
+			mediaID, err := identity.ParseID(evidence.ID)
+			if err != nil {
+				evidence.Availability = "MISSING"
+				continue
+			}
+			var derivative database.MediaDerivative
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=? AND kind=?", tenantID, mediaID, "DISPLAY").First(&derivative).Error; err == gorm.ErrRecordNotFound {
+				evidence.Availability = "MISSING"
+				continue
+			} else if err != nil {
+				return err
+			}
+			if store.Client == nil {
+				continue
+			}
+			url, err := store.PresignGet(ctx, derivative.ObjectKey, 5*time.Minute)
+			if err != nil {
+				return err
+			}
+			evidence.URL = &url
+		}
+		return nil
+	})
 }
 
 func mapRetentionPolicy(row database.RetentionPolicy) *graphql1.RetentionPolicy {
