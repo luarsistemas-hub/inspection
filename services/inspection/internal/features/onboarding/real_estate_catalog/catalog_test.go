@@ -10,7 +10,7 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != 1 || got.Version != 2 || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
+	if got.SchemaVersion != 1 || got.Version != 3 || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
 	if got.OriginModes[0].TemplateKey != ChecklistTemplateKey || got.OriginModes[1].TemplateKey != OriginTemplateKey {
@@ -28,7 +28,7 @@ func TestDefinitionChoicesKeepInternalValuesAndPortugueseLabels(t *testing.T) {
 	}{
 		{"property", "propertyType", "APARTMENT", "Apartamento"},
 		{"property", "purpose", "RENTAL", "Locação"},
-		{"origin", "mode", "CHECKLIST_ONLY", "Primeira vistoria do imóvel"},
+		{"origin", "mode", "CHECKLIST_ONLY", "Registrar estado inicial"},
 		{"participant", "mode", "SELF", "Eu farei a vistoria"},
 	}
 	for _, check := range checks {

@@ -386,6 +386,7 @@ type ComplexityRoot struct {
 		InviteOriginCapture                    func(childComplexity int, input InviteOriginCaptureInput) int
 		MarkNotificationRead                   func(childComplexity int, input MarkNotificationReadInput) int
 		PresignMediaParts                      func(childComplexity int, input PresignMediaPartsInput) int
+		PromoteInspectionPhotos                func(childComplexity int, input PromoteInspectionPhotosInput) int
 		PublishAnalysisProfile                 func(childComplexity int, input PublishAnalysisProfileInput) int
 		PublishReport                          func(childComplexity int, input PublishReportInput) int
 		PublishSegmentDefinition               func(childComplexity int, input PublishSegmentDefinitionInput) int
@@ -556,6 +557,26 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	OriginPromotion struct {
+		EligibleMedia   func(childComplexity int) int
+		FailureReason   func(childComplexity int) int
+		InspectionID    func(childComplexity int) int
+		OriginVersionID func(childComplexity int) int
+		Status          func(childComplexity int) int
+	}
+
+	OriginPromotionMedia struct {
+		Description func(childComplexity int) int
+		ID          func(childComplexity int) int
+		URL         func(childComplexity int) int
+	}
+
+	OriginPromotionPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Promotion        func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	OriginVersion struct {
 		ActivatedAt   func(childComplexity int) int
 		ID            func(childComplexity int) int
@@ -710,6 +731,7 @@ type ComplexityRoot struct {
 		NotificationDeliveries func(childComplexity int, first *int, after *string) int
 		OnboardingDefinition   func(childComplexity int, segment string) int
 		OnboardingSession      func(childComplexity int) int
+		OriginPromotion        func(childComplexity int, inspectionID string) int
 		OriginVersions         func(childComplexity int, assetID string, first *int, after *string) int
 		Participant            func(childComplexity int, id string) int
 		Participants           func(childComplexity int, search *string, first *int, after *string) int
@@ -1115,6 +1137,7 @@ type MutationResolver interface {
 	InviteOriginCapture(ctx context.Context, input InviteOriginCaptureInput) (*OriginInvitationPayload, error)
 	ActivateOriginVersion(ctx context.Context, input OriginVersionInput) (*OriginVersionPayload, error)
 	InvalidateOriginVersion(ctx context.Context, input OriginVersionInput) (*OriginVersionPayload, error)
+	PromoteInspectionPhotos(ctx context.Context, input PromoteInspectionPhotosInput) (*OriginPromotionPayload, error)
 	CreateSchedule(ctx context.Context, input CreateScheduleInput) (*SchedulePayload, error)
 	UpdateSchedule(ctx context.Context, input UpdateScheduleInput) (*SchedulePayload, error)
 	CancelSchedule(ctx context.Context, input CancelScheduleInput) (*SchedulePayload, error)
@@ -1163,6 +1186,7 @@ type QueryResolver interface {
 	Assets(ctx context.Context, businessUnitID *string, search *string, first *int, after *string) (*AssetConnection, error)
 	Asset(ctx context.Context, id string) (*Asset, error)
 	OriginVersions(ctx context.Context, assetID string, first *int, after *string) (*OriginVersionConnection, error)
+	OriginPromotion(ctx context.Context, inspectionID string) (*OriginPromotion, error)
 	Schedules(ctx context.Context, first *int, after *string) (*ScheduleConnection, error)
 	Projects(ctx context.Context, first *int, after *string) (*ProjectConnection, error)
 	Project(ctx context.Context, id string) (*Project, error)
@@ -2822,6 +2846,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PresignMediaParts(childComplexity, args["input"].(PresignMediaPartsInput)), true
+	case "Mutation.promoteInspectionPhotos":
+		if e.ComplexityRoot.Mutation.PromoteInspectionPhotos == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_promoteInspectionPhotos_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PromoteInspectionPhotos(childComplexity, args["input"].(PromoteInspectionPhotosInput)), true
 	case "Mutation.publishAnalysisProfile":
 		if e.ComplexityRoot.Mutation.PublishAnalysisProfile == nil {
 			break
@@ -3709,6 +3744,75 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OriginInvitationPayload.UserErrors(childComplexity), true
 
+	case "OriginPromotion.eligibleMedia":
+		if e.ComplexityRoot.OriginPromotion.EligibleMedia == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotion.EligibleMedia(childComplexity), true
+	case "OriginPromotion.failureReason":
+		if e.ComplexityRoot.OriginPromotion.FailureReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotion.FailureReason(childComplexity), true
+	case "OriginPromotion.inspectionId":
+		if e.ComplexityRoot.OriginPromotion.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotion.InspectionID(childComplexity), true
+	case "OriginPromotion.originVersionId":
+		if e.ComplexityRoot.OriginPromotion.OriginVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotion.OriginVersionID(childComplexity), true
+	case "OriginPromotion.status":
+		if e.ComplexityRoot.OriginPromotion.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotion.Status(childComplexity), true
+
+	case "OriginPromotionMedia.description":
+		if e.ComplexityRoot.OriginPromotionMedia.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionMedia.Description(childComplexity), true
+	case "OriginPromotionMedia.id":
+		if e.ComplexityRoot.OriginPromotionMedia.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionMedia.ID(childComplexity), true
+	case "OriginPromotionMedia.url":
+		if e.ComplexityRoot.OriginPromotionMedia.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionMedia.URL(childComplexity), true
+
+	case "OriginPromotionPayload.clientMutationId":
+		if e.ComplexityRoot.OriginPromotionPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionPayload.ClientMutationID(childComplexity), true
+	case "OriginPromotionPayload.promotion":
+		if e.ComplexityRoot.OriginPromotionPayload.Promotion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionPayload.Promotion(childComplexity), true
+	case "OriginPromotionPayload.userErrors":
+		if e.ComplexityRoot.OriginPromotionPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginPromotionPayload.UserErrors(childComplexity), true
+
 	case "OriginVersion.activatedAt":
 		if e.ComplexityRoot.OriginVersion.ActivatedAt == nil {
 			break
@@ -4380,6 +4484,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OnboardingSession(childComplexity), true
+	case "Query.originPromotion":
+		if e.ComplexityRoot.Query.OriginPromotion == nil {
+			break
+		}
+
+		args, err := ec.field_Query_originPromotion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.OriginPromotion(childComplexity, args["inspectionId"].(string)), true
 	case "Query.originVersions":
 		if e.ComplexityRoot.Query.OriginVersions == nil {
 			break
@@ -5956,6 +6071,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputOriginVersionInput,
 		ec.unmarshalInputPresignMediaPartsInput,
 		ec.unmarshalInputProjectTransitionInput,
+		ec.unmarshalInputPromoteInspectionPhotosInput,
 		ec.unmarshalInputPublishAnalysisProfileInput,
 		ec.unmarshalInputPublishReportInput,
 		ec.unmarshalInputPublishSegmentDefinitionInput,
@@ -6080,6 +6196,7 @@ type Query {
   assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
   asset(id: ID!): Asset
   originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
+  originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
@@ -6155,6 +6272,7 @@ type Mutation {
   inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
+  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
   createSchedule(input: CreateScheduleInput!): SchedulePayload!
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
   cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
@@ -6217,6 +6335,8 @@ type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
 type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
+type OriginPromotionMedia { id: ID! description: String! url: String }
+type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisProfileVersionId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
@@ -6333,6 +6453,7 @@ input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutation
 input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
 input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
+input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
 input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
@@ -6381,6 +6502,7 @@ type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: Stri
 type InvitationPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginInvitationPayload { invitationId: ID originVersionId: ID status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! clientMutationId: String! }
+type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
@@ -7308,6 +7430,46 @@ func (ec *executionContext) childFields_OriginInvitationPayload(ctx context.Cont
 		return ec.fieldContext_OriginInvitationPayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OriginInvitationPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_OriginPromotion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_OriginPromotion_inspectionId(ctx, field)
+	case "status":
+		return ec.fieldContext_OriginPromotion_status(ctx, field)
+	case "failureReason":
+		return ec.fieldContext_OriginPromotion_failureReason(ctx, field)
+	case "originVersionId":
+		return ec.fieldContext_OriginPromotion_originVersionId(ctx, field)
+	case "eligibleMedia":
+		return ec.fieldContext_OriginPromotion_eligibleMedia(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OriginPromotion", field.Name)
+}
+
+func (ec *executionContext) childFields_OriginPromotionMedia(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_OriginPromotionMedia_id(ctx, field)
+	case "description":
+		return ec.fieldContext_OriginPromotionMedia_description(ctx, field)
+	case "url":
+		return ec.fieldContext_OriginPromotionMedia_url(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OriginPromotionMedia", field.Name)
+}
+
+func (ec *executionContext) childFields_OriginPromotionPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "promotion":
+		return ec.fieldContext_OriginPromotionPayload_promotion(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_OriginPromotionPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_OriginPromotionPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OriginPromotionPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_OriginVersion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -8854,6 +9016,20 @@ func (ec *executionContext) field_Mutation_presignMediaParts_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_promoteInspectionPhotos_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (PromoteInspectionPhotosInput, error) {
+			return ec.unmarshalNPromoteInspectionPhotosInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionPhotosInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_publishAnalysisProfile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9663,6 +9839,20 @@ func (ec *executionContext) field_Query_onboardingDefinition_args(ctx context.Co
 		return nil, err
 	}
 	args["segment"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_originPromotion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inspectionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["inspectionId"] = arg0
 	return args, nil
 }
 
@@ -16523,6 +16713,50 @@ func (ec *executionContext) fieldContext_Mutation_invalidateOriginVersion(ctx co
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_promoteInspectionPhotos(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_promoteInspectionPhotos(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PromoteInspectionPhotos(ctx, fc.Args["input"].(PromoteInspectionPhotosInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginPromotionPayload) graphql.Marshaler {
+			return ec.marshalNOriginPromotionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_promoteInspectionPhotos(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginPromotionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_promoteInspectionPhotos_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createSchedule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20092,6 +20326,286 @@ func (ec *executionContext) fieldContext_OriginInvitationPayload_clientMutationI
 	return graphql.NewScalarFieldContext("OriginInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _OriginPromotion_inspectionId(ctx context.Context, field graphql.CollectedField, obj *OriginPromotion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotion_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotion_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotion", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotion_status(ctx context.Context, field graphql.CollectedField, obj *OriginPromotion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotion_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotion_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotion_failureReason(ctx context.Context, field graphql.CollectedField, obj *OriginPromotion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotion_failureReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailureReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotion_failureReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotion_originVersionId(ctx context.Context, field graphql.CollectedField, obj *OriginPromotion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotion_originVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotion_originVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotion", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotion_eligibleMedia(ctx context.Context, field graphql.CollectedField, obj *OriginPromotion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotion_eligibleMedia(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EligibleMedia, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*OriginPromotionMedia) graphql.Marshaler {
+			return ec.marshalNOriginPromotionMedia2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionMediaᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotion_eligibleMedia(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginPromotion",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginPromotionMedia(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OriginPromotionMedia_id(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionMedia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionMedia_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionMedia_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotionMedia", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotionMedia_description(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionMedia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionMedia_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionMedia_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotionMedia", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotionMedia_url(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionMedia) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionMedia_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionMedia_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotionMedia", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginPromotionPayload_promotion(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionPayload_promotion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Promotion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginPromotion) graphql.Marshaler {
+			return ec.marshalOOriginPromotion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionPayload_promotion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginPromotionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginPromotion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OriginPromotionPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginPromotionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OriginPromotionPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *OriginPromotionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginPromotionPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginPromotionPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginPromotionPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _OriginVersion_id(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22702,6 +23216,50 @@ func (ec *executionContext) fieldContext_Query_originVersions(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_originVersions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_originPromotion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_originPromotion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().OriginPromotion(ctx, fc.Args["inspectionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginPromotion) graphql.Marshaler {
+			return ec.marshalOOriginPromotion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_originPromotion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginPromotion(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_originPromotion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -32058,6 +32616,57 @@ func (ec *executionContext) unmarshalInputProjectTransitionInput(ctx context.Con
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputPromoteInspectionPhotosInput(ctx context.Context, obj any) (PromoteInspectionPhotosInput, error) {
+	var it PromoteInspectionPhotosInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "mediaIds", "expectedAssetVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "mediaIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mediaIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MediaIds = data
+		case "expectedAssetVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedAssetVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedAssetVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputPublishAnalysisProfileInput(ctx context.Context, obj any) (PublishAnalysisProfileInput, error) {
 	var it PublishAnalysisProfileInput
 	if obj == nil {
@@ -36118,6 +36727,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "promoteInspectionPhotos":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_promoteInspectionPhotos(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createSchedule":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createSchedule(ctx, field)
@@ -37310,6 +37926,160 @@ func (ec *executionContext) _OriginInvitationPayload(ctx context.Context, sel as
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._OriginInvitationPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var originPromotionImplementors = []string{"OriginPromotion"}
+
+func (ec *executionContext) _OriginPromotion(ctx context.Context, sel ast.SelectionSet, obj *OriginPromotion) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, originPromotionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OriginPromotion")
+		case "inspectionId":
+			out.Values[i] = ec._OriginPromotion_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._OriginPromotion_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failureReason":
+			out.Values[i] = ec._OriginPromotion_failureReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "originVersionId":
+			out.Values[i] = ec._OriginPromotion_originVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "eligibleMedia":
+			out.Values[i] = ec._OriginPromotion_eligibleMedia(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var originPromotionMediaImplementors = []string{"OriginPromotionMedia"}
+
+func (ec *executionContext) _OriginPromotionMedia(ctx context.Context, sel ast.SelectionSet, obj *OriginPromotionMedia) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, originPromotionMediaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OriginPromotionMedia")
+		case "id":
+			out.Values[i] = ec._OriginPromotionMedia_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._OriginPromotionMedia_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._OriginPromotionMedia_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var originPromotionPayloadImplementors = []string{"OriginPromotionPayload"}
+
+func (ec *executionContext) _OriginPromotionPayload(ctx context.Context, sel ast.SelectionSet, obj *OriginPromotionPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, originPromotionPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OriginPromotionPayload")
+		case "promotion":
+			out.Values[i] = ec._OriginPromotionPayload_promotion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._OriginPromotionPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._OriginPromotionPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -38690,6 +39460,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_originVersions(ctx, field)
 				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "originPromotion":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_originPromotion(ctx, field)
+				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -43155,6 +43947,42 @@ func (ec *executionContext) marshalNOriginInvitationPayload2ᚖinspectionᚋserv
 	return ec._OriginInvitationPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNOriginPromotionMedia2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionMediaᚄ(ctx context.Context, sel ast.SelectionSet, v []*OriginPromotionMedia) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNOriginPromotionMedia2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionMedia(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOriginPromotionMedia2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionMedia(ctx context.Context, sel ast.SelectionSet, v *OriginPromotionMedia) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OriginPromotionMedia(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOriginPromotionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotionPayload(ctx context.Context, sel ast.SelectionSet, v *OriginPromotionPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OriginPromotionPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNOriginVersion2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionᚄ(ctx context.Context, sel ast.SelectionSet, v []*OriginVersion) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -43449,6 +44277,11 @@ func (ec *executionContext) marshalNProjectTimelineEntry2ᚖinspectionᚋservice
 
 func (ec *executionContext) unmarshalNProjectTransitionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐProjectTransitionInput(ctx context.Context, v any) (ProjectTransitionInput, error) {
 	res, err := ec.unmarshalInputProjectTransitionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNPromoteInspectionPhotosInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionPhotosInput(ctx context.Context, v any) (PromoteInspectionPhotosInput, error) {
+	res, err := ec.unmarshalInputPromoteInspectionPhotosInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -44603,6 +45436,13 @@ func (ec *executionContext) marshalOOnboardingStatus2ᚖinspectionᚋservicesᚋ
 		return graphql.Null
 	}
 	return ec._OnboardingStatus(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOOriginPromotion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginPromotion(ctx context.Context, sel ast.SelectionSet, v *OriginPromotion) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._OriginPromotion(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOOriginVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersion(ctx context.Context, sel ast.SelectionSet, v *OriginVersion) graphql.Marshaler {

@@ -525,6 +525,29 @@ type OriginEvidence struct {
 
 func (OriginEvidence) TableName() string { return "origins.origin_evidence" }
 
+// OriginPromotion is the durable, resumable manifest used to turn completed
+// onboarding evidence into an independently retained origin.
+type OriginPromotion struct {
+	ID                   identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID             identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_origin_promotion_inspection,priority:1;index:idx_origin_promotion_status,priority:1"`
+	InspectionID         identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_origin_promotion_inspection,priority:2"`
+	AssetID              identity.ID     `gorm:"type:uuid;not null;index:idx_origin_promotion_status,priority:2"`
+	TemplateID           identity.ID     `gorm:"type:uuid;not null"`
+	ExpectedAssetVersion int64           `gorm:"not null"`
+	SelectedMediaIDs     json.RawMessage `gorm:"type:jsonb;not null"`
+	Manifest             json.RawMessage `gorm:"type:jsonb;not null"`
+	Status               string          `gorm:"size:20;not null;index:idx_origin_promotion_status,priority:3"`
+	FailureReason        string          `gorm:"size:2000"`
+	OriginVersionID      *identity.ID    `gorm:"type:uuid;uniqueIndex"`
+	RequestedBy          identity.ID     `gorm:"type:uuid;not null"`
+	RequestedAt          time.Time       `gorm:"not null"`
+	StartedAt            *time.Time
+	CompletedAt          *time.Time
+	UpdatedAt            time.Time
+}
+
+func (OriginPromotion) TableName() string { return "origins.promotions" }
+
 type MediaObject struct {
 	ID               identity.ID `gorm:"type:uuid;primaryKey"`
 	TenantID         identity.ID `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:1;uniqueIndex:idx_media_create_idempotency,priority:1"`
@@ -1156,7 +1179,7 @@ func Models() []any {
 		&OnboardingSession{}, &OnboardingEmailState{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
-		&Origin{}, &OriginVersion{}, &OriginEvidence{},
+		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{},
 		&MediaObject{}, &MultipartUpload{}, &UploadPart{}, &MediaDerivative{}, &ScreeningRun{},
 		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{},
 		&Delivery{}, &ChannelAttempt{}, &NotificationAttempt{}, &NotificationPayload{}, &NotificationRecipient{}, &ProviderCallback{},

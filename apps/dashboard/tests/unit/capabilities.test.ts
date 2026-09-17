@@ -11,6 +11,11 @@ describe("Dashboard capability composition", () => {
   it("UT-057 never emits mutation controls for viewer audiences", () => {
     for (const role of ["VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canMutate).toBe(false);
   });
+  it("shows reference promotion only to tenant admins and managers", () => {
+    expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["DASHBOARD"] }).canPromoteOrigin).toBe(true);
+    expect(composeCapabilities({ roles: ["MANAGER"], entitlements: ["DASHBOARD"] }).canPromoteOrigin).toBe(true);
+    expect(composeCapabilities({ roles: ["EMPLOYEE"], entitlements: ["DASHBOARD"] }).canPromoteOrigin).toBe(false);
+  });
   it("UT-132 keeps unavailable actions hidden without treating the UI as authorization", () => {
     const viewer = composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] });
     expect(viewer.canMutate).toBe(false);

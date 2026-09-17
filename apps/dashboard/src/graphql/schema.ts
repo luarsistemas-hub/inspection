@@ -647,6 +647,7 @@ export type Mutation = {
   inviteOriginCapture: OriginInvitationPayload;
   markNotificationRead: RecipientNotificationPayload;
   presignMediaParts: PresignedPartsPayload;
+  promoteInspectionPhotos: OriginPromotionPayload;
   publishAnalysisProfile: AnalysisProfilePayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
@@ -842,6 +843,11 @@ export type MutationMarkNotificationReadArgs = {
 
 export type MutationPresignMediaPartsArgs = {
   input: PresignMediaPartsInput;
+};
+
+
+export type MutationPromoteInspectionPhotosArgs = {
+  input: PromoteInspectionPhotosInput;
 };
 
 
@@ -1156,6 +1162,29 @@ export type OriginInvitationPayload = {
   userErrors: Array<UserError>;
 };
 
+export type OriginPromotion = {
+  __typename?: 'OriginPromotion';
+  eligibleMedia: Array<OriginPromotionMedia>;
+  failureReason: Maybe<Scalars['String']['output']>;
+  inspectionId: Scalars['ID']['output'];
+  originVersionId: Maybe<Scalars['ID']['output']>;
+  status: Scalars['String']['output'];
+};
+
+export type OriginPromotionMedia = {
+  __typename?: 'OriginPromotionMedia';
+  description: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type OriginPromotionPayload = {
+  __typename?: 'OriginPromotionPayload';
+  clientMutationId: Scalars['String']['output'];
+  promotion: Maybe<OriginPromotion>;
+  userErrors: Array<UserError>;
+};
+
 export type OriginVersion = {
   __typename?: 'OriginVersion';
   activatedAt: Maybe<Scalars['String']['output']>;
@@ -1314,6 +1343,13 @@ export type ProjectTransitionInput = {
   projectId: Scalars['ID']['input'];
 };
 
+export type PromoteInspectionPhotosInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedAssetVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+  mediaIds: Array<Scalars['ID']['input']>;
+};
+
 export type PublicationPolicy = {
   __typename?: 'PublicationPolicy';
   mode: Scalars['String']['output'];
@@ -1374,6 +1410,7 @@ export type Query = {
   notificationDeliveries: NotificationDeliveryConnection;
   onboardingDefinition: OnboardingDefinition;
   onboardingSession: Maybe<OnboardingSession>;
+  originPromotion: Maybe<OriginPromotion>;
   originVersions: OriginVersionConnection;
   participant: Maybe<Participant>;
   participants: ParticipantConnection;
@@ -1487,6 +1524,11 @@ export type QueryNotificationDeliveriesArgs = {
 
 export type QueryOnboardingDefinitionArgs = {
   segment: Scalars['String']['input'];
+};
+
+
+export type QueryOriginPromotionArgs = {
+  inspectionId: Scalars['ID']['input'];
 };
 
 

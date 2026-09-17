@@ -717,6 +717,26 @@ type OriginInvitationPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type OriginPromotion struct {
+	InspectionID    string                  `json:"inspectionId"`
+	Status          string                  `json:"status"`
+	FailureReason   *string                 `json:"failureReason,omitempty"`
+	OriginVersionID *string                 `json:"originVersionId,omitempty"`
+	EligibleMedia   []*OriginPromotionMedia `json:"eligibleMedia"`
+}
+
+type OriginPromotionMedia struct {
+	ID          string  `json:"id"`
+	Description string  `json:"description"`
+	URL         *string `json:"url,omitempty"`
+}
+
+type OriginPromotionPayload struct {
+	Promotion        *OriginPromotion `json:"promotion,omitempty"`
+	UserErrors       []*UserError     `json:"userErrors"`
+	ClientMutationID string           `json:"clientMutationId"`
+}
+
 type OriginVersion struct {
 	ID            string  `json:"id"`
 	OriginID      string  `json:"originId"`
@@ -856,6 +876,13 @@ type ProjectTransitionInput struct {
 	ProjectID        string `json:"projectId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type PromoteInspectionPhotosInput struct {
+	InspectionID         string   `json:"inspectionId"`
+	MediaIds             []string `json:"mediaIds"`
+	ExpectedAssetVersion int      `json:"expectedAssetVersion"`
+	ClientMutationID     string   `json:"clientMutationId"`
 }
 
 type PublicationPolicy struct {

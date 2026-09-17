@@ -859,6 +859,37 @@ CREATE POLICY tenant_isolation ON onboarding.activation USING (
   tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
   OR invitation_token_digest = decode(nullif(current_setting('app.admin_activation_digest', true), ''), 'hex')
 );
+`},
+		{Version: 35, Name: "resumable_onboarding_origin_promotions", Compatible: true, SQL: `
+CREATE TABLE IF NOT EXISTS origins.promotions (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  inspection_id uuid NOT NULL,
+  asset_id uuid NOT NULL,
+  template_id uuid NOT NULL,
+  expected_asset_version bigint NOT NULL,
+  selected_media_ids jsonb NOT NULL,
+  manifest jsonb NOT NULL,
+  status varchar(20) NOT NULL,
+  failure_reason varchar(2000) NOT NULL DEFAULT '',
+  origin_version_id uuid,
+  requested_by uuid NOT NULL,
+  requested_at timestamptz NOT NULL,
+  started_at timestamptz,
+  completed_at timestamptz,
+  updated_at timestamptz NOT NULL,
+  CONSTRAINT chk_origin_promotion_status CHECK (status IN ('PENDING','PROCESSING','ACTIVE','FAILED')),
+  CONSTRAINT uq_origin_promotion_inspection UNIQUE (tenant_id, inspection_id),
+  CONSTRAINT uq_origin_promotion_version UNIQUE (origin_version_id)
+);
+CREATE INDEX IF NOT EXISTS idx_origin_promotion_status ON origins.promotions(tenant_id, asset_id, status);
+ALTER TABLE origins.promotions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE origins.promotions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON origins.promotions;
+CREATE POLICY tenant_isolation ON origins.promotions
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON origins.promotions TO inspection_runtime;
 `}}
 }
 

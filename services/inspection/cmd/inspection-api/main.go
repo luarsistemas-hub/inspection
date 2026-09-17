@@ -62,6 +62,7 @@ import (
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
+	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	deactivateparticipant "inspection/services/inspection/internal/features/participants/deactivate_participant"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
@@ -364,6 +365,9 @@ func run() error {
 		},
 		func() error {
 			return originlist.Setup(originlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return originpromote.Setup(originpromote.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})

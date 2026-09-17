@@ -13,7 +13,7 @@ import (
 const (
 	Segment              = "REAL_ESTATE"
 	DefinitionSchema     = 1
-	DefinitionVersion    = 2
+	DefinitionVersion    = 3
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = "real-estate-fixed-origin"
 	AnalysisProfileKey   = "real-estate-default"
@@ -71,14 +71,14 @@ var definition = Definition{
 			{Key: "purpose", Label: "Finalidade da vistoria", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}, OptionLabels: map[string]string{"SALE": "Venda", "RENTAL": "Locação", "MAINTENANCE": "Manutenção", "INSURANCE": "Seguro"}},
 			{Key: "deadline", Label: "Prazo para concluir a vistoria", Type: "date", Required: true},
 		}},
-		{Key: "origin", Label: "Fotos de referência", Position: 3, Required: true, Fields: []Field{{Key: "mode", Label: "Base de comparação", Type: "select", Required: true, Options: []string{"CHECKLIST_ONLY", "FIXED_ORIGIN"}, OptionLabels: map[string]string{"CHECKLIST_ONLY": "Primeira vistoria do imóvel", "FIXED_ORIGIN": "Comparar com fotos de referência"}}}},
+		{Key: "origin", Label: "Fotos de referência", Position: 3, Required: true, Fields: []Field{{Key: "mode", Label: "Base de comparação", Type: "select", Required: true, Options: []string{"CHECKLIST_ONLY", "FIXED_ORIGIN"}, OptionLabels: map[string]string{"CHECKLIST_ONLY": "Registrar estado inicial", "FIXED_ORIGIN": "Comparar com fotos de referência"}}}},
 		{Key: "participant", Label: "Responsável pela vistoria", Position: 4, Required: true, Fields: []Field{
 			{Key: "mode", Label: "Quem realizará a vistoria?", Type: "select", Required: true, Options: []string{"SELF", "DELEGATE"}, OptionLabels: map[string]string{"SELF": "Eu farei a vistoria", "DELEGATE": "Outra pessoa fará a vistoria"}},
 			{Key: "name", Label: "Nome do responsável", Type: "text", Required: false},
 			{Key: "email", Label: "E-mail do responsável", Type: "email", Required: false},
 		}},
 	},
-	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "Primeira vistoria do imóvel", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Comparar com fotos de referência", TemplateKey: OriginTemplateKey, Required: true}},
+	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "Registrar estado inicial", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Comparar com fotos de referência", TemplateKey: OriginTemplateKey, Required: true}},
 }
 
 // Resolve returns a copy of a supported definition. Unsupported schema

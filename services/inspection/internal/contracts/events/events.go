@@ -119,6 +119,7 @@ func DefaultRegistry() *Registry {
 	r := NewRegistry()
 	for _, name := range []string{
 		"participant.channel_verified.v1", "origin.invitation_requested.v1", "inspection.created.v1",
+		"origin.promotion_requested.v1",
 		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1",
 		"capture.submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",

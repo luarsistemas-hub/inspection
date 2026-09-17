@@ -26,6 +26,7 @@ import (
 	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
+	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	processdeadline "inspection/services/inspection/internal/features/recapture/process_deadline"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	generatesnapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
@@ -112,7 +113,7 @@ func run() error {
 	}
 	defer channel.Close()
 	contracts := make([]messaging.QueueContract, 0, 24)
-	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
+	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
 		contract, contractErr := messaging.NewQueueContract(definition[0], definition[1], 32)
 		if contractErr != nil {
 			return contractErr
@@ -212,6 +213,15 @@ func run() error {
 			return processJob(ctx, tx, mustPayload(envelope.Payload, payload.JobID), envelope.TenantID)
 		}
 		return requestJobs(ctx, tx, envelope)
+	}
+	promotionHandler := func(ctx context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
+		var payload struct {
+			PromotionID identity.ID `json:"promotionId"`
+		}
+		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.PromotionID == (identity.ID{}) {
+			return messaging.ErrPermanent
+		}
+		return originpromote.Process(ctx, db, privateStore, envelope.TenantID, payload.PromotionID)
 	}
 	classifiedHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {
@@ -436,6 +446,7 @@ func run() error {
 	}
 	handlers := map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error{
 		"origin.invitation_requested.v1":     invitationHandler,
+		"origin.promotion_requested.v1":      promotionHandler,
 		"media.verified.v1":                  mediaHandler,
 		"recapture.deadline_reached.v1":      deadlineHandler,
 		"capture.submitted.v1":               requestJobs,

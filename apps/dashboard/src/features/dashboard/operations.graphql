@@ -8,7 +8,7 @@ query DashboardMemberships {
 }
 
 query DashboardFormOptions {
-  assets(first: 100) { nodes { id name externalKey businessUnitId segmentVersionId templateId status assignments { participantId role active } } pageInfo { endCursor hasNextPage } }
+  assets(first: 100) { nodes { id name externalKey businessUnitId segmentVersionId templateId status version assignments { participantId role active } } pageInfo { endCursor hasNextPage } }
   participants(first: 100) { nodes { id businessUnitId name status } pageInfo { endCursor hasNextPage } }
   templates(first: 100) { nodes { id key name segmentVersionId activeVersionId version } pageInfo { endCursor hasNextPage } }
 }
@@ -24,6 +24,7 @@ query OperationalOverview($after: String, $classification: String, $status: Stri
 query Schedules($after: String) { schedules(first: 25, after: $after) { nodes { id assetId participantId templateId rrule timezone startsAt nextDueAt deadlineMinutes reminderOffsetsMinutes status version } pageInfo { endCursor hasNextPage } } }
 query Inspections($after: String, $history: Boolean!) { inspections(first: 25, after: $after, history: $history) { nodes { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } pageInfo { endCursor hasNextPage } } }
 query InspectionDetail($id: ID!) { inspection(id: $id) { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } }
+query OriginPromotion($inspectionId: ID!) { originPromotion(inspectionId: $inspectionId) { inspectionId status failureReason originVersionId eligibleMedia { id description url } } }
 query Projects($after: String) { projects(first: 25, after: $after) { nodes { id assetId participantId templateId reportMode status version stages { id key label kind position status plannedAt reason inspectionId version } } pageInfo { endCursor hasNextPage } } }
 query ProjectDetail($id: ID!) { project(id: $id) { id assetId participantId templateId reportMode status version stages { id key label kind position status plannedAt reason inspectionId version } transitions { id stageId fromState toState reason occurredAt } } }
 query ProjectTimeline($projectId: ID!) { projectTimeline(projectId: $projectId) { projectId entries { stageId label status inspectionId occurredAt } } }
@@ -51,6 +52,7 @@ mutation CancelSchedule($input: CancelScheduleInput!) { cancelSchedule(input: $i
 mutation CreateInspection($input: CreateInspectionInput!) { createInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation CancelInspection($input: InspectionTransitionInput!) { cancelInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation InvalidateInspection($input: InvalidateInspectionInput!) { invalidateInspection(input: $input) { inspection { id status version } userErrors { code field message correlationId } clientMutationId } }
+mutation PromoteInspectionPhotos($input: PromoteInspectionPhotosInput!) { promoteInspectionPhotos(input: $input) { promotion { inspectionId status failureReason originVersionId eligibleMedia { id description url } } userErrors { code field message correlationId } clientMutationId } }
 mutation CreateProject($input: CreateProjectInput!) { createProject(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation AddExceptionalStage($input: AddExceptionalStageInput!) { addExceptionalStage(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation StartProjectStage($input: StartProjectStageInput!) { startProjectStage(input: $input) { project { id status version } userErrors { code field message correlationId } clientMutationId } }

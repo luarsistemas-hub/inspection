@@ -16,6 +16,7 @@ type Query {
   assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
   asset(id: ID!): Asset
   originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
+  originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
@@ -91,6 +92,7 @@ type Mutation {
   inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
+  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
   createSchedule(input: CreateScheduleInput!): SchedulePayload!
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
   cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
@@ -153,6 +155,8 @@ type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
 type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
+type OriginPromotionMedia { id: ID! description: String! url: String }
+type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisProfileVersionId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
@@ -269,6 +273,7 @@ input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutation
 input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
 input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
+input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
 input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
@@ -317,6 +322,7 @@ type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: Stri
 type InvitationPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginInvitationPayload { invitationId: ID originVersionId: ID status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! clientMutationId: String! }
+type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }

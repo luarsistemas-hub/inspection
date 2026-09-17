@@ -45,6 +45,7 @@ import (
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
+	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	participantlist "inspection/services/inspection/internal/features/participants/list_participants"
@@ -735,6 +736,31 @@ func (r *mutationResolver) InvalidateOriginVersion(ctx context.Context, input gr
 	}
 	row := raw.(database.OriginVersion)
 	return &graphql1.OriginVersionPayload{Version: mapOriginVersion(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// PromoteInspectionPhotos is the resolver for the promoteInspectionPhotos field.
+func (r *mutationResolver) PromoteInspectionPhotos(ctx context.Context, input graphql1.PromoteInspectionPhotosInput) (*graphql1.OriginPromotionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	mediaIDs := make([]identity.ID, 0, len(input.MediaIds))
+	for _, raw := range input.MediaIds {
+		id, err := identity.ParseID(raw)
+		if err != nil {
+			return nil, invalidID("mediaIds")
+		}
+		mediaIDs = append(mediaIDs, id)
+	}
+	raw, err := r.Bus.Send(ctx, originpromote.Command{TenantID: meta.TenantID, InspectionID: inspectionID, MediaIDs: mediaIDs, ExpectedAssetVersion: int64(input.ExpectedAssetVersion), ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.OriginPromotionPayload{Promotion: mapOriginPromotion(raw.(originpromote.Result)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // CreateSchedule is the resolver for the createSchedule field.
@@ -1865,6 +1891,34 @@ func (r *queryResolver) OriginVersions(ctx context.Context, assetID string, firs
 	return &graphql1.OriginVersionConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
 
+// OriginPromotion is the resolver for the originPromotion field.
+func (r *queryResolver) OriginPromotion(ctx context.Context, inspectionID string) (*graphql1.OriginPromotion, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	id, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	raw, err := r.Bus.Ask(ctx, originpromote.Query{TenantID: meta.TenantID, InspectionID: id})
+	if err != nil {
+		return nil, err
+	}
+	result := raw.(originpromote.Result)
+	view := mapOriginPromotion(result)
+	for index, item := range result.Eligible {
+		if item.DisplayKey == "" {
+			continue
+		}
+		url, err := r.Store.PresignGet(ctx, item.DisplayKey, 10*time.Minute)
+		if err == nil {
+			view.EligibleMedia[index].URL = &url
+		}
+	}
+	return view, nil
+}
+
 // Schedules is the resolver for the schedules field.
 func (r *queryResolver) Schedules(ctx context.Context, first *int, after *string) (*graphql1.ScheduleConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2347,22 +2401,6 @@ func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID strin
 		end = nodes[len(nodes)-1].ID
 	}
 	return &graphql1.CustomerEvidenceConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
-}
-
-func (r *queryResolver) publishedSnapshot(ctx context.Context, tenantID identity.ID, inspectionID string, version *int) (database.ReportSnapshot, error) {
-	id, err := identity.ParseID(inspectionID)
-	if err != nil {
-		return database.ReportSnapshot{}, invalidID("inspectionId")
-	}
-	var row database.ReportSnapshot
-	err = withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
-		query := tx.Joins("JOIN reports.report_publications p ON p.snapshot_id=reports.report_snapshots.id AND p.tenant_id=reports.report_snapshots.tenant_id").Where("reports.report_snapshots.inspection_id=? AND p.status='PUBLISHED'", id).Order("reports.report_snapshots.version_number DESC")
-		if version != nil {
-			query = query.Where("reports.report_snapshots.version_number=?", *version)
-		}
-		return query.First(&row).Error
-	})
-	return row, err
 }
 
 // MyNotifications is the resolver for the myNotifications field.

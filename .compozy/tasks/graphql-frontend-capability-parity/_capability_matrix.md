@@ -31,6 +31,7 @@ Every row must end in one of these verified outcomes:
 | 11 | `assets` | Admin | Used as generic data | Searchable/filterable asset collection with assignments, import/export, lifecycle, and origin status. |
 | 12 | `asset` | Admin | Missing UI | Complete asset detail, relationships, origin lineage, version, policy overrides, and history. |
 | 13 | `originVersions` | Admin | Missing UI | Paginated origin lineage with source/provenance, active/invalid state, media availability, and audit. |
+| 36 | `originPromotion` | Dashboard | Used | Tenant admin or manager reviews eligible completed onboarding photos and the durable promotion state. |
 | 14 | `schedules` | Dashboard | Missing UI | Operational schedule collection with due/status filters and create/update/cancel journeys. |
 | 15 | `projects` | Dashboard | Missing UI | Project collection with status, scope, asset, participant, stage progress, and pagination. |
 | 16 | `project` | Dashboard | Partial ID detail | Complete project detail with stages, transitions, inspections, report context, and allowed actions. |
@@ -83,6 +84,7 @@ Every row must end in one of these verified outcomes:
 | 23 | `inviteOriginCapture` | Admin | Missing UI | Origin invitation with asset, participant, expiry, delivery status, and origin version tracking. |
 | 24 | `activateOriginVersion` | Admin | Missing UI | Make one verified immutable origin version the future comparison reference. |
 | 25 | `invalidateOriginVersion` | Admin | Missing UI | Invalidate future use with visible reason/history while preserving the original. |
+| 63 | `promoteInspectionPhotos` | Dashboard | Used | Tenant admin or manager selects first-onboarding evidence for resumable copy, immutable origin activation, and future comparisons. |
 | 26 | `createSchedule` | Dashboard | Missing UI | Schedule creation with recurrence preview, timezone, deadline, reminders, and dependencies. |
 | 27 | `updateSchedule` | Dashboard | Missing UI | Version-safe recurrence/deadline/reminder update with next-due preview. |
 | 28 | `cancelSchedule` | Dashboard | Missing UI | Stop future generation and retain historical inspections. |

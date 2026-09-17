@@ -304,31 +304,34 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
 	}
 	documents := onboardingcatalog.TemplateDocuments()
+	templatesByKey := make(map[string]database.Template, len(documents))
+	for key, document := range documents {
+		document.SegmentVersionID = segmentView.Version.ID.String()
+		document.AnalysisProfile = profile.ID.String()
+		payload, err := json.Marshal(document)
+		if err != nil {
+			return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
+		}
+		templateName := "Primeira vistoria do imóvel"
+		if key == onboardingcatalog.OriginTemplateKey {
+			templateName = "Vistoria comparativa do imóvel"
+		}
+		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v3", payload)
+		if err != nil {
+			return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
+		}
+		templateView, err = templates.Activate(ctx, tenantID, templateView.Version.ID, templateView.Template.Version)
+		if err != nil {
+			return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
+		}
+		templatesByKey[key] = templateView.Template
+	}
+	_ = actorID
 	key := onboardingcatalog.ChecklistTemplateKey
 	if mode == templatecatalog.FixedOrigin {
 		key = onboardingcatalog.OriginTemplateKey
 	}
-	document := documents[key]
-	document.SegmentVersionID = segmentView.Version.ID.String()
-	document.AnalysisProfile = profile.ID.String()
-	payload, err := json.Marshal(document)
-	if err != nil {
-		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
-	}
-	templateName := "Primeira vistoria do imóvel"
-	if key == onboardingcatalog.OriginTemplateKey {
-		templateName = "Vistoria comparativa do imóvel"
-	}
-	templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v2", payload)
-	if err != nil {
-		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
-	}
-	templateView, err = templates.Activate(ctx, tenantID, templateView.Version.ID, templateView.Template.Version)
-	if err != nil {
-		return database.SegmentDefinitionVersion{}, database.AnalysisProfileVersion{}, database.Template{}, err
-	}
-	_ = actorID
-	return segmentView.Version, profile, templateView.Template, nil
+	return segmentView.Version, profile, templatesByKey[key], nil
 }
 
 func (s Service) ensureParticipant(ctx context.Context, tenantID, unitID identity.ID, submission onboardingsession.Submission) (participantcore.ParticipantView, error) {

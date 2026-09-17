@@ -8,6 +8,7 @@ import (
 	"inspection/libs/identity"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
+	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -319,6 +320,36 @@ func mapOriginVersion(row database.OriginVersion) *graphql1.OriginVersion {
 		activated = &value
 	}
 	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, Status: row.Status, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated}
+}
+
+func mapOriginPromotion(result originpromote.Result) *graphql1.OriginPromotion {
+	row := result.Promotion
+	media := make([]*graphql1.OriginPromotionMedia, 0, len(result.Eligible))
+	for _, item := range result.Eligible {
+		media = append(media, &graphql1.OriginPromotionMedia{ID: item.ID.String(), Description: item.Description})
+	}
+	var failure *string
+	if row.FailureReason != "" {
+		value := row.FailureReason
+		failure = &value
+	}
+	return &graphql1.OriginPromotion{InspectionID: row.InspectionID.String(), Status: row.Status, FailureReason: failure, OriginVersionID: optionalID(row.OriginVersionID), EligibleMedia: media}
+}
+
+func (r *queryResolver) publishedSnapshot(ctx context.Context, tenantID identity.ID, inspectionID string, version *int) (database.ReportSnapshot, error) {
+	id, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return database.ReportSnapshot{}, invalidID("inspectionId")
+	}
+	var row database.ReportSnapshot
+	err = withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
+		query := tx.Joins("JOIN reports.report_publications p ON p.snapshot_id=reports.report_snapshots.id AND p.tenant_id=reports.report_snapshots.tenant_id").Where("reports.report_snapshots.inspection_id=? AND p.status='PUBLISHED'", id).Order("reports.report_snapshots.version_number DESC")
+		if version != nil {
+			query = query.Where("reports.report_snapshots.version_number=?", *version)
+		}
+		return query.First(&row).Error
+	})
+	return row, err
 }
 
 func mapSchedule(row database.Schedule) *graphql1.Schedule {
