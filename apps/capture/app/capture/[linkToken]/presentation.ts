@@ -45,7 +45,7 @@ const mediaFeedbacks: Record<string, MediaFeedback> = {
   }
 };
 export function presentCaptureStatus(value: string) { return statuses[value] ?? "Situação não reconhecida"; }
-export function presentRequirementSection(value: string) { return sections[value] ?? "Seção não reconhecida"; }
+export function presentRequirementSection(value: string) { return sections[value] ?? (value.trim() || "Seção não informada"); }
 export function presentRequirementLabel(value: string) { return labels[value] ?? (value || "Requisito não reconhecido"); }
 export function presentComparisonMode(value: string) { return comparisons[value] ?? "Comparação não reconhecida"; }
 export function presentCaptureSource(value: string) { return sources[value] ?? "Origem não reconhecida"; }

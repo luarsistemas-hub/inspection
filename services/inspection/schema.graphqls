@@ -180,7 +180,8 @@ type CaptureRequirement {
   impossibilityAllowed: Boolean!
 }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type CaptureReferenceItem { mediaId: ID! requirementKey: String! description: String! availability: String! imageUrl: String imageUrlExpiresAt: String }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
 type Media { id: ID! status: String! requirementKey: String description: String captureSource: String flags: [String!]! replacesMediaId: ID }
 type MediaUpload { mediaId: ID! uploadId: String! expiresAt: String! partSizeBytes: Int! }
 type PresignedPart { partNumber: Int! url: String! expiresAt: String! }

@@ -74,13 +74,13 @@ describe("Capture drafts and transport", () => {
     expect(isTerminalBootstrapStatus("OPEN")).toBe(false);
   });
   it("enforces every required requirement's minimum media count", () => {
-    const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 2, maximumMedia: 3, descriptionRequired: false, captureSourcePolicy: "ANY", impossibilityAllowed: false }];
+    const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 2, maximumMedia: 3, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }];
     const answers = [{ requirementKey: "front", mediaIds: ["media-1"], impossibilityReason: null, version: 0 }];
     expect(requirementsSatisfied(requirements, answers, [])).toBe(false);
     expect(requirementsSatisfied(requirements, answers, [{ ...draft(), metadata: { ...draft().metadata, requirementKey: "front" }, mediaId: "media-2" }])).toBe(true);
   });
   it("does not treat server-screened media as a satisfied requirement or submission-ready", () => {
-    const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", impossibilityAllowed: false }];
+    const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }];
     const screened = { ...draft(), mediaId: "screened", mediaStatus: "SCREENED", metadataSaved: true, parts: [{ number: 1, complete: true, etag: "etag" }] };
     expect(isBlockedMediaStatus(screened.mediaStatus)).toBe(true);
     expect(requirementsSatisfied(requirements, [{ requirementKey: "front", mediaIds: ["screened"], impossibilityReason: null, version: 0 }], [screened])).toBe(false);
@@ -93,7 +93,7 @@ describe("Capture drafts and transport", () => {
     expect(isFalsePositiveActionable("ABORTED")).toBe(false);
   });
   it("allows gallery only when both policy and requirement permit it", () => {
-    const requirement = { key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", impossibilityAllowed: false };
+    const requirement = { key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false };
     expect(isGalleryAllowed({ allowGallery: true }, requirement)).toBe(true);
     expect(isGalleryAllowed({ allowGallery: false }, requirement)).toBe(false);
     expect(isGalleryAllowed({ allowGallery: true }, { ...requirement, captureSourcePolicy: "CAMERA_ONLY" })).toBe(false);

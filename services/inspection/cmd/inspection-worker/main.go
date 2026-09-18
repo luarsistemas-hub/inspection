@@ -369,7 +369,7 @@ func run() error {
 		var class database.ClassificationRun
 		_ = tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").First(&class).Error
 		row := database.DashboardInspection{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, AssetID: inspection.AssetID, Classification: class.Classification, Status: inspection.Status, Invalidated: inspection.Status == "INVALIDATED", Sequence: time.Now().UnixNano(), UpdatedAt: time.Now().UTC()}
-		return tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Assign(row).FirstOrCreate(&row).Error
+		return upsertDashboardInspection(tx.WithContext(ctx), row)
 	}
 	retentionHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {

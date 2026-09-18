@@ -29,6 +29,7 @@ import (
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
 	capturefinalize "inspection/services/inspection/internal/features/capture/finalize_submission"
+	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
 	inspectioncancel "inspection/services/inspection/internal/features/inspections/cancel"
@@ -371,6 +372,9 @@ func run() error {
 		},
 		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturereferences.Setup(capturereferences.Dependencies{Bus: bus, DB: db, Store: mediaStore})
 		},
 		func() error { return capturesave.Setup(capturesave.Dependencies{Bus: bus, Service: captureService}) },
 		func() error {

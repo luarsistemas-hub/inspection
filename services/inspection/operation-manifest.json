@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "b6ca2cd2da8418ea345944f9f806558e92f3ceff46a79af4494038de1ce198fd",
+  "schemaSha256": "91e7b39f40cf748ffc0710ab28cb2f320a0deffaa4e2878124241e65696d6042",
   "capabilities": [
     {
       "root": "Query.me",
@@ -782,67 +782,67 @@
         {
           "name": "AcceptProcessing",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "CompleteMediaUpload",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "CreateMediaUpload",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "DeclareCaptureImpossibility",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "DeclareSensitiveDetectionFalsePositive",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "ExternalCaptureBootstrap",
           "type": "query",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "PresignMediaParts",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "RequestInvitationOtp",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "RevokeInvitation",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "SaveCaptureMetadata",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "SubmitCapture",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "SubmitRecapture",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         },
         {
           "name": "VerifyInvitationOtp",
           "type": "mutation",
-          "documentSha256": "2acfa74ab559f2bc084bab3fa2f13ba2c12d1c3d5581674046cfca02ad131163"
+          "documentSha256": "1247ca7ccda9c99c85fd36358a796fa2c23bf8641b1b31747f75c1f6fb7662ba"
         }
       ]
     },

@@ -135,6 +135,15 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	CaptureReferenceItem struct {
+		Availability      func(childComplexity int) int
+		Description       func(childComplexity int) int
+		ImageURL          func(childComplexity int) int
+		ImageURLExpiresAt func(childComplexity int) int
+		MediaID           func(childComplexity int) int
+		RequirementKey    func(childComplexity int) int
+	}
+
 	CaptureRequirement struct {
 		CaptureSourcePolicy  func(childComplexity int) int
 		ComparisonTarget     func(childComplexity int) int
@@ -234,6 +243,7 @@ type ComplexityRoot struct {
 		Policy             func(childComplexity int) int
 		RecaptureRequestID func(childComplexity int) int
 		Reference          func(childComplexity int) int
+		ReferenceItems     func(childComplexity int) int
 		Requirements       func(childComplexity int) int
 		ResponsibilityID   func(childComplexity int) int
 		Status             func(childComplexity int) int
@@ -1606,6 +1616,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CapturePayload.UserErrors(childComplexity), true
 
+	case "CaptureReferenceItem.availability":
+		if e.ComplexityRoot.CaptureReferenceItem.Availability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.Availability(childComplexity), true
+	case "CaptureReferenceItem.description":
+		if e.ComplexityRoot.CaptureReferenceItem.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.Description(childComplexity), true
+	case "CaptureReferenceItem.imageUrl":
+		if e.ComplexityRoot.CaptureReferenceItem.ImageURL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.ImageURL(childComplexity), true
+	case "CaptureReferenceItem.imageUrlExpiresAt":
+		if e.ComplexityRoot.CaptureReferenceItem.ImageURLExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.ImageURLExpiresAt(childComplexity), true
+	case "CaptureReferenceItem.mediaId":
+		if e.ComplexityRoot.CaptureReferenceItem.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.MediaID(childComplexity), true
+	case "CaptureReferenceItem.requirementKey":
+		if e.ComplexityRoot.CaptureReferenceItem.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReferenceItem.RequirementKey(childComplexity), true
+
 	case "CaptureRequirement.captureSourcePolicy":
 		if e.ComplexityRoot.CaptureRequirement.CaptureSourcePolicy == nil {
 			break
@@ -2024,6 +2071,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.Reference(childComplexity), true
+	case "ExternalCapture.referenceItems":
+		if e.ComplexityRoot.ExternalCapture.ReferenceItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.ReferenceItems(childComplexity), true
 	case "ExternalCapture.requirements":
 		if e.ComplexityRoot.ExternalCapture.Requirements == nil {
 			break
@@ -6360,7 +6413,8 @@ type CaptureRequirement {
   impossibilityAllowed: Boolean!
 }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type CaptureReferenceItem { mediaId: ID! requirementKey: String! description: String! availability: String! imageUrl: String imageUrlExpiresAt: String }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
 type Media { id: ID! status: String! requirementKey: String description: String captureSource: String flags: [String!]! replacesMediaId: ID }
 type MediaUpload { mediaId: ID! uploadId: String! expiresAt: String! partSizeBytes: Int! }
 type PresignedPart { partNumber: Int! url: String! expiresAt: String! }
@@ -6722,6 +6776,24 @@ func (ec *executionContext) childFields_CapturePayload(ctx context.Context, fiel
 	return nil, fmt.Errorf("no field named %q was found under type CapturePayload", field.Name)
 }
 
+func (ec *executionContext) childFields_CaptureReferenceItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "mediaId":
+		return ec.fieldContext_CaptureReferenceItem_mediaId(ctx, field)
+	case "requirementKey":
+		return ec.fieldContext_CaptureReferenceItem_requirementKey(ctx, field)
+	case "description":
+		return ec.fieldContext_CaptureReferenceItem_description(ctx, field)
+	case "availability":
+		return ec.fieldContext_CaptureReferenceItem_availability(ctx, field)
+	case "imageUrl":
+		return ec.fieldContext_CaptureReferenceItem_imageUrl(ctx, field)
+	case "imageUrlExpiresAt":
+		return ec.fieldContext_CaptureReferenceItem_imageUrlExpiresAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureReferenceItem", field.Name)
+}
+
 func (ec *executionContext) childFields_CaptureRequirement(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "key":
@@ -6920,6 +6992,8 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_templateVersionId(ctx, field)
 	case "reference":
 		return ec.fieldContext_ExternalCapture_reference(ctx, field)
+	case "referenceItems":
+		return ec.fieldContext_ExternalCapture_referenceItems(ctx, field)
 	case "policy":
 		return ec.fieldContext_ExternalCapture_policy(ctx, field)
 	case "requirements":
@@ -11769,6 +11843,144 @@ func (ec *executionContext) fieldContext_CapturePayload_clientMutationId(_ conte
 	return graphql.NewScalarFieldContext("CapturePayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _CaptureReferenceItem_mediaId(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReferenceItem_requirementKey(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReferenceItem_description(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReferenceItem_availability(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_availability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Availability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_availability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReferenceItem_imageUrl(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_imageUrl(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageURL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_imageUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReferenceItem_imageUrlExpiresAt(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReferenceItem_imageUrlExpiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageURLExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReferenceItem_imageUrlExpiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReferenceItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CaptureRequirement_key(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -13421,6 +13633,38 @@ func (ec *executionContext) _ExternalCapture_reference(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_ExternalCapture_reference(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _ExternalCapture_referenceItems(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_referenceItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReferenceItems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CaptureReferenceItem) graphql.Marshaler {
+			return ec.marshalNCaptureReferenceItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_referenceItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExternalCapture",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureReferenceItem(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _ExternalCapture_policy(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
@@ -34948,6 +35192,69 @@ func (ec *executionContext) _CapturePayload(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var captureReferenceItemImplementors = []string{"CaptureReferenceItem"}
+
+func (ec *executionContext) _CaptureReferenceItem(ctx context.Context, sel ast.SelectionSet, obj *CaptureReferenceItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureReferenceItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureReferenceItem")
+		case "mediaId":
+			out.Values[i] = ec._CaptureReferenceItem_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requirementKey":
+			out.Values[i] = ec._CaptureReferenceItem_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._CaptureReferenceItem_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "availability":
+			out.Values[i] = ec._CaptureReferenceItem_availability(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "imageUrl":
+			out.Values[i] = ec._CaptureReferenceItem_imageUrl(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "imageUrlExpiresAt":
+			out.Values[i] = ec._CaptureReferenceItem_imageUrlExpiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var captureRequirementImplementors = []string{"CaptureRequirement"}
 
 func (ec *executionContext) _CaptureRequirement(ctx context.Context, sel ast.SelectionSet, obj *CaptureRequirement) graphql.Marshaler {
@@ -35627,6 +35934,11 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 			}
 		case "reference":
 			out.Values[i] = ec._ExternalCapture_reference(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "referenceItems":
+			out.Values[i] = ec._ExternalCapture_referenceItems(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -43152,6 +43464,32 @@ func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋin
 		return graphql.Null
 	}
 	return ec._CapturePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCaptureReferenceItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureReferenceItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCaptureReferenceItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCaptureReferenceItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItem(ctx context.Context, sel ast.SelectionSet, v *CaptureReferenceItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureReferenceItem(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNCaptureRequirement2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureRequirementᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureRequirement) graphql.Marshaler {

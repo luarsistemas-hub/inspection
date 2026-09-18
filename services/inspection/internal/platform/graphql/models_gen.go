@@ -193,6 +193,15 @@ type CapturePayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type CaptureReferenceItem struct {
+	MediaID           string  `json:"mediaId"`
+	RequirementKey    string  `json:"requirementKey"`
+	Description       string  `json:"description"`
+	Availability      string  `json:"availability"`
+	ImageURL          *string `json:"imageUrl,omitempty"`
+	ImageURLExpiresAt *string `json:"imageUrlExpiresAt,omitempty"`
+}
+
 type CaptureRequirement struct {
 	Key                  string  `json:"key"`
 	Section              string  `json:"section"`
@@ -398,17 +407,18 @@ type DisableMembershipInput struct {
 }
 
 type ExternalCapture struct {
-	ResponsibilityID   string                `json:"responsibilityId"`
-	RecaptureRequestID *string               `json:"recaptureRequestId,omitempty"`
-	Status             string                `json:"status"`
-	ConfirmationOnly   bool                  `json:"confirmationOnly"`
-	Kind               string                `json:"kind"`
-	TemplateVersionID  string                `json:"templateVersionId"`
-	Reference          map[string]any        `json:"reference"`
-	Policy             map[string]any        `json:"policy"`
-	Requirements       []*CaptureRequirement `json:"requirements"`
-	Answers            []*CaptureAnswer      `json:"answers"`
-	DisclosureVersion  string                `json:"disclosureVersion"`
+	ResponsibilityID   string                  `json:"responsibilityId"`
+	RecaptureRequestID *string                 `json:"recaptureRequestId,omitempty"`
+	Status             string                  `json:"status"`
+	ConfirmationOnly   bool                    `json:"confirmationOnly"`
+	Kind               string                  `json:"kind"`
+	TemplateVersionID  string                  `json:"templateVersionId"`
+	Reference          map[string]any          `json:"reference"`
+	ReferenceItems     []*CaptureReferenceItem `json:"referenceItems"`
+	Policy             map[string]any          `json:"policy"`
+	Requirements       []*CaptureRequirement   `json:"requirements"`
+	Answers            []*CaptureAnswer        `json:"answers"`
+	DisclosureVersion  string                  `json:"disclosureVersion"`
 }
 
 type ExternalSessionPayload struct {

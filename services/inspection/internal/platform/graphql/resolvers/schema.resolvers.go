@@ -23,6 +23,7 @@ import (
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
+	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
 	dashboardcore "inspection/services/inspection/internal/features/dashboard/core"
@@ -2541,7 +2542,7 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	reference, policy := map[string]any{}, map[string]any{}
 	_ = json.Unmarshal(view.Draft.ReferencePayload, &reference)
 	_ = json.Unmarshal(view.Draft.PolicyPayload, &policy)
-	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, TemplateVersionID: view.Draft.TemplateVersionID.String(), Reference: reference, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
+	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, TemplateVersionID: view.Draft.TemplateVersionID.String(), Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
 	if view.Draft.Kind == "RECAPTURE" {
 		var request database.RecaptureRequest
 		if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -2563,6 +2564,21 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	if !accepted {
 		response.Status = "ACCEPTANCE_REQUIRED"
 		return response, nil
+	}
+	referencesRaw, err := r.Bus.Ask(ctx, capturereferences.Query{TenantID: tenantID, ResponsibilityID: responsibilityID})
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range referencesRaw.([]capturereferences.Item) {
+		mapped := &graphql1.CaptureReferenceItem{MediaID: item.MediaID.String(), RequirementKey: item.RequirementKey, Description: item.Description, Availability: item.Availability}
+		if item.ImageURL != "" {
+			mapped.ImageURL = &item.ImageURL
+		}
+		if item.ImageURLExpiresAt != nil {
+			expires := item.ImageURLExpiresAt.Format(time.RFC3339Nano)
+			mapped.ImageURLExpiresAt = &expires
+		}
+		response.ReferenceItems = append(response.ReferenceItems, mapped)
 	}
 	requirements := make([]*graphql1.CaptureRequirement, 0, len(view.Requirements))
 	for _, req := range view.Requirements {

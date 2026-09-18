@@ -5,6 +5,8 @@ describe("capture presenters", () => {
   it("localizes legacy requirements and dynamic states", () => {
     expect(presentCaptureStatus("SUBMITTED")).toBe("Enviada");
     expect(presentRequirementSection("property")).toBe("Imóvel");
+    expect(presentRequirementSection("Referência")).toBe("Referência");
+    expect(presentRequirementSection("  ")).toBe("Seção não informada");
     expect(presentRequirementLabel("Property overview")).toBe("Visão geral do imóvel");
     expect(presentCaptureSource("CAMERA_ONLY")).toBe("Câmera obrigatória");
     expect(presentCaptureStatus("FUTURE")).toBe("Situação não reconhecida");
