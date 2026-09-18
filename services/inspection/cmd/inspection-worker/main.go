@@ -17,6 +17,7 @@ import (
 	comparative "inspection/services/inspection/internal/features/analysis/comparative"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
 	processmedia "inspection/services/inspection/internal/features/media/process_verified"
 	consumeevents "inspection/services/inspection/internal/features/messaging/consume_events"
@@ -640,13 +641,9 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		return reportcore.Context{}, nil, nil, err
 	}
 
-	var document catalog.TemplateDocument
-	if err := json.Unmarshal(version.DefinitionJSON, &document); err != nil {
+	requirements, err := reportSnapshotRequirements(ctx, tx, tenantID, inspection.ID, version.DefinitionJSON)
+	if err != nil {
 		return reportcore.Context{}, nil, nil, err
-	}
-	requirements := make([]reportcore.Requirement, 0, len(document.Requirements))
-	for _, value := range document.Requirements {
-		requirements = append(requirements, reportcore.Requirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: value.Instructions})
 	}
 
 	var payload struct {
@@ -664,14 +661,18 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		if item.MediaID == (identity.ID{}) {
 			continue
 		}
+		requirementKey := item.Category
+		if reference.ComparisonMode == "FIXED_ORIGIN" {
+			requirementKey = "origin:" + item.MediaID.String()
+		}
 		var media database.MediaObject
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, item.MediaID).First(&media).Error; err == gorm.ErrRecordNotFound {
-			evidence = append(evidence, reportcore.Evidence{ID: item.MediaID.String(), RequirementKey: item.Category, Role: "REFERENCE", Description: item.Description, Availability: "MISSING"})
+			evidence = append(evidence, reportcore.Evidence{ID: item.MediaID.String(), RequirementKey: requirementKey, Role: "REFERENCE", Description: item.Description, Availability: "MISSING"})
 			continue
 		} else if err != nil {
 			return reportcore.Context{}, nil, nil, err
 		}
-		value := reportcore.Evidence{ID: media.ID.String(), RequirementKey: item.Category, Role: "REFERENCE", Description: item.Description, CaptureSource: media.CaptureSource, Availability: "MISSING"}
+		value := reportcore.Evidence{ID: media.ID.String(), RequirementKey: requirementKey, Role: "REFERENCE", Description: item.Description, CaptureSource: media.CaptureSource, Availability: "MISSING"}
 		if value.Description == "" {
 			value.Description = media.Description
 		}
@@ -690,4 +691,39 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		evidence = append(evidence, value)
 	}
 	return context, requirements, evidence, nil
+}
+
+func reportSnapshotRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, templateDefinition []byte) ([]reportcore.Requirement, error) {
+	var draft database.CaptureDraft
+	err := tx.WithContext(ctx).
+		Where("tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID).
+		Order("updated_at DESC").First(&draft).Error
+	if err == nil {
+		return reportRequirementsFromCapture(draft.Requirements)
+	}
+	if err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	var document catalog.TemplateDocument
+	if err := json.Unmarshal(templateDefinition, &document); err != nil {
+		return nil, err
+	}
+	requirements := make([]reportcore.Requirement, 0, len(document.Requirements))
+	for _, value := range document.Requirements {
+		requirements = append(requirements, reportcore.Requirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: value.Instructions})
+	}
+	return requirements, nil
+}
+
+func reportRequirementsFromCapture(raw []byte) ([]reportcore.Requirement, error) {
+	var captured []capturecore.Requirement
+	if err := json.Unmarshal(raw, &captured); err != nil {
+		return nil, err
+	}
+	requirements := make([]reportcore.Requirement, 0, len(captured))
+	for _, value := range captured {
+		requirements = append(requirements, reportcore.Requirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: value.Instructions})
+	}
+	return requirements, nil
 }
