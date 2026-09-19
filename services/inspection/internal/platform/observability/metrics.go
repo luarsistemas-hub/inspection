@@ -1,13 +1,38 @@
 package observability
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"inspection/libs/identity"
 )
+
+// LogDeliveryTransition records only identifiers and normalized operational
+// fields; destinations, tokens and rendered content are intentionally absent.
+func LogDeliveryTransition(ctx context.Context, tenantID, deliveryID, inspectionID identity.ID, from, to, code, provider string, attempt int) {
+	slog.InfoContext(ctx, "notification_delivery_transition", "tenantId", tenantID.String(), "deliveryId", deliveryID.String(), "inspectionId", inspectionID.String(), "from", safeCode(from), "to", safeCode(to), "failureCode", safeCode(code), "provider", safeValue(provider), "attempt", attempt)
+}
+
+// LogResponsibleEmailCorrected records a redacted correction audit signal.
+func LogResponsibleEmailCorrected(ctx context.Context, tenantID, inspectionID, invitationID identity.ID, source string, version int64) {
+	slog.InfoContext(ctx, "responsible_email_corrected", "tenantId", tenantID.String(), "inspectionId", inspectionID.String(), "invitationId", invitationID.String(), "source", safeCode(source), "responsibilityVersion", version)
+}
+
+// LogResponsibleAccessConfirmed records the first successful responsible OTP access.
+func LogResponsibleAccessConfirmed(ctx context.Context, tenantID, inspectionID, responsibilityID identity.ID, version int64) {
+	slog.InfoContext(ctx, "responsible_access_confirmed", "tenantId", tenantID.String(), "inspectionId", inspectionID.String(), "responsibilityId", responsibilityID.String(), "responsibilityVersion", version)
+}
+
+// LogOwnerDeliveryAlertRequested records an alert request without its email.
+func LogOwnerDeliveryAlertRequested(ctx context.Context, tenantID, eventID, inspectionID identity.ID, state string) {
+	slog.InfoContext(ctx, "owner_delivery_alert_requested", "tenantId", tenantID.String(), "eventId", eventID.String(), "inspectionId", inspectionID.String(), "state", safeCode(state))
+}
 
 // Metrics is a small dependency-free Prometheus collector for operational
 // notification signals. Labels are constrained to provider/channel values so
@@ -106,6 +131,16 @@ func (m *Metrics) Callback(provider string, correlated bool) {
 // Unknown records a provider outcome that cannot safely be retried.
 func (m *Metrics) Unknown(channel, provider string) {
 	m.counter("inspection_notification_unknown_total", safeLabels(channel, provider), 1)
+}
+
+// ResponsibleEmailCorrection records a correction or explicit reissue.
+func (m *Metrics) ResponsibleEmailCorrection(source string) {
+	m.counter("inspection_responsible_email_corrections_total", map[string]string{"source": safeCode(source)}, 1)
+}
+
+// DeliveryAlert records a terminal delivery alert request.
+func (m *Metrics) DeliveryAlert(state string) {
+	m.counter("inspection_notification_delivery_alerts_total", map[string]string{"state": safeCode(state)}, 1)
 }
 
 // QueueDepth updates the currently observed queue depth.

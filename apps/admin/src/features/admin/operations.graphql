@@ -12,7 +12,7 @@ query AdminCatalogs($first: Int!, $after: String, $search: String) { participant
 
 query AdminAssets($first: Int!, $after: String, $search: String) { assets(first: $first, after: $after, search: $search) { nodes { id name externalKey address status businessUnitId version } pageInfo { endCursor hasNextPage } } }
 
-query AdminGovernance($first: Int!, $after: String) { publicationPolicy { mode version } retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt } pageInfo { endCursor hasNextPage } } }
+query AdminGovernance($first: Int!, $after: String) { publicationPolicy { mode version } retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt inspectionId invitationId logicalTemplate failureCode recipientMasked responsibilityVersion canCorrectResponsibleEmail } pageInfo { endCursor hasNextPage } } }
 
 query AdminAudit($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } usageSummary { from to requests inputTokens outputTokens cost } }
 
@@ -23,3 +23,4 @@ mutation AdminInviteInternalUser($input: InviteInternalUserInput!) { inviteInter
 mutation AdminUpsertParticipant($input: UpsertParticipantInput!) { upsertParticipant(input: $input) { participant { id name status version contacts { id channel value verified active } } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminRegisterAsset($input: RegisterAssetInput!) { registerAsset(input: $input) { asset { id name externalKey status version } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminConfigurePublicationPolicy($input: ConfigurePublicationPolicyInput!) { configurePublicationPolicy(input: $input) { policy { mode version } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminCorrectInspectionResponsibleEmail($input: CorrectInspectionResponsibleEmailInput!) { correctInspectionResponsibleEmail(input: $input) { correction { inspectionId responsibilityId invitationId deliveryId deliveryStatus responsibilityStatus responsibilityVersion recipientMasked canCorrectResponsibleEmail } userErrors { code field message correlationId } clientMutationId } }

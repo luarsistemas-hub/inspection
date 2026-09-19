@@ -414,6 +414,37 @@ func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Sessio
 	return Session{ID: row.ID, TenantID: row.TenantID, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, CompletedSteps: steps, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
 }
 
+// ValidateCSRF authenticates a public onboarding mutation without changing
+// the session version or rotating the browser's CSRF proof.
+func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Session, error) {
+	if s.DB == nil || len(s.Pepper) < 32 || locator == "" || csrf == "" {
+		return Session{}, apperror.New(apperror.SessionExpired, "", "session expired")
+	}
+	now := s.now()
+	locatorDigest := digest(locator)
+	var row database.OnboardingSession
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := setSessionDigest(tx, locatorDigest); err != nil {
+			return err
+		}
+		if err := tx.Where("session_locator_digest=?", locatorDigest[:]).First(&row).Error; err != nil {
+			return err
+		}
+		if err := s.validateCurrentSession(tx, row, now); err != nil {
+			return err
+		}
+		proof, err := security.CSRFProof(locatorDigest, csrf, s.Pepper)
+		if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
+			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
+		}
+		return nil
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+}
+
 // LoadSubmission authenticates the mutation proof and returns the immutable
 // checkpoint records that make up the onboarding request.
 func (s Service) LoadSubmission(ctx context.Context, locator, csrf string) (Submission, error) {

@@ -207,6 +207,16 @@ export type CapturePayload = {
   userErrors: Array<UserError>;
 };
 
+export type CaptureReferenceItem = {
+  __typename?: 'CaptureReferenceItem';
+  availability: Scalars['String']['output'];
+  description: Scalars['String']['output'];
+  imageUrl: Maybe<Scalars['String']['output']>;
+  imageUrlExpiresAt: Maybe<Scalars['String']['output']>;
+  mediaId: Scalars['ID']['output'];
+  requirementKey: Scalars['String']['output'];
+};
+
 export type CaptureRequirement = {
   __typename?: 'CaptureRequirement';
   captureSourcePolicy: Scalars['String']['output'];
@@ -260,6 +270,21 @@ export type ConfigureRetentionPolicyInput = {
 export type ContactInput = {
   channel: Scalars['String']['input'];
   value: Scalars['String']['input'];
+};
+
+export type CorrectInspectionResponsibleEmailInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  emailConfirmation: Scalars['String']['input'];
+  expectedResponsibilityVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
+export type CorrectOnboardingResponsibleEmailInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  emailConfirmation: Scalars['String']['input'];
+  expectedResponsibilityVersion: Scalars['Int']['input'];
 };
 
 export type CreateBusinessUnitInput = {
@@ -333,12 +358,17 @@ export type CustomerEvidenceConnection = {
 export type CustomerEvidenceItem = {
   __typename?: 'CustomerEvidenceItem';
   captureSource: Maybe<Scalars['String']['output']>;
+  capturedAt: Maybe<Scalars['String']['output']>;
   description: Maybe<Scalars['String']['output']>;
+  flags: Array<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  label: Maybe<Scalars['String']['output']>;
   lineageId: Scalars['ID']['output'];
   mediaAvailability: Scalars['String']['output'];
   replacedBy: Maybe<Scalars['ID']['output']>;
   requirementKey: Scalars['String']['output'];
+  role: Scalars['String']['output'];
+  section: Maybe<Scalars['String']['output']>;
   state: Scalars['String']['output'];
   url: Maybe<Scalars['String']['output']>;
 };
@@ -369,8 +399,10 @@ export type CustomerReport = {
   __typename?: 'CustomerReport';
   advisory: Scalars['String']['output'];
   classification: Scalars['String']['output'];
+  context: ReportContext;
   historical: Scalars['Boolean']['output'];
   inspectionId: Scalars['ID']['output'];
+  requirements: Array<ReportRequirement>;
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
   version: Scalars['Int']['output'];
@@ -427,6 +459,7 @@ export type ExternalCapture = {
   policy: Scalars['JSON']['output'];
   recaptureRequestId: Maybe<Scalars['ID']['output']>;
   reference: Scalars['JSON']['output'];
+  referenceItems: Array<CaptureReferenceItem>;
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -624,6 +657,8 @@ export type Mutation = {
   configureMyNotificationPreferences: NotificationPreferencesPayload;
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
+  correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
+  correctOnboardingResponsibleEmail: OnboardingPayload;
   createBusinessUnit: BusinessUnitPayload;
   createInspection: InspectionPayload;
   createMediaUpload: MediaUploadPayload;
@@ -640,6 +675,7 @@ export type Mutation = {
   inviteOriginCapture: OriginInvitationPayload;
   markNotificationRead: RecipientNotificationPayload;
   presignMediaParts: PresignedPartsPayload;
+  promoteInspectionPhotos: OriginPromotionPayload;
   publishAnalysisProfile: AnalysisProfilePayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
@@ -758,6 +794,16 @@ export type MutationConfigureRetentionPolicyArgs = {
 };
 
 
+export type MutationCorrectInspectionResponsibleEmailArgs = {
+  input: CorrectInspectionResponsibleEmailInput;
+};
+
+
+export type MutationCorrectOnboardingResponsibleEmailArgs = {
+  input: CorrectOnboardingResponsibleEmailInput;
+};
+
+
 export type MutationCreateBusinessUnitArgs = {
   input: CreateBusinessUnitInput;
 };
@@ -835,6 +881,11 @@ export type MutationMarkNotificationReadArgs = {
 
 export type MutationPresignMediaPartsArgs = {
   input: PresignMediaPartsInput;
+};
+
+
+export type MutationPromoteInspectionPhotosArgs = {
+  input: PromoteInspectionPhotosInput;
 };
 
 
@@ -1003,10 +1054,17 @@ export type NotificationChannelDelivery = {
 export type NotificationDelivery = {
   __typename?: 'NotificationDelivery';
   aggregateStatus: Scalars['String']['output'];
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
   channels: Array<NotificationChannelDelivery>;
   createdAt: Scalars['String']['output'];
+  failureCode: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  inspectionId: Maybe<Scalars['ID']['output']>;
   intentId: Scalars['ID']['output'];
+  invitationId: Maybe<Scalars['ID']['output']>;
+  logicalTemplate: Scalars['String']['output'];
+  recipientMasked: Maybe<Scalars['String']['output']>;
+  responsibilityVersion: Maybe<Scalars['Int']['output']>;
   selectedProvider: Scalars['String']['output'];
   status: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
@@ -1116,12 +1174,18 @@ export type OnboardingSession = {
 
 export type OnboardingStatus = {
   __typename?: 'OnboardingStatus';
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
+  deliveryFailureCode: Maybe<Scalars['String']['output']>;
   deliveryStatus: Scalars['String']['output'];
   inspectionId: Maybe<Scalars['ID']['output']>;
   nextAction: Scalars['String']['output'];
   originStatus: Scalars['String']['output'];
   requestId: Maybe<Scalars['ID']['output']>;
+  responsibilityStatus: Maybe<Scalars['String']['output']>;
+  responsibilityVersion: Maybe<Scalars['Int']['output']>;
+  responsibleEmail: Maybe<Scalars['String']['output']>;
   state: Scalars['String']['output'];
+  updatedAt: Maybe<Scalars['String']['output']>;
 };
 
 export type OnboardingStep = {
@@ -1146,6 +1210,29 @@ export type OriginInvitationPayload = {
   invitationId: Maybe<Scalars['ID']['output']>;
   originVersionId: Maybe<Scalars['ID']['output']>;
   status: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type OriginPromotion = {
+  __typename?: 'OriginPromotion';
+  eligibleMedia: Array<OriginPromotionMedia>;
+  failureReason: Maybe<Scalars['String']['output']>;
+  inspectionId: Scalars['ID']['output'];
+  originVersionId: Maybe<Scalars['ID']['output']>;
+  status: Scalars['String']['output'];
+};
+
+export type OriginPromotionMedia = {
+  __typename?: 'OriginPromotionMedia';
+  description: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type OriginPromotionPayload = {
+  __typename?: 'OriginPromotionPayload';
+  clientMutationId: Scalars['String']['output'];
+  promotion: Maybe<OriginPromotion>;
   userErrors: Array<UserError>;
 };
 
@@ -1307,6 +1394,13 @@ export type ProjectTransitionInput = {
   projectId: Scalars['ID']['input'];
 };
 
+export type PromoteInspectionPhotosInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedAssetVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+  mediaIds: Array<Scalars['ID']['input']>;
+};
+
 export type PublicationPolicy = {
   __typename?: 'PublicationPolicy';
   mode: Scalars['String']['output'];
@@ -1367,6 +1461,8 @@ export type Query = {
   notificationDeliveries: NotificationDeliveryConnection;
   onboardingDefinition: OnboardingDefinition;
   onboardingSession: Maybe<OnboardingSession>;
+  onboardingStatus: Maybe<OnboardingStatus>;
+  originPromotion: Maybe<OriginPromotion>;
   originVersions: OriginVersionConnection;
   participant: Maybe<Participant>;
   participants: ParticipantConnection;
@@ -1480,6 +1576,11 @@ export type QueryNotificationDeliveriesArgs = {
 
 export type QueryOnboardingDefinitionArgs = {
   segment: Scalars['String']['input'];
+};
+
+
+export type QueryOriginPromotionArgs = {
+  inspectionId: Scalars['ID']['input'];
 };
 
 
@@ -1635,17 +1736,40 @@ export type ReopenProjectInput = {
 
 export type Report = {
   __typename?: 'Report';
+  advisory: Scalars['String']['output'];
   canonicalJSON: Scalars['JSON']['output'];
   classification: Scalars['String']['output'];
+  context: ReportContext;
   createdAt: Scalars['String']['output'];
+  evidence: Array<ReportEvidence>;
+  findings: Array<ReportFinding>;
   html: Scalars['String']['output'];
   htmlDigest: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   inspectionId: Scalars['ID']['output'];
   jsonDigest: Scalars['String']['output'];
   mode: Scalars['String']['output'];
+  pdfStatus: Scalars['String']['output'];
   projectId: Maybe<Scalars['ID']['output']>;
+  requirements: Array<ReportRequirement>;
+  timeline: Array<ReportTimelineEntry>;
   version: Scalars['Int']['output'];
+};
+
+export type ReportAssetContext = {
+  __typename?: 'ReportAssetContext';
+  address: Scalars['String']['output'];
+  externalKey: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+};
+
+export type ReportContext = {
+  __typename?: 'ReportContext';
+  asset: ReportAssetContext;
+  inspection: ReportInspectionContext;
+  participant: ReportParticipantContext;
+  template: ReportTemplateContext;
 };
 
 export type ReportDownload = {
@@ -1656,6 +1780,48 @@ export type ReportDownload = {
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
   url: Scalars['String']['output'];
+};
+
+export type ReportEvidence = {
+  __typename?: 'ReportEvidence';
+  availability: Scalars['String']['output'];
+  captureSource: Maybe<Scalars['String']['output']>;
+  capturedAt: Maybe<Scalars['String']['output']>;
+  description: Maybe<Scalars['String']['output']>;
+  displayDigest: Maybe<Scalars['String']['output']>;
+  flags: Array<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  requirementKey: Scalars['String']['output'];
+  role: Scalars['String']['output'];
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportFinding = {
+  __typename?: 'ReportFinding';
+  confidence: Scalars['Float']['output'];
+  description: Scalars['String']['output'];
+  evidenceIds: Array<Scalars['ID']['output']>;
+  id: Maybe<Scalars['ID']['output']>;
+  quality: Scalars['String']['output'];
+  recommendedAction: Scalars['String']['output'];
+  severity: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+};
+
+export type ReportInspectionContext = {
+  __typename?: 'ReportInspectionContext';
+  dueAt: Maybe<Scalars['String']['output']>;
+  generatedAt: Scalars['String']['output'];
+  projectId: Maybe<Scalars['ID']['output']>;
+  stageId: Maybe<Scalars['ID']['output']>;
+  stageLabel: Maybe<Scalars['String']['output']>;
+  submittedAt: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportParticipantContext = {
+  __typename?: 'ReportParticipantContext';
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
 };
 
 export type ReportPublication = {
@@ -1674,6 +1840,31 @@ export type ReportPublicationPayload = {
   clientMutationId: Scalars['String']['output'];
   publication: Maybe<ReportPublication>;
   userErrors: Array<UserError>;
+};
+
+export type ReportRequirement = {
+  __typename?: 'ReportRequirement';
+  coverage: Maybe<Scalars['String']['output']>;
+  impossibilityReason: Maybe<Scalars['String']['output']>;
+  instructions: Maybe<Scalars['String']['output']>;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  section: Scalars['String']['output'];
+};
+
+export type ReportTemplateContext = {
+  __typename?: 'ReportTemplateContext';
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type ReportTimelineEntry = {
+  __typename?: 'ReportTimelineEntry';
+  classification: Maybe<Scalars['String']['output']>;
+  position: Scalars['Int']['output'];
+  stageId: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
 };
 
 export type RequestAdminActivationOtpInput = {
@@ -1697,6 +1888,26 @@ export type RequestRecaptureInput = {
   deadlineAt: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
   items: Array<RecaptureItemInput>;
+};
+
+export type ResponsibleEmailCorrection = {
+  __typename?: 'ResponsibleEmailCorrection';
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
+  deliveryId: Maybe<Scalars['ID']['output']>;
+  deliveryStatus: Scalars['String']['output'];
+  inspectionId: Scalars['ID']['output'];
+  invitationId: Scalars['ID']['output'];
+  recipientMasked: Scalars['String']['output'];
+  responsibilityId: Scalars['ID']['output'];
+  responsibilityStatus: Scalars['String']['output'];
+  responsibilityVersion: Scalars['Int']['output'];
+};
+
+export type ResponsibleEmailCorrectionPayload = {
+  __typename?: 'ResponsibleEmailCorrectionPayload';
+  clientMutationId: Scalars['String']['output'];
+  correction: Maybe<ResponsibleEmailCorrection>;
+  userErrors: Array<UserError>;
 };
 
 export type RetentionMutationPayload = {

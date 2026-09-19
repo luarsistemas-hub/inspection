@@ -124,7 +124,7 @@ func DefaultRegistry() *Registry {
 		"capture.submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
 		"report.snapshot_created.v1", "report.ready.v1", "notification.delivery_requested.v1",
-		"notification.channel_status.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
+		"notification.channel_status.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
 	} {
 		_ = r.Register(name, 1)
 	}

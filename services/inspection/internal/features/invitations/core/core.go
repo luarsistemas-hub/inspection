@@ -13,6 +13,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
@@ -188,6 +189,16 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 		if err := tx.Save(&challenge).Error; err != nil {
 			return err
 		}
+		if err := tx.Model(&database.Responsibility{}).
+			Where("tenant_id=? AND id=? AND status='PENDING'", tenantID, invitation.ResponsibilityID).
+			Updates(map[string]any{"status": "ACCESSED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
+			return err
+		}
+		var responsibility database.Responsibility
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, invitation.ResponsibilityID).First(&responsibility).Error; err != nil {
+			return err
+		}
+		observability.LogResponsibleAccessConfirmed(ctx, tenantID, responsibility.InspectionID, responsibility.ID, responsibility.Version)
 		token, err := security.NewScopedToken(invitation.TenantID)
 		if err != nil {
 			return err

@@ -53,6 +53,12 @@ func TestValidatePropertyAndDelegateBoundaries(t *testing.T) {
 	if err := ValidateDelegate(StepPayload{"name": "", "email": "bad"}); code(err) != apperror.InvalidInput {
 		t.Fatalf("bad delegate code=%v", err)
 	}
+	if err := ValidateDelegate(StepPayload{"name": "Ana", "email": " Ana@Example.Test ", "emailConfirmation": "ana@example.test"}); err != nil {
+		t.Fatalf("normalized matching confirmation rejected: %v", err)
+	}
+	if err := ValidateDelegate(StepPayload{"name": "Ana", "email": "ana@example.test", "emailConfirmation": "other@example.test"}); code(err) != apperror.InvalidInput {
+		t.Fatalf("divergent confirmation accepted: %v", err)
+	}
 	if err := ValidateOriginMedia("text/plain", 1, "x"); code(err) != apperror.InvalidInput {
 		t.Fatalf("bad media code=%v", err)
 	}

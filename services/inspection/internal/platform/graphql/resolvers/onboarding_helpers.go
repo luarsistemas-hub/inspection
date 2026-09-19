@@ -12,6 +12,7 @@ import (
 	"inspection/libs/identity"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
+	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -63,6 +64,23 @@ func mapOnboardingCompletion(value onboardingcomplete.Result) (*graphql1.Onboard
 		State: value.State, RequestID: requestID, InspectionID: inspectionID,
 		NextAction: value.NextAction, OriginStatus: value.OriginStatus, DeliveryStatus: value.Delivery,
 	}
+}
+
+func mapDeliveryStatus(value deliverystatus.Status) *graphql1.OnboardingStatus {
+	status := &graphql1.OnboardingStatus{State: value.State, NextAction: value.NextAction, OriginStatus: value.OriginStatus, DeliveryStatus: value.DeliveryStatus, CanCorrectResponsibleEmail: value.CanCorrect}
+	status.RequestID = optionalOnboardingID(value.RequestID)
+	status.InspectionID = optionalOnboardingID(value.InspectionID)
+	status.ResponsibleEmail = value.ResponsibleEmail
+	status.ResponsibilityStatus = value.ResponsibilityStatus
+	status.DeliveryFailureCode = value.DeliveryFailureCode
+	if value.ResponsibilityVersion != nil {
+		status.ResponsibilityVersion = intPointer(int(*value.ResponsibilityVersion))
+	}
+	if value.UpdatedAt != nil {
+		formatted := value.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		status.UpdatedAt = &formatted
+	}
+	return status
 }
 
 func mapOnboardingSession(value onboardingsession.Session) *graphql1.OnboardingSession {

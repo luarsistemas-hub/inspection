@@ -380,6 +380,8 @@ type ComplexityRoot struct {
 		ConfigureMyNotificationPreferences     func(childComplexity int, input ConfigureNotificationPreferencesInput) int
 		ConfigurePublicationPolicy             func(childComplexity int, input ConfigurePublicationPolicyInput) int
 		ConfigureRetentionPolicy               func(childComplexity int, input ConfigureRetentionPolicyInput) int
+		CorrectInspectionResponsibleEmail      func(childComplexity int, input CorrectInspectionResponsibleEmailInput) int
+		CorrectOnboardingResponsibleEmail      func(childComplexity int, input CorrectOnboardingResponsibleEmailInput) int
 		CreateBusinessUnit                     func(childComplexity int, input CreateBusinessUnitInput) int
 		CreateInspection                       func(childComplexity int, input CreateInspectionInput) int
 		CreateMediaUpload                      func(childComplexity int, input CreateMediaUploadInput) int
@@ -442,14 +444,21 @@ type ComplexityRoot struct {
 	}
 
 	NotificationDelivery struct {
-		AggregateStatus  func(childComplexity int) int
-		Channels         func(childComplexity int) int
-		CreatedAt        func(childComplexity int) int
-		ID               func(childComplexity int) int
-		IntentID         func(childComplexity int) int
-		SelectedProvider func(childComplexity int) int
-		Status           func(childComplexity int) int
-		UpdatedAt        func(childComplexity int) int
+		AggregateStatus            func(childComplexity int) int
+		CanCorrectResponsibleEmail func(childComplexity int) int
+		Channels                   func(childComplexity int) int
+		CreatedAt                  func(childComplexity int) int
+		FailureCode                func(childComplexity int) int
+		ID                         func(childComplexity int) int
+		InspectionID               func(childComplexity int) int
+		IntentID                   func(childComplexity int) int
+		InvitationID               func(childComplexity int) int
+		LogicalTemplate            func(childComplexity int) int
+		RecipientMasked            func(childComplexity int) int
+		ResponsibilityVersion      func(childComplexity int) int
+		SelectedProvider           func(childComplexity int) int
+		Status                     func(childComplexity int) int
+		UpdatedAt                  func(childComplexity int) int
 	}
 
 	NotificationDeliveryConnection struct {
@@ -543,12 +552,18 @@ type ComplexityRoot struct {
 	}
 
 	OnboardingStatus struct {
-		DeliveryStatus func(childComplexity int) int
-		InspectionID   func(childComplexity int) int
-		NextAction     func(childComplexity int) int
-		OriginStatus   func(childComplexity int) int
-		RequestID      func(childComplexity int) int
-		State          func(childComplexity int) int
+		CanCorrectResponsibleEmail func(childComplexity int) int
+		DeliveryFailureCode        func(childComplexity int) int
+		DeliveryStatus             func(childComplexity int) int
+		InspectionID               func(childComplexity int) int
+		NextAction                 func(childComplexity int) int
+		OriginStatus               func(childComplexity int) int
+		RequestID                  func(childComplexity int) int
+		ResponsibilityStatus       func(childComplexity int) int
+		ResponsibilityVersion      func(childComplexity int) int
+		ResponsibleEmail           func(childComplexity int) int
+		State                      func(childComplexity int) int
+		UpdatedAt                  func(childComplexity int) int
 	}
 
 	OnboardingStep struct {
@@ -741,6 +756,7 @@ type ComplexityRoot struct {
 		NotificationDeliveries func(childComplexity int, first *int, after *string) int
 		OnboardingDefinition   func(childComplexity int, segment string) int
 		OnboardingSession      func(childComplexity int) int
+		OnboardingStatus       func(childComplexity int) int
 		OriginPromotion        func(childComplexity int, inspectionID string) int
 		OriginVersions         func(childComplexity int, assetID string, first *int, after *string) int
 		Participant            func(childComplexity int, id string) int
@@ -915,6 +931,24 @@ type ComplexityRoot struct {
 		Position       func(childComplexity int) int
 		StageID        func(childComplexity int) int
 		Status         func(childComplexity int) int
+	}
+
+	ResponsibleEmailCorrection struct {
+		CanCorrectResponsibleEmail func(childComplexity int) int
+		DeliveryID                 func(childComplexity int) int
+		DeliveryStatus             func(childComplexity int) int
+		InspectionID               func(childComplexity int) int
+		InvitationID               func(childComplexity int) int
+		RecipientMasked            func(childComplexity int) int
+		ResponsibilityID           func(childComplexity int) int
+		ResponsibilityStatus       func(childComplexity int) int
+		ResponsibilityVersion      func(childComplexity int) int
+	}
+
+	ResponsibleEmailCorrectionPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Correction       func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
 	}
 
 	RetentionMutationPayload struct {
@@ -1119,6 +1153,7 @@ type MutationResolver interface {
 	VerifyOnboardingOtp(ctx context.Context, input VerifyOnboardingOtpInput) (*OnboardingPayload, error)
 	SaveOnboardingStep(ctx context.Context, input OnboardingStepInput) (*OnboardingPayload, error)
 	CompleteOnboarding(ctx context.Context, input CompleteOnboardingInput) (*OnboardingPayload, error)
+	CorrectOnboardingResponsibleEmail(ctx context.Context, input CorrectOnboardingResponsibleEmailInput) (*OnboardingPayload, error)
 	RequestAdminActivationOtp(ctx context.Context, input RequestAdminActivationOtpInput) (*OnboardingPayload, error)
 	VerifyAdminActivationOtp(ctx context.Context, input VerifyAdminActivationOtpInput) (*OnboardingPayload, error)
 	SetAdminInitialPassword(ctx context.Context, input SetAdminInitialPasswordInput) (*OnboardingPayload, error)
@@ -1133,6 +1168,7 @@ type MutationResolver interface {
 	UpsertParticipant(ctx context.Context, input UpsertParticipantInput) (*ParticipantPayload, error)
 	VerifyContact(ctx context.Context, input VerifyContactInput) (*ParticipantContactPayload, error)
 	SetDeliveryChannels(ctx context.Context, input SetDeliveryChannelsInput) (*ParticipantPayload, error)
+	CorrectInspectionResponsibleEmail(ctx context.Context, input CorrectInspectionResponsibleEmailInput) (*ResponsibleEmailCorrectionPayload, error)
 	PublishSegmentDefinition(ctx context.Context, input PublishSegmentDefinitionInput) (*SegmentDefinitionPayload, error)
 	ActivateSegmentDefinition(ctx context.Context, input ActivateSegmentDefinitionInput) (*SegmentDefinitionPayload, error)
 	PublishTemplateVersion(ctx context.Context, input PublishTemplateVersionInput) (*TemplatePayload, error)
@@ -1183,6 +1219,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	OnboardingDefinition(ctx context.Context, segment string) (*OnboardingDefinition, error)
 	OnboardingSession(ctx context.Context) (*OnboardingSession, error)
+	OnboardingStatus(ctx context.Context) (*OnboardingStatus, error)
 	Me(ctx context.Context) (*Me, error)
 	Tenant(ctx context.Context) (*Tenant, error)
 	Memberships(ctx context.Context, first *int, after *string) (*MembershipConnection, error)
@@ -2723,6 +2760,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ConfigureRetentionPolicy(childComplexity, args["input"].(ConfigureRetentionPolicyInput)), true
+	case "Mutation.correctInspectionResponsibleEmail":
+		if e.ComplexityRoot.Mutation.CorrectInspectionResponsibleEmail == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_correctInspectionResponsibleEmail_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CorrectInspectionResponsibleEmail(childComplexity, args["input"].(CorrectInspectionResponsibleEmailInput)), true
+	case "Mutation.correctOnboardingResponsibleEmail":
+		if e.ComplexityRoot.Mutation.CorrectOnboardingResponsibleEmail == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_correctOnboardingResponsibleEmail_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CorrectOnboardingResponsibleEmail(childComplexity, args["input"].(CorrectOnboardingResponsibleEmailInput)), true
 	case "Mutation.createBusinessUnit":
 		if e.ComplexityRoot.Mutation.CreateBusinessUnit == nil {
 			break
@@ -3302,6 +3361,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NotificationDelivery.AggregateStatus(childComplexity), true
+	case "NotificationDelivery.canCorrectResponsibleEmail":
+		if e.ComplexityRoot.NotificationDelivery.CanCorrectResponsibleEmail == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.CanCorrectResponsibleEmail(childComplexity), true
 	case "NotificationDelivery.channels":
 		if e.ComplexityRoot.NotificationDelivery.Channels == nil {
 			break
@@ -3314,18 +3379,54 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.NotificationDelivery.CreatedAt(childComplexity), true
+	case "NotificationDelivery.failureCode":
+		if e.ComplexityRoot.NotificationDelivery.FailureCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.FailureCode(childComplexity), true
 	case "NotificationDelivery.id":
 		if e.ComplexityRoot.NotificationDelivery.ID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.NotificationDelivery.ID(childComplexity), true
+	case "NotificationDelivery.inspectionId":
+		if e.ComplexityRoot.NotificationDelivery.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.InspectionID(childComplexity), true
 	case "NotificationDelivery.intentId":
 		if e.ComplexityRoot.NotificationDelivery.IntentID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.NotificationDelivery.IntentID(childComplexity), true
+	case "NotificationDelivery.invitationId":
+		if e.ComplexityRoot.NotificationDelivery.InvitationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.InvitationID(childComplexity), true
+	case "NotificationDelivery.logicalTemplate":
+		if e.ComplexityRoot.NotificationDelivery.LogicalTemplate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.LogicalTemplate(childComplexity), true
+	case "NotificationDelivery.recipientMasked":
+		if e.ComplexityRoot.NotificationDelivery.RecipientMasked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.RecipientMasked(childComplexity), true
+	case "NotificationDelivery.responsibilityVersion":
+		if e.ComplexityRoot.NotificationDelivery.ResponsibilityVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.NotificationDelivery.ResponsibilityVersion(childComplexity), true
 	case "NotificationDelivery.selectedProvider":
 		if e.ComplexityRoot.NotificationDelivery.SelectedProvider == nil {
 			break
@@ -3698,6 +3799,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OnboardingSession.Version(childComplexity), true
 
+	case "OnboardingStatus.canCorrectResponsibleEmail":
+		if e.ComplexityRoot.OnboardingStatus.CanCorrectResponsibleEmail == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.CanCorrectResponsibleEmail(childComplexity), true
+	case "OnboardingStatus.deliveryFailureCode":
+		if e.ComplexityRoot.OnboardingStatus.DeliveryFailureCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.DeliveryFailureCode(childComplexity), true
 	case "OnboardingStatus.deliveryStatus":
 		if e.ComplexityRoot.OnboardingStatus.DeliveryStatus == nil {
 			break
@@ -3728,12 +3841,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OnboardingStatus.RequestID(childComplexity), true
+	case "OnboardingStatus.responsibilityStatus":
+		if e.ComplexityRoot.OnboardingStatus.ResponsibilityStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.ResponsibilityStatus(childComplexity), true
+	case "OnboardingStatus.responsibilityVersion":
+		if e.ComplexityRoot.OnboardingStatus.ResponsibilityVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.ResponsibilityVersion(childComplexity), true
+	case "OnboardingStatus.responsibleEmail":
+		if e.ComplexityRoot.OnboardingStatus.ResponsibleEmail == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.ResponsibleEmail(childComplexity), true
 	case "OnboardingStatus.state":
 		if e.ComplexityRoot.OnboardingStatus.State == nil {
 			break
 		}
 
 		return e.ComplexityRoot.OnboardingStatus.State(childComplexity), true
+	case "OnboardingStatus.updatedAt":
+		if e.ComplexityRoot.OnboardingStatus.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingStatus.UpdatedAt(childComplexity), true
 
 	case "OnboardingStep.fields":
 		if e.ComplexityRoot.OnboardingStep.Fields == nil {
@@ -4537,6 +4674,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.OnboardingSession(childComplexity), true
+	case "Query.onboardingStatus":
+		if e.ComplexityRoot.Query.OnboardingStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.OnboardingStatus(childComplexity), true
 	case "Query.originPromotion":
 		if e.ComplexityRoot.Query.OriginPromotion == nil {
 			break
@@ -5351,6 +5494,80 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ReportTimelineEntry.Status(childComplexity), true
 
+	case "ResponsibleEmailCorrection.canCorrectResponsibleEmail":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.CanCorrectResponsibleEmail == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.CanCorrectResponsibleEmail(childComplexity), true
+	case "ResponsibleEmailCorrection.deliveryId":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.DeliveryID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.DeliveryID(childComplexity), true
+	case "ResponsibleEmailCorrection.deliveryStatus":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.DeliveryStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.DeliveryStatus(childComplexity), true
+	case "ResponsibleEmailCorrection.inspectionId":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.InspectionID(childComplexity), true
+	case "ResponsibleEmailCorrection.invitationId":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.InvitationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.InvitationID(childComplexity), true
+	case "ResponsibleEmailCorrection.recipientMasked":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.RecipientMasked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.RecipientMasked(childComplexity), true
+	case "ResponsibleEmailCorrection.responsibilityId":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityID(childComplexity), true
+	case "ResponsibleEmailCorrection.responsibilityStatus":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityStatus(childComplexity), true
+	case "ResponsibleEmailCorrection.responsibilityVersion":
+		if e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrection.ResponsibilityVersion(childComplexity), true
+
+	case "ResponsibleEmailCorrectionPayload.clientMutationId":
+		if e.ComplexityRoot.ResponsibleEmailCorrectionPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrectionPayload.ClientMutationID(childComplexity), true
+	case "ResponsibleEmailCorrectionPayload.correction":
+		if e.ComplexityRoot.ResponsibleEmailCorrectionPayload.Correction == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrectionPayload.Correction(childComplexity), true
+	case "ResponsibleEmailCorrectionPayload.userErrors":
+		if e.ComplexityRoot.ResponsibleEmailCorrectionPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResponsibleEmailCorrectionPayload.UserErrors(childComplexity), true
+
 	case "RetentionMutationPayload.clientMutationId":
 		if e.ComplexityRoot.RetentionMutationPayload.ClientMutationID == nil {
 			break
@@ -6104,6 +6321,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputConfigurePublicationPolicyInput,
 		ec.unmarshalInputConfigureRetentionPolicyInput,
 		ec.unmarshalInputContactInput,
+		ec.unmarshalInputCorrectInspectionResponsibleEmailInput,
+		ec.unmarshalInputCorrectOnboardingResponsibleEmailInput,
 		ec.unmarshalInputCreateBusinessUnitInput,
 		ec.unmarshalInputCreateInspectionInput,
 		ec.unmarshalInputCreateMediaUploadInput,
@@ -6236,6 +6455,7 @@ var sources = []*ast.Source{
 type Query {
 	 onboardingDefinition(segment: String!): OnboardingDefinition!
 	 onboardingSession: OnboardingSession
+	 onboardingStatus: OnboardingStatus
   me: Me!
   tenant: Tenant
   memberships(first: Int = 25, after: String): MembershipConnection!
@@ -6281,13 +6501,14 @@ type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, busin
 type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
 type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
-type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String! }
+type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String!, responsibleEmail: String, responsibilityStatus: String, responsibilityVersion: Int, deliveryFailureCode: String, canCorrectResponsibleEmail: Boolean!, updatedAt: String }
 type OnboardingPayload { session: OnboardingSession, sessionLocator: String, request: OnboardingRequest, activation: OnboardingActivation, status: OnboardingStatus, userErrors: [UserError!]!, clientMutationId: String! }
 
 input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!, clientMutationId: String! }
 input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
+input CorrectOnboardingResponsibleEmailInput { email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
 input RequestAdminActivationOtpInput { activationToken: String, clientMutationId: String! }
 input VerifyAdminActivationOtpInput { code: String!, clientMutationId: String! }
 input SetAdminInitialPasswordInput { password: String!, clientMutationId: String! }
@@ -6297,6 +6518,7 @@ type Mutation {
   verifyOnboardingOtp(input: VerifyOnboardingOtpInput!): OnboardingPayload!
   saveOnboardingStep(input: OnboardingStepInput!): OnboardingPayload!
   completeOnboarding(input: CompleteOnboardingInput!): OnboardingPayload!
+  correctOnboardingResponsibleEmail(input: CorrectOnboardingResponsibleEmailInput!): OnboardingPayload!
   requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
   verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
   setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!
@@ -6311,6 +6533,7 @@ type Mutation {
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
   verifyContact(input: VerifyContactInput!): ParticipantContactPayload!
   setDeliveryChannels(input: SetDeliveryChannelsInput!): ParticipantPayload!
+  correctInspectionResponsibleEmail(input: CorrectInspectionResponsibleEmailInput!): ResponsibleEmailCorrectionPayload!
   publishSegmentDefinition(input: PublishSegmentDefinitionInput!): SegmentDefinitionPayload!
   activateSegmentDefinition(input: ActivateSegmentDefinitionInput!): SegmentDefinitionPayload!
   publishTemplateVersion(input: PublishTemplateVersionInput!): TemplatePayload!
@@ -6459,6 +6682,13 @@ type NotificationDelivery {
   status: String!
   aggregateStatus: String!
   selectedProvider: String!
+  inspectionId: ID
+  invitationId: ID
+  logicalTemplate: String!
+  failureCode: String
+  recipientMasked: String
+  responsibilityVersion: Int
+  canCorrectResponsibleEmail: Boolean!
   channels: [NotificationChannelDelivery!]!
   createdAt: String!
   updatedAt: String!
@@ -6559,6 +6789,9 @@ type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! cli
 type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
+input CorrectInspectionResponsibleEmailInput { inspectionId: ID!, email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
+type ResponsibleEmailCorrection { inspectionId: ID!, responsibilityId: ID!, invitationId: ID!, deliveryId: ID, deliveryStatus: String!, responsibilityStatus: String!, responsibilityVersion: Int!, recipientMasked: String!, canCorrectResponsibleEmail: Boolean! }
+type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection, userErrors: [UserError!]!, clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }
@@ -7266,6 +7499,20 @@ func (ec *executionContext) childFields_NotificationDelivery(ctx context.Context
 		return ec.fieldContext_NotificationDelivery_aggregateStatus(ctx, field)
 	case "selectedProvider":
 		return ec.fieldContext_NotificationDelivery_selectedProvider(ctx, field)
+	case "inspectionId":
+		return ec.fieldContext_NotificationDelivery_inspectionId(ctx, field)
+	case "invitationId":
+		return ec.fieldContext_NotificationDelivery_invitationId(ctx, field)
+	case "logicalTemplate":
+		return ec.fieldContext_NotificationDelivery_logicalTemplate(ctx, field)
+	case "failureCode":
+		return ec.fieldContext_NotificationDelivery_failureCode(ctx, field)
+	case "recipientMasked":
+		return ec.fieldContext_NotificationDelivery_recipientMasked(ctx, field)
+	case "responsibilityVersion":
+		return ec.fieldContext_NotificationDelivery_responsibilityVersion(ctx, field)
+	case "canCorrectResponsibleEmail":
+		return ec.fieldContext_NotificationDelivery_canCorrectResponsibleEmail(ctx, field)
 	case "channels":
 		return ec.fieldContext_NotificationDelivery_channels(ctx, field)
 	case "createdAt":
@@ -7470,6 +7717,18 @@ func (ec *executionContext) childFields_OnboardingStatus(ctx context.Context, fi
 		return ec.fieldContext_OnboardingStatus_originStatus(ctx, field)
 	case "deliveryStatus":
 		return ec.fieldContext_OnboardingStatus_deliveryStatus(ctx, field)
+	case "responsibleEmail":
+		return ec.fieldContext_OnboardingStatus_responsibleEmail(ctx, field)
+	case "responsibilityStatus":
+		return ec.fieldContext_OnboardingStatus_responsibilityStatus(ctx, field)
+	case "responsibilityVersion":
+		return ec.fieldContext_OnboardingStatus_responsibilityVersion(ctx, field)
+	case "deliveryFailureCode":
+		return ec.fieldContext_OnboardingStatus_deliveryFailureCode(ctx, field)
+	case "canCorrectResponsibleEmail":
+		return ec.fieldContext_OnboardingStatus_canCorrectResponsibleEmail(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_OnboardingStatus_updatedAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OnboardingStatus", field.Name)
 }
@@ -8126,6 +8385,42 @@ func (ec *executionContext) childFields_ReportTimelineEntry(ctx context.Context,
 		return ec.fieldContext_ReportTimelineEntry_position(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportTimelineEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_ResponsibleEmailCorrection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_ResponsibleEmailCorrection_inspectionId(ctx, field)
+	case "responsibilityId":
+		return ec.fieldContext_ResponsibleEmailCorrection_responsibilityId(ctx, field)
+	case "invitationId":
+		return ec.fieldContext_ResponsibleEmailCorrection_invitationId(ctx, field)
+	case "deliveryId":
+		return ec.fieldContext_ResponsibleEmailCorrection_deliveryId(ctx, field)
+	case "deliveryStatus":
+		return ec.fieldContext_ResponsibleEmailCorrection_deliveryStatus(ctx, field)
+	case "responsibilityStatus":
+		return ec.fieldContext_ResponsibleEmailCorrection_responsibilityStatus(ctx, field)
+	case "responsibilityVersion":
+		return ec.fieldContext_ResponsibleEmailCorrection_responsibilityVersion(ctx, field)
+	case "recipientMasked":
+		return ec.fieldContext_ResponsibleEmailCorrection_recipientMasked(ctx, field)
+	case "canCorrectResponsibleEmail":
+		return ec.fieldContext_ResponsibleEmailCorrection_canCorrectResponsibleEmail(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ResponsibleEmailCorrection", field.Name)
+}
+
+func (ec *executionContext) childFields_ResponsibleEmailCorrectionPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "correction":
+		return ec.fieldContext_ResponsibleEmailCorrectionPayload_correction(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_ResponsibleEmailCorrectionPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_ResponsibleEmailCorrectionPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ResponsibleEmailCorrectionPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_RetentionMutationPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -8858,6 +9153,34 @@ func (ec *executionContext) field_Mutation_configureRetentionPolicy_args(ctx con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ConfigureRetentionPolicyInput, error) {
 			return ec.unmarshalNConfigureRetentionPolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureRetentionPolicyInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_correctInspectionResponsibleEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CorrectInspectionResponsibleEmailInput, error) {
+			return ec.unmarshalNCorrectInspectionResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectInspectionResponsibleEmailInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_correctOnboardingResponsibleEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CorrectOnboardingResponsibleEmailInput, error) {
+			return ec.unmarshalNCorrectOnboardingResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectOnboardingResponsibleEmailInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -15725,6 +16048,50 @@ func (ec *executionContext) fieldContext_Mutation_completeOnboarding(ctx context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_correctOnboardingResponsibleEmail(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_correctOnboardingResponsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CorrectOnboardingResponsibleEmail(ctx, fc.Args["input"].(CorrectOnboardingResponsibleEmailInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OnboardingPayload) graphql.Marshaler {
+			return ec.marshalNOnboardingPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_correctOnboardingResponsibleEmail(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OnboardingPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_correctOnboardingResponsibleEmail_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_requestAdminActivationOtp(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16335,6 +16702,50 @@ func (ec *executionContext) fieldContext_Mutation_setDeliveryChannels(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setDeliveryChannels_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_correctInspectionResponsibleEmail(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_correctInspectionResponsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CorrectInspectionResponsibleEmail(ctx, fc.Args["input"].(CorrectInspectionResponsibleEmailInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ResponsibleEmailCorrectionPayload) graphql.Marshaler {
+			return ec.marshalNResponsibleEmailCorrectionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResponsibleEmailCorrectionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_correctInspectionResponsibleEmail(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ResponsibleEmailCorrectionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_correctInspectionResponsibleEmail_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -18687,6 +19098,167 @@ func (ec *executionContext) fieldContext_NotificationDelivery_selectedProvider(_
 	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _NotificationDelivery_inspectionId(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_invitationId(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_invitationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InvitationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_invitationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_logicalTemplate(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_logicalTemplate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LogicalTemplate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_logicalTemplate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_failureCode(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_failureCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailureCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_failureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_recipientMasked(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_recipientMasked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RecipientMasked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_recipientMasked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_responsibilityVersion(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_responsibilityVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_responsibilityVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _NotificationDelivery_canCorrectResponsibleEmail(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_NotificationDelivery_canCorrectResponsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CanCorrectResponsibleEmail, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_NotificationDelivery_canCorrectResponsibleEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("NotificationDelivery", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _NotificationDelivery_channels(ctx context.Context, field graphql.CollectedField, obj *NotificationDelivery) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20319,6 +20891,144 @@ func (ec *executionContext) _OnboardingStatus_deliveryStatus(ctx context.Context
 	)
 }
 func (ec *executionContext) fieldContext_OnboardingStatus_deliveryStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_responsibleEmail(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_responsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibleEmail, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_responsibleEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_responsibilityStatus(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_responsibilityStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_responsibilityStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_responsibilityVersion(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_responsibilityVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_responsibilityVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_deliveryFailureCode(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_deliveryFailureCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryFailureCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_deliveryFailureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_canCorrectResponsibleEmail(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_canCorrectResponsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CanCorrectResponsibleEmail, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_canCorrectResponsibleEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingStatus_updatedAt(ctx context.Context, field graphql.CollectedField, obj *OnboardingStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingStatus_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingStatus_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("OnboardingStatus", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -22913,6 +23623,38 @@ func (ec *executionContext) fieldContext_Query_onboardingSession(_ context.Conte
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_OnboardingSession(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_onboardingStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_onboardingStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().OnboardingStatus(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OnboardingStatus) graphql.Marshaler {
+			return ec.marshalOOnboardingStatus2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingStatus(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_onboardingStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OnboardingStatus(ctx, field)
 		},
 	}
 	return fc, nil
@@ -26927,6 +27669,300 @@ func (ec *executionContext) _ReportTimelineEntry_position(ctx context.Context, f
 }
 func (ec *executionContext) fieldContext_ReportTimelineEntry_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportTimelineEntry", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_responsibilityId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_responsibilityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_responsibilityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_invitationId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_invitationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InvitationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_invitationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_deliveryId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_deliveryId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_deliveryId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_deliveryStatus(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_deliveryStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_deliveryStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_responsibilityStatus(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_responsibilityStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_responsibilityStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_responsibilityVersion(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_responsibilityVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_responsibilityVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_recipientMasked(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_recipientMasked(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RecipientMasked, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_recipientMasked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrection_canCorrectResponsibleEmail(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrection_canCorrectResponsibleEmail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CanCorrectResponsibleEmail, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrection_canCorrectResponsibleEmail(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrection", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrectionPayload_correction(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrectionPayload_correction(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Correction, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ResponsibleEmailCorrection) graphql.Marshaler {
+			return ec.marshalOResponsibleEmailCorrection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResponsibleEmailCorrection(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrectionPayload_correction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ResponsibleEmailCorrectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ResponsibleEmailCorrection(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrectionPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrectionPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrectionPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ResponsibleEmailCorrectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ResponsibleEmailCorrectionPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResponsibleEmailCorrectionPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResponsibleEmailCorrectionPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResponsibleEmailCorrectionPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _RetentionMutationPayload_status(ctx context.Context, field graphql.CollectedField, obj *RetentionMutationPayload) (ret graphql.Marshaler) {
@@ -31800,6 +32836,115 @@ func (ec *executionContext) unmarshalInputContactInput(ctx context.Context, obj 
 				return it, err
 			}
 			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCorrectInspectionResponsibleEmailInput(ctx context.Context, obj any) (CorrectInspectionResponsibleEmailInput, error) {
+	var it CorrectInspectionResponsibleEmailInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "email", "emailConfirmation", "expectedResponsibilityVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "emailConfirmation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("emailConfirmation"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EmailConfirmation = data
+		case "expectedResponsibilityVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedResponsibilityVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedResponsibilityVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCorrectOnboardingResponsibleEmailInput(ctx context.Context, obj any) (CorrectOnboardingResponsibleEmailInput, error) {
+	var it CorrectOnboardingResponsibleEmailInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"email", "emailConfirmation", "expectedResponsibilityVersion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Email = data
+		case "emailConfirmation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("emailConfirmation"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EmailConfirmation = data
+		case "expectedResponsibilityVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedResponsibilityVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedResponsibilityVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
 		}
 	}
 	return it, nil
@@ -36843,6 +37988,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "correctOnboardingResponsibleEmail":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_correctOnboardingResponsibleEmail(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "requestAdminActivationOtp":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_requestAdminActivationOtp(ctx, field)
@@ -36937,6 +38089,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setDeliveryChannels":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setDeliveryChannels(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "correctInspectionResponsibleEmail":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_correctInspectionResponsibleEmail(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -37396,6 +38555,41 @@ func (ec *executionContext) _NotificationDelivery(ctx context.Context, sel ast.S
 			}
 		case "selectedProvider":
 			out.Values[i] = ec._NotificationDelivery_selectedProvider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inspectionId":
+			out.Values[i] = ec._NotificationDelivery_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "invitationId":
+			out.Values[i] = ec._NotificationDelivery_invitationId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "logicalTemplate":
+			out.Values[i] = ec._NotificationDelivery_logicalTemplate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failureCode":
+			out.Values[i] = ec._NotificationDelivery_failureCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "recipientMasked":
+			out.Values[i] = ec._NotificationDelivery_recipientMasked(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "responsibilityVersion":
+			out.Values[i] = ec._NotificationDelivery_responsibilityVersion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "canCorrectResponsibleEmail":
+			out.Values[i] = ec._NotificationDelivery_canCorrectResponsibleEmail(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -38123,6 +39317,36 @@ func (ec *executionContext) _OnboardingStatus(ctx context.Context, sel ast.Selec
 		case "deliveryStatus":
 			out.Values[i] = ec._OnboardingStatus_deliveryStatus(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "responsibleEmail":
+			out.Values[i] = ec._OnboardingStatus_responsibleEmail(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "responsibilityStatus":
+			out.Values[i] = ec._OnboardingStatus_responsibilityStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "responsibilityVersion":
+			out.Values[i] = ec._OnboardingStatus_responsibilityVersion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deliveryFailureCode":
+			out.Values[i] = ec._OnboardingStatus_deliveryFailureCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "canCorrectResponsibleEmail":
+			out.Values[i] = ec._OnboardingStatus_canCorrectResponsibleEmail(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._OnboardingStatus_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -39485,6 +40709,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_onboardingSession(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "onboardingStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_onboardingStatus(ctx, field)
 				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -41360,6 +42606,132 @@ func (ec *executionContext) _ReportTimelineEntry(ctx context.Context, sel ast.Se
 			}
 		case "position":
 			out.Values[i] = ec._ReportTimelineEntry_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var responsibleEmailCorrectionImplementors = []string{"ResponsibleEmailCorrection"}
+
+func (ec *executionContext) _ResponsibleEmailCorrection(ctx context.Context, sel ast.SelectionSet, obj *ResponsibleEmailCorrection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, responsibleEmailCorrectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ResponsibleEmailCorrection")
+		case "inspectionId":
+			out.Values[i] = ec._ResponsibleEmailCorrection_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "responsibilityId":
+			out.Values[i] = ec._ResponsibleEmailCorrection_responsibilityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "invitationId":
+			out.Values[i] = ec._ResponsibleEmailCorrection_invitationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deliveryId":
+			out.Values[i] = ec._ResponsibleEmailCorrection_deliveryId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deliveryStatus":
+			out.Values[i] = ec._ResponsibleEmailCorrection_deliveryStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "responsibilityStatus":
+			out.Values[i] = ec._ResponsibleEmailCorrection_responsibilityStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "responsibilityVersion":
+			out.Values[i] = ec._ResponsibleEmailCorrection_responsibilityVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recipientMasked":
+			out.Values[i] = ec._ResponsibleEmailCorrection_recipientMasked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "canCorrectResponsibleEmail":
+			out.Values[i] = ec._ResponsibleEmailCorrection_canCorrectResponsibleEmail(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var responsibleEmailCorrectionPayloadImplementors = []string{"ResponsibleEmailCorrectionPayload"}
+
+func (ec *executionContext) _ResponsibleEmailCorrectionPayload(ctx context.Context, sel ast.SelectionSet, obj *ResponsibleEmailCorrectionPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, responsibleEmailCorrectionPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ResponsibleEmailCorrectionPayload")
+		case "correction":
+			out.Values[i] = ec._ResponsibleEmailCorrectionPayload_correction(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._ResponsibleEmailCorrectionPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._ResponsibleEmailCorrectionPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -43581,6 +44953,16 @@ func (ec *executionContext) unmarshalNContactInput2ᚖinspectionᚋservicesᚋin
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCorrectInspectionResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectInspectionResponsibleEmailInput(ctx context.Context, v any) (CorrectInspectionResponsibleEmailInput, error) {
+	res, err := ec.unmarshalInputCorrectInspectionResponsibleEmailInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNCorrectOnboardingResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectOnboardingResponsibleEmailInput(ctx context.Context, v any) (CorrectOnboardingResponsibleEmailInput, error) {
+	res, err := ec.unmarshalInputCorrectOnboardingResponsibleEmailInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCreateBusinessUnitInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCreateBusinessUnitInput(ctx context.Context, v any) (CreateBusinessUnitInput, error) {
 	res, err := ec.unmarshalInputCreateBusinessUnitInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -44937,6 +46319,16 @@ func (ec *executionContext) unmarshalNRequestRecaptureInput2inspectionᚋservice
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNResponsibleEmailCorrectionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResponsibleEmailCorrectionPayload(ctx context.Context, sel ast.SelectionSet, v *ResponsibleEmailCorrectionPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ResponsibleEmailCorrectionPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNRetentionMutationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetentionMutationPayload(ctx context.Context, sel ast.SelectionSet, v *RetentionMutationPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -45851,6 +47243,13 @@ func (ec *executionContext) marshalOReportPublication2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._ReportPublication(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOResponsibleEmailCorrection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResponsibleEmailCorrection(ctx context.Context, sel ast.SelectionSet, v *ResponsibleEmailCorrection) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ResponsibleEmailCorrection(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalORetentionPolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetentionPolicy(ctx context.Context, sel ast.SelectionSet, v *RetentionPolicy) graphql.Marshaler {

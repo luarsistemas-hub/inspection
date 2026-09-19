@@ -3,6 +3,7 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -72,6 +73,29 @@ func stringValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func intPointer(value int) *int { return &value }
+
+func userErrorFrom(err error) *graphql1.UserError {
+	code, field, message := apperror.Public(err)
+	var fieldValue *string
+	if field != "" {
+		fieldValue = &field
+	}
+	return &graphql1.UserError{Code: string(code), Field: fieldValue, Message: message}
+}
+
+func maskEmail(value string) string {
+	at := strings.LastIndex(value, "@")
+	if at <= 0 {
+		return "***"
+	}
+	local, domain := value[:at], value[at+1:]
+	if len(local) == 1 {
+		return "* @" + domain
+	}
+	return local[:1] + "***@" + domain
 }
 
 func mapMembership(ctx context.Context, db *gorm.DB, row database.Membership) (*graphql1.Membership, error) {

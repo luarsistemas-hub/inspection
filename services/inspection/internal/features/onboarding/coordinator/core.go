@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/mail"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 
 	"inspection/libs/identity"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	participantcore "inspection/services/inspection/internal/features/participants/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 )
@@ -83,9 +83,16 @@ func ValidateDelegate(payload StepPayload) error {
 		return apperror.New(apperror.InvalidInput, "name", "participant name is required")
 	}
 	email := stringValue(payload, "email")
-	parsed, err := mail.ParseAddress(strings.ToLower(strings.TrimSpace(email)))
-	if err != nil || parsed.Address != strings.ToLower(strings.TrimSpace(email)) {
+	normalized, err := participantcore.Normalize("EMAIL", email)
+	if err != nil {
 		return apperror.New(apperror.InvalidInput, "email", "invalid email")
+	}
+	confirmation, err := participantcore.Normalize("EMAIL", stringValue(payload, "emailConfirmation"))
+	if err != nil {
+		return apperror.New(apperror.InvalidInput, "emailConfirmation", "email confirmation does not match")
+	}
+	if confirmation != normalized {
+		return apperror.New(apperror.InvalidInput, "emailConfirmation", "email confirmation does not match")
 	}
 	return nil
 }

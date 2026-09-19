@@ -3,6 +3,7 @@ scalar JSON
 type Query {
 	 onboardingDefinition(segment: String!): OnboardingDefinition!
 	 onboardingSession: OnboardingSession
+	 onboardingStatus: OnboardingStatus
   me: Me!
   tenant: Tenant
   memberships(first: Int = 25, after: String): MembershipConnection!
@@ -48,13 +49,14 @@ type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, busin
 type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
 type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
-type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String! }
+type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String!, responsibleEmail: String, responsibilityStatus: String, responsibilityVersion: Int, deliveryFailureCode: String, canCorrectResponsibleEmail: Boolean!, updatedAt: String }
 type OnboardingPayload { session: OnboardingSession, sessionLocator: String, request: OnboardingRequest, activation: OnboardingActivation, status: OnboardingStatus, userErrors: [UserError!]!, clientMutationId: String! }
 
 input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!, clientMutationId: String! }
 input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
+input CorrectOnboardingResponsibleEmailInput { email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
 input RequestAdminActivationOtpInput { activationToken: String, clientMutationId: String! }
 input VerifyAdminActivationOtpInput { code: String!, clientMutationId: String! }
 input SetAdminInitialPasswordInput { password: String!, clientMutationId: String! }
@@ -64,6 +66,7 @@ type Mutation {
   verifyOnboardingOtp(input: VerifyOnboardingOtpInput!): OnboardingPayload!
   saveOnboardingStep(input: OnboardingStepInput!): OnboardingPayload!
   completeOnboarding(input: CompleteOnboardingInput!): OnboardingPayload!
+  correctOnboardingResponsibleEmail(input: CorrectOnboardingResponsibleEmailInput!): OnboardingPayload!
   requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
   verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
   setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!
@@ -78,6 +81,7 @@ type Mutation {
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
   verifyContact(input: VerifyContactInput!): ParticipantContactPayload!
   setDeliveryChannels(input: SetDeliveryChannelsInput!): ParticipantPayload!
+  correctInspectionResponsibleEmail(input: CorrectInspectionResponsibleEmailInput!): ResponsibleEmailCorrectionPayload!
   publishSegmentDefinition(input: PublishSegmentDefinitionInput!): SegmentDefinitionPayload!
   activateSegmentDefinition(input: ActivateSegmentDefinitionInput!): SegmentDefinitionPayload!
   publishTemplateVersion(input: PublishTemplateVersionInput!): TemplatePayload!
@@ -226,6 +230,13 @@ type NotificationDelivery {
   status: String!
   aggregateStatus: String!
   selectedProvider: String!
+  inspectionId: ID
+  invitationId: ID
+  logicalTemplate: String!
+  failureCode: String
+  recipientMasked: String
+  responsibilityVersion: Int
+  canCorrectResponsibleEmail: Boolean!
   channels: [NotificationChannelDelivery!]!
   createdAt: String!
   updatedAt: String!
@@ -326,6 +337,9 @@ type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! cli
 type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
+input CorrectInspectionResponsibleEmailInput { inspectionId: ID!, email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
+type ResponsibleEmailCorrection { inspectionId: ID!, responsibilityId: ID!, invitationId: ID!, deliveryId: ID, deliveryStatus: String!, responsibilityStatus: String!, responsibilityVersion: Int!, recipientMasked: String!, canCorrectResponsibleEmail: Boolean! }
+type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection, userErrors: [UserError!]!, clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }

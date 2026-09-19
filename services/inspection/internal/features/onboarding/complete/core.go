@@ -68,6 +68,7 @@ type Service struct {
 	Sessions           onboardingsession.Service
 	ActivationNotifier ActivationInvitationNotifier
 	AdminOrigin        string
+	OwnerIssuer        string
 	Now                func() time.Time
 	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
@@ -76,7 +77,7 @@ type Service struct {
 // only immutable checkpoints loaded through the verified cookie/CSRF pair are
 // materialized.
 func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey string) (Result, error) {
-	if s.DB == nil || s.Bus == nil || s.ActivationNotifier == nil || strings.TrimSpace(s.AdminOrigin) == "" {
+	if s.DB == nil || s.Bus == nil || s.ActivationNotifier == nil || strings.TrimSpace(s.AdminOrigin) == "" || strings.TrimSpace(s.OwnerIssuer) == "" {
 		return Result{}, errors.New("onboarding complete: missing dependency")
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
@@ -252,7 +253,9 @@ func (s Service) ensureActivationInvitation(ctx context.Context, current onboard
 		if err != nil {
 			return err
 		}
-		shouldSend = activation.Status == activationInvitationPending || (activation.Status == activationInvitationSent && len(activation.InvitationTokenDigest) == 0)
+		shouldSend = activation.Status == activationInvitationPending ||
+			(activation.Status == activationInvitationSent &&
+				(len(activation.InvitationTokenDigest) == 0 || activation.SessionID != current.ID))
 		if !shouldSend {
 			return nil
 		}
@@ -359,6 +362,15 @@ func (s Service) onboardingOwner(ctx context.Context, tenantID identity.ID, subj
 	var member database.Membership
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id = ? AND status = 'ACTIVE'", tenantID).Order("created_at, id").First(&unit).Error; err != nil {
+			return err
+		}
+		// Public onboarding has no authenticated OIDC request context. The
+		// membership RLS policy therefore needs the verified owner's issuer and
+		// subject explicitly before this lookup can see the provisioned row.
+		if err := tx.Exec(`SELECT set_config('app.oidc_issuer', ?, true)`, s.OwnerIssuer).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`SELECT set_config('app.oidc_subject', ?, true)`, subject).Error; err != nil {
 			return err
 		}
 		return tx.Where("tenant_id = ? AND subject = ?", tenantID, subject).First(&member).Error

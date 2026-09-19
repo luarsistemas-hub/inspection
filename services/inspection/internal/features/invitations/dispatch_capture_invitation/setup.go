@@ -75,14 +75,14 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		hash := security.HashToken(token)
 		now := time.Now().UTC()
 		encoded, _ := json.Marshal(delivery)
-		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: encoded, Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
+		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: encoded, IdempotencyKey: "inspection-created:" + envelope.ID.String(), Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
 		if err := tx.Create(&invitation).Error; err != nil {
 			return err
 		}
 		for _, target := range delivery {
 			template, variables := core.CaptureLinkNotification(core.Channel(target.Channel), participant.Name, asset.Name, asset.Address, invitation.ExpiresAt)
 			_, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
-				TenantID: envelope.TenantID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
+				TenantID: envelope.TenantID, InspectionID: &payload.InspectionID, InvitationID: &invitation.ID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
 				Template: template, Variables: variables,
 				CorrelationID: envelope.CorrelationID, IdempotencyKey: deliveryIdempotencyKey(invitation.ID, target),
 				Execution: &core.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()},

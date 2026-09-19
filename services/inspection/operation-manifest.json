@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "91e7b39f40cf748ffc0710ab28cb2f320a0deffaa4e2878124241e65696d6042",
+  "schemaSha256": "7dcc86befeace7094761abd8bc509c577e709a2b043a82f4f8678f91f512a608",
   "capabilities": [
     {
       "root": "Query.me",
@@ -251,6 +251,13 @@
       "owner": "Onboarding",
       "persona": "administrative user",
       "journey": "Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.onboardingStatus",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Public onboarding observes the real responsible delivery/access state and can correct a pending recipient safely.",
       "evidence": "IT-001"
     },
     {
@@ -693,6 +700,20 @@
       "persona": "administrative user",
       "journey": "First password is sent only through the confidential Keycloak adapter and activation is retryable.",
       "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.correctOnboardingResponsibleEmail",
+      "owner": "Onboarding",
+      "persona": "administrative user",
+      "journey": "Public onboarding double-confirms a pending responsible email, revokes the old link, and reissues atomically.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.correctInspectionResponsibleEmail",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Authorized governance users correct or reissue a pending inspection invitation within the business-unit scope.",
+      "evidence": "IT-001"
     }
   ],
   "products": [
@@ -702,77 +723,82 @@
         {
           "name": "AdminAccess",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminAssets",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminAudit",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminCatalogs",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminConfigurePublicationPolicy",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+        },
+        {
+          "name": "AdminCorrectInspectionResponsibleEmail",
+          "type": "mutation",
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminCreateBusinessUnit",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminGate",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminGovernance",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminHistory",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminIdentity",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminInviteInternalUser",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminOrganization",
           "type": "query",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminRegisterAsset",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "AdminUpsertParticipant",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         },
         {
           "name": "BootstrapTenant",
           "type": "mutation",
-          "documentSha256": "491bdab25f93e806027517617e9aed2468eec93abc2209c8b06f49d34b2cbd00"
+          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
         }
       ]
     },
@@ -1042,27 +1068,37 @@
         {
           "name": "CompleteOnboarding",
           "type": "mutation",
-          "documentSha256": "b69b883d77c673bb06a29df9044598bccc0316c7f2814eb5ac5a2738a226e26a"
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
+        },
+        {
+          "name": "CorrectOnboardingResponsibleEmail",
+          "type": "mutation",
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
         },
         {
           "name": "OnboardingSession",
           "type": "query",
-          "documentSha256": "b69b883d77c673bb06a29df9044598bccc0316c7f2814eb5ac5a2738a226e26a"
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
+        },
+        {
+          "name": "OnboardingStatus",
+          "type": "query",
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
         },
         {
           "name": "RequestOnboardingOtp",
           "type": "mutation",
-          "documentSha256": "b69b883d77c673bb06a29df9044598bccc0316c7f2814eb5ac5a2738a226e26a"
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
         },
         {
           "name": "SaveOnboardingStep",
           "type": "mutation",
-          "documentSha256": "b69b883d77c673bb06a29df9044598bccc0316c7f2814eb5ac5a2738a226e26a"
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
         },
         {
           "name": "VerifyOnboardingOtp",
           "type": "mutation",
-          "documentSha256": "b69b883d77c673bb06a29df9044598bccc0316c7f2814eb5ac5a2738a226e26a"
+          "documentSha256": "da30e198c1523501dd14f92e77447c57ae1cd017ca12748729db3fec7debe240"
         }
       ]
     }

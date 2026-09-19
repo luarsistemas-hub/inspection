@@ -256,6 +256,21 @@ type ContactInput struct {
 	Value   string `json:"value"`
 }
 
+type CorrectInspectionResponsibleEmailInput struct {
+	InspectionID                  string `json:"inspectionId"`
+	Email                         string `json:"email"`
+	EmailConfirmation             string `json:"emailConfirmation"`
+	ExpectedResponsibilityVersion int    `json:"expectedResponsibilityVersion"`
+	ClientMutationID              string `json:"clientMutationId"`
+}
+
+type CorrectOnboardingResponsibleEmailInput struct {
+	Email                         string `json:"email"`
+	EmailConfirmation             string `json:"emailConfirmation"`
+	ExpectedResponsibilityVersion int    `json:"expectedResponsibilityVersion"`
+	ClientMutationID              string `json:"clientMutationId"`
+}
+
 type CreateBusinessUnitInput struct {
 	Code                  string `json:"code"`
 	Name                  string `json:"name"`
@@ -595,14 +610,21 @@ type NotificationChannelDelivery struct {
 }
 
 type NotificationDelivery struct {
-	ID               string                         `json:"id"`
-	IntentID         string                         `json:"intentId"`
-	Status           string                         `json:"status"`
-	AggregateStatus  string                         `json:"aggregateStatus"`
-	SelectedProvider string                         `json:"selectedProvider"`
-	Channels         []*NotificationChannelDelivery `json:"channels"`
-	CreatedAt        string                         `json:"createdAt"`
-	UpdatedAt        string                         `json:"updatedAt"`
+	ID                         string                         `json:"id"`
+	IntentID                   string                         `json:"intentId"`
+	Status                     string                         `json:"status"`
+	AggregateStatus            string                         `json:"aggregateStatus"`
+	SelectedProvider           string                         `json:"selectedProvider"`
+	InspectionID               *string                        `json:"inspectionId,omitempty"`
+	InvitationID               *string                        `json:"invitationId,omitempty"`
+	LogicalTemplate            string                         `json:"logicalTemplate"`
+	FailureCode                *string                        `json:"failureCode,omitempty"`
+	RecipientMasked            *string                        `json:"recipientMasked,omitempty"`
+	ResponsibilityVersion      *int                           `json:"responsibilityVersion,omitempty"`
+	CanCorrectResponsibleEmail bool                           `json:"canCorrectResponsibleEmail"`
+	Channels                   []*NotificationChannelDelivery `json:"channels"`
+	CreatedAt                  string                         `json:"createdAt"`
+	UpdatedAt                  string                         `json:"updatedAt"`
 }
 
 type NotificationDeliveryConnection struct {
@@ -696,12 +718,18 @@ type OnboardingSession struct {
 }
 
 type OnboardingStatus struct {
-	State          string  `json:"state"`
-	RequestID      *string `json:"requestId,omitempty"`
-	InspectionID   *string `json:"inspectionId,omitempty"`
-	NextAction     string  `json:"nextAction"`
-	OriginStatus   string  `json:"originStatus"`
-	DeliveryStatus string  `json:"deliveryStatus"`
+	State                      string  `json:"state"`
+	RequestID                  *string `json:"requestId,omitempty"`
+	InspectionID               *string `json:"inspectionId,omitempty"`
+	NextAction                 string  `json:"nextAction"`
+	OriginStatus               string  `json:"originStatus"`
+	DeliveryStatus             string  `json:"deliveryStatus"`
+	ResponsibleEmail           *string `json:"responsibleEmail,omitempty"`
+	ResponsibilityStatus       *string `json:"responsibilityStatus,omitempty"`
+	ResponsibilityVersion      *int    `json:"responsibilityVersion,omitempty"`
+	DeliveryFailureCode        *string `json:"deliveryFailureCode,omitempty"`
+	CanCorrectResponsibleEmail bool    `json:"canCorrectResponsibleEmail"`
+	UpdatedAt                  *string `json:"updatedAt,omitempty"`
 }
 
 type OnboardingStep struct {
@@ -1137,6 +1165,24 @@ type RequestRecaptureInput struct {
 	Items            []*RecaptureItemInput `json:"items"`
 	DeadlineAt       string                `json:"deadlineAt"`
 	ClientMutationID string                `json:"clientMutationId"`
+}
+
+type ResponsibleEmailCorrection struct {
+	InspectionID               string  `json:"inspectionId"`
+	ResponsibilityID           string  `json:"responsibilityId"`
+	InvitationID               string  `json:"invitationId"`
+	DeliveryID                 *string `json:"deliveryId,omitempty"`
+	DeliveryStatus             string  `json:"deliveryStatus"`
+	ResponsibilityStatus       string  `json:"responsibilityStatus"`
+	ResponsibilityVersion      int     `json:"responsibilityVersion"`
+	RecipientMasked            string  `json:"recipientMasked"`
+	CanCorrectResponsibleEmail bool    `json:"canCorrectResponsibleEmail"`
+}
+
+type ResponsibleEmailCorrectionPayload struct {
+	Correction       *ResponsibleEmailCorrection `json:"correction,omitempty"`
+	UserErrors       []*UserError                `json:"userErrors"`
+	ClientMutationID string                      `json:"clientMutationId"`
 }
 
 type RetentionMutationPayload struct {

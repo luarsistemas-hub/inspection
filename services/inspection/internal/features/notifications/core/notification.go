@@ -51,6 +51,8 @@ func (t TemplateRef) String() string { return t.Name + ":" + t.Version }
 // no provider ID, rendered content, credential, or ORM dependency.
 type Notification struct {
 	TenantID       identity.ID
+	InspectionID   *identity.ID
+	InvitationID   *identity.ID
 	Recipient      Recipient
 	Channel        Channel
 	Template       TemplateRef
@@ -173,7 +175,7 @@ func CanonicalDigest(notification Notification) (string, error) {
 	}
 	sort.Slice(variables, func(i, j int) bool { return variables[i].Key < variables[j].Key })
 	payload := canonicalNotification{
-		TenantID: notification.TenantID.String(), RecipientID: notification.Recipient.ID,
+		TenantID: notification.TenantID.String(), InspectionID: optionalIDString(notification.InspectionID), InvitationID: optionalIDString(notification.InvitationID), RecipientID: notification.Recipient.ID,
 		Destination: notification.Recipient.Destination, Channel: string(notification.Channel),
 		Template: notification.Template.String(), Variables: variables, CorrelationID: notification.CorrelationID,
 	}
@@ -196,6 +198,8 @@ type canonicalVariable struct {
 
 type canonicalNotification struct {
 	TenantID      string              `json:"tenantId"`
+	InspectionID  string              `json:"inspectionId,omitempty"`
+	InvitationID  string              `json:"invitationId,omitempty"`
 	RecipientID   string              `json:"recipientId"`
 	Destination   string              `json:"destination"`
 	Channel       string              `json:"channel"`
@@ -203,6 +207,13 @@ type canonicalNotification struct {
 	Variables     []canonicalVariable `json:"variables"`
 	CorrelationID string              `json:"correlationId"`
 	Execution     *canonicalExecution `json:"execution,omitempty"`
+}
+
+func optionalIDString(value *identity.ID) string {
+	if value == nil || *value == (identity.ID{}) {
+		return ""
+	}
+	return value.String()
 }
 
 type canonicalExecution struct {

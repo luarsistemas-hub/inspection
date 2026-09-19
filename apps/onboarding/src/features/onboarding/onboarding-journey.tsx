@@ -4,14 +4,14 @@ import { Alert, Button, Card, Container, Field, Input, Select, Stack, Textarea }
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
 import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
-import { CompleteOnboardingDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery } from "@/graphql/generated";
+import { CompleteOnboardingDocument, CorrectOnboardingResponsibleEmailDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, OnboardingStatusDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery, type OnboardingStatusQuery } from "@/graphql/generated";
 import { isSupportedDefinition, sortedSteps, validateStep, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, type OriginUpload } from "./origin-upload";
 import { presentOnboardingLabel, presentOnboardingOption, presentOnboardingStatus } from "./presentation";
 
 type View = "identity" | "verify" | "step" | "review" | "status";
 type Session = NonNullable<OnboardingSessionQuery["onboardingSession"]>;
-type Status = { state: string; nextAction: string; originStatus: string; deliveryStatus: string; inspectionId: string | null };
+type Status = NonNullable<OnboardingStatusQuery["onboardingStatus"]>;
 
 const failureText = (error: unknown) => (error as GraphQLFailure).message ?? "Não foi possível concluir a solicitação.";
 
@@ -81,6 +81,25 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
       .finally(() => setLoading(false));
   }, [initialView]);
 
+  useEffect(() => {
+    if (view !== "status" || !session) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const result = await graphql(OnboardingStatusDocument);
+        if (!cancelled && result.onboardingStatus) setStatus(result.onboardingStatus);
+      } catch (cause) {
+        if (!cancelled && !isOnboardingSessionFailure(cause)) setError(failureText(cause));
+      }
+    };
+    void refresh();
+    const expired = Date.parse(session.expiresAt) <= Date.now();
+    const terminal = expired || status?.deliveryStatus === "FAILED" || status?.deliveryStatus === "UNKNOWN" || (status?.responsibilityStatus != null && status.responsibilityStatus !== "PENDING");
+    if (terminal) return () => { cancelled = true; };
+    const interval = window.setInterval(() => void refresh(), status?.deliveryStatus === "QUEUED" || status?.deliveryStatus === "PROCESSING" ? 5000 : 30000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [session, status?.deliveryStatus, view]);
+
   const steps = useMemo(() => definition ? sortedSteps(definition) : [], [definition]);
   const step = steps.find((item) => item.key === activeStep) ?? steps[0];
 
@@ -115,8 +134,8 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
       const next = steps[nextIndex];
       if (next) setActiveStep(next.key); else setView("review");
     }} onReview={() => setView("review")} onRestart={restart} onError={setError} /> : null}
-    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).map(([key, value]) => ({ label: `${presentOnboardingLabel(item.label)}: ${presentOnboardingLabel(item.fields.find((field) => field.key === key)?.label ?? key)}`, value: item.fields.find((field) => field.key === key)?.type === "select" ? presentOnboardingOption(value, item.fields.find((field) => field.key === key)?.choices) : value })))} status={status} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={restart} onSubmit={complete} submitting={submitting} /> : null}
-    {view === "status" ? <StatusView status={status ?? statusFromSession(session)} submitting={submitting} onRetry={complete} onRestart={restart} /> : null}
+    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).filter(([key]) => key !== "emailConfirmation").map(([key, value]) => ({ label: `${presentOnboardingLabel(item.label)}: ${presentOnboardingLabel(item.fields.find((field) => field.key === key)?.label ?? key)}`, value: item.fields.find((field) => field.key === key)?.type === "select" ? presentOnboardingOption(value, item.fields.find((field) => field.key === key)?.choices) : value })))} status={status} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={restart} onSubmit={complete} submitting={submitting} /> : null}
+    {view === "status" ? <StatusView status={status ?? statusFromSession(session)} submitting={submitting} onRetry={complete} onRestart={restart} onCorrected={setStatus} /> : null}
   </PageShell>;
 }
 
@@ -179,7 +198,7 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
       onSaved(response.session, response.status ?? undefined, values);
     } catch (cause) { onError(failureText(cause)); } finally { setSaving(false); }
   };
-  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => update(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
+  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.filter((field) => field.key !== "emailConfirmation" || values.mode === "DELEGATE").map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => update(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
 }
 
 function DynamicField({ field, value, error, onChange }: { field: OnboardingDefinition["steps"][number]["fields"][number]; value: string; error?: string; onChange: (value: string) => void }) {
@@ -193,11 +212,29 @@ function Review({ values, status, onBack, onRestart, onSubmit, submitting }: { v
   return <div className="onboarding-review"><p className="onboarding-step-description">Confira os dados que foram confirmados em cada etapa.</p><dl>{values.length ? values.map((item) => <Fragment key={item.label}><dt>{item.label}</dt><dd>{item.value || "Não informado"}</dd></Fragment>) : <dd>Nenhuma etapa foi confirmada ainda.</dd>}</dl>{status ? <Alert tone={status.originStatus === "PENDING" || status.deliveryStatus === "PENDING" ? "warning" : "info"}>Origem: {presentOnboardingStatus(status.originStatus)}. Entrega: {presentOnboardingStatus(status.deliveryStatus)}. Próxima ação: {presentOnboardingStatus(status.nextAction)}.</Alert> : null}<div className="onboarding-actions"><Button onClick={() => void onSubmit()} disabled={submitting}>{submitting ? "Criando vistoria…" : "Criar primeira vistoria"}</Button><Button variant="secondary" onClick={onBack}>Voltar à etapa</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
 }
 
-function StatusView({ status, submitting, onRetry, onRestart }: { status?: Status; submitting: boolean; onRetry: () => Promise<void>; onRestart: () => void }) {
+function StatusView({ status, submitting, onRetry, onRestart, onCorrected }: { status?: Status; submitting: boolean; onRetry: () => Promise<void>; onRestart: () => void; onCorrected: (status: Status) => void }) {
   const created = status?.state === "SUBMITTED" && Boolean(status.inspectionId);
-  const pending = !created || status?.originStatus === "PENDING" || status?.deliveryStatus === "PENDING";
+  const pending = !created || status?.originStatus === "PENDING" || ["NOT_STARTED", "QUEUED", "PROCESSING"].includes(status?.deliveryStatus ?? "");
   const waitingForOrigin = status?.state === "ORIGIN_PENDING" || status?.originStatus === "PENDING";
-  return <div className="onboarding-form"><Alert tone={created ? "success" : "warning"} title={created ? "Primeira vistoria criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{created ? `A vistoria ${status.inspectionId} foi criada. ${pending ? "O link de captura está sendo entregue ao responsável pela vistoria." : "O link de captura foi entregue ao responsável pela vistoria."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor."}</Alert>{status?.state === "FAILED" ? <Alert tone="danger">A operação falhou de forma recuperável. Revise os dados e tente novamente quando o serviço estiver disponível.</Alert> : null}<div className="onboarding-actions">{!created ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : waitingForOrigin ? "Tentar novamente" : "Consultar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
+  const message = status?.deliveryStatus === "FAILED" ? "Não foi possível enviar o link. Confira o endereço e reenvie." : status?.deliveryStatus === "UNKNOWN" ? "Não foi possível confirmar o envio. Confira o endereço antes de reenviar." : status?.responsibilityStatus && status.responsibilityStatus !== "PENDING" ? "O responsável confirmou o acesso ao link." : created ? `A vistoria ${status.inspectionId} foi criada. ${pending ? "Estamos enviando o link para o responsável." : "O servidor de e-mail aceitou a mensagem. Aguardando o responsável acessar."}` : waitingForOrigin ? "As fotos de referência ainda não estão prontas. Tente novamente após o processamento." : "A solicitação ainda não foi confirmada pelo servidor.";
+  return <div className="onboarding-form"><Alert tone={status?.deliveryStatus === "FAILED" ? "danger" : status?.responsibilityStatus && status.responsibilityStatus !== "PENDING" ? "success" : created ? "info" : "warning"} title={created ? "Primeira vistoria criada" : waitingForOrigin ? "Fotos de referência em processamento" : "Aguardando confirmação"}>{message}</Alert>{status?.canCorrectResponsibleEmail ? <ResponsibleEmailCorrection status={status} onCorrected={onCorrected} /> : null}<div className="onboarding-actions">{!created ? <Button onClick={() => void onRetry()} disabled={submitting}>{submitting ? "Consultando…" : waitingForOrigin ? "Tentar novamente" : "Consultar novamente"}</Button> : null}<Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></div>;
+}
+
+function ResponsibleEmailCorrection({ status, onCorrected }: { status: Status; onCorrected: (status: Status) => void }) {
+  const [email, setEmail] = useState(status.responsibleEmail ?? "");
+  const [confirmation, setConfirmation] = useState(email);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const result = await graphql(CorrectOnboardingResponsibleEmailDocument, { input: { email, emailConfirmation: confirmation, expectedResponsibilityVersion: status.responsibilityVersion ?? 1, clientMutationId: clientMutationId() } });
+      const payload = result.correctOnboardingResponsibleEmail;
+      if (payload.userErrors.length) { setError(payload.userErrors[0].message); return; }
+      if (payload.status) onCorrected(payload.status);
+    } catch (cause) { setError(failureText(cause)); } finally { setBusy(false); }
+  };
+  return <form className="onboarding-form" onSubmit={submit}><p><strong>Corrigir e reenviar</strong></p><p>O link anterior será invalidado. O responsável não precisa estar online agora.</p><Field label="Novo e-mail" required><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field><Field label="Confirme o novo e-mail" required><Input type="email" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Field>{error ? <Alert tone="danger">{error}</Alert> : null}<Button type="submit" disabled={busy}>{busy ? "Reenviando…" : "Corrigir e reenviar"}</Button></form>;
 }
 
 function Fragment({ children }: { children: React.ReactNode }) { return <>{children}</>; }
@@ -206,8 +243,8 @@ function statusFromSession(session: Session | undefined): Status | undefined {
   if (!session) return undefined;
   const selectedOrigin = confirmedSteps(session.completedSteps).origin;
   const originPending = selectedOrigin?.mode === "FIXED_ORIGIN" && session.state !== "SUBMITTED";
-  if (session.state === "FAILED") return { state: session.state, nextAction: "RETRY", originStatus: "FAILED", deliveryStatus: "PENDING", inspectionId: null };
-  if (session.state === "SUBMITTED") return { state: session.state, nextAction: "WAIT_FOR_DELIVERY", originStatus: selectedOrigin?.mode === "FIXED_ORIGIN" ? "ACTIVE" : "NOT_REQUIRED", deliveryStatus: "PENDING", inspectionId: null };
-  if (session.state === "READY_TO_SUBMIT") return { state: session.state, nextAction: "REVIEW_AND_SUBMIT", originStatus: "READY", deliveryStatus: "PENDING", inspectionId: null };
-  return { state: session.state, nextAction: originPending ? "WAIT_FOR_ORIGIN" : "CONTINUE_ONBOARDING", originStatus: originPending || session.state === "ORIGIN_PENDING" ? "PENDING" : "NOT_REQUIRED", deliveryStatus: "NOT_STARTED", inspectionId: null };
+  if (session.state === "FAILED") return { state: session.state, nextAction: "RETRY", originStatus: "FAILED", deliveryStatus: "NOT_STARTED", inspectionId: null, requestId: null, responsibleEmail: null, responsibilityStatus: null, responsibilityVersion: null, deliveryFailureCode: null, canCorrectResponsibleEmail: false, updatedAt: null };
+  if (session.state === "SUBMITTED") return { state: session.state, nextAction: "WAIT_FOR_DELIVERY", originStatus: selectedOrigin?.mode === "FIXED_ORIGIN" ? "ACTIVE" : "NOT_REQUIRED", deliveryStatus: "NOT_STARTED", inspectionId: null, requestId: null, responsibleEmail: null, responsibilityStatus: null, responsibilityVersion: null, deliveryFailureCode: null, canCorrectResponsibleEmail: false, updatedAt: null };
+  if (session.state === "READY_TO_SUBMIT") return { state: session.state, nextAction: "REVIEW_AND_SUBMIT", originStatus: "READY", deliveryStatus: "NOT_STARTED", inspectionId: null, requestId: null, responsibleEmail: null, responsibilityStatus: null, responsibilityVersion: null, deliveryFailureCode: null, canCorrectResponsibleEmail: false, updatedAt: null };
+  return { state: session.state, nextAction: originPending ? "WAIT_FOR_ORIGIN" : "CONTINUE_ONBOARDING", originStatus: originPending || session.state === "ORIGIN_PENDING" ? "PENDING" : "NOT_REQUIRED", deliveryStatus: "NOT_STARTED", inspectionId: null, requestId: null, responsibleEmail: null, responsibilityStatus: null, responsibilityVersion: null, deliveryFailureCode: null, canCorrectResponsibleEmail: false, updatedAt: null };
 }

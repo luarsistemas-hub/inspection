@@ -331,7 +331,7 @@ func (s Service) DispatchDueReminders(ctx context.Context, tenantID identity.ID,
 				correlationID = "reminder-" + plan.ID.String()
 			}
 			for _, target := range delivery {
-				_, err := s.Notifications.Send(notificationrequest.InTransaction(ctx, tx), notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "reminder", Version: "v1"}, Variables: map[string]string{"recipientName": participant.Name}, CorrelationID: correlationID, IdempotencyKey: plan.ID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: s.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+				_, err := s.Notifications.Send(notificationrequest.InTransaction(ctx, tx), notificationcore.Notification{TenantID: tenantID, InspectionID: &plan.InspectionID, InvitationID: &invitation.ID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "reminder", Version: "v1"}, Variables: map[string]string{"recipientName": participant.Name}, CorrelationID: correlationID, IdempotencyKey: plan.ID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: s.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
 				if err != nil {
 					return err
 				}

@@ -41,6 +41,7 @@ import (
 	inspectionlist "inspection/services/inspection/internal/features/inspections/list"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
 	requestotp "inspection/services/inspection/internal/features/invitations/request_otp"
 	revokeinvitation "inspection/services/inspection/internal/features/invitations/revoke_invitation"
 	verifyotp "inspection/services/inspection/internal/features/invitations/verify_otp"
@@ -55,6 +56,7 @@ import (
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
+	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
@@ -419,7 +421,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {
@@ -537,11 +539,14 @@ func isMembershipOptionalRequest(r *http.Request) bool {
 		allowed["me"] = struct{}{}
 		allowed["tenant"] = struct{}{}
 		allowed["onboardingSession"] = struct{}{}
+		allowed["onboardingStatus"] = struct{}{}
 	case ast.Mutation:
 		allowed["createTenant"] = struct{}{}
 		allowed["requestOnboardingOtp"] = struct{}{}
 		allowed["verifyOnboardingOtp"] = struct{}{}
 		allowed["saveOnboardingStep"] = struct{}{}
+		allowed["completeOnboarding"] = struct{}{}
+		allowed["correctOnboardingResponsibleEmail"] = struct{}{}
 		allowed["requestAdminActivationOtp"] = struct{}{}
 		allowed["verifyAdminActivationOtp"] = struct{}{}
 		allowed["setAdminInitialPassword"] = struct{}{}

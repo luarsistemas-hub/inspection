@@ -118,6 +118,7 @@ func (s service) persist(ctx context.Context, tx *gorm.DB, notification core.Not
 	now := s.now().UTC()
 	delivery := database.Delivery{
 		ID: identity.NewID(), TenantID: notification.TenantID, IntentID: identity.NewID(),
+		InspectionID: notification.InspectionID, InvitationID: notification.InvitationID,
 		Status: string(core.StateQueued), LogicalTemplate: notification.Template.Name,
 		TemplateVersion: notification.Template.Version, CorrelationID: notification.CorrelationID,
 		IdempotencyKey: notification.IdempotencyKey, RequestDigest: digest,

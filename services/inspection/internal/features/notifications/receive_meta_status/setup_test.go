@@ -39,7 +39,7 @@ func metaCallbackDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
-		`CREATE TABLE notifications.deliveries (id blob primary key,tenant_id blob,intent_id blob,inspection_id blob,status text,logical_template text,template_version text,correlation_id text,idempotency_key text,request_digest text,recipient_id text,selected_provider text,scheduled_at datetime,lease_expires_at datetime,created_at datetime,updated_at datetime)`,
+		`CREATE TABLE notifications.deliveries (id blob primary key,tenant_id blob,intent_id blob,inspection_id blob,invitation_id blob,status text,logical_template text,template_version text,correlation_id text,idempotency_key text,request_digest text,recipient_id text,selected_provider text,scheduled_at datetime,lease_expires_at datetime,created_at datetime,updated_at datetime)`,
 		`CREATE TABLE notifications.channel_attempts (id blob primary key,tenant_id blob,delivery_id blob,channel text,destination text,status text,provider text,provider_account text,receipt_id text,attempts integer,last_error text,template_variables blob,next_attempt_at datetime,lease_expires_at datetime,last_attempt_at datetime,created_at datetime,updated_at datetime)`,
 		`CREATE TABLE notifications.provider_callbacks (id blob primary key,tenant_id blob,provider text,provider_account text,callback_id text,receipt_id text,channel_attempt_id blob,status text,received_at datetime,UNIQUE(provider,provider_account,callback_id))`,
 	} {

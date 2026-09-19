@@ -54,6 +54,17 @@ p { text-wrap: pretty; }
 .capture-photo-empty p, .capture-reference-empty p { margin: 0; color: var(--inspection-muted); font-size: .8rem; }
 .capture-reference-empty strong { font-size: .9rem; }
 .capture-reference-empty button { justify-self: center; }
+.capture-photo-panel { gap: .7rem; }
+.capture-camera-button { display: flex; align-items: center; justify-content: center; gap: .5rem; inline-size: 100%; }
+.capture-camera-button svg, .capture-photo-trigger svg { inline-size: 1.2rem; block-size: 1.2rem; }
+button.capture-photo-trigger { inline-size: 100%; min-block-size: 17rem; border-color: var(--inspection-brand); background: color-mix(in oklch, var(--inspection-brand) 6%, var(--inspection-surface-raised)); color: var(--inspection-muted); font-weight: 400; }
+button.capture-photo-trigger:hover:not(:disabled) { border-color: var(--inspection-brand); background: color-mix(in oklch, var(--inspection-brand) 11%, var(--inspection-surface-raised)); color: var(--inspection-ink); }
+.capture-photo-trigger:disabled { cursor: not-allowed; }
+.capture-photo-trigger__label { color: inherit; font-size: .8rem; }
+.capture-photo-trigger .capture-requirement-meta { color: inherit; }
+.capture-photo-saved { display: grid; gap: .6rem; }
+.capture-photo-status { margin: 0; color: var(--inspection-muted); font-size: .76rem; text-align: center; }
+.capture-camera-input { display: none; }
 .capture-preview-actions, .capture-guide-navigation { display: flex; gap: .6rem; }
 .capture-preview-actions > button, .capture-guide-navigation > button { flex: 1; }
 .capture-preview-actions > button:first-child { border: 1px solid var(--inspection-border); background: var(--inspection-surface-raised); color: var(--inspection-ink); }
@@ -142,6 +153,7 @@ hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspectio
   .capture-comparison-grid { grid-template-columns: 1fr; }
   .capture-reference-image img, .capture-photo-preview { block-size: min(38dvh, 18rem); }
   .capture-photo-empty, .capture-reference-empty { min-block-size: 7rem; }
+  .capture-photo-trigger { min-block-size: min(38dvh, 18rem); }
   .capture-guide-progress { flex-wrap: wrap; }
   .capture-review-references li { flex-wrap: wrap; }
 }

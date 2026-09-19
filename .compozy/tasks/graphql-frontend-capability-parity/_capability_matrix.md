@@ -54,6 +54,7 @@ Every row must end in one of these verified outcomes:
 | 33 | `externalCapture` | Capture | Used | Link-scoped origin/inspection/recapture bootstrap with policy, reference, requirements, answers, and states. |
 | 34 | `onboardingDefinition` | Onboarding | New contract | Versioned segment metadata drives the public real-estate steps, origin modes, purposes, and pinned catalog references. |
 | 35 | `onboardingSession` | Onboarding | New contract | Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state. |
+| 36 | `onboardingStatus` | Onboarding | New contract | Public onboarding observes the real responsible delivery/access state and can correct a pending recipient safely. |
 
 ## Mutations
 
@@ -122,6 +123,8 @@ Every row must end in one of these verified outcomes:
 | 60 | `requestAdminActivationOtp` | Onboarding | New contract | Owner activation uses a separate challenge and never reuses onboarding OTPs. |
 | 61 | `verifyAdminActivationOtp` | Onboarding | New contract | Activation verification binds only the owner membership and preserves pending state on failure. |
 | 62 | `setAdminInitialPassword` | Onboarding | New contract | First password is sent only through the confidential Keycloak adapter and activation is retryable. |
+| 63 | `correctOnboardingResponsibleEmail` | Onboarding | New contract | Public onboarding double-confirms a pending responsible email, revokes the old link, and reissues atomically. |
+| 64 | `correctInspectionResponsibleEmail` | Admin | New contract | Authorized governance users correct or reissue a pending inspection invitation within the business-unit scope. |
 
 ## Required Backend Capabilities Not Yet Represented Adequately
 

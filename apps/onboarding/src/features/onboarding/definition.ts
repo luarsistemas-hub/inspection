@@ -21,6 +21,7 @@ export function validateStep(step: OnboardingStep, values: StepValues) {
     if (field.key === "mode" && value === "DELEGATE") {
       if (!values.name?.trim()) errors.name = "Informe o nome da pessoa responsável.";
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email ?? "")) errors.email = "Informe o e-mail da pessoa responsável.";
+      if ((values.email ?? "").trim().toLowerCase() !== (values.emailConfirmation ?? "").trim().toLowerCase()) errors.emailConfirmation = "Os e-mails precisam ser iguais.";
     }
     return errors;
   }, {});

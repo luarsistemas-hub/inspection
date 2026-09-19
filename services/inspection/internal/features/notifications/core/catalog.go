@@ -75,6 +75,9 @@ func DefaultCatalog() Catalog {
 		"critical-alert:v1": {Ref: TemplateRef{Name: "critical-alert", Version: "v1"}, Channels: all, Required: []string{"inspectionName", "dashboardUrl"}, render: func(v map[string]string) RenderedTemplate {
 			return RenderedTemplate{Subject: "Alerta crítico", Text: "A vistoria " + v["inspectionName"] + " requer revisão: " + v["dashboardUrl"], HTML: "<p>A vistoria " + v["inspectionName"] + " requer <a href=\"" + v["dashboardUrl"] + "\">revisão</a>.</p>", Parameters: []string{v["inspectionName"], v["dashboardUrl"]}}
 		}},
+		"delivery-problem:v1": {Ref: TemplateRef{Name: "delivery-problem", Version: "v1"}, Channels: map[Channel]struct{}{ChannelEmail: {}}, Required: []string{"inspectionName", "dashboardUrl", "failureMessage"}, render: func(v map[string]string) RenderedTemplate {
+			return RenderedTemplate{Subject: "Problema no envio do link da vistoria", Text: "Não foi possível confirmar o envio do link da vistoria " + v["inspectionName"] + ". " + v["failureMessage"] + " Acompanhe em " + v["dashboardUrl"], HTML: "<p>Não foi possível confirmar o envio do link da vistoria <strong>" + html.EscapeString(v["inspectionName"]) + "</strong>.</p><p>" + html.EscapeString(v["failureMessage"]) + "</p><p>Acompanhe em <a href=\"" + html.EscapeString(v["dashboardUrl"]) + "\">Governança</a>.</p>", Parameters: []string{v["inspectionName"], v["failureMessage"], v["dashboardUrl"]}}
+		}},
 		"reminder:v1": {Ref: TemplateRef{Name: "reminder", Version: "v1"}, Channels: all, Required: []string{"captureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
 			return RenderedTemplate{Subject: "Lembrete de vistoria", Text: "Olá " + v["recipientName"] + ", lembrete: " + v["captureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", <a href=\"" + v["captureUrl"] + "\">conclua sua vistoria</a>.</p>", Parameters: []string{v["captureUrl"], v["recipientName"]}}
 		}},

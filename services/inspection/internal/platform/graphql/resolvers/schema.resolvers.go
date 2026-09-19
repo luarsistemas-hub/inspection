@@ -30,6 +30,7 @@ import (
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
 	requestotp "inspection/services/inspection/internal/features/invitations/request_otp"
 	revokeinvitation "inspection/services/inspection/internal/features/invitations/revoke_invitation"
 	verifyotp "inspection/services/inspection/internal/features/invitations/verify_otp"
@@ -180,12 +181,42 @@ func (r *mutationResolver) CompleteOnboarding(ctx context.Context, input graphql
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
 	request, status := mapOnboardingCompletion(result)
+	if result.Session.TenantID != nil && r.OnboardingDeliveryStatus.DB != nil {
+		if current, statusErr := r.OnboardingDeliveryStatus.Load(ctx, *result.Session.TenantID, result.Session.ID); statusErr == nil {
+			status = mapDeliveryStatus(current)
+		}
+	}
 	return &graphql1.OnboardingPayload{
 		Session:    mapOnboardingSession(result.Session),
 		Request:    request,
 		Status:     status,
 		UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID,
 	}, nil
+}
+
+// CorrectOnboardingResponsibleEmail is the resolver for the correctOnboardingResponsibleEmail field.
+func (r *mutationResolver) CorrectOnboardingResponsibleEmail(ctx context.Context, input graphql1.CorrectOnboardingResponsibleEmailInput) (*graphql1.OnboardingPayload, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	session, err := r.Onboarding.ValidateCSRF(ctx, credentials.SessionToken, credentials.CSRFToken)
+	if err != nil || session.TenantID == nil {
+		if err == nil {
+			err = apperror.New(apperror.Unauthenticated, "session", "onboarding session required")
+		}
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	var responsibility database.Responsibility
+	if err := r.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id IN (SELECT inspection_id FROM onboarding.requests WHERE tenant_id=? AND session_id=?)", *session.TenantID, *session.TenantID, session.ID).First(&responsibility).Error; err != nil {
+		return onboardingValidationPayload(apperror.New(apperror.NotFound, "inspectionId", "inspection not found"), input.ClientMutationID)
+	}
+	result, err := r.ResponsibleEmail.Correct(ctx, responsibleemail.Input{TenantID: *session.TenantID, InspectionID: responsibility.InspectionID, ResponsibilityID: responsibility.ID, Email: input.Email, EmailConfirmation: input.EmailConfirmation, ExpectedResponsibilityVersion: int64(input.ExpectedResponsibilityVersion), IdempotencyKey: "onboarding:" + input.ClientMutationID, Source: "ONBOARDING", ActorID: responsibility.ID, CorrelationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	if err != nil {
+		return onboardingValidationPayload(err, input.ClientMutationID)
+	}
+	status := &graphql1.OnboardingStatus{State: "SUBMITTED", InspectionID: stringPointer(result.InspectionID.String()), NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", DeliveryStatus: result.DeliveryStatus, ResponsibleEmail: stringPointer(result.Recipient), ResponsibilityStatus: stringPointer(result.ResponsibilityStatus), ResponsibilityVersion: intPointer(int(result.ResponsibilityVersion)), CanCorrectResponsibleEmail: result.ResponsibilityStatus == "PENDING"}
+	return &graphql1.OnboardingPayload{Status: status, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // RequestAdminActivationOtp is the resolver for the requestAdminActivationOtp field.
@@ -496,6 +527,34 @@ func (r *mutationResolver) SetDeliveryChannels(ctx context.Context, input graphq
 		return nil, err
 	}
 	return &graphql1.ParticipantPayload{Participant: mapParticipant(raw.(participantcore.ParticipantView)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// CorrectInspectionResponsibleEmail is the resolver for the correctInspectionResponsibleEmail field.
+func (r *mutationResolver) CorrectInspectionResponsibleEmail(ctx context.Context, input graphql1.CorrectInspectionResponsibleEmailInput) (*graphql1.ResponsibleEmailCorrectionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	var inspection database.Inspection
+	if err := r.DB.WithContext(ctx).Where("tenant_id=? AND id=?", meta.TenantID, inspectionID).First(&inspection).Error; err != nil {
+		return nil, err
+	}
+	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, true); err != nil {
+		return nil, err
+	}
+	var responsibility database.Responsibility
+	if err := r.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", meta.TenantID, inspectionID).First(&responsibility).Error; err != nil {
+		return nil, err
+	}
+	result, err := r.ResponsibleEmail.Correct(ctx, responsibleemail.Input{TenantID: meta.TenantID, InspectionID: inspectionID, ResponsibilityID: responsibility.ID, ActorID: meta.Principal.IdentityID, Email: input.Email, EmailConfirmation: input.EmailConfirmation, ExpectedResponsibilityVersion: int64(input.ExpectedResponsibilityVersion), IdempotencyKey: "admin:" + input.ClientMutationID, Source: "ADMIN", CorrelationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	if err != nil {
+		return &graphql1.ResponsibleEmailCorrectionPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+	}
+	return &graphql1.ResponsibleEmailCorrectionPayload{Correction: &graphql1.ResponsibleEmailCorrection{InspectionID: result.InspectionID.String(), ResponsibilityID: result.ResponsibilityID.String(), InvitationID: result.InvitationID.String(), DeliveryID: optionalOnboardingID(result.DeliveryID), DeliveryStatus: result.DeliveryStatus, ResponsibilityStatus: result.ResponsibilityStatus, ResponsibilityVersion: int(result.ResponsibilityVersion), RecipientMasked: maskEmail(result.Recipient), CanCorrectResponsibleEmail: result.ResponsibilityStatus == "PENDING"}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // PublishSegmentDefinition is the resolver for the publishSegmentDefinition field.
@@ -1574,6 +1633,23 @@ func (r *queryResolver) OnboardingSession(ctx context.Context) (*graphql1.Onboar
 	return mapOnboardingSession(value), nil
 }
 
+// OnboardingStatus is the resolver for the onboardingStatus field.
+func (r *queryResolver) OnboardingStatus(ctx context.Context) (*graphql1.OnboardingStatus, error) {
+	credentials, ok := requestctx.OnboardingCredentialsFromContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+	session, err := r.Onboarding.ValidateCSRF(ctx, credentials.SessionToken, credentials.CSRFToken)
+	if err != nil || session.TenantID == nil {
+		return nil, nil
+	}
+	value, err := r.OnboardingDeliveryStatus.Load(ctx, *session.TenantID, session.ID)
+	if err != nil {
+		return nil, err
+	}
+	return mapDeliveryStatus(value), nil
+}
+
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2279,7 +2355,38 @@ func (r *queryResolver) NotificationDeliveries(ctx context.Context, first *int, 
 	}
 	nodes := make([]*graphql1.NotificationDelivery, 0, len(rows))
 	for _, row := range rows {
-		nodes = append(nodes, &graphql1.NotificationDelivery{ID: row.ID.String(), IntentID: row.IntentID.String(), Status: row.Status, AggregateStatus: row.Status, SelectedProvider: row.SelectedProvider, Channels: channelsByDelivery[row.ID], CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)})
+		var inspectionID, invitationID *string
+		var responsibilityVersion *int
+		canCorrect := false
+		if row.InspectionID != nil {
+			value := row.InspectionID.String()
+			inspectionID = &value
+			var responsibility database.Responsibility
+			if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", meta.TenantID, *row.InspectionID).First(&responsibility).Error; lookupErr == nil {
+				version := int(responsibility.Version)
+				responsibilityVersion = &version
+				canCorrect = responsibility.Status == "PENDING" && row.LogicalTemplate == "capture-link"
+			}
+		}
+		if row.InvitationID != nil {
+			value := row.InvitationID.String()
+			invitationID = &value
+		}
+		var failureCode, recipientMasked *string
+		if channelRows := channelsByDelivery[row.ID]; len(channelRows) > 0 {
+			if row.Status == "FAILED" || row.Status == "UNKNOWN" {
+				var attempt database.ChannelAttempt
+				if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", meta.TenantID, row.ID).Order("updated_at desc").First(&attempt).Error; lookupErr == nil && attempt.LastError != "" {
+					failureCode = strptr(attempt.LastError)
+				}
+			}
+			var attempt database.ChannelAttempt
+			if lookupErr := r.DB.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", meta.TenantID, row.ID).Order("created_at asc").First(&attempt).Error; lookupErr == nil {
+				masked := maskEmail(attempt.Destination)
+				recipientMasked = &masked
+			}
+		}
+		nodes = append(nodes, &graphql1.NotificationDelivery{ID: row.ID.String(), IntentID: row.IntentID.String(), Status: row.Status, AggregateStatus: row.Status, SelectedProvider: row.SelectedProvider, InspectionID: inspectionID, InvitationID: invitationID, LogicalTemplate: row.LogicalTemplate, FailureCode: failureCode, RecipientMasked: recipientMasked, ResponsibilityVersion: responsibilityVersion, CanCorrectResponsibleEmail: canCorrect, Channels: channelsByDelivery[row.ID], CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 	}
 	end := ""
 	if len(rows) > 0 {

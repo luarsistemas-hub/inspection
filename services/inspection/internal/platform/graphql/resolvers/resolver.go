@@ -8,8 +8,10 @@ package resolvers
 import (
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
+	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	projectcore "inspection/services/inspection/internal/features/projects/core"
@@ -24,19 +26,21 @@ import (
 )
 
 type Resolver struct {
-	Bus                 *mediator.Bus
-	DB                  *gorm.DB
-	Invitations         invitationcore.Service
-	ScheduleService     schedulecore.Service
-	InspectionService   inspectioncore.Service
-	ProjectService      projectcore.Service
-	PublicationService  publication.Service
-	Store               objectstore.Store
-	Authorizer          auth.Authorizer
-	Onboarding          onboardingsession.Service
-	OnboardingComplete  onboardingcomplete.Service
-	AdminActivation     adminactivation.Service
-	OnboardingBootstrap onboardingbootstrap.Service
-	OwnerProvider       keycloak.OwnerIdentityProvider
-	OwnerIssuer         string
+	Bus                      *mediator.Bus
+	DB                       *gorm.DB
+	Invitations              invitationcore.Service
+	ScheduleService          schedulecore.Service
+	InspectionService        inspectioncore.Service
+	ProjectService           projectcore.Service
+	PublicationService       publication.Service
+	Store                    objectstore.Store
+	Authorizer               auth.Authorizer
+	Onboarding               onboardingsession.Service
+	OnboardingComplete       onboardingcomplete.Service
+	AdminActivation          adminactivation.Service
+	OnboardingBootstrap      onboardingbootstrap.Service
+	ResponsibleEmail         responsibleemail.Service
+	OnboardingDeliveryStatus deliverystatus.Service
+	OwnerProvider            keycloak.OwnerIdentityProvider
+	OwnerIssuer              string
 }

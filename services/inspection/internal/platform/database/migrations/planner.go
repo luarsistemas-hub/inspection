@@ -890,6 +890,35 @@ CREATE POLICY tenant_isolation ON origins.promotions
   USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 GRANT SELECT, INSERT, UPDATE, DELETE ON origins.promotions TO inspection_runtime;
+`},
+		{Version: 36, Name: "responsible_email_correction_lineage", Compatible: true, SQL: `
+ALTER TABLE invitations.invitations ADD COLUMN IF NOT EXISTS idempotency_key varchar(200) NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invitation_idempotency
+  ON invitations.invitations(tenant_id, idempotency_key)
+  WHERE idempotency_key <> '';
+ALTER TABLE notifications.deliveries ADD COLUMN IF NOT EXISTS invitation_id uuid;
+CREATE INDEX IF NOT EXISTS idx_delivery_invitation ON notifications.deliveries(tenant_id, invitation_id, created_at DESC);
+UPDATE notifications.deliveries d
+SET invitation_id = CASE
+  WHEN split_part(d.idempotency_key, ':', 1) ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    THEN split_part(d.idempotency_key, ':', 1)::uuid
+  ELSE NULL
+END
+WHERE d.logical_template = 'capture-link'
+  AND d.invitation_id IS NULL
+  AND split_part(d.idempotency_key, ':', 1) ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  AND EXISTS (
+    SELECT 1 FROM invitations.invitations i
+    WHERE i.tenant_id = d.tenant_id
+      AND i.id = split_part(d.idempotency_key, ':', 1)::uuid
+  );
+UPDATE notifications.deliveries d
+SET inspection_id = r.inspection_id
+FROM invitations.invitations i
+JOIN inspections.responsibilities r ON r.tenant_id = i.tenant_id AND r.id = i.responsibility_id
+WHERE d.tenant_id = i.tenant_id
+  AND d.invitation_id = i.id
+  AND d.inspection_id IS NULL;
 `}}
 }
 

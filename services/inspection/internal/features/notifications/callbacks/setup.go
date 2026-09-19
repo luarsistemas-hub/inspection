@@ -3,12 +3,17 @@ package callbacks
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/features/notifications/core"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -62,12 +67,60 @@ func correlate(ctx context.Context, tx *gorm.DB, tenantID identity.ID, provider,
 // UpdateDelivery recomputes the aggregate without promoting partial results to
 // DELIVERED. It is shared by callbacks and the executor after each result.
 func UpdateDelivery(ctx context.Context, tx *gorm.DB, tenantID, deliveryID identity.ID, now time.Time) error {
+	var before database.Delivery
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, deliveryID).First(&before).Error; err != nil {
+		return err
+	}
 	var rows []database.ChannelAttempt
 	if err := tx.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", tenantID, deliveryID).Find(&rows).Error; err != nil {
 		return err
 	}
 	state := aggregate(rows)
-	return tx.WithContext(ctx).Model(&database.Delivery{}).Where("tenant_id=? AND id=?", tenantID, deliveryID).Updates(map[string]any{"status": string(state), "updated_at": now.UTC()}).Error
+	if err := tx.WithContext(ctx).Model(&database.Delivery{}).Where("tenant_id=? AND id=?", tenantID, deliveryID).Updates(map[string]any{"status": string(state), "updated_at": now.UTC()}).Error; err != nil {
+		return err
+	}
+	if before.Status != string(state) && (state == core.StateFailed || state == core.StateUnknown) {
+		if err := queueTerminalEvent(ctx, tx, before, state, rows, now.UTC()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func queueTerminalEvent(ctx context.Context, tx *gorm.DB, delivery database.Delivery, state core.State, rows []database.ChannelAttempt, now time.Time) error {
+	if delivery.InspectionID == nil || (delivery.LogicalTemplate != "capture-link" && delivery.LogicalTemplate != "reminder") {
+		return nil
+	}
+	var latest database.ChannelAttempt
+	for _, row := range rows {
+		if latest.ID == (identity.ID{}) || row.UpdatedAt.After(latest.UpdatedAt) {
+			latest = row
+		}
+	}
+	eventID := identity.ID(uuid.NewSHA1(delivery.ID, []byte("notification.delivery_terminal.v1:"+string(state))))
+	payload := map[string]any{
+		"deliveryId":      delivery.ID,
+		"inspectionId":    *delivery.InspectionID,
+		"logicalTemplate": delivery.LogicalTemplate,
+		"state":           string(state),
+		"failureCode":     latest.LastError,
+		"attempt":         latest.Attempts,
+		"provider":        latest.Provider,
+	}
+	if delivery.InvitationID != nil {
+		payload["invitationId"] = *delivery.InvitationID
+	}
+	observability.LogDeliveryTransition(ctx, delivery.TenantID, delivery.ID, *delivery.InspectionID, delivery.Status, string(state), latest.LastError, latest.Provider, latest.Attempts)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	envelope := events.Envelope[json.RawMessage]{
+		ID: eventID, Type: "notification.delivery_terminal.v1", SchemaVersion: 1,
+		OccurredAt: now, TenantID: delivery.TenantID, AggregateID: delivery.ID,
+		CorrelationID: delivery.CorrelationID, Payload: body,
+	}
+	return messaging.AddOutbox(tx.WithContext(ctx), envelope)
 }
 
 func aggregate(rows []database.ChannelAttempt) core.State {

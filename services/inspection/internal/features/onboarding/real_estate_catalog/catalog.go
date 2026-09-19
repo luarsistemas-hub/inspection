@@ -76,6 +76,7 @@ var definition = Definition{
 			{Key: "mode", Label: "Quem realizará a vistoria?", Type: "select", Required: true, Options: []string{"SELF", "DELEGATE"}, OptionLabels: map[string]string{"SELF": "Eu farei a vistoria", "DELEGATE": "Outra pessoa fará a vistoria"}},
 			{Key: "name", Label: "Nome do responsável", Type: "text", Required: false},
 			{Key: "email", Label: "E-mail do responsável", Type: "email", Required: false},
+			{Key: "emailConfirmation", Label: "Confirme o e-mail do responsável", Type: "email", Required: false},
 		}},
 	},
 	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "Registrar estado inicial", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Comparar com fotos de referência", TemplateKey: OriginTemplateKey, Required: true}},

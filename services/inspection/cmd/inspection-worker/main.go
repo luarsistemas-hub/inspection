@@ -22,6 +22,7 @@ import (
 	processmedia "inspection/services/inspection/internal/features/media/process_verified"
 	consumeevents "inspection/services/inspection/internal/features/messaging/consume_events"
 	dispatchoutbox "inspection/services/inspection/internal/features/messaging/dispatch_outbox"
+	alertdelivery "inspection/services/inspection/internal/features/notifications/alert_delivery"
 	consumedelivery "inspection/services/inspection/internal/features/notifications/consume_delivery"
 	delivercritical "inspection/services/inspection/internal/features/notifications/deliver_critical"
 	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
@@ -114,7 +115,7 @@ func run() error {
 	}
 	defer channel.Close()
 	contracts := make([]messaging.QueueContract, 0, 24)
-	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
+	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
 		contract, contractErr := messaging.NewQueueContract(definition[0], definition[1], 32)
 		if contractErr != nil {
 			return contractErr
@@ -192,6 +193,10 @@ func run() error {
 		return err
 	}
 	deliveryExecutor, err := executedelivery.Setup(executedelivery.Dependencies{DB: db, Gateway: operationalGateway, MaxAttempts: cfg.Notification.MaxAttempts, RetryDelays: cfg.Notification.RetryDelays, LeaseDuration: cfg.ProviderTimeout + 5*time.Second, CallbackURL: cfg.TwilioCallbackURL, ProviderAccounts: map[notifications.Provider]string{notifications.ProviderTwilio: cfg.TwilioAccountSID, notifications.ProviderMeta: cfg.Notification.MetaPhoneNumberID}, Payloads: payloadCipher, Metrics: metrics})
+	if err != nil {
+		return err
+	}
+	terminalAlert, err := alertdelivery.Setup(alertdelivery.Dependencies{Notifications: notificationService, DashboardURL: cfg.AdminOrigin, Metrics: metrics})
 	if err != nil {
 		return err
 	}
@@ -460,6 +465,7 @@ func run() error {
 		"notification.delivery_requested.v1": deliverCritical,
 		"notification.delivery_requested.v2": consumedelivery.Setup(),
 		"notification.channel_status.v1":     notificationStatusHandler,
+		"notification.delivery_terminal.v1":  terminalAlert,
 		"retention.purge_due.v1":             retentionHandler,
 		"retention.purged.v1": func(_ context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
 			var payload map[string]any

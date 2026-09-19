@@ -2,6 +2,8 @@ query OnboardingSession {
   onboardingSession { id state currentStep version expiresAt definition completedSteps existingAgency { tenantId businessUnitId name businessUnitCode status } }
 }
 
+query OnboardingStatus { onboardingStatus { state requestId inspectionId nextAction originStatus deliveryStatus responsibleEmail responsibilityStatus responsibilityVersion deliveryFailureCode canCorrectResponsibleEmail updatedAt } }
+
 mutation RequestOnboardingOtp($input: RequestOnboardingOtpInput!) {
   requestOnboardingOtp(input: $input) { sessionLocator userErrors { code field message } clientMutationId }
 }
@@ -17,7 +19,7 @@ mutation VerifyOnboardingOtp($input: VerifyOnboardingOtpInput!) {
 mutation SaveOnboardingStep($input: OnboardingStepInput!) {
   saveOnboardingStep(input: $input) {
     session { id state currentStep version expiresAt definition completedSteps existingAgency { tenantId businessUnitId name businessUnitCode status } }
-    status { state requestId inspectionId nextAction originStatus deliveryStatus }
+    status { state requestId inspectionId nextAction originStatus deliveryStatus responsibleEmail responsibilityStatus responsibilityVersion deliveryFailureCode canCorrectResponsibleEmail updatedAt }
     userErrors { code field message }
     clientMutationId
   }
@@ -27,7 +29,15 @@ mutation CompleteOnboarding($input: CompleteOnboardingInput!) {
   completeOnboarding(input: $input) {
     session { id state currentStep version expiresAt definition completedSteps existingAgency { tenantId businessUnitId name businessUnitCode status } }
     request { id status assetId participantId originVersionId templateId }
-    status { state requestId inspectionId nextAction originStatus deliveryStatus }
+    status { state requestId inspectionId nextAction originStatus deliveryStatus responsibleEmail responsibilityStatus responsibilityVersion deliveryFailureCode canCorrectResponsibleEmail updatedAt }
+    userErrors { code field message }
+    clientMutationId
+  }
+}
+
+mutation CorrectOnboardingResponsibleEmail($input: CorrectOnboardingResponsibleEmailInput!) {
+  correctOnboardingResponsibleEmail(input: $input) {
+    status { state requestId inspectionId nextAction originStatus deliveryStatus responsibleEmail responsibilityStatus responsibilityVersion deliveryFailureCode canCorrectResponsibleEmail updatedAt }
     userErrors { code field message }
     clientMutationId
   }

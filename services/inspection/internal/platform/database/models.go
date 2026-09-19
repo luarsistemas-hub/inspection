@@ -433,6 +433,7 @@ type Invitation struct {
 	TokenHash         []byte          `gorm:"type:bytea;size:32;not null;uniqueIndex"`
 	PreviousTokenHash []byte          `gorm:"type:bytea;size:32;index"`
 	DeliveryIntents   json.RawMessage `gorm:"type:jsonb;not null"`
+	IdempotencyKey    string          `gorm:"size:200;not null;default:'';index"`
 	Status            string          `gorm:"size:20;not null;index"`
 	ExpiresAt         time.Time       `gorm:"not null;index"`
 	RevokedAt         *time.Time
@@ -701,6 +702,7 @@ type Delivery struct {
 	TenantID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:1"`
 	IntentID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_delivery_intent,priority:2"`
 	InspectionID     *identity.ID `gorm:"type:uuid;index"`
+	InvitationID     *identity.ID `gorm:"type:uuid;index"`
 	Status           string       `gorm:"size:20;not null;index"`
 	LogicalTemplate  string       `gorm:"size:100;not null;default:''"`
 	TemplateVersion  string       `gorm:"size:32;not null;default:''"`
