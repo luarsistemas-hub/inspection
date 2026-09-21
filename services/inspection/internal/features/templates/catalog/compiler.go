@@ -76,13 +76,13 @@ type TemplateDocument struct {
 	MultiStage       bool                 `json:"multiStage"`
 	Stages           []Stage              `json:"stages,omitempty"`
 	ReportMode       string               `json:"reportMode"`
-	AnalysisProfile  string               `json:"analysisProfile"`
+	AnalysisType     string               `json:"analysisType"`
 	Policy           Policy               `json:"policy"`
 }
 
 type References interface {
 	SegmentExists(string) bool
-	AnalysisProfileExists(string) bool
+	AnalysisTypeExists(string) bool
 }
 
 type Compiled struct {
@@ -149,7 +149,7 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	if doc.SchemaVersion != SchemaVersion {
 		return Compiled{}, fmt.Errorf("unsupported schema version")
 	}
-	if refs == nil || !refs.SegmentExists(doc.SegmentVersionID) || !refs.AnalysisProfileExists(doc.AnalysisProfile) {
+	if refs == nil || !refs.SegmentExists(doc.SegmentVersionID) || !refs.AnalysisTypeExists(doc.AnalysisType) {
 		return Compiled{}, fmt.Errorf("unknown semantic reference")
 	}
 	if len(doc.Requirements) == 0 || len(doc.Requirements) > MaxRequirements {

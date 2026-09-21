@@ -1,0 +1,20 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [{"contains": "analysis-finding"}]
+  },
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {
+      "id": "stub-finding",
+      "provider": "stub",
+      "model": "stub/vision",
+      "choices": [{"message": {"content": "{\"noRelevantChange\":false,\"findings\":[{\"category\":\"FINISHES\",\"title\":\"Pintura com desgaste visível\",\"description\":\"Há desgaste visual na pintura.\",\"severity\":\"LOW\",\"confidence\":0.9,\"evidenceIds\":[\"{{jsonPath request.body '$.messages[1].content[1].text' regex='evidenceId=([^;]+);.*' group=1}}\"],\"quality\":\"ADEQUATE\",\"recommendedAction\":\"Revisar a pintura presencialmente.\"}]}"}}],
+      "usage": {"prompt_tokens": 12, "completion_tokens": 8},
+      "cost": 0.0
+    }
+  }
+}

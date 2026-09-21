@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	"inspection/services/inspection/internal/platform/database"
@@ -75,7 +76,10 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 	}
 	segmentJSON := json.RawMessage(`{"type":"object","properties":{"propertyType":{"type":"string"}}}`)
 	templateJSON := json.RawMessage(requirementJSON)
-	profileJSON := json.RawMessage(`{"normalMaximum":0.25,"attentionMaximum":0.60}`)
+	var promptSnapshot database.AnalysisPromptSnapshot
+	if err := db.WithContext(ctx).Where("analysis_type = ?", analysisprompt.RealEstate).Order("created_at ASC").First(&promptSnapshot).Error; err != nil {
+		return "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
+	}
 
 	token, err := security.NewScopedToken(tenant.ID)
 	if err != nil {
@@ -98,8 +102,6 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			&database.SegmentDefinitionVersion{ID: ids.segmentVersion, TenantID: tenant.ID, DefinitionID: ids.segment, VersionNumber: 1, SchemaVersion: 1, SchemaJSON: segmentJSON, UISchemaJSON: json.RawMessage(`{}`), CanonicalDigest: digest(segmentJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-segment", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Template{ID: ids.template, TenantID: tenant.ID, Key: "qa-basic-inspection", Name: "Vistoria básica QA", SegmentVersionID: ids.segmentVersion, ActiveVersionID: &ids.templateVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.TemplateVersion{ID: ids.templateVersion, TenantID: tenant.ID, TemplateID: ids.template, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-template", PublishedAt: now, CreatedBy: membership.IdentityID},
-			&database.AnalysisProfile{ID: ids.profile, TenantID: tenant.ID, Key: "qa-default", ActiveVersionID: ids.profileVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.AnalysisProfileVersion{ID: ids.profileVersion, TenantID: tenant.ID, ProfileID: ids.profile, Key: "qa-default", VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: profileJSON, CanonicalDigest: digest(profileJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-profile", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Asset{ID: ids.asset, TenantID: tenant.ID, BusinessUnitID: unit.ID, SegmentVersionID: ids.segmentVersion, TemplateID: &ids.template, Name: "Imóvel QA", ExternalKey: "QA-001", Address: "Rua de Teste, 100", GeofenceMeters: 150, PolicyOverrides: json.RawMessage(`{"allowGallery":true}`), Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-asset", CreatedAt: now, UpdatedAt: now},
 			&database.AssetAttributeVersion{ID: ids.assetAttributes, TenantID: tenant.ID, AssetID: ids.asset, SegmentVersionID: ids.segmentVersion, VersionNumber: 1, AttributesJSON: json.RawMessage(`{"propertyType":"residential"}`), CanonicalDigest: digest([]byte(`{"propertyType":"residential"}`)), CreatedAt: now},
 			&database.AssetAssignment{ID: ids.assetAssignment, TenantID: tenant.ID, AssetID: ids.asset, ParticipantID: ids.participant, Role: "OWNER", Active: true, CreatedAt: now},
@@ -112,7 +114,7 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 
 		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, ReportMode: "CURRENT", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
 		stage := database.ProjectStage{ID: stageID, TenantID: tenant.ID, ProjectID: projectID, Key: "inspection", Label: "Vistoria inicial", Kind: "INSPECTION", Position: 1, Status: "AVAILABLE", Requirements: requirementJSON, EffectiveReference: json.RawMessage(`{}`), InspectionID: &inspectionID, Version: 1, IdempotencyKey: "qa-seed-stage-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
-		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, AnalysisProfileVersionID: ids.profileVersion, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
+		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, AnalysisPromptSnapshotID: promptSnapshot.ID, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
 		rows := []any{
 			&project,
 			&stage,
@@ -143,7 +145,7 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 type qaIDs struct {
 	participant, contact, verification, channelSelection identity.ID
 	segment, segmentVersion, template, templateVersion   identity.ID
-	profile, profileVersion, asset, assetAttributes      identity.ID
+	asset, assetAttributes                               identity.ID
 	assetAssignment                                      identity.ID
 }
 
@@ -154,7 +156,7 @@ func stableIDs(tenantID identity.ID) qaIDs {
 	return qaIDs{
 		participant: id("participant"), contact: id("contact"), verification: id("verification"), channelSelection: id("channel-selection"),
 		segment: id("segment"), segmentVersion: id("segment-version"), template: id("template"), templateVersion: id("template-version"),
-		profile: id("profile"), profileVersion: id("profile-version"), asset: id("asset"), assetAttributes: id("asset-attributes"), assetAssignment: id("asset-assignment"),
+		asset: id("asset"), assetAttributes: id("asset-attributes"), assetAssignment: id("asset-assignment"),
 	}
 }
 

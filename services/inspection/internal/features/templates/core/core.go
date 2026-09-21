@@ -3,12 +3,13 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	"inspection/libs/identity"
+	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -29,66 +30,10 @@ type View struct {
 	Template database.Template
 	Version  database.TemplateVersion
 }
-type ProfileDocument struct {
-	SchemaVersion        int            `json:"schemaVersion"`
-	ModelAlias           string         `json:"modelAlias"`
-	PromptVersion        string         `json:"promptVersion"`
-	OutputSchema         map[string]any `json:"outputSchema"`
-	MinimumConfidenceBPS int            `json:"minimumConfidenceBps"`
-}
+type refs struct{ segment, analysisType string }
 
-type refs struct{ segment, profile string }
-
-func (r refs) SegmentExists(v string) bool         { return v == r.segment }
-func (r refs) AnalysisProfileExists(v string) bool { return v == r.profile }
-
-func (s Service) PublishProfile(ctx context.Context, tenantID identity.ID, key, idempotencyKey string, payload []byte) (database.AnalysisProfileVersion, error) {
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
-		return database.AnalysisProfileVersion{}, err
-	}
-	var doc ProfileDocument
-	decoder := json.NewDecoder(strings.NewReader(string(payload)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&doc); err != nil || doc.SchemaVersion != 1 || doc.ModelAlias == "" || doc.PromptVersion == "" || len(doc.OutputSchema) == 0 || doc.MinimumConfidenceBPS < 0 || doc.MinimumConfidenceBPS > 10000 {
-		return database.AnalysisProfileVersion{}, apperror.New(apperror.InvalidInput, "profile", "invalid analysis profile")
-	}
-	canonical, digest, err := catalog.CanonicalJSON(doc)
-	if err != nil {
-		return database.AnalysisProfileVersion{}, err
-	}
-	var out database.AnalysisProfileVersion
-	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND idempotency_key=?", tenantID, idempotencyKey).First(&out).Error; err == nil {
-			return nil
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		var root database.AnalysisProfile
-		rootErr := tx.Where("tenant_id=? AND key=?", tenantID, key).First(&root).Error
-		var count int64
-		if err := tx.Model(&database.AnalysisProfileVersion{}).Where("tenant_id=? AND key=?", tenantID, key).Count(&count).Error; err != nil {
-			return err
-		}
-		meta, _ := requestctx.FromContext(ctx)
-		now := time.Now().UTC()
-		out = database.AnalysisProfileVersion{ID: identity.NewID(), TenantID: tenantID, Key: key, VersionNumber: int(count) + 1, SchemaVersion: 1, DefinitionJSON: canonical, CanonicalDigest: digest, Status: "PUBLISHED", IdempotencyKey: idempotencyKey, PublishedAt: now, CreatedBy: meta.Principal.IdentityID}
-		if rootErr == gorm.ErrRecordNotFound {
-			root = database.AnalysisProfile{ID: identity.NewID(), TenantID: tenantID, Key: key, ActiveVersionID: out.ID, Version: 1, CreatedAt: now, UpdatedAt: now}
-			if err := tx.Create(&root).Error; err != nil {
-				return err
-			}
-		} else if rootErr != nil {
-			return rootErr
-		} else {
-			if err := tx.Model(&root).Updates(map[string]any{"active_version_id": out.ID, "version": root.Version + 1, "updated_at": now}).Error; err != nil {
-				return err
-			}
-		}
-		out.ProfileID = root.ID
-		return tx.Create(&out).Error
-	})
-	return out, err
-}
+func (r refs) SegmentExists(v string) bool      { return v == r.segment }
+func (r refs) AnalysisTypeExists(v string) bool { return v == r.analysisType }
 
 func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, idempotencyKey string, payload []byte) (View, error) {
 	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin}, nil, true); err != nil {
@@ -99,10 +44,13 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 	}
 	var raw struct {
 		SegmentVersionID string `json:"segmentVersionId"`
-		AnalysisProfile  string `json:"analysisProfile"`
+		AnalysisType     string `json:"analysisType"`
 	}
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		return View{}, apperror.New(apperror.InvalidInput, "definition", "invalid template")
+	}
+	if !analysisprompt.IsKnownType(raw.AnalysisType) {
+		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 	}
 	segmentID, err := identity.ParseID(raw.SegmentVersionID)
 	if err != nil {
@@ -114,14 +62,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 	if _, err := s.Bus.Ask(ctx, segmentresolve.Query{TenantID: tenantID, VersionID: segmentID}); err != nil {
 		return View{}, err
 	}
-	var profile database.AnalysisProfileVersion
-	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
-		return tx.Where("tenant_id=? AND (id::text=? OR key=?) AND status='PUBLISHED'", tenantID, raw.AnalysisProfile, raw.AnalysisProfile).Order("version_number DESC").First(&profile).Error
-	})
-	if err != nil {
-		return View{}, apperror.New(apperror.InvalidInput, "analysisProfile", "unknown analysis profile")
-	}
-	compiled, err := catalog.Compile(payload, refs{segment: raw.SegmentVersionID, profile: raw.AnalysisProfile})
+	compiled, err := catalog.Compile(payload, refs{segment: raw.SegmentVersionID, analysisType: raw.AnalysisType})
 	if err != nil {
 		return View{}, apperror.New(apperror.InvalidInput, "definition", err.Error())
 	}
@@ -214,7 +155,13 @@ func (s Service) ResolveActive(ctx context.Context, tenantID, templateID identit
 		if err := tx.Where("tenant_id=? AND id=? AND active_version_id IS NOT NULL", tenantID, templateID).First(&out.Template).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "templateId", "active template is required")
 		}
-		return tx.Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, out.Template.ActiveVersionID).First(&out.Version).Error
+		if err := tx.Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, out.Template.ActiveVersionID).First(&out.Version).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.InvalidState, "templateId", "active template version is unavailable")
+			}
+			return err
+		}
+		return nil
 	})
 	return out, err
 }

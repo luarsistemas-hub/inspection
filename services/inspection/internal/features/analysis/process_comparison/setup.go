@@ -69,7 +69,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 		if validationErr != nil {
 			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), validationErr)
 		}
-		return persistAccepted(tx, tenantID, job, parsed, result, started, deps.Now().UTC())
+		status := "COMPLETED"
+		if isInsufficientEvidence(parsed) {
+			status = "INCONCLUSIVE"
+		}
+		return persistAccepted(tx, tenantID, job, parsed, result, started, deps.Now().UTC(), status)
 	}, nil
 }
 
@@ -82,6 +86,9 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 		return fmt.Errorf("analysis: finding limit exceeded")
 	}
 	for _, finding := range result.Findings {
+		if int(finding.Confidence*10000) < request.MinimumConfidenceBPS {
+			return fmt.Errorf("analysis: finding below minimum confidence")
+		}
 		if len(finding.EvidenceIDs) > 50 {
 			return fmt.Errorf("analysis: evidence limit exceeded")
 		}
@@ -105,26 +112,42 @@ func retryOrFallback(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 }
 
 func validateRequest(request llm.StructuredRequest) (llm.StructuredRequest, error) {
-	if request.ModelAlias == "" || request.PromptVersion == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
+	if request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 || request.MinimumConfidenceBPS < 0 || request.MinimumConfidenceBPS > 10000 {
 		return llm.StructuredRequest{}, fmt.Errorf("analysis request lacks authorized structured input")
 	}
 	for _, image := range request.Images {
-		if image.EvidenceID == "" || image.Digest == "" || len(image.DataURL) < len("data:image/") || image.DataURL[:len("data:image/")] != "data:image/" {
+		if image.EvidenceID == "" || image.Digest == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") || len(image.DataURL) < len("data:image/") || image.DataURL[:len("data:image/")] != "data:image/" {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis request has unauthorized image")
 		}
 	}
 	return request, nil
 }
 
-func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time) error {
-	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, Provider: provider.Provider, Model: provider.Model, GatewayRequestID: provider.GatewayRequestID, PromptVersion: job.PromptVersion, InputDigest: job.InputDigest, Output: provider.JSON, InputTokens: provider.InputTokens, OutputTokens: provider.OutputTokens, Cost: provider.Cost, LatencyMS: provider.Latency.Milliseconds(), ValidationOutcome: "ACCEPTED", CreatedAt: now}
+func isInsufficientEvidence(result analysis.Result) bool {
+	if len(result.Findings) == 0 || result.NoRelevantChange {
+		return false
+	}
+	for _, finding := range result.Findings {
+		if finding.Category != "EVIDENCE_QUALITY" || finding.Quality != "INSUFFICIENT" {
+			return false
+		}
+	}
+	return true
+}
+
+func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time, status string) error {
+	outcome := "ACCEPTED"
+	if status == "INCONCLUSIVE" {
+		outcome = "INCONCLUSIVE"
+	}
+	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: provider.Provider, Model: provider.Model, GatewayRequestID: provider.GatewayRequestID, PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: provider.JSON, InputTokens: provider.InputTokens, OutputTokens: provider.OutputTokens, Cost: provider.Cost, LatencyMS: provider.Latency.Milliseconds(), ValidationOutcome: outcome, CreatedAt: now}
 	if run.LatencyMS == 0 {
 		run.LatencyMS = now.Sub(started).Milliseconds()
 	}
 	if err := tx.Create(&run).Error; err != nil {
 		return err
 	}
-	if err := tx.Create(&database.UsageRecord{ID: identity.NewID(), TenantID: tenantID, InspectionID: job.InspectionID, JobID: job.ID, Provider: provider.Provider, Model: provider.Model, PromptVersion: job.PromptVersion, InputTokens: provider.InputTokens, OutputTokens: provider.OutputTokens, Cost: provider.Cost, LatencyMS: run.LatencyMS, CreatedAt: now}).Error; err != nil {
+	if err := tx.Create(&database.UsageRecord{ID: identity.NewID(), TenantID: tenantID, InspectionID: job.InspectionID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: provider.Provider, Model: provider.Model, PromptDigest: job.PromptDigest, InputTokens: provider.InputTokens, OutputTokens: provider.OutputTokens, Cost: provider.Cost, LatencyMS: run.LatencyMS, CreatedAt: now}).Error; err != nil {
 		return err
 	}
 	var daily database.UsageDailySummary
@@ -167,21 +190,23 @@ func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJ
 			return err
 		}
 	}
-	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": "COMPLETED", "attempts": job.Attempts + 1, "updated_at": now}).Error; err != nil {
+	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": status, "attempts": job.Attempts + 1, "updated_at": now}).Error; err != nil {
 		return err
 	}
+	job.Status = status
 	return emitCompleted(tx, tenantID, job, now)
 }
 
 func persistFallback(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {
 	output, _ := json.Marshal(map[string]any{"inconclusive": true, "reason": "analysis unavailable"})
-	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, Provider: "", Model: "", GatewayRequestID: "", PromptVersion: job.PromptVersion, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "INCONCLUSIVE", CreatedAt: now}
+	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: "", Model: "", GatewayRequestID: "", PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "INCONCLUSIVE", CreatedAt: now}
 	if err := tx.Create(&run).Error; err != nil {
 		return err
 	}
 	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": "INCONCLUSIVE", "attempts": job.Attempts + 1, "updated_at": now}).Error; err != nil {
 		return err
 	}
+	job.Status = "INCONCLUSIVE"
 	return emitCompleted(tx, tenantID, job, now)
 }
 

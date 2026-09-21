@@ -64,8 +64,8 @@ type Config struct {
 	TwilioFrom            string
 	TwilioCallbackURL     string
 	LiteLLMURL            string
-	LiteLLMModelAlias     string
-	LiteLLMPromptVersion  string
+	LLMMode               string
+	LiteLLMAPIKey         string
 	GotenbergURL          string
 	ProviderTimeout       time.Duration
 	Notification          NotificationConfig
@@ -116,7 +116,7 @@ func Load() (Config, error) {
 		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
 		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: keycloakClientID, KeycloakClientSecret: keycloakClientSecret,
-		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMModelAlias: env("INSPECTION_LITELLM_MODEL_ALIAS", "inspection-vision"), LiteLLMPromptVersion: env("INSPECTION_LITELLM_PROMPT_VERSION", "analysis-v1"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
+		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LLMMode: strings.ToLower(strings.TrimSpace(env("INSPECTION_LLM_MODE", "mock"))), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMAPIKey: os.Getenv("INSPECTION_LITELLM_API_KEY"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
 	}
 	notification, err := loadNotification(c.Environment)
 	if err != nil {
@@ -399,6 +399,16 @@ func (c Config) Validate() error {
 	}
 	if c.SchemaMin <= 0 || c.SchemaMax < c.SchemaMin {
 		return fmt.Errorf("configuration: invalid schema compatibility range")
+	}
+	mode := c.LLMMode
+	if mode == "" {
+		mode = "mock"
+	}
+	if mode != "mock" && mode != "live" {
+		return fmt.Errorf("configuration: invalid INSPECTION_LLM_MODE")
+	}
+	if mode == "live" && (c.LiteLLMURL == "" || c.LiteLLMAPIKey == "") {
+		return fmt.Errorf("configuration: missing live LLM gateway configuration")
 	}
 	for name, endpoint := range map[string]string{"LiteLLM": c.LiteLLMURL, "Gotenberg": c.GotenbergURL} {
 		if endpoint == "" {

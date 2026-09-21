@@ -9,9 +9,11 @@ import (
 // StructuredRequest may contain only normalized, already-authorized image data.
 // Model is a logical alias; provider/model resolution remains adapter metadata.
 type StructuredRequest struct {
-	ModelAlias, PromptVersion string
-	JSONSchema                []byte
-	Images                    []NormalizedImage
+	ModelAlias, PromptDigest string
+	SystemPrompt, UserPrompt string
+	JSONSchema               []byte
+	MinimumConfidenceBPS     int
+	Images                   []NormalizedImage
 }
 
 // NormalizedImage carries explicit lineage so comparative prompts cannot

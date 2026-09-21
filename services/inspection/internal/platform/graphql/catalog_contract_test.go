@@ -19,7 +19,7 @@ func TestCatalogQueriesIT397ToIT410(t *testing.T) {
 
 func TestCatalogMutationsIT453ToIT472(t *testing.T) {
 	schema := catalogSchema(t)
-	for _, field := range []string{"upsertParticipant", "verifyContact", "setDeliveryChannels", "publishSegmentDefinition", "publishTemplateVersion", "activateTemplateVersion", "publishAnalysisProfile", "registerAsset", "updateAsset", "archiveAsset"} {
+	for _, field := range []string{"upsertParticipant", "verifyContact", "setDeliveryChannels", "publishSegmentDefinition", "publishTemplateVersion", "activateTemplateVersion", "updateAnalysisPrompt", "registerAsset", "updateAsset", "archiveAsset"} {
 		t.Run(field, func(t *testing.T) {
 			if !strings.Contains(schema, field+"(") {
 				t.Fatalf("mutation %s is absent from generated contract", field)

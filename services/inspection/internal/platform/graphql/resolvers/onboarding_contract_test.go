@@ -72,6 +72,20 @@ func TestOnboardingValidationPayloadProjectsActivationFailures(t *testing.T) {
 	}
 }
 
+func TestOnboardingValidationPayloadProjectsUnavailableActiveTemplate(t *testing.T) {
+	payload, err := onboardingValidationPayload(
+		apperror.New(apperror.InvalidState, "templateId", "active template version is unavailable"),
+		"mutation-1",
+	)
+	if err != nil || payload == nil || len(payload.UserErrors) != 1 {
+		t.Fatalf("active template failure was not projected: payload=%#v err=%v", payload, err)
+	}
+	userError := payload.UserErrors[0]
+	if userError.Code != string(apperror.InvalidState) || userError.Field == nil || *userError.Field != "templateId" || userError.Message != "active template version is unavailable" {
+		t.Fatalf("unexpected active template error: %#v", userError)
+	}
+}
+
 func TestOnboardingSessionWithoutCookieReturnsNull(t *testing.T) {
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{}}))
 	server.SetErrorPresenter(graph.PresentError)

@@ -45,7 +45,39 @@ load_env() {
   fi
 }
 
-compose() { docker compose --env-file "$env_file" -f "$compose_file" "$@"; }
+compose() {
+  local llm_url="${INSPECTION_LITELLM_DOCKER_URL:-}"
+  if [[ -z "$llm_url" ]]; then
+    if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
+      llm_url="http://litellm:4000"
+    else
+      llm_url="http://litellm-stub:8080"
+    fi
+  fi
+  if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
+    INSPECTION_LITELLM_DOCKER_URL="$llm_url" docker compose --profile llm-live --env-file "$env_file" -f "$compose_file" "$@"
+  else
+    INSPECTION_LITELLM_DOCKER_URL="$llm_url" docker compose --env-file "$env_file" -f "$compose_file" "$@"
+  fi
+}
+
+llm_service() {
+  case "${INSPECTION_LLM_MODE:-mock}" in
+    mock) printf '%s\n' litellm-stub ;;
+    live) printf '%s\n' litellm ;;
+    *) die "INSPECTION_LLM_MODE deve ser mock ou live" ;;
+  esac
+}
+
+validate_llm_mode() {
+  case "${INSPECTION_LLM_MODE:-mock}" in
+    mock) ;;
+    live)
+      [[ -n "${INSPECTION_LITELLM_API_KEY:-}" && -n "${LITELLM_MASTER_KEY:-}" && -n "${LLM_API_KEY:-}" ]] || die "modo live exige INSPECTION_LITELLM_API_KEY, LITELLM_MASTER_KEY e LLM_API_KEY"
+      ;;
+    *) die "INSPECTION_LLM_MODE deve ser mock ou live" ;;
+  esac
+}
 
 wait_http() {
   local url="$1" label="$2" timeout="${INSPECTION_STARTUP_TIMEOUT:-180}" start now
@@ -103,7 +135,7 @@ check_port() {
 case "${1:-help}" in
   init) init ;;
   up)
-    require_base; [[ -f "$env_file" ]] || init; load_env
+    require_base; [[ -f "$env_file" ]] || init; load_env; validate_llm_mode
     if ! compose ps --status running -q inspection-api 2>/dev/null | grep -q .; then
       check_port "${INSPECTION_API_PORT:-8080}" "API"
       check_port "${INSPECTION_ADMIN_PORT:-3000}" "Admin"
@@ -120,11 +152,12 @@ case "${1:-help}" in
     wait_http "http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}/" "Onboarding"
     ;;
   infra)
-    require_base; [[ -f "$env_file" ]] || init; load_env
-    compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake litellm-stub gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap keycloak-super-admin-bootstrap
+    require_base; [[ -f "$env_file" ]] || init; load_env; validate_llm_mode
+    compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake "$(llm_service)" gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap inspection-prompt-seed keycloak-super-admin-bootstrap
     wait_service_completion inspection-bootstrap
     wait_service_completion inspection-migrate
     wait_service_completion inspection-runtime-bootstrap
+    wait_service_completion inspection-prompt-seed
     wait_service_completion keycloak-super-admin-bootstrap
     printf 'infraestrutura e migrations concluídas.\n'
     ;;
@@ -133,6 +166,7 @@ case "${1:-help}" in
     compose up -d postgres minio minio-setup inspection-bootstrap
     compose run --rm inspection-migrate
     compose run --rm inspection-runtime-bootstrap
+    compose run --rm inspection-prompt-seed
     printf 'migrations e papéis locais concluídos.\n'
     ;;
   seed)

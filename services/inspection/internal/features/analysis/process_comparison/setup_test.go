@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	analysis "inspection/services/inspection/internal/features/analysis/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
 
@@ -15,6 +16,25 @@ type gateway struct{ response llm.StructuredResult }
 
 func (g gateway) CompleteStructured(context.Context, llm.StructuredRequest) (llm.StructuredResult, error) {
 	return g.response, nil
+}
+
+func TestValidateEvidenceRejectsUnknownAndLowConfidence(t *testing.T) {
+	request := llm.StructuredRequest{MinimumConfidenceBPS: 7000, Images: []llm.NormalizedImage{{EvidenceID: "known"}}}
+	result := analysis.Result{Findings: []analysis.Finding{{Category: "FINISHES", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
+	if err := validateEvidence(result, request); err == nil {
+		t.Fatal("unknown evidence accepted")
+	}
+	result.Findings[0].EvidenceIDs = []string{"known"}
+	result.Findings[0].Confidence = .69
+	if err := validateEvidence(result, request); err == nil {
+		t.Fatal("low confidence accepted")
+	}
+}
+
+func TestIsInsufficientEvidence(t *testing.T) {
+	if !isInsufficientEvidence(analysis.Result{Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY", Quality: "INSUFFICIENT"}}}) {
+		t.Fatal("insufficient evidence not detected")
+	}
 }
 
 func TestSetupRequiresAuthorizedRequestSeam(t *testing.T) {

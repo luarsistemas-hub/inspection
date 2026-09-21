@@ -181,6 +181,25 @@ services:
       psql -h postgres -U postgres -d inspection -c \"ALTER ROLE inspection_worker LOGIN PASSWORD 'inspection-worker-local';\";
       "
 
+  inspection-prompt-seed:
+    build:
+      context: ..
+      dockerfile: services/inspection/Dockerfile
+    command: ["inspection-prompt-seed"]
+    depends_on:
+      inspection-runtime-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      INSPECTION_ENV: local
+      INSPECTION_MIGRATION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_DATABASE_URL: postgres://postgres:postgres@postgres:5432/inspection?sslmode=disable
+      INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
+      INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
+      INSPECTION_SUPER_ADMIN_ISSUER: http://localhost:8081/realms/inspection
+      INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
+      INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
+
   inspection-api:
     build:
       context: ..
@@ -188,6 +207,8 @@ services:
     command: ["inspection-api"]
     depends_on:
       inspection-runtime-bootstrap:
+        condition: service_completed_successfully
+      inspection-prompt-seed:
         condition: service_completed_successfully
       keycloak:
         condition: service_healthy
@@ -250,9 +271,11 @@ services:
       INSPECTION_TWILIO_AUTH_TOKEN: local-token
       INSPECTION_TWILIO_FROM: "+15550000000"
       INSPECTION_TWILIO_CALLBACK_URL: ${INSPECTION_TWILIO_CALLBACK_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/webhooks/twilio/status}
-      INSPECTION_LITELLM_URL: http://litellm-stub:8080
-      INSPECTION_LITELLM_MODEL_ALIAS: inspection-vision
-      INSPECTION_LITELLM_PROMPT_VERSION: analysis-v1
+      # The selected LLM service is supplied by .env.inspection. The host-facing
+      # URL is translated to the Docker-internal URL by scripts/local.sh.
+      INSPECTION_LLM_MODE: ${INSPECTION_LLM_MODE:-mock}
+      INSPECTION_LITELLM_URL: ${INSPECTION_LITELLM_DOCKER_URL:-http://litellm-stub:8080}
+      INSPECTION_LITELLM_API_KEY: ${INSPECTION_LITELLM_API_KEY:-}
       INSPECTION_GOTENBERG_URL: http://gotenberg:3000
       INSPECTION_PROVIDER_TIMEOUT: 30s
       NOTIFICATION_MAX_ATTEMPTS: "4"
@@ -291,6 +314,8 @@ services:
       dockerfile: services/inspection/Dockerfile
     command: ["inspection-worker"]
     depends_on:
+      inspection-prompt-seed:
+        condition: service_completed_successfully
       inspection-api:
         condition: service_started
     environment:
@@ -485,6 +510,25 @@ services:
       - ./wiremock/litellm:/home/wiremock/mappings:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Live use is explicitly opt-in through the llm-live Compose profile. The
+  # worker receives only the gateway master key; provider credentials stay here.
+  litellm:
+    image: docker.litellm.ai/berriai/litellm:latest
+    profiles: ["llm-live"]
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "${INSPECTION_LITELLM_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 12

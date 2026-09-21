@@ -13,6 +13,8 @@ import (
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
+	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
+	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	assetarchive "inspection/services/inspection/internal/features/assets/archive_asset"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
@@ -68,7 +70,6 @@ import (
 	templateactivate "inspection/services/inspection/internal/features/templates/activate_template"
 	templatecore "inspection/services/inspection/internal/features/templates/core"
 	templatelist "inspection/services/inspection/internal/features/templates/list_templates"
-	templateprofile "inspection/services/inspection/internal/features/templates/publish_analysis_profile"
 	templatepublish "inspection/services/inspection/internal/features/templates/publish_template"
 	archiveunit "inspection/services/inspection/internal/features/tenancy/archive_business_unit"
 	createunit "inspection/services/inspection/internal/features/tenancy/create_business_unit"
@@ -622,21 +623,17 @@ func (r *mutationResolver) ActivateTemplateVersion(ctx context.Context, input gr
 	return mapTemplatePayload(raw.(templatecore.View), input.ClientMutationID), nil
 }
 
-// PublishAnalysisProfile is the resolver for the publishAnalysisProfile field.
-func (r *mutationResolver) PublishAnalysisProfile(ctx context.Context, input graphql1.PublishAnalysisProfileInput) (*graphql1.AnalysisProfilePayload, error) {
+// UpdateAnalysisPrompt is the resolver for the updateAnalysisPrompt field.
+func (r *mutationResolver) UpdateAnalysisPrompt(ctx context.Context, input graphql1.UpdateAnalysisPromptInput) (*graphql1.AnalysisPromptPayload, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
 	}
-	payload, _ := json.Marshal(input.Definition)
-	raw, err := r.Bus.Send(ctx, templateprofile.Command{TenantID: meta.TenantID, Key: input.Key, DefinitionJSON: payload, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	raw, err := r.Bus.Send(ctx, updateanalysisprompt.Command{TenantID: meta.TenantID, AnalysisType: string(input.AnalysisType), SystemPrompt: input.SystemPrompt, ExpectedRevision: int64(input.ExpectedRevision), ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
 		return nil, err
 	}
-	p := raw.(database.AnalysisProfileVersion)
-	definition := map[string]any{}
-	_ = json.Unmarshal(p.DefinitionJSON, &definition)
-	return &graphql1.AnalysisProfilePayload{Profile: &graphql1.AnalysisProfile{ID: p.ID.String(), Key: p.Key, VersionNumber: p.VersionNumber, SchemaVersion: p.SchemaVersion, Definition: definition, CanonicalDigest: p.CanonicalDigest, Status: p.Status, PublishedAt: p.PublishedAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return &graphql1.AnalysisPromptPayload{Prompt: mapAnalysisPrompt(raw.(database.AnalysisPrompt)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // RegisterAsset is the resolver for the registerAsset field.
@@ -1604,7 +1601,20 @@ func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string
 	for _, mode := range value.OriginModes {
 		modes = append(modes, &graphql1.OnboardingOriginMode{Key: mode.Key, Label: mode.Label, TemplateKey: mode.TemplateKey, Required: mode.Required})
 	}
-	return &graphql1.OnboardingDefinition{SchemaVersion: value.SchemaVersion, Version: value.Version, Segment: value.Segment, SegmentVersion: value.SegmentVersion, Steps: steps, Purposes: value.Purposes, OriginModes: modes, Templates: value.Templates, AnalysisProfile: value.AnalysisProfile}, nil
+	return &graphql1.OnboardingDefinition{SchemaVersion: value.SchemaVersion, Version: value.Version, Segment: value.Segment, SegmentVersion: value.SegmentVersion, Steps: steps, Purposes: value.Purposes, OriginModes: modes, Templates: value.Templates, AnalysisType: graphql1.AnalysisType(value.AnalysisType)}, nil
+}
+
+// AnalysisPrompt returns the global prompt visible to the configured super administrator.
+func (r *queryResolver) AnalysisPrompt(ctx context.Context, typeArg graphql1.AnalysisType) (*graphql1.AnalysisPrompt, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	raw, err := r.Bus.Ask(ctx, getanalysisprompt.Query{TenantID: meta.TenantID, AnalysisType: string(typeArg)})
+	if err != nil {
+		return nil, err
+	}
+	return mapAnalysisPrompt(raw.(database.AnalysisPrompt)), nil
 }
 
 // OnboardingSession is the resolver for the onboardingSession field.

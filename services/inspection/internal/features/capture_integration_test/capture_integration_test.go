@@ -122,7 +122,7 @@ func TestTask5IT071ToIT100IT141ToIT200IT221ToIT240IT311ToIT320(t *testing.T) {
 	}
 
 	inspectionID := identity.NewID()
-	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.NewID(), AssetID: assetID, ParticipantID: identity.NewID(), TemplateID: templateID, TemplateVersionID: templateVersionID, AnalysisProfileVersionID: identity.NewID(), Source: "MANUAL", SourceKey: "recapture-source", Status: "SUBMITTED", ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), DueAt: now, DeadlineAt: now.Add(time.Hour), Version: 1, CreatedAt: now, UpdatedAt: now}
+	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.NewID(), AssetID: assetID, ParticipantID: identity.NewID(), TemplateID: templateID, TemplateVersionID: templateVersionID, AnalysisPromptSnapshotID: identity.NewID(), Source: "MANUAL", SourceKey: "recapture-source", Status: "SUBMITTED", ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), DueAt: now, DeadlineAt: now.Add(time.Hour), Version: 1, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&inspection).Error; err != nil {
 		t.Fatal(err)
 	}

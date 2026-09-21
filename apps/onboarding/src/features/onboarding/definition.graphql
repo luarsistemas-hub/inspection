@@ -8,6 +8,6 @@ query OnboardingDefinition($segment: String!) {
     purposes
     originModes { key label templateKey required }
     templates
-    analysisProfile
+		analysisType
   }
 }

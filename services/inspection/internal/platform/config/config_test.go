@@ -88,3 +88,26 @@ func TestConfigRequiresSecretBackedSuperAdminBootstrap(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigLLMModeContracts(t *testing.T) {
+	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", LLMMode: "mock"}
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	live := valid
+	live.LLMMode = "live"
+	live.LiteLLMURL = "http://litellm:4000"
+	live.LiteLLMAPIKey = "test-only"
+	if err := live.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	live.LiteLLMAPIKey = ""
+	if err := live.Validate(); err == nil {
+		t.Fatal("live without gateway key accepted")
+	}
+	invalid := valid
+	invalid.LLMMode = "other"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("unknown LLM mode accepted")
+	}
+}

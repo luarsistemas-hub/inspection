@@ -43,7 +43,7 @@ func TestTask06GraphQLReadsAndStableAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	inputTokens, outputTokens, cost := int64(12), int64(4), 0.25
-	if err := db.Create(&database.UsageRecord{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), Provider: "stub", Model: "stub/vision", PromptVersion: "analysis-v1", InputTokens: &inputTokens, OutputTokens: &outputTokens, Cost: &cost, CreatedAt: now}).Error; err != nil {
+	if err := db.Create(&database.UsageRecord{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), PromptSnapshotID: identity.NewID(), Provider: "stub", Model: "stub/vision", PromptDigest: "digest", InputTokens: &inputTokens, OutputTokens: &outputTokens, Cost: &cost, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 

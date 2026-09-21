@@ -8,11 +8,11 @@ import (
 
 type testRefs struct{}
 
-func (testRefs) SegmentExists(value string) bool         { return value == "segment-v1" }
-func (testRefs) AnalysisProfileExists(value string) bool { return value == "profile-v1" }
+func (testRefs) SegmentExists(value string) bool      { return value == "segment-v1" }
+func (testRefs) AnalysisTypeExists(value string) bool { return value == "REAL_ESTATE" }
 
 func validDocument() TemplateDocument {
-	return TemplateDocument{SchemaVersion: 1, SegmentVersionID: "segment-v1", ParticipantRoles: []string{"TENANT_PARTICIPANT"}, ComparisonMode: FixedOrigin, Requirements: []CaptureRequirement{{Key: "front", Section: "outside", Label: "Front", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: FixedOrigin, Applicability: `asset.kind == "house"`}}, ReportMode: "HISTORICAL", AnalysisProfile: "profile-v1", Policy: Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
+	return TemplateDocument{SchemaVersion: 1, SegmentVersionID: "segment-v1", ParticipantRoles: []string{"TENANT_PARTICIPANT"}, ComparisonMode: FixedOrigin, Requirements: []CaptureRequirement{{Key: "front", Section: "outside", Label: "Front", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: FixedOrigin, Applicability: `asset.kind == "house"`}}, ReportMode: "HISTORICAL", AnalysisType: "REAL_ESTATE", Policy: Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
 }
 func encode(t *testing.T, v any) []byte {
 	t.Helper()
@@ -116,7 +116,7 @@ func TestStoragePolicyUT073(t *testing.T) {
 }
 
 func TestCuratedSeedsPropertyConstructionCleaning(t *testing.T) {
-	seeds := CuratedSeeds("profile-v1", "segment-v1", "segment-v1", "segment-v1")
+	seeds := CuratedSeeds("REAL_ESTATE", "segment-v1", "segment-v1", "segment-v1")
 	if err := ValidateSeeds(seeds, testRefs{}); err != nil {
 		t.Fatal(err)
 	}

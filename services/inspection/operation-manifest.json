@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "7dcc86befeace7094761abd8bc509c577e709a2b043a82f4f8678f91f512a608",
+  "schemaSha256": "69219e3fe729647bd2ebdf06698387fcfa9f7302f1a0cc3dae0d4a51ce0965a3",
   "capabilities": [
     {
       "root": "Query.me",
@@ -90,6 +90,13 @@
       "owner": "Admin",
       "persona": "administrative user",
       "journey": "Paginated origin lineage with source/provenance, active/invalid state, media availability, and audit.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.analysisPrompt",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Read the global versioned analysis prompt and fixed execution configuration.",
       "evidence": "IT-001"
     },
     {
@@ -366,10 +373,10 @@
       "evidence": "IT-001"
     },
     {
-      "root": "Mutation.publishAnalysisProfile",
+      "root": "Mutation.updateAnalysisPrompt",
       "owner": "Admin",
       "persona": "administrative user",
-      "journey": "Publish immutable analysis profile through a discoverable profile lifecycle.",
+      "journey": "Update only the global system prompt with optimistic revision and audit.",
       "evidence": "IT-001"
     },
     {
@@ -723,82 +730,92 @@
         {
           "name": "AdminAccess",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
+        },
+        {
+          "name": "AdminAnalysisPrompt",
+          "type": "query",
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminAssets",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminAudit",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminCatalogs",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminConfigurePublicationPolicy",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminCorrectInspectionResponsibleEmail",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminCreateBusinessUnit",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminGate",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminGovernance",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminHistory",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminIdentity",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminInviteInternalUser",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminOrganization",
           "type": "query",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminRegisterAsset",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
+        },
+        {
+          "name": "AdminUpdateAnalysisPrompt",
+          "type": "mutation",
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "AdminUpsertParticipant",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         },
         {
           "name": "BootstrapTenant",
           "type": "mutation",
-          "documentSha256": "4c03633e6c385dcd0b1c8847bf535846bcc9ad689c2b95fb69dd00021692bd79"
+          "documentSha256": "b56ae548465de8617eceafd32dd96418e1652ca540fff3902e1ea8bfe71b6d9e"
         }
       ]
     },

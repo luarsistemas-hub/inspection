@@ -40,24 +40,26 @@ export type AddExceptionalStageInput = {
   reason: Scalars['String']['input'];
 };
 
-export type AnalysisProfile = {
-  __typename?: 'AnalysisProfile';
+export type AnalysisPrompt = {
+  __typename?: 'AnalysisPrompt';
+  analysisType: AnalysisType;
   canonicalDigest: Scalars['String']['output'];
-  definition: Scalars['JSON']['output'];
-  id: Scalars['ID']['output'];
-  key: Scalars['String']['output'];
-  publishedAt: Scalars['String']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  versionNumber: Scalars['Int']['output'];
+  minimumConfidenceBps: Scalars['Int']['output'];
+  modelAlias: Scalars['String']['output'];
+  revision: Scalars['Int']['output'];
+  systemPrompt: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
 };
 
-export type AnalysisProfilePayload = {
-  __typename?: 'AnalysisProfilePayload';
+export type AnalysisPromptPayload = {
+  __typename?: 'AnalysisPromptPayload';
   clientMutationId: Scalars['String']['output'];
-  profile: Maybe<AnalysisProfile>;
+  prompt: Maybe<AnalysisPrompt>;
   userErrors: Array<UserError>;
 };
+
+export type AnalysisType =
+  | 'REAL_ESTATE';
 
 export type ArchiveAssetInput = {
   assetId: Scalars['ID']['input'];
@@ -477,7 +479,7 @@ export type ExternalSessionPayload = {
 
 export type Inspection = {
   __typename?: 'Inspection';
-  analysisProfileVersionId: Scalars['ID']['output'];
+  analysisPromptSnapshotId: Scalars['ID']['output'];
   assetId: Scalars['ID']['output'];
   businessUnitId: Scalars['ID']['output'];
   deadlineAt: Scalars['String']['output'];
@@ -676,7 +678,6 @@ export type Mutation = {
   markNotificationRead: RecipientNotificationPayload;
   presignMediaParts: PresignedPartsPayload;
   promoteInspectionPhotos: OriginPromotionPayload;
-  publishAnalysisProfile: AnalysisProfilePayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
   publishTemplateVersion: TemplatePayload;
@@ -697,6 +698,7 @@ export type Mutation = {
   startProjectStage: ProjectPayload;
   submitCapture: SubmissionPayload;
   submitRecapture: RecapturePayload;
+  updateAnalysisPrompt: AnalysisPromptPayload;
   updateAsset: AssetPayload;
   updateSchedule: SchedulePayload;
   updateTenant: TenantPayload;
@@ -889,11 +891,6 @@ export type MutationPromoteInspectionPhotosArgs = {
 };
 
 
-export type MutationPublishAnalysisProfileArgs = {
-  input: PublishAnalysisProfileInput;
-};
-
-
 export type MutationPublishReportArgs = {
   input: PublishReportInput;
 };
@@ -991,6 +988,11 @@ export type MutationSubmitCaptureArgs = {
 
 export type MutationSubmitRecaptureArgs = {
   input: SubmitRecaptureInput;
+};
+
+
+export type MutationUpdateAnalysisPromptArgs = {
+  input: UpdateAnalysisPromptInput;
 };
 
 
@@ -1102,7 +1104,7 @@ export type OnboardingAgency = {
 
 export type OnboardingDefinition = {
   __typename?: 'OnboardingDefinition';
-  analysisProfile: Scalars['String']['output'];
+  analysisType: AnalysisType;
   originModes: Array<OnboardingOriginMode>;
   purposes: Array<Scalars['String']['output']>;
   schemaVersion: Scalars['Int']['output'];
@@ -1414,12 +1416,6 @@ export type PublicationPolicyPayload = {
   userErrors: Array<UserError>;
 };
 
-export type PublishAnalysisProfileInput = {
-  clientMutationId: Scalars['String']['input'];
-  definition: Scalars['JSON']['input'];
-  key: Scalars['String']['input'];
-};
-
 export type PublishReportInput = {
   clientMutationId: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
@@ -1443,6 +1439,7 @@ export type PublishTemplateVersionInput = {
 
 export type Query = {
   __typename?: 'Query';
+  analysisPrompt: AnalysisPrompt;
   asset: Maybe<Asset>;
   assets: AssetConnection;
   auditEvents: AuditEventConnection;
@@ -1480,6 +1477,11 @@ export type Query = {
   tenant: Maybe<Tenant>;
   triageInspections: TriageInspectionConnection;
   usageSummary: UsageSummary;
+};
+
+
+export type QueryAnalysisPromptArgs = {
+  type: AnalysisType;
 };
 
 
@@ -2176,6 +2178,13 @@ export type TriageInspectionConnection = {
   __typename?: 'TriageInspectionConnection';
   nodes: Array<TriageInspection>;
   pageInfo: PageInfo;
+};
+
+export type UpdateAnalysisPromptInput = {
+  analysisType: AnalysisType;
+  clientMutationId: Scalars['String']['input'];
+  expectedRevision: Scalars['Int']['input'];
+  systemPrompt: Scalars['String']['input'];
 };
 
 export type UpdateAssetInput = {

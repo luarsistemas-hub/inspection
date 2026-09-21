@@ -2,6 +2,7 @@ scalar JSON
 
 type Query {
 	 onboardingDefinition(segment: String!): OnboardingDefinition!
+	 analysisPrompt(type: AnalysisType!): AnalysisPrompt!
 	 onboardingSession: OnboardingSession
 	 onboardingStatus: OnboardingStatus
   me: Me!
@@ -44,7 +45,7 @@ type OnboardingOption { value: String!, label: String! }
 type OnboardingField { key: String!, label: String!, type: String!, required: Boolean!, placeholder: String, options: [String!]! @deprecated(reason: "Use choices to obtain user-facing labels"), choices: [OnboardingOption!]! }
 type OnboardingStep { key: String!, label: String!, position: Int!, required: Boolean!, fields: [OnboardingField!]! }
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
-type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisProfile: String! }
+type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisType: AnalysisType! }
 type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, businessUnitCode: String!, status: String! }
 type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
@@ -85,8 +86,8 @@ type Mutation {
   publishSegmentDefinition(input: PublishSegmentDefinitionInput!): SegmentDefinitionPayload!
   activateSegmentDefinition(input: ActivateSegmentDefinitionInput!): SegmentDefinitionPayload!
   publishTemplateVersion(input: PublishTemplateVersionInput!): TemplatePayload!
-  activateTemplateVersion(input: ActivateTemplateVersionInput!): TemplatePayload!
-  publishAnalysisProfile(input: PublishAnalysisProfileInput!): AnalysisProfilePayload!
+	activateTemplateVersion(input: ActivateTemplateVersionInput!): TemplatePayload!
+	updateAnalysisPrompt(input: UpdateAnalysisPromptInput!): AnalysisPromptPayload!
   registerAsset(input: RegisterAssetInput!): AssetPayload!
   updateAsset(input: UpdateAssetInput!): AssetPayload!
   archiveAsset(input: ArchiveAssetInput!): AssetPayload!
@@ -153,7 +154,8 @@ type SegmentDefinitionConnection { nodes: [SegmentDefinition!]! pageInfo: PageIn
 type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeVersionId: ID version: Int! }
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
-type AnalysisProfile { id: ID! key: String! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+enum AnalysisType { REAL_ESTATE }
+type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
 type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
@@ -163,7 +165,7 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisProfileVersionId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -274,7 +276,7 @@ input PublishSegmentDefinitionInput { key: String! name: String! schema: JSON! u
 input ActivateSegmentDefinitionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
 input PublishTemplateVersionInput { key: String! name: String! definition: JSON! clientMutationId: String! }
 input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
-input PublishAnalysisProfileInput { key: String! definition: JSON! clientMutationId: String! }
+input UpdateAnalysisPromptInput { analysisType: AnalysisType!, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
 input AssetAssignmentInput { participantId: ID! role: String! }
 input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
 input RegisterAssetInput { asset: AssetInput! clientMutationId: String! }
@@ -327,7 +329,7 @@ type ParticipantPayload { participant: Participant userErrors: [UserError!]! cli
 type ParticipantContactPayload { contact: ParticipantContact userErrors: [UserError!]! clientMutationId: String! }
 type SegmentDefinitionPayload { definition: SegmentDefinition version: SegmentDefinitionVersion userErrors: [UserError!]! clientMutationId: String! }
 type TemplatePayload { template: Template version: TemplateVersion userErrors: [UserError!]! clientMutationId: String! }
-type AnalysisProfilePayload { profile: AnalysisProfile userErrors: [UserError!]! clientMutationId: String! }
+type AnalysisPromptPayload { prompt: AnalysisPrompt userErrors: [UserError!]! clientMutationId: String! }
 type AssetPayload { asset: Asset userErrors: [UserError!]! clientMutationId: String! }
 type InvitationOtpPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: String! userErrors: [UserError!]! clientMutationId: String! }

@@ -15,31 +15,36 @@ import (
 // depends only on Gateway and therefore never sees provider request types.
 type HTTPGateway struct {
 	BaseURL string
+	APIKey  string
 	Client  *http.Client
 }
 
 func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredRequest) (StructuredResult, error) {
-	if g.BaseURL == "" || request.ModelAlias == "" || request.PromptVersion == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
+	if g.BaseURL == "" || request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
 		return StructuredResult{}, fmt.Errorf("litellm: invalid structured request")
 	}
 	client := g.Client
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	content := make([]map[string]any, 0, len(request.Images)+1)
-	content = append(content, map[string]any{"type": "text", "text": "Prompt version: " + request.PromptVersion})
+	content := make([]map[string]any, 0, len(request.Images)*2+1)
+	content = append(content, map[string]any{"type": "text", "text": request.UserPrompt + "\n\nDigest do prompt: " + request.PromptDigest})
 	for _, image := range request.Images {
-		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" {
+		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") {
 			return StructuredResult{}, fmt.Errorf("litellm: unauthorized image")
 		}
-		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": image.DataURL}})
+		content = append(content, map[string]any{"type": "text", "text": "evidenceId=" + image.EvidenceID + "; source=" + image.Source})
+		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": image.DataURL, "detail": "high"}})
 	}
-	body, _ := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "user", "content": content}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
+	body, _ := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "system", "content": request.SystemPrompt}, map[string]any{"role": "user", "content": content}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(g.BaseURL, "/")+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return StructuredResult{}, err
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
+	if g.APIKey != "" {
+		httpRequest.Header.Set("Authorization", "Bearer "+g.APIKey)
+	}
 	started := time.Now()
 	response, err := client.Do(httpRequest)
 	if err != nil {

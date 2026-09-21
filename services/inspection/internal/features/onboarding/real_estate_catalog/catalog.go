@@ -16,7 +16,6 @@ const (
 	DefinitionVersion    = 3
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = "real-estate-fixed-origin"
-	AnalysisProfileKey   = "real-estate-default"
 )
 
 var ErrUnsupportedSchemaVersion = errors.New("unsupported schema version")
@@ -47,21 +46,21 @@ type OriginMode struct {
 }
 
 type Definition struct {
-	SchemaVersion   int          `json:"schemaVersion"`
-	Version         int          `json:"version"`
-	Segment         string       `json:"segment"`
-	SegmentVersion  string       `json:"segmentVersion"`
-	Steps           []Step       `json:"steps"`
-	Purposes        []string     `json:"purposes"`
-	OriginModes     []OriginMode `json:"originModes"`
-	Templates       []string     `json:"templates"`
-	AnalysisProfile string       `json:"analysisProfile"`
+	SchemaVersion  int          `json:"schemaVersion"`
+	Version        int          `json:"version"`
+	Segment        string       `json:"segment"`
+	SegmentVersion string       `json:"segmentVersion"`
+	Steps          []Step       `json:"steps"`
+	Purposes       []string     `json:"purposes"`
+	OriginModes    []OriginMode `json:"originModes"`
+	Templates      []string     `json:"templates"`
+	AnalysisType   string       `json:"analysisType"`
 }
 
 var definition = Definition{
 	SchemaVersion: DefinitionSchema, Version: DefinitionVersion, Segment: Segment,
 	SegmentVersion: "real-estate-v1", Purposes: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"},
-	Templates: []string{ChecklistTemplateKey, OriginTemplateKey}, AnalysisProfile: AnalysisProfileKey,
+	Templates: []string{ChecklistTemplateKey, OriginTemplateKey}, AnalysisType: "REAL_ESTATE",
 	Steps: []Step{
 		{Key: "agency", Label: "Imobiliária", Position: 1, Required: true, Fields: []Field{{Key: "name", Label: "Nome da imobiliária", Type: "text", Required: true}}},
 		{Key: "property", Label: "Imóvel", Position: 2, Required: true, Fields: []Field{
@@ -117,14 +116,14 @@ func Validate(value Definition) error {
 }
 
 // TemplateDocuments returns the two immutable template contracts selected by
-// the real-estate origin modes. Both use the same pinned analysis profile.
+// the real-estate origin modes. Both use the REAL_ESTATE analysis type.
 func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
 	base := func(mode templatecatalog.ComparisonMode) templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
 			SchemaVersion: DefinitionSchema, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, ComparisonMode: mode,
 			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
-			ReportMode:   "HISTORICAL", AnalysisProfile: AnalysisProfileKey,
+			ReportMode:   "HISTORICAL", AnalysisType: "REAL_ESTATE",
 			Policy: templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: true},
 		}
 	}
@@ -132,7 +131,7 @@ func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
 }
 
 // ValidateTemplates compiles both curated documents against the supplied
-// segment/profile references before they are published.
+// segment and analysis-type references before they are published.
 func ValidateTemplates(refs templatecatalog.References) error {
 	for key, document := range TemplateDocuments() {
 		payload, _, err := templatecatalog.CanonicalJSON(document)

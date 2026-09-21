@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -23,7 +24,7 @@ type Task06Fixture struct {
 	TenantID, IdentityID, MembershipID, BusinessUnitID identity.ID
 	ParticipantID, ContactID                           identity.ID
 	SegmentVersionID, TemplateID, TemplateVersionID    identity.ID
-	ProfileID, ProfileVersionID, AssetID               identity.ID
+	PromptSnapshotID, AssetID                          identity.ID
 	InspectionID, ResponsibilityID, DraftID            identity.ID
 	MediaID, DerivativeID, ProjectID, StageID          identity.ID
 }
@@ -62,7 +63,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 	f := Task06Fixture{
 		TenantID: identity.NewID(), IdentityID: identity.NewID(), MembershipID: identity.NewID(), BusinessUnitID: identity.NewID(),
 		ParticipantID: identity.NewID(), ContactID: identity.NewID(), SegmentVersionID: identity.NewID(), TemplateID: identity.NewID(), TemplateVersionID: identity.NewID(),
-		ProfileID: identity.NewID(), ProfileVersionID: identity.NewID(), AssetID: identity.NewID(), InspectionID: identity.NewID(), ResponsibilityID: identity.NewID(),
+		PromptSnapshotID: identity.NewID(), AssetID: identity.NewID(), InspectionID: identity.NewID(), ResponsibilityID: identity.NewID(),
 		DraftID: identity.NewID(), MediaID: identity.NewID(), DerivativeID: identity.NewID(), ProjectID: identity.NewID(), StageID: identity.NewID(),
 	}
 	tenant := database.Tenant{ID: f.TenantID, TenantID: f.TenantID, Name: "Task 06 tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}
@@ -116,11 +117,11 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.TemplateVersion{ID: f.TemplateVersionID, TenantID: f.TenantID, TemplateID: f.TemplateID, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "task06-template", PublishedAt: createdAt, CreatedBy: f.IdentityID}).Error; err != nil {
 			return err
 		}
-		profileJSON := json.RawMessage(`{"threshold":"deterministic-v1"}`)
-		if err := tx.Create(&database.AnalysisProfile{ID: f.ProfileID, TenantID: f.TenantID, Key: "task06-profile", ActiveVersionID: f.ProfileVersionID, Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		promptJSON, promptDigest, err := analysisprompt.Canonicalize(analysisprompt.DefaultDefinition())
+		if err != nil {
 			return err
 		}
-		if err := tx.Create(&database.AnalysisProfileVersion{ID: f.ProfileVersionID, TenantID: f.TenantID, ProfileID: f.ProfileID, Key: "task06-profile", VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: profileJSON, CanonicalDigest: digest(profileJSON), Status: "ACTIVE", IdempotencyKey: "task06-profile", PublishedAt: createdAt, CreatedBy: f.IdentityID}).Error; err != nil {
+		if err := tx.Create(&database.AnalysisPromptSnapshot{ID: f.PromptSnapshotID, AnalysisType: analysisprompt.RealEstate, DefinitionJSON: promptJSON, CanonicalDigest: promptDigest, CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Asset{ID: f.AssetID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, SegmentVersionID: f.SegmentVersionID, TemplateID: &f.TemplateID, Name: "Task 06 asset", ExternalKey: "task06-asset", Address: "Test address", GeofenceMeters: 150, PolicyOverrides: json.RawMessage(`{}`), Status: "ACTIVE", Version: 1, IdempotencyKey: "task06-asset", CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
@@ -138,7 +139,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.ProjectStage{ID: f.StageID, TenantID: f.TenantID, ProjectID: f.ProjectID, Key: "stage-1", Label: "Fixture stage", Kind: "INSPECTION", Position: 1, Status: "COMPLETED", Requirements: templateJSON, EffectiveReference: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.Inspection{ID: f.InspectionID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, AnalysisProfileVersionID: f.ProfileVersionID, ProjectID: &f.ProjectID, StageID: &f.StageID, Source: "MANUAL", SourceKey: "task06-inspection", SourceReason: "integration fixture", Status: options.InspectionStatus, EvidenceCount: 1, DueAt: createdAt, DeadlineAt: createdAt.Add(24 * time.Hour), ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.Inspection{ID: f.InspectionID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, AnalysisPromptSnapshotID: f.PromptSnapshotID, ProjectID: &f.ProjectID, StageID: &f.StageID, Source: "MANUAL", SourceKey: "task06-inspection", SourceReason: "integration fixture", Status: options.InspectionStatus, EvidenceCount: 1, DueAt: createdAt, DeadlineAt: createdAt.Add(24 * time.Hour), ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&database.ProjectStage{}).Where("tenant_id=? AND id=?", f.TenantID, f.StageID).Update("inspection_id", f.InspectionID).Error; err != nil {

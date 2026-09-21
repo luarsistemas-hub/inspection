@@ -919,6 +919,79 @@ JOIN inspections.responsibilities r ON r.tenant_id = i.tenant_id AND r.id = i.re
 WHERE d.tenant_id = i.tenant_id
   AND d.invitation_id = i.id
   AND d.inspection_id IS NULL;
+`},
+		{Version: 37, Name: "global_analysis_prompts", Destructive: true, Compatible: true, SQL: `
+CREATE SCHEMA IF NOT EXISTS analysis;
+CREATE TABLE IF NOT EXISTS analysis.prompts (
+  id uuid PRIMARY KEY,
+  analysis_type varchar(64) NOT NULL UNIQUE,
+  definition_json jsonb NOT NULL,
+  canonical_digest varchar(64) NOT NULL,
+  revision bigint NOT NULL DEFAULT 1,
+  updated_by uuid NOT NULL,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL
+);
+CREATE TABLE IF NOT EXISTS analysis.prompt_snapshots (
+  id uuid PRIMARY KEY,
+  analysis_type varchar(64) NOT NULL,
+  definition_json jsonb NOT NULL,
+  canonical_digest varchar(64) NOT NULL,
+  created_at timestamptz NOT NULL,
+  CONSTRAINT uq_analysis_prompt_snapshot_digest UNIQUE (analysis_type, canonical_digest)
+);
+DROP TRIGGER IF EXISTS immutable_analysis_prompt_snapshot ON analysis.prompt_snapshots;
+CREATE TRIGGER immutable_analysis_prompt_snapshot BEFORE UPDATE OR DELETE ON analysis.prompt_snapshots FOR EACH ROW EXECUTE FUNCTION platform.reject_append_only_mutation();
+GRANT USAGE ON SCHEMA analysis TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON analysis.prompts, analysis.prompt_snapshots TO inspection_runtime;
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS analysis_prompt_snapshot_id uuid;
+ALTER TABLE analysis.comparison_jobs ADD COLUMN IF NOT EXISTS prompt_snapshot_id uuid;
+ALTER TABLE analysis.comparison_jobs ADD COLUMN IF NOT EXISTS prompt_digest varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE analysis.analysis_runs ADD COLUMN IF NOT EXISTS prompt_snapshot_id uuid;
+ALTER TABLE analysis.analysis_runs ADD COLUMN IF NOT EXISTS prompt_digest varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE analysis.classification_runs ADD COLUMN IF NOT EXISTS prompt_snapshot_id uuid;
+ALTER TABLE usage.records ADD COLUMN IF NOT EXISTS prompt_snapshot_id uuid;
+ALTER TABLE usage.records ADD COLUMN IF NOT EXISTS prompt_digest varchar(200) NOT NULL DEFAULT '';
+DO $$
+DECLARE
+  snapshot_id uuid;
+  snapshot_digest varchar(64);
+BEGIN
+  SELECT id, canonical_digest INTO snapshot_id, snapshot_digest
+  FROM analysis.prompt_snapshots
+  WHERE analysis_type = 'REAL_ESTATE'
+  ORDER BY created_at ASC
+  LIMIT 1;
+  IF snapshot_id IS NULL THEN
+    RAISE EXCEPTION 'REAL_ESTATE analysis prompt snapshot was not seeded';
+  END IF;
+  UPDATE inspections.inspections SET analysis_prompt_snapshot_id = snapshot_id WHERE analysis_prompt_snapshot_id IS NULL;
+  UPDATE analysis.comparison_jobs SET prompt_snapshot_id = snapshot_id, prompt_digest = snapshot_digest WHERE prompt_snapshot_id IS NULL OR prompt_digest = '';
+  UPDATE analysis.analysis_runs SET prompt_snapshot_id = snapshot_id, prompt_digest = snapshot_digest WHERE prompt_snapshot_id IS NULL OR prompt_digest = '';
+  UPDATE analysis.classification_runs SET prompt_snapshot_id = snapshot_id WHERE prompt_snapshot_id IS NULL;
+  UPDATE usage.records SET prompt_snapshot_id = snapshot_id, prompt_digest = snapshot_digest WHERE prompt_snapshot_id IS NULL OR prompt_digest = '';
+END $$;
+ALTER TABLE inspections.inspections ALTER COLUMN analysis_prompt_snapshot_id SET NOT NULL;
+ALTER TABLE analysis.comparison_jobs ALTER COLUMN prompt_snapshot_id SET NOT NULL;
+ALTER TABLE analysis.comparison_jobs ALTER COLUMN prompt_digest SET NOT NULL;
+ALTER TABLE analysis.analysis_runs ALTER COLUMN prompt_snapshot_id SET NOT NULL;
+ALTER TABLE analysis.analysis_runs ALTER COLUMN prompt_digest SET NOT NULL;
+ALTER TABLE analysis.classification_runs ALTER COLUMN prompt_snapshot_id SET NOT NULL;
+ALTER TABLE usage.records ALTER COLUMN prompt_snapshot_id SET NOT NULL;
+ALTER TABLE usage.records ALTER COLUMN prompt_digest SET NOT NULL;
+ALTER TABLE inspections.inspections DROP COLUMN IF EXISTS analysis_profile_version_id;
+DROP INDEX IF EXISTS analysis.idx_analysis_job_input;
+ALTER TABLE analysis.comparison_jobs DROP COLUMN IF EXISTS prompt_version;
+ALTER TABLE analysis.analysis_runs DROP COLUMN IF EXISTS prompt_version;
+ALTER TABLE analysis.classification_runs DROP COLUMN IF EXISTS profile_version_id;
+ALTER TABLE usage.records DROP COLUMN IF EXISTS prompt_version;
+DROP TABLE IF EXISTS templates.analysis_profile_versions;
+DROP TABLE IF EXISTS templates.analysis_profiles;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_job_input ON analysis.comparison_jobs(tenant_id, inspection_id, requirement_key, model_alias, prompt_digest, input_digest);
+`},
+		{Version: 38, Name: "analysis_job_prompt_digest_index", Compatible: true, SQL: `
+DROP INDEX IF EXISTS analysis.idx_analysis_job_input;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_job_input ON analysis.comparison_jobs(tenant_id, inspection_id, requirement_key, model_alias, prompt_digest, input_digest);
 `}}
 }
 

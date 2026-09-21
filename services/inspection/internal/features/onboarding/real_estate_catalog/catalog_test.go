@@ -82,8 +82,8 @@ func TestCuratedTemplatesPinOriginModeAndProfile(t *testing.T) {
 	if templates[ChecklistTemplateKey].ComparisonMode != "CHECKLIST_ONLY" || templates[OriginTemplateKey].ComparisonMode != "FIXED_ORIGIN" {
 		t.Fatal("curated templates have incorrect comparison modes")
 	}
-	if templates[ChecklistTemplateKey].AnalysisProfile != AnalysisProfileKey || templates[OriginTemplateKey].AnalysisProfile != AnalysisProfileKey {
-		t.Fatal("curated templates do not pin the analysis profile")
+	if templates[ChecklistTemplateKey].AnalysisType != "REAL_ESTATE" || templates[OriginTemplateKey].AnalysisType != "REAL_ESTATE" {
+		t.Fatal("curated templates do not pin the analysis type")
 	}
 	refs := templateRefs{}
 	if err := ValidateTemplates(refs); err != nil {
@@ -93,5 +93,5 @@ func TestCuratedTemplatesPinOriginModeAndProfile(t *testing.T) {
 
 type templateRefs struct{}
 
-func (templateRefs) SegmentExists(string) bool         { return true }
-func (templateRefs) AnalysisProfileExists(string) bool { return true }
+func (templateRefs) SegmentExists(string) bool      { return true }
+func (templateRefs) AnalysisTypeExists(string) bool { return true }

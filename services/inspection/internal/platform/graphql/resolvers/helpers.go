@@ -386,7 +386,17 @@ func mapInspection(view inspectioncore.View) *graphql1.Inspection {
 	row := view.Inspection
 	var reminders []string
 	_ = json.Unmarshal(row.ReminderInstants, &reminders)
-	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisProfileVersionID: row.AnalysisProfileVersionID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version)}
+	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version)}
+}
+
+func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {
+	var definition struct {
+		SystemPrompt         string `json:"systemPrompt"`
+		ModelAlias           string `json:"modelAlias"`
+		MinimumConfidenceBPS int    `json:"minimumConfidenceBps"`
+	}
+	_ = json.Unmarshal(row.DefinitionJSON, &definition)
+	return &graphql1.AnalysisPrompt{AnalysisType: graphql1.AnalysisType(row.AnalysisType), SystemPrompt: definition.SystemPrompt, ModelAlias: definition.ModelAlias, MinimumConfidenceBps: definition.MinimumConfidenceBPS, CanonicalDigest: row.CanonicalDigest, Revision: int(row.Revision), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)}
 }
 
 func mapProject(view projectcore.View) *graphql1.Project {

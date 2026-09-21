@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"inspection/libs/identity"
+	resolveprompt "inspection/services/inspection/internal/features/analysis/resolve_prompt"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
@@ -152,9 +153,8 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	} else if requiresReference(document.ComparisonMode) && in.ReferenceVersionID == nil {
 		return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
 	}
-	analysisProfileID, err := identity.ParseID(document.AnalysisProfile)
-	if err != nil {
-		return View{}, fmt.Errorf("decode analysis profile reference: %w", err)
+	if !strings.EqualFold(document.AnalysisType, "REAL_ESTATE") {
+		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 	}
 	if in.Source != SourceScheduled {
 		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
@@ -166,13 +166,6 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		return View{}, err
 	}
 	reminderJSON, _ := json.Marshal(reminders)
-	contextSnapshot, _ := json.Marshal(map[string]any{
-		"tenantId": in.TenantID, "businessUnitId": asset.Asset.BusinessUnitID,
-		"assetId": asset.Asset.ID, "assetVersion": asset.Asset.Version,
-		"participantId": participant.Participant.ID, "participantVersion": participant.Participant.Version,
-		"templateId": *templateID, "templateVersionId": template.Version.ID,
-		"analysisProfileVersionId": analysisProfileID, "source": in.Source,
-	})
 	now := s.now()
 	var out View
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
@@ -189,7 +182,18 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		if count >= catalog.MaxInspections {
 			return apperror.New(apperror.InvalidState, "inspections", "inspection capacity reached")
 		}
-		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisProfileVersionID: analysisProfileID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
+		resolvedPrompt, err := resolveprompt.Resolve(ctx, tx, document.AnalysisType, now)
+		if err != nil {
+			return err
+		}
+		contextSnapshot, _ := json.Marshal(map[string]any{
+			"tenantId": in.TenantID, "businessUnitId": asset.Asset.BusinessUnitID,
+			"assetId": asset.Asset.ID, "assetVersion": asset.Asset.Version,
+			"participantId": participant.Participant.ID, "participantVersion": participant.Participant.Version,
+			"templateId": *templateID, "templateVersionId": template.Version.ID,
+			"analysisType": document.AnalysisType, "analysisPromptSnapshotId": resolvedPrompt.Snapshot.ID, "source": in.Source,
+		})
+		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ParticipantID: in.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		policy := database.PolicySnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, SchemaVersion: 1, Payload: policyPayload, CanonicalDigest: policyDigest, CreatedAt: now}
 		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": document.ComparisonMode}

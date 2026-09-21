@@ -14,7 +14,7 @@ import (
 
 type Command struct {
 	TenantID                     identity.ID
-	AnalysisProfileID            identity.ID
+	AnalysisType                 string
 	PropertySegmentVersionID     identity.ID
 	ConstructionSegmentVersionID identity.ID
 	CleaningSegmentVersionID     identity.ID
@@ -28,7 +28,7 @@ func Setup(d Dependencies) error {
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 		cmd := raw.(Command)
-		seeds := catalog.CuratedSeeds(cmd.AnalysisProfileID.String(), cmd.PropertySegmentVersionID.String(), cmd.ConstructionSegmentVersionID.String(), cmd.CleaningSegmentVersionID.String())
+		seeds := catalog.CuratedSeeds(cmd.AnalysisType, cmd.PropertySegmentVersionID.String(), cmd.ConstructionSegmentVersionID.String(), cmd.CleaningSegmentVersionID.String())
 		result := Result{Versions: map[string]identity.ID{}}
 		for _, seed := range seeds {
 			payload, err := json.Marshal(seed.Document)

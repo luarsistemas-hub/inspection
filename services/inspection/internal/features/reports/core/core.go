@@ -19,7 +19,7 @@ type Snapshot struct {
 	ProjectID          string            `json:"projectId,omitempty"`
 	TemplateVersionID  string            `json:"templateVersionId"`
 	ReferenceVersionID string            `json:"referenceVersionId"`
-	ProfileVersionID   string            `json:"profileVersionId"`
+	PromptDigest       string            `json:"promptDigest"`
 	Mode               string            `json:"mode"`
 	Classification     string            `json:"classification"`
 	ReasonCodes        []string          `json:"reasonCodes"`
@@ -131,7 +131,7 @@ func CanonicalJSON(snapshot Snapshot) ([]byte, string, error) {
 }
 
 func Validate(snapshot Snapshot) error {
-	if snapshot.SchemaVersion <= 0 || strings.TrimSpace(snapshot.ReportID) == "" || strings.TrimSpace(snapshot.InspectionID) == "" || strings.TrimSpace(snapshot.TemplateVersionID) == "" || strings.TrimSpace(snapshot.ReferenceVersionID) == "" || strings.TrimSpace(snapshot.ProfileVersionID) == "" {
+	if snapshot.SchemaVersion <= 0 || strings.TrimSpace(snapshot.ReportID) == "" || strings.TrimSpace(snapshot.InspectionID) == "" || strings.TrimSpace(snapshot.TemplateVersionID) == "" || strings.TrimSpace(snapshot.ReferenceVersionID) == "" || strings.TrimSpace(snapshot.PromptDigest) == "" {
 		return fmt.Errorf("report snapshot identity is required")
 	}
 	if snapshot.Mode != "CONSOLIDATED" && snapshot.Mode != "HISTORICAL" {

@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"inspection/libs/identity"
@@ -20,9 +19,7 @@ import (
 )
 
 type Dependencies struct {
-	ModelAlias    string
-	PromptVersion string
-	Now           func() time.Time
+	Now func() time.Time
 }
 
 type payload struct {
@@ -36,9 +33,6 @@ type payload struct {
 // intentionally left for the process_comparison consumer; this slice only
 // creates jobs and schedules them.
 func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) error, error) {
-	if deps.ModelAlias == "" || deps.PromptVersion == "" {
-		return nil, fmt.Errorf("analysis/request_comparisons: missing provider version")
-	}
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
@@ -67,6 +61,14 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if len(answers) == 0 {
 			return messaging.ErrPermanent
 		}
+		var inspection database.Inspection
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
+			return err
+		}
+		var snapshot database.AnalysisPromptSnapshot
+		if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", inspection.AnalysisPromptSnapshotID, "REAL_ESTATE").First(&snapshot).Error; err != nil {
+			return err
+		}
 		var reference database.ReferenceSnapshot
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, in.InspectionID).First(&reference).Error; err != nil {
 			return err
@@ -80,13 +82,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			digestInput := append(append([]byte{}, answer.MediaIDs...), answer.Flags...)
 			digestInput = append(digestInput, reference.Payload...)
 			digestBytes := sha256.Sum256(digestInput)
-			job := database.ComparisonJob{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: in.InspectionID, RequirementKey: answer.RequirementKey, ModelAlias: deps.ModelAlias, PromptVersion: deps.PromptVersion, InputDigest: hex.EncodeToString(digestBytes[:]), Status: "PENDING", CreatedAt: now, UpdatedAt: now}
+			job := database.ComparisonJob{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: in.InspectionID, PromptSnapshotID: snapshot.ID, RequirementKey: answer.RequirementKey, ModelAlias: "inspection-vision", PromptDigest: snapshot.CanonicalDigest, InputDigest: hex.EncodeToString(digestBytes[:]), Status: "PENDING", CreatedAt: now, UpdatedAt: now}
 			result := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
 			if result.Error != nil {
 				return result.Error
 			}
 			if result.RowsAffected == 0 {
-				if err := tx.Where("tenant_id=? AND inspection_id=? AND requirement_key=? AND model_alias=? AND prompt_version=? AND input_digest=?", job.TenantID, job.InspectionID, job.RequirementKey, job.ModelAlias, job.PromptVersion, job.InputDigest).First(&job).Error; err != nil {
+				if err := tx.Where("tenant_id=? AND inspection_id=? AND requirement_key=? AND model_alias=? AND prompt_digest=? AND input_digest=?", job.TenantID, job.InspectionID, job.RequirementKey, job.ModelAlias, job.PromptDigest, job.InputDigest).First(&job).Error; err != nil {
 					return err
 				}
 			}

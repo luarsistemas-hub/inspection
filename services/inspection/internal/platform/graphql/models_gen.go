@@ -39,21 +39,20 @@ type AddExceptionalStageInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
-type AnalysisProfile struct {
-	ID              string         `json:"id"`
-	Key             string         `json:"key"`
-	VersionNumber   int            `json:"versionNumber"`
-	SchemaVersion   int            `json:"schemaVersion"`
-	Definition      map[string]any `json:"definition"`
-	CanonicalDigest string         `json:"canonicalDigest"`
-	Status          string         `json:"status"`
-	PublishedAt     string         `json:"publishedAt"`
+type AnalysisPrompt struct {
+	AnalysisType         AnalysisType `json:"analysisType"`
+	SystemPrompt         string       `json:"systemPrompt"`
+	ModelAlias           string       `json:"modelAlias"`
+	MinimumConfidenceBps int          `json:"minimumConfidenceBps"`
+	CanonicalDigest      string       `json:"canonicalDigest"`
+	Revision             int          `json:"revision"`
+	UpdatedAt            string       `json:"updatedAt"`
 }
 
-type AnalysisProfilePayload struct {
-	Profile          *AnalysisProfile `json:"profile,omitempty"`
-	UserErrors       []*UserError     `json:"userErrors"`
-	ClientMutationID string           `json:"clientMutationId"`
+type AnalysisPromptPayload struct {
+	Prompt           *AnalysisPrompt `json:"prompt,omitempty"`
+	UserErrors       []*UserError    `json:"userErrors"`
+	ClientMutationID string          `json:"clientMutationId"`
 }
 
 type ArchiveAssetInput struct {
@@ -451,7 +450,7 @@ type Inspection struct {
 	ParticipantID            string   `json:"participantId"`
 	TemplateID               string   `json:"templateId"`
 	TemplateVersionID        string   `json:"templateVersionId"`
-	AnalysisProfileVersionID string   `json:"analysisProfileVersionId"`
+	AnalysisPromptSnapshotID string   `json:"analysisPromptSnapshotId"`
 	ProjectID                *string  `json:"projectId,omitempty"`
 	StageID                  *string  `json:"stageId,omitempty"`
 	Source                   string   `json:"source"`
@@ -654,15 +653,15 @@ type OnboardingAgency struct {
 }
 
 type OnboardingDefinition struct {
-	SchemaVersion   int                     `json:"schemaVersion"`
-	Version         int                     `json:"version"`
-	Segment         string                  `json:"segment"`
-	SegmentVersion  string                  `json:"segmentVersion"`
-	Steps           []*OnboardingStep       `json:"steps"`
-	Purposes        []string                `json:"purposes"`
-	OriginModes     []*OnboardingOriginMode `json:"originModes"`
-	Templates       []string                `json:"templates"`
-	AnalysisProfile string                  `json:"analysisProfile"`
+	SchemaVersion  int                     `json:"schemaVersion"`
+	Version        int                     `json:"version"`
+	Segment        string                  `json:"segment"`
+	SegmentVersion string                  `json:"segmentVersion"`
+	Steps          []*OnboardingStep       `json:"steps"`
+	Purposes       []string                `json:"purposes"`
+	OriginModes    []*OnboardingOriginMode `json:"originModes"`
+	Templates      []string                `json:"templates"`
+	AnalysisType   AnalysisType            `json:"analysisType"`
 }
 
 type OnboardingField struct {
@@ -932,12 +931,6 @@ type PublicationPolicyPayload struct {
 	Policy           *PublicationPolicy `json:"policy,omitempty"`
 	UserErrors       []*UserError       `json:"userErrors"`
 	ClientMutationID string             `json:"clientMutationId"`
-}
-
-type PublishAnalysisProfileInput struct {
-	Key              string         `json:"key"`
-	Definition       map[string]any `json:"definition"`
-	ClientMutationID string         `json:"clientMutationId"`
 }
 
 type PublishReportInput struct {
@@ -1430,6 +1423,13 @@ type TriageInspectionConnection struct {
 	PageInfo *PageInfo           `json:"pageInfo"`
 }
 
+type UpdateAnalysisPromptInput struct {
+	AnalysisType     AnalysisType `json:"analysisType"`
+	SystemPrompt     string       `json:"systemPrompt"`
+	ExpectedRevision int          `json:"expectedRevision"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type UpdateAssetInput struct {
 	AssetID          string      `json:"assetId"`
 	ExpectedVersion  int         `json:"expectedVersion"`
@@ -1512,6 +1512,59 @@ type VerifyOnboardingOtpInput struct {
 	SessionLocator   string `json:"sessionLocator"`
 	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type AnalysisType string
+
+const (
+	AnalysisTypeRealEstate AnalysisType = "REAL_ESTATE"
+)
+
+var AllAnalysisType = []AnalysisType{
+	AnalysisTypeRealEstate,
+}
+
+func (e AnalysisType) IsValid() bool {
+	switch e {
+	case AnalysisTypeRealEstate:
+		return true
+	}
+	return false
+}
+
+func (e AnalysisType) String() string {
+	return string(e)
+}
+
+func (e *AnalysisType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AnalysisType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AnalysisType", str)
+	}
+	return nil
+}
+
+func (e AnalysisType) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AnalysisType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AnalysisType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type EvidenceMode string

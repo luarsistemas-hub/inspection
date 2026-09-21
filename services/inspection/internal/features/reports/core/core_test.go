@@ -6,7 +6,7 @@ import (
 )
 
 func validSnapshot() Snapshot {
-	return Snapshot{SchemaVersion: 1, ReportID: "report-1", InspectionID: "inspection-1", TemplateVersionID: "template-v1", ReferenceVersionID: "reference-v1", ProfileVersionID: "profile-v1", Mode: "HISTORICAL", Classification: "ATTENTION", Context: Context{Asset: AssetContext{ID: "asset-1", Name: "Apartamento 12", ExternalKey: "APT-12", Address: "Rua Exemplo, 12"}, Participant: ParticipantContext{ID: "participant-1", Name: "Pessoa responsável"}, Template: TemplateContext{ID: "template-1", Name: "Vistoria periódica", Version: 1}, Inspection: InspectionContext{GeneratedAt: "2026-09-16T00:00:00Z"}}, Advisory: "Esta triagem interna não atribui culpa."}
+	return Snapshot{SchemaVersion: 1, ReportID: "report-1", InspectionID: "inspection-1", TemplateVersionID: "template-v1", ReferenceVersionID: "reference-v1", PromptDigest: "prompt-digest-v1", Mode: "HISTORICAL", Classification: "ATTENTION", Context: Context{Asset: AssetContext{ID: "asset-1", Name: "Apartamento 12", ExternalKey: "APT-12", Address: "Rua Exemplo, 12"}, Participant: ParticipantContext{ID: "participant-1", Name: "Pessoa responsável"}, Template: TemplateContext{ID: "template-1", Name: "Vistoria periódica", Version: 1}, Inspection: InspectionContext{GeneratedAt: "2026-09-16T00:00:00Z"}}, Advisory: "Esta triagem interna não atribui culpa."}
 }
 
 func TestSnapshotRejectsMutableURLs(t *testing.T) {

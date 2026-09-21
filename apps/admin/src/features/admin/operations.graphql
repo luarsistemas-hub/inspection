@@ -2,6 +2,8 @@ query AdminIdentity { me { identityId tenantId roles productEntitlements members
 
 query AdminGate { me { tenantId roles productEntitlements } tenant { id name status } }
 
+query AdminAnalysisPrompt { analysisPrompt(type: REAL_ESTATE) { analysisType systemPrompt modelAlias minimumConfidenceBps canonicalDigest revision updatedAt } }
+
 mutation BootstrapTenant($input: CreateTenantInput!) { createTenant(input: $input) { tenant { id name status } userErrors { code field message correlationId } clientMutationId } }
 
 query AdminOrganization($first: Int!, $after: String) { businessUnits(first: $first, after: $after) { nodes { id code name status version } pageInfo { endCursor hasNextPage } } }
@@ -24,3 +26,4 @@ mutation AdminUpsertParticipant($input: UpsertParticipantInput!) { upsertPartici
 mutation AdminRegisterAsset($input: RegisterAssetInput!) { registerAsset(input: $input) { asset { id name externalKey status version } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminConfigurePublicationPolicy($input: ConfigurePublicationPolicyInput!) { configurePublicationPolicy(input: $input) { policy { mode version } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminCorrectInspectionResponsibleEmail($input: CorrectInspectionResponsibleEmailInput!) { correctInspectionResponsibleEmail(input: $input) { correction { inspectionId responsibilityId invitationId deliveryId deliveryStatus responsibilityStatus responsibilityVersion recipientMasked canCorrectResponsibleEmail } userErrors { code field message correlationId } clientMutationId } }
+mutation AdminUpdateAnalysisPrompt($input: UpdateAnalysisPromptInput!) { updateAnalysisPrompt(input: $input) { prompt { analysisType systemPrompt modelAlias minimumConfidenceBps canonicalDigest revision updatedAt } userErrors { code field message correlationId } clientMutationId } }

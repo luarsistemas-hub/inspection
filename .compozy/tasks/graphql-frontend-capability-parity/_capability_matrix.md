@@ -31,6 +31,7 @@ Every row must end in one of these verified outcomes:
 | 11 | `assets` | Admin | Used as generic data | Searchable/filterable asset collection with assignments, import/export, lifecycle, and origin status. |
 | 12 | `asset` | Admin | Missing UI | Complete asset detail, relationships, origin lineage, version, policy overrides, and history. |
 | 13 | `originVersions` | Admin | Missing UI | Paginated origin lineage with source/provenance, active/invalid state, media availability, and audit. |
+| 37 | `analysisPrompt` | Admin | Used | Read the global versioned analysis prompt and fixed execution configuration. |
 | 36 | `originPromotion` | Dashboard | Used | Tenant admin or manager reviews eligible completed onboarding photos and the durable promotion state. |
 | 14 | `schedules` | Dashboard | Missing UI | Operational schedule collection with due/status filters and create/update/cancel journeys. |
 | 15 | `projects` | Dashboard | Missing UI | Project collection with status, scope, asset, participant, stage progress, and pagination. |
@@ -75,7 +76,7 @@ Every row must end in one of these verified outcomes:
 | 13 | `activateSegmentDefinition` | Admin | Missing UI | Activate one compatible segment version for future use without rewriting history. |
 | 14 | `publishTemplateVersion` | Admin | Missing UI | Publish immutable template version from structured requirements and preview. |
 | 15 | `activateTemplateVersion` | Admin | Missing UI | Activate one compatible template version after dependency/impact review. |
-| 16 | `publishAnalysisProfile` | Admin | Missing UI | Publish immutable analysis profile through a discoverable profile lifecycle. |
+| 16 | `updateAnalysisPrompt` | Admin | Used | Update only the global system prompt with optimistic revision and audit. |
 | 17 | `registerAsset` | Admin | Missing UI | Asset registration with configuration, assignments, policy overrides, and import parity. |
 | 18 | `updateAsset` | Admin | Missing UI | Version-safe asset update with dependency impact. |
 | 19 | `archiveAsset` | Admin | Missing UI | Archive asset, prevent new work, and preserve historical work. |

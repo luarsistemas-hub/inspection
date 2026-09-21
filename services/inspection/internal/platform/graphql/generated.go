@@ -35,20 +35,19 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
-	AnalysisProfile struct {
-		CanonicalDigest func(childComplexity int) int
-		Definition      func(childComplexity int) int
-		ID              func(childComplexity int) int
-		Key             func(childComplexity int) int
-		PublishedAt     func(childComplexity int) int
-		SchemaVersion   func(childComplexity int) int
-		Status          func(childComplexity int) int
-		VersionNumber   func(childComplexity int) int
+	AnalysisPrompt struct {
+		AnalysisType         func(childComplexity int) int
+		CanonicalDigest      func(childComplexity int) int
+		MinimumConfidenceBps func(childComplexity int) int
+		ModelAlias           func(childComplexity int) int
+		Revision             func(childComplexity int) int
+		SystemPrompt         func(childComplexity int) int
+		UpdatedAt            func(childComplexity int) int
 	}
 
-	AnalysisProfilePayload struct {
+	AnalysisPromptPayload struct {
 		ClientMutationID func(childComplexity int) int
-		Profile          func(childComplexity int) int
+		Prompt           func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -259,7 +258,7 @@ type ComplexityRoot struct {
 	}
 
 	Inspection struct {
-		AnalysisProfileVersionID func(childComplexity int) int
+		AnalysisPromptSnapshotID func(childComplexity int) int
 		AssetID                  func(childComplexity int) int
 		BusinessUnitID           func(childComplexity int) int
 		DeadlineAt               func(childComplexity int) int
@@ -399,7 +398,6 @@ type ComplexityRoot struct {
 		MarkNotificationRead                   func(childComplexity int, input MarkNotificationReadInput) int
 		PresignMediaParts                      func(childComplexity int, input PresignMediaPartsInput) int
 		PromoteInspectionPhotos                func(childComplexity int, input PromoteInspectionPhotosInput) int
-		PublishAnalysisProfile                 func(childComplexity int, input PublishAnalysisProfileInput) int
 		PublishReport                          func(childComplexity int, input PublishReportInput) int
 		PublishSegmentDefinition               func(childComplexity int, input PublishSegmentDefinitionInput) int
 		PublishTemplateVersion                 func(childComplexity int, input PublishTemplateVersionInput) int
@@ -420,6 +418,7 @@ type ComplexityRoot struct {
 		StartProjectStage                      func(childComplexity int, input StartProjectStageInput) int
 		SubmitCapture                          func(childComplexity int, input SubmitCaptureInput) int
 		SubmitRecapture                        func(childComplexity int, input SubmitRecaptureInput) int
+		UpdateAnalysisPrompt                   func(childComplexity int, input UpdateAnalysisPromptInput) int
 		UpdateAsset                            func(childComplexity int, input UpdateAssetInput) int
 		UpdateSchedule                         func(childComplexity int, input UpdateScheduleInput) int
 		UpdateTenant                           func(childComplexity int, input UpdateTenantInput) int
@@ -488,15 +487,15 @@ type ComplexityRoot struct {
 	}
 
 	OnboardingDefinition struct {
-		AnalysisProfile func(childComplexity int) int
-		OriginModes     func(childComplexity int) int
-		Purposes        func(childComplexity int) int
-		SchemaVersion   func(childComplexity int) int
-		Segment         func(childComplexity int) int
-		SegmentVersion  func(childComplexity int) int
-		Steps           func(childComplexity int) int
-		Templates       func(childComplexity int) int
-		Version         func(childComplexity int) int
+		AnalysisType   func(childComplexity int) int
+		OriginModes    func(childComplexity int) int
+		Purposes       func(childComplexity int) int
+		SchemaVersion  func(childComplexity int) int
+		Segment        func(childComplexity int) int
+		SegmentVersion func(childComplexity int) int
+		Steps          func(childComplexity int) int
+		Templates      func(childComplexity int) int
+		Version        func(childComplexity int) int
 	}
 
 	OnboardingField struct {
@@ -738,6 +737,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AnalysisPrompt         func(childComplexity int, typeArg AnalysisType) int
 		Asset                  func(childComplexity int, id string) int
 		Assets                 func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
 		AuditEvents            func(childComplexity int, first *int, after *string) int
@@ -1173,7 +1173,7 @@ type MutationResolver interface {
 	ActivateSegmentDefinition(ctx context.Context, input ActivateSegmentDefinitionInput) (*SegmentDefinitionPayload, error)
 	PublishTemplateVersion(ctx context.Context, input PublishTemplateVersionInput) (*TemplatePayload, error)
 	ActivateTemplateVersion(ctx context.Context, input ActivateTemplateVersionInput) (*TemplatePayload, error)
-	PublishAnalysisProfile(ctx context.Context, input PublishAnalysisProfileInput) (*AnalysisProfilePayload, error)
+	UpdateAnalysisPrompt(ctx context.Context, input UpdateAnalysisPromptInput) (*AnalysisPromptPayload, error)
 	RegisterAsset(ctx context.Context, input RegisterAssetInput) (*AssetPayload, error)
 	UpdateAsset(ctx context.Context, input UpdateAssetInput) (*AssetPayload, error)
 	ArchiveAsset(ctx context.Context, input ArchiveAssetInput) (*AssetPayload, error)
@@ -1218,6 +1218,7 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	OnboardingDefinition(ctx context.Context, segment string) (*OnboardingDefinition, error)
+	AnalysisPrompt(ctx context.Context, typeArg AnalysisType) (*AnalysisPrompt, error)
 	OnboardingSession(ctx context.Context) (*OnboardingSession, error)
 	OnboardingStatus(ctx context.Context) (*OnboardingStatus, error)
 	Me(ctx context.Context) (*Me, error)
@@ -1274,73 +1275,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "AnalysisProfile.canonicalDigest":
-		if e.ComplexityRoot.AnalysisProfile.CanonicalDigest == nil {
+	case "AnalysisPrompt.analysisType":
+		if e.ComplexityRoot.AnalysisPrompt.AnalysisType == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.CanonicalDigest(childComplexity), true
-	case "AnalysisProfile.definition":
-		if e.ComplexityRoot.AnalysisProfile.Definition == nil {
+		return e.ComplexityRoot.AnalysisPrompt.AnalysisType(childComplexity), true
+	case "AnalysisPrompt.canonicalDigest":
+		if e.ComplexityRoot.AnalysisPrompt.CanonicalDigest == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.Definition(childComplexity), true
-	case "AnalysisProfile.id":
-		if e.ComplexityRoot.AnalysisProfile.ID == nil {
+		return e.ComplexityRoot.AnalysisPrompt.CanonicalDigest(childComplexity), true
+	case "AnalysisPrompt.minimumConfidenceBps":
+		if e.ComplexityRoot.AnalysisPrompt.MinimumConfidenceBps == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.ID(childComplexity), true
-	case "AnalysisProfile.key":
-		if e.ComplexityRoot.AnalysisProfile.Key == nil {
+		return e.ComplexityRoot.AnalysisPrompt.MinimumConfidenceBps(childComplexity), true
+	case "AnalysisPrompt.modelAlias":
+		if e.ComplexityRoot.AnalysisPrompt.ModelAlias == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.Key(childComplexity), true
-	case "AnalysisProfile.publishedAt":
-		if e.ComplexityRoot.AnalysisProfile.PublishedAt == nil {
+		return e.ComplexityRoot.AnalysisPrompt.ModelAlias(childComplexity), true
+	case "AnalysisPrompt.revision":
+		if e.ComplexityRoot.AnalysisPrompt.Revision == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.PublishedAt(childComplexity), true
-	case "AnalysisProfile.schemaVersion":
-		if e.ComplexityRoot.AnalysisProfile.SchemaVersion == nil {
+		return e.ComplexityRoot.AnalysisPrompt.Revision(childComplexity), true
+	case "AnalysisPrompt.systemPrompt":
+		if e.ComplexityRoot.AnalysisPrompt.SystemPrompt == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.SchemaVersion(childComplexity), true
-	case "AnalysisProfile.status":
-		if e.ComplexityRoot.AnalysisProfile.Status == nil {
+		return e.ComplexityRoot.AnalysisPrompt.SystemPrompt(childComplexity), true
+	case "AnalysisPrompt.updatedAt":
+		if e.ComplexityRoot.AnalysisPrompt.UpdatedAt == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.Status(childComplexity), true
-	case "AnalysisProfile.versionNumber":
-		if e.ComplexityRoot.AnalysisProfile.VersionNumber == nil {
+		return e.ComplexityRoot.AnalysisPrompt.UpdatedAt(childComplexity), true
+
+	case "AnalysisPromptPayload.clientMutationId":
+		if e.ComplexityRoot.AnalysisPromptPayload.ClientMutationID == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfile.VersionNumber(childComplexity), true
-
-	case "AnalysisProfilePayload.clientMutationId":
-		if e.ComplexityRoot.AnalysisProfilePayload.ClientMutationID == nil {
+		return e.ComplexityRoot.AnalysisPromptPayload.ClientMutationID(childComplexity), true
+	case "AnalysisPromptPayload.prompt":
+		if e.ComplexityRoot.AnalysisPromptPayload.Prompt == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfilePayload.ClientMutationID(childComplexity), true
-	case "AnalysisProfilePayload.profile":
-		if e.ComplexityRoot.AnalysisProfilePayload.Profile == nil {
+		return e.ComplexityRoot.AnalysisPromptPayload.Prompt(childComplexity), true
+	case "AnalysisPromptPayload.userErrors":
+		if e.ComplexityRoot.AnalysisPromptPayload.UserErrors == nil {
 			break
 		}
 
-		return e.ComplexityRoot.AnalysisProfilePayload.Profile(childComplexity), true
-	case "AnalysisProfilePayload.userErrors":
-		if e.ComplexityRoot.AnalysisProfilePayload.UserErrors == nil {
-			break
-		}
-
-		return e.ComplexityRoot.AnalysisProfilePayload.UserErrors(childComplexity), true
+		return e.ComplexityRoot.AnalysisPromptPayload.UserErrors(childComplexity), true
 
 	case "Asset.address":
 		if e.ComplexityRoot.Asset.Address == nil {
@@ -2170,12 +2165,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ExternalSessionPayload.UserErrors(childComplexity), true
 
-	case "Inspection.analysisProfileVersionId":
-		if e.ComplexityRoot.Inspection.AnalysisProfileVersionID == nil {
+	case "Inspection.analysisPromptSnapshotId":
+		if e.ComplexityRoot.Inspection.AnalysisPromptSnapshotID == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Inspection.AnalysisProfileVersionID(childComplexity), true
+		return e.ComplexityRoot.Inspection.AnalysisPromptSnapshotID(childComplexity), true
 	case "Inspection.assetId":
 		if e.ComplexityRoot.Inspection.AssetID == nil {
 			break
@@ -2969,17 +2964,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PromoteInspectionPhotos(childComplexity, args["input"].(PromoteInspectionPhotosInput)), true
-	case "Mutation.publishAnalysisProfile":
-		if e.ComplexityRoot.Mutation.PublishAnalysisProfile == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_publishAnalysisProfile_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.PublishAnalysisProfile(childComplexity, args["input"].(PublishAnalysisProfileInput)), true
 	case "Mutation.publishReport":
 		if e.ComplexityRoot.Mutation.PublishReport == nil {
 			break
@@ -3200,6 +3184,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SubmitRecapture(childComplexity, args["input"].(SubmitRecaptureInput)), true
+	case "Mutation.updateAnalysisPrompt":
+		if e.ComplexityRoot.Mutation.UpdateAnalysisPrompt == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateAnalysisPrompt_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateAnalysisPrompt(childComplexity, args["input"].(UpdateAnalysisPromptInput)), true
 	case "Mutation.updateAsset":
 		if e.ComplexityRoot.Mutation.UpdateAsset == nil {
 			break
@@ -3534,12 +3529,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OnboardingAgency.TenantID(childComplexity), true
 
-	case "OnboardingDefinition.analysisProfile":
-		if e.ComplexityRoot.OnboardingDefinition.AnalysisProfile == nil {
+	case "OnboardingDefinition.analysisType":
+		if e.ComplexityRoot.OnboardingDefinition.AnalysisType == nil {
 			break
 		}
 
-		return e.ComplexityRoot.OnboardingDefinition.AnalysisProfile(childComplexity), true
+		return e.ComplexityRoot.OnboardingDefinition.AnalysisType(childComplexity), true
 	case "OnboardingDefinition.originModes":
 		if e.ComplexityRoot.OnboardingDefinition.OriginModes == nil {
 			break
@@ -4490,6 +4485,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PublicationPolicyPayload.UserErrors(childComplexity), true
 
+	case "Query.analysisPrompt":
+		if e.ComplexityRoot.Query.AnalysisPrompt == nil {
+			break
+		}
+
+		args, err := ec.field_Query_analysisPrompt_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AnalysisPrompt(childComplexity, args["type"].(AnalysisType)), true
 	case "Query.asset":
 		if e.ComplexityRoot.Query.Asset == nil {
 			break
@@ -6344,7 +6350,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPresignMediaPartsInput,
 		ec.unmarshalInputProjectTransitionInput,
 		ec.unmarshalInputPromoteInspectionPhotosInput,
-		ec.unmarshalInputPublishAnalysisProfileInput,
 		ec.unmarshalInputPublishReportInput,
 		ec.unmarshalInputPublishSegmentDefinitionInput,
 		ec.unmarshalInputPublishTemplateVersionInput,
@@ -6366,6 +6371,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputStartProjectStageInput,
 		ec.unmarshalInputSubmitCaptureInput,
 		ec.unmarshalInputSubmitRecaptureInput,
+		ec.unmarshalInputUpdateAnalysisPromptInput,
 		ec.unmarshalInputUpdateAssetInput,
 		ec.unmarshalInputUpdateScheduleInput,
 		ec.unmarshalInputUpdateTenantInput,
@@ -6454,6 +6460,7 @@ var sources = []*ast.Source{
 
 type Query {
 	 onboardingDefinition(segment: String!): OnboardingDefinition!
+	 analysisPrompt(type: AnalysisType!): AnalysisPrompt!
 	 onboardingSession: OnboardingSession
 	 onboardingStatus: OnboardingStatus
   me: Me!
@@ -6496,7 +6503,7 @@ type OnboardingOption { value: String!, label: String! }
 type OnboardingField { key: String!, label: String!, type: String!, required: Boolean!, placeholder: String, options: [String!]! @deprecated(reason: "Use choices to obtain user-facing labels"), choices: [OnboardingOption!]! }
 type OnboardingStep { key: String!, label: String!, position: Int!, required: Boolean!, fields: [OnboardingField!]! }
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
-type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisProfile: String! }
+type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisType: AnalysisType! }
 type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, businessUnitCode: String!, status: String! }
 type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
@@ -6537,8 +6544,8 @@ type Mutation {
   publishSegmentDefinition(input: PublishSegmentDefinitionInput!): SegmentDefinitionPayload!
   activateSegmentDefinition(input: ActivateSegmentDefinitionInput!): SegmentDefinitionPayload!
   publishTemplateVersion(input: PublishTemplateVersionInput!): TemplatePayload!
-  activateTemplateVersion(input: ActivateTemplateVersionInput!): TemplatePayload!
-  publishAnalysisProfile(input: PublishAnalysisProfileInput!): AnalysisProfilePayload!
+	activateTemplateVersion(input: ActivateTemplateVersionInput!): TemplatePayload!
+	updateAnalysisPrompt(input: UpdateAnalysisPromptInput!): AnalysisPromptPayload!
   registerAsset(input: RegisterAssetInput!): AssetPayload!
   updateAsset(input: UpdateAssetInput!): AssetPayload!
   archiveAsset(input: ArchiveAssetInput!): AssetPayload!
@@ -6605,7 +6612,8 @@ type SegmentDefinitionConnection { nodes: [SegmentDefinition!]! pageInfo: PageIn
 type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeVersionId: ID version: Int! }
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
-type AnalysisProfile { id: ID! key: String! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+enum AnalysisType { REAL_ESTATE }
+type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
 type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
@@ -6615,7 +6623,7 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisProfileVersionId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -6726,7 +6734,7 @@ input PublishSegmentDefinitionInput { key: String! name: String! schema: JSON! u
 input ActivateSegmentDefinitionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
 input PublishTemplateVersionInput { key: String! name: String! definition: JSON! clientMutationId: String! }
 input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
-input PublishAnalysisProfileInput { key: String! definition: JSON! clientMutationId: String! }
+input UpdateAnalysisPromptInput { analysisType: AnalysisType!, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
 input AssetAssignmentInput { participantId: ID! role: String! }
 input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
 input RegisterAssetInput { asset: AssetInput! clientMutationId: String! }
@@ -6779,7 +6787,7 @@ type ParticipantPayload { participant: Participant userErrors: [UserError!]! cli
 type ParticipantContactPayload { contact: ParticipantContact userErrors: [UserError!]! clientMutationId: String! }
 type SegmentDefinitionPayload { definition: SegmentDefinition version: SegmentDefinitionVersion userErrors: [UserError!]! clientMutationId: String! }
 type TemplatePayload { template: Template version: TemplateVersion userErrors: [UserError!]! clientMutationId: String! }
-type AnalysisProfilePayload { profile: AnalysisProfile userErrors: [UserError!]! clientMutationId: String! }
+type AnalysisPromptPayload { prompt: AnalysisPrompt userErrors: [UserError!]! clientMutationId: String! }
 type AssetPayload { asset: Asset userErrors: [UserError!]! clientMutationId: String! }
 type InvitationOtpPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: String! userErrors: [UserError!]! clientMutationId: String! }
@@ -6809,38 +6817,36 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
 
-func (ec *executionContext) childFields_AnalysisProfile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+func (ec *executionContext) childFields_AnalysisPrompt(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
-	case "id":
-		return ec.fieldContext_AnalysisProfile_id(ctx, field)
-	case "key":
-		return ec.fieldContext_AnalysisProfile_key(ctx, field)
-	case "versionNumber":
-		return ec.fieldContext_AnalysisProfile_versionNumber(ctx, field)
-	case "schemaVersion":
-		return ec.fieldContext_AnalysisProfile_schemaVersion(ctx, field)
-	case "definition":
-		return ec.fieldContext_AnalysisProfile_definition(ctx, field)
+	case "analysisType":
+		return ec.fieldContext_AnalysisPrompt_analysisType(ctx, field)
+	case "systemPrompt":
+		return ec.fieldContext_AnalysisPrompt_systemPrompt(ctx, field)
+	case "modelAlias":
+		return ec.fieldContext_AnalysisPrompt_modelAlias(ctx, field)
+	case "minimumConfidenceBps":
+		return ec.fieldContext_AnalysisPrompt_minimumConfidenceBps(ctx, field)
 	case "canonicalDigest":
-		return ec.fieldContext_AnalysisProfile_canonicalDigest(ctx, field)
-	case "status":
-		return ec.fieldContext_AnalysisProfile_status(ctx, field)
-	case "publishedAt":
-		return ec.fieldContext_AnalysisProfile_publishedAt(ctx, field)
+		return ec.fieldContext_AnalysisPrompt_canonicalDigest(ctx, field)
+	case "revision":
+		return ec.fieldContext_AnalysisPrompt_revision(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_AnalysisPrompt_updatedAt(ctx, field)
 	}
-	return nil, fmt.Errorf("no field named %q was found under type AnalysisProfile", field.Name)
+	return nil, fmt.Errorf("no field named %q was found under type AnalysisPrompt", field.Name)
 }
 
-func (ec *executionContext) childFields_AnalysisProfilePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+func (ec *executionContext) childFields_AnalysisPromptPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
-	case "profile":
-		return ec.fieldContext_AnalysisProfilePayload_profile(ctx, field)
+	case "prompt":
+		return ec.fieldContext_AnalysisPromptPayload_prompt(ctx, field)
 	case "userErrors":
-		return ec.fieldContext_AnalysisProfilePayload_userErrors(ctx, field)
+		return ec.fieldContext_AnalysisPromptPayload_userErrors(ctx, field)
 	case "clientMutationId":
-		return ec.fieldContext_AnalysisProfilePayload_clientMutationId(ctx, field)
+		return ec.fieldContext_AnalysisPromptPayload_clientMutationId(ctx, field)
 	}
-	return nil, fmt.Errorf("no field named %q was found under type AnalysisProfilePayload", field.Name)
+	return nil, fmt.Errorf("no field named %q was found under type AnalysisPromptPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_Asset(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -7269,8 +7275,8 @@ func (ec *executionContext) childFields_Inspection(ctx context.Context, field gr
 		return ec.fieldContext_Inspection_templateId(ctx, field)
 	case "templateVersionId":
 		return ec.fieldContext_Inspection_templateVersionId(ctx, field)
-	case "analysisProfileVersionId":
-		return ec.fieldContext_Inspection_analysisProfileVersionId(ctx, field)
+	case "analysisPromptSnapshotId":
+		return ec.fieldContext_Inspection_analysisPromptSnapshotId(ctx, field)
 	case "projectId":
 		return ec.fieldContext_Inspection_projectId(ctx, field)
 	case "stageId":
@@ -7593,8 +7599,8 @@ func (ec *executionContext) childFields_OnboardingDefinition(ctx context.Context
 		return ec.fieldContext_OnboardingDefinition_originModes(ctx, field)
 	case "templates":
 		return ec.fieldContext_OnboardingDefinition_templates(ctx, field)
-	case "analysisProfile":
-		return ec.fieldContext_OnboardingDefinition_analysisProfile(ctx, field)
+	case "analysisType":
+		return ec.fieldContext_OnboardingDefinition_analysisType(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OnboardingDefinition", field.Name)
 }
@@ -9427,20 +9433,6 @@ func (ec *executionContext) field_Mutation_promoteInspectionPhotos_args(ctx cont
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_publishAnalysisProfile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
-		func(ctx context.Context, v any) (PublishAnalysisProfileInput, error) {
-			return ec.unmarshalNPublishAnalysisProfileInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPublishAnalysisProfileInput(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg0
-	return args, nil
-}
-
 func (ec *executionContext) field_Mutation_publishReport_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9721,6 +9713,20 @@ func (ec *executionContext) field_Mutation_submitRecapture_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateAnalysisPrompt_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (UpdateAnalysisPromptInput, error) {
+			return ec.unmarshalNUpdateAnalysisPromptInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateAnalysisPromptInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateAsset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9858,6 +9864,20 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_analysisPrompt_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "type",
+		func(ctx context.Context, v any) (AnalysisType, error) {
+			return ec.unmarshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg0
 	return args, nil
 }
 
@@ -10637,39 +10657,39 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _AnalysisProfile_id(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPrompt_analysisType(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_id(ctx, field)
+			return ec.fieldContext_AnalysisPrompt_analysisType(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.ID, nil
+			return obj.AnalysisType, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v AnalysisType) graphql.Marshaler {
+			return ec.marshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfile_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type ID does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPrompt_analysisType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type AnalysisType does not have child fields"))
 }
 
-func (ec *executionContext) _AnalysisProfile_key(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPrompt_systemPrompt(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_key(ctx, field)
+			return ec.fieldContext_AnalysisPrompt_systemPrompt(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Key, nil
+			return obj.SystemPrompt, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
@@ -10679,20 +10699,43 @@ func (ec *executionContext) _AnalysisProfile_key(ctx context.Context, field grap
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfile_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPrompt_systemPrompt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _AnalysisProfile_versionNumber(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPrompt_modelAlias(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_versionNumber(ctx, field)
+			return ec.fieldContext_AnalysisPrompt_modelAlias(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.VersionNumber, nil
+			return obj.ModelAlias, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalysisPrompt_modelAlias(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AnalysisPrompt_minimumConfidenceBps(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalysisPrompt_minimumConfidenceBps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MinimumConfidenceBps, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
@@ -10702,63 +10745,17 @@ func (ec *executionContext) _AnalysisProfile_versionNumber(ctx context.Context, 
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfile_versionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type Int does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPrompt_minimumConfidenceBps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
-func (ec *executionContext) _AnalysisProfile_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPrompt_canonicalDigest(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_schemaVersion(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.SchemaVersion, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_AnalysisProfile_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type Int does not have child fields"))
-}
-
-func (ec *executionContext) _AnalysisProfile_definition(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_definition(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Definition, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
-			return ec.marshalNJSON2map(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_AnalysisProfile_definition(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type JSON does not have child fields"))
-}
-
-func (ec *executionContext) _AnalysisProfile_canonicalDigest(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_canonicalDigest(ctx, field)
+			return ec.fieldContext_AnalysisPrompt_canonicalDigest(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			return obj.CanonicalDigest, nil
@@ -10771,20 +10768,43 @@ func (ec *executionContext) _AnalysisProfile_canonicalDigest(ctx context.Context
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfile_canonicalDigest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPrompt_canonicalDigest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _AnalysisProfile_status(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPrompt_revision(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_status(ctx, field)
+			return ec.fieldContext_AnalysisPrompt_revision(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.Status, nil
+			return obj.Revision, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalysisPrompt_revision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _AnalysisPrompt_updatedAt(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalysisPrompt_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
@@ -10794,72 +10814,49 @@ func (ec *executionContext) _AnalysisProfile_status(ctx context.Context, field g
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfile_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPrompt_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _AnalysisProfile_publishedAt(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfile) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPromptPayload_prompt(ctx context.Context, field graphql.CollectedField, obj *AnalysisPromptPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfile_publishedAt(ctx, field)
+			return ec.fieldContext_AnalysisPromptPayload_prompt(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.PublishedAt, nil
+			return obj.Prompt, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_AnalysisProfile_publishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfile", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _AnalysisProfilePayload_profile(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfilePayload) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfilePayload_profile(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Profile, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisProfile) graphql.Marshaler {
-			return ec.marshalOAnalysisProfile2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisProfile(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisPrompt) graphql.Marshaler {
+			return ec.marshalOAnalysisPrompt2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPrompt(ctx, selections, v)
 		},
 		true,
 		false,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfilePayload_profile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_AnalysisPromptPayload_prompt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "AnalysisProfilePayload",
+		Object:     "AnalysisPromptPayload",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_AnalysisProfile(ctx, field)
+			return ec.childFields_AnalysisPrompt(ctx, field)
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _AnalysisProfilePayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfilePayload) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPromptPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *AnalysisPromptPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfilePayload_userErrors(ctx, field)
+			return ec.fieldContext_AnalysisPromptPayload_userErrors(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			return obj.UserErrors, nil
@@ -10872,9 +10869,9 @@ func (ec *executionContext) _AnalysisProfilePayload_userErrors(ctx context.Conte
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfilePayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_AnalysisPromptPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "AnalysisProfilePayload",
+		Object:     "AnalysisPromptPayload",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -10885,13 +10882,13 @@ func (ec *executionContext) fieldContext_AnalysisProfilePayload_userErrors(_ con
 	return fc, nil
 }
 
-func (ec *executionContext) _AnalysisProfilePayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *AnalysisProfilePayload) (ret graphql.Marshaler) {
+func (ec *executionContext) _AnalysisPromptPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *AnalysisPromptPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_AnalysisProfilePayload_clientMutationId(ctx, field)
+			return ec.fieldContext_AnalysisPromptPayload_clientMutationId(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			return obj.ClientMutationID, nil
@@ -10904,8 +10901,8 @@ func (ec *executionContext) _AnalysisProfilePayload_clientMutationId(ctx context
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_AnalysisProfilePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("AnalysisProfilePayload", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_AnalysisPromptPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPromptPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Asset_id(ctx context.Context, field graphql.CollectedField, obj *Asset) (ret graphql.Marshaler) {
@@ -14362,16 +14359,16 @@ func (ec *executionContext) fieldContext_Inspection_templateVersionId(_ context.
 	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
-func (ec *executionContext) _Inspection_analysisProfileVersionId(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+func (ec *executionContext) _Inspection_analysisPromptSnapshotId(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Inspection_analysisProfileVersionId(ctx, field)
+			return ec.fieldContext_Inspection_analysisPromptSnapshotId(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.AnalysisProfileVersionID, nil
+			return obj.AnalysisPromptSnapshotID, nil
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
@@ -14381,7 +14378,7 @@ func (ec *executionContext) _Inspection_analysisProfileVersionId(ctx context.Con
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Inspection_analysisProfileVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Inspection_analysisPromptSnapshotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
@@ -16928,34 +16925,34 @@ func (ec *executionContext) fieldContext_Mutation_activateTemplateVersion(ctx co
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_publishAnalysisProfile(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_updateAnalysisPrompt(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_publishAnalysisProfile(ctx, field)
+			return ec.fieldContext_Mutation_updateAnalysisPrompt(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().PublishAnalysisProfile(ctx, fc.Args["input"].(PublishAnalysisProfileInput))
+			return ec.Resolvers.Mutation().UpdateAnalysisPrompt(ctx, fc.Args["input"].(UpdateAnalysisPromptInput))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisProfilePayload) graphql.Marshaler {
-			return ec.marshalNAnalysisProfilePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisProfilePayload(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisPromptPayload) graphql.Marshaler {
+			return ec.marshalNAnalysisPromptPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptPayload(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_Mutation_publishAnalysisProfile(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_updateAnalysisPrompt(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
 		IsMethod:   true,
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_AnalysisProfilePayload(ctx, field)
+			return ec.childFields_AnalysisPromptPayload(ctx, field)
 		},
 	}
 	defer func() {
@@ -16965,7 +16962,7 @@ func (ec *executionContext) fieldContext_Mutation_publishAnalysisProfile(ctx con
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_publishAnalysisProfile_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_updateAnalysisPrompt_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19888,27 +19885,27 @@ func (ec *executionContext) fieldContext_OnboardingDefinition_templates(_ contex
 	return graphql.NewScalarFieldContext("OnboardingDefinition", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _OnboardingDefinition_analysisProfile(ctx context.Context, field graphql.CollectedField, obj *OnboardingDefinition) (ret graphql.Marshaler) {
+func (ec *executionContext) _OnboardingDefinition_analysisType(ctx context.Context, field graphql.CollectedField, obj *OnboardingDefinition) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_OnboardingDefinition_analysisProfile(ctx, field)
+			return ec.fieldContext_OnboardingDefinition_analysisType(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.AnalysisProfile, nil
+			return obj.AnalysisType, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v AnalysisType) graphql.Marshaler {
+			return ec.marshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
-func (ec *executionContext) fieldContext_OnboardingDefinition_analysisProfile(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("OnboardingDefinition", field, false, false, errors.New("field of type String does not have child fields"))
+func (ec *executionContext) fieldContext_OnboardingDefinition_analysisType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingDefinition", field, false, false, errors.New("field of type AnalysisType does not have child fields"))
 }
 
 func (ec *executionContext) _OnboardingField_key(ctx context.Context, field graphql.CollectedField, obj *OnboardingField) (ret graphql.Marshaler) {
@@ -23590,6 +23587,50 @@ func (ec *executionContext) fieldContext_Query_onboardingDefinition(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_onboardingDefinition_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_analysisPrompt(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_analysisPrompt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AnalysisPrompt(ctx, fc.Args["type"].(AnalysisType))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisPrompt) graphql.Marshaler {
+			return ec.marshalNAnalysisPrompt2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPrompt(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_analysisPrompt(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AnalysisPrompt(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_analysisPrompt_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -34056,50 +34097,6 @@ func (ec *executionContext) unmarshalInputPromoteInspectionPhotosInput(ctx conte
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputPublishAnalysisProfileInput(ctx context.Context, obj any) (PublishAnalysisProfileInput, error) {
-	var it PublishAnalysisProfileInput
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"key", "definition", "clientMutationId"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "key":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Key = data
-		case "definition":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("definition"))
-			data, err := ec.unmarshalNJSON2map(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Definition = data
-		case "clientMutationId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ClientMutationID = data
-		}
-	}
-	return it, nil
-}
-
 func (ec *executionContext) unmarshalInputPublishReportInput(ctx context.Context, obj any) (PublishReportInput, error) {
 	var it PublishReportInput
 	if obj == nil {
@@ -35101,6 +35098,57 @@ func (ec *executionContext) unmarshalInputSubmitRecaptureInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpdateAnalysisPromptInput(ctx context.Context, obj any) (UpdateAnalysisPromptInput, error) {
+	var it UpdateAnalysisPromptInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"analysisType", "systemPrompt", "expectedRevision", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "analysisType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("analysisType"))
+			data, err := ec.unmarshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AnalysisType = data
+		case "systemPrompt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("systemPrompt"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SystemPrompt = data
+		case "expectedRevision":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedRevision"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedRevision = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpdateAssetInput(ctx context.Context, obj any) (UpdateAssetInput, error) {
 	var it UpdateAssetInput
 	if obj == nil {
@@ -35603,10 +35651,10 @@ func (ec *executionContext) unmarshalInputVerifyOnboardingOtpInput(ctx context.C
 
 // region    **************************** object.gotpl ****************************
 
-var analysisProfileImplementors = []string{"AnalysisProfile"}
+var analysisPromptImplementors = []string{"AnalysisPrompt"}
 
-func (ec *executionContext) _AnalysisProfile(ctx context.Context, sel ast.SelectionSet, obj *AnalysisProfile) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, analysisProfileImplementors)
+func (ec *executionContext) _AnalysisPrompt(ctx context.Context, sel ast.SelectionSet, obj *AnalysisPrompt) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, analysisPromptImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferredFieldSet := graphql.NewFieldSet(nil)
@@ -35614,44 +35662,39 @@ func (ec *executionContext) _AnalysisProfile(ctx context.Context, sel ast.Select
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("AnalysisProfile")
-		case "id":
-			out.Values[i] = ec._AnalysisProfile_id(ctx, field, obj)
+			out.Values[i] = graphql.MarshalString("AnalysisPrompt")
+		case "analysisType":
+			out.Values[i] = ec._AnalysisPrompt_analysisType(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "key":
-			out.Values[i] = ec._AnalysisProfile_key(ctx, field, obj)
+		case "systemPrompt":
+			out.Values[i] = ec._AnalysisPrompt_systemPrompt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "versionNumber":
-			out.Values[i] = ec._AnalysisProfile_versionNumber(ctx, field, obj)
+		case "modelAlias":
+			out.Values[i] = ec._AnalysisPrompt_modelAlias(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "schemaVersion":
-			out.Values[i] = ec._AnalysisProfile_schemaVersion(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "definition":
-			out.Values[i] = ec._AnalysisProfile_definition(ctx, field, obj)
+		case "minimumConfidenceBps":
+			out.Values[i] = ec._AnalysisPrompt_minimumConfidenceBps(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "canonicalDigest":
-			out.Values[i] = ec._AnalysisProfile_canonicalDigest(ctx, field, obj)
+			out.Values[i] = ec._AnalysisPrompt_canonicalDigest(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "status":
-			out.Values[i] = ec._AnalysisProfile_status(ctx, field, obj)
+		case "revision":
+			out.Values[i] = ec._AnalysisPrompt_revision(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "publishedAt":
-			out.Values[i] = ec._AnalysisProfile_publishedAt(ctx, field, obj)
+		case "updatedAt":
+			out.Values[i] = ec._AnalysisPrompt_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -35676,10 +35719,10 @@ func (ec *executionContext) _AnalysisProfile(ctx context.Context, sel ast.Select
 	return out
 }
 
-var analysisProfilePayloadImplementors = []string{"AnalysisProfilePayload"}
+var analysisPromptPayloadImplementors = []string{"AnalysisPromptPayload"}
 
-func (ec *executionContext) _AnalysisProfilePayload(ctx context.Context, sel ast.SelectionSet, obj *AnalysisProfilePayload) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, analysisProfilePayloadImplementors)
+func (ec *executionContext) _AnalysisPromptPayload(ctx context.Context, sel ast.SelectionSet, obj *AnalysisPromptPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, analysisPromptPayloadImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferredFieldSet := graphql.NewFieldSet(nil)
@@ -35687,19 +35730,19 @@ func (ec *executionContext) _AnalysisProfilePayload(ctx context.Context, sel ast
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("AnalysisProfilePayload")
-		case "profile":
-			out.Values[i] = ec._AnalysisProfilePayload_profile(ctx, field, obj)
+			out.Values[i] = graphql.MarshalString("AnalysisPromptPayload")
+		case "prompt":
+			out.Values[i] = ec._AnalysisPromptPayload_prompt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "userErrors":
-			out.Values[i] = ec._AnalysisProfilePayload_userErrors(ctx, field, obj)
+			out.Values[i] = ec._AnalysisPromptPayload_userErrors(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "clientMutationId":
-			out.Values[i] = ec._AnalysisProfilePayload_clientMutationId(ctx, field, obj)
+			out.Values[i] = ec._AnalysisPromptPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -37228,8 +37271,8 @@ func (ec *executionContext) _Inspection(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "analysisProfileVersionId":
-			out.Values[i] = ec._Inspection_analysisProfileVersionId(ctx, field, obj)
+		case "analysisPromptSnapshotId":
+			out.Values[i] = ec._Inspection_analysisPromptSnapshotId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -38128,9 +38171,9 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "publishAnalysisProfile":
+		case "updateAnalysisPrompt":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_publishAnalysisProfile(ctx, field)
+				return ec._Mutation_updateAnalysisPrompt(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -38883,8 +38926,8 @@ func (ec *executionContext) _OnboardingDefinition(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "analysisProfile":
-			out.Values[i] = ec._OnboardingDefinition_analysisProfile(ctx, field, obj)
+		case "analysisType":
+			out.Values[i] = ec._OnboardingDefinition_analysisType(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -40687,6 +40730,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_onboardingDefinition(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "analysisPrompt":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_analysisPrompt(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -44578,14 +44643,34 @@ func (ec *executionContext) unmarshalNAddExceptionalStageInput2inspectionᚋserv
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNAnalysisProfilePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisProfilePayload(ctx context.Context, sel ast.SelectionSet, v *AnalysisProfilePayload) graphql.Marshaler {
+func (ec *executionContext) marshalNAnalysisPrompt2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPrompt(ctx context.Context, sel ast.SelectionSet, v *AnalysisPrompt) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._AnalysisProfilePayload(ctx, sel, v)
+	return ec._AnalysisPrompt(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAnalysisPromptPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptPayload(ctx context.Context, sel ast.SelectionSet, v *AnalysisPromptPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AnalysisPromptPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx context.Context, v any) (AnalysisType, error) {
+	var res AnalysisType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx context.Context, sel ast.SelectionSet, v AnalysisType) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNArchiveAssetInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐArchiveAssetInput(ctx context.Context, v any) (ArchiveAssetInput, error) {
@@ -46025,11 +46110,6 @@ func (ec *executionContext) marshalNPublicationPolicyPayload2ᚖinspectionᚋser
 	return ec._PublicationPolicyPayload(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNPublishAnalysisProfileInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPublishAnalysisProfileInput(ctx context.Context, v any) (PublishAnalysisProfileInput, error) {
-	res, err := ec.unmarshalInputPublishAnalysisProfileInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
 func (ec *executionContext) unmarshalNPublishReportInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPublishReportInput(ctx context.Context, v any) (PublishReportInput, error) {
 	res, err := ec.unmarshalInputPublishReportInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -46740,6 +46820,11 @@ func (ec *executionContext) marshalNTriageInspectionConnection2ᚖinspectionᚋs
 	return ec._TriageInspectionConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNUpdateAnalysisPromptInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateAnalysisPromptInput(ctx context.Context, v any) (UpdateAnalysisPromptInput, error) {
+	res, err := ec.unmarshalInputUpdateAnalysisPromptInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNUpdateAssetInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateAssetInput(ctx context.Context, v any) (UpdateAssetInput, error) {
 	res, err := ec.unmarshalInputUpdateAssetInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -46961,11 +47046,11 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
-func (ec *executionContext) marshalOAnalysisProfile2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisProfile(ctx context.Context, sel ast.SelectionSet, v *AnalysisProfile) graphql.Marshaler {
+func (ec *executionContext) marshalOAnalysisPrompt2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPrompt(ctx context.Context, sel ast.SelectionSet, v *AnalysisPrompt) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
-	return ec._AnalysisProfile(ctx, sel, v)
+	return ec._AnalysisPrompt(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOAsset2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAsset(ctx context.Context, sel ast.SelectionSet, v *Asset) graphql.Marshaler {

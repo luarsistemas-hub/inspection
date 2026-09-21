@@ -40,24 +40,26 @@ export type AddExceptionalStageInput = {
   reason: Scalars['String']['input'];
 };
 
-export type AnalysisProfile = {
-  __typename?: 'AnalysisProfile';
+export type AnalysisPrompt = {
+  __typename?: 'AnalysisPrompt';
+  analysisType: AnalysisType;
   canonicalDigest: Scalars['String']['output'];
-  definition: Scalars['JSON']['output'];
-  id: Scalars['ID']['output'];
-  key: Scalars['String']['output'];
-  publishedAt: Scalars['String']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  versionNumber: Scalars['Int']['output'];
+  minimumConfidenceBps: Scalars['Int']['output'];
+  modelAlias: Scalars['String']['output'];
+  revision: Scalars['Int']['output'];
+  systemPrompt: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
 };
 
-export type AnalysisProfilePayload = {
-  __typename?: 'AnalysisProfilePayload';
+export type AnalysisPromptPayload = {
+  __typename?: 'AnalysisPromptPayload';
   clientMutationId: Scalars['String']['output'];
-  profile: Maybe<AnalysisProfile>;
+  prompt: Maybe<AnalysisPrompt>;
   userErrors: Array<UserError>;
 };
+
+export type AnalysisType =
+  | 'REAL_ESTATE';
 
 export type ArchiveAssetInput = {
   assetId: Scalars['ID']['input'];
@@ -207,6 +209,16 @@ export type CapturePayload = {
   userErrors: Array<UserError>;
 };
 
+export type CaptureReferenceItem = {
+  __typename?: 'CaptureReferenceItem';
+  availability: Scalars['String']['output'];
+  description: Scalars['String']['output'];
+  imageUrl: Maybe<Scalars['String']['output']>;
+  imageUrlExpiresAt: Maybe<Scalars['String']['output']>;
+  mediaId: Scalars['ID']['output'];
+  requirementKey: Scalars['String']['output'];
+};
+
 export type CaptureRequirement = {
   __typename?: 'CaptureRequirement';
   captureSourcePolicy: Scalars['String']['output'];
@@ -260,6 +272,21 @@ export type ConfigureRetentionPolicyInput = {
 export type ContactInput = {
   channel: Scalars['String']['input'];
   value: Scalars['String']['input'];
+};
+
+export type CorrectInspectionResponsibleEmailInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  emailConfirmation: Scalars['String']['input'];
+  expectedResponsibilityVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
+export type CorrectOnboardingResponsibleEmailInput = {
+  clientMutationId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  emailConfirmation: Scalars['String']['input'];
+  expectedResponsibilityVersion: Scalars['Int']['input'];
 };
 
 export type CreateBusinessUnitInput = {
@@ -434,6 +461,7 @@ export type ExternalCapture = {
   policy: Scalars['JSON']['output'];
   recaptureRequestId: Maybe<Scalars['ID']['output']>;
   reference: Scalars['JSON']['output'];
+  referenceItems: Array<CaptureReferenceItem>;
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -451,7 +479,7 @@ export type ExternalSessionPayload = {
 
 export type Inspection = {
   __typename?: 'Inspection';
-  analysisProfileVersionId: Scalars['ID']['output'];
+  analysisPromptSnapshotId: Scalars['ID']['output'];
   assetId: Scalars['ID']['output'];
   businessUnitId: Scalars['ID']['output'];
   deadlineAt: Scalars['String']['output'];
@@ -631,6 +659,8 @@ export type Mutation = {
   configureMyNotificationPreferences: NotificationPreferencesPayload;
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
+  correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
+  correctOnboardingResponsibleEmail: OnboardingPayload;
   createBusinessUnit: BusinessUnitPayload;
   createInspection: InspectionPayload;
   createMediaUpload: MediaUploadPayload;
@@ -648,7 +678,6 @@ export type Mutation = {
   markNotificationRead: RecipientNotificationPayload;
   presignMediaParts: PresignedPartsPayload;
   promoteInspectionPhotos: OriginPromotionPayload;
-  publishAnalysisProfile: AnalysisProfilePayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
   publishTemplateVersion: TemplatePayload;
@@ -669,6 +698,7 @@ export type Mutation = {
   startProjectStage: ProjectPayload;
   submitCapture: SubmissionPayload;
   submitRecapture: RecapturePayload;
+  updateAnalysisPrompt: AnalysisPromptPayload;
   updateAsset: AssetPayload;
   updateSchedule: SchedulePayload;
   updateTenant: TenantPayload;
@@ -766,6 +796,16 @@ export type MutationConfigureRetentionPolicyArgs = {
 };
 
 
+export type MutationCorrectInspectionResponsibleEmailArgs = {
+  input: CorrectInspectionResponsibleEmailInput;
+};
+
+
+export type MutationCorrectOnboardingResponsibleEmailArgs = {
+  input: CorrectOnboardingResponsibleEmailInput;
+};
+
+
 export type MutationCreateBusinessUnitArgs = {
   input: CreateBusinessUnitInput;
 };
@@ -848,11 +888,6 @@ export type MutationPresignMediaPartsArgs = {
 
 export type MutationPromoteInspectionPhotosArgs = {
   input: PromoteInspectionPhotosInput;
-};
-
-
-export type MutationPublishAnalysisProfileArgs = {
-  input: PublishAnalysisProfileInput;
 };
 
 
@@ -956,6 +991,11 @@ export type MutationSubmitRecaptureArgs = {
 };
 
 
+export type MutationUpdateAnalysisPromptArgs = {
+  input: UpdateAnalysisPromptInput;
+};
+
+
 export type MutationUpdateAssetArgs = {
   input: UpdateAssetInput;
 };
@@ -1016,10 +1056,17 @@ export type NotificationChannelDelivery = {
 export type NotificationDelivery = {
   __typename?: 'NotificationDelivery';
   aggregateStatus: Scalars['String']['output'];
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
   channels: Array<NotificationChannelDelivery>;
   createdAt: Scalars['String']['output'];
+  failureCode: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  inspectionId: Maybe<Scalars['ID']['output']>;
   intentId: Scalars['ID']['output'];
+  invitationId: Maybe<Scalars['ID']['output']>;
+  logicalTemplate: Scalars['String']['output'];
+  recipientMasked: Maybe<Scalars['String']['output']>;
+  responsibilityVersion: Maybe<Scalars['Int']['output']>;
   selectedProvider: Scalars['String']['output'];
   status: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
@@ -1057,7 +1104,7 @@ export type OnboardingAgency = {
 
 export type OnboardingDefinition = {
   __typename?: 'OnboardingDefinition';
-  analysisProfile: Scalars['String']['output'];
+  analysisType: AnalysisType;
   originModes: Array<OnboardingOriginMode>;
   purposes: Array<Scalars['String']['output']>;
   schemaVersion: Scalars['Int']['output'];
@@ -1129,12 +1176,18 @@ export type OnboardingSession = {
 
 export type OnboardingStatus = {
   __typename?: 'OnboardingStatus';
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
+  deliveryFailureCode: Maybe<Scalars['String']['output']>;
   deliveryStatus: Scalars['String']['output'];
   inspectionId: Maybe<Scalars['ID']['output']>;
   nextAction: Scalars['String']['output'];
   originStatus: Scalars['String']['output'];
   requestId: Maybe<Scalars['ID']['output']>;
+  responsibilityStatus: Maybe<Scalars['String']['output']>;
+  responsibilityVersion: Maybe<Scalars['Int']['output']>;
+  responsibleEmail: Maybe<Scalars['String']['output']>;
   state: Scalars['String']['output'];
+  updatedAt: Maybe<Scalars['String']['output']>;
 };
 
 export type OnboardingStep = {
@@ -1363,12 +1416,6 @@ export type PublicationPolicyPayload = {
   userErrors: Array<UserError>;
 };
 
-export type PublishAnalysisProfileInput = {
-  clientMutationId: Scalars['String']['input'];
-  definition: Scalars['JSON']['input'];
-  key: Scalars['String']['input'];
-};
-
 export type PublishReportInput = {
   clientMutationId: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
@@ -1392,6 +1439,7 @@ export type PublishTemplateVersionInput = {
 
 export type Query = {
   __typename?: 'Query';
+  analysisPrompt: AnalysisPrompt;
   asset: Maybe<Asset>;
   assets: AssetConnection;
   auditEvents: AuditEventConnection;
@@ -1410,6 +1458,7 @@ export type Query = {
   notificationDeliveries: NotificationDeliveryConnection;
   onboardingDefinition: OnboardingDefinition;
   onboardingSession: Maybe<OnboardingSession>;
+  onboardingStatus: Maybe<OnboardingStatus>;
   originPromotion: Maybe<OriginPromotion>;
   originVersions: OriginVersionConnection;
   participant: Maybe<Participant>;
@@ -1428,6 +1477,11 @@ export type Query = {
   tenant: Maybe<Tenant>;
   triageInspections: TriageInspectionConnection;
   usageSummary: UsageSummary;
+};
+
+
+export type QueryAnalysisPromptArgs = {
+  type: AnalysisType;
 };
 
 
@@ -1838,6 +1892,26 @@ export type RequestRecaptureInput = {
   items: Array<RecaptureItemInput>;
 };
 
+export type ResponsibleEmailCorrection = {
+  __typename?: 'ResponsibleEmailCorrection';
+  canCorrectResponsibleEmail: Scalars['Boolean']['output'];
+  deliveryId: Maybe<Scalars['ID']['output']>;
+  deliveryStatus: Scalars['String']['output'];
+  inspectionId: Scalars['ID']['output'];
+  invitationId: Scalars['ID']['output'];
+  recipientMasked: Scalars['String']['output'];
+  responsibilityId: Scalars['ID']['output'];
+  responsibilityStatus: Scalars['String']['output'];
+  responsibilityVersion: Scalars['Int']['output'];
+};
+
+export type ResponsibleEmailCorrectionPayload = {
+  __typename?: 'ResponsibleEmailCorrectionPayload';
+  clientMutationId: Scalars['String']['output'];
+  correction: Maybe<ResponsibleEmailCorrection>;
+  userErrors: Array<UserError>;
+};
+
 export type RetentionMutationPayload = {
   __typename?: 'RetentionMutationPayload';
   clientMutationId: Scalars['String']['output'];
@@ -2104,6 +2178,13 @@ export type TriageInspectionConnection = {
   __typename?: 'TriageInspectionConnection';
   nodes: Array<TriageInspection>;
   pageInfo: PageInfo;
+};
+
+export type UpdateAnalysisPromptInput = {
+  analysisType: AnalysisType;
+  clientMutationId: Scalars['String']['input'];
+  expectedRevision: Scalars['Int']['input'];
+  systemPrompt: Scalars['String']['input'];
 };
 
 export type UpdateAssetInput = {

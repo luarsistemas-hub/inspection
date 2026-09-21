@@ -98,7 +98,7 @@ func ValidateResult(result Result) error {
 		if strings.TrimSpace(finding.Category) == "" || !validText(finding.Title, MaxTitle) || !validText(finding.Description, MaxDescription) || !validText(finding.RecommendedAction, MaxAction) || len(finding.EvidenceIDs) == 0 {
 			return fmt.Errorf("%w: finding fields are incomplete", ErrInvalidStructuredOutput)
 		}
-		if finding.Confidence < 0 || finding.Confidence > 1 || !validSeverity(finding.Severity) || strings.TrimSpace(finding.Quality) == "" {
+		if finding.Confidence < 0 || finding.Confidence > 1 || !validSeverity(finding.Severity) || !validQuality(finding.Quality) {
 			return fmt.Errorf("%w: finding severity, confidence, or quality is invalid", ErrInvalidStructuredOutput)
 		}
 		for _, evidenceID := range finding.EvidenceIDs {
@@ -111,6 +111,10 @@ func ValidateResult(result Result) error {
 		}
 	}
 	return nil
+}
+
+func validQuality(value string) bool {
+	return value == "ADEQUATE" || value == "LIMITED" || value == "INSUFFICIENT"
 }
 
 func assignsConsequence(value string) bool {

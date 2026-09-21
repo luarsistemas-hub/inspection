@@ -121,7 +121,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		decision := analysis.Classify(facts)
 		reasons, _ := json.Marshal(decision.ReasonCodes)
 		now := deps.Now().UTC()
-		row := database.ClassificationRun{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProfileVersionID: inspection.AnalysisProfileVersionID, Classification: decision.Classification, ReasonCodes: reasons, CreatedAt: now}
+		row := database.ClassificationRun{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, PromptSnapshotID: inspection.AnalysisPromptSnapshotID, Classification: decision.Classification, ReasonCodes: reasons, CreatedAt: now}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return err
 		}

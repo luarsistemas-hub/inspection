@@ -251,34 +251,31 @@ type TemplateVersion struct {
 
 func (TemplateVersion) TableName() string { return "templates.template_versions" }
 
-type AnalysisProfile struct {
-	ID              identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID        identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_profile_key,priority:1"`
-	Key             string      `gorm:"size:100;not null;uniqueIndex:idx_profile_key,priority:2"`
-	ActiveVersionID identity.ID `gorm:"type:uuid;not null"`
-	Version         int64       `gorm:"not null;default:1"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-}
-
-func (AnalysisProfile) TableName() string { return "templates.analysis_profiles" }
-
-type AnalysisProfileVersion struct {
+// AnalysisPrompt is the mutable global configuration for one analysis type.
+// Revision is strictly an optimistic-concurrency token.
+type AnalysisPrompt struct {
 	ID              identity.ID     `gorm:"type:uuid;primaryKey"`
-	TenantID        identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_profile_key_version,priority:1;uniqueIndex:idx_profile_publish_idempotency,priority:1"`
-	ProfileID       identity.ID     `gorm:"type:uuid;not null;index"`
-	Key             string          `gorm:"size:100;not null;uniqueIndex:idx_profile_key_version,priority:2"`
-	VersionNumber   int             `gorm:"not null;uniqueIndex:idx_profile_key_version,priority:3"`
-	SchemaVersion   int             `gorm:"not null"`
+	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex"`
 	DefinitionJSON  json.RawMessage `gorm:"type:jsonb;not null"`
 	CanonicalDigest string          `gorm:"size:64;not null"`
-	Status          string          `gorm:"size:16;not null"`
-	IdempotencyKey  string          `gorm:"size:200;not null;uniqueIndex:idx_profile_publish_idempotency,priority:2"`
-	PublishedAt     time.Time       `gorm:"not null"`
-	CreatedBy       identity.ID     `gorm:"type:uuid;not null"`
+	Revision        int64           `gorm:"not null;default:1"`
+	UpdatedBy       identity.ID     `gorm:"type:uuid;not null"`
+	CreatedAt       time.Time       `gorm:"not null"`
+	UpdatedAt       time.Time       `gorm:"not null"`
 }
 
-func (AnalysisProfileVersion) TableName() string { return "templates.analysis_profile_versions" }
+func (AnalysisPrompt) TableName() string { return "analysis.prompts" }
+
+// AnalysisPromptSnapshot is immutable content addressed state pinned by an inspection.
+type AnalysisPromptSnapshot struct {
+	ID              identity.ID     `gorm:"type:uuid;primaryKey"`
+	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex:idx_analysis_prompt_snapshot_digest,priority:1"`
+	DefinitionJSON  json.RawMessage `gorm:"type:jsonb;not null"`
+	CanonicalDigest string          `gorm:"size:64;not null;uniqueIndex:idx_analysis_prompt_snapshot_digest,priority:2"`
+	CreatedAt       time.Time       `gorm:"not null"`
+}
+
+func (AnalysisPromptSnapshot) TableName() string { return "analysis.prompt_snapshots" }
 
 // OnboardingSession stores the public journey state. The locator digest is
 // used before tenant provisioning; after provisioning tenant_id scopes access.
@@ -860,7 +857,7 @@ type Inspection struct {
 	ParticipantID            identity.ID     `gorm:"type:uuid;not null"`
 	TemplateID               identity.ID     `gorm:"type:uuid;not null"`
 	TemplateVersionID        identity.ID     `gorm:"type:uuid;not null"`
-	AnalysisProfileVersionID identity.ID     `gorm:"type:uuid;not null"`
+	AnalysisPromptSnapshotID identity.ID     `gorm:"type:uuid"`
 	ProjectID                *identity.ID    `gorm:"type:uuid;index"`
 	StageID                  *identity.ID    `gorm:"type:uuid;index"`
 	Source                   string          `gorm:"size:20;not null;uniqueIndex:idx_inspection_source,priority:2"`
@@ -974,24 +971,28 @@ func (StageTransition) TableName() string { return "projects.stage_transitions" 
 
 // ComparisonJob is immutable input identity and mutable bounded execution state.
 type ComparisonJob struct {
-	ID, TenantID, InspectionID                             identity.ID `gorm:"type:uuid;primaryKey"`
-	RequirementKey, ModelAlias, PromptVersion, InputDigest string      `gorm:"size:200;not null"`
-	Status                                                 string      `gorm:"size:20;not null;index"`
-	Attempts                                               int         `gorm:"not null;default:0"`
-	CreatedAt, UpdatedAt                                   time.Time
+	ID, TenantID, InspectionID              identity.ID `gorm:"type:uuid;primaryKey"`
+	PromptSnapshotID                        identity.ID `gorm:"type:uuid"`
+	RequirementKey, ModelAlias, InputDigest string      `gorm:"size:200;not null"`
+	PromptDigest                            string      `gorm:"size:200"`
+	Status                                  string      `gorm:"size:20;not null;index"`
+	Attempts                                int         `gorm:"not null;default:0"`
+	CreatedAt, UpdatedAt                    time.Time
 }
 
 func (ComparisonJob) TableName() string { return "analysis.comparison_jobs" }
 
 type AnalysisRun struct {
-	ID, TenantID, JobID                                           identity.ID     `gorm:"type:uuid;primaryKey"`
-	Provider, Model, GatewayRequestID, PromptVersion, InputDigest string          `gorm:"size:200;not null"`
-	Output                                                        json.RawMessage `gorm:"type:jsonb;not null"`
-	InputTokens, OutputTokens                                     *int64
-	Cost                                                          *float64
-	LatencyMS                                                     int64  `gorm:"not null"`
-	ValidationOutcome                                             string `gorm:"size:32;not null"`
-	CreatedAt                                                     time.Time
+	ID, TenantID, JobID                            identity.ID     `gorm:"type:uuid;primaryKey"`
+	PromptSnapshotID                               identity.ID     `gorm:"type:uuid"`
+	Provider, Model, GatewayRequestID, InputDigest string          `gorm:"size:200;not null"`
+	PromptDigest                                   string          `gorm:"size:200"`
+	Output                                         json.RawMessage `gorm:"type:jsonb;not null"`
+	InputTokens, OutputTokens                      *int64
+	Cost                                           *float64
+	LatencyMS                                      int64  `gorm:"not null"`
+	ValidationOutcome                              string `gorm:"size:32;not null"`
+	CreatedAt                                      time.Time
 }
 
 func (AnalysisRun) TableName() string { return "analysis.analysis_runs" }
@@ -1007,7 +1008,7 @@ type FindingRecord struct {
 func (FindingRecord) TableName() string { return "analysis.findings" }
 
 type ClassificationRun struct {
-	ID, TenantID, InspectionID, ProfileVersionID identity.ID     `gorm:"type:uuid;primaryKey"`
+	ID, TenantID, InspectionID, PromptSnapshotID identity.ID     `gorm:"type:uuid;primaryKey"`
 	Classification                               string          `gorm:"size:16;not null"`
 	ReasonCodes                                  json.RawMessage `gorm:"type:jsonb;not null"`
 	CreatedAt                                    time.Time
@@ -1122,7 +1123,9 @@ func (DashboardInspection) TableName() string { return "dashboard.inspections" }
 // reconciliation. It intentionally contains no prompt or image content.
 type UsageRecord struct {
 	ID, TenantID, InspectionID, JobID identity.ID `gorm:"type:uuid;primaryKey"`
-	Provider, Model, PromptVersion    string      `gorm:"size:200;not null"`
+	PromptSnapshotID                  identity.ID `gorm:"type:uuid"`
+	Provider, Model                   string      `gorm:"size:200;not null"`
+	PromptDigest                      string      `gorm:"size:200"`
 	InputTokens, OutputTokens         *int64
 	Cost                              *float64
 	LatencyMS                         int64 `gorm:"not null"`
@@ -1177,7 +1180,7 @@ func (PurgeRun) TableName() string { return "retention.purge_runs" }
 func Models() []any {
 	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ProductEntitlement{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},
-		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisProfile{}, &AnalysisProfileVersion{},
+		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisPrompt{}, &AnalysisPromptSnapshot{},
 		&OnboardingSession{}, &OnboardingEmailState{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},

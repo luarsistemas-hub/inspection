@@ -28,7 +28,7 @@ func TestLockInspectionAndCheckLegalHoldBlocksActiveHold(t *testing.T) {
 	}
 	tenantID := identity.ID(uuid.New())
 	inspectionID := identity.ID(uuid.New())
-	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.ID(uuid.New()), AssetID: identity.ID(uuid.New()), ParticipantID: identity.ID(uuid.New()), TemplateID: identity.ID(uuid.New()), TemplateVersionID: identity.ID(uuid.New()), AnalysisProfileVersionID: identity.ID(uuid.New()), Source: "test", SourceKey: uuid.NewString(), Status: "COMPLETED", ReminderInstants: json.RawMessage("[]"), ContextSnapshot: json.RawMessage("{}")}
+	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.ID(uuid.New()), AssetID: identity.ID(uuid.New()), ParticipantID: identity.ID(uuid.New()), TemplateID: identity.ID(uuid.New()), TemplateVersionID: identity.ID(uuid.New()), AnalysisPromptSnapshotID: identity.ID(uuid.New()), Source: "test", SourceKey: uuid.NewString(), Status: "COMPLETED", ReminderInstants: json.RawMessage("[]"), ContextSnapshot: json.RawMessage("{}")}
 	if err := db.Create(&inspection).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestLockInspectionAndCheckLegalHoldAllowsNoActiveHold(t *testing.T) {
 	}
 	tenantID := identity.ID(uuid.New())
 	inspectionID := identity.ID(uuid.New())
-	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.ID(uuid.New()), AssetID: identity.ID(uuid.New()), ParticipantID: identity.ID(uuid.New()), TemplateID: identity.ID(uuid.New()), TemplateVersionID: identity.ID(uuid.New()), AnalysisProfileVersionID: identity.ID(uuid.New()), Source: "test", SourceKey: uuid.NewString(), Status: "COMPLETED", ReminderInstants: json.RawMessage("[]"), ContextSnapshot: json.RawMessage("{}")}
+	inspection := database.Inspection{ID: inspectionID, TenantID: tenantID, BusinessUnitID: identity.ID(uuid.New()), AssetID: identity.ID(uuid.New()), ParticipantID: identity.ID(uuid.New()), TemplateID: identity.ID(uuid.New()), TemplateVersionID: identity.ID(uuid.New()), AnalysisPromptSnapshotID: identity.ID(uuid.New()), Source: "test", SourceKey: uuid.NewString(), Status: "COMPLETED", ReminderInstants: json.RawMessage("[]"), ContextSnapshot: json.RawMessage("{}")}
 	if err := db.Create(&inspection).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func createRetentionLockTables(db *gorm.DB) error {
 	if err := db.Exec(`CREATE TABLE inspections.inspections (
 		id text PRIMARY KEY, tenant_id text NOT NULL, business_unit_id text NOT NULL,
 		asset_id text NOT NULL, participant_id text NOT NULL, template_id text NOT NULL,
-		template_version_id text NOT NULL, analysis_profile_version_id text NOT NULL,
+		 template_version_id text NOT NULL, analysis_prompt_snapshot_id text NOT NULL,
 		project_id text, stage_id text, source text NOT NULL, source_key text NOT NULL,
 		source_reason text, state_reason text, status text NOT NULL,
 		evidence_count integer NOT NULL DEFAULT 0, due_at datetime NOT NULL,

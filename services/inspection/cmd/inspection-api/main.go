@@ -18,6 +18,8 @@ import (
 	explaineffectiveaccess "inspection/services/inspection/internal/features/access/explain_effective_access"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
+	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
+	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	archiveasset "inspection/services/inspection/internal/features/assets/archive_asset"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
 	listassets "inspection/services/inspection/internal/features/assets/list_assets"
@@ -98,7 +100,6 @@ import (
 	resolvedefinition "inspection/services/inspection/internal/features/segments/resolve_definition"
 	activatetemplate "inspection/services/inspection/internal/features/templates/activate_template"
 	listtemplates "inspection/services/inspection/internal/features/templates/list_templates"
-	publishprofile "inspection/services/inspection/internal/features/templates/publish_analysis_profile"
 	publishseeds "inspection/services/inspection/internal/features/templates/publish_seeds"
 	publishtemplate "inspection/services/inspection/internal/features/templates/publish_template"
 	resolvetemplate "inspection/services/inspection/internal/features/templates/resolve_template"
@@ -276,7 +277,10 @@ func run() error {
 		},
 		func() error { return resolvedefinition.Setup(resolvedefinition.Dependencies{DB: db, Bus: bus}) },
 		func() error {
-			return publishprofile.Setup(publishprofile.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+			return getanalysisprompt.Setup(getanalysisprompt.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject})
+		},
+		func() error {
+			return updateanalysisprompt.Setup(updateanalysisprompt.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject})
 		},
 		func() error {
 			return publishtemplate.Setup(publishtemplate.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -435,6 +439,9 @@ func run() error {
 		w.Header().Set("X-Correlation-ID", correlationID)
 		r.Header.Set("X-Correlation-ID", correlationID)
 		ctx := requestctx.WithResponseWriter(r.Context(), w)
+		// Public onboarding requests do not carry an authenticated principal, but
+		// they still need the transport correlation ID for resolver diagnostics.
+		ctx = requestctx.WithMetadata(ctx, requestctx.Metadata{CorrelationID: correlationID, StartedAt: time.Now().UTC()})
 		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
 			ctx = requestctx.WithClientIP(ctx, host)
 		} else if r.RemoteAddr != "" {
