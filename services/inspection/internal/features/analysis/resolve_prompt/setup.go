@@ -37,15 +37,14 @@ func Resolve(ctx context.Context, tx *gorm.DB, analysisType string, now time.Tim
 	if _, err := prompt.Parse(current.DefinitionJSON); err != nil {
 		return Result{}, fmt.Errorf("analysis prompt configuration is invalid: %w", err)
 	}
-	snapshot := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now.UTC()}
-	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "canonical_digest"}}, DoNothing: true}).Create(&snapshot).Error; err != nil {
+	candidate := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now.UTC()}
+	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "canonical_digest"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
 		return Result{}, err
 	}
-	if snapshot.ID == (identity.ID{}) {
-		return Result{}, fmt.Errorf("analysis prompt snapshot was not created")
-	}
-	// PostgreSQL does not hydrate an ignored INSERT. Fetch the durable row in
-	// either case, so callers always pin the deduplicated ID.
+	// Always load a fresh value. PostgreSQL does not hydrate an ignored INSERT,
+	// and reusing candidate would make GORM add its unused generated ID to the
+	// lookup predicate.
+	var snapshot database.AnalysisPromptSnapshot
 	if err := tx.WithContext(ctx).Where("analysis_type=? AND canonical_digest=?", analysisType, current.CanonicalDigest).First(&snapshot).Error; err != nil {
 		return Result{}, err
 	}

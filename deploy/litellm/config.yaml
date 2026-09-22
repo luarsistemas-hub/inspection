@@ -1,7 +1,8 @@
+# deploy/litellm/config.yaml
 model_list:
   - model_name: inspection-vision
     litellm_params:
-      model: gemini/gemini-2.5-flash
+      model: gemini/gemini-3.6-flash
       api_key: os.environ/LLM_API_KEY
 
 general_settings:
