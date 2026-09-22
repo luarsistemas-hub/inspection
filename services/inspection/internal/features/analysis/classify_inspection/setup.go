@@ -100,6 +100,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				_ = json.Unmarshal(finding.Evidence, &evidence)
 				fact.Findings = append(fact.Findings, analysis.Finding{Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, EvidenceIDs: evidence})
 			}
+			facts = append(facts, fact)
 		}
 		if inspection.StageID != nil {
 			var stage database.ProjectStage
