@@ -12,7 +12,7 @@
       "id": "stub-unknown-evidence",
       "provider": "stub",
       "model": "stub/vision",
-      "choices": [{"message": {"content": "{\"noRelevantChange\":false,\"findings\":[{\"category\":\"FINISHES\",\"title\":\"Pintura com desgaste visível\",\"description\":\"Há desgaste visual na pintura.\",\"severity\":\"LOW\",\"confidence\":0.9,\"evidenceIds\":[\"unknown-evidence\"],\"quality\":\"ADEQUATE\",\"recommendedAction\":\"Revisar a pintura presencialmente.\"}]}"}}]
+      "choices": [{"message": {"content": "{\"coverageStatus\":\"COMPLETE\",\"comparisonStatus\":\"CHANGED\",\"findings\":[{\"category\":\"CONSERVATION\",\"changeType\":\"NEW_DAMAGE\",\"title\":\"Pintura com desgaste visível\",\"description\":\"Há desgaste visual novo na pintura.\",\"severity\":\"LOW\",\"confidence\":0.9,\"evidenceIds\":[\"unknown-evidence\"],\"quality\":\"ADEQUATE\",\"recommendedAction\":\"Revisar a pintura presencialmente.\"}]}"}}]
     }
   }
 }

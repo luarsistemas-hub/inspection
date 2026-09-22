@@ -29,13 +29,13 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 		if len(body.Messages) != 2 || body.Messages[0].Role != "system" || body.Messages[1].Role != "user" {
 			t.Fatalf("messages=%s", body.Messages)
 		}
-		if string(body.Messages[0].Content) != `"system"` || !strings.Contains(string(body.Messages[1].Content), "evidenceId=e1; source=CURRENT") || !strings.Contains(string(body.Messages[1].Content), `"detail":"high"`) {
+		if string(body.Messages[0].Content) != `"system"` || !strings.Contains(string(body.Messages[1].Content), "evidenceId=e1; source=CURRENT; pairId=pair-1; position=CURRENT_1") || !strings.Contains(string(body.Messages[1].Content), `"detail":"high"`) {
 			t.Fatalf("unexpected prompt=%s", body.Messages[1].Content)
 		}
-		_, _ = w.Write([]byte(`{"id":"req-1","model":"provider/model","provider":"provider","choices":[{"message":{"content":"{\\\"noRelevantChange\\\":true,\\\"findings\\\":[]}"}}],"usage":{"prompt_tokens":3,"completion_tokens":2},"cost":0.01}`))
+		_, _ = w.Write([]byte(`{"id":"req-1","model":"provider/model","provider":"provider","choices":[{"message":{"content":"{\\\"coverageStatus\\\":\\\"COMPLETE\\\",\\\"comparisonStatus\\\":\\\"UNCHANGED\\\",\\\"findings\\\":[]}"}}],"usage":{"prompt_tokens":3,"completion_tokens":2},"cost":0.01}`))
 	}))
 	defer server.Close()
-	result, err := (HTTPGateway{BaseURL: server.URL, APIKey: "gateway-secret"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", SystemPrompt: "system", UserPrompt: "context", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "digest", DataURL: "data:image/png;base64,AAAA"}}})
+	result, err := (HTTPGateway{BaseURL: server.URL, APIKey: "gateway-secret"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", SystemPrompt: "system", UserPrompt: "context", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", PairID: "pair-1", Position: "CURRENT_1", Digest: "digest", DataURL: "data:image/png;base64,AAAA"}}})
 	if err != nil || result.Model != "provider/model" || result.InputTokens == nil {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}

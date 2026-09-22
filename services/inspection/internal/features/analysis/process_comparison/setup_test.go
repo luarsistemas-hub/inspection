@@ -20,7 +20,7 @@ func (g gateway) CompleteStructured(context.Context, llm.StructuredRequest) (llm
 
 func TestValidateEvidenceRejectsUnknownAndLowConfidence(t *testing.T) {
 	request := llm.StructuredRequest{MinimumConfidenceBPS: 7000, Images: []llm.NormalizedImage{{EvidenceID: "known"}}}
-	result := analysis.Result{Findings: []analysis.Finding{{Category: "FINISHES", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
+	result := analysis.Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []analysis.Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
 	if err := validateEvidence(result, request); err == nil {
 		t.Fatal("unknown evidence accepted")
 	}
@@ -32,7 +32,7 @@ func TestValidateEvidenceRejectsUnknownAndLowConfidence(t *testing.T) {
 }
 
 func TestIsInsufficientEvidence(t *testing.T) {
-	if !isInsufficientEvidence(analysis.Result{Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY", Quality: "INSUFFICIENT"}}}) {
+	if !isInsufficientEvidence(analysis.Result{CoverageStatus: "INSUFFICIENT", ComparisonStatus: "INCONCLUSIVE", Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY", ChangeType: "NOT_APPLICABLE", Quality: "INSUFFICIENT"}}}) {
 		t.Fatal("insufficient evidence not detected")
 	}
 }

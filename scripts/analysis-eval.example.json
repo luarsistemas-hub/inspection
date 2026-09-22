@@ -1,0 +1,15 @@
+{
+  "name": "inspection-visual-evaluation",
+  "schema": "scripts/analysis-output-schema.json",
+  "cases": [
+    {
+      "id": "preexisting-unchanged-001",
+      "userPrompt": "Compare ORIGIN and CURRENT for the wall finish.",
+      "images": [
+        { "evidenceId": "origin-001", "source": "ORIGIN", "pairId": "pair-001", "position": "ORIGIN", "dataUrl": "data:image/jpeg;base64,..." },
+        { "evidenceId": "current-001", "source": "CURRENT", "pairId": "pair-001", "position": "CURRENT_1", "dataUrl": "data:image/jpeg;base64,..." }
+      ],
+      "expectedFindings": []
+    }
+  ]
+}

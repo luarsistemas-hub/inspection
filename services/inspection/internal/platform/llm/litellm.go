@@ -28,12 +28,19 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	content := make([]map[string]any, 0, len(request.Images)*2+1)
-	content = append(content, map[string]any{"type": "text", "text": request.UserPrompt + "\n\nDigest do prompt: " + request.PromptDigest})
+	content = append(content, map[string]any{"type": "text", "text": request.UserPrompt})
 	for _, image := range request.Images {
 		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") {
 			return StructuredResult{}, fmt.Errorf("litellm: unauthorized image")
 		}
-		content = append(content, map[string]any{"type": "text", "text": "evidenceId=" + image.EvidenceID + "; source=" + image.Source})
+		label := "evidenceId=" + image.EvidenceID + "; source=" + image.Source
+		if image.PairID != "" {
+			if image.Position == "" {
+				return StructuredResult{}, fmt.Errorf("litellm: paired image has no position")
+			}
+			label += "; pairId=" + image.PairID + "; position=" + image.Position
+		}
+		content = append(content, map[string]any{"type": "text", "text": label})
 		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": image.DataURL, "detail": "high"}})
 	}
 	body, _ := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "system", "content": request.SystemPrompt}, map[string]any{"role": "user", "content": content}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
@@ -70,8 +77,13 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		Provider string   `json:"provider"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
-	if err := decoder.Decode(&wire); err != nil || len(wire.Choices) != 1 || wire.Choices[0].Message.Content == "" {
+	if err := decoder.Decode(&wire); err != nil {
 		return StructuredResult{}, fmt.Errorf("litellm: malformed structured response")
 	}
-	return StructuredResult{JSON: []byte(wire.Choices[0].Message.Content), GatewayRequestID: wire.ID, Provider: wire.Provider, Model: wire.Model, InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Cost, Latency: time.Since(started)}, nil
+	result := StructuredResult{GatewayRequestID: wire.ID, Provider: wire.Provider, Model: wire.Model, InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Cost, Latency: time.Since(started)}
+	if len(wire.Choices) != 1 || wire.Choices[0].Message.Content == "" {
+		return result, fmt.Errorf("litellm: malformed structured response")
+	}
+	result.JSON = []byte(wire.Choices[0].Message.Content)
+	return result, nil
 }

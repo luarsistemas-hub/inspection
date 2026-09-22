@@ -14,8 +14,9 @@ import (
 )
 
 type Dependencies struct {
-	DB  *gorm.DB
-	Now func() time.Time
+	DB      *gorm.DB
+	Now     func() time.Time
+	Replace bool
 }
 
 // Run inserts REAL_ESTATE once and never overwrites an administrator edit.
@@ -32,5 +33,18 @@ func Run(ctx context.Context, d Dependencies) error {
 	}
 	now := d.Now().UTC()
 	row := database.AnalysisPrompt{ID: identity.NewID(), AnalysisType: prompt.RealEstate, DefinitionJSON: definition, CanonicalDigest: digest, Revision: 1, UpdatedBy: identity.ID{}, CreatedAt: now, UpdatedAt: now}
-	return d.DB.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}}, DoNothing: true}).Create(&row).Error
+	if !d.Replace {
+		return d.DB.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}}, DoNothing: true}).Create(&row).Error
+	}
+	var current database.AnalysisPrompt
+	if err := d.DB.WithContext(ctx).Where("analysis_type=?", prompt.RealEstate).First(&current).Error; err == gorm.ErrRecordNotFound {
+		return d.DB.WithContext(ctx).Create(&row).Error
+	} else if err != nil {
+		return err
+	} else if current.CanonicalDigest == digest {
+		return nil
+	}
+	return d.DB.WithContext(ctx).Model(&database.AnalysisPrompt{}).Where("analysis_type=?", prompt.RealEstate).Updates(map[string]any{
+		"definition_json": definition, "canonical_digest": digest, "revision": current.Revision + 1, "updated_by": identity.ID{}, "updated_at": now,
+	}).Error
 }

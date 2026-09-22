@@ -992,6 +992,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_job_input ON analysis.comparison_
 		{Version: 38, Name: "analysis_job_prompt_digest_index", Compatible: true, SQL: `
 DROP INDEX IF EXISTS analysis.idx_analysis_job_input;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_job_input ON analysis.comparison_jobs(tenant_id, inspection_id, requirement_key, model_alias, prompt_digest, input_digest);
+`},
+		{Version: 39, Name: "analysis_finding_change_type", Compatible: true, SQL: `
+ALTER TABLE analysis.findings ADD COLUMN IF NOT EXISTS change_type varchar(32);
 `}}
 }
 

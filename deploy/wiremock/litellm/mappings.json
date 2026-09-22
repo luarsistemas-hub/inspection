@@ -19,7 +19,7 @@
       "choices": [
         {
           "message": {
-            "content": "{\"noRelevantChange\":true,\"findings\":[]}"
+            "content": "{\"coverageStatus\":\"COMPLETE\",\"comparisonStatus\":\"UNCHANGED\",\"findings\":[]}"
           }
         }
       ],

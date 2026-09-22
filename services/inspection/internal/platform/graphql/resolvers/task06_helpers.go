@@ -33,7 +33,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	context := &graphql1.ReportContext{Asset: &graphql1.ReportAssetContext{ID: snapshot.Context.Asset.ID, Name: snapshot.Context.Asset.Name, ExternalKey: snapshot.Context.Asset.ExternalKey, Address: snapshot.Context.Asset.Address}, Participant: &graphql1.ReportParticipantContext{ID: snapshot.Context.Participant.ID, Name: snapshot.Context.Participant.Name}, Template: &graphql1.ReportTemplateContext{ID: snapshot.Context.Template.ID, Name: snapshot.Context.Template.Name, Version: snapshot.Context.Template.Version}, Inspection: &graphql1.ReportInspectionContext{ProjectID: optional(snapshot.Context.Inspection.ProjectID), StageID: optional(snapshot.Context.Inspection.StageID), StageLabel: optional(snapshot.Context.Inspection.StageLabel), DueAt: optional(snapshot.Context.Inspection.DueAt), SubmittedAt: optional(snapshot.Context.Inspection.SubmittedAt), GeneratedAt: snapshot.Context.Inspection.GeneratedAt}}
 	requirements := make([]*graphql1.ReportRequirement, 0, len(snapshot.Requirements))
 	for _, value := range snapshot.Requirements {
-		requirements = append(requirements, &graphql1.ReportRequirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: optional(value.Instructions), Coverage: optional(value.Coverage), ImpossibilityReason: optional(value.ImpossibilityReason)})
+		requirements = append(requirements, &graphql1.ReportRequirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: optional(value.Instructions), Coverage: optional(value.Coverage), ImpossibilityReason: optional(value.ImpossibilityReason), CoverageStatus: optional(value.CoverageStatus), ComparisonStatus: optional(value.ComparisonStatus)})
 	}
 	evidence := make([]*graphql1.ReportEvidence, 0, len(snapshot.Evidence))
 	for _, value := range snapshot.Evidence {
@@ -41,7 +41,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	}
 	findings := make([]*graphql1.ReportFinding, 0, len(snapshot.Findings))
 	for _, value := range snapshot.Findings {
-		findings = append(findings, &graphql1.ReportFinding{ID: optional(value.ID), Title: value.Title, Description: value.Description, Severity: value.Severity, Confidence: value.Confidence, Quality: value.Quality, RecommendedAction: value.RecommendedAction, EvidenceIds: value.EvidenceIDs})
+		findings = append(findings, &graphql1.ReportFinding{ID: optional(value.ID), Category: value.Category, ChangeType: optional(value.ChangeType), Title: value.Title, Description: value.Description, Severity: value.Severity, Confidence: value.Confidence, Quality: value.Quality, RecommendedAction: value.RecommendedAction, EvidenceIds: value.EvidenceIDs})
 	}
 	timeline := make([]*graphql1.ReportTimelineEntry, 0, len(snapshot.Timeline))
 	for _, value := range snapshot.Timeline {

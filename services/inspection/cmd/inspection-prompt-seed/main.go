@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -18,6 +19,8 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	replace := flag.Bool("replace", false, "replace the current REAL_ESTATE prompt with the embedded default")
+	flag.Parse()
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -26,5 +29,5 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return seedprompt.Run(ctx, seedprompt.Dependencies{DB: db})
+	return seedprompt.Run(ctx, seedprompt.Dependencies{DB: db, Replace: *replace})
 }

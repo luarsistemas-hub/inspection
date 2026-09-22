@@ -25,16 +25,17 @@ var ErrInvalidStructuredOutput = errors.New("invalid structured analysis output"
 // Finding is the provider-neutral, immutable result of one observation.
 // It deliberately has no fault, cost, liability, or automatic-consequence field.
 type Finding struct {
-	Category, Title, Description, Severity, RecommendedAction string
-	Confidence                                                float64
-	EvidenceIDs                                               []string
-	Quality                                                   string
+	Category, ChangeType, Title, Description, Severity, RecommendedAction string
+	Confidence                                                            float64
+	EvidenceIDs                                                           []string
+	Quality                                                               string
 }
 
 // Result is the strict structured response accepted from an analysis gateway.
-// NoRelevantChange makes an empty findings list meaningful rather than ambiguous.
+// Coverage and comparison status make an empty findings list unambiguous.
 type Result struct {
-	NoRelevantChange bool
+	CoverageStatus   string
+	ComparisonStatus string
 	Findings         []Finding
 }
 
@@ -46,9 +47,11 @@ func ParseResult(data []byte) (Result, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	var wire struct {
-		NoRelevantChange bool `json:"noRelevantChange"`
+		CoverageStatus   string `json:"coverageStatus"`
+		ComparisonStatus string `json:"comparisonStatus"`
 		Findings         []struct {
 			Category          string   `json:"category"`
+			ChangeType        string   `json:"changeType"`
 			Title             string   `json:"title"`
 			Description       string   `json:"description"`
 			Severity          string   `json:"severity"`
@@ -65,9 +68,9 @@ func ParseResult(data []byte) (Result, error) {
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return Result{}, fmt.Errorf("%w: trailing JSON", ErrInvalidStructuredOutput)
 	}
-	result := Result{NoRelevantChange: wire.NoRelevantChange, Findings: make([]Finding, 0, len(wire.Findings))}
+	result := Result{CoverageStatus: wire.CoverageStatus, ComparisonStatus: wire.ComparisonStatus, Findings: make([]Finding, 0, len(wire.Findings))}
 	for _, finding := range wire.Findings {
-		result.Findings = append(result.Findings, Finding{Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Confidence: finding.Confidence, EvidenceIDs: finding.EvidenceIDs, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction})
+		result.Findings = append(result.Findings, Finding{Category: finding.Category, ChangeType: finding.ChangeType, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Confidence: finding.Confidence, EvidenceIDs: finding.EvidenceIDs, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction})
 	}
 	return result, ValidateResult(result)
 }
@@ -88,18 +91,42 @@ type Decision struct {
 // ValidateResult rejects loosely shaped provider output before it can become a
 // finding. Empty findings are accepted only for an explicit no-change outcome.
 func ValidateResult(result Result) error {
-	if len(result.Findings) == 0 && !result.NoRelevantChange {
-		return fmt.Errorf("%w: empty findings require noRelevantChange", ErrInvalidStructuredOutput)
+	if !validCoverage(result.CoverageStatus) || !validComparison(result.ComparisonStatus) {
+		return fmt.Errorf("%w: coverage or comparison status is invalid", ErrInvalidStructuredOutput)
 	}
-	if result.NoRelevantChange && len(result.Findings) != 0 {
-		return fmt.Errorf("%w: noRelevantChange cannot include findings", ErrInvalidStructuredOutput)
+	if len(result.Findings) == 0 && !(result.CoverageStatus == "COMPLETE" && (result.ComparisonStatus == "UNCHANGED" || result.ComparisonStatus == "NOT_APPLICABLE")) {
+		return fmt.Errorf("%w: empty findings require complete unchanged or current-only result", ErrInvalidStructuredOutput)
+	}
+	if result.ComparisonStatus == "UNCHANGED" && (result.CoverageStatus != "COMPLETE" || len(result.Findings) != 0) {
+		return fmt.Errorf("%w: unchanged requires complete coverage and no findings", ErrInvalidStructuredOutput)
+	}
+	if result.ComparisonStatus == "CHANGED" && len(result.Findings) == 0 {
+		return fmt.Errorf("%w: changed requires findings", ErrInvalidStructuredOutput)
+	}
+	if result.ComparisonStatus == "CHANGED" && allEvidenceQualityFindings(result.Findings) {
+		return fmt.Errorf("%w: changed requires a documented change", ErrInvalidStructuredOutput)
+	}
+	if result.ComparisonStatus == "INCONCLUSIVE" && !hasEvidenceQualityFinding(result.Findings) {
+		return fmt.Errorf("%w: inconclusive requires evidence quality finding", ErrInvalidStructuredOutput)
+	}
+	if result.CoverageStatus != "COMPLETE" && !hasEvidenceQualityFinding(result.Findings) {
+		return fmt.Errorf("%w: incomplete coverage requires evidence quality finding", ErrInvalidStructuredOutput)
 	}
 	for _, finding := range result.Findings {
-		if strings.TrimSpace(finding.Category) == "" || !validText(finding.Title, MaxTitle) || !validText(finding.Description, MaxDescription) || !validText(finding.RecommendedAction, MaxAction) || len(finding.EvidenceIDs) == 0 {
+		if !validCategory(finding.Category) || !validChangeType(finding.ChangeType) || !validText(finding.Title, MaxTitle) || !validText(finding.Description, MaxDescription) || !validText(finding.RecommendedAction, MaxAction) || len(finding.EvidenceIDs) == 0 {
 			return fmt.Errorf("%w: finding fields are incomplete", ErrInvalidStructuredOutput)
 		}
 		if finding.Confidence < 0 || finding.Confidence > 1 || !validSeverity(finding.Severity) || !validQuality(finding.Quality) {
 			return fmt.Errorf("%w: finding severity, confidence, or quality is invalid", ErrInvalidStructuredOutput)
+		}
+		if finding.Category == "EVIDENCE_QUALITY" {
+			if finding.Severity != "NONE" || finding.Quality != "INSUFFICIENT" || finding.ChangeType != "NOT_APPLICABLE" {
+				return fmt.Errorf("%w: evidence quality finding is malformed", ErrInvalidStructuredOutput)
+			}
+		} else if finding.ChangeType == "CURRENT_CONDITION" && result.ComparisonStatus != "NOT_APPLICABLE" {
+			return fmt.Errorf("%w: current condition is only valid without origin", ErrInvalidStructuredOutput)
+		} else if result.ComparisonStatus == "NOT_APPLICABLE" && finding.ChangeType != "CURRENT_CONDITION" {
+			return fmt.Errorf("%w: current-only result cannot contain temporal change", ErrInvalidStructuredOutput)
 		}
 		for _, evidenceID := range finding.EvidenceIDs {
 			if strings.TrimSpace(evidenceID) == "" {
@@ -117,10 +144,51 @@ func validQuality(value string) bool {
 	return value == "ADEQUATE" || value == "LIMITED" || value == "INSUFFICIENT"
 }
 
+func validCoverage(value string) bool {
+	return value == "COMPLETE" || value == "PARTIAL" || value == "INSUFFICIENT"
+}
+func validComparison(value string) bool {
+	return value == "CHANGED" || value == "UNCHANGED" || value == "INCONCLUSIVE" || value == "NOT_APPLICABLE"
+}
+func validCategory(value string) bool {
+	return value == "CONSERVATION" || value == "INVENTORY" || value == "EVIDENCE_QUALITY"
+}
+func validChangeType(value string) bool {
+	switch value {
+	case "CURRENT_CONDITION", "NEW_DAMAGE", "WORSENED", "REMOVED", "ADDED", "REPLACED", "MOVED", "IMPROVED", "NOT_APPLICABLE":
+		return true
+	}
+	return false
+}
+func hasEvidenceQualityFinding(findings []Finding) bool {
+	for _, finding := range findings {
+		if finding.Category == "EVIDENCE_QUALITY" && finding.Severity == "NONE" && finding.Quality == "INSUFFICIENT" && finding.ChangeType == "NOT_APPLICABLE" {
+			return true
+		}
+	}
+	return false
+}
+
+func allEvidenceQualityFindings(findings []Finding) bool {
+	if len(findings) == 0 {
+		return false
+	}
+	for _, finding := range findings {
+		if finding.Category != "EVIDENCE_QUALITY" {
+			return false
+		}
+	}
+	return true
+}
+
 func assignsConsequence(value string) bool {
-	value = strings.ToLower(value)
-	for _, prohibited := range []string{"fault", "liable", "liability", "blame", "penalty", "fine", "charge", "cost", "compensation", "culpa", "responsável", "multa", "cobrar", "custo"} {
-		if strings.Contains(value, prohibited) {
+	prohibitedWords := map[string]struct{}{}
+	for _, word := range []string{"fault", "liable", "liability", "blame", "penalty", "fine", "charge", "cost", "compensation", "culpa", "responsável", "responsabilidade", "responsabilização", "multa", "penalidade", "cobrar", "cobrança", "custo", "indenização"} {
+		prohibitedWords[word] = struct{}{}
+	}
+	for _, word := range strings.Fields(strings.ToLower(value)) {
+		word = strings.Trim(word, ".,;:!?()[]{}\"'")
+		if _, prohibited := prohibitedWords[word]; prohibited {
 			return true
 		}
 	}

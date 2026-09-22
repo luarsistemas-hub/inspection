@@ -1800,6 +1800,8 @@ export type ReportEvidence = {
 
 export type ReportFinding = {
   __typename?: 'ReportFinding';
+  category: Scalars['String']['output'];
+  changeType: Maybe<Scalars['String']['output']>;
   confidence: Scalars['Float']['output'];
   description: Scalars['String']['output'];
   evidenceIds: Array<Scalars['ID']['output']>;
@@ -1846,7 +1848,9 @@ export type ReportPublicationPayload = {
 
 export type ReportRequirement = {
   __typename?: 'ReportRequirement';
+  comparisonStatus: Maybe<Scalars['String']['output']>;
   coverage: Maybe<Scalars['String']['output']>;
+  coverageStatus: Maybe<Scalars['String']['output']>;
   impossibilityReason: Maybe<Scalars['String']['output']>;
   instructions: Maybe<Scalars['String']['output']>;
   key: Scalars['String']['output'];

@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,10 +10,10 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	buildrequest "inspection/services/inspection/internal/features/analysis/build_request"
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
-	comparative "inspection/services/inspection/internal/features/analysis/comparative"
+	analysiscore "inspection/services/inspection/internal/features/analysis/core"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
-	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
@@ -185,7 +182,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	processJob, err := processcomparison.Setup(processcomparison.Dependencies{Gateway: llmGateway, Now: time.Now, BuildRequest: buildAnalysisRequest(privateStore)})
+	requestBuilder, err := buildrequest.Setup(buildrequest.Dependencies{Store: privateStore})
+	if err != nil {
+		return err
+	}
+	processJob, err := processcomparison.Setup(processcomparison.Dependencies{Gateway: llmGateway, Now: time.Now, BuildRequest: requestBuilder})
 	if err != nil {
 		return err
 	}
@@ -299,10 +300,27 @@ func run() error {
 			return err
 		}
 		findings := make([]reportcore.Finding, 0)
+		analysisStatuses := make(map[string][2]string)
 		evidence := make([]reportcore.Evidence, 0)
 		for _, job := range jobs {
 			var run database.AnalysisRun
 			if err := tx.Where("tenant_id=? AND job_id=?", envelope.TenantID, job.ID).Order("created_at DESC").First(&run).Error; err == nil {
+				var analysisResult analysiscore.Result
+				if parsed, parseErr := analysiscore.ParseResult(run.Output); parseErr == nil {
+					analysisResult = parsed
+				} else {
+					var terminalState struct {
+						CoverageStatus   string `json:"coverageStatus"`
+						ComparisonStatus string `json:"comparisonStatus"`
+					}
+					if json.Unmarshal(run.Output, &terminalState) == nil {
+						analysisResult.CoverageStatus = terminalState.CoverageStatus
+						analysisResult.ComparisonStatus = terminalState.ComparisonStatus
+					}
+				}
+				if analysisResult.CoverageStatus != "" {
+					analysisStatuses[job.RequirementKey] = [2]string{analysisResult.CoverageStatus, analysisResult.ComparisonStatus}
+				}
 				var rows []database.FindingRecord
 				if err := tx.Where("tenant_id=? AND analysis_run_id=?", envelope.TenantID, run.ID).Order("created_at ASC").Find(&rows).Error; err != nil {
 					return err
@@ -310,7 +328,7 @@ func run() error {
 				for _, row := range rows {
 					var evidenceIDs []string
 					_ = json.Unmarshal(row.Evidence, &evidenceIDs)
-					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
+					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, ChangeType: row.ChangeType, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
 				}
 			} else if err != gorm.ErrRecordNotFound {
 				return err
@@ -355,6 +373,13 @@ func run() error {
 		context, requirements, referenceEvidence, err := reportSnapshotContext(ctx, tx, envelope.TenantID, inspection, reference, envelope.OccurredAt)
 		if err != nil {
 			return err
+		}
+		for i := range requirements {
+			if status, ok := analysisStatuses[requirements[i].Key]; ok {
+				requirements[i].CoverageStatus, requirements[i].ComparisonStatus = status[0], status[1]
+			} else {
+				requirements[i].CoverageStatus, requirements[i].ComparisonStatus = "INSUFFICIENT", "INCONCLUSIVE"
+			}
 		}
 		var promptSnapshot database.AnalysisPromptSnapshot
 		if err := tx.Where("id=?", inspection.AnalysisPromptSnapshotID).First(&promptSnapshot).Error; err != nil {
@@ -543,115 +568,6 @@ func operationalNotificationGateway(cfg config.Config) (*notifications.Gateway, 
 func mustPayload(_ []byte, jobID identity.ID) []byte {
 	data, _ := json.Marshal(map[string]any{"jobId": jobID})
 	return data
-}
-
-func buildAnalysisRequest(store objectstore.Store) processcomparison.RequestBuilder {
-	return func(ctx context.Context, tx *gorm.DB, job database.ComparisonJob, _ processcomparison.Payload) (llm.StructuredRequest, error) {
-		var answers []database.RequirementAnswer
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT d.id FROM capture.capture_drafts d JOIN inspections.responsibilities r ON r.id=d.responsibility_id WHERE d.tenant_id=? AND r.inspection_id=?)", job.TenantID, job.RequirementKey, job.TenantID, job.InspectionID).Order("updated_at DESC").Limit(1).Find(&answers).Error; err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		if len(answers) == 0 {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: requirement evidence not found")
-		}
-		var inspection database.Inspection
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", job.TenantID, job.InspectionID).First(&inspection).Error; err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		var promptSnapshot database.AnalysisPromptSnapshot
-		if err := tx.WithContext(ctx).Where("id=?", inspection.AnalysisPromptSnapshotID).First(&promptSnapshot).Error; err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		profileDocument, err := analysisprompt.Parse(promptSnapshot.DefinitionJSON)
-		if err != nil {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: invalid pinned prompt")
-		}
-		modelAlias, systemPrompt, outputSchema, minimumConfidence := profileDocument.ModelAlias, profileDocument.SystemPrompt, profileDocument.OutputSchema, profileDocument.MinimumConfidenceBPS
-		var draft database.CaptureDraft
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", job.TenantID, answers[0].DraftID).First(&draft).Error; err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		var requirements []capturecore.Requirement
-		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: invalid requirement context")
-		}
-		var requirement capturecore.Requirement
-		for _, candidate := range requirements {
-			if candidate.Key == job.RequirementKey {
-				requirement = candidate
-				break
-			}
-		}
-		if requirement.Key == "" {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: requirement context not found")
-		}
-		comparisonMode := "CURRENT_ONLY"
-		var ids []identity.ID
-		if err := json.Unmarshal(answers[0].MediaIDs, &ids); err != nil || len(ids) == 0 {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: no evidence")
-		}
-		current := make([]comparative.Evidence, 0, len(ids))
-		for _, mediaID := range ids {
-			var derivative database.MediaDerivative
-			if err := tx.Where("tenant_id=? AND media_id=? AND kind=?", job.TenantID, mediaID, "ANALYSIS").Order("created_at DESC").First(&derivative).Error; err != nil {
-				return llm.StructuredRequest{}, err
-			}
-			data, err := store.Read(ctx, derivative.ObjectKey)
-			if err != nil {
-				return llm.StructuredRequest{}, err
-			}
-			digest := sha256.Sum256(data)
-			current = append(current, comparative.Evidence{ID: mediaID, Source: "CURRENT", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
-		}
-		schema, err := json.Marshal(outputSchema)
-		if err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		userPrompt := fmt.Sprintf("Requisito: %s\nTítulo: %s\nInstruções da captura: %s\nModo: %s\nConfiança mínima: %.2f%%\n\nAs imagens seguintes estão identificadas individualmente.", requirement.Key, requirement.Label, requirement.Instructions, comparisonMode, float64(minimumConfidence)/100)
-		var reference database.ReferenceSnapshot
-		if err := tx.Where("tenant_id=? AND inspection_id=?", job.TenantID, job.InspectionID).First(&reference).Error; err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		if reference.ReferenceVersionID == nil || reference.ComparisonMode != "FIXED_ORIGIN" {
-			return llm.StructuredRequest{ModelAlias: modelAlias, PromptDigest: promptSnapshot.CanonicalDigest, SystemPrompt: systemPrompt, UserPrompt: userPrompt, JSONSchema: schema, MinimumConfidenceBPS: minimumConfidence, Images: mustCurrentImages(current)}, nil
-		}
-		var snapshot struct {
-			Items []struct {
-				MediaID identity.ID `json:"mediaId"`
-			} `json:"items"`
-		}
-		if err := json.Unmarshal(reference.Payload, &snapshot); err != nil || len(snapshot.Items) == 0 {
-			return llm.StructuredRequest{}, fmt.Errorf("analysis: pinned origin evidence not found")
-		}
-		origin := make([]comparative.Evidence, 0, len(snapshot.Items))
-		for _, item := range snapshot.Items {
-			var derivative database.MediaDerivative
-			if err := tx.Where("tenant_id=? AND media_id=? AND kind=?", job.TenantID, item.MediaID, "ANALYSIS").Order("created_at DESC").First(&derivative).Error; err != nil {
-				return llm.StructuredRequest{}, err
-			}
-			data, err := store.Read(ctx, derivative.ObjectKey)
-			if err != nil {
-				return llm.StructuredRequest{}, err
-			}
-			digest := sha256.Sum256(data)
-			origin = append(origin, comparative.Evidence{ID: item.MediaID, Source: "ORIGIN", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
-		}
-		comparisonMode = "COMPARE_ORIGIN_CURRENT"
-		userPrompt = fmt.Sprintf("Requisito: %s\nTítulo: %s\nInstruções da captura: %s\nModo: %s\nConfiança mínima: %.2f%%\n\nAs imagens seguintes estão identificadas individualmente.", requirement.Key, requirement.Label, requirement.Instructions, comparisonMode, float64(minimumConfidence)/100)
-		images, _, err := comparative.Build(current, origin)
-		if err != nil {
-			return llm.StructuredRequest{}, err
-		}
-		return llm.StructuredRequest{ModelAlias: modelAlias, PromptDigest: promptSnapshot.CanonicalDigest, SystemPrompt: systemPrompt, UserPrompt: userPrompt, JSONSchema: schema, MinimumConfidenceBPS: minimumConfidence, Images: images}, nil
-	}
-}
-
-func mustCurrentImages(evidence []comparative.Evidence) []llm.NormalizedImage {
-	images := make([]llm.NormalizedImage, 0, len(evidence))
-	for _, item := range evidence {
-		images = append(images, llm.NormalizedImage{EvidenceID: item.ID.String(), Source: item.Source, Digest: item.Digest, DataURL: item.DataURL})
-	}
-	return images
 }
 
 // reportSnapshotContext freezes the human-readable context and reference

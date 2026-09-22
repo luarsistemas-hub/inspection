@@ -9,16 +9,25 @@ import (
 // StructuredRequest may contain only normalized, already-authorized image data.
 // Model is a logical alias; provider/model resolution remains adapter metadata.
 type StructuredRequest struct {
-	ModelAlias, PromptDigest string
-	SystemPrompt, UserPrompt string
-	JSONSchema               []byte
-	MinimumConfidenceBPS     int
-	Images                   []NormalizedImage
+	ModelAlias, PromptDigest, Mode string
+	SystemPrompt, UserPrompt       string
+	JSONSchema                     []byte
+	MinimumConfidenceBPS           int
+	Images                         []NormalizedImage
 }
 
 // NormalizedImage carries explicit lineage so comparative prompts cannot
-// silently mix current evidence with the pinned origin snapshot.
-type NormalizedImage struct{ EvidenceID, Source, DataURL, Digest string }
+// silently mix current evidence with the pinned origin snapshot. PairID and
+// Position are populated for comparative evidence so the adapter can preserve
+// the relationship between an origin image and its current counterpart.
+type NormalizedImage struct {
+	EvidenceID string
+	Source     string
+	PairID     string
+	Position   string
+	DataURL    string
+	Digest     string
+}
 
 // StructuredResult records actual provider facts, never estimated usage.
 type StructuredResult struct {

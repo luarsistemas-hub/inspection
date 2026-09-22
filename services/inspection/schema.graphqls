@@ -198,9 +198,9 @@ type ReportParticipantContext { id: ID! name: String! }
 type ReportTemplateContext { id: ID! name: String! version: Int! }
 type ReportInspectionContext { projectId: ID stageId: ID stageLabel: String dueAt: String submittedAt: String generatedAt: String! }
 type ReportContext { asset: ReportAssetContext! participant: ReportParticipantContext! template: ReportTemplateContext! inspection: ReportInspectionContext! }
-type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String }
+type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String coverageStatus: String comparisonStatus: String }
 type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! flags: [String!]! url: String }
-type ReportFinding { id: ID title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
+type ReportFinding { id: ID category: String! changeType: String title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
 type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type PublicationPolicy { mode: String! version: Int! }

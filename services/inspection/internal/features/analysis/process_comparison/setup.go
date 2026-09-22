@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"inspection/libs/identity"
@@ -55,11 +56,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			_, err = validateRequest(request)
 		}
 		if err != nil {
+			logAttempt(ctx, request, llm.StructuredResult{}, "REQUEST_REJECTED")
 			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
 		}
 		started := deps.Now().UTC()
 		result, err := deps.Gateway.CompleteStructured(ctx, request)
 		if err != nil {
+			logAttempt(ctx, request, result, "PROVIDER_ERROR")
 			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
 		}
 		parsed, validationErr := analysis.ParseResult(result.JSON)
@@ -67,8 +70,10 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			validationErr = validateEvidence(parsed, request)
 		}
 		if validationErr != nil {
+			logAttempt(ctx, request, result, "RESPONSE_REJECTED")
 			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), validationErr)
 		}
+		logAttempt(ctx, request, result, "ACCEPTED")
 		status := "COMPLETED"
 		if isInsufficientEvidence(parsed) {
 			status = "INCONCLUSIVE"
@@ -77,25 +82,74 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 	}, nil
 }
 
+func logAttempt(ctx context.Context, request llm.StructuredRequest, result llm.StructuredResult, outcome string) {
+	attrs := []any{"mode", request.Mode, "outcome", outcome, "latencyMs", result.Latency.Milliseconds(), "gatewayRequestId", result.GatewayRequestID, "provider", result.Provider, "model", result.Model}
+	if result.InputTokens != nil {
+		attrs = append(attrs, "inputTokens", *result.InputTokens)
+	}
+	if result.OutputTokens != nil {
+		attrs = append(attrs, "outputTokens", *result.OutputTokens)
+	}
+	if result.Cost != nil {
+		attrs = append(attrs, "cost", *result.Cost)
+	}
+	slog.InfoContext(ctx, "analysis_attempt", attrs...)
+}
+
 func validateEvidence(result analysis.Result, request llm.StructuredRequest) error {
 	known := make(map[string]struct{}, len(request.Images))
+	byID := make(map[string]llm.NormalizedImage, len(request.Images))
+	comparative := false
 	for _, image := range request.Images {
 		known[image.EvidenceID] = struct{}{}
+		byID[image.EvidenceID] = image
+		comparative = comparative || image.Source == "ORIGIN"
 	}
 	if len(result.Findings) > 100 {
 		return fmt.Errorf("analysis: finding limit exceeded")
 	}
 	for _, finding := range result.Findings {
-		if int(finding.Confidence*10000) < request.MinimumConfidenceBPS {
+		if finding.Category != "EVIDENCE_QUALITY" && int(finding.Confidence*10000) < request.MinimumConfidenceBPS {
 			return fmt.Errorf("analysis: finding below minimum confidence")
 		}
 		if len(finding.EvidenceIDs) > 50 {
 			return fmt.Errorf("analysis: evidence limit exceeded")
 		}
+		seen := make(map[string]struct{}, len(finding.EvidenceIDs))
+		pairIDs := make(map[string]struct{})
+		hasCurrent, hasOrigin := false, false
 		for _, evidenceID := range finding.EvidenceIDs {
 			if _, ok := known[evidenceID]; !ok {
 				return fmt.Errorf("analysis: unknown evidence reference")
 			}
+			if _, duplicate := seen[evidenceID]; duplicate {
+				return fmt.Errorf("analysis: duplicate evidence reference")
+			}
+			seen[evidenceID] = struct{}{}
+			image := byID[evidenceID]
+			hasCurrent = hasCurrent || image.Source == "CURRENT"
+			hasOrigin = hasOrigin || image.Source == "ORIGIN"
+			if image.PairID != "" {
+				pairIDs[image.PairID] = struct{}{}
+			}
+		}
+		if finding.Category != "EVIDENCE_QUALITY" && !hasCurrent {
+			return fmt.Errorf("analysis: finding requires current evidence")
+		}
+		if comparative && finding.ChangeType == "CURRENT_CONDITION" {
+			return fmt.Errorf("analysis: current condition cannot be used with origin evidence")
+		}
+		if finding.ChangeType == "CURRENT_CONDITION" && len(pairIDs) > 0 {
+			return fmt.Errorf("analysis: current condition cannot use paired evidence")
+		}
+		if comparative && finding.Category != "EVIDENCE_QUALITY" && finding.ChangeType != "NOT_APPLICABLE" && (len(pairIDs) == 0 || !hasOrigin) {
+			return fmt.Errorf("analysis: comparative finding requires paired origin evidence")
+		}
+		if finding.ChangeType != "CURRENT_CONDITION" && finding.ChangeType != "NOT_APPLICABLE" && len(pairIDs) > 0 && !hasOrigin {
+			return fmt.Errorf("analysis: comparative finding requires origin evidence")
+		}
+		if len(pairIDs) > 1 {
+			return fmt.Errorf("analysis: finding mixes evidence pairs")
 		}
 	}
 	return nil
@@ -115,24 +169,31 @@ func validateRequest(request llm.StructuredRequest) (llm.StructuredRequest, erro
 	if request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 || request.MinimumConfidenceBPS < 0 || request.MinimumConfidenceBPS > 10000 {
 		return llm.StructuredRequest{}, fmt.Errorf("analysis request lacks authorized structured input")
 	}
+	pairedSources := make(map[string]map[string]bool)
 	for _, image := range request.Images {
 		if image.EvidenceID == "" || image.Digest == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") || len(image.DataURL) < len("data:image/") || image.DataURL[:len("data:image/")] != "data:image/" {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis request has unauthorized image")
+		}
+		if (image.PairID == "") != (image.Position == "") {
+			return llm.StructuredRequest{}, fmt.Errorf("analysis request has incomplete evidence pairing")
+		}
+		if image.PairID != "" {
+			if pairedSources[image.PairID] == nil {
+				pairedSources[image.PairID] = make(map[string]bool)
+			}
+			pairedSources[image.PairID][image.Source] = true
+		}
+	}
+	for pairID, sources := range pairedSources {
+		if !sources["ORIGIN"] || !sources["CURRENT"] {
+			return llm.StructuredRequest{}, fmt.Errorf("analysis request has incomplete pair %s", pairID)
 		}
 	}
 	return request, nil
 }
 
 func isInsufficientEvidence(result analysis.Result) bool {
-	if len(result.Findings) == 0 || result.NoRelevantChange {
-		return false
-	}
-	for _, finding := range result.Findings {
-		if finding.Category != "EVIDENCE_QUALITY" || finding.Quality != "INSUFFICIENT" {
-			return false
-		}
-	}
-	return true
+	return result.CoverageStatus != "COMPLETE" || result.ComparisonStatus == "INCONCLUSIVE"
 }
 
 func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time, status string) error {
@@ -185,7 +246,7 @@ func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJ
 	}
 	for _, finding := range result.Findings {
 		evidence, _ := json.Marshal(finding.EvidenceIDs)
-		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
+		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, Category: finding.Category, ChangeType: finding.ChangeType, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -198,7 +259,7 @@ func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJ
 }
 
 func persistFallback(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {
-	output, _ := json.Marshal(map[string]any{"inconclusive": true, "reason": "analysis unavailable"})
+	output, _ := json.Marshal(map[string]any{"coverageStatus": "INSUFFICIENT", "comparisonStatus": "INCONCLUSIVE", "findings": []any{}, "reason": "analysis unavailable"})
 	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: "", Model: "", GatewayRequestID: "", PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "INCONCLUSIVE", CreatedAt: now}
 	if err := tx.Create(&run).Error; err != nil {
 		return err
