@@ -8,3 +8,6 @@ model_list:
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 
+#gemini-3-flash-preview
+#gemini/gemini-3.6-flash
+

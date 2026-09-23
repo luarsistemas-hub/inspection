@@ -76,7 +76,6 @@ type Config struct {
 type NotificationConfig struct {
 	MaxAttempts        int
 	RetryDelays        []time.Duration
-	V2ProducersEnabled bool
 	SMTPTLSMode        string
 	TwilioSMSFrom      string
 	TwilioWhatsAppFrom string
@@ -152,14 +151,7 @@ func notificationEnv(key string) (string, bool) {
 }
 
 func loadNotification(environment string) (NotificationConfig, error) {
-	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, V2ProducersEnabled: false, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", TwilioTemplates: map[string]string{}, MetaTemplates: map[string]string{}, PayloadKeys: map[string]string{}}
-	if raw, ok := notificationEnv("NOTIFICATION_V2_PRODUCERS_ENABLED"); ok {
-		value, err := strconv.ParseBool(strings.TrimSpace(raw))
-		if err != nil {
-			return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_V2_PRODUCERS_ENABLED")
-		}
-		c.V2ProducersEnabled = value
-	}
+	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", TwilioTemplates: map[string]string{}, MetaTemplates: map[string]string{}, PayloadKeys: map[string]string{}}
 	if raw, ok := notificationEnv("NOTIFICATION_MAX_ATTEMPTS"); ok {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value <= 0 {

@@ -47,6 +47,14 @@ func TestNotificationDeliveryV2IsReferenceOnly(t *testing.T) {
 	if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrUnknownContract) {
 		t.Fatalf("wrong v2 version accepted: %v", err)
 	}
+	for _, eventType := range []string{"notification.delivery_requested.v1", "notification.channel_status.v1"} {
+		envelope.Type = eventType
+		envelope.SchemaVersion = 1
+		raw, _ = json.Marshal(envelope)
+		if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrUnknownContract) {
+			t.Fatalf("removed contract %s accepted: %v", eventType, err)
+		}
+	}
 }
 
 func TestLifecycleEventsIT551ToIT554IT581ToIT582(t *testing.T) {

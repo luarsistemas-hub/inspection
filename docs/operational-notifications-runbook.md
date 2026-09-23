@@ -34,18 +34,14 @@ automaticamente. Correlacione o receipt no provedor, registre a decisão
 operacional e só faça uma nova solicitação de negócio quando houver evidência
 de que nenhum envio ocorreu.
 
-Antes de qualquer remoção de tratamento v1:
+O fluxo operacional usa exclusivamente o contrato
+`notification.delivery_requested.v2`. O evento carrega apenas a referência da
+notificação; a entrega, as tentativas e os dados protegidos permanecem no banco
+e são processados pelo executor durável do worker.
 
-1. implante consumidores compatíveis com v1/v2;
-2. verifique `V1QueueDepth=0` e `V1DurableWork=0`;
-3. habilite os produtores v2;
-4. drene e confirme o trabalho v1;
-5. remova o legado somente quando o gate de rollout permitir.
-
-O gate bloqueia a remoção enquanto houver item na fila v1 ou trabalho durável
-v1. Em rollback, pare novos produtores v2, mantenha consumidores compatíveis,
-preserve as filas e reative a versão anterior somente após confirmar que os
-eventos já publicados são suportados.
+Não existe fallback para uma versão anterior nem procedimento de migração entre
+contratos. Em ambiente local, uma fila antiga eventualmente criada no RabbitMQ
+deve ser removida manualmente quando necessário.
 
 ## Simulação local
 

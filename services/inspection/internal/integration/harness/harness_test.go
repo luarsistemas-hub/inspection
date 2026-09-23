@@ -56,8 +56,8 @@ func TestEventuallyHonoursContext(t *testing.T) {
 
 func TestTask06AssignedCaseManifest(t *testing.T) {
 	cases := Task06AssignedCases()
-	if len(cases) != 9 {
-		t.Fatalf("assigned cases=%d want 9", len(cases))
+	if len(cases) != 8 {
+		t.Fatalf("assigned cases=%d want 8", len(cases))
 	}
 	seen := make(map[string]struct{}, len(cases))
 	integration, endToEnd := 0, 0
@@ -78,7 +78,7 @@ func TestTask06AssignedCaseManifest(t *testing.T) {
 			t.Fatalf("unknown case kind %q", item.Kind)
 		}
 	}
-	if integration != 4 || endToEnd != 5 {
+	if integration != 3 || endToEnd != 5 {
 		t.Fatalf("case split integration=%d end-to-end=%d", integration, endToEnd)
 	}
 }

@@ -28,12 +28,7 @@ type Dependencies struct {
 	Payloads  *platformnotifications.PayloadCipher
 	Metrics   *observability.Metrics
 	Now       func() time.Time
-	// V2ProducersEnabled is the deployment-controlled rollout gate. It must be
-	// enabled only after compatible consumers have been deployed.
-	V2ProducersEnabled bool
 }
-
-var ErrV2ProducersDisabled = errors.New("notifications/request: v2 producers are disabled")
 
 // Setup constructs the provider-neutral notification service. Catalog may be
 // zero only to select the built-in, versioned operational catalog.
@@ -54,17 +49,16 @@ func Setup(dependencies Dependencies) (core.NotificationService, error) {
 			return nil, err
 		}
 	}
-	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now, v2ProducersEnabled: dependencies.V2ProducersEnabled}, nil
+	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now}, nil
 }
 
 type service struct {
-	db                 *gorm.DB
-	catalog            core.Catalog
-	providers          *platformnotifications.ProviderResolver
-	payloads           *platformnotifications.PayloadCipher
-	metrics            *observability.Metrics
-	now                func() time.Time
-	v2ProducersEnabled bool
+	db        *gorm.DB
+	catalog   core.Catalog
+	providers *platformnotifications.ProviderResolver
+	payloads  *platformnotifications.PayloadCipher
+	metrics   *observability.Metrics
+	now       func() time.Time
 }
 
 type transactionKey struct{}
@@ -79,9 +73,6 @@ func InTransaction(ctx context.Context, tx *gorm.DB) context.Context {
 func (s service) Send(ctx context.Context, notification core.Notification) (core.NotificationResult, error) {
 	if err := core.Validate(notification, s.catalog); err != nil {
 		return core.NotificationResult{}, err
-	}
-	if !s.v2ProducersEnabled {
-		return core.NotificationResult{}, ErrV2ProducersDisabled
 	}
 	digest, err := core.CanonicalDigest(notification)
 	if err != nil {

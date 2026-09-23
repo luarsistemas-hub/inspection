@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { beginPKCE, takePKCE } from "@/auth/pkce";
 import { safeAdminPath } from "@/auth/return-path";
-import { clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
+import { clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasAnalysisPromptAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
 
 describe("Admin authentication safety", () => {
   beforeEach(() => { sessionStorage.clear(); clearSession(); vi.stubGlobal("location", { origin: "http://localhost:3000", assign: vi.fn() }); });
@@ -22,9 +22,16 @@ describe("Admin authentication safety", () => {
   it("UT-055 clears in-memory access after a revoked or inactive session", () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN", "DASHBOARD"], roles: ["TENANT_ADMIN"] });
     expect(hasAdminAccess()).toBe(true);
+    expect(hasAnalysisPromptAccess()).toBe(true);
     clearSession();
     expect(getAccessToken()).toBeUndefined();
     expect(hasAdminAccess()).toBe(false);
+    expect(hasAnalysisPromptAccess()).toBe(false);
+  });
+
+  it("keeps the analysis prompt restricted to its administrative roles", () => {
+    expect(hasAnalysisPromptAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] })).toBe(false);
+    expect(hasAnalysisPromptAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["INSPECTION_CONFIG_ADMIN"] })).toBe(true);
   });
 
   it("allows delegated administrative roles in Admin but reserves Dashboard for tenant administrators", () => {

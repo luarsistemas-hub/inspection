@@ -34,6 +34,15 @@ export function hasAdminAccess(current = identity): boolean {
   );
 }
 
+/** Reports whether the current Admin session may open the global analysis prompt. */
+export function hasAnalysisPromptAccess(current = identity): boolean {
+  return Boolean(
+    current
+      && hasAdminAccess(current)
+      && current.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN"),
+  );
+}
+
 export function hasDashboardAccess(current = identity): boolean {
   return Boolean(current?.roles.includes("TENANT_ADMIN") && current.entitlements.includes("DASHBOARD"));
 }

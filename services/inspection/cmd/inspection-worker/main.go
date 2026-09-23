@@ -22,7 +22,6 @@ import (
 	dispatchoutbox "inspection/services/inspection/internal/features/messaging/dispatch_outbox"
 	alertdelivery "inspection/services/inspection/internal/features/notifications/alert_delivery"
 	consumedelivery "inspection/services/inspection/internal/features/notifications/consume_delivery"
-	delivercritical "inspection/services/inspection/internal/features/notifications/deliver_critical"
 	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
@@ -43,7 +42,6 @@ import (
 	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
 	"inspection/services/inspection/internal/platform/pdf"
-	"inspection/services/inspection/internal/platform/rollout"
 	process "inspection/services/inspection/internal/platform/runtime"
 	"inspection/services/inspection/internal/platform/sensitivecontent"
 
@@ -56,13 +54,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "inspection-worker:", err)
 		os.Exit(1)
 	}
-}
-
-func rolloutV2ProducerCount(enabled bool) int {
-	if !enabled {
-		return 0
-	}
-	return 1
 }
 
 func run() error {
@@ -95,7 +86,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, V2ProducersEnabled: cfg.Notification.V2ProducersEnabled})
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics})
 	if err != nil {
 		return err
 	}
@@ -116,8 +107,8 @@ func run() error {
 		return fmt.Errorf("rabbitmq channel: %w", err)
 	}
 	defer channel.Close()
-	contracts := make([]messaging.QueueContract, 0, 24)
-	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery", "notification.delivery_requested.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-status", "notification.channel_status.v1"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
+	contracts := make([]messaging.QueueContract, 0, 22)
+	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
 		contract, contractErr := messaging.NewQueueContract(definition[0], definition[1], 32)
 		if contractErr != nil {
 			return contractErr
@@ -127,24 +118,6 @@ func run() error {
 	if err := messaging.DeclareTopology(channel, contracts); err != nil {
 		return fmt.Errorf("rabbitmq topology: %w", err)
 	}
-	rolloutReader := rollout.SnapshotReaderFunc(func(ctx context.Context) (rollout.Snapshot, error) {
-		liveChannel, err := connection.Channel()
-		if err != nil {
-			return rollout.Snapshot{}, err
-		}
-		defer liveChannel.Close()
-		queue, err := liveChannel.QueueInspect("notification-delivery")
-		if err != nil {
-			return rollout.Snapshot{}, err
-		}
-		var durable int64
-		if err := db.WithContext(ctx).Model(&database.OutboxIntent{}).
-			Where("type = ? AND status IN ?", "notification.delivery_requested.v1", []string{"PENDING", "CLAIMED"}).
-			Count(&durable).Error; err != nil {
-			return rollout.Snapshot{}, err
-		}
-		return rollout.Snapshot{CompatibleConsumers: queue.Consumers, V2Producers: rolloutV2ProducerCount(cfg.Notification.V2ProducersEnabled), V1QueueDepth: queue.Messages, V1DurableWork: int(durable)}, nil
-	})
 	publisher, err := messaging.NewRabbitPublisher(channel)
 	if err != nil {
 		return err
@@ -159,14 +132,6 @@ func run() error {
 	}
 	privateStore := objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}
 	mediaHandler, err := processmedia.Setup(processmedia.Dependencies{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}, Detector: sensitivecontent.NewEmbeddedDetector()})
-	if err != nil {
-		return err
-	}
-	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
-		notifications.Email:    notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, ReplyTo: cfg.SMTPReplyTo, TLSMode: cfg.Notification.SMTPTLSMode, Timeout: cfg.ProviderTimeout},
-		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
-		notifications.SMS:      notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.SMS},
-	})
 	if err != nil {
 		return err
 	}
@@ -191,10 +156,6 @@ func run() error {
 		return err
 	}
 	classify, err := classifyinspection.Setup(classifyinspection.Dependencies{Now: time.Now})
-	if err != nil {
-		return err
-	}
-	deliverCritical, err := delivercritical.Setup(delivercritical.Dependencies{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Now: time.Now})
 	if err != nil {
 		return err
 	}
@@ -453,37 +414,6 @@ func run() error {
 		now := purge.CreatedAt
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
 	}
-	notificationStatusHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-		var payload struct {
-			DeliveryID identity.ID `json:"deliveryId"`
-			AttemptID  identity.ID `json:"attemptId"`
-			Status     string      `json:"status"`
-			ReceiptID  string      `json:"receiptId"`
-		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.DeliveryID == (identity.ID{}) || payload.AttemptID == (identity.ID{}) || payload.Status == "" {
-			return messaging.ErrPermanent
-		}
-		if err := tx.WithContext(ctx).Model(&database.ChannelAttempt{}).Where("tenant_id=? AND id=? AND delivery_id=?", envelope.TenantID, payload.AttemptID, payload.DeliveryID).Updates(map[string]any{"status": payload.Status, "receipt_id": payload.ReceiptID, "updated_at": time.Now().UTC()}).Error; err != nil {
-			return err
-		}
-		var failed, pending, sent int64
-		if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND delivery_id=? AND status='FAILED'", envelope.TenantID, payload.DeliveryID).Count(&failed).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND delivery_id=? AND status='PENDING'", envelope.TenantID, payload.DeliveryID).Count(&pending).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND delivery_id=? AND status IN ('SENT','DELIVERED')", envelope.TenantID, payload.DeliveryID).Count(&sent).Error; err != nil {
-			return err
-		}
-		deliveryStatus := "FAILED"
-		if sent > 0 {
-			deliveryStatus = "DELIVERED"
-		} else if pending > 0 || failed == 0 {
-			deliveryStatus = "PENDING"
-		}
-		return tx.Model(&database.Delivery{}).Where("tenant_id=? AND id=?", envelope.TenantID, payload.DeliveryID).Update("status", deliveryStatus).Error
-	}
 	handlers := map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error{
 		"origin.invitation_requested.v1":     invitationHandler,
 		"origin.promotion_requested.v1":      promotionHandler,
@@ -496,9 +426,7 @@ func run() error {
 		"inspection.classified.v1":           classifiedHandler,
 		"report.snapshot_created.v1":         render,
 		"report.ready.v1":                    dashboardHandler,
-		"notification.delivery_requested.v1": deliverCritical,
 		"notification.delivery_requested.v2": consumedelivery.Setup(),
-		"notification.channel_status.v1":     notificationStatusHandler,
 		"notification.delivery_terminal.v1":  terminalAlert,
 		"retention.purge_due.v1":             retentionHandler,
 		"retention.purged.v1": func(_ context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
@@ -514,9 +442,7 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
-	if err := operational.SetupWithRollout(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics, func(ctx context.Context) (rollout.Status, error) {
-		return rollout.NewGate(1).ReadStatus(ctx, rolloutReader)
-	}); err != nil {
+	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
 	}
 	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {

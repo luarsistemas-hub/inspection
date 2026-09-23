@@ -13,7 +13,7 @@ type ContractCase struct {
 // A fresh slice is returned so a caller cannot mutate the process-wide contract.
 func Task06AssignedCases() []ContractCase {
 	ids := []struct{ id, kind string }{
-		{"IT-047", "integration"}, {"IT-048", "integration"}, {"IT-049", "integration"}, {"IT-050", "integration"},
+		{"IT-047", "integration"}, {"IT-048", "integration"}, {"IT-049", "integration"},
 		{"E2E-009", "end-to-end"}, {"E2E-012", "end-to-end"}, {"E2E-013", "end-to-end"}, {"E2E-014", "end-to-end"}, {"E2E-015", "end-to-end"},
 	}
 	cases := make([]ContractCase, 0, len(ids))

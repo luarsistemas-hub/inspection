@@ -29,4 +29,4 @@ export INSPECTION_ENV=test
 
 O suite externo deve criar um harness por processo, declarar contratos de fila, semear via `WithinTenant`, publicar com `PublishPayload`, chamar GraphQL por `GraphQL` e aguardar com `Eventually`. Sobrescreva `INSPECTION_TEST_*` na CI; credenciais não ficam no código.
 
-`Task06AssignedCases()` expõe as nove cases atribuídas a esta tarefa como manifesto fail-fast: IT-047 a IT-050 e E2E-009/E2E-012 a E2E-015. O runner externo ainda precisa registrar implementação para cada ID.
+`Task06AssignedCases()` expõe as oito cases atribuídas a esta tarefa como manifesto fail-fast: IT-047 a IT-049 e E2E-009/E2E-012 a E2E-015. O runner externo ainda precisa registrar implementação para cada ID.

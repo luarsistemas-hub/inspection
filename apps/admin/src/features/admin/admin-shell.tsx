@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { beginPKCE } from "@/auth/pkce";
-import { clearProtectedContext, hasAdminAccess, restoreMembershipContext, setIdentity, setMembershipContext, type AdminIdentity } from "@/auth/session";
+import { clearProtectedContext, hasAdminAccess, hasAnalysisPromptAccess, restoreMembershipContext, setIdentity, setMembershipContext, type AdminIdentity } from "@/auth/session";
 import { graphql, graphqlIdentity, type GraphQLFailure } from "@/graphql/client";
 import * as G from "@/graphql/generated";
 import { presentAdminRole, presentAdminScope, presentAdminStatus, presentPublicationMode } from "./presentation";
@@ -88,7 +88,7 @@ export function AdminShell({ section }: { section?: string }) {
   const showHistory = async (item: Row) => { setDetail(item); setHistory(undefined); try { const result = await graphql<G.AdminHistoryQuery>(G.AdminHistoryDocument, { first: 25, after: null }); setHistory(result.auditEvents.nodes); } catch (failure) { setError(failureText(failure)); } };
   const exportCsv = () => { if (!collection) return; const csv = [collection.columns, ...collection.rows.map((x) => collection.columns.map((c) => String(x[c] ?? "").replaceAll('"', '""')))].map((line) => line.map((value) => `"${value}"`).join(",")).join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `${pathname.slice(1)}-filtros.csv`; link.click(); URL.revokeObjectURL(url); setStatus("Exportação CSV preparada com os filtros atuais."); };
   const bootstrap = async () => { try { await graphqlIdentity<G.BootstrapTenantMutation>(G.BootstrapTenantDocument, { input: { name: "Minha operação", businessUnitCode: "MATRIZ", businessUnitName: "Matriz", clientMutationId: "local-bootstrap-admin" } }); await loadIdentity(); } catch (failure) { setError(failureText(failure)); } };
-  const permitted = hasAdminAccess(); const promptPermitted = Boolean(identityData?.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN") && identityData.me.productEntitlements.includes("ADMIN")); const activeMembership = identityData?.me.memberships.find((x) => x.id === restoreMembershipContext()?.membershipId); const tenantName = identityData?.tenant?.name ?? "Não selecionado";
+  const permitted = hasAdminAccess(); const promptPermitted = permitted && hasAnalysisPromptAccess() && Boolean(identityData?.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN") && identityData.me.productEntitlements.includes("ADMIN")); const activeMembership = identityData?.me.memberships.find((x) => x.id === restoreMembershipContext()?.membershipId); const tenantName = identityData?.tenant?.name ?? "Não selecionado";
   const currentPolicyVersion = collection?.rows.find((row) => row.Recurso === "Política de publicação")?.Versão;
   const primaryAction = () => {
     if (pathname === "/overview") return void load();

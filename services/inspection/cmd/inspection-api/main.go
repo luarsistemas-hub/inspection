@@ -155,7 +155,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, V2ProducersEnabled: cfg.Notification.V2ProducersEnabled})
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics})
 	if err != nil {
 		return err
 	}

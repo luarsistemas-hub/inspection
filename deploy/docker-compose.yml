@@ -280,7 +280,6 @@ services:
       INSPECTION_PROVIDER_TIMEOUT: 30s
       NOTIFICATION_MAX_ATTEMPTS: "4"
       NOTIFICATION_RETRY_DELAYS: 5s,30s,5m
-      NOTIFICATION_V2_PRODUCERS_ENABLED: ${NOTIFICATION_V2_PRODUCERS_ENABLED:-true}
       # Fixed local-only AES-256 key; deployment environments must override
       # both values from their secret manager or env file.
       NOTIFICATION_PAYLOAD_KEYS: '${NOTIFICATION_PAYLOAD_KEYS:-{"local-v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}}'

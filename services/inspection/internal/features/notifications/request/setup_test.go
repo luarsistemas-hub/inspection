@@ -2,14 +2,17 @@ package request
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/features/notifications/core"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -128,12 +131,28 @@ func TestServiceUsesAmbientTransaction(t *testing.T) {
 	}
 }
 
-func TestServiceBlocksV2ProductionUntilRolloutFlagIsEnabled(t *testing.T) {
+func TestServicePersistsV2Request(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := Setup(Dependencies{DB: db})
+	for _, schema := range []string{"notifications", "messaging"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE notifications.deliveries (id blob primary key,tenant_id blob not null,intent_id blob not null,inspection_id blob,invitation_id blob,status text not null,logical_template text not null,template_version text not null,correlation_id text not null,idempotency_key text not null,request_digest text not null,recipient_id text not null,selected_provider text not null,scheduled_at datetime,lease_expires_at datetime,created_at datetime,updated_at datetime)`,
+		`CREATE UNIQUE INDEX notifications.idx_delivery_intent ON deliveries (tenant_id,idempotency_key) WHERE idempotency_key <> ''`,
+		`CREATE TABLE notifications.channel_attempts (id blob primary key,tenant_id blob not null,delivery_id blob not null,channel text not null,destination text not null,status text not null,provider text,provider_account text not null,receipt_id text,attempts integer not null, last_error text,template_variables blob,next_attempt_at datetime not null,lease_expires_at datetime,last_attempt_at datetime,created_at datetime,updated_at datetime)`,
+		`CREATE TABLE notifications.execution_payloads (id blob primary key,tenant_id blob not null,delivery_id blob not null,key_id text not null,nonce blob not null,ciphertext blob not null,created_at datetime not null,expires_at datetime)`,
+		`CREATE TABLE messaging.outbox (id blob primary key,tenant_id blob not null,type text not null,schema_version integer not null,payload blob not null,correlation_id text not null,causation_id text,status text not null,attempts integer not null default 0,next_attempt_at datetime not null,claimed_at datetime,last_error text,published_at datetime,created_at datetime)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	service, err := Setup(Dependencies{DB: db, Metrics: observability.NewMetrics()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,12 +162,30 @@ func TestServiceBlocksV2ProductionUntilRolloutFlagIsEnabled(t *testing.T) {
 		Channel:        core.ChannelEmail,
 		Template:       core.TemplateRef{Name: "capture-link", Version: "v1"},
 		Variables:      map[string]string{"captureUrl": "https://capture.test/a", "recipientName": "Ana"},
-		CorrelationID:  "corr-rollout",
-		IdempotencyKey: "rollout-1:email",
+		CorrelationID:  "corr-v2",
+		IdempotencyKey: "v2-1:email",
 	}
-	_, err = service.Send(context.Background(), notification)
-	if !errors.Is(err, ErrV2ProducersDisabled) {
-		t.Fatal("v2 request was not blocked while rollout flag was disabled")
+	result, err := service.Send(context.Background(), notification)
+	if err != nil {
+		t.Fatalf("v2 request was rejected without rollout flag: %v", err)
+	}
+	if result.ID == (identity.ID{}) || result.State != core.StateQueued {
+		t.Fatalf("unexpected notification result: %+v", result)
+	}
+	var delivery database.Delivery
+	if err := db.Where("tenant_id=? AND id=?", notification.TenantID, result.ID).First(&delivery).Error; err != nil {
+		t.Fatal(err)
+	}
+	var outbox database.OutboxIntent
+	if err := db.Where("type=?", "notification.delivery_requested.v2").First(&outbox).Error; err != nil {
+		t.Fatal(err)
+	}
+	var envelope events.RawEnvelope
+	if err := json.Unmarshal(outbox.Payload, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Type != "notification.delivery_requested.v2" || envelope.SchemaVersion != 2 || string(envelope.Payload) != `{"notificationId":"`+result.ID.String()+`"}` {
+		t.Fatalf("unexpected v2 outbox envelope: %+v", envelope)
 	}
 }
 

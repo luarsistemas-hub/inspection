@@ -118,13 +118,23 @@ func TestIT355AndIT356ConfirmedOutbox(t *testing.T) {
 	}
 }
 func TestIT357IT360IT547IT548IT551ToIT554IT577ToIT582EventConsumers(t *testing.T) {
-	for _, eventType := range []string{"participant.channel_verified.v1", "inspection.created.v1", "inspection.state_changed.v1", "project.stage_changed.v1", "notification.delivery_requested.v1", "notification.channel_status.v1"} {
-		t.Run(eventType, func(t *testing.T) {
+	contracts := []struct {
+		eventType string
+		version   int
+	}{
+		{eventType: "participant.channel_verified.v1", version: 1},
+		{eventType: "inspection.created.v1", version: 1},
+		{eventType: "inspection.state_changed.v1", version: 1},
+		{eventType: "project.stage_changed.v1", version: 1},
+		{eventType: "notification.delivery_requested.v2", version: 2},
+	}
+	for _, contract := range contracts {
+		t.Run(contract.eventType, func(t *testing.T) {
 			db := sqliteDB(t)
-			consumer := Consumer{DB: db, Registry: events.DefaultRegistry(), Name: "consumer-" + eventType, Handle: func(_ context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			consumer := Consumer{DB: db, Registry: events.DefaultRegistry(), Name: "consumer-" + contract.eventType, Handle: func(_ context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 				return tx.Create(&outcome{EventID: envelope.ID.String()}).Error
 			}}
-			body := eventBody(t, eventType, 1)
+			body := eventBody(t, contract.eventType, contract.version)
 			first, err := consumer.Process(context.Background(), body, 0)
 			if err != nil || !first {
 				t.Fatalf("first: %v %v", first, err)
@@ -142,7 +152,7 @@ func TestIT357IT360IT547IT548IT551ToIT554IT577ToIT582EventConsumers(t *testing.T
 			if count != 2 {
 				t.Fatalf("outcomes=%d", count)
 			}
-			if _, err := consumer.Process(context.Background(), eventBody(t, eventType, 2), 0); !errors.Is(err, ErrPermanent) {
+			if _, err := consumer.Process(context.Background(), eventBody(t, contract.eventType, contract.version+1), 0); !errors.Is(err, ErrPermanent) {
 				t.Fatalf("invalid major not rejected: %v", err)
 			}
 		})
@@ -216,7 +226,7 @@ func TestIT359AndIT362PoisonDoesNotBlock(t *testing.T) {
 		}
 		return tx.Create(&outcome{EventID: envelope.ID.String()}).Error
 	}}
-	valid := eventBody(t, "notification.channel_status.v1", 1)
+	valid := eventBody(t, "participant.channel_verified.v1", 1)
 	if processed, err := consumer.Process(context.Background(), valid, 0); err != nil || !processed {
 		t.Fatalf("later valid blocked: %v %v", processed, err)
 	}

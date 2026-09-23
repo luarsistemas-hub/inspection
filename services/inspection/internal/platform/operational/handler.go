@@ -1,33 +1,23 @@
 package operational
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"inspection/services/inspection/internal/platform/observability"
-	"inspection/services/inspection/internal/platform/rollout"
 )
 
 type Readiness func(*http.Request) error
-type RolloutStatus func(context.Context) (rollout.Status, error)
 
 // Setup registers liveness, readiness and private metrics.
 func Setup(mux *http.ServeMux, readiness Readiness, metricsToken string) error {
 	return SetupWithMetrics(mux, readiness, metricsToken, nil)
 }
 
-// SetupWithMetrics registers operational routes and an optional dynamic
-// notification metrics collector. The legacy Setup function remains a small
-// compatibility wrapper for processes that do not emit notification metrics.
+// SetupWithMetrics registers operational routes and a dynamic notification
+// metrics collector.
 func SetupWithMetrics(mux *http.ServeMux, readiness Readiness, metricsToken string, metrics *observability.Metrics) error {
-	return SetupWithRollout(mux, readiness, metricsToken, metrics, nil)
-}
-
-// SetupWithRollout registers operational routes and an optional live rollout
-// status endpoint.
-func SetupWithRollout(mux *http.ServeMux, readiness Readiness, metricsToken string, metrics *observability.Metrics, rolloutStatus RolloutStatus) error {
 	if mux == nil || readiness == nil {
 		return &setupError{"operational", "missing dependency"}
 	}
@@ -54,20 +44,6 @@ func SetupWithRollout(mux *http.ServeMux, readiness Readiness, metricsToken stri
 		}
 		_, _ = w.Write([]byte(metrics.Prometheus()))
 	})
-	if rolloutStatus != nil {
-		mux.HandleFunc("GET /rollout", func(w http.ResponseWriter, r *http.Request) {
-			if !authorized(r, metricsToken) {
-				http.Error(w, "not found", http.StatusNotFound)
-				return
-			}
-			status, err := rolloutStatus(r.Context())
-			if err != nil {
-				writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
-				return
-			}
-			writeJSON(w, http.StatusOK, status)
-		})
-	}
 	return nil
 }
 

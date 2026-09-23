@@ -105,7 +105,7 @@ func (d Dispatcher) observeNotificationQueueDepth(ctx context.Context) {
 	var depth int64
 	if err := d.DB.WithContext(ctx).
 		Model(&database.OutboxIntent{}).
-		Where("type IN ? AND status IN ?", []string{"notification.delivery_requested.v1", "notification.delivery_requested.v2"}, []string{"PENDING", "CLAIMED"}).
+		Where("type = ? AND status IN ?", "notification.delivery_requested.v2", []string{"PENDING", "CLAIMED"}).
 		Count(&depth).Error; err != nil {
 		return
 	}
