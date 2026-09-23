@@ -35,6 +35,36 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 40 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "llm_call_ledger" {
+		t.Fatalf("ledger migration=%+v", step)
+	}
+	for _, required := range []string{
+		"usage.llm_calls",
+		"ENABLE ROW LEVEL SECURITY",
+		"FORCE ROW LEVEL SECURITY",
+		"idx_llm_calls_inspection_cursor",
+		"idx_llm_calls_started",
+		"guard_llm_call_mutation",
+		"NEW.state <> 'FINISHED'",
+		"GRANT SELECT, INSERT, UPDATE, DELETE",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Fatalf("ledger migration does not contain %q", required)
+		}
+	}
+	if got := LatestVersion(); got != 40 {
+		t.Fatalf("latest version=%d, want 40", got)
+	}
+}
+
 func TestOnboardingEmailCoordinationMigrationUsesRestrictedDatabaseBoundary(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {

@@ -34,6 +34,7 @@ type NormalizedImage struct {
 type StructuredResult struct {
 	JSON                              []byte
 	GatewayRequestID, Provider, Model string
+	CallID                            string
 	InputTokens, OutputTokens         *int64
 	Cost                              *float64
 	Latency                           time.Duration
@@ -44,6 +45,42 @@ type StructuredResult struct {
 type Gateway interface {
 	CompleteStructured(context.Context, StructuredRequest) (StructuredResult, error)
 }
+
+// CallStart contains the safe correlation and request metadata persisted before
+// a provider transport is attempted.
+type CallStart struct {
+	CallID, TenantID, EventID, CorrelationID string
+	JobID, InspectionID, ExecutionID         string
+	Attempt, ReplayGeneration                int
+	Mode, ComparisonMode, ModelAlias         string
+	PromptDigest                             string
+	StartedAt                                time.Time
+}
+
+// CallFinish contains provider metadata available after a transport attempt.
+// Nil token and cost values remain unknown rather than being estimated.
+type CallFinish struct {
+	CallID, Provider, Model, GatewayRequestID, TechnicalOutcome string
+	InputTokens, OutputTokens                                   *int64
+	Cost                                                        *float64
+	TransportDelivered                                          bool
+	HTTPStatus                                                  int
+	Duration                                                    time.Duration
+	FinishedAt                                                  time.Time
+}
+
+// CallLedger persists one operational row for each gateway invocation.
+type CallLedger interface {
+	Start(context.Context, CallStart) error
+	Finish(context.Context, CallFinish) error
+}
+
+// NoopCallLedger disables durable call recording for tests or non-worker
+// callers without changing the provider-neutral gateway contract.
+type NoopCallLedger struct{}
+
+func (NoopCallLedger) Start(context.Context, CallStart) error   { return nil }
+func (NoopCallLedger) Finish(context.Context, CallFinish) error { return nil }
 
 var errMissingGateway = errors.New("missing gateway")
 
@@ -58,6 +95,7 @@ const (
 	CodeRateLimit         ErrorCode = "rate_limit"
 	CodeProviderHTTP      ErrorCode = "provider_http"
 	CodeMalformedResponse ErrorCode = "malformed_response"
+	CodeLedgerPersistence ErrorCode = "ledger_persistence"
 )
 
 type Error struct {

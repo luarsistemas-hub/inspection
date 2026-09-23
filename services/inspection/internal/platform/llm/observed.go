@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
+	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/observability"
-
-	"github.com/google/uuid"
 )
 
 // ObservedGateway decorates a provider gateway without changing the
@@ -16,6 +15,7 @@ type ObservedGateway struct {
 	Metrics *observability.Metrics
 	Logger  observability.LLMLogger
 	Mode    string
+	Ledger  CallLedger
 }
 
 func (g ObservedGateway) CompleteStructured(ctx context.Context, request StructuredRequest) (StructuredResult, error) {
@@ -25,9 +25,33 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	if g.Logger == nil {
 		g.Logger = observability.NoopLLMLogger{}
 	}
-	callID := uuid.NewString()
+	callID := identity.NewID().String()
 	ctx = observability.WithCallID(ctx, callID)
 	started := time.Now()
+	correlation := observability.CorrelationFromContext(ctx)
+	if g.Ledger != nil {
+		if err := g.Ledger.Start(ctx, CallStart{
+			CallID: callID, TenantID: correlation.TenantID, EventID: correlation.EventID,
+			CorrelationID: correlation.CorrelationID, JobID: correlation.JobID, InspectionID: correlation.InspectionID,
+			ExecutionID: correlation.ExecutionID, Attempt: correlation.Attempt, ReplayGeneration: correlation.ReplayGeneration,
+			Mode: g.Mode, ComparisonMode: request.Mode, ModelAlias: request.ModelAlias, PromptDigest: request.PromptDigest,
+			StartedAt: started,
+		}); err != nil {
+			if g.Metrics != nil {
+				g.Metrics.LLMLedgerWrite("start", "error")
+			}
+			event := observability.EventFromContext(ctx, "llm_ledger_start_failed", "error", "ledger", "error", CodeOf(err))
+			event.CallID = callID
+			event.Mode = g.Mode
+			event.ComparisonMode = request.Mode
+			event.ModelAlias = request.ModelAlias
+			g.Logger.LogLLM(ctx, event)
+			return StructuredResult{CallID: callID}, NewError(CodeLedgerPersistence, 0, err)
+		}
+		if g.Metrics != nil {
+			g.Metrics.LLMLedgerWrite("start", "success")
+		}
+	}
 	if g.Metrics != nil {
 		g.Metrics.LLMCallStarted(g.Mode, request.ModelAlias)
 	}
@@ -41,6 +65,7 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	g.Logger.LogLLM(ctx, startEvent)
 
 	result, err := g.Inner.CompleteStructured(ctx, request)
+	result.CallID = callID
 	duration := time.Since(started)
 	outcome := "success"
 	level := "info"
@@ -49,6 +74,28 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 		code = CodeOf(err)
 		outcome = code
 		level = "warn"
+	}
+	if g.Ledger != nil {
+		finishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		finishErr := g.Ledger.Finish(finishContext, CallFinish{
+			CallID: callID, Provider: result.Provider, Model: result.Model, GatewayRequestID: result.GatewayRequestID,
+			TechnicalOutcome: outcome, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			TransportDelivered: result.TransportDelivered, HTTPStatus: result.HTTPStatus, Duration: duration, FinishedAt: time.Now().UTC(),
+		})
+		cancel()
+		if finishErr != nil {
+			if g.Metrics != nil {
+				g.Metrics.LLMLedgerWrite("finish", "error")
+			}
+			finishEvent := observability.EventFromContext(ctx, "llm_ledger_finish_failed", "error", "ledger", "error", CodeOf(finishErr))
+			finishEvent.CallID = callID
+			finishEvent.Mode = g.Mode
+			finishEvent.ComparisonMode = request.Mode
+			finishEvent.ModelAlias = request.ModelAlias
+			g.Logger.LogLLM(ctx, finishEvent)
+		} else if g.Metrics != nil {
+			g.Metrics.LLMLedgerWrite("finish", "success")
+		}
 	}
 	if g.Metrics != nil {
 		g.Metrics.LLMCallFinished(g.Mode, request.Mode, request.ModelAlias, outcome, duration, result.TransportDelivered, result.InputTokens, result.OutputTokens)

@@ -108,6 +108,7 @@ import (
 	createtenant "inspection/services/inspection/internal/features/tenancy/create_tenant"
 	updatetenant "inspection/services/inspection/internal/features/tenancy/update_tenant"
 	upsertunit "inspection/services/inspection/internal/features/tenancy/upsert_business_unit"
+	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/config"
 	"inspection/services/inspection/internal/platform/database"
@@ -324,6 +325,9 @@ func run() error {
 		},
 		func() error {
 			return inspectionlist.Setup(inspectionlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return getinspectionllmusage.Setup(getinspectionllmusage.Dependencies{DB: db, Bus: bus})
 		},
 		func() error {
 			return schedulecreate.Setup(schedulecreate.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})

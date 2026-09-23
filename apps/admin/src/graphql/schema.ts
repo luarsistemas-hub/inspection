@@ -505,6 +505,24 @@ export type InspectionConnection = {
   pageInfo: PageInfo;
 };
 
+export type InspectionLlmUsage = {
+  __typename?: 'InspectionLLMUsage';
+  attemptedCalls: Scalars['Int']['output'];
+  calls: Array<LlmCallUsage>;
+  costComplete: Scalars['Boolean']['output'];
+  coverageComplete: Scalars['Boolean']['output'];
+  coverageStartedAt: Maybe<Scalars['String']['output']>;
+  deliveredCalls: Scalars['Int']['output'];
+  incompleteCalls: Scalars['Int']['output'];
+  inputTokens: Scalars['Int']['output'];
+  inspectionId: Scalars['ID']['output'];
+  knownReportedCost: Scalars['Float']['output'];
+  mode: LlmExecutionMode;
+  outputTokens: Scalars['Int']['output'];
+  pageInfo: PageInfo;
+  unknownCostCalls: Scalars['Int']['output'];
+};
+
 export type InspectionPayload = {
   __typename?: 'InspectionPayload';
   clientMutationId: Scalars['String']['output'];
@@ -560,6 +578,41 @@ export type InviteOriginCaptureInput = {
   expiresAt: Scalars['String']['input'];
   participantId: Scalars['ID']['input'];
 };
+
+export type LlmCallState =
+  | 'FINISHED'
+  | 'STARTED';
+
+export type LlmCallUsage = {
+  __typename?: 'LLMCallUsage';
+  attempt: Scalars['Int']['output'];
+  callId: Scalars['ID']['output'];
+  comparisonMode: Scalars['String']['output'];
+  correlationId: Scalars['String']['output'];
+  durationMs: Maybe<Scalars['Int']['output']>;
+  eventId: Scalars['ID']['output'];
+  executionId: Scalars['ID']['output'];
+  finishedAt: Maybe<Scalars['String']['output']>;
+  gatewayRequestId: Maybe<Scalars['String']['output']>;
+  httpStatus: Maybe<Scalars['Int']['output']>;
+  inputTokens: Maybe<Scalars['Int']['output']>;
+  jobId: Scalars['ID']['output'];
+  mode: LlmExecutionMode;
+  model: Maybe<Scalars['String']['output']>;
+  modelAlias: Scalars['String']['output'];
+  outputTokens: Maybe<Scalars['Int']['output']>;
+  provider: Maybe<Scalars['String']['output']>;
+  replayGeneration: Scalars['Int']['output'];
+  reportedCost: Maybe<Scalars['Float']['output']>;
+  startedAt: Scalars['String']['output'];
+  state: LlmCallState;
+  technicalOutcome: Scalars['String']['output'];
+  transportDelivered: Maybe<Scalars['Boolean']['output']>;
+};
+
+export type LlmExecutionMode =
+  | 'LIVE'
+  | 'MOCK';
 
 export type LegalHoldInput = {
   clientMutationId: Scalars['String']['input'];
@@ -1451,6 +1504,7 @@ export type Query = {
   dashboardSummary: DashboardSummary;
   externalCapture: ExternalCapture;
   inspection: Maybe<Inspection>;
+  inspectionLLMUsage: InspectionLlmUsage;
   inspections: InspectionConnection;
   me: Me;
   memberships: MembershipConnection;
@@ -1547,6 +1601,14 @@ export type QueryDashboardSummaryArgs = {
 
 export type QueryInspectionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryInspectionLlmUsageArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  inspectionId: Scalars['ID']['input'];
+  mode?: InputMaybe<LlmExecutionMode>;
 };
 
 

@@ -995,6 +995,68 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_job_input ON analysis.comparison_
 `},
 		{Version: 39, Name: "analysis_finding_change_type", Compatible: true, SQL: `
 ALTER TABLE analysis.findings ADD COLUMN IF NOT EXISTS change_type varchar(32);
+`},
+		{Version: 40, Name: "llm_call_ledger", Compatible: true, SQL: `
+ALTER TABLE usage.llm_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage.llm_calls FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON usage.llm_calls;
+CREATE POLICY tenant_isolation ON usage.llm_calls
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_inspection_cursor
+  ON usage.llm_calls(tenant_id, inspection_id, started_at DESC, call_id DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_job
+  ON usage.llm_calls(tenant_id, job_id);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_started
+  ON usage.llm_calls(tenant_id, started_at)
+  WHERE state = 'STARTED';
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_mode;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_mode CHECK (mode IN ('mock','live'));
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_state;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_state CHECK (state IN ('STARTED','FINISHED'));
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_attempt;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_attempt CHECK (attempt >= 0 AND replay_generation >= 0);
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_tokens;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_tokens CHECK ((input_tokens IS NULL OR input_tokens >= 0) AND (output_tokens IS NULL OR output_tokens >= 0));
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_cost;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_cost CHECK (reported_cost IS NULL OR reported_cost >= 0);
+CREATE OR REPLACE FUNCTION platform.guard_llm_call_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF current_setting('app.retention_purge', true) <> 'on' THEN
+      RAISE EXCEPTION 'LLM call deletion requires retention purge';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.state <> 'STARTED' THEN
+    RAISE EXCEPTION 'finished LLM call is immutable';
+  END IF;
+  IF NEW.call_id IS DISTINCT FROM OLD.call_id OR
+     NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR
+     NEW.inspection_id IS DISTINCT FROM OLD.inspection_id OR
+     NEW.job_id IS DISTINCT FROM OLD.job_id OR
+     NEW.event_id IS DISTINCT FROM OLD.event_id OR
+     NEW.execution_id IS DISTINCT FROM OLD.execution_id OR
+     NEW.correlation_id IS DISTINCT FROM OLD.correlation_id OR
+     NEW.attempt IS DISTINCT FROM OLD.attempt OR
+     NEW.replay_generation IS DISTINCT FROM OLD.replay_generation OR
+     NEW.mode IS DISTINCT FROM OLD.mode OR
+     NEW.comparison_mode IS DISTINCT FROM OLD.comparison_mode OR
+     NEW.model_alias IS DISTINCT FROM OLD.model_alias OR
+     NEW.prompt_digest IS DISTINCT FROM OLD.prompt_digest OR
+     NEW.started_at IS DISTINCT FROM OLD.started_at OR
+     NEW.state <> 'FINISHED' OR
+     NEW.finished_at IS NULL OR
+     NEW.technical_outcome = ''
+  THEN
+    RAISE EXCEPTION 'LLM call identity is immutable';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS immutable_llm_call ON usage.llm_calls;
+CREATE TRIGGER immutable_llm_call BEFORE UPDATE OR DELETE ON usage.llm_calls FOR EACH ROW EXECUTE FUNCTION platform.guard_llm_call_mutation();
+GRANT USAGE ON SCHEMA usage TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON usage.llm_calls TO inspection_runtime;
 `}}
 }
 

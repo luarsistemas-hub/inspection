@@ -124,12 +124,12 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			}
 		}
 		for _, item := range []any{
-			&database.UsageRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{},
+			&database.UsageRecord{}, &database.LLMCallRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{},
 			&database.DeletionRequest{},
 		} {
 			var err error
 			switch item.(type) {
-			case *database.UsageRecord:
+			case *database.UsageRecord, *database.LLMCallRecord:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)
 			case *database.DashboardInspection, *database.ReferenceSnapshot, *database.PolicySnapshot, *database.DeletionRequest:
 				err = deleteWhere(item, "tenant_id=? AND inspection_id=?", tenantID, inspectionID)

@@ -22,6 +22,32 @@ func (s observedGatewayStub) CompleteStructured(context.Context, StructuredReque
 	return s.result, s.err
 }
 
+type observedLedgerStub struct {
+	startErr, finishErr error
+	starts, finishes    int
+}
+
+func (s *observedLedgerStub) Start(context.Context, CallStart) error {
+	s.starts++
+	return s.startErr
+}
+
+func (s *observedLedgerStub) Finish(context.Context, CallFinish) error {
+	s.finishes++
+	return s.finishErr
+}
+
+type countingGateway struct {
+	calls  int
+	result StructuredResult
+	err    error
+}
+
+func (g *countingGateway) CompleteStructured(context.Context, StructuredRequest) (StructuredResult, error) {
+	g.calls++
+	return g.result, g.err
+}
+
 func TestObservedGatewayLogsSuccessfulCallAndUsage(t *testing.T) {
 	var output bytes.Buffer
 	logger := observability.NewJSONLLMLogger(&output, "inspection-worker", "test", "mock")
@@ -74,6 +100,26 @@ func TestHTTPGatewayClassifiesRateLimitAndCancellation(t *testing.T) {
 	_, err = (HTTPGateway{BaseURL: server.URL}).CompleteStructured(ctx, request)
 	if !errors.As(err, &typed) || typed.Code != CodeCancelled {
 		t.Fatalf("unexpected cancellation error=%v", err)
+	}
+}
+
+func TestObservedGatewayDoesNotCallProviderWhenLedgerStartFails(t *testing.T) {
+	inner := &countingGateway{}
+	ledger := &observedLedgerStub{startErr: errors.New("ledger unavailable")}
+	gateway := ObservedGateway{Inner: inner, Ledger: ledger, Mode: "live"}
+	_, err := gateway.CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest"})
+	if CodeOf(err) != string(CodeLedgerPersistence) || inner.calls != 0 || ledger.starts != 1 || ledger.finishes != 0 {
+		t.Fatalf("start failure was not isolated: err=%v calls=%d starts=%d finishes=%d", err, inner.calls, ledger.starts, ledger.finishes)
+	}
+}
+
+func TestObservedGatewayDoesNotRepeatProviderWhenLedgerFinishFails(t *testing.T) {
+	inner := &countingGateway{result: StructuredResult{TransportDelivered: true}}
+	ledger := &observedLedgerStub{finishErr: errors.New("ledger unavailable")}
+	gateway := ObservedGateway{Inner: inner, Ledger: ledger, Mode: "live"}
+	_, err := gateway.CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest"})
+	if err != nil || inner.calls != 1 || ledger.starts != 1 || ledger.finishes != 1 {
+		t.Fatalf("finish failure changed provider result: err=%v calls=%d starts=%d finishes=%d", err, inner.calls, ledger.starts, ledger.finishes)
 	}
 }
 

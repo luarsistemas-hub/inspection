@@ -38,6 +38,7 @@ type Query {
   myNotifications(unreadOnly: Boolean = false, first: Int = 25, after: String): RecipientNotificationConnection!
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
+  inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
   externalCapture: ExternalCapture!
 }
 
@@ -258,6 +259,49 @@ type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: 
 type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
 type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }
 type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float! }
+enum LLMExecutionMode { LIVE MOCK }
+enum LLMCallState { STARTED FINISHED }
+type InspectionLLMUsage {
+  inspectionId: ID!
+  mode: LLMExecutionMode!
+  attemptedCalls: Int!
+  deliveredCalls: Int!
+  incompleteCalls: Int!
+  inputTokens: Int!
+  outputTokens: Int!
+  knownReportedCost: Float!
+  unknownCostCalls: Int!
+  costComplete: Boolean!
+  coverageStartedAt: String
+  coverageComplete: Boolean!
+  calls: [LLMCallUsage!]!
+  pageInfo: PageInfo!
+}
+type LLMCallUsage {
+  callId: ID!
+  jobId: ID!
+  eventId: ID!
+  executionId: ID!
+  correlationId: String!
+  attempt: Int!
+  replayGeneration: Int!
+  mode: LLMExecutionMode!
+  comparisonMode: String!
+  modelAlias: String!
+  provider: String
+  model: String
+  gatewayRequestId: String
+  state: LLMCallState!
+  technicalOutcome: String!
+  transportDelivered: Boolean
+  httpStatus: Int
+  inputTokens: Int
+  outputTokens: Int
+  reportedCost: Float
+  durationMs: Int
+  startedAt: String!
+  finishedAt: String
+}
 
 input CreateTenantInput { name: String! language: String = "pt-BR" timezone: String = "America/Sao_Paulo" businessUnitCode: String! businessUnitName: String! clientMutationId: String! }
 input UpdateTenantInput { name: String! language: String! timezone: String! expectedVersion: Int! clientMutationId: String! }

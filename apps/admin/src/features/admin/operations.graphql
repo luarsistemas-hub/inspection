@@ -18,6 +18,8 @@ query AdminGovernance($first: Int!, $after: String) { publicationPolicy { mode v
 
 query AdminAudit($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } usageSummary { from to requests inputTokens outputTokens cost } }
 
+query AdminInspectionLLMUsage($inspectionId: ID!, $mode: LLMExecutionMode = LIVE, $first: Int = 25, $after: String) { inspectionLLMUsage(inspectionId: $inspectionId, mode: $mode, first: $first, after: $after) { inspectionId mode attemptedCalls deliveredCalls incompleteCalls inputTokens outputTokens knownReportedCost unknownCostCalls costComplete coverageStartedAt coverageComplete calls { callId jobId eventId executionId correlationId attempt replayGeneration mode comparisonMode modelAlias provider model gatewayRequestId state technicalOutcome transportDelivered httpStatus inputTokens outputTokens reportedCost durationMs startedAt finishedAt } pageInfo { endCursor hasNextPage } } }
+
 query AdminHistory($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } }
 
 mutation AdminCreateBusinessUnit($input: CreateBusinessUnitInput!) { createBusinessUnit(input: $input) { businessUnit { id code name status version } userErrors { code field message correlationId } clientMutationId } }

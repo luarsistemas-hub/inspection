@@ -52,6 +52,7 @@ Every row must end in one of these verified outcomes:
 | 30 | `myNotifications` | Dashboard | Used partially | Paginated notification center with unread count, authorized resource links, and read state. |
 | 31 | `retentionPolicies` | Admin | Missing UI | Current policy/history plus legal-hold, deletion, purge eligibility/progress, and tombstone entry points. |
 | 32 | `usageSummary` | Admin | Missing UI | Period-filtered requests, tokens, cost, freshness, timezone, and authorized export context. |
+| 37 | `inspectionLLMUsage` | Admin | New contract | Per-inspection durable LLM attempts, known usage/cost, incomplete coverage, and safe correlation details. |
 | 33 | `externalCapture` | Capture | Used | Link-scoped origin/inspection/recapture bootstrap with policy, reference, requirements, answers, and states. |
 | 34 | `onboardingDefinition` | Onboarding | New contract | Versioned segment metadata drives the public real-estate steps, origin modes, purposes, and pinned catalog references. |
 | 35 | `onboardingSession` | Onboarding | New contract | Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state. |

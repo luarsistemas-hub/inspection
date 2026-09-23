@@ -33,6 +33,7 @@ import (
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	purgedata "inspection/services/inspection/internal/features/retention/purge_data"
 	"inspection/services/inspection/internal/features/templates/catalog"
+	recordllmcall "inspection/services/inspection/internal/features/usage/record_llm_call"
 	"inspection/services/inspection/internal/platform/config"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
@@ -69,7 +70,7 @@ func run() error {
 	}
 	metrics := observability.NewMetrics()
 	llmLogger := observability.NewJSONLLMLogger(os.Stdout, "inspection-worker", cfg.Environment, cfg.LLMMode)
-	llmGateway := llm.ObservedGateway{Inner: llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, APIKey: llmAPIKey, Client: &http.Client{Timeout: cfg.ProviderTimeout}}, Metrics: metrics, Logger: llmLogger, Mode: cfg.LLMMode}
+	llmTransport := llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, APIKey: llmAPIKey, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
 	pdfRenderer := pdf.Gotenberg{BaseURL: cfg.GotenbergURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
 	operationalGateway, err := operationalNotificationGateway(cfg)
 	if err != nil {
@@ -79,6 +80,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	callLedger, err := recordllmcall.Setup(recordllmcall.Dependencies{DB: db})
+	if err != nil {
+		return err
+	}
+	llmGateway := llm.ObservedGateway{Inner: llmTransport, Metrics: metrics, Logger: llmLogger, Mode: cfg.LLMMode, Ledger: callLedger}
 	payloadCipher, err := notifications.NewPayloadCipher(cfg.Notification.ActivePayloadKey, cfg.Notification.PayloadKeys)
 	if err != nil {
 		return err

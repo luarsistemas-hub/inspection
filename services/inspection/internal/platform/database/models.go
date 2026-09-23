@@ -1136,6 +1136,30 @@ type UsageRecord struct {
 
 func (UsageRecord) TableName() string { return "usage.records" }
 
+// LLMCallRecord is the durable, one-row-per-provider-attempt ledger. It is
+// intentionally separate from UsageRecord, which represents accepted analysis
+// results and feeds the existing usage summary.
+type LLMCallRecord struct {
+	CallID, TenantID, InspectionID, JobID, EventID, ExecutionID identity.ID `gorm:"type:uuid;primaryKey"`
+	CorrelationID                                               string      `gorm:"size:200;not null"`
+	Attempt                                                     int         `gorm:"not null"`
+	ReplayGeneration                                            int         `gorm:"not null"`
+	Mode, ComparisonMode, ModelAlias                            string      `gorm:"size:64;not null"`
+	PromptDigest                                                string      `gorm:"size:200;not null"`
+	Provider, Model, GatewayRequestID                           string      `gorm:"size:200;not null"`
+	State, TechnicalOutcome                                     string      `gorm:"size:64;not null"`
+	TransportDelivered                                          *bool
+	HTTPStatus                                                  *int
+	InputTokens, OutputTokens                                   *int64
+	ReportedCost                                                *float64 `gorm:"type:numeric(20,12)"`
+	DurationMS                                                  *int64
+	StartedAt                                                   time.Time `gorm:"not null"`
+	FinishedAt                                                  *time.Time
+	UpdatedAt                                                   time.Time
+}
+
+func (LLMCallRecord) TableName() string { return "usage.llm_calls" }
+
 type UsageDailySummary struct {
 	ID, TenantID identity.ID `gorm:"type:uuid;primaryKey"`
 	Day          time.Time   `gorm:"type:date;not null;uniqueIndex:idx_usage_daily,priority:2"`
@@ -1196,6 +1220,6 @@ func Models() []any {
 		&ComparisonJob{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
 		&ReportSnapshot{}, &ReportArtifact{}, &RetentionPolicy{},
 		&PublicationPolicy{}, &ReportPublication{}, &RecipientChannel{}, &RecipientNotification{},
-		&DashboardInspection{}, &UsageRecord{}, &UsageDailySummary{},
+		&DashboardInspection{}, &UsageRecord{}, &LLMCallRecord{}, &UsageDailySummary{},
 		&DeletionRequest{}, &LegalHold{}, &PurgeRun{}}
 }

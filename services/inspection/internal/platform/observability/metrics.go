@@ -77,6 +77,7 @@ func NewMetrics() *Metrics {
 			"inspection_llm_inflight":                    {typeName: "gauge", help: "LLM gateway calls currently in flight."},
 			"inspection_llm_tokens_total":                {typeName: "counter", help: "Provider reported LLM tokens."},
 			"inspection_llm_usage_missing_total":         {typeName: "counter", help: "LLM calls without provider usage metadata."},
+			"inspection_llm_ledger_writes_total":         {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
 			"inspection_analysis_validation_total":       {typeName: "counter", help: "Structured analysis validation outcomes."},
 			"inspection_analysis_stage_duration_seconds": {typeName: "histogram", help: "Analysis stage duration in seconds."},
 			"inspection_analysis_processing_total":       {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
@@ -164,6 +165,19 @@ func (m *Metrics) observeHistogram(name string, labels map[string]string, second
 // LLMCallStarted records a transport invocation that has begun.
 func (m *Metrics) LLMCallStarted(mode, modelAlias string) {
 	m.gaugeDelta("inspection_llm_inflight", llmLabels(mode, "", modelAlias), 1)
+}
+
+// LLMLedgerWrite records whether durable call metadata was written.
+func (m *Metrics) LLMLedgerWrite(phase, result string) {
+	phase = strings.ToLower(strings.TrimSpace(phase))
+	if phase != "start" && phase != "finish" {
+		phase = "unknown"
+	}
+	result = strings.ToLower(strings.TrimSpace(result))
+	if result != "success" && result != "error" {
+		result = "unknown"
+	}
+	m.counter("inspection_llm_ledger_writes_total", map[string]string{"phase": phase, "result": result}, 1)
 }
 
 // LLMCallFinished records a transport invocation, including calls that return

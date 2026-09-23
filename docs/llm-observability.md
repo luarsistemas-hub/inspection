@@ -16,6 +16,33 @@ Os eventos JSON emitidos pelo worker usam o evento `llm_observation` e carregam 
 Prompts, imagens, respostas, URLs, credenciais e textos arbitrários de erro não são registrados.
 O custo aparece somente quando informado pelo gateway; não há inferência de moeda ou preço.
 
+## Ledger durável por inspeção
+
+A migration 40 cria `usage.llm_calls`, com uma linha por tentativa de chamada ao
+gateway. A linha é criada como `STARTED` antes do transporte e finalizada como
+`FINISHED` depois do retorno, inclusive em timeout, erro HTTP, resposta
+malformada ou rejeição posterior da resposta. Retries possuem novos `callId`.
+
+O ledger grava apenas IDs, hashes, modo, tentativa, provider/model retornados,
+status HTTP, latência, tokens e custo explicitamente informado. Não há prompt,
+imagem, resposta, moeda ou preço inferido. Se a finalização falhar, a chamada
+original não é repetida e a linha permanece `STARTED`; isso é indicado por
+`inspection_llm_ledger_writes_total{phase="finish",result="error"}`.
+
+`usage.records` e `usage.daily_summaries` continuam representando somente o
+resultado aceito e não são recalculados pelo ledger. Portanto, o custo
+operacional potencial de uma inspeção é a soma dos custos não nulos das chamadas
+com `transportDelivered=true`; chamadas sem custo informado permanecem
+desconhecidas.
+
+A API GraphQL expõe `inspectionLLMUsage(inspectionId:, mode: LIVE, first:, after:)`
+para `TENANT_ADMIN` e `MANAGER`. Ela retorna tentativas, chamadas entregues,
+tokens conhecidos, `knownReportedCost`, chamadas sem custo, detalhes seguros das
+chamadas e os indicadores `costComplete`, `coverageStartedAt` e
+`coverageComplete`. Inspeções criadas antes da aplicação da migration 40 possuem
+cobertura histórica parcial e não recebem backfill; nesse caso o custo não é
+declarado completo.
+
 Eventos principais:
 
 | Evento | Uso |
@@ -40,6 +67,7 @@ As labels são limitadas a valores conhecidos: `mode`, `comparison_mode`, `model
 | `inspection_llm_inflight` | modo e alias |
 | `inspection_llm_tokens_total` | modo, alias e direção `input/output` |
 | `inspection_llm_usage_missing_total` | modo, alias e direção ausente |
+| `inspection_llm_ledger_writes_total` | fase `start/finish` e resultado da escrita |
 | `inspection_analysis_validation_total` | modo, comparação, resultado e código |
 | `inspection_analysis_stage_duration_seconds` | etapa e resultado |
 | `inspection_analysis_processing_total` | `completed`, `inconclusive`, `duplicate` ou `error` |
@@ -93,6 +121,12 @@ Chamadas sem uso informado:
 
 ```promql
 sum by (direction) (increase(inspection_llm_usage_missing_total{mode="live"}[15m]))
+```
+
+Falhas de persistência do ledger:
+
+```promql
+sum(increase(inspection_llm_ledger_writes_total{result="error"}[15m])) by (phase)
 ```
 
 Regras iniciais de alerta, filtrando `mock`:

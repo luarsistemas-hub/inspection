@@ -469,6 +469,23 @@ type InspectionConnection struct {
 	PageInfo *PageInfo     `json:"pageInfo"`
 }
 
+type InspectionLLMUsage struct {
+	InspectionID      string           `json:"inspectionId"`
+	Mode              LLMExecutionMode `json:"mode"`
+	AttemptedCalls    int              `json:"attemptedCalls"`
+	DeliveredCalls    int              `json:"deliveredCalls"`
+	IncompleteCalls   int              `json:"incompleteCalls"`
+	InputTokens       int              `json:"inputTokens"`
+	OutputTokens      int              `json:"outputTokens"`
+	KnownReportedCost float64          `json:"knownReportedCost"`
+	UnknownCostCalls  int              `json:"unknownCostCalls"`
+	CostComplete      bool             `json:"costComplete"`
+	CoverageStartedAt *string          `json:"coverageStartedAt,omitempty"`
+	CoverageComplete  bool             `json:"coverageComplete"`
+	Calls             []*LLMCallUsage  `json:"calls"`
+	PageInfo          *PageInfo        `json:"pageInfo"`
+}
+
 type InspectionPayload struct {
 	Inspection       *Inspection  `json:"inspection,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
@@ -520,6 +537,32 @@ type InviteOriginCaptureInput struct {
 	ParticipantID    string `json:"participantId"`
 	ExpiresAt        string `json:"expiresAt"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type LLMCallUsage struct {
+	CallID             string           `json:"callId"`
+	JobID              string           `json:"jobId"`
+	EventID            string           `json:"eventId"`
+	ExecutionID        string           `json:"executionId"`
+	CorrelationID      string           `json:"correlationId"`
+	Attempt            int              `json:"attempt"`
+	ReplayGeneration   int              `json:"replayGeneration"`
+	Mode               LLMExecutionMode `json:"mode"`
+	ComparisonMode     string           `json:"comparisonMode"`
+	ModelAlias         string           `json:"modelAlias"`
+	Provider           *string          `json:"provider,omitempty"`
+	Model              *string          `json:"model,omitempty"`
+	GatewayRequestID   *string          `json:"gatewayRequestId,omitempty"`
+	State              LLMCallState     `json:"state"`
+	TechnicalOutcome   string           `json:"technicalOutcome"`
+	TransportDelivered *bool            `json:"transportDelivered,omitempty"`
+	HTTPStatus         *int             `json:"httpStatus,omitempty"`
+	InputTokens        *int             `json:"inputTokens,omitempty"`
+	OutputTokens       *int             `json:"outputTokens,omitempty"`
+	ReportedCost       *float64         `json:"reportedCost,omitempty"`
+	DurationMs         *int             `json:"durationMs,omitempty"`
+	StartedAt          string           `json:"startedAt"`
+	FinishedAt         *string          `json:"finishedAt,omitempty"`
 }
 
 type LegalHoldInput struct {
@@ -1621,6 +1664,116 @@ func (e *EvidenceMode) UnmarshalJSON(b []byte) error {
 }
 
 func (e EvidenceMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type LLMCallState string
+
+const (
+	LLMCallStateStarted  LLMCallState = "STARTED"
+	LLMCallStateFinished LLMCallState = "FINISHED"
+)
+
+var AllLLMCallState = []LLMCallState{
+	LLMCallStateStarted,
+	LLMCallStateFinished,
+}
+
+func (e LLMCallState) IsValid() bool {
+	switch e {
+	case LLMCallStateStarted, LLMCallStateFinished:
+		return true
+	}
+	return false
+}
+
+func (e LLMCallState) String() string {
+	return string(e)
+}
+
+func (e *LLMCallState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LLMCallState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LLMCallState", str)
+	}
+	return nil
+}
+
+func (e LLMCallState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LLMCallState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LLMCallState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type LLMExecutionMode string
+
+const (
+	LLMExecutionModeLive LLMExecutionMode = "LIVE"
+	LLMExecutionModeMock LLMExecutionMode = "MOCK"
+)
+
+var AllLLMExecutionMode = []LLMExecutionMode{
+	LLMExecutionModeLive,
+	LLMExecutionModeMock,
+}
+
+func (e LLMExecutionMode) IsValid() bool {
+	switch e {
+	case LLMExecutionModeLive, LLMExecutionModeMock:
+		return true
+	}
+	return false
+}
+
+func (e LLMExecutionMode) String() string {
+	return string(e)
+}
+
+func (e *LLMExecutionMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LLMExecutionMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LLMExecutionMode", str)
+	}
+	return nil
+}
+
+func (e LLMExecutionMode) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LLMExecutionMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LLMExecutionMode) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

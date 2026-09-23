@@ -76,6 +76,7 @@ import (
 	createtenant "inspection/services/inspection/internal/features/tenancy/create_tenant"
 	updatetenant "inspection/services/inspection/internal/features/tenancy/update_tenant"
 	upsertunit "inspection/services/inspection/internal/features/tenancy/upsert_business_unit"
+	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -2643,6 +2644,98 @@ func (r *queryResolver) UsageSummary(ctx context.Context, from *string, to *stri
 		return nil, err
 	}
 	return &graphql1.UsageSummary{From: start.Format(time.RFC3339Nano), To: end.Format(time.RFC3339Nano), Requests: int(row.Requests), InputTokens: int(row.InputTokens), OutputTokens: int(row.OutputTokens), Cost: row.Cost}, nil
+}
+
+// InspectionLLMUsage is the resolver for the inspectionLLMUsage field.
+func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID string, mode *graphql1.LLMExecutionMode, first *int, after *string) (*graphql1.InspectionLLMUsage, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+		return nil, err
+	}
+	parsedInspectionID, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	modeValue := "live"
+	if mode != nil {
+		modeValue = strings.ToLower(string(*mode))
+	}
+	raw, err := r.Bus.Ask(ctx, getinspectionllmusage.Query{
+		TenantID: meta.TenantID, InspectionID: parsedInspectionID, Mode: modeValue,
+		First: intValue(first), After: stringValue(after),
+	})
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(getinspectionllmusage.Result)
+	modeEnum := graphql1.LLMExecutionModeLive
+	if view.Mode == "mock" {
+		modeEnum = graphql1.LLMExecutionModeMock
+	}
+	response := &graphql1.InspectionLLMUsage{
+		InspectionID: view.InspectionID.String(), Mode: modeEnum,
+		AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls,
+		IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens),
+		OutputTokens: int(view.OutputTokens), KnownReportedCost: view.KnownReportedCost,
+		UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete,
+		CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.LLMCallUsage, 0, len(view.Calls)),
+		PageInfo: pageInfo(view.EndCursor, view.HasNextPage),
+	}
+	if view.CoverageStartedAt != nil {
+		coverageStartedAt := view.CoverageStartedAt.UTC().Format(time.RFC3339Nano)
+		response.CoverageStartedAt = &coverageStartedAt
+	}
+	for _, call := range view.Calls {
+		callMode := graphql1.LLMExecutionModeLive
+		if call.Mode == "mock" {
+			callMode = graphql1.LLMExecutionModeMock
+		}
+		mapped := &graphql1.LLMCallUsage{
+			CallID: call.CallID.String(), JobID: call.JobID.String(), EventID: call.EventID.String(), ExecutionID: call.ExecutionID.String(),
+			CorrelationID: call.CorrelationID, Attempt: call.Attempt, ReplayGeneration: call.ReplayGeneration,
+			Mode: callMode, ComparisonMode: call.ComparisonMode, ModelAlias: call.ModelAlias,
+			State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome,
+			TransportDelivered: call.TransportDelivered, ReportedCost: call.ReportedCost,
+			StartedAt: call.StartedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if call.Provider != "" {
+			value := call.Provider
+			mapped.Provider = &value
+		}
+		if call.Model != "" {
+			value := call.Model
+			mapped.Model = &value
+		}
+		if call.GatewayRequestID != "" {
+			value := call.GatewayRequestID
+			mapped.GatewayRequestID = &value
+		}
+		if call.HTTPStatus != nil {
+			value := *call.HTTPStatus
+			mapped.HTTPStatus = &value
+		}
+		if call.InputTokens != nil {
+			value := int(*call.InputTokens)
+			mapped.InputTokens = &value
+		}
+		if call.OutputTokens != nil {
+			value := int(*call.OutputTokens)
+			mapped.OutputTokens = &value
+		}
+		if call.DurationMS != nil {
+			value := int(*call.DurationMS)
+			mapped.DurationMs = &value
+		}
+		if call.FinishedAt != nil {
+			value := call.FinishedAt.UTC().Format(time.RFC3339Nano)
+			mapped.FinishedAt = &value
+		}
+		response.Calls = append(response.Calls, mapped)
+	}
+	return response, nil
 }
 
 // ExternalCapture is the resolver for the externalCapture field.
