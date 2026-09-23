@@ -5,6 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
+
+	"inspection/libs/identity"
+	"inspection/services/inspection/internal/platform/observability"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -39,6 +43,7 @@ type RabbitConsumer struct {
 	Contract     QueueContract
 	Handler      DeliveryHandler
 	ConsumerName string
+	Observer     observability.DeliveryObserver
 }
 
 func (c RabbitConsumer) Run(ctx context.Context) error {
@@ -53,9 +58,16 @@ func (c RabbitConsumer) Run(ctx context.Context) error {
 		return err
 	}
 	for delivery := range deliveries {
+		started := time.Now()
 		attempt := headerInt(delivery.Headers, "attempt")
 		generation := headerInt(delivery.Headers, "replay_generation")
 		deliveryCtx := WithAttempt(ctx, attempt)
+		deliveryCtx = observability.WithExecutionID(deliveryCtx, identity.NewID().String())
+		correlation := observability.CorrelationFromContext(deliveryCtx)
+		correlation.CorrelationID = delivery.CorrelationId
+		correlation.Attempt = attempt
+		correlation.ReplayGeneration = generation
+		deliveryCtx = observability.WithCorrelation(deliveryCtx, correlation)
 		_, handleErr := c.Handler.Process(deliveryCtx, delivery.Body, generation)
 		if handleErr == nil {
 			if err := delivery.Ack(false); err != nil {
@@ -65,22 +77,33 @@ func (c RabbitConsumer) Run(ctx context.Context) error {
 		}
 		if errors.Is(handleErr, ErrPermanent) || attempt+1 >= len(RetryDelays) {
 			if err := c.publishQueue(ctx, c.Contract.DLQName, delivery, attempt+1, "contract_or_exhausted"); err != nil {
+				c.observeDelivery(deliveryCtx, delivery, "dlq", "publish_failed", "contract_or_exhausted", attempt, started, err)
 				_ = delivery.Nack(false, true)
 				continue
 			}
+			c.observeDelivery(deliveryCtx, delivery, "dlq", "published", "contract_or_exhausted", attempt, started, handleErr)
 			_ = delivery.Ack(false)
 			continue
 		}
 		if err := c.publishQueue(ctx, c.Contract.RetryNames[attempt], delivery, attempt+1, "retryable"); err != nil {
+			c.observeDelivery(deliveryCtx, delivery, "retry", "publish_failed", "retryable", attempt, started, err)
 			_ = delivery.Nack(false, true)
 			continue
 		}
+		c.observeDelivery(deliveryCtx, delivery, "retry", "published", "retryable", attempt, started, handleErr)
 		_ = delivery.Ack(false)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (c RabbitConsumer) observeDelivery(ctx context.Context, delivery amqp.Delivery, action, result, reason string, attempt int, started time.Time, err error) {
+	if c.Observer == nil {
+		return
+	}
+	c.Observer.AfterDelivery(ctx, observability.DeliveryObservation{ExecutionID: observability.CorrelationFromContext(ctx).ExecutionID, Queue: c.Contract.Name, CorrelationID: delivery.CorrelationId, Action: action, Result: result, Reason: reason, Attempt: attempt, Duration: time.Since(started), Err: err})
 }
 
 func (c RabbitConsumer) publishQueue(ctx context.Context, queue string, delivery amqp.Delivery, attempt int, reason string) error {

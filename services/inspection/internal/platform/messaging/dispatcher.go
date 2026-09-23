@@ -136,6 +136,7 @@ type Consumer struct {
 	Name     string
 	Handle   func(context.Context, *gorm.DB, events.RawEnvelope) error
 	Clock    func() time.Time
+	Observer observability.ConsumerObserver
 }
 
 func (c Consumer) Process(ctx context.Context, body []byte, generation int) (bool, error) {
@@ -146,11 +147,27 @@ func (c Consumer) Process(ctx context.Context, body []byte, generation int) (boo
 	if err != nil {
 		return false, fmt.Errorf("%w: contract", ErrPermanent)
 	}
+	correlation := observability.CorrelationFromContext(ctx)
+	correlation.EventID = envelope.ID.String()
+	correlation.CorrelationID = envelope.CorrelationID
+	correlation.CausationID = envelope.CausationID
+	correlation.TenantID = envelope.TenantID.String()
+	correlation.Attempt = Attempt(ctx)
+	correlation.ReplayGeneration = generation
+	if correlation.ExecutionID == "" {
+		correlation.ExecutionID = identity.NewID().String()
+	}
+	ctx = observability.WithCorrelation(ctx, correlation)
+	recorder := observability.NewOutcomeRecorder()
+	ctx = observability.WithOutcomeRecorder(ctx, recorder)
+	recorder.SetCorrelation(correlation)
 	now := time.Now
 	if c.Clock != nil {
 		now = c.Clock
 	}
 	processed := false
+	transactionBodyCompleted := false
+	started := time.Now()
 	err = c.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if tx.Dialector.Name() == "postgres" {
 			if err := tx.Exec("SELECT set_config('app.tenant_id', ?, true)", envelope.TenantID.String()).Error; err != nil {
@@ -163,13 +180,38 @@ func (c Consumer) Process(ctx context.Context, body []byte, generation int) (boo
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
+			transactionBodyCompleted = true
 			return nil
 		}
 		if err := c.Handle(ctx, tx, envelope); err != nil {
 			return err
 		}
 		processed = true
+		transactionBodyCompleted = true
 		return nil
 	})
+	outcome := recorder.Get()
+	if recorded := recorder.Correlation(); recorded.JobID != "" || recorded.InspectionID != "" {
+		correlation.JobID = recorded.JobID
+		correlation.InspectionID = recorded.InspectionID
+		ctx = observability.WithCorrelation(ctx, correlation)
+	}
+	if err != nil {
+		outcome = "error"
+	} else if !processed {
+		outcome = "duplicate"
+	} else if outcome == "" {
+		outcome = "completed"
+	}
+	phase := "committed"
+	if err != nil {
+		phase = "rollback"
+		if transactionBodyCompleted {
+			phase = "commit_error"
+		}
+	}
+	if c.Observer != nil {
+		c.Observer.AfterTransaction(ctx, envelope, observability.TransactionObservation{ExecutionID: correlation.ExecutionID, Outcome: outcome, Phase: phase, Processed: processed, Duration: time.Since(started), Err: err})
+	}
 	return processed, err
 }

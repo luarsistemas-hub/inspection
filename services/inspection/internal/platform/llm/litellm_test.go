@@ -3,10 +3,12 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
@@ -36,7 +38,7 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 	}))
 	defer server.Close()
 	result, err := (HTTPGateway{BaseURL: server.URL, APIKey: "gateway-secret"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", SystemPrompt: "system", UserPrompt: "context", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", PairID: "pair-1", Position: "CURRENT_1", Digest: "digest", DataURL: "data:image/png;base64,AAAA"}}})
-	if err != nil || result.Model != "provider/model" || result.InputTokens == nil {
+	if err != nil || result.Model != "provider/model" || result.InputTokens == nil || result.HTTPStatus != http.StatusOK || !result.TransportDelivered {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 }
@@ -44,12 +46,71 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 func TestHTTPGatewayRejectsMalformedProviderResponseAndUnauthorizedImage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"choices":[]}`)) }))
 	defer server.Close()
-	_, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "alias", PromptDigest: "d", SystemPrompt: "s", UserPrompt: "u", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "d1", DataURL: "data:image/png;base64,AAAA"}}})
-	if err == nil {
-		t.Fatal("malformed provider response accepted")
+	result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "alias", PromptDigest: "d", SystemPrompt: "s", UserPrompt: "u", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "d1", DataURL: "data:image/png;base64,AAAA"}}})
+	var typed *Error
+	if !errors.As(err, &typed) || typed.Code != CodeMalformedResponse || result.HTTPStatus != http.StatusOK || !result.TransportDelivered {
+		t.Fatalf("malformed provider response result=%#v err=%v", result, err)
 	}
 	_, err = (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "alias", PromptDigest: "d", SystemPrompt: "s", UserPrompt: "u", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "d1", DataURL: "https://private/object"}}})
-	if err == nil {
-		t.Fatal("unauthorized image URL accepted")
+	if !errors.As(err, &typed) || typed.Code != CodeInvalidInput {
+		t.Fatalf("unauthorized image URL was not classified: %v", err)
 	}
+}
+
+func TestHTTPGatewayClassifiesProviderHTTPStatuses(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		code   ErrorCode
+	}{
+		{http.StatusUnauthorized, CodeAuthentication},
+		{http.StatusForbidden, CodeAuthentication},
+		{http.StatusTooManyRequests, CodeRateLimit},
+		{http.StatusBadGateway, CodeProviderHTTP},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tc.status)
+		}))
+		result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), validRequest())
+		server.Close()
+		var typed *Error
+		if !errors.As(err, &typed) || typed.Code != tc.code || result.HTTPStatus != tc.status || !result.TransportDelivered || result.Latency <= 0 {
+			t.Fatalf("status=%d result=%#v err=%v", tc.status, result, err)
+		}
+	}
+}
+
+func TestHTTPGatewayClassifiesTimeoutNetworkAndMissingUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-time.After(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(ctx, validRequest())
+	cancel()
+	server.Close()
+	var typed *Error
+	if !errors.As(err, &typed) || typed.Code != CodeTimeout || result.TransportDelivered || result.Latency <= 0 {
+		t.Fatalf("timeout result=%#v err=%v", result, err)
+	}
+
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	networkURL := closed.URL
+	closed.Close()
+	result, err = (HTTPGateway{BaseURL: networkURL}).CompleteStructured(context.Background(), validRequest())
+	if !errors.As(err, &typed) || typed.Code != CodeTransport || result.TransportDelivered {
+		t.Fatalf("network result=%#v err=%v", result, err)
+	}
+
+	usageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"req","choices":[{"message":{"content":"{}"}}]}`))
+	}))
+	result, err = (HTTPGateway{BaseURL: usageServer.URL}).CompleteStructured(context.Background(), validRequest())
+	usageServer.Close()
+	if err != nil || result.InputTokens != nil || result.OutputTokens != nil || !result.TransportDelivered {
+		t.Fatalf("missing usage result=%#v err=%v", result, err)
+	}
+}
+
+func validRequest() StructuredRequest {
+	return StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", SystemPrompt: "system", UserPrompt: "user", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "e1", Source: "CURRENT", Digest: "d1", DataURL: "data:image/png;base64,AAAA"}}}
 }

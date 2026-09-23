@@ -11,4 +11,5 @@ Documentos baseados no código atual do Inspection. Stubs WireMock, Mailpit e Go
 - [Configuração](configuration.md): variáveis e diferenças host/Compose.
 - [Desenvolvimento](development.md): codegen, testes e CI.
 - [Operação](operations.md): checks e diagnóstico.
+- [Observabilidade de LLM](llm-observability.md): eventos, métricas Prometheus, scrape e consultas.
 - [Limitações](limitations.md): escopo dos stubs, artefatos residuais e lacunas conhecidas.

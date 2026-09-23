@@ -67,7 +67,9 @@ func run() error {
 	if cfg.LLMMode == "live" {
 		llmAPIKey = cfg.LiteLLMAPIKey
 	}
-	llmGateway := llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, APIKey: llmAPIKey, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
+	metrics := observability.NewMetrics()
+	llmLogger := observability.NewJSONLLMLogger(os.Stdout, "inspection-worker", cfg.Environment, cfg.LLMMode)
+	llmGateway := llm.ObservedGateway{Inner: llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, APIKey: llmAPIKey, Client: &http.Client{Timeout: cfg.ProviderTimeout}}, Metrics: metrics, Logger: llmLogger, Mode: cfg.LLMMode}
 	pdfRenderer := pdf.Gotenberg{BaseURL: cfg.GotenbergURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
 	operationalGateway, err := operationalNotificationGateway(cfg)
 	if err != nil {
@@ -81,7 +83,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	metrics := observability.NewMetrics()
+	workerObserver := observability.NewWorkerObserver(metrics, llmLogger)
 	providerResolver, err := notifications.NewProviderResolver(notifications.Provider(cfg.Notification.WhatsAppProvider))
 	if err != nil {
 		return err
@@ -151,7 +153,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	processJob, err := processcomparison.Setup(processcomparison.Dependencies{Gateway: llmGateway, Now: time.Now, BuildRequest: requestBuilder})
+	processJob, err := processcomparison.Setup(processcomparison.Dependencies{Gateway: llmGateway, Now: time.Now, BuildRequest: requestBuilder, Metrics: metrics, Logger: llmLogger, Mode: cfg.LLMMode})
 	if err != nil {
 		return err
 	}
@@ -437,7 +439,7 @@ func run() error {
 			return nil
 		},
 	}
-	consume, err := consumeevents.Setup(consumeevents.Dependencies{DB: db, Connection: connection, Contracts: contracts, Registry: events.DefaultRegistry(), Handlers: handlers})
+	consume, err := consumeevents.Setup(consumeevents.Dependencies{DB: db, Connection: connection, Contracts: contracts, Registry: events.DefaultRegistry(), Handlers: handlers, Observer: workerObserver, DeliveryObserver: workerObserver})
 	if err != nil {
 		return err
 	}

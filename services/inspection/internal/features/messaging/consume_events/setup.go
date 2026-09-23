@@ -11,6 +11,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -19,11 +20,13 @@ import (
 )
 
 type Dependencies struct {
-	DB         *gorm.DB
-	Connection *amqp.Connection
-	Contracts  []messaging.QueueContract
-	Registry   *events.Registry
-	Handlers   map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error
+	DB               *gorm.DB
+	Connection       *amqp.Connection
+	Contracts        []messaging.QueueContract
+	Registry         *events.Registry
+	Handlers         map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error
+	Observer         observability.ConsumerObserver
+	DeliveryObserver observability.DeliveryObserver
 }
 
 func Setup(deps Dependencies) (func(context.Context) error, error) {
@@ -48,8 +51,8 @@ func Setup(deps Dependencies) (func(context.Context) error, error) {
 			if registered := deps.Handlers[contract.RoutingKey]; registered != nil {
 				handle = registered
 			}
-			consumer := messaging.Consumer{DB: deps.DB, Registry: deps.Registry, Name: contract.Name, Handle: handle}
-			rabbit := messaging.RabbitConsumer{Channel: channel, Contract: contract, Handler: consumer, ConsumerName: contract.Name}
+			consumer := messaging.Consumer{DB: deps.DB, Registry: deps.Registry, Name: contract.Name, Handle: handle, Observer: deps.Observer}
+			rabbit := messaging.RabbitConsumer{Channel: channel, Contract: contract, Handler: consumer, ConsumerName: contract.Name, Observer: deps.DeliveryObserver}
 			go func() { errCh <- rabbit.Run(ctx) }()
 		}
 		select {

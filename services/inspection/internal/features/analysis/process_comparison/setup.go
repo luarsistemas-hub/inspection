@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"inspection/libs/identity"
@@ -14,6 +13,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/gorm"
 )
@@ -27,6 +27,9 @@ type Dependencies struct {
 	Gateway      llm.Gateway
 	BuildRequest RequestBuilder
 	Now          func() time.Time
+	Metrics      *observability.Metrics
+	Logger       observability.LLMLogger
+	Mode         string
 }
 
 // Setup returns an inbox-compatible consumer. BuildRequest is deliberately the
@@ -39,6 +42,9 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
+	if deps.Logger == nil {
+		deps.Logger = observability.NoopLLMLogger{}
+	}
 	return func(ctx context.Context, tx *gorm.DB, payload []byte, tenantID identity.ID) error {
 		var event Payload
 		if err := json.Unmarshal(payload, &event); err != nil || event.JobID == (identity.ID{}) {
@@ -49,51 +55,147 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			return err
 		}
 		if job.Status == "COMPLETED" || job.Status == "INCONCLUSIVE" {
+			if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+				recorder.Set("duplicate")
+			}
 			return nil
 		}
+		ctx = observability.EnsureExecutionID(ctx, func() string { return identity.NewID().String() })
+		correlation := observability.CorrelationFromContext(ctx)
+		correlation.JobID = job.ID.String()
+		correlation.InspectionID = job.InspectionID.String()
+		correlation.TenantID = tenantID.String()
+		ctx = observability.WithCorrelation(ctx, correlation)
+		if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+			recorder.SetCorrelation(correlation)
+		}
+		requestStarted := deps.Now()
 		request, err := deps.BuildRequest(ctx, tx, job, event)
+		requestOutcome := "success"
+		if err != nil {
+			requestOutcome = "error"
+		}
+		if deps.Metrics != nil {
+			deps.Metrics.AnalysisStage("request", requestOutcome, time.Since(requestStarted))
+		}
+		validationStarted := deps.Now()
 		if err == nil {
 			_, err = validateRequest(request)
 		}
+		if deps.Metrics != nil {
+			validationOutcome := "success"
+			if err != nil {
+				validationOutcome = "rejected"
+			}
+			deps.Metrics.AnalysisStage("validation", validationOutcome, time.Since(validationStarted))
+		}
 		if err != nil {
-			logAttempt(ctx, request, llm.StructuredResult{}, "REQUEST_REJECTED")
-			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
+			if deps.Metrics != nil {
+				deps.Metrics.AnalysisValidation(deps.Mode, request.Mode, "rejected", "request_invalid")
+			}
+			logAttempt(ctx, deps.Logger, request, llm.StructuredResult{}, "REQUEST_REJECTED", err)
+			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
+			if fallbackErr == nil {
+				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+					recorder.Set("inconclusive")
+				}
+			}
+			return fallbackErr
 		}
 		started := deps.Now().UTC()
 		result, err := deps.Gateway.CompleteStructured(ctx, request)
 		if err != nil {
-			logAttempt(ctx, request, result, "PROVIDER_ERROR")
-			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
+			if deps.Metrics != nil {
+				deps.Metrics.AnalysisStage("llm", "error", time.Since(started))
+			}
+			logAttempt(ctx, deps.Logger, request, result, "PROVIDER_ERROR", err)
+			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
+			if fallbackErr == nil {
+				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+					recorder.Set("inconclusive")
+				}
+			}
+			return fallbackErr
 		}
+		if deps.Metrics != nil {
+			deps.Metrics.AnalysisStage("llm", "success", time.Since(started))
+		}
+		validationStarted = deps.Now()
 		parsed, validationErr := analysis.ParseResult(result.JSON)
 		if validationErr == nil {
 			validationErr = validateEvidence(parsed, request)
 		}
 		if validationErr != nil {
-			logAttempt(ctx, request, result, "RESPONSE_REJECTED")
-			return retryOrFallback(ctx, tx, tenantID, job, deps.Now(), validationErr)
+			if deps.Metrics != nil {
+				deps.Metrics.AnalysisStage("validation", "rejected", time.Since(validationStarted))
+				deps.Metrics.AnalysisValidation(deps.Mode, request.Mode, "rejected", "response_invalid")
+			}
+			logAttempt(ctx, deps.Logger, request, result, "RESPONSE_REJECTED", validationErr)
+			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), validationErr)
+			if fallbackErr == nil {
+				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+					recorder.Set("inconclusive")
+				}
+			}
+			return fallbackErr
 		}
-		logAttempt(ctx, request, result, "ACCEPTED")
+		validationOutcome := "accepted"
 		status := "COMPLETED"
 		if isInsufficientEvidence(parsed) {
 			status = "INCONCLUSIVE"
+			validationOutcome = "inconclusive"
 		}
-		return persistAccepted(tx, tenantID, job, parsed, result, started, deps.Now().UTC(), status)
+		if deps.Metrics != nil {
+			deps.Metrics.AnalysisStage("validation", validationOutcome, time.Since(validationStarted))
+			deps.Metrics.AnalysisValidation(deps.Mode, request.Mode, validationOutcome, "accepted")
+		}
+		logAttempt(ctx, deps.Logger, request, result, "ACCEPTED", nil)
+		persistStarted := deps.Now()
+		err = persistAccepted(tx, tenantID, job, parsed, result, started, deps.Now().UTC(), status)
+		persistOutcome := "success"
+		if err != nil {
+			persistOutcome = "error"
+		}
+		if deps.Metrics != nil {
+			deps.Metrics.AnalysisStage("persist", persistOutcome, time.Since(persistStarted))
+		}
+		if err != nil {
+			logAttempt(ctx, deps.Logger, request, result, "PERSISTENCE_REJECTED", err)
+			return err
+		}
+		if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
+			if status == "INCONCLUSIVE" {
+				recorder.Set("inconclusive")
+			} else {
+				recorder.Set("completed")
+			}
+		}
+		return nil
 	}, nil
 }
 
-func logAttempt(ctx context.Context, request llm.StructuredRequest, result llm.StructuredResult, outcome string) {
-	attrs := []any{"mode", request.Mode, "outcome", outcome, "latencyMs", result.Latency.Milliseconds(), "gatewayRequestId", result.GatewayRequestID, "provider", result.Provider, "model", result.Model}
-	if result.InputTokens != nil {
-		attrs = append(attrs, "inputTokens", *result.InputTokens)
+func logAttempt(ctx context.Context, logger observability.LLMLogger, request llm.StructuredRequest, result llm.StructuredResult, outcome string, err error) {
+	level := "info"
+	if err != nil && outcome == "PERSISTENCE_REJECTED" {
+		level = "error"
+	} else if err != nil {
+		level = "warn"
 	}
-	if result.OutputTokens != nil {
-		attrs = append(attrs, "outputTokens", *result.OutputTokens)
-	}
-	if result.Cost != nil {
-		attrs = append(attrs, "cost", *result.Cost)
-	}
-	slog.InfoContext(ctx, "analysis_attempt", attrs...)
+	event := observability.EventFromContext(ctx, "analysis_attempt", level, "analysis", outcome, llm.CodeOf(err))
+	event.ComparisonMode = request.Mode
+	event.ModelAlias = request.ModelAlias
+	event.Provider = result.Provider
+	event.Model = result.Model
+	event.GatewayRequestID = result.GatewayRequestID
+	event.PromptDigest = request.PromptDigest
+	event.HTTPStatus = result.HTTPStatus
+	event.TransportDelivered = result.TransportDelivered
+	event.DurationMS = result.Latency.Milliseconds()
+	event.InputTokens = result.InputTokens
+	event.OutputTokens = result.OutputTokens
+	event.Cost = result.Cost
+	event.Images = len(request.Images)
+	logger.LogLLM(ctx, event)
 }
 
 func validateEvidence(result analysis.Result, request llm.StructuredRequest) error {

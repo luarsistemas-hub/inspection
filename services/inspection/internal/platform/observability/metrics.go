@@ -38,10 +38,12 @@ func LogOwnerDeliveryAlertRequested(ctx context.Context, tenantID, eventID, insp
 // notification signals. Labels are constrained to provider/channel values so
 // a destination, tenant, or provider response can never become a label.
 type Metrics struct {
-	mu       sync.RWMutex
-	counters map[string]map[string]float64
-	gauges   map[string]map[string]float64
-	hist     map[string]histogram
+	mu         sync.RWMutex
+	counters   map[string]map[string]float64
+	gauges     map[string]map[string]float64
+	hist       map[string]histogram
+	histograms map[string]map[string]labeledHistogram
+	metricMeta map[string]metricMetadata
 }
 
 type histogram struct {
@@ -49,9 +51,38 @@ type histogram struct {
 	Sum   float64
 }
 
+type labeledHistogram struct {
+	Count   float64
+	Sum     float64
+	Buckets map[float64]float64
+}
+
+type metricMetadata struct {
+	typeName string
+	help     string
+}
+
+var llmDurationBuckets = []float64{0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300}
+
 // NewMetrics returns an empty collector.
 func NewMetrics() *Metrics {
-	return &Metrics{counters: make(map[string]map[string]float64), gauges: make(map[string]map[string]float64), hist: make(map[string]histogram)}
+	return &Metrics{
+		counters:   make(map[string]map[string]float64),
+		gauges:     make(map[string]map[string]float64),
+		hist:       make(map[string]histogram),
+		histograms: make(map[string]map[string]labeledHistogram),
+		metricMeta: map[string]metricMetadata{
+			"inspection_llm_calls_total":                 {typeName: "counter", help: "LLM gateway calls delivered to the configured transport."},
+			"inspection_llm_call_duration_seconds":       {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
+			"inspection_llm_inflight":                    {typeName: "gauge", help: "LLM gateway calls currently in flight."},
+			"inspection_llm_tokens_total":                {typeName: "counter", help: "Provider reported LLM tokens."},
+			"inspection_llm_usage_missing_total":         {typeName: "counter", help: "LLM calls without provider usage metadata."},
+			"inspection_analysis_validation_total":       {typeName: "counter", help: "Structured analysis validation outcomes."},
+			"inspection_analysis_stage_duration_seconds": {typeName: "histogram", help: "Analysis stage duration in seconds."},
+			"inspection_analysis_processing_total":       {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
+			"inspection_analysis_delivery_actions_total": {typeName: "counter", help: "RabbitMQ retry and dead letter delivery actions."},
+		},
+	}
 }
 
 func (m *Metrics) counter(name string, labels map[string]string, value float64) {
@@ -78,6 +109,22 @@ func (m *Metrics) gauge(name string, labels map[string]string, value float64) {
 	m.gauges[name][labelKey(labels)] = value
 }
 
+func (m *Metrics) gaugeDelta(name string, labels map[string]string, delta float64) {
+	if m == nil || delta == 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.gauges[name] == nil {
+		m.gauges[name] = make(map[string]float64)
+	}
+	key := labelKey(labels)
+	m.gauges[name][key] += delta
+	if m.gauges[name][key] < 0 {
+		m.gauges[name][key] = 0
+	}
+}
+
 func (m *Metrics) observe(name string, seconds float64) {
 	if m == nil || seconds < 0 {
 		return
@@ -88,6 +135,90 @@ func (m *Metrics) observe(name string, seconds float64) {
 	value.Count++
 	value.Sum += seconds
 	m.hist[name] = value
+}
+
+func (m *Metrics) observeHistogram(name string, labels map[string]string, seconds float64, buckets []float64) {
+	if m == nil || seconds < 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.histograms[name] == nil {
+		m.histograms[name] = make(map[string]labeledHistogram)
+	}
+	key := labelKey(labels)
+	value := m.histograms[name][key]
+	if value.Buckets == nil {
+		value.Buckets = make(map[float64]float64, len(buckets))
+	}
+	value.Count++
+	value.Sum += seconds
+	for _, bound := range buckets {
+		if seconds <= bound {
+			value.Buckets[bound]++
+		}
+	}
+	m.histograms[name][key] = value
+}
+
+// LLMCallStarted records a transport invocation that has begun.
+func (m *Metrics) LLMCallStarted(mode, modelAlias string) {
+	m.gaugeDelta("inspection_llm_inflight", llmLabels(mode, "", modelAlias), 1)
+}
+
+// LLMCallFinished records a transport invocation, including calls that return
+// an error or a response later rejected by the analysis validator.
+func (m *Metrics) LLMCallFinished(mode, comparisonMode, modelAlias, outcome string, duration time.Duration, transportDelivered bool, inputTokens, outputTokens *int64) {
+	m.gaugeDelta("inspection_llm_inflight", llmLabels(mode, "", modelAlias), -1)
+	if !transportDelivered {
+		return
+	}
+	labels := llmLabels(mode, comparisonMode, modelAlias)
+	labels["outcome"] = safeLLMOutcome(outcome)
+	m.counter("inspection_llm_calls_total", labels, 1)
+	m.observeHistogram("inspection_llm_call_duration_seconds", labels, duration.Seconds(), llmDurationBuckets)
+	if inputTokens != nil {
+		m.counter("inspection_llm_tokens_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias), "direction": "input"}, float64(*inputTokens))
+	}
+	if outputTokens != nil {
+		m.counter("inspection_llm_tokens_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias), "direction": "output"}, float64(*outputTokens))
+	}
+	missing := ""
+	if inputTokens == nil {
+		missing = "input"
+	}
+	if outputTokens == nil {
+		if missing != "" {
+			missing = "both"
+		} else {
+			missing = "output"
+		}
+	}
+	if missing != "" {
+		m.counter("inspection_llm_usage_missing_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias), "direction": missing}, 1)
+	}
+}
+
+// AnalysisValidation records the post-provider structured-result decision.
+func (m *Metrics) AnalysisValidation(mode, comparisonMode, outcome, code string) {
+	labels := map[string]string{"mode": safeLLMMode(mode), "comparison_mode": safeComparisonMode(comparisonMode), "outcome": safeValidationOutcome(outcome), "code": safeValidationCode(code)}
+	m.counter("inspection_analysis_validation_total", labels, 1)
+}
+
+// AnalysisStage records the time spent preparing, calling, validating or
+// persisting an analysis result.
+func (m *Metrics) AnalysisStage(stage, outcome string, duration time.Duration) {
+	m.observeHistogram("inspection_analysis_stage_duration_seconds", map[string]string{"stage": safeStage(stage), "outcome": safeStageOutcome(outcome)}, duration.Seconds(), llmDurationBuckets)
+}
+
+// AnalysisProcessing is emitted after the inbox transaction has returned.
+func (m *Metrics) AnalysisProcessing(outcome string) {
+	m.counter("inspection_analysis_processing_total", map[string]string{"outcome": safeProcessingOutcome(outcome)}, 1)
+}
+
+// AnalysisDelivery records retry/DLQ publication attempts and their result.
+func (m *Metrics) AnalysisDelivery(action, result string) {
+	m.counter("inspection_analysis_delivery_actions_total", map[string]string{"action": safeDeliveryAction(action), "result": safeDeliveryResult(result)}, 1)
 }
 
 // Request records a durable request boundary.
@@ -174,6 +305,11 @@ func (m *Metrics) Prometheus() string {
 	defer m.mu.RUnlock()
 	var b strings.Builder
 	b.WriteString("inspection_up 1\n")
+	for _, name := range sortedMetadataKeys(m.metricMeta) {
+		metadata := m.metricMeta[name]
+		b.WriteString("# HELP " + name + " " + metadata.help + "\n")
+		b.WriteString("# TYPE " + name + " " + metadata.typeName + "\n")
+	}
 	for _, name := range sortedKeys(m.counters) {
 		for _, labels := range sortedLabelKeys(m.counters[name]) {
 			writeSample(&b, name, labels, m.counters[name][labels])
@@ -188,6 +324,20 @@ func (m *Metrics) Prometheus() string {
 		value := m.hist[name]
 		writeSample(&b, name+"_count", "", value.Count)
 		writeSample(&b, name+"_sum", "", value.Sum)
+	}
+	for _, name := range sortedLabeledHistogramKeys(m.histograms) {
+		for _, labels := range sortedLabeledHistogramLabelKeys(m.histograms[name]) {
+			value := m.histograms[name][labels]
+			for _, bound := range append(append([]float64{}, llmDurationBuckets...), 0) {
+				if bound == 0 {
+					continue
+				}
+				writeSample(&b, name+"_bucket", withEncodedLabel(labels, "le", strconv.FormatFloat(bound, 'f', -1, 64)), value.Buckets[bound])
+			}
+			writeSample(&b, name+"_bucket", withEncodedLabel(labels, "le", "+Inf"), value.Count)
+			writeSample(&b, name+"_count", labels, value.Count)
+			writeSample(&b, name+"_sum", labels, value.Sum)
+		}
 	}
 	return b.String()
 }
@@ -237,6 +387,113 @@ func safeQueue(value string) string {
 	return value
 }
 
+func safeLLMMode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "mock" || value == "live" {
+		return value
+	}
+	return "unknown"
+}
+
+func safeModelAlias(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "inspection-vision" {
+		return value
+	}
+	return "unknown"
+}
+
+func safeComparisonMode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "current_only" || value == "compare_origin_current" || value == "" {
+		if value == "" {
+			return "unknown"
+		}
+		return value
+	}
+	return "unknown"
+}
+
+func safeStage(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "request", "llm", "validation", "persist":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeLLMOutcome(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "success", "invalid_input", "timeout", "cancelled", "transport", "authentication", "rate_limit", "provider_http", "malformed_response":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeValidationOutcome(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "accepted", "rejected", "inconclusive":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeValidationCode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "accepted", "request_invalid", "response_invalid":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeStageOutcome(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "success", "error", "accepted", "rejected", "inconclusive":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeProcessingOutcome(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "completed", "inconclusive", "duplicate", "error":
+		return value
+	default:
+		return "unknown"
+	}
+}
+
+func safeDeliveryAction(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "retry" || value == "dlq" {
+		return value
+	}
+	return "unknown"
+}
+
+func safeDeliveryResult(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "published" || value == "publish_failed" {
+		return value
+	}
+	return "unknown"
+}
+
+func llmLabels(mode, comparisonMode, modelAlias string) map[string]string {
+	return map[string]string{"mode": safeLLMMode(mode), "comparison_mode": safeComparisonMode(comparisonMode), "model_alias": safeModelAlias(modelAlias)}
+}
+
 func labelKey(labels map[string]string) string {
 	keys := make([]string, 0, len(labels))
 	for key := range labels {
@@ -251,6 +508,19 @@ func labelKey(labels map[string]string) string {
 		b.WriteByte('\x00')
 	}
 	return b.String()
+}
+
+func withEncodedLabel(encoded, key, value string) string {
+	labels := make(map[string]string)
+	parts := strings.Split(strings.TrimSuffix(encoded, "\x00"), "\x00")
+	for _, part := range parts {
+		name, current, ok := strings.Cut(part, "=")
+		if ok {
+			labels[name] = current
+		}
+	}
+	labels[key] = value
+	return labelKey(labels)
 }
 
 func writeSample(b *strings.Builder, name, encodedLabels string, value float64) {
@@ -288,6 +558,33 @@ func sortedLabelKeys(values map[string]float64) []string {
 }
 
 func sortedHistogramKeys(values map[string]histogram) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedMetadataKeys(values map[string]metricMetadata) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedLabeledHistogramKeys(values map[string]map[string]labeledHistogram) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedLabeledHistogramLabelKeys(values map[string]labeledHistogram) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
