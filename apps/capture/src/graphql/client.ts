@@ -1,5 +1,5 @@
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { print } from "graphql";
+import { getOperationAST, print } from "graphql";
 import {
   AcceptProcessingDocument,
   CompleteMediaUploadDocument,
@@ -18,9 +18,16 @@ import {
 import { clearCaptureCsrfToken, getCaptureCsrfToken } from "@/auth/capture-session";
 
 export type GraphQLFailure = { message: string; code?: string; field?: string };
-type Response<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
+type GraphQLErrorResponse = { message: string; extensions?: { code?: string; field?: string; correlationId?: string; [key: string]: unknown } };
+type Response<T> = { data?: T; errors?: GraphQLErrorResponse[] };
 const captureSessionErrorCodes = new Set(["UNAUTHENTICATED", "SESSION_EXPIRED"]);
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
+
+function logOperationErrors<TData, TVariables>(query: TypedDocumentNode<TData, TVariables>, errors: GraphQLErrorResponse[]): void {
+  const operation = getOperationAST(query);
+  const operationLabel = operation ? `${operation.operation} ${operation.name?.value ?? "(anonymous)"}` : "unknown operation";
+  console.error(`[GraphQL] ${operationLabel} failed`, { errors });
+}
 
 export const isCaptureSessionFailure = (error: unknown): error is GraphQLFailure =>
   typeof error === "object" && error !== null && "code" in error && captureSessionErrorCodes.has(String(error.code));
@@ -37,6 +44,7 @@ export async function graphql<TData, TVariables>(query: TypedDocumentNode<TData,
   let body: Response<TData> = {};
   const raw = await response.text();
   if (raw.trimStart().startsWith("{")) { try { body = JSON.parse(raw) as Response<TData>; } catch { body = {}; } }
+  if (body.errors?.length) logOperationErrors(query, body.errors);
   if (response.status === 401 || response.status === 403) {
     if (response.status === 401) clearCaptureCsrfToken();
     throw { message: response.status === 401 ? "Sua sessão de captura expirou. Solicite um novo acesso." : "Você não tem permissão para esta operação.", code: response.status === 401 ? "UNAUTHENTICATED" : "FORBIDDEN" } satisfies GraphQLFailure;

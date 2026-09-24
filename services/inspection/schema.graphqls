@@ -39,6 +39,8 @@ type Query {
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
   inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
+  llmUsage(filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsage!
+  llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
 }
 
@@ -136,8 +138,9 @@ type Scope { kind: String! resourceId: ID! }
 type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
-type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! }
+type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
 type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
+type TenantConnection { nodes: [Tenant!]! pageInfo: PageInfo! }
 type BusinessUnit { id: ID! code: String! name: String! status: String! version: Int! }
 type BusinessUnitConnection { nodes: [BusinessUnit!]! pageInfo: PageInfo! }
 type BusinessUnitPayload { businessUnit: BusinessUnit userErrors: [UserError!]! clientMutationId: String! }
@@ -258,9 +261,55 @@ type NotificationChannelDelivery {
 type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: PageInfo! }
 type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
 type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }
-type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float! }
+type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float }
 enum LLMExecutionMode { LIVE MOCK }
 enum LLMCallState { STARTED FINISHED }
+enum LLMUsageCostState { INFORMED MISSING }
+input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState }
+type LLMUsage {
+  from: String!
+  to: String!
+  attemptedCalls: Int!
+  deliveredCalls: Int!
+  incompleteCalls: Int!
+  inputTokens: Int!
+  outputTokens: Int!
+  knownReportedCost: Float!
+  unknownCostCalls: Int!
+  costComplete: Boolean!
+  coverageStartedAt: String
+  coverageComplete: Boolean!
+  calls: [GlobalLLMCallUsage!]!
+  pageInfo: PageInfo!
+}
+type GlobalLLMCallUsage {
+  callId: ID!
+  tenantId: ID!
+  tenantName: String!
+  inspectionId: ID!
+  jobId: ID!
+  eventId: ID!
+  executionId: ID!
+  correlationId: String!
+  attempt: Int!
+  replayGeneration: Int!
+  mode: LLMExecutionMode!
+  comparisonMode: String!
+  modelAlias: String!
+  provider: String
+  model: String
+  gatewayRequestId: String
+  state: LLMCallState!
+  technicalOutcome: String!
+  transportDelivered: Boolean
+  httpStatus: Int
+  inputTokens: Int
+  outputTokens: Int
+  reportedCost: Float
+  durationMs: Int
+  startedAt: String!
+  finishedAt: String
+}
 type InspectionLLMUsage {
   inspectionId: ID!
   mode: LLMExecutionMode!

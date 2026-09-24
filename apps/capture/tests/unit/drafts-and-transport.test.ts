@@ -4,7 +4,7 @@ import { clearCaptureCsrfToken, clearCaptureLinkToken, getCaptureCsrfToken, getC
 import { graphql } from "@/graphql/client";
 import { ExternalCaptureBootstrapDocument } from "@/graphql/generated";
 import { isBlockedMediaStatus, isFalsePositiveActionable, isGalleryAllowed, isTerminalBootstrapStatus, requirementsSatisfied } from "@/pwa/capture-policy";
-import { type CaptureDraft, hasDraftCapacity, loadDraft, loadDraftsForResponsibility, mediaCountForRequirement, persistDraftMediaStatus, readyForSubmission, removeDraftsForResponsibility, saveDraft } from "@/pwa/drafts";
+import { type CaptureDraft, hasDraftCapacity, hasDuplicateDraft, loadDraft, loadDraftsForResponsibility, mediaCountForRequirement, persistDraftMediaStatus, readyForSubmission, removeDraftsForResponsibility, saveDraft } from "@/pwa/drafts";
 
 const draft = (id = "draft-1"): CaptureDraft => ({ id, responsibilityId: "responsibility-1", blob: new Blob(["photo"], { type: "image/jpeg" }), sha256: "hash", parts: [{ number: 1, complete: false }], metadata: { requirementKey: "front", description: "Fachada", source: "camera", capturedAt: "2026-09-07T00:00:00Z" } });
 
@@ -66,6 +66,12 @@ describe("Capture drafts and transport", () => {
     const drafts = [{ ...draft(), metadata: { ...draft().metadata, requirementKey: "front" }, mediaId: "media-1" }, { ...draft("offline"), metadata: { ...draft().metadata, requirementKey: "front" }, mediaId: undefined }];
     expect(mediaCountForRequirement("front", answered, drafts)).toBe(2);
   });
+  it("rejects the same image bytes for the same active requirement", () => {
+    const existing = { ...draft(), sha256: "same-image", mediaStatus: "SCREENED" };
+    expect(hasDuplicateDraft("front", "same-image", [existing])).toBe(true);
+    expect(hasDuplicateDraft("other", "same-image", [existing])).toBe(false);
+    expect(hasDuplicateDraft("front", "same-image", [{ ...existing, mediaStatus: "ABORTED" }])).toBe(false);
+  });
   it("blocks terminal bootstrap states before capture", () => {
     expect(isTerminalBootstrapStatus("EXPIRED")).toBe(true);
     expect(isTerminalBootstrapStatus("REVOKED")).toBe(true);
@@ -105,5 +111,15 @@ describe("Capture drafts and transport", () => {
     await expect(graphql(ExternalCaptureBootstrapDocument)).rejects.toMatchObject({ code: "SESSION_EXPIRED" });
     expect(getCaptureCsrfToken()).toBeUndefined(); expect(getCaptureLinkToken()).toBe("invite-token");
     vi.unstubAllGlobals();
+  });
+  it("logs GraphQL operation errors with the operation name and correlation details", async () => {
+    const errors = [{ message: "requirement media limit reached", extensions: { code: "INVALID_STATE", field: "requirementKey", correlationId: "correlation-3" } }];
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
+
+    await expect(graphql(ExternalCaptureBootstrapDocument)).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    expect(log).toHaveBeenCalledWith("[GraphQL] query ExternalCaptureBootstrap failed", { errors });
+    log.mockRestore();
   });
 });

@@ -3,16 +3,12 @@ package finalize_submission
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"inspection/libs/identity"
-	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
-	"inspection/services/inspection/internal/platform/messaging"
 
 	"gorm.io/gorm"
 )
@@ -73,13 +69,5 @@ func finalizeInspection(tx *gorm.DB, draft database.CaptureDraft, submission dat
 	if transition.RowsAffected != 1 {
 		return apperror.New(apperror.InvalidState, "inspection", "inspection no longer accepts capture")
 	}
-	eventID := identity.NewID()
-	return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "analysis.comparison_requested.v1", SchemaVersion: 1, OccurredAt: normalizeTime(now), TenantID: draft.TenantID, AggregateID: responsibility.InspectionID, CorrelationID: "analysis-request-" + submission.ID.String(), Payload: map[string]any{"inspectionId": responsibility.InspectionID, "submissionId": submission.ID, "complete": submission.Complete, "requiresAttention": submission.RequiresAttention}})
-}
-
-func normalizeTime(value time.Time) time.Time {
-	if value.IsZero() {
-		return time.Now().UTC()
-	}
-	return value
+	return nil
 }

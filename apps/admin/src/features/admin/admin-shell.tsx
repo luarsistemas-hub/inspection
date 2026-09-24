@@ -8,6 +8,7 @@ import { clearProtectedContext, hasAdminAccess, hasAnalysisPromptAccess, restore
 import { graphql, graphqlIdentity, type GraphQLFailure } from "@/graphql/client";
 import * as G from "@/graphql/generated";
 import { presentAdminRole, presentAdminScope, presentAdminStatus, presentPublicationMode } from "./presentation";
+import { LLMUsagePage } from "../llm-usage/llm-usage-page";
 
 type Row = Record<string, string | number | null>;
 type Collection = { title: string; responsibility: string; columns: string[]; rows: Row[]; hasNextPage: boolean; endCursor: string | null };
@@ -24,6 +25,7 @@ const pages: Record<string, { title: string; responsibility: string; primary: st
   "/prompts": { title: "Prompts de análise", responsibility: "Instrução global usada pela análise visual de imóveis", primary: "Atualizar prompt" },
   "/governance": { title: "Governança", responsibility: "Publicação, entregas e retenção", primary: "Configurar política" },
   "/audit": { title: "Auditoria", responsibility: "Eventos, histórico, uso e exportações autorizadas", primary: "Exportar filtros" },
+  "/llm-usage": { title: "Consumo de LLM", responsibility: "Chamadas, tokens e custos informados pelo gateway em todos os tenants", primary: "Atualizar" },
 };
 const navItems = [
   ["Visão geral", "/overview"],
@@ -34,6 +36,7 @@ const navItems = [
   ["Prompts de análise", "/prompts"],
   ["Governança", "/governance"],
   ["Auditoria", "/audit"],
+  ["Consumo de LLM", "/llm-usage"],
 ] as const;
 const emptyID = "00000000-0000-0000-0000-000000000000";
 const makeRow = (values: Record<string, string | number | boolean | null | undefined>): Row => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, typeof value === "boolean" ? (value ? "Sim" : "Não") : value ?? "—"]));
@@ -66,7 +69,7 @@ export function AdminShell({ section }: { section?: string }) {
   useEffect(() => { const controller = new AbortController(); void loadIdentity(controller.signal).catch((failure: GraphQLFailure) => setError(failure.code === "FORBIDDEN" || failure.code === "UNAUTHENTICATED" ? "Acesso administrativo não autorizado. Nenhuma configuração foi carregada." : failure.message)); return () => controller.abort(); }, [loadIdentity]);
 
   const load = useCallback(async () => {
-    if (!identityData || !hasAdminAccess() || (pathname === "/prompts" && !identityData.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN"))) return; request.current?.abort(); const controller = new AbortController(); request.current = controller; const currentGeneration = ++generation.current;
+    if (!identityData || !hasAdminAccess() || pathname === "/llm-usage" || (pathname === "/prompts" && !identityData.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN"))) return; request.current?.abort(); const controller = new AbortController(); request.current = controller; const currentGeneration = ++generation.current;
     setLoading(true); setError(undefined); const variables = { first: 25, after: cursor, search: query || null };
     try { let next: Collection;
       switch (pathname) {
@@ -76,13 +79,13 @@ export function AdminShell({ section }: { section?: string }) {
         case "/assets": { const r = await graphql<G.AdminAssetsQuery>(G.AdminAssetsDocument, variables); next = { ...pages[pathname], columns: ["ID", "Imóvel", "Código do imóvel", "Abrangência", "Situação", "Versão"], rows: r.assets.nodes.map((x) => makeRow({ ID: x.id, Imóvel: x.name, "Código do imóvel": x.externalKey, Abrangência: "Unidade vinculada", Situação: x.status, Versão: x.version, businessUnitId: x.businessUnitId })), hasNextPage: r.assets.pageInfo.hasNextPage, endCursor: r.assets.pageInfo.endCursor }; break; }
         case "/prompts": { const r = await graphql<G.AdminAnalysisPromptQuery>(G.AdminAnalysisPromptDocument, undefined, controller.signal); setAnalysisPrompt(r.analysisPrompt); next = { ...pages[pathname], columns: ["Tipo", "Modelo", "Confiança mínima", "Revisão", "Digest", "Atualizado"], rows: [makeRow({ Tipo: r.analysisPrompt.analysisType, Modelo: r.analysisPrompt.modelAlias, "Confiança mínima": `${r.analysisPrompt.minimumConfidenceBps / 100}%`, Revisão: r.analysisPrompt.revision, Digest: r.analysisPrompt.canonicalDigest, Atualizado: r.analysisPrompt.updatedAt })], hasNextPage: false, endCursor: null }; break; }
         case "/governance": { const r = await graphql<G.AdminGovernanceQuery>(G.AdminGovernanceDocument, variables); next = { ...pages[pathname], columns: ["Recurso", "ID", "Vistoria", "Destinatário", "Situação", "Código", "Atualizado"], rows: [makeRow({ Recurso: "Política de publicação", Situação: presentPublicationMode(r.publicationPolicy.mode), Versão: r.publicationPolicy.version }), ...r.retentionPolicies.nodes.map((x) => makeRow({ Recurso: "Retenção", ID: x.id, Situação: "Configurada", Evidências: `${x.evidenceDays} dias`, Operacional: `${x.operationalDays} dias`, Segurança: `${x.securityDays} dias`, Versão: x.version })), ...r.notificationDeliveries.nodes.map((x) => makeRow({ Recurso: "Entrega", ID: x.id, Vistoria: x.inspectionId, Destinatário: x.recipientMasked, Situação: x.status, Código: x.failureCode, inspectionId: x.inspectionId, responsibilityVersion: x.responsibilityVersion, canCorrectResponsibleEmail: x.canCorrectResponsibleEmail, Atualizado: x.updatedAt }))], hasNextPage: r.retentionPolicies.pageInfo.hasNextPage || r.notificationDeliveries.pageInfo.hasNextPage, endCursor: r.retentionPolicies.pageInfo.endCursor ?? r.notificationDeliveries.pageInfo.endCursor }; break; }
-        case "/audit": { const r = await graphql<G.AdminAuditQuery>(G.AdminAuditDocument, variables); next = { ...pages[pathname], columns: ["ID", "Data/hora", "Ação", "Recurso", "Abrangência", "Resultado"], rows: r.auditEvents.nodes.map((x) => makeRow({ ID: x.id, targetId: x.targetId, "Data/hora": x.occurredAt, Ação: x.action, Recurso: x.targetType, Abrangência: identityData.tenant?.name, Resultado: x.outcome })), hasNextPage: r.auditEvents.pageInfo.hasNextPage, endCursor: r.auditEvents.pageInfo.endCursor }; setStatus(`${pages[pathname].title} atualizado. Uso: ${r.usageSummary.requests} requisições · custo ${r.usageSummary.cost}`); break; }
+        case "/audit": { const r = await graphql<G.AdminAuditQuery>(G.AdminAuditDocument, variables); next = { ...pages[pathname], columns: ["ID", "Data/hora", "Ação", "Recurso", "Abrangência", "Resultado"], rows: r.auditEvents.nodes.map((x) => makeRow({ ID: x.id, targetId: x.targetId, "Data/hora": x.occurredAt, Ação: x.action, Recurso: x.targetType, Abrangência: identityData.tenant?.name, Resultado: x.outcome })), hasNextPage: r.auditEvents.pageInfo.hasNextPage, endCursor: r.auditEvents.pageInfo.endCursor }; setStatus(`${pages[pathname].title} atualizado. Uso: ${r.usageSummary.requests} requisições · custo ${r.usageSummary.cost == null ? "restrito" : r.usageSummary.cost}`); break; }
         default: next = { ...pages["/overview"], columns: ["Contexto", "Valor"], rows: [makeRow({ Contexto: "Imobiliária", Valor: identityData.tenant?.name }), makeRow({ Contexto: "Papel atual", Valor: identityData.me.roles.map(presentAdminRole).join(", ") || "Sem papel" }), makeRow({ Contexto: "Abrangência efetiva", Valor: identityData.me.effectiveScopes.map((x) => presentAdminScope(x.kind)).join(", ") || "Imobiliária" })], hasNextPage: false, endCursor: null };
       }
       if (currentGeneration === generation.current && !controller.signal.aborted) { setCollection(next); setStatus(`${next.title} atualizado. ${next.rows.length} registros visíveis.`); }
     } catch (failure) { if (!controller.signal.aborted) setError(failureText(failure)); } finally { if (currentGeneration === generation.current) setLoading(false); }
   }, [cursor, identityData, pathname, query]);
-  useEffect(() => { if (!identityData || !hasAdminAccess() || (pathname === "/prompts" && !identityData.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN"))) return; const timer = window.setTimeout(() => void load(), query ? 250 : 0); return () => { window.clearTimeout(timer); request.current?.abort(); }; }, [identityData, load, pathname, query]);
+  useEffect(() => { if (!identityData || !hasAdminAccess() || pathname === "/llm-usage" || (pathname === "/prompts" && !identityData.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN"))) return; const timer = window.setTimeout(() => void load(), query ? 250 : 0); return () => { window.clearTimeout(timer); request.current?.abort(); }; }, [identityData, load, pathname, query]);
 
   const selectMembership = async (membershipId: string) => { if (!membershipOptions.some((item) => item.id === membershipId)) return; request.current?.abort(); clearProtectedContext(); setCollection(undefined); setDetail(undefined); setHistory(undefined); setError(undefined); updateParams({ after: null }); setMembershipContext(membershipId); setStatus("Trocando o contexto de acesso. Os dados anteriores foram descartados."); try { const result = await graphql<G.AdminIdentityQuery>(G.AdminIdentityDocument); setIdentityData(result); establishIdentity(result); } catch (failure) { setError(failureText(failure)); } };
   const showHistory = async (item: Row) => { setDetail(item); setHistory(undefined); try { const result = await graphql<G.AdminHistoryQuery>(G.AdminHistoryDocument, { first: 25, after: null }); setHistory(result.auditEvents.nodes); } catch (failure) { setError(failureText(failure)); } };
@@ -106,7 +109,7 @@ export function AdminShell({ section }: { section?: string }) {
     <div className="admin-layout">
       <nav className="admin-nav" aria-label="Navegação administrativa">
         <p className="admin-nav-label">Administração</p>
-        {navItems.filter(([, href]) => href !== "/prompts" || promptPermitted).map(([label, href]) => <Link key={href} href={href} prefetch={false} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}
+        {navItems.filter(([, href]) => (href !== "/prompts" || promptPermitted) && (href !== "/llm-usage" || identityData?.me.canViewLLMCosts)).map(([label, href]) => <Link key={href} href={href} prefetch={false} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}
         <div className="admin-nav-context">
           <p className="admin-nav-label">Contexto protegido</p>
           <span>{tenantName}</span>
@@ -116,8 +119,8 @@ export function AdminShell({ section }: { section?: string }) {
       </nav>
       <section id="admin-content" className="admin-content" aria-labelledby="page-title">
         <p className="breadcrumb">Administração / {page.title}</p>
-        <div className="page-heading"><div><h1 id="page-title">{section ?? page.title}</h1><p>{page.responsibility}</p></div><button disabled={!permitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction}>{loading && pathname === "/overview" ? "Atualizando…" : page.primary}</button></div>
-        {!permitted || (pathname === "/prompts" && !promptPermitted) ? <div className="admin-state denied" role="alert">Você não tem permissão para acessar este recurso neste escopo.</div> : pathname === "/prompts" ? error ? <div className="admin-state error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : <>
+        <div className="page-heading"><div><h1 id="page-title">{section ?? page.title}</h1><p>{page.responsibility}</p></div><button hidden={pathname === "/llm-usage"} disabled={!permitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction}>{loading && pathname === "/overview" ? "Atualizando…" : page.primary}</button></div>
+        {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !permitted || (pathname === "/prompts" && !promptPermitted) ? <div className="admin-state denied" role="alert">Você não tem permissão para acessar este recurso neste escopo.</div> : pathname === "/prompts" ? error ? <div className="admin-state error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : <>
           <div className="collection-toolbar"><label>{pathname === "/organization" ? "Buscar unidade" : "Buscar nesta coleção"}<input value={query} onChange={(event) => updateParams({ search: event.target.value || null, after: null })} placeholder={pathname === "/organization" ? "Nome ou código da unidade" : "Nome, identificador ou contexto"} /></label>{query && <button className="secondary" onClick={() => updateParams({ search: null, after: null })}>Limpar busca</button>}</div>
           <p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>
           {error ? <div className="admin-state error" role="alert">{error} <button onClick={() => void load()}>Tentar novamente</button></div> : <CollectionView data={collection} query={query} compact={pathname === "/organization"} tenantName={tenantName} onHistory={showHistory} onNext={(after) => updateParams({ after })} />}

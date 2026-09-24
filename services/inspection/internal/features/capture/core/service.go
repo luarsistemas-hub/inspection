@@ -163,13 +163,31 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			}
 			return apperror.New(apperror.Conflict, "mediaId", "capture metadata was already saved")
 		}
+		var replacedMediaIDs []identity.ID
 		if selected.MaximumMedia > 0 {
-			var count int64
-			if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Count(&count).Error; err != nil {
+			var active []database.MediaObject
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Order("created_at,id").Find(&active).Error; err != nil {
 				return err
 			}
-			if count >= int64(selected.MaximumMedia) {
-				return apperror.New(apperror.InvalidState, "requirementKey", "requirement media limit reached")
+			if len(active) >= selected.MaximumMedia {
+				requiredSlots := len(active) - selected.MaximumMedia + 1
+				for _, media := range active {
+					if media.Status == "SCREENED" && len(replacedMediaIDs) < requiredSlots {
+						replacedMediaIDs = append(replacedMediaIDs, media.ID)
+					}
+				}
+				if len(replacedMediaIDs) != requiredSlots {
+					return apperror.New(apperror.InvalidState, "requirementKey", "requirement media limit reached")
+				}
+				aborted := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND id IN ? AND status='SCREENED'", in.TenantID, in.ResponsibilityID, replacedMediaIDs).Update("status", "ABORTED")
+				if aborted.Error != nil {
+					return aborted.Error
+				}
+				if aborted.RowsAffected != int64(len(replacedMediaIDs)) {
+					return apperror.New(apperror.Conflict, "requirementKey", "blocked media replacement changed concurrently")
+				}
+				replacedID := replacedMediaIDs[len(replacedMediaIDs)-1]
+				out.ReplacesMediaID = &replacedID
 			}
 		}
 		var existingFlags []string
@@ -193,6 +211,19 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		var mediaIDs []identity.ID
 		if find.Error == nil {
 			_ = json.Unmarshal(answer.MediaIDs, &mediaIDs)
+		}
+		if len(replacedMediaIDs) > 0 {
+			replaced := make(map[identity.ID]struct{}, len(replacedMediaIDs))
+			for _, id := range replacedMediaIDs {
+				replaced[id] = struct{}{}
+			}
+			retained := mediaIDs[:0]
+			for _, id := range mediaIDs {
+				if _, removed := replaced[id]; !removed {
+					retained = append(retained, id)
+				}
+			}
+			mediaIDs = retained
 		}
 		for _, id := range mediaIDs {
 			if id == in.MediaID {
@@ -378,8 +409,12 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", tenantID, responsibilityID).Updates(map[string]any{"status": "COMPLETED", "revoked_at": now}).Error; err != nil {
 			return err
 		}
+		var responsibility database.Responsibility
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).First(&responsibility).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
 		eventID := identity.NewID()
-		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: responsibilityID, CorrelationID: "capture-submit-" + result.ID.String(), Payload: map[string]any{"draftId": draft.ID, "kind": draft.Kind, "responsibilityId": responsibilityID, "submissionId": result.ID, "complete": result.Complete, "requiresAttention": result.RequiresAttention}}); err != nil {
+		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: responsibilityID, CorrelationID: "capture-submit-" + result.ID.String(), Payload: map[string]any{"draftId": draft.ID, "kind": draft.Kind, "responsibilityId": responsibilityID, "inspectionId": responsibility.InspectionID, "submissionId": result.ID, "complete": result.Complete, "requiresAttention": result.RequiresAttention}}); err != nil {
 			return err
 		}
 		if s.Finalizer != nil {

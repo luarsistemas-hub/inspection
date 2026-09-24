@@ -13,4 +13,15 @@ describe("Dashboard auth and transport", () => {
   it("UT-072 persists the selected membership per tab and sends it with omitted credentials", async () => { setSession("dashboard-token"); selectMembership("membership-a"); setSession("dashboard-token-after-reload"); expect(getMembershipId()).toBe("membership-a"); expect(sessionStorage.getItem("inspection.dashboard.membership")).toBe("membership-a"); const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { identityId: "1" } } }), { status: 200 })); vi.stubGlobal("fetch", fetch); await graphql(DashboardGateDocument, {}); expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentials: "omit", headers: expect.objectContaining({ Authorization: "Bearer dashboard-token-after-reload", "X-Inspection-Membership-ID": "membership-a" }) })); });
   it("clears protected state before a different membership can load", () => { setSession("dashboard-token", { tenantId: "t", tenantName: "T", tenantStatus: "ACTIVE", entitlements: ["DASHBOARD"], roles: ["VIEWER"], scopes: [] }); const before = getProtectedStateGeneration(); selectMembership("membership-a"); selectMembership("membership-b"); expect(getProtectedStateGeneration()).toBeGreaterThan(before); expect(hasDashboardAccess()).toBe(false); });
   it("maps a non-JSON forbidden response without exposing parser details", async () => { setSession("dashboard-token"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("forbidden", { status: 403, headers: { "content-type": "text/plain" } }))); await expect(graphql(DashboardGateDocument, {})).rejects.toMatchObject({ code: "FORBIDDEN", message: "Você não tem permissão para esta operação." }); expect(getAccessToken()).toBeUndefined(); });
+  it("logs GraphQL operation errors with their correlation details", async () => {
+    setSession("dashboard-token");
+    const errors = [{ message: "operation failed", extensions: { code: "INVALID_STATE", field: "input", correlationId: "correlation-2" } }];
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
+
+    await expect(graphql(DashboardGateDocument, {})).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    expect(log).toHaveBeenCalledWith("[GraphQL] query DashboardGate failed", { errors });
+    log.mockRestore();
+  });
 });

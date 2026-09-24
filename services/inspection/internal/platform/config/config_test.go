@@ -16,6 +16,30 @@ func TestStageFromEnvironmentDefaultsToProduction(t *testing.T) {
 	}
 }
 
+func TestEnvBoolUsesSafeFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		fallback bool
+		want     bool
+	}{
+		{name: "unset", fallback: true, want: true},
+		{name: "false", value: "false", fallback: true, want: false},
+		{name: "zero", value: "0", fallback: true, want: false},
+		{name: "true", value: "true", fallback: false, want: true},
+		{name: "invalid", value: "maybe", fallback: true, want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			key := "TEST_ENV_BOOL_" + test.name
+			t.Setenv(key, test.value)
+			if got := envBool(key, test.fallback); got != test.want {
+				t.Fatalf("envBool() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestConfigContractsUT058UT059(t *testing.T) {
 	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime"}
 	if err := valid.Validate(); err != nil {

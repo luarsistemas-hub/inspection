@@ -1,12 +1,19 @@
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { print } from "graphql";
+import { getOperationAST, print } from "graphql";
 import { clearOnboardingSession, getOnboardingCsrfToken, setOnboardingCsrfToken } from "@/auth/onboarding-session";
 
 export type GraphQLFailure = { message: string; code?: string; field?: string };
-type Response<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
+type GraphQLErrorResponse = { message: string; extensions?: { code?: string; field?: string; correlationId?: string; [key: string]: unknown } };
+type Response<T> = { data?: T; errors?: GraphQLErrorResponse[] };
 
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
 const sessionErrors = new Set(["UNAUTHENTICATED", "SESSION_EXPIRED"]);
+
+function logOperationErrors<TData, TVariables>(query: TypedDocumentNode<TData, TVariables>, errors: GraphQLErrorResponse[]): void {
+  const operation = getOperationAST(query);
+  const operationLabel = operation ? `${operation.operation} ${operation.name?.value ?? "(anonymous)"}` : "unknown operation";
+  console.error(`[GraphQL] ${operationLabel} failed`, { errors });
+}
 
 /** Sends a reference image through the private onboarding media endpoint. */
 export async function uploadReferencePhoto(file: File, description: string, id: string): Promise<string> {
@@ -62,6 +69,7 @@ export async function graphql<TData, TVariables>(query: TypedDocumentNode<TData,
   }
   const error = body.errors?.find((item) => sessionErrors.has(item.extensions?.code ?? "")) ?? body.errors?.[0];
   if (response.status === 401 || response.status === 403 || !response.ok || error) {
+    if (body.errors?.length) logOperationErrors(query, body.errors);
     const failure: GraphQLFailure = {
       message: error?.message ?? (response.status === 401 ? "Sua sessão expirou. Recomece a verificação do e-mail." : "Não foi possível concluir a solicitação."),
       code: error?.extensions?.code ?? (response.status === 401 ? "UNAUTHENTICATED" : undefined),

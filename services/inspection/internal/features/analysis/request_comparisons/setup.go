@@ -25,6 +25,7 @@ type Dependencies struct {
 type payload struct {
 	InspectionID     identity.ID `json:"inspectionId"`
 	DraftID          identity.ID `json:"draftId"`
+	Kind             string      `json:"kind"`
 	RecaptureRequest identity.ID `json:"recaptureRequestId"`
 	JobID            identity.ID `json:"jobId"`
 }
@@ -38,7 +39,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 	}
 	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var in payload
-		if err := json.Unmarshal(envelope.Payload, &in); err != nil || in.InspectionID == (identity.ID{}) {
+		if err := json.Unmarshal(envelope.Payload, &in); err != nil {
+			return messaging.ErrPermanent
+		}
+		if in.Kind != "" && in.Kind != "INSPECTION" {
+			return nil
+		}
+		if in.InspectionID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
 		if in.JobID != (identity.ID{}) {

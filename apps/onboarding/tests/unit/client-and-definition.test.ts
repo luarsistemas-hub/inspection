@@ -27,6 +27,17 @@ describe("onboarding session client", () => {
     expect(getOnboardingCsrfToken()).toBe("rotated-proof");
   });
 
+  it("logs GraphQL operation errors with the server correlation details", async () => {
+    const errors = [{ message: "operation failed", extensions: { code: "INVALID_STATE", field: "input", correlationId: "correlation-4" } }];
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
+
+    await expect(graphql(OnboardingDefinitionDocument, { segment: "REAL_ESTATE" })).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    expect(log).toHaveBeenCalledWith("[GraphQL] query OnboardingDefinition failed", { errors });
+    log.mockRestore();
+  });
+
   it("sends the actual reference photo privately and requires a confirmed media ID", async () => {
     setOnboardingCsrfToken("csrf-proof");
     const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ mediaId: "media-1" }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ message: "upload failed" }), { status: 503 }));

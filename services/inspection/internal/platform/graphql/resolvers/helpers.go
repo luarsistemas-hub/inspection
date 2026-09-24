@@ -289,6 +289,25 @@ func parseOptionalID(value *string, field string) (*identity.ID, error) {
 	return &parsed, nil
 }
 
+func parseOptionalWindow(from, to *string) (time.Time, time.Time, error) {
+	var start, end time.Time
+	if from != nil && *from != "" {
+		parsed, err := time.Parse(time.RFC3339, *from)
+		if err != nil {
+			return time.Time{}, time.Time{}, graphql1Error("from")
+		}
+		start = parsed.UTC()
+	}
+	if to != nil && *to != "" {
+		parsed, err := time.Parse(time.RFC3339, *to)
+		if err != nil {
+			return time.Time{}, time.Time{}, graphql1Error("to")
+		}
+		end = parsed.UTC()
+	}
+	return start, end, nil
+}
+
 func parseInstant(value string, field string) (time.Time, error) {
 	parsed, err := time.Parse(time.RFC3339, value)
 	if err != nil {

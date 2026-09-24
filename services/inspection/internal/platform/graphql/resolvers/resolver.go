@@ -43,4 +43,6 @@ type Resolver struct {
 	OnboardingDeliveryStatus deliverystatus.Service
 	OwnerProvider            keycloak.OwnerIdentityProvider
 	OwnerIssuer              string
+	SuperAdminIssuer         string
+	SuperAdminSubject        string
 }

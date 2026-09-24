@@ -31,6 +31,16 @@ func TestClassifyIsDeterministicAndConservative(t *testing.T) {
 	}
 }
 
+func TestClassifyTechnicalFailureIsNotVisualInconclusive(t *testing.T) {
+	decision := Classify([]ComparisonFacts{{Terminal: true, TechnicalFailure: true}})
+	if decision.Classification != ClassificationAttention {
+		t.Fatalf("classification = %q, want ATTENTION", decision.Classification)
+	}
+	if len(decision.ReasonCodes) != 1 || decision.ReasonCodes[0] != "ANALYSIS_FAILED" {
+		t.Fatalf("reason codes = %#v, want ANALYSIS_FAILED", decision.ReasonCodes)
+	}
+}
+
 func TestParseResultRejectsUnknownOrLooseFields(t *testing.T) {
 	if _, err := ParseResult([]byte(`{"noRelevantChange":true,"narrative":"looks fine"}`)); err == nil {
 		t.Fatal("unexpected loose provider output accepted")

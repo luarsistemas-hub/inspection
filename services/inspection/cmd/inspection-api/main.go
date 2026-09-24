@@ -108,7 +108,9 @@ import (
 	createtenant "inspection/services/inspection/internal/features/tenancy/create_tenant"
 	updatetenant "inspection/services/inspection/internal/features/tenancy/update_tenant"
 	upsertunit "inspection/services/inspection/internal/features/tenancy/upsert_business_unit"
+	getgloballlmusage "inspection/services/inspection/internal/features/usage/get_global_llm_usage"
 	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
+	listllmusagetenants "inspection/services/inspection/internal/features/usage/list_llm_usage_tenants"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/config"
 	"inspection/services/inspection/internal/platform/database"
@@ -330,6 +332,12 @@ func run() error {
 			return getinspectionllmusage.Setup(getinspectionllmusage.Dependencies{DB: db, Bus: bus})
 		},
 		func() error {
+			return getgloballlmusage.Setup(getgloballlmusage.Dependencies{DB: db, Bus: bus})
+		},
+		func() error {
+			return listllmusagetenants.Setup(listllmusagetenants.Dependencies{DB: db, Bus: bus})
+		},
+		func() error {
 			return schedulecreate.Setup(schedulecreate.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
@@ -429,7 +437,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {

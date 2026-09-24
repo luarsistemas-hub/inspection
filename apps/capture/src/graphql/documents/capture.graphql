@@ -21,7 +21,7 @@ mutation PresignMediaParts($input: PresignMediaPartsInput!) { presignMediaParts(
 
 mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) { completeMediaUpload(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
 
-mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status } userErrors { code field message correlationId } clientMutationId } }
+mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status replacesMediaId } userErrors { code field message correlationId } clientMutationId } }
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 

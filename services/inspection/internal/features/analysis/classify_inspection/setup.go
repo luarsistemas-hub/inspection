@@ -42,7 +42,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return messaging.ErrPermanent
 		}
 		for _, job := range jobs {
-			if job.Status != "COMPLETED" && job.Status != "INCONCLUSIVE" {
+			if job.Status != "COMPLETED" && job.Status != "INCONCLUSIVE" && job.Status != "FAILED" {
 				return nil
 			}
 		}
@@ -67,6 +67,9 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			if job.Status == "INCONCLUSIVE" {
 				fact.Inconclusive = true
 			}
+			if job.Status == "FAILED" {
+				fact.TechnicalFailure = true
+			}
 			var answer database.RequirementAnswer
 			answerErr := tx.Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?))", envelope.TenantID, job.RequirementKey, envelope.TenantID, envelope.TenantID, payload.InspectionID).Order("updated_at DESC").First(&answer).Error
 			if answerErr == gorm.ErrRecordNotFound {
@@ -87,7 +90,9 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				return err
 			}
 			if len(runs) == 0 {
-				fact.Inconclusive = true
+				if job.Status != "FAILED" {
+					fact.Inconclusive = true
+				}
 				facts = append(facts, fact)
 				continue
 			}

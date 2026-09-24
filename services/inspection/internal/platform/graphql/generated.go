@@ -257,6 +257,35 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	GlobalLLMCallUsage struct {
+		Attempt            func(childComplexity int) int
+		CallID             func(childComplexity int) int
+		ComparisonMode     func(childComplexity int) int
+		CorrelationID      func(childComplexity int) int
+		DurationMs         func(childComplexity int) int
+		EventID            func(childComplexity int) int
+		ExecutionID        func(childComplexity int) int
+		FinishedAt         func(childComplexity int) int
+		GatewayRequestID   func(childComplexity int) int
+		HTTPStatus         func(childComplexity int) int
+		InputTokens        func(childComplexity int) int
+		InspectionID       func(childComplexity int) int
+		JobID              func(childComplexity int) int
+		Mode               func(childComplexity int) int
+		Model              func(childComplexity int) int
+		ModelAlias         func(childComplexity int) int
+		OutputTokens       func(childComplexity int) int
+		Provider           func(childComplexity int) int
+		ReplayGeneration   func(childComplexity int) int
+		ReportedCost       func(childComplexity int) int
+		StartedAt          func(childComplexity int) int
+		State              func(childComplexity int) int
+		TechnicalOutcome   func(childComplexity int) int
+		TenantID           func(childComplexity int) int
+		TenantName         func(childComplexity int) int
+		TransportDelivered func(childComplexity int) int
+	}
+
 	Inspection struct {
 		AnalysisPromptSnapshotID func(childComplexity int) int
 		AssetID                  func(childComplexity int) int
@@ -344,8 +373,26 @@ type ComplexityRoot struct {
 		TransportDelivered func(childComplexity int) int
 	}
 
+	LLMUsage struct {
+		AttemptedCalls    func(childComplexity int) int
+		Calls             func(childComplexity int) int
+		CostComplete      func(childComplexity int) int
+		CoverageComplete  func(childComplexity int) int
+		CoverageStartedAt func(childComplexity int) int
+		DeliveredCalls    func(childComplexity int) int
+		From              func(childComplexity int) int
+		IncompleteCalls   func(childComplexity int) int
+		InputTokens       func(childComplexity int) int
+		KnownReportedCost func(childComplexity int) int
+		OutputTokens      func(childComplexity int) int
+		PageInfo          func(childComplexity int) int
+		To                func(childComplexity int) int
+		UnknownCostCalls  func(childComplexity int) int
+	}
+
 	Me struct {
 		Audience            func(childComplexity int) int
+		CanViewLLMCosts     func(childComplexity int) int
 		EffectiveScopes     func(childComplexity int) int
 		IdentityID          func(childComplexity int) int
 		Memberships         func(childComplexity int) int
@@ -794,6 +841,8 @@ type ComplexityRoot struct {
 		Inspection             func(childComplexity int, id string) int
 		InspectionLLMUsage     func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
 		Inspections            func(childComplexity int, first *int, after *string, history *bool) int
+		LlmUsage               func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
+		LlmUsageTenants        func(childComplexity int, search *string, first *int, after *string) int
 		Me                     func(childComplexity int) int
 		Memberships            func(childComplexity int, first *int, after *string) int
 		MyNotifications        func(childComplexity int, unreadOnly *bool, first *int, after *string) int
@@ -1155,6 +1204,11 @@ type ComplexityRoot struct {
 		Version         func(childComplexity int) int
 	}
 
+	TenantConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
 	TenantPayload struct {
 		ClientMutationID func(childComplexity int) int
 		Tenant           func(childComplexity int) int
@@ -1303,6 +1357,8 @@ type QueryResolver interface {
 	RetentionPolicies(ctx context.Context) (*RetentionPolicyConnection, error)
 	UsageSummary(ctx context.Context, from *string, to *string) (*UsageSummary, error)
 	InspectionLLMUsage(ctx context.Context, inspectionID string, mode *LLMExecutionMode, first *int, after *string) (*InspectionLLMUsage, error)
+	LlmUsage(ctx context.Context, filter *LLMUsageFilter, first *int, after *string) (*LLMUsage, error)
+	LlmUsageTenants(ctx context.Context, search *string, first *int, after *string) (*TenantConnection, error)
 	ExternalCapture(ctx context.Context) (*ExternalCapture, error)
 }
 
@@ -2214,6 +2270,163 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ExternalSessionPayload.UserErrors(childComplexity), true
 
+	case "GlobalLLMCallUsage.attempt":
+		if e.ComplexityRoot.GlobalLLMCallUsage.Attempt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.Attempt(childComplexity), true
+	case "GlobalLLMCallUsage.callId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.CallID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.CallID(childComplexity), true
+	case "GlobalLLMCallUsage.comparisonMode":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ComparisonMode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ComparisonMode(childComplexity), true
+	case "GlobalLLMCallUsage.correlationId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.CorrelationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.CorrelationID(childComplexity), true
+	case "GlobalLLMCallUsage.durationMs":
+		if e.ComplexityRoot.GlobalLLMCallUsage.DurationMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.DurationMs(childComplexity), true
+	case "GlobalLLMCallUsage.eventId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.EventID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.EventID(childComplexity), true
+	case "GlobalLLMCallUsage.executionId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ExecutionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ExecutionID(childComplexity), true
+	case "GlobalLLMCallUsage.finishedAt":
+		if e.ComplexityRoot.GlobalLLMCallUsage.FinishedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.FinishedAt(childComplexity), true
+	case "GlobalLLMCallUsage.gatewayRequestId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.GatewayRequestID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.GatewayRequestID(childComplexity), true
+	case "GlobalLLMCallUsage.httpStatus":
+		if e.ComplexityRoot.GlobalLLMCallUsage.HTTPStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.HTTPStatus(childComplexity), true
+	case "GlobalLLMCallUsage.inputTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.InputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.InputTokens(childComplexity), true
+	case "GlobalLLMCallUsage.inspectionId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.InspectionID(childComplexity), true
+	case "GlobalLLMCallUsage.jobId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.JobID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.JobID(childComplexity), true
+	case "GlobalLLMCallUsage.mode":
+		if e.ComplexityRoot.GlobalLLMCallUsage.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.Mode(childComplexity), true
+	case "GlobalLLMCallUsage.model":
+		if e.ComplexityRoot.GlobalLLMCallUsage.Model == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.Model(childComplexity), true
+	case "GlobalLLMCallUsage.modelAlias":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ModelAlias == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ModelAlias(childComplexity), true
+	case "GlobalLLMCallUsage.outputTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.OutputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.OutputTokens(childComplexity), true
+	case "GlobalLLMCallUsage.provider":
+		if e.ComplexityRoot.GlobalLLMCallUsage.Provider == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.Provider(childComplexity), true
+	case "GlobalLLMCallUsage.replayGeneration":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ReplayGeneration == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ReplayGeneration(childComplexity), true
+	case "GlobalLLMCallUsage.reportedCost":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ReportedCost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ReportedCost(childComplexity), true
+	case "GlobalLLMCallUsage.startedAt":
+		if e.ComplexityRoot.GlobalLLMCallUsage.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.StartedAt(childComplexity), true
+	case "GlobalLLMCallUsage.state":
+		if e.ComplexityRoot.GlobalLLMCallUsage.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.State(childComplexity), true
+	case "GlobalLLMCallUsage.technicalOutcome":
+		if e.ComplexityRoot.GlobalLLMCallUsage.TechnicalOutcome == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.TechnicalOutcome(childComplexity), true
+	case "GlobalLLMCallUsage.tenantId":
+		if e.ComplexityRoot.GlobalLLMCallUsage.TenantID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.TenantID(childComplexity), true
+	case "GlobalLLMCallUsage.tenantName":
+		if e.ComplexityRoot.GlobalLLMCallUsage.TenantName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.TenantName(childComplexity), true
+	case "GlobalLLMCallUsage.transportDelivered":
+		if e.ComplexityRoot.GlobalLLMCallUsage.TransportDelivered == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.TransportDelivered(childComplexity), true
+
 	case "Inspection.analysisPromptSnapshotId":
 		if e.ComplexityRoot.Inspection.AnalysisPromptSnapshotID == nil {
 			break
@@ -2617,12 +2830,103 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.LLMCallUsage.TransportDelivered(childComplexity), true
 
+	case "LLMUsage.attemptedCalls":
+		if e.ComplexityRoot.LLMUsage.AttemptedCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.AttemptedCalls(childComplexity), true
+	case "LLMUsage.calls":
+		if e.ComplexityRoot.LLMUsage.Calls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.Calls(childComplexity), true
+	case "LLMUsage.costComplete":
+		if e.ComplexityRoot.LLMUsage.CostComplete == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.CostComplete(childComplexity), true
+	case "LLMUsage.coverageComplete":
+		if e.ComplexityRoot.LLMUsage.CoverageComplete == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.CoverageComplete(childComplexity), true
+	case "LLMUsage.coverageStartedAt":
+		if e.ComplexityRoot.LLMUsage.CoverageStartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.CoverageStartedAt(childComplexity), true
+	case "LLMUsage.deliveredCalls":
+		if e.ComplexityRoot.LLMUsage.DeliveredCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.DeliveredCalls(childComplexity), true
+	case "LLMUsage.from":
+		if e.ComplexityRoot.LLMUsage.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.From(childComplexity), true
+	case "LLMUsage.incompleteCalls":
+		if e.ComplexityRoot.LLMUsage.IncompleteCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.IncompleteCalls(childComplexity), true
+	case "LLMUsage.inputTokens":
+		if e.ComplexityRoot.LLMUsage.InputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.InputTokens(childComplexity), true
+	case "LLMUsage.knownReportedCost":
+		if e.ComplexityRoot.LLMUsage.KnownReportedCost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.KnownReportedCost(childComplexity), true
+	case "LLMUsage.outputTokens":
+		if e.ComplexityRoot.LLMUsage.OutputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.OutputTokens(childComplexity), true
+	case "LLMUsage.pageInfo":
+		if e.ComplexityRoot.LLMUsage.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.PageInfo(childComplexity), true
+	case "LLMUsage.to":
+		if e.ComplexityRoot.LLMUsage.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.To(childComplexity), true
+	case "LLMUsage.unknownCostCalls":
+		if e.ComplexityRoot.LLMUsage.UnknownCostCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.UnknownCostCalls(childComplexity), true
+
 	case "Me.audience":
 		if e.ComplexityRoot.Me.Audience == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Me.Audience(childComplexity), true
+	case "Me.canViewLLMCosts":
+		if e.ComplexityRoot.Me.CanViewLLMCosts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Me.CanViewLLMCosts(childComplexity), true
 	case "Me.effectiveScopes":
 		if e.ComplexityRoot.Me.EffectiveScopes == nil {
 			break
@@ -4908,6 +5212,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Inspections(childComplexity, args["first"].(*int), args["after"].(*string), args["history"].(*bool)), true
 
+	case "Query.llmUsage":
+		if e.ComplexityRoot.Query.LlmUsage == nil {
+			break
+		}
+
+		args, err := ec.field_Query_llmUsage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LlmUsage(childComplexity, args["filter"].(*LLMUsageFilter), args["first"].(*int), args["after"].(*string)), true
+	case "Query.llmUsageTenants":
+		if e.ComplexityRoot.Query.LlmUsageTenants == nil {
+			break
+		}
+
+		args, err := ec.field_Query_llmUsageTenants_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LlmUsageTenants(childComplexity, args["search"].(*string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -6478,6 +6804,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Tenant.Version(childComplexity), true
 
+	case "TenantConnection.nodes":
+		if e.ComplexityRoot.TenantConnection.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TenantConnection.Nodes(childComplexity), true
+	case "TenantConnection.pageInfo":
+		if e.ComplexityRoot.TenantConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TenantConnection.PageInfo(childComplexity), true
+
 	case "TenantPayload.clientMutationId":
 		if e.ComplexityRoot.TenantPayload.ClientMutationID == nil {
 			break
@@ -6651,6 +6990,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputInvalidateReportPublicationInput,
 		ec.unmarshalInputInviteInternalUserInput,
 		ec.unmarshalInputInviteOriginCaptureInput,
+		ec.unmarshalInputLLMUsageFilter,
 		ec.unmarshalInputLegalHoldInput,
 		ec.unmarshalInputMarkNotificationReadInput,
 		ec.unmarshalInputOnboardingStepInput,
@@ -6805,6 +7145,8 @@ type Query {
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
   inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
+  llmUsage(filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsage!
+  llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
 }
 
@@ -6902,8 +7244,9 @@ type Scope { kind: String! resourceId: ID! }
 type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
-type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! }
+type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
 type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
+type TenantConnection { nodes: [Tenant!]! pageInfo: PageInfo! }
 type BusinessUnit { id: ID! code: String! name: String! status: String! version: Int! }
 type BusinessUnitConnection { nodes: [BusinessUnit!]! pageInfo: PageInfo! }
 type BusinessUnitPayload { businessUnit: BusinessUnit userErrors: [UserError!]! clientMutationId: String! }
@@ -7024,9 +7367,55 @@ type NotificationChannelDelivery {
 type NotificationDeliveryConnection { nodes: [NotificationDelivery!]! pageInfo: PageInfo! }
 type RetentionPolicy { id: ID! evidenceDays: Int! operationalDays: Int! securityDays: Int! version: Int! createdAt: String! updatedAt: String! }
 type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! }
-type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float! }
+type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float }
 enum LLMExecutionMode { LIVE MOCK }
 enum LLMCallState { STARTED FINISHED }
+enum LLMUsageCostState { INFORMED MISSING }
+input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState }
+type LLMUsage {
+  from: String!
+  to: String!
+  attemptedCalls: Int!
+  deliveredCalls: Int!
+  incompleteCalls: Int!
+  inputTokens: Int!
+  outputTokens: Int!
+  knownReportedCost: Float!
+  unknownCostCalls: Int!
+  costComplete: Boolean!
+  coverageStartedAt: String
+  coverageComplete: Boolean!
+  calls: [GlobalLLMCallUsage!]!
+  pageInfo: PageInfo!
+}
+type GlobalLLMCallUsage {
+  callId: ID!
+  tenantId: ID!
+  tenantName: String!
+  inspectionId: ID!
+  jobId: ID!
+  eventId: ID!
+  executionId: ID!
+  correlationId: String!
+  attempt: Int!
+  replayGeneration: Int!
+  mode: LLMExecutionMode!
+  comparisonMode: String!
+  modelAlias: String!
+  provider: String
+  model: String
+  gatewayRequestId: String
+  state: LLMCallState!
+  technicalOutcome: String!
+  transportDelivered: Boolean
+  httpStatus: Int
+  inputTokens: Int
+  outputTokens: Int
+  reportedCost: Float
+  durationMs: Int
+  startedAt: String!
+  finishedAt: String
+}
 type InspectionLLMUsage {
   inspectionId: ID!
   mode: LLMExecutionMode!
@@ -7613,6 +8002,64 @@ func (ec *executionContext) childFields_ExternalSessionPayload(ctx context.Conte
 	return nil, fmt.Errorf("no field named %q was found under type ExternalSessionPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_GlobalLLMCallUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "callId":
+		return ec.fieldContext_GlobalLLMCallUsage_callId(ctx, field)
+	case "tenantId":
+		return ec.fieldContext_GlobalLLMCallUsage_tenantId(ctx, field)
+	case "tenantName":
+		return ec.fieldContext_GlobalLLMCallUsage_tenantName(ctx, field)
+	case "inspectionId":
+		return ec.fieldContext_GlobalLLMCallUsage_inspectionId(ctx, field)
+	case "jobId":
+		return ec.fieldContext_GlobalLLMCallUsage_jobId(ctx, field)
+	case "eventId":
+		return ec.fieldContext_GlobalLLMCallUsage_eventId(ctx, field)
+	case "executionId":
+		return ec.fieldContext_GlobalLLMCallUsage_executionId(ctx, field)
+	case "correlationId":
+		return ec.fieldContext_GlobalLLMCallUsage_correlationId(ctx, field)
+	case "attempt":
+		return ec.fieldContext_GlobalLLMCallUsage_attempt(ctx, field)
+	case "replayGeneration":
+		return ec.fieldContext_GlobalLLMCallUsage_replayGeneration(ctx, field)
+	case "mode":
+		return ec.fieldContext_GlobalLLMCallUsage_mode(ctx, field)
+	case "comparisonMode":
+		return ec.fieldContext_GlobalLLMCallUsage_comparisonMode(ctx, field)
+	case "modelAlias":
+		return ec.fieldContext_GlobalLLMCallUsage_modelAlias(ctx, field)
+	case "provider":
+		return ec.fieldContext_GlobalLLMCallUsage_provider(ctx, field)
+	case "model":
+		return ec.fieldContext_GlobalLLMCallUsage_model(ctx, field)
+	case "gatewayRequestId":
+		return ec.fieldContext_GlobalLLMCallUsage_gatewayRequestId(ctx, field)
+	case "state":
+		return ec.fieldContext_GlobalLLMCallUsage_state(ctx, field)
+	case "technicalOutcome":
+		return ec.fieldContext_GlobalLLMCallUsage_technicalOutcome(ctx, field)
+	case "transportDelivered":
+		return ec.fieldContext_GlobalLLMCallUsage_transportDelivered(ctx, field)
+	case "httpStatus":
+		return ec.fieldContext_GlobalLLMCallUsage_httpStatus(ctx, field)
+	case "inputTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_inputTokens(ctx, field)
+	case "outputTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_outputTokens(ctx, field)
+	case "reportedCost":
+		return ec.fieldContext_GlobalLLMCallUsage_reportedCost(ctx, field)
+	case "durationMs":
+		return ec.fieldContext_GlobalLLMCallUsage_durationMs(ctx, field)
+	case "startedAt":
+		return ec.fieldContext_GlobalLLMCallUsage_startedAt(ctx, field)
+	case "finishedAt":
+		return ec.fieldContext_GlobalLLMCallUsage_finishedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type GlobalLLMCallUsage", field.Name)
+}
+
 func (ec *executionContext) childFields_Inspection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -7787,6 +8234,40 @@ func (ec *executionContext) childFields_LLMCallUsage(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type LLMCallUsage", field.Name)
 }
 
+func (ec *executionContext) childFields_LLMUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "from":
+		return ec.fieldContext_LLMUsage_from(ctx, field)
+	case "to":
+		return ec.fieldContext_LLMUsage_to(ctx, field)
+	case "attemptedCalls":
+		return ec.fieldContext_LLMUsage_attemptedCalls(ctx, field)
+	case "deliveredCalls":
+		return ec.fieldContext_LLMUsage_deliveredCalls(ctx, field)
+	case "incompleteCalls":
+		return ec.fieldContext_LLMUsage_incompleteCalls(ctx, field)
+	case "inputTokens":
+		return ec.fieldContext_LLMUsage_inputTokens(ctx, field)
+	case "outputTokens":
+		return ec.fieldContext_LLMUsage_outputTokens(ctx, field)
+	case "knownReportedCost":
+		return ec.fieldContext_LLMUsage_knownReportedCost(ctx, field)
+	case "unknownCostCalls":
+		return ec.fieldContext_LLMUsage_unknownCostCalls(ctx, field)
+	case "costComplete":
+		return ec.fieldContext_LLMUsage_costComplete(ctx, field)
+	case "coverageStartedAt":
+		return ec.fieldContext_LLMUsage_coverageStartedAt(ctx, field)
+	case "coverageComplete":
+		return ec.fieldContext_LLMUsage_coverageComplete(ctx, field)
+	case "calls":
+		return ec.fieldContext_LLMUsage_calls(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_LLMUsage_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type LLMUsage", field.Name)
+}
+
 func (ec *executionContext) childFields_Me(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "identityId":
@@ -7805,6 +8286,8 @@ func (ec *executionContext) childFields_Me(ctx context.Context, field graphql.Co
 		return ec.fieldContext_Me_memberships(ctx, field)
 	case "effectiveScopes":
 		return ec.fieldContext_Me_effectiveScopes(ctx, field)
+	case "canViewLLMCosts":
+		return ec.fieldContext_Me_canViewLLMCosts(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Me", field.Name)
 }
@@ -9185,6 +9668,16 @@ func (ec *executionContext) childFields_Tenant(ctx context.Context, field graphq
 		return ec.fieldContext_Tenant_version(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Tenant", field.Name)
+}
+
+func (ec *executionContext) childFields_TenantConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodes":
+		return ec.fieldContext_TenantConnection_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_TenantConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TenantConnection", field.Name)
 }
 
 func (ec *executionContext) childFields_TenantPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10652,6 +11145,66 @@ func (ec *executionContext) field_Query_inspections_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["history"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_llmUsageTenants_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "search",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_llmUsage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter",
+		func(ctx context.Context, v any) (*LLMUsageFilter, error) {
+			return ec.unmarshalOLLMUsageFilter2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsageFilter(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
 	return args, nil
 }
 
@@ -14705,6 +15258,604 @@ func (ec *executionContext) fieldContext_ExternalSessionPayload_clientMutationId
 	return graphql.NewScalarFieldContext("ExternalSessionPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _GlobalLLMCallUsage_callId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_callId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CallID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_callId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_tenantId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_tenantId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TenantID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_tenantId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_tenantName(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_tenantName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TenantName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_tenantName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_inspectionId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_jobId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_jobId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_jobId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_eventId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_eventId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EventID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_eventId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_executionId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_executionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExecutionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_executionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_correlationId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_correlationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CorrelationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_correlationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_attempt(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_attempt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Attempt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_attempt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_replayGeneration(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_replayGeneration(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplayGeneration, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_replayGeneration(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_mode(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_mode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LLMExecutionMode) graphql.Marshaler {
+			return ec.marshalNLLMExecutionMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMExecutionMode(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type LLMExecutionMode does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_comparisonMode(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_comparisonMode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ComparisonMode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_comparisonMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_modelAlias(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_modelAlias(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ModelAlias, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_modelAlias(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_provider(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_provider(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Provider, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_model(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_model(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Model, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_gatewayRequestId(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_gatewayRequestId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GatewayRequestID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_gatewayRequestId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_state(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LLMCallState) graphql.Marshaler {
+			return ec.marshalNLLMCallState2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMCallState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type LLMCallState does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_technicalOutcome(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_technicalOutcome(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TechnicalOutcome, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_technicalOutcome(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_transportDelivered(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_transportDelivered(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TransportDelivered, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_transportDelivered(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_httpStatus(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_httpStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HTTPStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_httpStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_inputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_inputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_outputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_outputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_reportedCost(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_reportedCost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReportedCost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_reportedCost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_durationMs(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_durationMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DurationMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_startedAt(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_startedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_finishedAt(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_finishedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FinishedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Inspection_id(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16295,6 +17446,346 @@ func (ec *executionContext) fieldContext_LLMCallUsage_finishedAt(_ context.Conte
 	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _LLMUsage_from(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_from(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_to(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_to(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_attemptedCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_attemptedCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AttemptedCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_attemptedCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_deliveredCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_deliveredCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveredCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_deliveredCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_incompleteCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_incompleteCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IncompleteCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_incompleteCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_inputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_inputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_outputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_outputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_knownReportedCost(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_knownReportedCost(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.KnownReportedCost, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
+			return ec.marshalNFloat2float64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_knownReportedCost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Float does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_unknownCostCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_unknownCostCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnknownCostCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_unknownCostCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_costComplete(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_costComplete(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CostComplete, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_costComplete(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_coverageStartedAt(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_coverageStartedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CoverageStartedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_coverageStartedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_coverageComplete(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_coverageComplete(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CoverageComplete, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_coverageComplete(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_calls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_calls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Calls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*GlobalLLMCallUsage) graphql.Marshaler {
+			return ec.marshalNGlobalLLMCallUsage2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐGlobalLLMCallUsageᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_calls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "LLMUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_GlobalLLMCallUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _LLMUsage_pageInfo(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "LLMUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Me_identityId(ctx context.Context, field graphql.CollectedField, obj *Me) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16495,6 +17986,29 @@ func (ec *executionContext) fieldContext_Me_effectiveScopes(_ context.Context, f
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Me_canViewLLMCosts(ctx context.Context, field graphql.CollectedField, obj *Me) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Me_canViewLLMCosts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CanViewLLMCosts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Me_canViewLLMCosts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Me", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Media_id(ctx context.Context, field graphql.CollectedField, obj *Media) (ret graphql.Marshaler) {
@@ -26502,6 +28016,94 @@ func (ec *executionContext) fieldContext_Query_inspectionLLMUsage(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_llmUsage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_llmUsage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LlmUsage(ctx, fc.Args["filter"].(*LLMUsageFilter), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *LLMUsage) graphql.Marshaler {
+			return ec.marshalNLLMUsage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_llmUsage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_LLMUsage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_llmUsage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_llmUsageTenants(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_llmUsageTenants(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LlmUsageTenants(ctx, fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TenantConnection) graphql.Marshaler {
+			return ec.marshalNTenantConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenantConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_llmUsageTenants(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TenantConnection(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_llmUsageTenants_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_externalCapture(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31892,6 +33494,70 @@ func (ec *executionContext) fieldContext_Tenant_version(_ context.Context, field
 	return graphql.NewScalarFieldContext("Tenant", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _TenantConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *TenantConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TenantConnection_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Tenant) graphql.Marshaler {
+			return ec.marshalNTenant2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenantᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TenantConnection_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TenantConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Tenant(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TenantConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *TenantConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TenantConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TenantConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TenantConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _TenantPayload_tenant(ctx context.Context, field graphql.CollectedField, obj *TenantPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32308,11 +33974,11 @@ func (ec *executionContext) _UsageSummary_cost(ctx context.Context, field graphq
 			return obj.Cost, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v float64) graphql.Marshaler {
-			return ec.marshalNFloat2float64(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_UsageSummary_cost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -35273,6 +36939,110 @@ func (ec *executionContext) unmarshalInputInviteOriginCaptureInput(ctx context.C
 				return it, err
 			}
 			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputLLMUsageFilter(ctx context.Context, obj any) (LLMUsageFilter, error) {
+	var it LLMUsageFilter
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["mode"]; !present {
+		asMap["mode"] = "LIVE"
+	}
+
+	fieldsInOrder := [...]string{"from", "to", "tenantId", "inspectionId", "provider", "model", "modelAlias", "mode", "technicalOutcome", "state", "cost"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "from":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("from"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.From = data
+		case "to":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("to"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.To = data
+		case "tenantId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tenantId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TenantID = data
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "provider":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("provider"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Provider = data
+		case "model":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("model"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Model = data
+		case "modelAlias":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("modelAlias"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ModelAlias = data
+		case "mode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mode"))
+			data, err := ec.unmarshalOLLMExecutionMode2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMExecutionMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Mode = data
+		case "technicalOutcome":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("technicalOutcome"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TechnicalOutcome = data
+		case "state":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("state"))
+			data, err := ec.unmarshalOLLMCallState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMCallState(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.State = data
+		case "cost":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cost"))
+			data, err := ec.unmarshalOLLMUsageCostState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsageCostState(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Cost = data
 		}
 	}
 	return it, nil
@@ -38718,6 +40488,169 @@ func (ec *executionContext) _ExternalSessionPayload(ctx context.Context, sel ast
 	return out
 }
 
+var globalLLMCallUsageImplementors = []string{"GlobalLLMCallUsage"}
+
+func (ec *executionContext) _GlobalLLMCallUsage(ctx context.Context, sel ast.SelectionSet, obj *GlobalLLMCallUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, globalLLMCallUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("GlobalLLMCallUsage")
+		case "callId":
+			out.Values[i] = ec._GlobalLLMCallUsage_callId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tenantId":
+			out.Values[i] = ec._GlobalLLMCallUsage_tenantId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tenantName":
+			out.Values[i] = ec._GlobalLLMCallUsage_tenantName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inspectionId":
+			out.Values[i] = ec._GlobalLLMCallUsage_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobId":
+			out.Values[i] = ec._GlobalLLMCallUsage_jobId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "eventId":
+			out.Values[i] = ec._GlobalLLMCallUsage_eventId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "executionId":
+			out.Values[i] = ec._GlobalLLMCallUsage_executionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "correlationId":
+			out.Values[i] = ec._GlobalLLMCallUsage_correlationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attempt":
+			out.Values[i] = ec._GlobalLLMCallUsage_attempt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "replayGeneration":
+			out.Values[i] = ec._GlobalLLMCallUsage_replayGeneration(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._GlobalLLMCallUsage_mode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "comparisonMode":
+			out.Values[i] = ec._GlobalLLMCallUsage_comparisonMode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "modelAlias":
+			out.Values[i] = ec._GlobalLLMCallUsage_modelAlias(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._GlobalLLMCallUsage_provider(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "model":
+			out.Values[i] = ec._GlobalLLMCallUsage_model(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "gatewayRequestId":
+			out.Values[i] = ec._GlobalLLMCallUsage_gatewayRequestId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._GlobalLLMCallUsage_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "technicalOutcome":
+			out.Values[i] = ec._GlobalLLMCallUsage_technicalOutcome(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "transportDelivered":
+			out.Values[i] = ec._GlobalLLMCallUsage_transportDelivered(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "httpStatus":
+			out.Values[i] = ec._GlobalLLMCallUsage_httpStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "inputTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "outputTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reportedCost":
+			out.Values[i] = ec._GlobalLLMCallUsage_reportedCost(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "durationMs":
+			out.Values[i] = ec._GlobalLLMCallUsage_durationMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._GlobalLLMCallUsage_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "finishedAt":
+			out.Values[i] = ec._GlobalLLMCallUsage_finishedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var inspectionImplementors = []string{"Inspection"}
 
 func (ec *executionContext) _Inspection(ctx context.Context, sel ast.SelectionSet, obj *Inspection) graphql.Marshaler {
@@ -39279,6 +41212,109 @@ func (ec *executionContext) _LLMCallUsage(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var lLMUsageImplementors = []string{"LLMUsage"}
+
+func (ec *executionContext) _LLMUsage(ctx context.Context, sel ast.SelectionSet, obj *LLMUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, lLMUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("LLMUsage")
+		case "from":
+			out.Values[i] = ec._LLMUsage_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._LLMUsage_to(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attemptedCalls":
+			out.Values[i] = ec._LLMUsage_attemptedCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deliveredCalls":
+			out.Values[i] = ec._LLMUsage_deliveredCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "incompleteCalls":
+			out.Values[i] = ec._LLMUsage_incompleteCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inputTokens":
+			out.Values[i] = ec._LLMUsage_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outputTokens":
+			out.Values[i] = ec._LLMUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "knownReportedCost":
+			out.Values[i] = ec._LLMUsage_knownReportedCost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unknownCostCalls":
+			out.Values[i] = ec._LLMUsage_unknownCostCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "costComplete":
+			out.Values[i] = ec._LLMUsage_costComplete(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "coverageStartedAt":
+			out.Values[i] = ec._LLMUsage_coverageStartedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "coverageComplete":
+			out.Values[i] = ec._LLMUsage_coverageComplete(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "calls":
+			out.Values[i] = ec._LLMUsage_calls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._LLMUsage_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var meImplementors = []string{"Me"}
 
 func (ec *executionContext) _Me(ctx context.Context, sel ast.SelectionSet, obj *Me) graphql.Marshaler {
@@ -39328,6 +41364,11 @@ func (ec *executionContext) _Me(ctx context.Context, sel ast.SelectionSet, obj *
 			}
 		case "effectiveScopes":
 			out.Values[i] = ec._Me_effectiveScopes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "canViewLLMCosts":
+			out.Values[i] = ec._Me_canViewLLMCosts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -43296,6 +45337,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "llmUsage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_llmUsage(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "llmUsageTenants":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_llmUsageTenants(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "externalCapture":
 			field := field
 
@@ -45743,6 +47828,49 @@ func (ec *executionContext) _Tenant(ctx context.Context, sel ast.SelectionSet, o
 	return out
 }
 
+var tenantConnectionImplementors = []string{"TenantConnection"}
+
+func (ec *executionContext) _TenantConnection(ctx context.Context, sel ast.SelectionSet, obj *TenantConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, tenantConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TenantConnection")
+		case "nodes":
+			out.Values[i] = ec._TenantConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._TenantConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var tenantPayloadImplementors = []string{"TenantPayload"}
 
 func (ec *executionContext) _TenantPayload(ctx context.Context, sel ast.SelectionSet, obj *TenantPayload) graphql.Marshaler {
@@ -45936,7 +48064,7 @@ func (ec *executionContext) _UsageSummary(ctx context.Context, sel ast.Selection
 			}
 		case "cost":
 			out.Values[i] = ec._UsageSummary_cost(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -47034,6 +49162,32 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 	return graphql.WrapContextMarshaler(ctx, res)
 }
 
+func (ec *executionContext) marshalNGlobalLLMCallUsage2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐGlobalLLMCallUsageᚄ(ctx context.Context, sel ast.SelectionSet, v []*GlobalLLMCallUsage) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNGlobalLLMCallUsage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐGlobalLLMCallUsage(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNGlobalLLMCallUsage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐGlobalLLMCallUsage(ctx context.Context, sel ast.SelectionSet, v *GlobalLLMCallUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._GlobalLLMCallUsage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -47291,6 +49445,16 @@ func (ec *executionContext) unmarshalNLLMExecutionMode2inspectionᚋservicesᚋi
 
 func (ec *executionContext) marshalNLLMExecutionMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMExecutionMode(ctx context.Context, sel ast.SelectionSet, v LLMExecutionMode) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNLLMUsage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsage(ctx context.Context, sel ast.SelectionSet, v *LLMUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._LLMUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNLegalHoldInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLegalHoldInput(ctx context.Context, v any) (LegalHoldInput, error) {
@@ -48612,6 +50776,42 @@ func (ec *executionContext) marshalNTemplatePayload2ᚖinspectionᚋservicesᚋi
 	return ec._TemplatePayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNTenant2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenantᚄ(ctx context.Context, sel ast.SelectionSet, v []*Tenant) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTenant2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenant(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTenant2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenant(ctx context.Context, sel ast.SelectionSet, v *Tenant) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Tenant(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTenantConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenantConnection(ctx context.Context, sel ast.SelectionSet, v *TenantConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TenantConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNTenantPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTenantPayload(ctx context.Context, sel ast.SelectionSet, v *TenantPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -49052,6 +51252,22 @@ func (ec *executionContext) marshalOJSON2map(ctx context.Context, sel ast.Select
 	return res
 }
 
+func (ec *executionContext) unmarshalOLLMCallState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMCallState(ctx context.Context, v any) (*LLMCallState, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(LLMCallState)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOLLMCallState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMCallState(ctx context.Context, sel ast.SelectionSet, v *LLMCallState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOLLMExecutionMode2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMExecutionMode(ctx context.Context, v any) (*LLMExecutionMode, error) {
 	if v == nil {
 		return nil, nil
@@ -49066,6 +51282,30 @@ func (ec *executionContext) marshalOLLMExecutionMode2ᚖinspectionᚋservicesᚋ
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOLLMUsageCostState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsageCostState(ctx context.Context, v any) (*LLMUsageCostState, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(LLMUsageCostState)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOLLMUsageCostState2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsageCostState(ctx context.Context, sel ast.SelectionSet, v *LLMUsageCostState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOLLMUsageFilter2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLLMUsageFilter(ctx context.Context, v any) (*LLMUsageFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputLLMUsageFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOMedia2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMedia(ctx context.Context, sel ast.SelectionSet, v *Media) graphql.Marshaler {

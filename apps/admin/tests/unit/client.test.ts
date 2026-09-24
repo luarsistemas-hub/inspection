@@ -31,4 +31,15 @@ describe("Admin GraphQL transport", () => {
     await expect(graphql(AdminIdentityDocument)).rejects.toMatchObject({ code: "UNAUTHENTICATED", message: "Sua sessão expirou. Entre novamente." });
     expect(getAccessToken()).toBeUndefined();
   });
+  it("logs every GraphQL operation error with its server extensions", async () => {
+    setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1");
+    const errors = [{ message: "requirement media limit reached", extensions: { code: "INVALID_STATE", field: "requirementKey", correlationId: "correlation-1" } }];
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
+
+    await expect(graphql(AdminIdentityDocument)).rejects.toMatchObject({ code: "INVALID_STATE" });
+
+    expect(log).toHaveBeenCalledWith("[GraphQL] query AdminIdentity failed", { errors });
+    log.mockRestore();
+  });
 });

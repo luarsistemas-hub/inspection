@@ -60,8 +60,37 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 40 {
-		t.Fatalf("latest version=%d, want 40", got)
+	if got := LatestVersion(); got != 41 {
+		t.Fatalf("latest version=%d, want 41", got)
+	}
+}
+
+func TestGlobalLLMUsageMigrationAddsRestrictedReaders(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 41 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "global_llm_usage_readers" {
+		t.Fatalf("global usage migration=%+v", step)
+	}
+	for _, required := range []string{
+		"idx_llm_calls_global_cursor",
+		"idx_llm_calls_tenant_cursor",
+		"idx_llm_calls_mode_cursor",
+		"usage.read_llm_usage_summary",
+		"usage.read_llm_usage_calls",
+		"usage.read_llm_usage_tenants",
+		"SECURITY DEFINER",
+		"SET search_path = usage, inspections, tenancy, platform, pg_catalog",
+		"REVOKE ALL ON FUNCTION",
+		"GRANT EXECUTE ON FUNCTION",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Fatalf("global usage migration does not contain %q", required)
+		}
 	}
 }
 

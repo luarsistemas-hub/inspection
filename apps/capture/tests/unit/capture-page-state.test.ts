@@ -9,11 +9,15 @@ describe("capture page answer state", () => {
   });
 
   it("removes only the blocked media and preserves the other answer media", () => {
-    expect(mergeUploadedAnswer([answer(["media-1", "media-2"])], "front", "media-2", true)).toEqual([answer(["media-1"])]);
+    expect(mergeUploadedAnswer([answer(["media-1", "media-2"])], "front", "media-2", true)).toEqual([answer(["media-1"], 2)]);
   });
 
-  it("does not create a local answer for a blocked upload", () => {
-    expect(mergeUploadedAnswer([], "front", "screened-media", true)).toEqual([]);
+  it("tracks the answer version without counting a blocked upload as evidence", () => {
+    expect(mergeUploadedAnswer([], "front", "screened-media", true)).toEqual([{ requirementKey: "front", mediaIds: [], impossibilityReason: null, version: 1 }]);
+  });
+
+  it("replaces the prior blocked media in local answer state", () => {
+    expect(mergeUploadedAnswer([answer(["blocked-media"])], "front", "replacement", false, "blocked-media")).toEqual([answer(["replacement"], 3)]);
   });
 
   it("uses the current answer version for impossibility and preserves its media", () => {

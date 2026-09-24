@@ -54,7 +54,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 		if err := tx.Where("tenant_id=? AND id=?", tenantID, event.JobID).First(&job).Error; err != nil {
 			return err
 		}
-		if job.Status == "COMPLETED" || job.Status == "INCONCLUSIVE" {
+		if job.Status == "COMPLETED" || job.Status == "INCONCLUSIVE" || job.Status == "FAILED" {
 			if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
 				recorder.Set("duplicate")
 			}
@@ -97,7 +97,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
 			if fallbackErr == nil {
 				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
-					recorder.Set("inconclusive")
+					recorder.Set("failed")
 				}
 			}
 			return fallbackErr
@@ -112,7 +112,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), err)
 			if fallbackErr == nil {
 				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
-					recorder.Set("inconclusive")
+					recorder.Set("failed")
 				}
 			}
 			return fallbackErr
@@ -134,7 +134,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			fallbackErr := retryOrFallback(ctx, tx, tenantID, job, deps.Now(), validationErr)
 			if fallbackErr == nil {
 				if recorder := observability.OutcomeRecorderFromContext(ctx); recorder != nil {
-					recorder.Set("inconclusive")
+					recorder.Set("failed")
 				}
 			}
 			return fallbackErr
@@ -151,7 +151,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 		}
 		logAttempt(ctx, deps.Logger, request, result, "ACCEPTED", nil)
 		persistStarted := deps.Now()
-		err = persistAccepted(tx, tenantID, job, parsed, result, started, deps.Now().UTC(), status)
+		err = persistAccepted(ctx, tx, tenantID, job, parsed, result, started, deps.Now().UTC(), status)
 		persistOutcome := "success"
 		if err != nil {
 			persistOutcome = "error"
@@ -258,13 +258,20 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 }
 
 func retryOrFallback(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {
+	// Ledger failures are deterministic configuration or persistence faults. A
+	// broker retry cannot repair them and would only add the 5-minute retry tail
+	// observed in production, so close the job immediately as a technical
+	// failure and keep the cause code in the immutable analysis run.
+	if llm.CodeOf(cause) == string(llm.CodeLedgerPersistence) {
+		return persistTechnicalFailure(ctx, tx, tenantID, job, now, cause)
+	}
 	// Direct slice callers do not have broker metadata and retain the historical
-	// deterministic fallback behavior. Rabbit consumers carry the attempt and
-	// leave the job retryable until the fourth delivery.
+	// deterministic terminal behavior. Rabbit consumers carry the attempt and
+	// leave transient provider failures retryable until the fourth delivery.
 	if messaging.HasAttempt(ctx) && messaging.Attempt(ctx) < analysis.MaxAttempts-1 {
 		return cause
 	}
-	return persistFallback(tx, tenantID, job, now, cause)
+	return persistTechnicalFailure(ctx, tx, tenantID, job, now, cause)
 }
 
 func validateRequest(request llm.StructuredRequest) (llm.StructuredRequest, error) {
@@ -298,7 +305,7 @@ func isInsufficientEvidence(result analysis.Result) bool {
 	return result.CoverageStatus != "COMPLETE" || result.ComparisonStatus == "INCONCLUSIVE"
 }
 
-func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time, status string) error {
+func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time, status string) error {
 	outcome := "ACCEPTED"
 	if status == "INCONCLUSIVE" {
 		outcome = "INCONCLUSIVE"
@@ -353,24 +360,36 @@ func persistAccepted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJ
 			return err
 		}
 	}
-	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": status, "attempts": job.Attempts + 1, "updated_at": now}).Error; err != nil {
+	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": status, "attempts": attemptCount(ctx, job), "updated_at": now}).Error; err != nil {
 		return err
 	}
 	job.Status = status
 	return emitCompleted(tx, tenantID, job, now)
 }
 
-func persistFallback(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {
-	output, _ := json.Marshal(map[string]any{"coverageStatus": "INSUFFICIENT", "comparisonStatus": "INCONCLUSIVE", "findings": []any{}, "reason": "analysis unavailable"})
-	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: "", Model: "", GatewayRequestID: "", PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "INCONCLUSIVE", CreatedAt: now}
+func persistTechnicalFailure(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {
+	reasonCode := llm.CodeOf(cause)
+	if reasonCode == "" {
+		reasonCode = "analysis_unavailable"
+	}
+	output, _ := json.Marshal(map[string]any{"coverageStatus": "UNAVAILABLE", "comparisonStatus": "FAILED", "findings": []any{}, "reason": "analysis unavailable", "reasonCode": reasonCode})
+	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: "", Model: "", GatewayRequestID: "", PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "FAILED", CreatedAt: now}
 	if err := tx.Create(&run).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": "INCONCLUSIVE", "attempts": job.Attempts + 1, "updated_at": now}).Error; err != nil {
+	if err := tx.Model(&database.ComparisonJob{}).Where("tenant_id=? AND id=?", tenantID, job.ID).Updates(map[string]any{"status": "FAILED", "attempts": attemptCount(ctx, job), "updated_at": now}).Error; err != nil {
 		return err
 	}
-	job.Status = "INCONCLUSIVE"
+	job.Status = "FAILED"
 	return emitCompleted(tx, tenantID, job, now)
+}
+
+func attemptCount(ctx context.Context, job database.ComparisonJob) int {
+	attempts := job.Attempts + 1
+	if messaging.HasAttempt(ctx) && messaging.Attempt(ctx)+1 > attempts {
+		attempts = messaging.Attempt(ctx) + 1
+	}
+	return attempts
 }
 
 func emitCompleted(tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time) error {

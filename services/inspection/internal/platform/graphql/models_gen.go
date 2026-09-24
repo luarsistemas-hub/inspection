@@ -443,6 +443,35 @@ type ExternalSessionPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type GlobalLLMCallUsage struct {
+	CallID             string           `json:"callId"`
+	TenantID           string           `json:"tenantId"`
+	TenantName         string           `json:"tenantName"`
+	InspectionID       string           `json:"inspectionId"`
+	JobID              string           `json:"jobId"`
+	EventID            string           `json:"eventId"`
+	ExecutionID        string           `json:"executionId"`
+	CorrelationID      string           `json:"correlationId"`
+	Attempt            int              `json:"attempt"`
+	ReplayGeneration   int              `json:"replayGeneration"`
+	Mode               LLMExecutionMode `json:"mode"`
+	ComparisonMode     string           `json:"comparisonMode"`
+	ModelAlias         string           `json:"modelAlias"`
+	Provider           *string          `json:"provider,omitempty"`
+	Model              *string          `json:"model,omitempty"`
+	GatewayRequestID   *string          `json:"gatewayRequestId,omitempty"`
+	State              LLMCallState     `json:"state"`
+	TechnicalOutcome   string           `json:"technicalOutcome"`
+	TransportDelivered *bool            `json:"transportDelivered,omitempty"`
+	HTTPStatus         *int             `json:"httpStatus,omitempty"`
+	InputTokens        *int             `json:"inputTokens,omitempty"`
+	OutputTokens       *int             `json:"outputTokens,omitempty"`
+	ReportedCost       *float64         `json:"reportedCost,omitempty"`
+	DurationMs         *int             `json:"durationMs,omitempty"`
+	StartedAt          string           `json:"startedAt"`
+	FinishedAt         *string          `json:"finishedAt,omitempty"`
+}
+
 type Inspection struct {
 	ID                       string   `json:"id"`
 	BusinessUnitID           string   `json:"businessUnitId"`
@@ -565,6 +594,37 @@ type LLMCallUsage struct {
 	FinishedAt         *string          `json:"finishedAt,omitempty"`
 }
 
+type LLMUsage struct {
+	From              string                `json:"from"`
+	To                string                `json:"to"`
+	AttemptedCalls    int                   `json:"attemptedCalls"`
+	DeliveredCalls    int                   `json:"deliveredCalls"`
+	IncompleteCalls   int                   `json:"incompleteCalls"`
+	InputTokens       int                   `json:"inputTokens"`
+	OutputTokens      int                   `json:"outputTokens"`
+	KnownReportedCost float64               `json:"knownReportedCost"`
+	UnknownCostCalls  int                   `json:"unknownCostCalls"`
+	CostComplete      bool                  `json:"costComplete"`
+	CoverageStartedAt *string               `json:"coverageStartedAt,omitempty"`
+	CoverageComplete  bool                  `json:"coverageComplete"`
+	Calls             []*GlobalLLMCallUsage `json:"calls"`
+	PageInfo          *PageInfo             `json:"pageInfo"`
+}
+
+type LLMUsageFilter struct {
+	From             *string            `json:"from,omitempty"`
+	To               *string            `json:"to,omitempty"`
+	TenantID         *string            `json:"tenantId,omitempty"`
+	InspectionID     *string            `json:"inspectionId,omitempty"`
+	Provider         *string            `json:"provider,omitempty"`
+	Model            *string            `json:"model,omitempty"`
+	ModelAlias       *string            `json:"modelAlias,omitempty"`
+	Mode             *LLMExecutionMode  `json:"mode,omitempty"`
+	TechnicalOutcome *string            `json:"technicalOutcome,omitempty"`
+	State            *LLMCallState      `json:"state,omitempty"`
+	Cost             *LLMUsageCostState `json:"cost,omitempty"`
+}
+
 type LegalHoldInput struct {
 	InspectionID     string `json:"inspectionId"`
 	Reason           string `json:"reason"`
@@ -585,6 +645,7 @@ type Me struct {
 	Roles               []string      `json:"roles"`
 	Memberships         []*Membership `json:"memberships"`
 	EffectiveScopes     []*Scope      `json:"effectiveScopes"`
+	CanViewLLMCosts     bool          `json:"canViewLLMCosts"`
 }
 
 type Media struct {
@@ -1450,6 +1511,11 @@ type Tenant struct {
 	Version         int    `json:"version"`
 }
 
+type TenantConnection struct {
+	Nodes    []*Tenant `json:"nodes"`
+	PageInfo *PageInfo `json:"pageInfo"`
+}
+
 type TenantPayload struct {
 	Tenant           *Tenant      `json:"tenant,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
@@ -1523,12 +1589,12 @@ type UpsertParticipantInput struct {
 }
 
 type UsageSummary struct {
-	From         string  `json:"from"`
-	To           string  `json:"to"`
-	Requests     int     `json:"requests"`
-	InputTokens  int     `json:"inputTokens"`
-	OutputTokens int     `json:"outputTokens"`
-	Cost         float64 `json:"cost"`
+	From         string   `json:"from"`
+	To           string   `json:"to"`
+	Requests     int      `json:"requests"`
+	InputTokens  int      `json:"inputTokens"`
+	OutputTokens int      `json:"outputTokens"`
+	Cost         *float64 `json:"cost,omitempty"`
 }
 
 type UserError struct {
@@ -1774,6 +1840,61 @@ func (e *LLMExecutionMode) UnmarshalJSON(b []byte) error {
 }
 
 func (e LLMExecutionMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type LLMUsageCostState string
+
+const (
+	LLMUsageCostStateInformed LLMUsageCostState = "INFORMED"
+	LLMUsageCostStateMissing  LLMUsageCostState = "MISSING"
+)
+
+var AllLLMUsageCostState = []LLMUsageCostState{
+	LLMUsageCostStateInformed,
+	LLMUsageCostStateMissing,
+}
+
+func (e LLMUsageCostState) IsValid() bool {
+	switch e {
+	case LLMUsageCostStateInformed, LLMUsageCostStateMissing:
+		return true
+	}
+	return false
+}
+
+func (e LLMUsageCostState) String() string {
+	return string(e)
+}
+
+func (e *LLMUsageCostState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LLMUsageCostState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LLMUsageCostState", str)
+	}
+	return nil
+}
+
+func (e LLMUsageCostState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LLMUsageCostState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LLMUsageCostState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

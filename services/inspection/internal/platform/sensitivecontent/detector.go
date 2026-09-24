@@ -19,8 +19,11 @@ const MaxDecodedPixels = 40_000_000
 
 const (
 	minFaceComponentPercent = 8
-	minFaceAspectRatio      = 0.25
-	maxFaceAspectRatio      = 1.60
+	minFaceAspectRatio      = 0.35
+	maxFaceAspectRatio      = 1.50
+	maxFaceFrameSpan        = 0.90
+	maxFaceFillRatio        = 0.96
+	maxFaceBorderContacts   = 1
 )
 
 type Region struct {
@@ -38,8 +41,13 @@ type Model interface {
 type Detector struct{ Model Model }
 
 type embeddedModel struct{}
+type disabledModel struct{}
 
 func NewEmbeddedDetector() Detector { return Detector{Model: embeddedModel{}} }
+
+// NewDisabledDetector creates a detector that clears media without inspecting
+// its pixels. It is intended for explicitly configured operational bypasses.
+func NewDisabledDetector() Detector { return Detector{Model: disabledModel{}} }
 
 func (embeddedModel) Detect(ctx context.Context, source image.Image) ([]Region, error) {
 	bounds := source.Bounds()
@@ -111,23 +119,64 @@ func faceComponent(mask []bool, width, height, total int) (skinComponent, bool) 
 					queue = append(queue, neighbor)
 				}
 			}
-			if component.count > best.count {
+			if faceLike(component, width, height, total) && component.count > best.count {
 				best = component
 			}
 		}
 	}
-	if best.count*100 < total*minFaceComponentPercent {
-		return skinComponent{}, false
+	return best, best.count > 0
+}
+
+func faceLike(component skinComponent, width, height, total int) bool {
+	if component.count*100 < total*minFaceComponentPercent {
+		return false
 	}
-	aspectRatio := float64(best.maxX-best.minX+1) / float64(best.maxY-best.minY+1)
+	componentWidth := component.maxX - component.minX + 1
+	componentHeight := component.maxY - component.minY + 1
+	aspectRatio := float64(componentWidth) / float64(componentHeight)
 	if aspectRatio < minFaceAspectRatio || aspectRatio > maxFaceAspectRatio {
-		return skinComponent{}, false
+		return false
 	}
-	return best, true
+	widthRatio := float64(componentWidth) / float64(width)
+	heightRatio := float64(componentHeight) / float64(height)
+	if widthRatio >= maxFaceFrameSpan && heightRatio >= maxFaceFrameSpan {
+		return false
+	}
+
+	borderContacts := 0
+	if component.minX == 0 {
+		borderContacts++
+	}
+	if component.maxX == width-1 {
+		borderContacts++
+	}
+	if component.minY == 0 {
+		borderContacts++
+	}
+	if component.maxY == height-1 {
+		borderContacts++
+	}
+	if borderContacts > maxFaceBorderContacts {
+		return false
+	}
+
+	fillRatio := float64(component.count) / float64(componentWidth*componentHeight)
+	return fillRatio <= maxFaceFillRatio
 }
 
 func (embeddedModel) Bytes() []byte {
-	return []byte("inspection-sensitive-region-model-v3:skin-component-r8-aspect25-160:document-gray24-luma210")
+	return []byte("inspection-sensitive-region-model-v5:skin-component-r8-aspect35-150-frame90-border1-fill96:document-gray24-luma210")
+}
+
+func (disabledModel) Detect(ctx context.Context, _ image.Image) ([]Region, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (disabledModel) Bytes() []byte {
+	return []byte("inspection-sensitive-region-model-disabled")
 }
 
 type candidate struct {

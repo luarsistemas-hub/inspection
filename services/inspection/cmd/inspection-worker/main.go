@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -80,7 +81,17 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	callLedger, err := recordllmcall.Setup(recordllmcall.Dependencies{DB: db})
+	ledgerDB := db
+	if cfg.RuntimeDatabaseURL != "" && cfg.RuntimeDatabaseURL != cfg.DatabaseURL {
+		ledgerDB, err = database.Open(cfg.RuntimeDatabaseURL)
+		if err != nil {
+			return fmt.Errorf("ledger database: %w", err)
+		}
+		if sqlDB, dbErr := ledgerDB.DB(); dbErr == nil {
+			defer sqlDB.Close()
+		}
+	}
+	callLedger, err := recordllmcall.Setup(recordllmcall.Dependencies{DB: ledgerDB})
 	if err != nil {
 		return err
 	}
@@ -139,7 +150,12 @@ func run() error {
 		return err
 	}
 	privateStore := objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}
-	mediaHandler, err := processmedia.Setup(processmedia.Dependencies{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}, Detector: sensitivecontent.NewEmbeddedDetector()})
+	detector := sensitivecontent.NewEmbeddedDetector()
+	if !cfg.ImageValidationEnabled {
+		log.Printf("inspection-worker: image validation disabled by INSPECTION_IMAGE_VALIDATION_ENABLED")
+		detector = sensitivecontent.NewDisabledDetector()
+	}
+	mediaHandler, err := processmedia.Setup(processmedia.Dependencies{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}, Detector: detector})
 	if err != nil {
 		return err
 	}

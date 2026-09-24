@@ -1,10 +1,17 @@
 import { clearProtectedContext, clearSession, getAccessToken, restoreMembershipContext } from "@/auth/session";
-import { print } from "graphql";
+import { getOperationAST, print } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 
 export type GraphQLFailure = { message: string; code?: string; field?: string };
-type Response<T> = { data?: T; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
+type GraphQLErrorResponse = { message: string; extensions?: { code?: string; field?: string; correlationId?: string; [key: string]: unknown } };
+type Response<T> = { data?: T; errors?: GraphQLErrorResponse[] };
 const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql";
+
+function logOperationErrors(document: TypedDocumentNode<unknown, never>, errors: GraphQLErrorResponse[]): void {
+  const operation = getOperationAST(document);
+  const operationLabel = operation ? `${operation.operation} ${operation.name?.value ?? "(anonymous)"}` : "unknown operation";
+  console.error(`[GraphQL] ${operationLabel} failed`, { errors });
+}
 
 async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variables: V | undefined, signal: AbortSignal | undefined, requiresMembership: boolean): Promise<T> {
   const token = getAccessToken();
@@ -17,6 +24,7 @@ async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variab
   let body: Response<T> = {};
   const raw = await response.text();
   if (raw.trimStart().startsWith("{")) { try { body = JSON.parse(raw) as Response<T>; } catch { body = {}; } }
+  if (body.errors?.length) logOperationErrors(document, body.errors);
   if (response.status === 401 || response.status === 403) {
     clearProtectedContext(); clearSession();
     throw { message: response.status === 401 ? "Sua sessão expirou. Entre novamente." : "Você não tem permissão para esta operação.", code: response.status === 401 ? "UNAUTHENTICATED" : "FORBIDDEN" } satisfies GraphQLFailure;

@@ -11,7 +11,9 @@ describe("dashboard presenters", () => {
     expect(presentInspectionSource("MANUAL")).toBe("Manual");
     expect(presentReportMode("HISTORICAL")).toBe("Histórico");
     expect(presentCoverageStatus("INSUFFICIENT")).toBe("Evidência insuficiente");
+    expect(presentCoverageStatus("UNAVAILABLE")).toBe("Análise indisponível");
     expect(presentComparisonStatus("UNCHANGED")).toBe("Sem mudanças relevantes");
+    expect(presentComparisonStatus("FAILED")).toBe("Falha técnica na análise");
     expect(presentChangeType("WORSENED")).toBe("Agravamento");
   });
 });

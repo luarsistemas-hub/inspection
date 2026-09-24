@@ -178,10 +178,10 @@ func Validate(snapshot Snapshot) error {
 		if strings.TrimSpace(requirement.Key) == "" || strings.TrimSpace(requirement.Section) == "" || strings.TrimSpace(requirement.Label) == "" {
 			return fmt.Errorf("report requirement is invalid")
 		}
-		if requirement.CoverageStatus != "" && requirement.CoverageStatus != "COMPLETE" && requirement.CoverageStatus != "PARTIAL" && requirement.CoverageStatus != "INSUFFICIENT" {
+		if requirement.CoverageStatus != "" && requirement.CoverageStatus != "COMPLETE" && requirement.CoverageStatus != "PARTIAL" && requirement.CoverageStatus != "INSUFFICIENT" && requirement.CoverageStatus != "UNAVAILABLE" {
 			return fmt.Errorf("report requirement coverage status is invalid")
 		}
-		if requirement.ComparisonStatus != "" && requirement.ComparisonStatus != "CHANGED" && requirement.ComparisonStatus != "UNCHANGED" && requirement.ComparisonStatus != "INCONCLUSIVE" && requirement.ComparisonStatus != "NOT_APPLICABLE" {
+		if requirement.ComparisonStatus != "" && requirement.ComparisonStatus != "CHANGED" && requirement.ComparisonStatus != "UNCHANGED" && requirement.ComparisonStatus != "INCONCLUSIVE" && requirement.ComparisonStatus != "NOT_APPLICABLE" && requirement.ComparisonStatus != "FAILED" {
 			return fmt.Errorf("report requirement comparison status is invalid")
 		}
 	}
@@ -263,7 +263,7 @@ func presentMode(value string) string {
 	return reportLabel(map[string]string{"CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico"}, value)
 }
 func presentReason(value string) string {
-	return reportLabel(map[string]string{"MISSING_EVIDENCE": "Evidência ausente", "QUALITY_LOW": "Qualidade insuficiente", "INCONCLUSIVE": "Comparação inconclusiva", "OBSERVED_CHANGE": "Mudança observada", "CRITICAL_FINDING": "Achado crítico", "CLASSIFICATION_CRITICAL": "Classificação crítica"}, value)
+	return reportLabel(map[string]string{"MISSING_EVIDENCE": "Evidência ausente", "QUALITY_LOW": "Qualidade insuficiente", "INCONCLUSIVE": "Comparação inconclusiva", "ANALYSIS_FAILED": "Falha técnica na análise", "OBSERVED_CHANGE": "Mudança observada", "CRITICAL_FINDING": "Achado crítico", "CLASSIFICATION_CRITICAL": "Classificação crítica"}, value)
 }
 func presentRequirement(value string) string {
 	if value == "overview" || value == "Property overview" {
@@ -281,10 +281,10 @@ func presentSeverity(value string) string {
 	return reportLabel(map[string]string{"NONE": "Insuficiente", "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica"}, value)
 }
 func presentCoverageStatus(value string) string {
-	return reportLabel(map[string]string{"COMPLETE": "Cobertura completa", "PARTIAL": "Cobertura parcial", "INSUFFICIENT": "Evidência insuficiente"}, value)
+	return reportLabel(map[string]string{"COMPLETE": "Cobertura completa", "PARTIAL": "Cobertura parcial", "INSUFFICIENT": "Evidência insuficiente", "UNAVAILABLE": "Análise indisponível"}, value)
 }
 func presentComparisonStatus(value string) string {
-	return reportLabel(map[string]string{"CHANGED": "Mudança identificada", "UNCHANGED": "Sem mudanças relevantes", "INCONCLUSIVE": "Comparação inconclusiva", "NOT_APPLICABLE": "Análise atual"}, value)
+	return reportLabel(map[string]string{"CHANGED": "Mudança identificada", "UNCHANGED": "Sem mudanças relevantes", "INCONCLUSIVE": "Comparação inconclusiva", "NOT_APPLICABLE": "Análise atual", "FAILED": "Falha técnica na análise"}, value)
 }
 func presentAction(value string) string {
 	if label := reportLabel(map[string]string{"REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional"}, value); label != "Situação não reconhecida" {

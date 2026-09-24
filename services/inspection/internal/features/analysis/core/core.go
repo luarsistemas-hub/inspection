@@ -78,8 +78,8 @@ func ParseResult(data []byte) (Result, error) {
 // ComparisonFacts are terminal facts only. They are sufficient to reproduce a
 // classification from the inspection's pinned analysis-profile version.
 type ComparisonFacts struct {
-	Terminal, Inconclusive, Missing, Skipped, Flagged, Uncorrected bool
-	Findings                                                       []Finding
+	Terminal, Inconclusive, TechnicalFailure, Missing, Skipped, Flagged, Uncorrected bool
+	Findings                                                                         []Finding
 }
 
 // Decision is the sole final classification plus stable reason codes.
@@ -218,6 +218,10 @@ func Classify(comparisons []ComparisonFacts) Decision {
 		if comparison.Inconclusive {
 			attention = true
 			reasons = appendReason(reasons, "INCONCLUSIVE")
+		}
+		if comparison.TechnicalFailure {
+			attention = true
+			reasons = appendReason(reasons, "ANALYSIS_FAILED")
 		}
 		if comparison.Missing {
 			attention = true

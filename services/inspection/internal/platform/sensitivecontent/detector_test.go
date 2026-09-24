@@ -41,12 +41,20 @@ func TestUT010CorruptAndCanceledImages(t *testing.T) {
 	}
 }
 
+func TestDisabledDetectorClearsValidImageWithoutRegions(t *testing.T) {
+	result, err := NewDisabledDetector().Detect(context.Background(), validPNG())
+	if err != nil || len(result.Regions) != 0 || result.ModelDigest == "" {
+		t.Fatalf("disabled detector result = %+v, err = %v", result, err)
+	}
+}
+
 func TestEmbeddedModelDetectsFaceAndDocumentSignals(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
 	for y := 0; y < 100; y++ {
 		for x := 0; x < 100; x++ {
+			dx, dy := (float64(x)-24.5)/15, (float64(y)-42.5)/22.5
 			switch {
-			case x < 40:
+			case dx*dx+dy*dy <= 1:
 				img.Set(x, y, color.RGBA{R: 210, G: 150, B: 110, A: 255})
 			default:
 				img.Set(x, y, color.RGBA{R: 240, G: 240, B: 240, A: 255})
@@ -60,6 +68,23 @@ func TestEmbeddedModelDetectsFaceAndDocumentSignals(t *testing.T) {
 	result, err := NewEmbeddedDetector().Detect(context.Background(), encoded.Bytes())
 	if err != nil || len(result.Regions) != 2 || result.Regions[0].Kind != "FACE" || result.Regions[1].Kind != "DOCUMENT" {
 		t.Fatalf("embedded detection failed: %+v %v", result, err)
+	}
+}
+
+func TestEmbeddedModelIgnoresFrameSpanningWarmSurface(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.RGBA{R: 170, G: 115, B: 70, A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewEmbeddedDetector().Detect(context.Background(), encoded.Bytes())
+	if err != nil || len(result.Regions) != 0 {
+		t.Fatalf("frame-spanning warm surface was treated as sensitive content: %+v %v", result, err)
 	}
 }
 
@@ -84,5 +109,26 @@ func TestEmbeddedModelIgnoresDistributedWarmTones(t *testing.T) {
 	result, err := NewEmbeddedDetector().Detect(context.Background(), encoded.Bytes())
 	if err != nil || len(result.Regions) != 1 || result.Regions[0].Kind != "DOCUMENT" {
 		t.Fatalf("distributed warm tones were treated as a face: %+v %v", result, err)
+	}
+}
+
+func TestEmbeddedModelIgnoresSolidWarmPanel(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			if x < 60 && y >= 10 {
+				img.Set(x, y, color.RGBA{R: 170, G: 115, B: 70, A: 255})
+				continue
+			}
+			img.Set(x, y, color.RGBA{R: 240, G: 240, B: 240, A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewEmbeddedDetector().Detect(context.Background(), encoded.Bytes())
+	if err != nil || len(result.Regions) != 1 || result.Regions[0].Kind != "DOCUMENT" {
+		t.Fatalf("solid warm panel was treated as a face: %+v %v", result, err)
 	}
 }

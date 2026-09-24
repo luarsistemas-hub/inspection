@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"inspection/libs/identity"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	mediacore "inspection/services/inspection/internal/features/media/core"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -48,6 +49,41 @@ func TestIT153PerRequirementLimitKeepsAcceptedMedia(t *testing.T) {
 	var accepted int64
 	if err := f.db.Model(&database.MediaObject{}).Where("responsibility_id=? AND requirement_key='room'", f.draft.ResponsibilityID).Count(&accepted).Error; err != nil || accepted != 1 {
 		t.Fatalf("accepted evidence changed: %d %v", accepted, err)
+	}
+}
+
+func TestScreenedMediaCanBeReplacedWithinRequirementLimit(t *testing.T) {
+	f := newSubmissionFixture(t)
+	setRequirements(t, f, []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 1, DescriptionRequired: true}})
+	blocked := f.addMedia(t, "SCREENED", "room", "blocked room", true)
+	replacement := f.addMedia(t, "SCREENED", "", "", false)
+
+	result, err := f.service.SaveMetadata(context.Background(), capturecore.MetadataInput{
+		TenantID:         f.draft.TenantID,
+		ResponsibilityID: f.draft.ResponsibilityID,
+		MediaID:          replacement.ID,
+		RequirementKey:   "room",
+		Description:      "replacement room",
+		CaptureSource:    "CAMERA",
+		WindowStartedAt:  f.now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReplacesMediaID == nil || *result.ReplacesMediaID != blocked.ID {
+		t.Fatalf("replacement lineage missing: %+v", result)
+	}
+
+	if err := f.db.First(&blocked, "id=?", blocked.ID).Error; err != nil || blocked.Status != "ABORTED" {
+		t.Fatalf("blocked media remained active: %+v %v", blocked, err)
+	}
+	var answer database.RequirementAnswer
+	if err := f.db.Where("draft_id=? AND requirement_key='room'", f.draft.ID).First(&answer).Error; err != nil {
+		t.Fatal(err)
+	}
+	var mediaIDs []identity.ID
+	if err := json.Unmarshal(answer.MediaIDs, &mediaIDs); err != nil || len(mediaIDs) != 1 || mediaIDs[0] != replacement.ID {
+		t.Fatalf("replacement answer is inconsistent: %s %v", answer.MediaIDs, err)
 	}
 }
 

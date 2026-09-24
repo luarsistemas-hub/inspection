@@ -278,6 +278,7 @@ services:
       INSPECTION_LITELLM_API_KEY: ${INSPECTION_LITELLM_API_KEY:-}
       INSPECTION_GOTENBERG_URL: http://gotenberg:3000
       INSPECTION_PROVIDER_TIMEOUT: 30s
+      INSPECTION_IMAGE_VALIDATION_ENABLED: ${INSPECTION_IMAGE_VALIDATION_ENABLED:-true}
       NOTIFICATION_MAX_ATTEMPTS: "4"
       NOTIFICATION_RETRY_DELAYS: 5s,30s,5m
       # Fixed local-only AES-256 key; deployment environments must override
@@ -320,6 +321,7 @@ services:
     environment:
       <<: *inspection_runtime_environment
       INSPECTION_DATABASE_URL: postgres://inspection_worker:inspection-worker-local@postgres:5432/inspection?sslmode=disable
+      INSPECTION_RUNTIME_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-local@postgres:5432/inspection?sslmode=disable
       INSPECTION_DISPATCHER_DATABASE_URL: postgres://inspection_worker:inspection-worker-local@postgres:5432/inspection?sslmode=disable
 
   inspection-scheduler:
@@ -435,7 +437,7 @@ services:
 
   gotenberg:
     image: gotenberg/gotenberg:8.17.0
-    command: ["gotenberg", "--api-port=3000"]
+    command: ["gotenberg", "--api-port=3000", "--api-disable-health-check-logging"]
     ports:
       - "3001:3000"
     healthcheck:
@@ -473,7 +475,7 @@ services:
 
   twilio-fake:
     image: wiremock/wiremock:3.13.1
-    command: ["--global-response-templating", "--verbose"]
+    command: ["--global-response-templating", "--disable-request-logging"]
     ports:
       - "${INSPECTION_TWILIO_FAKE_PORT:-1081}:8080"
     volumes:
@@ -486,7 +488,7 @@ services:
 
   meta-fake:
     image: wiremock/wiremock:3.13.1
-    command: ["--global-response-templating", "--verbose"]
+    command: ["--global-response-templating", "--disable-request-logging"]
     ports:
       - "${INSPECTION_META_FAKE_PORT:-1082}:8080"
     volumes:
@@ -502,7 +504,7 @@ services:
   litellm-stub:
     image: wiremock/wiremock:3.13.1
     container_name: inspection-litellm-stub
-    command: ["--global-response-templating", "--verbose"]
+    command: ["--global-response-templating", "--disable-request-logging"]
     ports:
       - "18080:8080"
     volumes:
@@ -518,12 +520,13 @@ services:
   litellm:
     image: docker.litellm.ai/berriai/litellm:latest
     profiles: ["llm-live"]
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--log_config", "/app/logging.json"]
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/logging.json:/app/logging.json:ro
     ports:
       - "${INSPECTION_LITELLM_PORT:-4000}:4000"
     healthcheck:
@@ -537,7 +540,7 @@ services:
   gotenberg-stub:
     image: wiremock/wiremock:3.13.1
     container_name: inspection-gotenberg-stub
-    command: ["--global-response-templating", "--verbose"]
+    command: ["--global-response-templating", "--disable-request-logging"]
     ports:
       - "18081:8080"
     volumes:

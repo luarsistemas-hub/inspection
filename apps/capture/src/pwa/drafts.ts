@@ -5,6 +5,7 @@ export type CaptureDraft = {
   uploadId?: string; mediaId?: string; parts: PendingPart[];
   expiresAt?: string; partSizeBytes?: number;
   mediaStatus?: string;
+  replacesMediaId?: string;
   metadataSaved?: boolean;
   metadata: { requirementKey: string; description: string; source: "camera" | "gallery"; capturedAt: string; gps?: CaptureGPS; deviceContext?: Record<string, unknown> };
 };
@@ -34,6 +35,7 @@ function valid(draft: unknown): draft is CaptureDraft {
   const preUpload = value.parts.length === 0 && value.uploadId === undefined && value.mediaId === undefined && value.metadataSaved === false;
   if (value.parts.length === 0 && !preUpload) return false;
   if (value.expiresAt !== undefined && !isNonEmptyString(value.expiresAt)) return false;
+  if (value.replacesMediaId !== undefined && !isNonEmptyString(value.replacesMediaId)) return false;
   if (value.partSizeBytes !== undefined && (!Number.isInteger(value.partSizeBytes) || value.partSizeBytes < 1)) return false;
   const partNumbers = new Set<number>();
   if (!value.parts.every((part) => {
@@ -115,6 +117,9 @@ export const mediaCountForRequirement = (requirementKey: string, answers: Captur
   }
   return count;
 };
+export const hasDuplicateDraft = (requirementKey: string, sha256: string, drafts: CaptureDraft[]): boolean => drafts.some((draft) =>
+  draft.metadata.requirementKey === requirementKey && draft.sha256 === sha256 && !["ABORTED", "PURGED"].includes(draft.mediaStatus ?? "")
+);
 export const readyForSubmission = (drafts: CaptureDraft[], online: boolean, allRequirementsSatisfied?: boolean, confirmIncomplete = false): boolean => {
   if (!online) return false;
   const mediaReady = drafts.length > 0 && drafts.every((draft) => !["SCREENED", "REJECTED", "PURGED", "ABORTED"].includes(draft.mediaStatus ?? "") && !!draft.mediaId && draft.metadataSaved === true && draft.parts.length > 0 && draft.parts.every((part) => part.complete));

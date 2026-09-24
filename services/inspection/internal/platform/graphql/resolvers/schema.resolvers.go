@@ -76,7 +76,9 @@ import (
 	createtenant "inspection/services/inspection/internal/features/tenancy/create_tenant"
 	updatetenant "inspection/services/inspection/internal/features/tenancy/update_tenant"
 	upsertunit "inspection/services/inspection/internal/features/tenancy/upsert_business_unit"
+	getgloballlmusage "inspection/services/inspection/internal/features/usage/get_global_llm_usage"
 	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
+	listllmusagetenants "inspection/services/inspection/internal/features/usage/list_llm_usage_tenants"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -1695,10 +1697,21 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Role: summary.Role, Status: status, Version: int(summary.MembershipVersion), Scopes: []*graphql1.Scope{}})
 		}
 	}
+	canViewLLMCosts := auth.IsConfiguredSuperAdmin(ctx, r.SuperAdminIssuer, r.SuperAdminSubject) && principal.Product == auth.AdminProduct && principal.ProductEntitled(auth.AdminProduct)
+	if canViewLLMCosts {
+		canViewLLMCosts = false
+		for _, membership := range memberships {
+			if membership.Status == "ACTIVE" && (membership.Role == auth.TenantAdmin || membership.Role == auth.InspectionConfigAdmin) {
+				canViewLLMCosts = true
+				break
+			}
+		}
+	}
 	return &graphql1.Me{
 		IdentityID: principal.IdentityID.String(), TenantID: principal.TenantID.String(), Audience: principal.Audience, Product: principal.Product, ProductEntitlements: principal.ProductEntitlements, Roles: principal.Roles,
 		Memberships:     memberships,
 		EffectiveScopes: scopes,
+		CanViewLLMCosts: canViewLLMCosts,
 	}, nil
 }
 
@@ -2632,14 +2645,24 @@ func (r *queryResolver) UsageSummary(ctx context.Context, from *string, to *stri
 			return nil, graphql1Error("to")
 		}
 	}
+	canViewCost := auth.IsConfiguredSuperAdmin(ctx, r.SuperAdminIssuer, r.SuperAdminSubject)
+	if canViewCost {
+		if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+			canViewCost = false
+		}
+	}
 	var row struct {
 		Requests     int64
 		InputTokens  int64
 		OutputTokens int64
-		Cost         float64
+		Cost         *float64
 	}
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.UsageRecord{}).Select("count(*) as requests, coalesce(sum(input_tokens),0) as input_tokens, coalesce(sum(output_tokens),0) as output_tokens, coalesce(sum(cost),0) as cost").Where("created_at>=? AND created_at<?", start, end).Scan(&row).Error
+		selectSQL := "count(*) as requests, coalesce(sum(input_tokens),0) as input_tokens, coalesce(sum(output_tokens),0) as output_tokens"
+		if canViewCost {
+			selectSQL += ", coalesce(sum(cost),0) as cost"
+		}
+		return tx.Model(&database.UsageRecord{}).Select(selectSQL).Where("created_at>=? AND created_at<?", start, end).Scan(&row).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -2652,7 +2675,7 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
 		return nil, err
 	}
 	parsedInspectionID, err := identity.ParseID(inspectionID)
@@ -2736,6 +2759,111 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 		response.Calls = append(response.Calls, mapped)
 	}
 	return response, nil
+}
+
+// LlmUsage is the resolver for the llmUsage field.
+func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageFilter, first *int, after *string) (*graphql1.LLMUsage, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	query := getgloballlmusage.Query{First: intValue(first), After: stringValue(after)}
+	if filter != nil {
+		var err error
+		query.From, query.To, err = parseOptionalWindow(filter.From, filter.To)
+		if err != nil {
+			return nil, err
+		}
+		query.TenantID, err = parseOptionalID(filter.TenantID, "tenantId")
+		if err != nil {
+			return nil, err
+		}
+		query.InspectionID, err = parseOptionalID(filter.InspectionID, "inspectionId")
+		if err != nil {
+			return nil, err
+		}
+		query.Provider, query.Model, query.ModelAlias, query.TechnicalOutcome = stringValue(filter.Provider), stringValue(filter.Model), stringValue(filter.ModelAlias), stringValue(filter.TechnicalOutcome)
+		if filter.Mode != nil {
+			query.Mode = strings.ToLower(string(*filter.Mode))
+		}
+		if filter.State != nil {
+			query.State = string(*filter.State)
+		}
+		if filter.Cost != nil {
+			query.CostState = strings.ToLower(string(*filter.Cost))
+		}
+	}
+	raw, err := r.Bus.Ask(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(getgloballlmusage.Result)
+	response := &graphql1.LLMUsage{From: view.From.Format(time.RFC3339Nano), To: view.To.Format(time.RFC3339Nano), AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls, IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens), OutputTokens: int(view.OutputTokens), KnownReportedCost: view.KnownReportedCost, UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete, CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.GlobalLLMCallUsage, 0, len(view.Calls)), PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}
+	if view.CoverageStartedAt != nil {
+		value := view.CoverageStartedAt.UTC().Format(time.RFC3339Nano)
+		response.CoverageStartedAt = &value
+	}
+	for _, call := range view.Calls {
+		mapped := &graphql1.GlobalLLMCallUsage{CallID: call.CallID.String(), TenantID: call.TenantID.String(), TenantName: call.TenantName, InspectionID: call.InspectionID.String(), JobID: call.JobID.String(), EventID: call.EventID.String(), ExecutionID: call.ExecutionID.String(), CorrelationID: call.CorrelationID, Attempt: call.Attempt, ReplayGeneration: call.ReplayGeneration, Mode: graphql1.LLMExecutionMode(strings.ToUpper(call.Mode)), ComparisonMode: call.ComparisonMode, ModelAlias: call.ModelAlias, State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome, TransportDelivered: call.TransportDelivered, ReportedCost: call.ReportedCost, StartedAt: call.StartedAt.UTC().Format(time.RFC3339Nano)}
+		if call.Provider != "" {
+			value := call.Provider
+			mapped.Provider = &value
+		}
+		if call.Model != "" {
+			value := call.Model
+			mapped.Model = &value
+		}
+		if call.GatewayRequestID != "" {
+			value := call.GatewayRequestID
+			mapped.GatewayRequestID = &value
+		}
+		if call.HTTPStatus != nil {
+			value := *call.HTTPStatus
+			mapped.HTTPStatus = &value
+		}
+		if call.InputTokens != nil {
+			value := int(*call.InputTokens)
+			mapped.InputTokens = &value
+		}
+		if call.OutputTokens != nil {
+			value := int(*call.OutputTokens)
+			mapped.OutputTokens = &value
+		}
+		if call.DurationMS != nil {
+			value := int(*call.DurationMS)
+			mapped.DurationMs = &value
+		}
+		if call.FinishedAt != nil {
+			value := call.FinishedAt.UTC().Format(time.RFC3339Nano)
+			mapped.FinishedAt = &value
+		}
+		response.Calls = append(response.Calls, mapped)
+	}
+	return response, nil
+}
+
+// LlmUsageTenants is the resolver for the llmUsageTenants field.
+func (r *queryResolver) LlmUsageTenants(ctx context.Context, search *string, first *int, after *string) (*graphql1.TenantConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Ask(ctx, listllmusagetenants.Query{Search: stringValue(search), First: intValue(first), After: stringValue(after)})
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(listllmusagetenants.Result)
+	nodes := make([]*graphql1.Tenant, 0, len(view.Nodes))
+	for _, tenant := range view.Nodes {
+		nodes = append(nodes, &graphql1.Tenant{ID: tenant.ID, Name: tenant.Name, Language: tenant.Language, DefaultTimezone: tenant.DefaultTimezone, Status: tenant.Status, Version: tenant.Version})
+	}
+	return &graphql1.TenantConnection{Nodes: nodes, PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}, nil
 }
 
 // ExternalCapture is the resolver for the externalCapture field.

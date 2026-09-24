@@ -6,8 +6,8 @@ export function presentClassification(value: string | null | undefined) { return
 export function presentDashboardStatus(value: string | null | undefined) { return statuses[value ?? ""] ?? "Situação não reconhecida"; }
 export function presentInspectionSource(value: string | null | undefined) { return sources[value ?? ""] ?? "Origem não reconhecida"; }
 export function presentReportMode(value: string | null | undefined) { return statuses[value ?? ""] ?? "Modalidade não reconhecida"; }
-const coverageStatuses: Record<string, string> = { COMPLETE: "Cobertura completa", PARTIAL: "Cobertura parcial", INSUFFICIENT: "Evidência insuficiente" };
-const comparisonStatuses: Record<string, string> = { CHANGED: "Mudança identificada", UNCHANGED: "Sem mudanças relevantes", INCONCLUSIVE: "Comparação inconclusiva", NOT_APPLICABLE: "Análise atual" };
+const coverageStatuses: Record<string, string> = { COMPLETE: "Cobertura completa", PARTIAL: "Cobertura parcial", INSUFFICIENT: "Evidência insuficiente", UNAVAILABLE: "Análise indisponível" };
+const comparisonStatuses: Record<string, string> = { CHANGED: "Mudança identificada", UNCHANGED: "Sem mudanças relevantes", INCONCLUSIVE: "Comparação inconclusiva", NOT_APPLICABLE: "Análise atual", FAILED: "Falha técnica na análise" };
 const changeTypes: Record<string, string> = { CURRENT_CONDITION: "Condição atual", NEW_DAMAGE: "Dano novo", WORSENED: "Agravamento", REMOVED: "Remoção", ADDED: "Adição", REPLACED: "Substituição", MOVED: "Movimentação", IMPROVED: "Melhoria", NOT_APPLICABLE: "Evidência insuficiente" };
 export function presentCoverageStatus(value: string | null | undefined) { return coverageStatuses[value ?? ""] ?? "Cobertura não informada"; }
 export function presentComparisonStatus(value: string | null | undefined) { return comparisonStatuses[value ?? ""] ?? "Comparação não informada"; }

@@ -2,9 +2,14 @@ const endpoint = process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost
 
 type UserError = { code: string; field: string | null; message: string };
 type Payload = { userErrors: UserError[] };
-type Response = { data?: Record<string, Payload>; errors?: Array<{ message: string }> };
+type GraphQLErrorResponse = { message: string; extensions?: Record<string, unknown> };
+type Response = { data?: Record<string, Payload>; errors?: GraphQLErrorResponse[] };
 
 let csrfToken: string | undefined;
+
+function logOperationErrors(operation: string, errors: GraphQLErrorResponse[]): void {
+  console.error(`[GraphQL] ${operation} failed`, { errors });
+}
 
 function mutationID(): string {
   return globalThis.crypto?.randomUUID?.() ?? `activation-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -21,7 +26,10 @@ async function execute(operation: string, input: Record<string, string>): Promis
   if (nextCsrf) csrfToken = nextCsrf;
   const body = await response.json().catch(() => ({})) as Response;
   const payload = body.data?.[`${operation.charAt(0).toLowerCase()}${operation.slice(1)}`];
-  if (!response.ok || body.errors?.[0] || !payload) throw new Error(body.errors?.[0]?.message ?? "Não foi possível concluir a ativação.");
+  if (!response.ok || body.errors?.[0] || !payload) {
+    if (body.errors?.length) logOperationErrors(`mutation ${operation}`, body.errors);
+    throw new Error(body.errors?.[0]?.message ?? "Não foi possível concluir a ativação.");
+  }
   return payload;
 }
 
@@ -34,8 +42,9 @@ async function refreshActivationProof(): Promise<void> {
     body: JSON.stringify({ query: "query AdminActivationSession { onboardingSession { id } }" }),
   });
   const nextCsrf = response.headers.get("x-csrf-token");
-  const body = await response.json().catch(() => ({})) as { data?: { onboardingSession?: { id: string } | null }; errors?: Array<{ message: string }> };
+  const body = await response.json().catch(() => ({})) as { data?: { onboardingSession?: { id: string } | null }; errors?: GraphQLErrorResponse[] };
   if (!response.ok || body.errors?.[0] || !body.data?.onboardingSession || !nextCsrf) {
+    if (body.errors?.length) logOperationErrors("query AdminActivationSession", body.errors);
     throw new Error(body.errors?.[0]?.message ?? "Abra o link de ativação enviado para o seu e-mail. O link pode estar ausente, inválido ou expirado.");
   }
   csrfToken = nextCsrf;

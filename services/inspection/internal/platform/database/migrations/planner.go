@@ -1057,6 +1057,180 @@ DROP TRIGGER IF EXISTS immutable_llm_call ON usage.llm_calls;
 CREATE TRIGGER immutable_llm_call BEFORE UPDATE OR DELETE ON usage.llm_calls FOR EACH ROW EXECUTE FUNCTION platform.guard_llm_call_mutation();
 GRANT USAGE ON SCHEMA usage TO inspection_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON usage.llm_calls TO inspection_runtime;
+`},
+		{Version: 41, Name: "global_llm_usage_readers", Compatible: true, SQL: `
+CREATE INDEX IF NOT EXISTS idx_llm_calls_global_cursor
+  ON usage.llm_calls(started_at DESC, call_id DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_tenant_cursor
+  ON usage.llm_calls(tenant_id, started_at DESC, call_id DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_calls_mode_cursor
+  ON usage.llm_calls(mode, started_at DESC, call_id DESC);
+
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_summary(
+  p_from timestamptz,
+  p_to timestamptz,
+  p_tenant_id uuid,
+  p_inspection_id uuid,
+  p_provider text,
+  p_model text,
+  p_model_alias text,
+  p_mode text,
+  p_outcome text,
+  p_state text,
+  p_cost_state text
+)
+RETURNS TABLE(
+  attempted_calls bigint,
+  delivered_calls bigint,
+  incomplete_calls bigint,
+  input_tokens bigint,
+  output_tokens bigint,
+  known_reported_cost numeric,
+  unknown_cost_calls bigint,
+  coverage_started_at timestamptz,
+  legacy_coverage_calls bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = usage, inspections, tenancy, platform, pg_catalog
+AS $function$
+  SELECT
+    count(*)::bigint,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE)::bigint,
+    count(*) FILTER (WHERE l.state = 'STARTED')::bigint,
+    coalesce(sum(CASE WHEN l.transport_delivered IS TRUE THEN coalesce(l.input_tokens, 0) ELSE 0 END), 0)::bigint,
+    coalesce(sum(CASE WHEN l.transport_delivered IS TRUE THEN coalesce(l.output_tokens, 0) ELSE 0 END), 0)::bigint,
+    coalesce(sum(CASE WHEN l.transport_delivered IS TRUE THEN coalesce(l.reported_cost, 0) ELSE 0 END), 0)::numeric,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.reported_cost IS NULL)::bigint,
+    max(sm.applied_at),
+    count(*) FILTER (WHERE sm.applied_at IS NOT NULL AND i.created_at < sm.applied_at)::bigint
+  FROM usage.llm_calls l
+  LEFT JOIN inspections.inspections i ON i.tenant_id = l.tenant_id AND i.id = l.inspection_id
+  LEFT JOIN platform.schema_migrations sm ON sm.version = 40
+  WHERE l.started_at >= p_from AND l.started_at < p_to
+    AND (p_tenant_id IS NULL OR l.tenant_id = p_tenant_id)
+    AND (p_inspection_id IS NULL OR l.inspection_id = p_inspection_id)
+    AND (p_provider IS NULL OR l.provider ILIKE '%' || p_provider || '%')
+    AND (p_model IS NULL OR l.model ILIKE '%' || p_model || '%')
+    AND (p_model_alias IS NULL OR l.model_alias ILIKE '%' || p_model_alias || '%')
+    AND (p_mode IS NULL OR l.mode = p_mode)
+    AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%' || p_outcome || '%')
+    AND (p_state IS NULL OR l.state = p_state)
+    AND (
+      p_cost_state IS NULL
+      OR (p_cost_state = 'informed' AND l.transport_delivered IS TRUE AND l.reported_cost IS NOT NULL)
+      OR (p_cost_state = 'missing' AND l.transport_delivered IS TRUE AND l.reported_cost IS NULL)
+    )
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_summary(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_summary(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_calls(
+  p_from timestamptz,
+  p_to timestamptz,
+  p_tenant_id uuid,
+  p_inspection_id uuid,
+  p_provider text,
+  p_model text,
+  p_model_alias text,
+  p_mode text,
+  p_outcome text,
+  p_state text,
+  p_cost_state text,
+  p_after_started_at timestamptz,
+  p_after_call_id uuid,
+  p_limit integer
+)
+RETURNS TABLE(
+  call_id uuid,
+  tenant_id uuid,
+  tenant_name text,
+  inspection_id uuid,
+  job_id uuid,
+  event_id uuid,
+  execution_id uuid,
+  correlation_id varchar,
+  attempt integer,
+  replay_generation integer,
+  mode varchar,
+  comparison_mode varchar,
+  model_alias varchar,
+  provider varchar,
+  model varchar,
+  gateway_request_id varchar,
+  state varchar,
+  technical_outcome varchar,
+  transport_delivered boolean,
+  http_status integer,
+  input_tokens bigint,
+  output_tokens bigint,
+  reported_cost numeric,
+  duration_ms bigint,
+  started_at timestamptz,
+  finished_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = usage, inspections, tenancy, platform, pg_catalog
+AS $function$
+  SELECT l.call_id, l.tenant_id, t.name, l.inspection_id, l.job_id, l.event_id, l.execution_id,
+         l.correlation_id, l.attempt, l.replay_generation, l.mode, l.comparison_mode, l.model_alias,
+         l.provider, l.model, l.gateway_request_id, l.state, l.technical_outcome,
+         l.transport_delivered, l.http_status, l.input_tokens, l.output_tokens, l.reported_cost,
+         l.duration_ms, l.started_at, l.finished_at
+  FROM usage.llm_calls l
+  JOIN tenancy.tenants t ON t.id = l.tenant_id
+  WHERE l.started_at >= p_from AND l.started_at < p_to
+    AND (p_tenant_id IS NULL OR l.tenant_id = p_tenant_id)
+    AND (p_inspection_id IS NULL OR l.inspection_id = p_inspection_id)
+    AND (p_provider IS NULL OR l.provider ILIKE '%' || p_provider || '%')
+    AND (p_model IS NULL OR l.model ILIKE '%' || p_model || '%')
+    AND (p_model_alias IS NULL OR l.model_alias ILIKE '%' || p_model_alias || '%')
+    AND (p_mode IS NULL OR l.mode = p_mode)
+    AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%' || p_outcome || '%')
+    AND (p_state IS NULL OR l.state = p_state)
+    AND (
+      p_cost_state IS NULL
+      OR (p_cost_state = 'informed' AND l.transport_delivered IS TRUE AND l.reported_cost IS NOT NULL)
+      OR (p_cost_state = 'missing' AND l.transport_delivered IS TRUE AND l.reported_cost IS NULL)
+    )
+    AND (p_after_started_at IS NULL OR l.started_at < p_after_started_at OR (l.started_at = p_after_started_at AND l.call_id < p_after_call_id))
+  ORDER BY l.started_at DESC, l.call_id DESC
+  LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_calls(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text, timestamptz, uuid, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text, timestamptz, uuid, integer) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_tenants(
+  p_search text,
+  p_after_name text,
+  p_after_id uuid,
+  p_limit integer
+)
+RETURNS TABLE(
+  id uuid,
+  name varchar,
+  language varchar,
+  default_timezone varchar,
+  status varchar,
+  version bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = tenancy, usage, platform, pg_catalog
+AS $function$
+  SELECT t.id, t.name, t.language, t.default_timezone, t.status, t.version
+  FROM tenancy.tenants t
+  WHERE (p_search IS NULL OR t.name ILIKE '%' || p_search || '%' OR t.id::text ILIKE '%' || p_search || '%')
+    AND (p_after_name IS NULL OR t.name > p_after_name OR (t.name = p_after_name AND t.id > p_after_id))
+  ORDER BY t.name ASC, t.id ASC
+  LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_tenants(text, text, uuid, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_tenants(text, text, uuid, integer) TO inspection_runtime;
 `}}
 }
 

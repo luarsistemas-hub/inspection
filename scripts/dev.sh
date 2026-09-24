@@ -102,6 +102,7 @@ case "$component" in
   api) need go; check_port "${INSPECTION_API_PORT:-8080}" "API"; export INSPECTION_HTTP_ADDR="${INSPECTION_API_ADDR:-:${INSPECTION_API_PORT:-8080}}"; cd "$workspace"; exec go run ./services/inspection/cmd/inspection-api ;;
   worker)
     need go; check_port "${INSPECTION_WORKER_PORT:-8082}" "worker"; export INSPECTION_HTTP_ADDR="${INSPECTION_WORKER_ADDR:-:${INSPECTION_WORKER_PORT:-8082}}"; cd "$workspace"
+    export INSPECTION_RUNTIME_DATABASE_URL="${INSPECTION_RUNTIME_DATABASE_URL:-$INSPECTION_DATABASE_URL}"
     export INSPECTION_DISPATCHER_DATABASE_URL="${INSPECTION_DISPATCHER_DATABASE_URL:-$INSPECTION_DATABASE_URL}"
     exec go run ./services/inspection/cmd/inspection-worker
     ;;

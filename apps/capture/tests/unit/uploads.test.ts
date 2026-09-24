@@ -108,7 +108,7 @@ describe("multipart reconciliation", () => {
     const fetch = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
       const body = String(init?.body ?? "");
       const data = body.includes("saveCaptureMetadata")
-        ? { saveCaptureMetadata: { media: { id: "media", status: "SCREENED" }, userErrors: [] } }
+        ? { saveCaptureMetadata: { media: { id: "media", status: "SCREENED", replacesMediaId: "blocked-media" }, userErrors: [] } }
         : { completeMediaUpload: { userErrors: [] } };
       return new Response(JSON.stringify({ data }), { status: 200 });
     });
@@ -121,7 +121,9 @@ describe("multipart reconciliation", () => {
 
     expect(metadataRequest.query).toContain("media {");
     expect(result.mediaStatus).toBe("SCREENED");
+    expect(result.replacesMediaId).toBe("blocked-media");
     expect(saved?.mediaStatus).toBe("SCREENED");
+    expect(saved?.replacesMediaId).toBe("blocked-media");
     vi.unstubAllGlobals();
   });
 

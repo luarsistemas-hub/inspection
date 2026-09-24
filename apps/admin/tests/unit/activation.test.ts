@@ -32,4 +32,15 @@ describe("Admin activation transport", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { onboardingSession: null } }))));
     await expect(requestActivationCode()).rejects.toThrow("Abra o link de ativação enviado para o seu e-mail");
   });
+
+  it("logs GraphQL errors from activation operations", async () => {
+    const errors = [{ message: "activation failed", extensions: { code: "INVALID_STATE", correlationId: "correlation-5" } }];
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors }), { status: 200 })));
+
+    await expect(requestActivationCode("invitation-token")).rejects.toThrow("activation failed");
+
+    expect(log).toHaveBeenCalledWith("[GraphQL] mutation RequestAdminActivationOtp failed", { errors });
+    log.mockRestore();
+  });
 });

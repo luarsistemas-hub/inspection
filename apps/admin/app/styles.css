@@ -51,6 +51,18 @@ label { display: grid; gap: .35rem; font-size: .8rem; font-weight: 600; }
 .page-heading p { max-inline-size: 65ch; margin: .35rem 0 0; color: var(--admin-muted); font-size: .9rem; }
 .collection-toolbar { display: flex; align-items: flex-end; gap: .75rem; margin-block: 1rem .7rem; }
 .collection-toolbar label { flex: 1; }
+.llm-usage-context { display: flex; flex-wrap: wrap; gap: .6rem 1rem; margin-block: 1rem; color: var(--admin-muted); font: .7rem/1.4 var(--admin-mono); }
+.llm-usage-context span { padding: .35rem .55rem; border: 1px solid var(--admin-border); border-radius: .3rem; background: var(--admin-surface); }
+.llm-usage-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; padding: 1rem; border: 1px solid var(--admin-border); border-radius: .5rem; background: var(--admin-surface); }
+.llm-usage-filters label { position: relative; }
+.llm-usage-filter-actions { display: flex; align-items: end; gap: .5rem; grid-column: 1 / -1; }
+.llm-tenant-options { position: absolute; z-index: 2; inset-block-start: calc(100% + .25rem); inset-inline: 0; display: grid; max-block-size: 14rem; overflow: auto; padding: .35rem; border: 1px solid var(--admin-border); border-radius: .35rem; background: var(--admin-surface); box-shadow: 0 .5rem 1.5rem color-mix(in oklch, var(--admin-fg) 15%, transparent); }
+.llm-tenant-options .link-button { margin: 0; text-align: start; }
+.llm-usage-summary { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .65rem; margin-block: 1rem; }
+.llm-usage-metric { display: grid; gap: .3rem; min-block-size: 5rem; padding: .8rem; border: 1px solid var(--admin-border); border-radius: .45rem; background: var(--admin-surface); }
+.llm-usage-metric span { color: var(--admin-muted); font: .65rem/1.3 var(--admin-mono); text-transform: uppercase; }
+.llm-usage-metric strong { font-size: 1.1rem; overflow-wrap: anywhere; }
+.llm-usage-page small { color: var(--admin-muted); }
 .status-line {
   position: absolute;
   inline-size: 1px;
@@ -99,6 +111,8 @@ td strong { font-weight: 700; }
   .admin-nav { flex-direction: row; align-items: center; gap: .4rem; overflow-x: auto; padding: .65rem 1rem; border-inline-end: 0; border-block-end: 1px solid var(--admin-border); }
   .admin-nav-label { display: none; }
   .admin-nav > a { flex: none; white-space: nowrap; }
+  .llm-usage-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .llm-usage-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-nav-context { display: contents; }
   .admin-nav-context > span, .admin-nav-context label { display: none; }
   .dashboard-exit { flex: none; white-space: nowrap; }
@@ -112,6 +126,10 @@ td strong { font-weight: 700; }
   .page-heading button { inline-size: 100%; }
   .collection-toolbar { align-items: stretch; flex-direction: column; }
   .collection-toolbar button { inline-size: 100%; }
+  .llm-usage-filters { grid-template-columns: 1fr; }
+  .llm-usage-filter-actions { flex-direction: column; align-items: stretch; }
+  .llm-usage-filter-actions button { inline-size: 100%; }
+  .llm-usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   table, thead, tbody, tr, th, td { display: block; inline-size: 100%; }
   thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   tr { padding: .7rem; border-block-end: 1px solid var(--admin-border); }

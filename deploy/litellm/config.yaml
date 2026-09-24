@@ -2,7 +2,7 @@
 model_list:
   - model_name: inspection-vision
     litellm_params:
-      model: gemini/gemini-3.6-flash
+      model: gemini/gemini-3-flash-preview
       api_key: os.environ/LLM_API_KEY
 
 general_settings:

@@ -8,6 +8,7 @@ import (
 	analysis "inspection/services/inspection/internal/features/analysis/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
+	"inspection/services/inspection/internal/platform/messaging"
 
 	"gorm.io/gorm"
 )
@@ -34,6 +35,17 @@ func TestValidateEvidenceRejectsUnknownAndLowConfidence(t *testing.T) {
 func TestIsInsufficientEvidence(t *testing.T) {
 	if !isInsufficientEvidence(analysis.Result{CoverageStatus: "INSUFFICIENT", ComparisonStatus: "INCONCLUSIVE", Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY", ChangeType: "NOT_APPLICABLE", Quality: "INSUFFICIENT"}}}) {
 		t.Fatal("insufficient evidence not detected")
+	}
+}
+
+func TestAttemptCountIncludesBrokerDeliveries(t *testing.T) {
+	job := database.ComparisonJob{Attempts: 1}
+	if got := attemptCount(context.Background(), job); got != 2 {
+		t.Fatalf("direct attempt count = %d, want 2", got)
+	}
+	ctx := messaging.WithAttempt(context.Background(), 3)
+	if got := attemptCount(ctx, job); got != 4 {
+		t.Fatalf("broker attempt count = %d, want 4", got)
 	}
 }
 
