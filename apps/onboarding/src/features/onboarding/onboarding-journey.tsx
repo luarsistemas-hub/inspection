@@ -165,7 +165,7 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
     if (upload.mediaId) return upload.mediaId;
     setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, sending: true, failed: false } : item));
     try {
-      const mediaId = await uploadReferencePhoto(upload.file, upload.description, upload.id);
+      const mediaId = await uploadReferencePhoto(upload.file, upload.description, upload.attentionItems, upload.id);
       setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, mediaId, sending: false } : item));
       return mediaId;
     } catch (cause) {

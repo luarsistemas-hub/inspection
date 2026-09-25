@@ -48,6 +48,9 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 		if err != nil || result.Version.ID != activeID {
 			t.Fatalf("fixed active origin changed: %+v %v", result, err)
 		}
+		if len(result.Evidence) != 1 || len(result.Evidence[0].AttentionItems) != 1 || result.Evidence[0].AttentionItems[0] != "Cafeteira" {
+			t.Fatalf("origin attention items were not projected: %+v", result.Evidence)
+		}
 	})
 	t.Run("IT-320 many rooms retain grouped category and instructions", func(t *testing.T) {
 		db, query, _ := originFixture(t, core.MaxActivePhotos)
@@ -88,7 +91,11 @@ func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.I
 		t.Fatal(err)
 	}
 	for index := 0; index < evidenceCount; index++ {
-		item := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, MediaID: identity.NewID(), Category: "room-" + number(index/10+1), Description: "view-" + number(index+1), CreatedAt: now.Add(time.Duration(index) * time.Second)}
+		attentionItems := []byte(`[]`)
+		if index == 0 {
+			attentionItems = []byte(`["Cafeteira"]`)
+		}
+		item := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, MediaID: identity.NewID(), Category: "room-" + number(index/10+1), Description: "view-" + number(index+1), AttentionItems: attentionItems, CreatedAt: now.Add(time.Duration(index) * time.Second)}
 		if err := db.Create(&item).Error; err != nil {
 			t.Fatal(err)
 		}

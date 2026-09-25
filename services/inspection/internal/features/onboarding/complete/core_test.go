@@ -83,7 +83,7 @@ func TestReferencePhotosWaitForScreeningThenActivateOnce(t *testing.T) {
 		}
 	}
 	tenantID, sessionID, assetID, templateID, templateVersionID, mediaID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	photo := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: sessionID, Status: "VERIFIED", RequirementKey: "reference", Description: "Quarto", ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 12}
+	photo := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: sessionID, Status: "VERIFIED", RequirementKey: "reference", Description: "Quarto", AttentionItems: []byte(`["Torneira"]`), ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 12}
 	if err := db.Create(&photo).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -104,6 +104,10 @@ func TestReferencePhotosWaitForScreeningThenActivateOnce(t *testing.T) {
 	versionID, err := service.ensureOrigin(context.Background(), tenantID, sessionID, assetID, templateID, templateVersionID, []identity.ID{mediaID})
 	if err != nil {
 		t.Fatal(err)
+	}
+	var expectedEvidence database.OriginEvidence
+	if err := db.Where("tenant_id=? AND origin_version_id=?", tenantID, versionID).First(&expectedEvidence).Error; err != nil || string(expectedEvidence.AttentionItems) != `["Torneira"]` {
+		t.Fatalf("origin attention items = %s, %v", expectedEvidence.AttentionItems, err)
 	}
 	again, err := service.ensureOrigin(context.Background(), tenantID, sessionID, assetID, templateID, templateVersionID, []identity.ID{mediaID})
 	if err != nil || again != versionID {

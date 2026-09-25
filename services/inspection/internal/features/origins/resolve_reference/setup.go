@@ -4,6 +4,7 @@ package resolve_reference
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"inspection/libs/identity"
@@ -29,9 +30,10 @@ type Result struct {
 
 // Evidence is the public, immutable origin projection used by capture.
 type Evidence struct {
-	MediaID     identity.ID `json:"mediaId"`
-	Category    string      `json:"category"`
-	Description string      `json:"description"`
+	MediaID        identity.ID `json:"mediaId"`
+	Category       string      `json:"category"`
+	Description    string      `json:"description"`
+	AttentionItems []string    `json:"attentionItems"`
 }
 
 type Dependencies struct {
@@ -75,7 +77,13 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "origin evidence must fit the capture limit")
 	}
 	for _, item := range rows {
-		result.Evidence = append(result.Evidence, Evidence{MediaID: item.MediaID, Category: item.Category, Description: item.Description})
+		attentionItems := []string{}
+		if len(item.AttentionItems) > 0 && string(item.AttentionItems) != "null" {
+			if err := json.Unmarshal(item.AttentionItems, &attentionItems); err != nil {
+				return Result{}, fmt.Errorf("origin evidence has invalid attention items")
+			}
+		}
+		result.Evidence = append(result.Evidence, Evidence{MediaID: item.MediaID, Category: item.Category, Description: item.Description, AttentionItems: attentionItems})
 		result.Requirements = append(result.Requirements, core.Requirement{
 			Key:                  "origin:" + item.MediaID.String(),
 			Section:              item.Category,

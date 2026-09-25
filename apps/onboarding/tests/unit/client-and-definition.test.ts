@@ -43,7 +43,7 @@ describe("onboarding session client", () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ mediaId: "media-1" }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ message: "upload failed" }), { status: 503 }));
     vi.stubGlobal("fetch", fetch);
     const file = new File(["photo bytes"], "quarto.jpg", { type: "image/jpeg" });
-    await expect(uploadReferencePhoto(file, "Quarto", "photo-1")).resolves.toBe("media-1");
+    await expect(uploadReferencePhoto(file, "Quarto", ["Cafeteira"], "photo-1")).resolves.toBe("media-1");
     const [url, init] = fetch.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe("/onboarding/reference-photos");
     expect(init.credentials).toBe("include");
@@ -51,8 +51,9 @@ describe("onboarding session client", () => {
     const form = init.body as FormData;
     expect(form.get("file")).toBe(file);
     expect(form.get("description")).toBe("Quarto");
+    expect(form.get("attentionItems")).toBe('["Cafeteira"]');
     expect(form.get("clientMutationId")).toBe("photo-1");
-    await expect(uploadReferencePhoto(file, "Quarto", "photo-1")).rejects.toMatchObject({ message: "upload failed" });
+    await expect(uploadReferencePhoto(file, "Quarto", ["Cafeteira"], "photo-1")).rejects.toMatchObject({ message: "upload failed" });
   });
 
   it("UT-041 maps a server field error without changing unrelated values", () => {

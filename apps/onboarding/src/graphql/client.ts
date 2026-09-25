@@ -16,10 +16,11 @@ function logOperationErrors<TData, TVariables>(query: TypedDocumentNode<TData, T
 }
 
 /** Sends a reference image through the private onboarding media endpoint. */
-export async function uploadReferencePhoto(file: File, description: string, id: string): Promise<string> {
+export async function uploadReferencePhoto(file: File, description: string, attentionItems: string[], id: string): Promise<string> {
   const form = new FormData();
   form.set("file", file);
   form.set("description", description);
+	form.set("attentionItems", JSON.stringify(attentionItems));
   form.set("clientMutationId", id);
   const response = await fetch(new URL("/onboarding/reference-photos", endpoint), {
     method: "POST",

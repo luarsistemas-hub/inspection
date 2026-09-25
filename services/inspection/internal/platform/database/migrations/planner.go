@@ -1235,6 +1235,20 @@ GRANT EXECUTE ON FUNCTION usage.read_llm_usage_tenants(text, text, uuid, integer
 		{Version: 42, Name: "remove_analysis_finding_change_type", Destructive: true, Compatible: true, SQL: `
 ALTER TABLE analysis.findings DROP COLUMN IF EXISTS change_type;
 `},
+		{Version: 43, Name: "origin_attention_items", Compatible: true, SQL: `
+ALTER TABLE media.media_objects ADD COLUMN IF NOT EXISTS attention_items jsonb;
+UPDATE media.media_objects SET attention_items = '[]'::jsonb WHERE attention_items IS NULL;
+ALTER TABLE media.media_objects ALTER COLUMN attention_items SET DEFAULT '[]'::jsonb;
+ALTER TABLE media.media_objects ALTER COLUMN attention_items SET NOT NULL;
+ALTER TABLE origins.origin_evidence ADD COLUMN IF NOT EXISTS attention_items jsonb;
+UPDATE origins.origin_evidence SET attention_items = '[]'::jsonb WHERE attention_items IS NULL;
+ALTER TABLE origins.origin_evidence ALTER COLUMN attention_items SET DEFAULT '[]'::jsonb;
+ALTER TABLE origins.origin_evidence ALTER COLUMN attention_items SET NOT NULL;
+ALTER TABLE media.media_objects DROP CONSTRAINT IF EXISTS chk_media_attention_items;
+ALTER TABLE media.media_objects ADD CONSTRAINT chk_media_attention_items CHECK (jsonb_typeof(attention_items) = 'array');
+ALTER TABLE origins.origin_evidence DROP CONSTRAINT IF EXISTS chk_origin_evidence_attention_items;
+ALTER TABLE origins.origin_evidence ADD CONSTRAINT chk_origin_evidence_attention_items CHECK (jsonb_typeof(attention_items) = 'array');
+`},
 	}
 }
 

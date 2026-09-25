@@ -512,12 +512,13 @@ type OriginVersion struct {
 func (OriginVersion) TableName() string { return "origins.origin_versions" }
 
 type OriginEvidence struct {
-	ID              identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID        identity.ID `gorm:"type:uuid;not null;index:idx_origin_evidence,priority:1"`
-	OriginVersionID identity.ID `gorm:"type:uuid;not null;index:idx_origin_evidence,priority:2"`
-	MediaID         identity.ID `gorm:"type:uuid;not null;uniqueIndex"`
-	Category        string      `gorm:"size:200;not null"`
-	Description     string      `gorm:"size:2000;not null"`
+	ID              identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID        identity.ID     `gorm:"type:uuid;not null;index:idx_origin_evidence,priority:1"`
+	OriginVersionID identity.ID     `gorm:"type:uuid;not null;index:idx_origin_evidence,priority:2"`
+	MediaID         identity.ID     `gorm:"type:uuid;not null;uniqueIndex"`
+	Category        string          `gorm:"size:200;not null"`
+	Description     string          `gorm:"size:2000;not null"`
+	AttentionItems  json.RawMessage `gorm:"type:jsonb"`
 	CreatedAt       time.Time
 }
 
@@ -547,18 +548,19 @@ type OriginPromotion struct {
 func (OriginPromotion) TableName() string { return "origins.promotions" }
 
 type MediaObject struct {
-	ID               identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID         identity.ID `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:1;uniqueIndex:idx_media_create_idempotency,priority:1"`
-	ResponsibilityID identity.ID `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:2"`
-	ObjectKey        string      `gorm:"size:1000;not null;uniqueIndex"`
-	ContentType      string      `gorm:"size:100;not null"`
-	SHA256           string      `gorm:"size:64;not null"`
-	SizeBytes        int64       `gorm:"not null"`
-	Status           string      `gorm:"size:20;not null;index"`
-	IdempotencyKey   string      `gorm:"size:200;uniqueIndex:idx_media_create_idempotency,priority:2"`
-	RequirementKey   string      `gorm:"size:200;index"`
-	Description      string      `gorm:"size:2000"`
-	CaptureSource    string      `gorm:"size:16"`
+	ID               identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID     `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:1;uniqueIndex:idx_media_create_idempotency,priority:1"`
+	ResponsibilityID identity.ID     `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:2"`
+	ObjectKey        string          `gorm:"size:1000;not null;uniqueIndex"`
+	ContentType      string          `gorm:"size:100;not null"`
+	SHA256           string          `gorm:"size:64;not null"`
+	SizeBytes        int64           `gorm:"not null"`
+	Status           string          `gorm:"size:20;not null;index"`
+	IdempotencyKey   string          `gorm:"size:200;uniqueIndex:idx_media_create_idempotency,priority:2"`
+	RequirementKey   string          `gorm:"size:200;index"`
+	Description      string          `gorm:"size:2000"`
+	AttentionItems   json.RawMessage `gorm:"type:jsonb"`
+	CaptureSource    string          `gorm:"size:16"`
 	CapturedAt       *time.Time
 	DeviceContext    json.RawMessage `gorm:"type:jsonb"`
 	LatitudeE6       *int32

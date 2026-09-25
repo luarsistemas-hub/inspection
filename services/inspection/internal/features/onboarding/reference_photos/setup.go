@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
@@ -75,7 +76,7 @@ func (d Dependencies) serve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, apperror.New(apperror.InvalidInput, "file", "photo must be at most 20 MiB"))
 		return
 	}
-	mediaID, err := d.upload(r.Context(), cookie.Value, r.Header.Get("X-CSRF-Token"), r.FormValue("clientMutationId"), header.Header.Get("Content-Type"), r.FormValue("description"), data)
+	mediaID, err := d.upload(r.Context(), cookie.Value, r.Header.Get("X-CSRF-Token"), r.FormValue("clientMutationId"), header.Header.Get("Content-Type"), r.FormValue("description"), r.FormValue("attentionItems"), data)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -84,11 +85,15 @@ func (d Dependencies) serve(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"mediaId": mediaID.String(), "status": "VERIFIED"})
 }
 
-func (d Dependencies) upload(ctx context.Context, locator, csrf, key, contentType, description string, data []byte) (identity.ID, error) {
+func (d Dependencies) upload(ctx context.Context, locator, csrf, key, contentType, description, rawAttentionItems string, data []byte) (identity.ID, error) {
 	if strings.TrimSpace(key) == "" {
 		return identity.ID{}, apperror.New(apperror.InvalidInput, "clientMutationId", "invalid upload identifier")
 	}
 	if err := coordinator.ValidateOriginMedia(contentType, int64(len(data)), description); err != nil {
+		return identity.ID{}, err
+	}
+	attentionItems, err := normalizeAttentionItems(rawAttentionItems)
+	if err != nil {
 		return identity.ID{}, err
 	}
 	submission, err := d.Sessions.LoadSubmission(ctx, locator, csrf)
@@ -107,7 +112,7 @@ func (d Dependencies) upload(ctx context.Context, locator, csrf, key, contentTyp
 		return tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&existing).Error
 	})
 	if err == nil {
-		if existing.Description != strings.TrimSpace(description) || existing.SizeBytes != int64(len(data)) || existing.ContentType != contentType || existing.SHA256 != expectedHash {
+		if existing.Description != strings.TrimSpace(description) || existing.SizeBytes != int64(len(data)) || existing.ContentType != contentType || existing.SHA256 != expectedHash || !sameAttentionItems(existing.AttentionItems, attentionItems) {
 			return identity.ID{}, apperror.New(apperror.Conflict, "clientMutationId", "photo upload has changed")
 		}
 		return existing.ID, nil
@@ -132,7 +137,7 @@ func (d Dependencies) upload(ctx context.Context, locator, csrf, key, contentTyp
 		if count >= capturecore.MaxActivePhotos {
 			return apperror.New(apperror.InvalidState, "file", "photo limit reached")
 		}
-		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: objectKey, ContentType: contentType, SHA256: hash, SizeBytes: int64(len(data)), Status: "VERIFIED", IdempotencyKey: idempotencyKey, RequirementKey: "reference", Description: strings.TrimSpace(description), CaptureSource: "GALLERY", Flags: json.RawMessage(`[]`), CreatedAt: now}
+		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: objectKey, ContentType: contentType, SHA256: hash, SizeBytes: int64(len(data)), Status: "VERIFIED", IdempotencyKey: idempotencyKey, RequirementKey: "reference", Description: strings.TrimSpace(description), AttentionItems: attentionItems, CaptureSource: "GALLERY", Flags: json.RawMessage(`[]`), CreatedAt: now}
 		if err := tx.Create(&media).Error; err != nil {
 			return err
 		}
@@ -143,6 +148,61 @@ func (d Dependencies) upload(ctx context.Context, locator, csrf, key, contentTyp
 		return identity.ID{}, err
 	}
 	return mediaID, nil
+}
+
+const (
+	maxAttentionItems     = 20
+	maxAttentionItemRunes = 80
+)
+
+func normalizeAttentionItems(raw string) (json.RawMessage, error) {
+	if strings.TrimSpace(raw) == "" {
+		return json.RawMessage(`[]`), nil
+	}
+	if strings.TrimSpace(raw) == "null" {
+		return nil, apperror.New(apperror.InvalidInput, "attentionItems", "attention items must be a list of text values")
+	}
+	var values []string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return nil, apperror.New(apperror.InvalidInput, "attentionItems", "attention items must be a list of text values")
+	}
+	items := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		item := strings.TrimSpace(value)
+		if item == "" {
+			continue
+		}
+		if utf8.RuneCountInString(item) > maxAttentionItemRunes {
+			return nil, apperror.New(apperror.InvalidInput, "attentionItems", "attention items must be at most 80 characters")
+		}
+		key := strings.ToLower(item)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		items = append(items, item)
+	}
+	if len(items) > maxAttentionItems {
+		return nil, apperror.New(apperror.InvalidInput, "attentionItems", "at most 20 attention items are allowed")
+	}
+	return json.Marshal(items)
+}
+
+func sameAttentionItems(saved, requested json.RawMessage) bool {
+	var savedItems, requestedItems []string
+	if err := json.Unmarshal(saved, &savedItems); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(requested, &requestedItems); err != nil || len(savedItems) != len(requestedItems) {
+		return false
+	}
+	for index := range savedItems {
+		if !strings.EqualFold(strings.TrimSpace(savedItems[index]), strings.TrimSpace(requestedItems[index])) {
+			return false
+		}
+	}
+	return true
 }
 
 func (d Dependencies) within(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {

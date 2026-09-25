@@ -60,15 +60,29 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 42 {
-		t.Fatalf("latest version=%d, want 42", got)
+	if got := LatestVersion(); got != 43 {
+		t.Fatalf("latest version=%d, want 43", got)
 	}
+}
+
+func TestOriginAttentionItemsMigrationUsesJSONArrays(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 43 {
+			if step.Name != "origin_attention_items" || !strings.Contains(step.SQL, "media.media_objects") || !strings.Contains(step.SQL, "origins.origin_evidence") || !strings.Contains(step.SQL, "SET DEFAULT '[]'::jsonb") || !strings.Contains(step.SQL, "SET NOT NULL") || !strings.Contains(step.SQL, "jsonb_typeof(attention_items) = 'array'") {
+				t.Fatalf("unexpected attention items migration: %+v", step)
+			}
+			return
+		}
+	}
+	t.Fatal("origin attention items migration missing")
 }
 
 func TestAnalysisFindingChangeTypeIsRemoved(t *testing.T) {
 	for _, step := range Foundation() {
 		if step.Version == 42 {
-			if step.Name != "remove_analysis_finding_change_type" || !strings.Contains(step.SQL, "DROP COLUMN IF EXISTS change_type") { t.Fatalf("unexpected analysis finding migration: %+v", step) }
+			if step.Name != "remove_analysis_finding_change_type" || !strings.Contains(step.SQL, "DROP COLUMN IF EXISTS change_type") {
+				t.Fatalf("unexpected analysis finding migration: %+v", step)
+			}
 			return
 		}
 	}

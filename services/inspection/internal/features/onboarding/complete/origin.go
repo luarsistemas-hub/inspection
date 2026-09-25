@@ -82,7 +82,7 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 			return err
 		}
 		for _, photo := range media {
-			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: version.ID, MediaID: photo.ID, Category: "Referência", Description: photo.Description, CreatedAt: now}
+			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: version.ID, MediaID: photo.ID, Category: "Referência", Description: photo.Description, AttentionItems: photo.AttentionItems, CreatedAt: now}
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&evidence).Error; err != nil {
 				return err
 			}

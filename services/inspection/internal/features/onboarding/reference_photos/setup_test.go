@@ -98,7 +98,7 @@ func TestPrivateUploadConfirmsActualPhotoAndQueuesScreening(t *testing.T) {
 	}
 	imageBytes := testJPEG(t)
 	key := identity.NewID().String()
-	send := func(contentType string) *httptest.ResponseRecorder {
+	send := func(contentType, attentionItems string) *httptest.ResponseRecorder {
 		t.Helper()
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
@@ -113,6 +113,7 @@ func TestPrivateUploadConfirmsActualPhotoAndQueuesScreening(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = writer.WriteField("description", "Quarto")
+		_ = writer.WriteField("attentionItems", attentionItems)
 		_ = writer.WriteField("clientMutationId", key)
 		_ = writer.Close()
 		req := httptest.NewRequest(http.MethodPost, path, &body)
@@ -123,7 +124,7 @@ func TestPrivateUploadConfirmsActualPhotoAndQueuesScreening(t *testing.T) {
 		mux.ServeHTTP(response, req)
 		return response
 	}
-	if response := send("image/jpeg"); response.Code != http.StatusOK {
+	if response := send("image/jpeg", `[" Cafeteira ","cafeteira","","Torneira"]`); response.Code != http.StatusOK {
 		t.Fatalf("photo upload = %d: %s", response.Code, response.Body.String())
 	} else {
 		var result map[string]string
@@ -131,8 +132,11 @@ func TestPrivateUploadConfirmsActualPhotoAndQueuesScreening(t *testing.T) {
 			t.Fatalf("photo was not confirmed: %v %v", result, err)
 		}
 	}
-	if response := send("image/jpeg"); response.Code != http.StatusOK || store.putCount != 1 {
+	if response := send("image/jpeg", `["Cafeteira","Torneira"]`); response.Code != http.StatusOK || store.putCount != 1 {
 		t.Fatalf("idempotent upload = %d, writes=%d", response.Code, store.putCount)
+	}
+	if response := send("image/jpeg", `["Geladeira"]`); response.Code != http.StatusConflict {
+		t.Fatalf("changed attention items = %d", response.Code)
 	}
 	var media []database.MediaObject
 	var intents []database.OutboxIntent
@@ -142,16 +146,41 @@ func TestPrivateUploadConfirmsActualPhotoAndQueuesScreening(t *testing.T) {
 	if err := db.Find(&intents).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(media) != 1 || media[0].Status != "VERIFIED" || media[0].Description != "Quarto" || len(intents) != 1 || intents[0].Type != "media.verified.v1" {
+	if len(media) != 1 || media[0].Status != "VERIFIED" || media[0].Description != "Quarto" || string(media[0].AttentionItems) != `["Cafeteira","Torneira"]` || len(intents) != 1 || intents[0].Type != "media.verified.v1" {
 		t.Fatalf("upload was not saved for screening: %+v %+v", media, intents)
 	}
 	store.putErr = errors.New("store unavailable")
 	key = identity.NewID().String()
-	if response := send("image/jpeg"); response.Code != http.StatusServiceUnavailable {
+	if response := send("image/jpeg", `[]`); response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("dependency failure = %d", response.Code)
 	}
-	if response := send("application/octet-stream"); response.Code != http.StatusUnprocessableEntity {
+	if response := send("application/octet-stream", `[]`); response.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid image type = %d", response.Code)
+	}
+}
+
+func TestNormalizeAttentionItems(t *testing.T) {
+	items, err := normalizeAttentionItems(`[" Cafeteira ","cafeteira","","Torneira"]`)
+	if err != nil || string(items) != `["Cafeteira","Torneira"]` {
+		t.Fatalf("items=%s err=%v", items, err)
+	}
+	if _, err := normalizeAttentionItems(`{"item":"Cafeteira"}`); err == nil {
+		t.Fatal("object accepted as attention items")
+	}
+	tooLong := `[` + `"` + strings.Repeat("a", maxAttentionItemRunes+1) + `"` + `]`
+	if _, err := normalizeAttentionItems(tooLong); err == nil {
+		t.Fatal("long attention item accepted")
+	}
+	tooMany := make([]string, maxAttentionItems+1)
+	for index := range tooMany {
+		tooMany[index] = "item-" + string(rune('a'+index))
+	}
+	encoded, err := json.Marshal(tooMany)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := normalizeAttentionItems(string(encoded)); err == nil {
+		t.Fatal("too many attention items accepted")
 	}
 }
 
