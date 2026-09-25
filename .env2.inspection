@@ -56,7 +56,7 @@ INSPECTION_LITELLM_MODEL_ALIAS=inspection-vision
 INSPECTION_LITELLM_PROMPT_VERSION=analysis-v1
 # Real Gotenberg is used in Compose acceptance; this host URL exposes it on 3001.
 INSPECTION_GOTENBERG_URL=http://localhost:3001
-INSPECTION_PROVIDER_TIMEOUT=30s
+INSPECTION_PROVIDER_TIMEOUT=300s
 # Required outside local mode; keep empty for local development.
 # INSPECTION_METRICS_TOKEN=
 
