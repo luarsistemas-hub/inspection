@@ -1000,7 +1000,6 @@ func (AnalysisRun) TableName() string { return "analysis.analysis_runs" }
 type FindingRecord struct {
 	ID, TenantID, AnalysisRunID                              identity.ID     `gorm:"type:uuid;primaryKey"`
 	Category                                                 string          `gorm:"size:2000;not null"`
-	ChangeType                                               string          `gorm:"size:32"`
 	Title, Description, Severity, Quality, RecommendedAction string          `gorm:"size:2000;not null"`
 	Confidence                                               float64         `gorm:"not null"`
 	Evidence                                                 json.RawMessage `gorm:"type:jsonb;not null"`

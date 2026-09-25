@@ -1181,7 +1181,6 @@ type ReportEvidence struct {
 type ReportFinding struct {
 	ID                *string  `json:"id,omitempty"`
 	Category          string   `json:"category"`
-	ChangeType        *string  `json:"changeType,omitempty"`
 	Title             string   `json:"title"`
 	Description       string   `json:"description"`
 	Severity          string   `json:"severity"`
@@ -1228,8 +1227,9 @@ type ReportRequirement struct {
 	Instructions        *string `json:"instructions,omitempty"`
 	Coverage            *string `json:"coverage,omitempty"`
 	ImpossibilityReason *string `json:"impossibilityReason,omitempty"`
-	CoverageStatus      *string `json:"coverageStatus,omitempty"`
-	ComparisonStatus    *string `json:"comparisonStatus,omitempty"`
+	NoRelevantChange    *bool   `json:"noRelevantChange,omitempty"`
+	AnalysisMode        string  `json:"analysisMode"`
+	AnalysisStatus      string  `json:"analysisStatus"`
 }
 
 type ReportTemplateContext struct {

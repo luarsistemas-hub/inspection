@@ -103,7 +103,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			for _, finding := range findings {
 				var evidence []string
 				_ = json.Unmarshal(finding.Evidence, &evidence)
-				fact.Findings = append(fact.Findings, analysis.Finding{Category: finding.Category, ChangeType: finding.ChangeType, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, EvidenceIDs: evidence})
+				fact.Findings = append(fact.Findings, analysis.Finding{Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, EvidenceIDs: evidence})
 			}
 			facts = append(facts, fact)
 		}

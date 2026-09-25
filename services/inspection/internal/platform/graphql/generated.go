@@ -965,7 +965,6 @@ type ComplexityRoot struct {
 
 	ReportFinding struct {
 		Category          func(childComplexity int) int
-		ChangeType        func(childComplexity int) int
 		Confidence        func(childComplexity int) int
 		Description       func(childComplexity int) int
 		EvidenceIds       func(childComplexity int) int
@@ -1007,13 +1006,14 @@ type ComplexityRoot struct {
 	}
 
 	ReportRequirement struct {
-		ComparisonStatus    func(childComplexity int) int
+		AnalysisMode        func(childComplexity int) int
+		AnalysisStatus      func(childComplexity int) int
 		Coverage            func(childComplexity int) int
-		CoverageStatus      func(childComplexity int) int
 		ImpossibilityReason func(childComplexity int) int
 		Instructions        func(childComplexity int) int
 		Key                 func(childComplexity int) int
 		Label               func(childComplexity int) int
+		NoRelevantChange    func(childComplexity int) int
 		Section             func(childComplexity int) int
 	}
 
@@ -5874,12 +5874,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportFinding.Category(childComplexity), true
-	case "ReportFinding.changeType":
-		if e.ComplexityRoot.ReportFinding.ChangeType == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ReportFinding.ChangeType(childComplexity), true
 	case "ReportFinding.confidence":
 		if e.ComplexityRoot.ReportFinding.Confidence == nil {
 			break
@@ -6041,24 +6035,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ReportPublicationPayload.UserErrors(childComplexity), true
 
-	case "ReportRequirement.comparisonStatus":
-		if e.ComplexityRoot.ReportRequirement.ComparisonStatus == nil {
+	case "ReportRequirement.analysisMode":
+		if e.ComplexityRoot.ReportRequirement.AnalysisMode == nil {
 			break
 		}
 
-		return e.ComplexityRoot.ReportRequirement.ComparisonStatus(childComplexity), true
+		return e.ComplexityRoot.ReportRequirement.AnalysisMode(childComplexity), true
+	case "ReportRequirement.analysisStatus":
+		if e.ComplexityRoot.ReportRequirement.AnalysisStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportRequirement.AnalysisStatus(childComplexity), true
 	case "ReportRequirement.coverage":
 		if e.ComplexityRoot.ReportRequirement.Coverage == nil {
 			break
 		}
 
 		return e.ComplexityRoot.ReportRequirement.Coverage(childComplexity), true
-	case "ReportRequirement.coverageStatus":
-		if e.ComplexityRoot.ReportRequirement.CoverageStatus == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ReportRequirement.CoverageStatus(childComplexity), true
 	case "ReportRequirement.impossibilityReason":
 		if e.ComplexityRoot.ReportRequirement.ImpossibilityReason == nil {
 			break
@@ -6083,6 +6077,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportRequirement.Label(childComplexity), true
+	case "ReportRequirement.noRelevantChange":
+		if e.ComplexityRoot.ReportRequirement.NoRelevantChange == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportRequirement.NoRelevantChange(childComplexity), true
 	case "ReportRequirement.section":
 		if e.ComplexityRoot.ReportRequirement.Section == nil {
 			break
@@ -7308,9 +7308,9 @@ type ReportParticipantContext { id: ID! name: String! }
 type ReportTemplateContext { id: ID! name: String! version: Int! }
 type ReportInspectionContext { projectId: ID stageId: ID stageLabel: String dueAt: String submittedAt: String generatedAt: String! }
 type ReportContext { asset: ReportAssetContext! participant: ReportParticipantContext! template: ReportTemplateContext! inspection: ReportInspectionContext! }
-type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String coverageStatus: String comparisonStatus: String }
+type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String noRelevantChange: Boolean analysisMode: String! analysisStatus: String! }
 type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! flags: [String!]! url: String }
-type ReportFinding { id: ID category: String! changeType: String title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
+type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
 type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type PublicationPolicy { mode: String! version: Int! }
@@ -9194,8 +9194,6 @@ func (ec *executionContext) childFields_ReportFinding(ctx context.Context, field
 		return ec.fieldContext_ReportFinding_id(ctx, field)
 	case "category":
 		return ec.fieldContext_ReportFinding_category(ctx, field)
-	case "changeType":
-		return ec.fieldContext_ReportFinding_changeType(ctx, field)
 	case "title":
 		return ec.fieldContext_ReportFinding_title(ctx, field)
 	case "description":
@@ -9288,10 +9286,12 @@ func (ec *executionContext) childFields_ReportRequirement(ctx context.Context, f
 		return ec.fieldContext_ReportRequirement_coverage(ctx, field)
 	case "impossibilityReason":
 		return ec.fieldContext_ReportRequirement_impossibilityReason(ctx, field)
-	case "coverageStatus":
-		return ec.fieldContext_ReportRequirement_coverageStatus(ctx, field)
-	case "comparisonStatus":
-		return ec.fieldContext_ReportRequirement_comparisonStatus(ctx, field)
+	case "noRelevantChange":
+		return ec.fieldContext_ReportRequirement_noRelevantChange(ctx, field)
+	case "analysisMode":
+		return ec.fieldContext_ReportRequirement_analysisMode(ctx, field)
+	case "analysisStatus":
+		return ec.fieldContext_ReportRequirement_analysisStatus(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportRequirement", field.Name)
 }
@@ -29842,29 +29842,6 @@ func (ec *executionContext) fieldContext_ReportFinding_category(_ context.Contex
 	return graphql.NewScalarFieldContext("ReportFinding", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _ReportFinding_changeType(ctx context.Context, field graphql.CollectedField, obj *ReportFinding) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_ReportFinding_changeType(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ChangeType, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_ReportFinding_changeType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("ReportFinding", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
 func (ec *executionContext) _ReportFinding_title(ctx context.Context, field graphql.CollectedField, obj *ReportFinding) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30596,49 +30573,72 @@ func (ec *executionContext) fieldContext_ReportRequirement_impossibilityReason(_
 	return graphql.NewScalarFieldContext("ReportRequirement", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _ReportRequirement_coverageStatus(ctx context.Context, field graphql.CollectedField, obj *ReportRequirement) (ret graphql.Marshaler) {
+func (ec *executionContext) _ReportRequirement_noRelevantChange(ctx context.Context, field graphql.CollectedField, obj *ReportRequirement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_ReportRequirement_coverageStatus(ctx, field)
+			return ec.fieldContext_ReportRequirement_noRelevantChange(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.CoverageStatus, nil
+			return obj.NoRelevantChange, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
 		},
 		true,
 		false,
 	)
 }
-func (ec *executionContext) fieldContext_ReportRequirement_coverageStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ReportRequirement_noRelevantChange(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _ReportRequirement_analysisMode(ctx context.Context, field graphql.CollectedField, obj *ReportRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportRequirement_analysisMode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AnalysisMode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportRequirement_analysisMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportRequirement", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _ReportRequirement_comparisonStatus(ctx context.Context, field graphql.CollectedField, obj *ReportRequirement) (ret graphql.Marshaler) {
+func (ec *executionContext) _ReportRequirement_analysisStatus(ctx context.Context, field graphql.CollectedField, obj *ReportRequirement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_ReportRequirement_comparisonStatus(ctx, field)
+			return ec.fieldContext_ReportRequirement_analysisStatus(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.ComparisonStatus, nil
+			return obj.AnalysisStatus, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
 		},
 		true,
-		false,
+		true,
 	)
 }
-func (ec *executionContext) fieldContext_ReportRequirement_comparisonStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ReportRequirement_analysisStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportRequirement", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -46105,11 +46105,6 @@ func (ec *executionContext) _ReportFinding(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "changeType":
-			out.Values[i] = ec._ReportFinding_changeType(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
-			}
 		case "title":
 			out.Values[i] = ec._ReportFinding_title(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -46430,14 +46425,19 @@ func (ec *executionContext) _ReportRequirement(ctx context.Context, sel ast.Sele
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
-		case "coverageStatus":
-			out.Values[i] = ec._ReportRequirement_coverageStatus(ctx, field, obj)
+		case "noRelevantChange":
+			out.Values[i] = ec._ReportRequirement_noRelevantChange(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
-		case "comparisonStatus":
-			out.Values[i] = ec._ReportRequirement_comparisonStatus(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
+		case "analysisMode":
+			out.Values[i] = ec._ReportRequirement_analysisMode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "analysisStatus":
+			out.Values[i] = ec._ReportRequirement_analysisStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:

@@ -1,9 +1,12 @@
 {
+  "priority": 10,
   "request": {
     "method": "POST",
     "urlPath": "/v1/chat/completions",
     "headers": {
-      "Content-Type": { "contains": "application/json" }
+      "Content-Type": {
+        "contains": "application/json"
+      }
     }
   },
   "response": {
@@ -19,7 +22,7 @@
       "choices": [
         {
           "message": {
-            "content": "{\"coverageStatus\":\"COMPLETE\",\"comparisonStatus\":\"UNCHANGED\",\"findings\":[]}"
+            "content": "{\"noRelevantChange\":null,\"findings\":[]}"
           }
         }
       ],

@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "fd6deed918aa98e9f0ac9aa945b88f656fd553c9da5b585695cc7c0eee1e2f58",
+  "schemaSha256": "6bfb3cccb9fbccbd98d0782741a9fefb61aa976046334b854401509deb3c78fb",
   "capabilities": [
     {
       "root": "Query.me",
@@ -931,187 +931,187 @@
         {
           "name": "AddExceptionalStage",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CancelInspection",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CancelSchedule",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CloseProject",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ConfigureNotificationPreferences",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CreateInspection",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CreateProject",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CreateSchedule",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CustomerEvidence",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CustomerPortfolio",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CustomerReport",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "CustomerTimeline",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "DashboardFormOptions",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "DashboardGate",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "DashboardMemberships",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "InspectionDetail",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "Inspections",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "InvalidateInspection",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "InvalidateReportPublication",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "MarkNotificationRead",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "MyNotifications",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "NotificationDeliveries",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "OperationalOverview",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "OriginPromotion",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ProjectDetail",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ProjectTimeline",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "Projects",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "PromoteInspectionPhotos",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "PublishReport",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ReopenProject",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ReportDownload",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "ReportWorkspace",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "RequestRecapture",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "Schedules",
           "type": "query",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "SkipProjectStage",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "StartProjectStage",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         },
         {
           "name": "UpdateSchedule",
           "type": "mutation",
-          "documentSha256": "0840e0670f56874a052a9b3fcca8337bd02209dbbed82f4cfdf162d953cbbc43"
+          "documentSha256": "ca591946526a3d7341592c4146a284a6157b0471867bcd423989594613c62d61"
         }
       ]
     },

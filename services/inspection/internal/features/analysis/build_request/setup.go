@@ -96,7 +96,7 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 		if err != nil {
 			return llm.StructuredRequest{}, err
 		}
-		userPrompt := fmt.Sprintf("Requisito: %s\nTítulo: %s\nInstruções da captura: %s\nModo: %s\nConfiança mínima: %.2f\n\nAs imagens seguintes estão identificadas individualmente.", requirement.Key, requirement.Label, requirement.Instructions, comparisonMode, float64(minimumConfidence)/10000)
+		userPrompt := fmt.Sprintf("requirement: %s\nconfidenceThreshold: %.2f\nModo: %s\n\nAs imagens seguintes estão identificadas individualmente por evidenceId e role.", requirement.Label+" — "+requirement.Instructions, float64(minimumConfidence)/10000, comparisonMode)
 		var reference database.ReferenceSnapshot
 		if err := tx.Where("tenant_id=? AND inspection_id=?", job.TenantID, job.InspectionID).First(&reference).Error; err != nil {
 			return llm.StructuredRequest{}, err
@@ -146,7 +146,7 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis: pinned origin evidence not found for requirement")
 		}
 		comparisonMode = "COMPARE_ORIGIN_CURRENT"
-		userPrompt = fmt.Sprintf("Requisito: %s\nTítulo: %s\nInstruções da captura: %s\nModo: %s\nConfiança mínima: %.2f\n\nAs imagens seguintes estão identificadas individualmente.", requirement.Key, requirement.Label, requirement.Instructions, comparisonMode, float64(minimumConfidence)/10000)
+		userPrompt = fmt.Sprintf("requirement: %s\nconfidenceThreshold: %.2f\nModo: %s\n\nAs imagens seguintes estão identificadas individualmente por evidenceId e role.", requirement.Label+" — "+requirement.Instructions, float64(minimumConfidence)/10000, comparisonMode)
 		images, _, err := comparative.Build(current, origin)
 		if err != nil {
 			return llm.StructuredRequest{}, err

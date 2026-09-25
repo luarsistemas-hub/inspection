@@ -16,8 +16,8 @@ import (
 const (
 	RealEstate           = "REAL_ESTATE"
 	ModelAlias           = "inspection-vision"
-	MinimumConfidenceBPS = 7000
-	MaxSystemPromptRunes = 12000
+	MinimumConfidenceBPS = 8500
+	MaxSystemPromptRunes = 20000
 )
 
 // Definition is stored verbatim (in canonical JSON) in prompt rows and snapshots.
@@ -28,7 +28,7 @@ type Definition struct {
 	MinimumConfidenceBPS int            `json:"minimumConfidenceBps"`
 }
 
-const outputSchemaJSON = `{"type":"object","additionalProperties":false,"required":["coverageStatus","comparisonStatus","findings"],"properties":{"coverageStatus":{"type":"string","enum":["COMPLETE","PARTIAL","INSUFFICIENT"]},"comparisonStatus":{"type":"string","enum":["CHANGED","UNCHANGED","INCONCLUSIVE","NOT_APPLICABLE"]},"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["category","changeType","title","description","severity","confidence","evidenceIds","quality","recommendedAction"],"properties":{"category":{"type":"string","enum":["CONSERVATION","INVENTORY","EVIDENCE_QUALITY"]},"changeType":{"type":"string","enum":["CURRENT_CONDITION","NEW_DAMAGE","WORSENED","REMOVED","ADDED","REPLACED","MOVED","IMPROVED","NOT_APPLICABLE"]},"title":{"type":"string"},"description":{"type":"string"},"severity":{"type":"string","enum":["NONE","LOW","MEDIUM","HIGH","CRITICAL"]},"confidence":{"type":"number","minimum":0,"maximum":1},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"quality":{"type":"string","enum":["ADEQUATE","LIMITED","INSUFFICIENT"]},"recommendedAction":{"type":"string"}}}}}}`
+const outputSchemaJSON = `{"type":"object","additionalProperties":false,"required":["noRelevantChange","findings"],"properties":{"noRelevantChange":{"type":["boolean","null"]},"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["category","title","description","severity","confidence","evidenceIds","quality","recommendedAction"],"properties":{"category":{"type":"string","enum":["CONSERVATION","INVENTORY","CLEANLINESS","OBSTRUCTION","EVIDENCE_QUALITY"]},"title":{"type":"string"},"description":{"type":"string"},"severity":{"type":"string","enum":["NONE","LOW","MEDIUM","HIGH","CRITICAL"]},"confidence":{"type":"number","minimum":0,"maximum":1},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"quality":{"type":"string","enum":["ADEQUATE","LIMITED","INSUFFICIENT"]},"recommendedAction":{"type":"string"}}}}}}`
 
 // OutputSchema returns the sole schema understood by the structured-result parser.
 func OutputSchema() map[string]any {

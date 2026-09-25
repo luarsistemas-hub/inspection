@@ -1,0 +1,21 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [
+      {"contains": "analysis-finding"},
+      {"contains": "COMPARE_ORIGIN_CURRENT"}
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "jsonBody": {
+      "id": "stub-comparison-finding",
+      "provider": "stub",
+      "model": "stub/vision",
+      "choices": [{"message": {"content": "{\"noRelevantChange\":false,\"findings\":[{\"category\":\"CONSERVATION\",\"title\":\"Pintura com desgaste visível\",\"description\":\"Há desgaste visual na pintura em comparação com a referência.\",\"severity\":\"LOW\",\"confidence\":0.9,\"evidenceIds\":[\"{{jsonPath request.body '$.messages[1].content[1].text' regex='evidenceId=([^;]+);.*' group=1}}\",\"{{jsonPath request.body '$.messages[1].content[3].text' regex='evidenceId=([^;]+);.*' group=1}}\"],\"quality\":\"ADEQUATE\",\"recommendedAction\":\"Revisar a pintura presencialmente.\"}]}"}}]
+    }
+  }
+}

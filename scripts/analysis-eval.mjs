@@ -27,22 +27,24 @@ const candidate = await readFile(candidatePath, "utf8");
 const schema = JSON.parse(await readFile(schemaPath, "utf8"));
 
 function expectedKey(finding) {
-  return `${finding.changeType ?? ""}|${finding.category ?? ""}|${(finding.evidenceIds ?? []).slice().sort().join(",")}`;
+  return `${finding.category ?? ""}|${(finding.evidenceIds ?? []).slice().sort().join(",")}`;
 }
 
-function score(expected, actual) {
+function score(expected, actual, expectedNoRelevantChange, actualNoRelevantChange) {
   const remaining = new Set(actual.map(expectedKey));
   let truePositive = 0;
   for (const finding of expected) {
     if (remaining.delete(expectedKey(finding))) truePositive++;
   }
-  return { truePositive, expected: expected.length, actual: actual.length };
+  return { truePositive, expected: expected.length, actual: actual.length, noRelevantChangeCorrect: expectedNoRelevantChange === undefined ? null : expectedNoRelevantChange === actualNoRelevantChange };
 }
 
 async function runCase(testCase, systemPrompt) {
-  const content = [{ type: "text", text: testCase.userPrompt ?? "Analise as evidências fornecidas." }];
+  if (typeof testCase.requirement !== "string" || typeof testCase.confidenceThreshold !== "number" || testCase.confidenceThreshold < 0 || testCase.confidenceThreshold > 1 || !Object.hasOwn(testCase, "expectedNoRelevantChange") || ![true, false, null].includes(testCase.expectedNoRelevantChange)) throw new Error(`${testCase.id}: requirement, confidenceThreshold and expectedNoRelevantChange are required`);
+  const content = [{ type: "text", text: `requirement: ${testCase.requirement}\nconfidenceThreshold: ${testCase.confidenceThreshold}` }];
   for (const image of testCase.images) {
-    content.push({ type: "text", text: `evidenceId=${image.evidenceId}; source=${image.source}${image.pairId ? `; pairId=${image.pairId}; position=${image.position}` : ""}` });
+    if (!image.evidenceId || !["ORIGIN", "CURRENT"].includes(image.role) || !image.dataUrl) throw new Error(`${testCase.id}: every image requires evidenceId, role and dataUrl`);
+    content.push({ type: "text", text: `evidenceId=${image.evidenceId}; role=${image.role}${image.pairId ? `; pairId=${image.pairId}; position=${image.position}` : ""}` });
     content.push({ type: "image_url", image_url: { url: image.dataUrl, detail: "high" } });
   }
   const started = Date.now();
@@ -61,15 +63,19 @@ async function runCase(testCase, systemPrompt) {
   return { result: parsed, latencyMs: Date.now() - started, usage: body.usage ?? null };
 }
 
-const output = { manifest: manifest.name ?? manifestPath, cases: [], totals: { baseline: { truePositive: 0, expected: 0, actual: 0 }, candidate: { truePositive: 0, expected: 0, actual: 0 } } };
+const output = { manifest: manifest.name ?? manifestPath, cases: [], totals: { baseline: { truePositive: 0, expected: 0, actual: 0, noRelevantChangeScored: 0, noRelevantChangeCorrect: 0 }, candidate: { truePositive: 0, expected: 0, actual: 0, noRelevantChangeScored: 0, noRelevantChangeCorrect: 0 } } };
 for (const testCase of manifest.cases ?? []) {
   const expected = testCase.expectedFindings ?? [];
   const row = { id: testCase.id, baseline: null, candidate: null };
   for (const [name, prompt] of [["baseline", baseline], ["candidate", candidate]]) {
     const run = await runCase(testCase, prompt);
-    const metrics = score(expected, run.result.findings ?? []);
-    row[name] = { coverageStatus: run.result.coverageStatus, comparisonStatus: run.result.comparisonStatus, metrics, latencyMs: run.latencyMs, usage: run.usage };
-    for (const key of Object.keys(metrics)) output.totals[name][key] += metrics[key];
+    const metrics = score(expected, run.result.findings ?? [], testCase.expectedNoRelevantChange, run.result.noRelevantChange);
+    row[name] = { noRelevantChange: run.result.noRelevantChange, metrics, latencyMs: run.latencyMs, usage: run.usage };
+    for (const key of ["truePositive", "expected", "actual"]) output.totals[name][key] += metrics[key];
+    if (metrics.noRelevantChangeCorrect !== null) {
+      output.totals[name].noRelevantChangeScored++;
+      if (metrics.noRelevantChangeCorrect) output.totals[name].noRelevantChangeCorrect++;
+    }
   }
   output.cases.push(row);
 }

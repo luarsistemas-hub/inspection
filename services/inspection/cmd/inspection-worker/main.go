@@ -7,13 +7,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	buildrequest "inspection/services/inspection/internal/features/analysis/build_request"
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
-	analysiscore "inspection/services/inspection/internal/features/analysis/core"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
@@ -285,27 +285,24 @@ func run() error {
 			return err
 		}
 		findings := make([]reportcore.Finding, 0)
-		analysisStatuses := make(map[string][2]string)
+		type requirementAnalysis struct {
+			mode, status     string
+			noRelevantChange *bool
+		}
+		analysisStatuses := make(map[string]requirementAnalysis)
 		evidence := make([]reportcore.Evidence, 0)
 		for _, job := range jobs {
 			var run database.AnalysisRun
 			if err := tx.Where("tenant_id=? AND job_id=?", envelope.TenantID, job.ID).Order("created_at DESC").First(&run).Error; err == nil {
-				var analysisResult analysiscore.Result
-				if parsed, parseErr := analysiscore.ParseResult(run.Output); parseErr == nil {
-					analysisResult = parsed
-				} else {
-					var terminalState struct {
-						CoverageStatus   string `json:"coverageStatus"`
-						ComparisonStatus string `json:"comparisonStatus"`
-					}
-					if json.Unmarshal(run.Output, &terminalState) == nil {
-						analysisResult.CoverageStatus = terminalState.CoverageStatus
-						analysisResult.ComparisonStatus = terminalState.ComparisonStatus
-					}
+				var output struct {
+					NoRelevantChange *bool `json:"noRelevantChange"`
 				}
-				if analysisResult.CoverageStatus != "" {
-					analysisStatuses[job.RequirementKey] = [2]string{analysisResult.CoverageStatus, analysisResult.ComparisonStatus}
+				_ = json.Unmarshal(run.Output, &output)
+				analysisMode := "CURRENT_ONLY"
+				if reference.ReferenceVersionID != nil && reference.ComparisonMode == "FIXED_ORIGIN" && strings.HasPrefix(job.RequirementKey, "origin:") {
+					analysisMode = "COMPARE_ORIGIN_CURRENT"
 				}
+				analysisStatuses[job.RequirementKey] = requirementAnalysis{mode: analysisMode, status: job.Status, noRelevantChange: output.NoRelevantChange}
 				var rows []database.FindingRecord
 				if err := tx.Where("tenant_id=? AND analysis_run_id=?", envelope.TenantID, run.ID).Order("created_at ASC").Find(&rows).Error; err != nil {
 					return err
@@ -313,7 +310,7 @@ func run() error {
 				for _, row := range rows {
 					var evidenceIDs []string
 					_ = json.Unmarshal(row.Evidence, &evidenceIDs)
-					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, ChangeType: row.ChangeType, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
+					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
 				}
 			} else if err != gorm.ErrRecordNotFound {
 				return err
@@ -360,10 +357,13 @@ func run() error {
 			return err
 		}
 		for i := range requirements {
-			if status, ok := analysisStatuses[requirements[i].Key]; ok {
-				requirements[i].CoverageStatus, requirements[i].ComparisonStatus = status[0], status[1]
+			if result, ok := analysisStatuses[requirements[i].Key]; ok {
+				requirements[i].AnalysisMode = result.mode
+				requirements[i].AnalysisStatus = result.status
+				requirements[i].NoRelevantChange = result.noRelevantChange
 			} else {
-				requirements[i].CoverageStatus, requirements[i].ComparisonStatus = "INSUFFICIENT", "INCONCLUSIVE"
+				requirements[i].AnalysisMode = "CURRENT_ONLY"
+				requirements[i].AnalysisStatus = "PENDING"
 			}
 		}
 		var promptSnapshot database.AnalysisPromptSnapshot

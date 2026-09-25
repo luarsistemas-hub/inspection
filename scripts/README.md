@@ -13,7 +13,7 @@
 
 Após substituir o prompt de análise em um ambiente local, aplique explicitamente o padrão novo com `docker compose -f deploy/docker-compose.yml run --rm inspection-prompt-seed --replace`. O seed sem `--replace` permanece idempotente e não sobrescreve edições administrativas.
 
-Para comparar duas versões do prompt com um manifesto de casos rotulados, use `node scripts/analysis-eval.mjs --live --manifest scripts/analysis-eval.example.json --baseline prompt-a.txt --candidate prompt-b.txt --endpoint http://localhost:4000`. O manifesto deve fornecer imagens em data URL e `expectedFindings`; o comando retorna métricas e uso informado pelo provedor em JSON. A flag `--live` é obrigatória para deixar explícito que haverá chamadas reais ao modelo.
+Para comparar duas versões do prompt com um manifesto de casos rotulados, use `node scripts/analysis-eval.mjs --live --manifest scripts/analysis-eval.example.json --baseline prompt-a.txt --candidate prompt-b.txt --endpoint http://localhost:4000`. Cada caso deve informar `requirement`, `confidenceThreshold` e `expectedNoRelevantChange`; as imagens usam `evidenceId`, `role` e data URL. O comando mede os findings e a correção de `noRelevantChange`. A flag `--live` é obrigatória para deixar explícito que haverá chamadas reais ao modelo.
 
 O inventário pode ser revisado sem subir a stack:
 

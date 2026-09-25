@@ -141,7 +141,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 		}
 		validationOutcome := "accepted"
 		status := "COMPLETED"
-		if isInsufficientEvidence(parsed) {
+		if isInsufficientEvidence(parsed, request.Mode) {
 			status = "INCONCLUSIVE"
 			validationOutcome = "inconclusive"
 		}
@@ -210,8 +210,39 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 	if len(result.Findings) > 100 {
 		return fmt.Errorf("analysis: finding limit exceeded")
 	}
+	if !comparative && result.NoRelevantChange != nil {
+		return fmt.Errorf("analysis: current-only result requires noRelevantChange=null")
+	}
+	if comparative && result.NoRelevantChange == nil && len(result.Findings) == 0 {
+		return fmt.Errorf("analysis: inconclusive comparison requires a finding")
+	}
+	if comparative && result.NoRelevantChange != nil && !*result.NoRelevantChange {
+		pairedOccurrence := false
+		for _, finding := range result.Findings {
+			if finding.Category == "EVIDENCE_QUALITY" {
+				continue
+			}
+			var origin, current bool
+			pairs := map[string]bool{}
+			for _, id := range finding.EvidenceIDs {
+				image := byID[id]
+				if image.PairID != "" {
+					pairs[image.PairID] = true
+				}
+				origin = origin || image.Source == "ORIGIN"
+				current = current || image.Source == "CURRENT"
+			}
+			if origin && current && len(pairs) == 1 {
+				pairedOccurrence = true
+				break
+			}
+		}
+		if !pairedOccurrence {
+			return fmt.Errorf("analysis: noRelevantChange=false requires paired origin and current evidence")
+		}
+	}
 	for _, finding := range result.Findings {
-		if finding.Category != "EVIDENCE_QUALITY" && int(finding.Confidence*10000) < request.MinimumConfidenceBPS {
+		if int(finding.Confidence*10000) < request.MinimumConfidenceBPS {
 			return fmt.Errorf("analysis: finding below minimum confidence")
 		}
 		if len(finding.EvidenceIDs) > 50 {
@@ -219,7 +250,7 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 		}
 		seen := make(map[string]struct{}, len(finding.EvidenceIDs))
 		pairIDs := make(map[string]struct{})
-		hasCurrent, hasOrigin := false, false
+		hasCurrent := false
 		for _, evidenceID := range finding.EvidenceIDs {
 			if _, ok := known[evidenceID]; !ok {
 				return fmt.Errorf("analysis: unknown evidence reference")
@@ -230,25 +261,12 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 			seen[evidenceID] = struct{}{}
 			image := byID[evidenceID]
 			hasCurrent = hasCurrent || image.Source == "CURRENT"
-			hasOrigin = hasOrigin || image.Source == "ORIGIN"
 			if image.PairID != "" {
 				pairIDs[image.PairID] = struct{}{}
 			}
 		}
 		if finding.Category != "EVIDENCE_QUALITY" && !hasCurrent {
 			return fmt.Errorf("analysis: finding requires current evidence")
-		}
-		if comparative && finding.ChangeType == "CURRENT_CONDITION" {
-			return fmt.Errorf("analysis: current condition cannot be used with origin evidence")
-		}
-		if finding.ChangeType == "CURRENT_CONDITION" && len(pairIDs) > 0 {
-			return fmt.Errorf("analysis: current condition cannot use paired evidence")
-		}
-		if comparative && finding.Category != "EVIDENCE_QUALITY" && finding.ChangeType != "NOT_APPLICABLE" && (len(pairIDs) == 0 || !hasOrigin) {
-			return fmt.Errorf("analysis: comparative finding requires paired origin evidence")
-		}
-		if finding.ChangeType != "CURRENT_CONDITION" && finding.ChangeType != "NOT_APPLICABLE" && len(pairIDs) > 0 && !hasOrigin {
-			return fmt.Errorf("analysis: comparative finding requires origin evidence")
 		}
 		if len(pairIDs) > 1 {
 			return fmt.Errorf("analysis: finding mixes evidence pairs")
@@ -275,7 +293,7 @@ func retryOrFallback(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 }
 
 func validateRequest(request llm.StructuredRequest) (llm.StructuredRequest, error) {
-	if request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 || request.MinimumConfidenceBPS < 0 || request.MinimumConfidenceBPS > 10000 {
+	if request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 || request.MinimumConfidenceBPS != analysis.MinimumConfidenceBPS {
 		return llm.StructuredRequest{}, fmt.Errorf("analysis request lacks authorized structured input")
 	}
 	pairedSources := make(map[string]map[string]bool)
@@ -301,8 +319,16 @@ func validateRequest(request llm.StructuredRequest) (llm.StructuredRequest, erro
 	return request, nil
 }
 
-func isInsufficientEvidence(result analysis.Result) bool {
-	return result.CoverageStatus != "COMPLETE" || result.ComparisonStatus == "INCONCLUSIVE"
+func isInsufficientEvidence(result analysis.Result, mode string) bool {
+	if mode == "COMPARE_ORIGIN_CURRENT" && result.NoRelevantChange == nil {
+		return true
+	}
+	for _, finding := range result.Findings {
+		if finding.Category == "EVIDENCE_QUALITY" {
+			return true
+		}
+	}
+	return false
 }
 
 func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, result analysis.Result, provider llm.StructuredResult, started, now time.Time, status string) error {
@@ -355,7 +381,7 @@ func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 	}
 	for _, finding := range result.Findings {
 		evidence, _ := json.Marshal(finding.EvidenceIDs)
-		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, Category: finding.Category, ChangeType: finding.ChangeType, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
+		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -372,7 +398,7 @@ func persistTechnicalFailure(ctx context.Context, tx *gorm.DB, tenantID identity
 	if reasonCode == "" {
 		reasonCode = "analysis_unavailable"
 	}
-	output, _ := json.Marshal(map[string]any{"coverageStatus": "UNAVAILABLE", "comparisonStatus": "FAILED", "findings": []any{}, "reason": "analysis unavailable", "reasonCode": reasonCode})
+	output, _ := json.Marshal(map[string]any{"noRelevantChange": nil, "findings": []any{}, "reason": "analysis unavailable", "reasonCode": reasonCode})
 	run := database.AnalysisRun{ID: identity.NewID(), TenantID: tenantID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: "", Model: "", GatewayRequestID: "", PromptDigest: job.PromptDigest, InputDigest: job.InputDigest, Output: output, LatencyMS: 0, ValidationOutcome: "FAILED", CreatedAt: now}
 	if err := tx.Create(&run).Error; err != nil {
 		return err

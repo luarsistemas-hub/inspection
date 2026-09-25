@@ -1,105 +1,54 @@
 package core
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
 
-func TestValidateResultRequiresExplicitEmptyOutcome(t *testing.T) {
-	if err := ValidateResult(Result{}); err == nil {
-		t.Fatal("expected invalid empty output")
-	}
-	if err := ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "UNCHANGED"}); err != nil {
-		t.Fatalf("explicit empty result: %v", err)
-	}
+	"github.com/stretchr/testify/require"
+)
+
+func TestParseResultRequiresNewContractAndAllowsNull(t *testing.T) {
+	result, err := ParseResult([]byte(`{"noRelevantChange":null,"findings":[]}`))
+	require.NoError(t, err)
+	require.Nil(t, result.NoRelevantChange)
+	_, err = ParseResult([]byte(`{"findings":[]}`))
+	require.Error(t, err)
+	_, err = ParseResult([]byte(`{"noRelevantChange":true,"findings":[],"coverageStatus":"COMPLETE"}`))
+	require.Error(t, err)
 }
 
-func TestClassifyIsDeterministicAndConservative(t *testing.T) {
-	tests := []struct {
-		name  string
-		facts []ComparisonFacts
-		want  string
-	}{
-		{"normal", []ComparisonFacts{{Terminal: true}}, ClassificationNormal},
-		{"critical", []ComparisonFacts{{Terminal: true, Findings: []Finding{{Severity: "CRITICAL"}}}}, ClassificationCritical},
-		{"inconclusive", []ComparisonFacts{TerminalFallback()}, ClassificationAttention},
-		{"flagged", []ComparisonFacts{{Terminal: true, Flagged: true}}, ClassificationAttention},
+func TestValidateResultCategoriesAndSeverity(t *testing.T) {
+	for _, category := range []string{"CONSERVATION", "INVENTORY", "CLEANLINESS", "OBSTRUCTION"} {
+		require.NoError(t, ValidateResult(Result{Findings: []Finding{finding(category, "LOW", "ADEQUATE", .85)}}))
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := Classify(test.facts).Classification; got != test.want {
-				t.Fatalf("got %s, want %s", got, test.want)
-			}
-		})
-	}
+	require.NoError(t, ValidateResult(Result{Findings: []Finding{finding("EVIDENCE_QUALITY", "NONE", "INSUFFICIENT", .85)}}))
+	require.Error(t, ValidateResult(Result{Findings: []Finding{finding("UNKNOWN", "LOW", "ADEQUATE", .9)}}))
+	require.Error(t, ValidateResult(Result{Findings: []Finding{finding("CONSERVATION", "NONE", "INSUFFICIENT", .9)}}))
+	require.Error(t, ValidateResult(Result{Findings: []Finding{finding("EVIDENCE_QUALITY", "LOW", "INSUFFICIENT", .9)}}))
 }
 
-func TestClassifyTechnicalFailureIsNotVisualInconclusive(t *testing.T) {
-	decision := Classify([]ComparisonFacts{{Terminal: true, TechnicalFailure: true}})
-	if decision.Classification != ClassificationAttention {
-		t.Fatalf("classification = %q, want ATTENTION", decision.Classification)
-	}
-	if len(decision.ReasonCodes) != 1 || decision.ReasonCodes[0] != "ANALYSIS_FAILED" {
-		t.Fatalf("reason codes = %#v, want ANALYSIS_FAILED", decision.ReasonCodes)
-	}
+func TestParseResultFindingsRemainIndependentOfQualityFindings(t *testing.T) {
+	payload := map[string]any{"noRelevantChange": true, "findings": []any{
+		map[string]any{"category": "OBSTRUCTION", "title": "Obstrução do gabinete inferior", "description": "Um saco encobre parte da frente do gabinete.", "severity": "LOW", "confidence": .9, "evidenceIds": []string{"current"}, "quality": "ADEQUATE", "recommendedAction": "Retirar o objeto e fotografar novamente."},
+	}}
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	result, err := ParseResult(data)
+	require.NoError(t, err)
+	require.Len(t, result.Findings, 1)
+	require.Equal(t, "OBSTRUCTION", result.Findings[0].Category)
 }
 
-func TestParseResultRejectsUnknownOrLooseFields(t *testing.T) {
-	if _, err := ParseResult([]byte(`{"noRelevantChange":true,"narrative":"looks fine"}`)); err == nil {
-		t.Fatal("unexpected loose provider output accepted")
-	}
-	result, err := ParseResult([]byte(`{"coverageStatus":"COMPLETE","comparisonStatus":"UNCHANGED","findings":[]}`))
-	if err != nil || result.ComparisonStatus != "UNCHANGED" {
-		t.Fatalf("strict valid result rejected: %#v %v", result, err)
-	}
+func TestValidateResultDoesNotInferFromEmptyFindings(t *testing.T) {
+	require.NoError(t, ValidateResult(Result{Findings: []Finding{}}))
 }
 
-func TestUnchangedComparisonRejectsFindings(t *testing.T) {
-	result := Result{CoverageStatus: "COMPLETE", ComparisonStatus: "UNCHANGED", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Dano", Description: "Dano visível", Severity: "LOW", Confidence: .9, EvidenceIDs: []string{"current"}, Quality: "ADEQUATE", RecommendedAction: "Revisar"}}}
-	if err := ValidateResult(result); err == nil {
-		t.Fatal("unchanged comparison accepted a finding")
-	}
+func finding(category, severity, quality string, confidence float64) Finding {
+	return Finding{Category: category, Title: "Observação", Description: "Condição visual observada.", Severity: severity, Confidence: confidence, EvidenceIDs: []string{"current"}, Quality: quality, RecommendedAction: "Verificar a região."}
 }
 
-func TestInsufficientComparisonRequiresQualityFinding(t *testing.T) {
-	result := Result{CoverageStatus: "INSUFFICIENT", ComparisonStatus: "INCONCLUSIVE"}
-	if err := ValidateResult(result); err == nil {
-		t.Fatal("inconclusive result without quality finding was accepted")
-	}
-	result.Findings = []Finding{{Category: "EVIDENCE_QUALITY", ChangeType: "NOT_APPLICABLE", Title: "Evidência insuficiente", Description: "A origem não cobre a área", Severity: "NONE", Confidence: .9, EvidenceIDs: []string{"current"}, Quality: "INSUFFICIENT", RecommendedAction: "Solicitar nova captura"}}
-	if err := ValidateResult(result); err != nil {
-		t.Fatalf("valid inconclusive result rejected: %v", err)
-	}
-}
-
-func TestCurrentOnlyAcceptsCurrentCondition(t *testing.T) {
-	result := Result{CoverageStatus: "COMPLETE", ComparisonStatus: "NOT_APPLICABLE", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "CURRENT_CONDITION", Title: "Desgaste visível", Description: "Há desgaste visível na superfície.", Severity: "LOW", Confidence: .8, EvidenceIDs: []string{"current"}, Quality: "ADEQUATE", RecommendedAction: "Revisar presencialmente"}}}
-	if err := ValidateResult(result); err != nil {
-		t.Fatalf("current-only condition rejected: %v", err)
-	}
-}
-
-func TestValidateResultRejectsContradictoryStatusesAndFindings(t *testing.T) {
-	quality := Finding{Category: "EVIDENCE_QUALITY", ChangeType: "NOT_APPLICABLE", Title: "Cobertura limitada", Description: "A área não está visível.", Severity: "NONE", Confidence: .9, EvidenceIDs: []string{"current"}, Quality: "INSUFFICIENT", RecommendedAction: "Solicitar nova captura"}
-	if err := ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []Finding{quality}}); err == nil {
-		t.Fatal("changed result with only a quality finding was accepted")
-	}
-	if err := ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "INCONCLUSIVE", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Dano", Description: "Dano visível.", Severity: "LOW", Confidence: .9, EvidenceIDs: []string{"current"}, Quality: "ADEQUATE", RecommendedAction: "Revisar"}}}); err == nil {
-		t.Fatal("inconclusive result without quality finding was accepted")
-	}
-	if err := ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "NOT_APPLICABLE", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Dano", Description: "Dano visível.", Severity: "LOW", Confidence: .9, EvidenceIDs: []string{"current"}, Quality: "ADEQUATE", RecommendedAction: "Revisar"}}}); err == nil {
-		t.Fatal("current-only result with temporal finding was accepted")
-	}
-}
-
-func TestValidateResultRejectsBlameAndCostLanguage(t *testing.T) {
-	err := ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Tenant fault", Description: "Observed change", Severity: "LOW", Confidence: .8, EvidenceIDs: []string{"evidence-1"}, Quality: "ADEQUATE", RecommendedAction: "Review"}}})
-	if err == nil {
-		t.Fatal("blame language was accepted")
-	}
-	err = ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Alteração.", Description: "A responsabilidade é indeterminada.", Severity: "LOW", Confidence: .8, EvidenceIDs: []string{"evidence-1"}, Quality: "ADEQUATE", RecommendedAction: "Review"}}})
-	if err == nil {
-		t.Fatal("punctuated responsibility language was accepted")
-	}
-	err = ValidateResult(Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Title: "Custo-benefício visual", Description: "Alteração observada.", Severity: "LOW", Confidence: .8, EvidenceIDs: []string{"evidence-1"}, Quality: "ADEQUATE", RecommendedAction: "Review"}}})
-	if err != nil {
-		t.Fatalf("unrelated substring was rejected: %v", err)
-	}
+func TestClassificationPrioritizesCriticalAndAttention(t *testing.T) {
+	require.Equal(t, ClassificationNormal, Classify([]ComparisonFacts{{Terminal: true}}).Classification)
+	require.Equal(t, ClassificationAttention, Classify([]ComparisonFacts{{Terminal: true, Inconclusive: true}}).Classification)
+	require.Equal(t, ClassificationCritical, Classify([]ComparisonFacts{{Terminal: true, Findings: []Finding{{Severity: "CRITICAL"}}}}).Classification)
 }

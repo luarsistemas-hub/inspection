@@ -1231,7 +1231,11 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION usage.read_llm_usage_tenants(text, text, uuid, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION usage.read_llm_usage_tenants(text, text, uuid, integer) TO inspection_runtime;
-`}}
+`},
+		{Version: 42, Name: "remove_analysis_finding_change_type", Destructive: true, Compatible: true, SQL: `
+ALTER TABLE analysis.findings DROP COLUMN IF EXISTS change_type;
+`},
+	}
 }
 
 // LatestVersion returns the highest schema version known by the application.

@@ -21,6 +21,9 @@ func TestDefaultDefinitionIsCanonicalAndParseable(t *testing.T) {
 	if parsed.MinimumConfidenceBPS != MinimumConfidenceBPS || parsed.ModelAlias != ModelAlias {
 		t.Fatalf("fixed configuration changed: %+v", parsed)
 	}
+	if MinimumConfidenceBPS != 8500 || MaxSystemPromptRunes != 20000 || len([]rune(parsed.SystemPrompt)) <= 12000 {
+		t.Fatalf("new prompt contract limits not applied: confidence=%d limit=%d runes=%d", MinimumConfidenceBPS, MaxSystemPromptRunes, len([]rune(parsed.SystemPrompt)))
+	}
 }
 
 func TestValidateRejectsChangesToFixedContract(t *testing.T) {

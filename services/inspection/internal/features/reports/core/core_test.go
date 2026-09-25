@@ -19,7 +19,8 @@ func TestSnapshotRejectsMutableURLs(t *testing.T) {
 
 func TestHTMLForPDFIncludesLocalImagesAndMissingMarker(t *testing.T) {
 	snapshot := validSnapshot()
-	snapshot.Requirements = []Requirement{{Key: "overview", Section: "imóvel", Label: "Visão geral"}}
+	unchanged := true
+	snapshot.Requirements = []Requirement{{Key: "overview", Section: "imóvel", Label: "Visão geral", AnalysisMode: "COMPARE_ORIGIN_CURRENT", AnalysisStatus: "COMPLETED", NoRelevantChange: &unchanged}}
 	snapshot.Evidence = []Evidence{{ID: "evidence-1", RequirementKey: "overview", Role: "CURRENT", Description: "Sala"}, {ID: "evidence-2", RequirementKey: "overview", Role: "REFERENCE", Description: "Origem"}}
 	html, err := HTMLForPDF(snapshot, map[string]bool{"evidence-1": true, "evidence-2": false}, true)
 	if err != nil {
@@ -27,6 +28,9 @@ func TestHTMLForPDFIncludesLocalImagesAndMissingMarker(t *testing.T) {
 	}
 	if !strings.Contains(string(html), `src="evidence-evidence-1.jpg"`) || !strings.Contains(string(html), "Imagem indisponível") {
 		t.Fatalf("expected local image and missing marker: %s", html)
+	}
+	if !strings.Contains(string(html), "Sem alteração relevante identificada") || !strings.Contains(string(html), "não confirma a ausência de problemas") {
+		t.Fatalf("expected neutral analysis summary: %s", html)
 	}
 }
 

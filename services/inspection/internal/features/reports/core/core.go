@@ -78,8 +78,9 @@ type Requirement struct {
 	Instructions        string `json:"instructions,omitempty"`
 	Coverage            string `json:"coverage,omitempty"`
 	ImpossibilityReason string `json:"impossibilityReason,omitempty"`
-	CoverageStatus      string `json:"coverageStatus,omitempty"`
-	ComparisonStatus    string `json:"comparisonStatus,omitempty"`
+	NoRelevantChange    *bool  `json:"noRelevantChange"`
+	AnalysisMode        string `json:"analysisMode"`
+	AnalysisStatus      string `json:"analysisStatus"`
 }
 
 // Finding is an immutable, neutral observation included in the internal
@@ -88,7 +89,6 @@ type Requirement struct {
 type Finding struct {
 	ID                string   `json:"id,omitempty"`
 	Category          string   `json:"category"`
-	ChangeType        string   `json:"changeType,omitempty"`
 	Title             string   `json:"title"`
 	Description       string   `json:"description"`
 	Severity          string   `json:"severity"`
@@ -158,6 +158,7 @@ func Validate(snapshot Snapshot) error {
 		if strings.TrimSpace(finding.Category) == "" || strings.TrimSpace(finding.Title) == "" || strings.TrimSpace(finding.Description) == "" || strings.TrimSpace(finding.Quality) == "" || strings.TrimSpace(finding.RecommendedAction) == "" || len(finding.EvidenceIDs) == 0 || finding.Confidence < 0 || finding.Confidence > 1 {
 			return fmt.Errorf("report finding is invalid")
 		}
+		if finding.Category != "CONSERVATION" && finding.Category != "INVENTORY" && finding.Category != "CLEANLINESS" && finding.Category != "OBSTRUCTION" && finding.Category != "EVIDENCE_QUALITY" { return fmt.Errorf("report finding category is invalid") }
 		for _, evidenceID := range finding.EvidenceIDs {
 			if strings.TrimSpace(evidenceID) == "" {
 				return fmt.Errorf("report finding evidence is required")
@@ -178,11 +179,14 @@ func Validate(snapshot Snapshot) error {
 		if strings.TrimSpace(requirement.Key) == "" || strings.TrimSpace(requirement.Section) == "" || strings.TrimSpace(requirement.Label) == "" {
 			return fmt.Errorf("report requirement is invalid")
 		}
-		if requirement.CoverageStatus != "" && requirement.CoverageStatus != "COMPLETE" && requirement.CoverageStatus != "PARTIAL" && requirement.CoverageStatus != "INSUFFICIENT" && requirement.CoverageStatus != "UNAVAILABLE" {
-			return fmt.Errorf("report requirement coverage status is invalid")
+		if requirement.AnalysisMode != "CURRENT_ONLY" && requirement.AnalysisMode != "COMPARE_ORIGIN_CURRENT" {
+			return fmt.Errorf("report requirement analysis mode is invalid")
 		}
-		if requirement.ComparisonStatus != "" && requirement.ComparisonStatus != "CHANGED" && requirement.ComparisonStatus != "UNCHANGED" && requirement.ComparisonStatus != "INCONCLUSIVE" && requirement.ComparisonStatus != "NOT_APPLICABLE" && requirement.ComparisonStatus != "FAILED" {
-			return fmt.Errorf("report requirement comparison status is invalid")
+		if requirement.AnalysisStatus != "PENDING" && requirement.AnalysisStatus != "COMPLETED" && requirement.AnalysisStatus != "INCONCLUSIVE" && requirement.AnalysisStatus != "FAILED" {
+			return fmt.Errorf("report requirement analysis status is invalid")
+		}
+		if requirement.AnalysisMode == "CURRENT_ONLY" && requirement.NoRelevantChange != nil {
+			return fmt.Errorf("current-only report must have null noRelevantChange")
 		}
 	}
 	return nil
@@ -201,11 +205,11 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 	if err := Validate(snapshot); err != nil {
 		return nil, err
 	}
-	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p><h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p>{{if .CoverageStatus}}<p class="muted">{{coverageStatus .CoverageStatus}}{{if .ComparisonStatus}} · {{comparisonStatus .ComparisonStatus}}{{end}}</p>{{end}}<div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{.Title}}</strong>{{if .ChangeType}} · {{changeType .ChangeType}}{{end}}<p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
+	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p><h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p><p class="muted">{{analysisMode .AnalysisMode}} · {{analysisStatus .AnalysisStatus}}{{if .HasNoRelevantChange}} · {{noRelevantChange .NoRelevantChange}}{{end}}</p><div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{category .Category}} · {{.Title}}</strong><p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
 	t, err := template.New("report").Funcs(template.FuncMap{
 		"classification": presentClassification, "mode": presentMode, "reason": presentReason,
 		"requirement": presentRequirement, "captureSource": presentCaptureSource, "flag": presentFlag, "severity": presentSeverity, "action": presentAction,
-		"evidenceRole": presentEvidenceRole, "assetName": evidenceAssetName, "changeType": presentChangeType, "coverageStatus": presentCoverageStatus, "comparisonStatus": presentComparisonStatus, "noFindings": noFindings,
+		"evidenceRole": presentEvidenceRole, "assetName": evidenceAssetName, "analysisMode": presentAnalysisMode, "analysisStatus": presentAnalysisStatus, "noRelevantChange": presentNoRelevantChange, "hasNoRelevantChange": hasNoRelevantChange, "category": presentCategory, "noFindings": noFindings,
 		"available": func(id string) bool { return availability == nil || availability[id] },
 	}).Parse(source)
 	if err != nil {
@@ -219,8 +223,10 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 }
 
 type evidenceGroup struct {
-	Label, Instructions, CoverageStatus, ComparisonStatus string
-	Evidence                                              []Evidence
+	Label, Instructions, AnalysisMode, AnalysisStatus string
+	NoRelevantChange                                  *bool
+	HasNoRelevantChange                               bool
+	Evidence                                          []Evidence
 }
 type htmlModel struct {
 	Snapshot       Snapshot
@@ -232,7 +238,7 @@ func groupEvidence(snapshot Snapshot) []evidenceGroup {
 	byKey := make(map[string]*evidenceGroup, len(snapshot.Requirements))
 	groups := make([]evidenceGroup, 0, len(snapshot.Requirements))
 	for _, requirement := range snapshot.Requirements {
-		groups = append(groups, evidenceGroup{Label: requirement.Label, Instructions: requirement.Instructions, CoverageStatus: requirement.CoverageStatus, ComparisonStatus: requirement.ComparisonStatus})
+		groups = append(groups, evidenceGroup{Label: requirement.Label, Instructions: requirement.Instructions, AnalysisMode: requirement.AnalysisMode, AnalysisStatus: requirement.AnalysisStatus, NoRelevantChange: requirement.NoRelevantChange, HasNoRelevantChange: requirement.AnalysisMode == "COMPARE_ORIGIN_CURRENT" && requirement.NoRelevantChange != nil})
 		byKey[requirement.Key] = &groups[len(groups)-1]
 	}
 	for _, item := range snapshot.Evidence {
@@ -257,7 +263,7 @@ func evidenceAssetName(id string) string {
 }
 
 func presentClassification(value string) string {
-	return reportLabel(map[string]string{"NORMAL": "Sem alterações relevantes", "ATTENTION": "Requer atenção", "CRITICAL": "Crítica"}, value)
+	return reportLabel(map[string]string{"NORMAL": "Sem alertas identificados", "ATTENTION": "Requer atenção", "CRITICAL": "Crítica"}, value)
 }
 func presentMode(value string) string {
 	return reportLabel(map[string]string{"CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico"}, value)
@@ -280,11 +286,24 @@ func presentFlag(value string) string {
 func presentSeverity(value string) string {
 	return reportLabel(map[string]string{"NONE": "Insuficiente", "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica"}, value)
 }
-func presentCoverageStatus(value string) string {
-	return reportLabel(map[string]string{"COMPLETE": "Cobertura completa", "PARTIAL": "Cobertura parcial", "INSUFFICIENT": "Evidência insuficiente", "UNAVAILABLE": "Análise indisponível"}, value)
+func presentAnalysisMode(value string) string {
+	return reportLabel(map[string]string{"CURRENT_ONLY": "Análise atual", "COMPARE_ORIGIN_CURRENT": "Comparação com referência"}, value)
 }
-func presentComparisonStatus(value string) string {
-	return reportLabel(map[string]string{"CHANGED": "Mudança identificada", "UNCHANGED": "Sem mudanças relevantes", "INCONCLUSIVE": "Comparação inconclusiva", "NOT_APPLICABLE": "Análise atual", "FAILED": "Falha técnica na análise"}, value)
+func presentAnalysisStatus(value string) string {
+	return reportLabel(map[string]string{"PENDING": "Pendente", "COMPLETED": "Concluída", "INCONCLUSIVE": "Inconclusiva", "FAILED": "Falha técnica"}, value)
+}
+func presentNoRelevantChange(value *bool) string {
+	if value == nil {
+		return "Comparação inconclusiva"
+	}
+	if *value {
+		return "Sem alteração relevante identificada"
+	}
+	return "Alteração relevante identificada"
+}
+func hasNoRelevantChange(value evidenceGroup) bool { return value.HasNoRelevantChange }
+func presentCategory(value string) string {
+	return reportLabel(map[string]string{"CONSERVATION": "Conservação", "INVENTORY": "Inventário", "CLEANLINESS": "Limpeza", "OBSTRUCTION": "Obstrução", "EVIDENCE_QUALITY": "Qualidade da evidência"}, value)
 }
 func presentAction(value string) string {
 	if label := reportLabel(map[string]string{"REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional"}, value); label != "Situação não reconhecida" {
@@ -295,16 +314,8 @@ func presentAction(value string) string {
 func presentEvidenceRole(value string) string {
 	return reportLabel(map[string]string{"REFERENCE": "Referência", "CURRENT": "Vistoria atual"}, value)
 }
-func presentChangeType(value string) string {
-	return reportLabel(map[string]string{"CURRENT_CONDITION": "Condição atual", "NEW_DAMAGE": "Dano novo", "WORSENED": "Agravamento", "REMOVED": "Remoção", "ADDED": "Adição", "REPLACED": "Substituição", "MOVED": "Movimentação", "IMPROVED": "Melhoria", "NOT_APPLICABLE": "Evidência insuficiente"}, value)
-}
 func noFindings(snapshot Snapshot) string {
-	for _, requirement := range snapshot.Requirements {
-		if requirement.ComparisonStatus != "" && requirement.ComparisonStatus != "NOT_APPLICABLE" {
-			return "Nenhuma constatação foi registrada."
-		}
-	}
-	return "Sem achados relevantes"
+	return "Nenhuma constatação foi registrada; isso não confirma a ausência de problemas."
 }
 func reportLabel(labels map[string]string, value string) string {
 	if label, ok := labels[value]; ok {

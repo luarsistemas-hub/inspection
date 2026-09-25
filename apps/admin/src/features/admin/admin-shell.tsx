@@ -153,8 +153,8 @@ function AnalysisPromptEditor({ prompt, onSaved }: { prompt?: G.AdminAnalysisPro
   if (!prompt) return <div className="admin-state loading" role="status">Carregando prompt global…</div>;
   return <form className="prompt-editor" onSubmit={submit} aria-label="Editar prompt global de análise">
     <div className="prompt-editor-meta"><span>Tipo: Imóveis</span><span>Modelo fixo: {prompt.modelAlias}</span><span>Confiança mínima: {prompt.minimumConfidenceBps / 100}%</span><span>Revisão: {prompt.revision}</span><span>Digest: {prompt.canonicalDigest}</span><span>Atualizado: {prompt.updatedAt}</span></div>
-    <label>Instrução do sistema<textarea required minLength={1} maxLength={12000} rows={18} value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} /></label>
-    <p className="prompt-editor-help">{systemPrompt.length}/12000 caracteres. O schema de saída, o alias do modelo e o limiar de confiança são fixos. Cada alteração gera uma nova revisão e um registro de auditoria sem armazenar o conteúdo anterior. As mudanças afetam somente inspeções criadas depois da gravação.</p>
+    <label>Instrução do sistema<textarea required minLength={1} maxLength={20000} rows={18} value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} /></label>
+    <p className="prompt-editor-help">{systemPrompt.length}/20000 caracteres. O schema de saída, o alias do modelo e o limiar de confiança são fixos. Cada alteração gera uma nova revisão e um registro de auditoria sem armazenar o conteúdo anterior. As mudanças afetam somente inspeções criadas depois da gravação.</p>
     <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /> Confirmo a alteração do prompt global.</label>
     {error && <p className="admin-state error" role="alert">{error}</p>}
     <button disabled={busy || !confirmed || systemPrompt === prompt.systemPrompt}>{busy ? "Salvando…" : "Salvar nova revisão"}</button>

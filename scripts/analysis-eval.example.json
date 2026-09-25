@@ -4,10 +4,24 @@
   "cases": [
     {
       "id": "preexisting-unchanged-001",
-      "userPrompt": "Compare ORIGIN and CURRENT for the wall finish.",
+      "requirement": "Compare ORIGIN and CURRENT for the wall finish.",
+      "confidenceThreshold": 0.85,
+      "expectedNoRelevantChange": true,
       "images": [
-        { "evidenceId": "origin-001", "source": "ORIGIN", "pairId": "pair-001", "position": "ORIGIN", "dataUrl": "data:image/jpeg;base64,..." },
-        { "evidenceId": "current-001", "source": "CURRENT", "pairId": "pair-001", "position": "CURRENT_1", "dataUrl": "data:image/jpeg;base64,..." }
+        {
+          "evidenceId": "origin-001",
+          "pairId": "pair-001",
+          "position": "ORIGIN",
+          "dataUrl": "data:image/jpeg;base64,...",
+          "role": "ORIGIN"
+        },
+        {
+          "evidenceId": "current-001",
+          "pairId": "pair-001",
+          "position": "CURRENT_1",
+          "dataUrl": "data:image/jpeg;base64,...",
+          "role": "CURRENT"
+        }
       ],
       "expectedFindings": []
     }

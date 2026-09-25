@@ -34,7 +34,7 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") {
 			return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("unauthorized image"))
 		}
-		label := "evidenceId=" + image.EvidenceID + "; source=" + image.Source
+		label := "evidenceId=" + image.EvidenceID + "; role=" + image.Source
 		if image.PairID != "" {
 			if image.Position == "" {
 				return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("paired image has no position"))

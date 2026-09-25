@@ -19,22 +19,66 @@ func (g gateway) CompleteStructured(context.Context, llm.StructuredRequest) (llm
 	return g.response, nil
 }
 
-func TestValidateEvidenceRejectsUnknownAndLowConfidence(t *testing.T) {
-	request := llm.StructuredRequest{MinimumConfidenceBPS: 7000, Images: []llm.NormalizedImage{{EvidenceID: "known"}}}
-	result := analysis.Result{CoverageStatus: "COMPLETE", ComparisonStatus: "CHANGED", Findings: []analysis.Finding{{Category: "CONSERVATION", ChangeType: "NEW_DAMAGE", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
+func TestValidateEvidenceEnforcesConfidenceAndKnownReferences(t *testing.T) {
+	request := llm.StructuredRequest{MinimumConfidenceBPS: 8500, Mode: "CURRENT_ONLY", Images: []llm.NormalizedImage{{EvidenceID: "known", Source: "CURRENT"}}}
+	result := analysis.Result{Findings: []analysis.Finding{{Category: "CONSERVATION", Title: "Marca", Description: "Marca visível", Severity: "LOW", Quality: "ADEQUATE", RecommendedAction: "Verificar", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
 	if err := validateEvidence(result, request); err == nil {
 		t.Fatal("unknown evidence accepted")
 	}
 	result.Findings[0].EvidenceIDs = []string{"known"}
-	result.Findings[0].Confidence = .69
+	result.Findings[0].Confidence = .8499
 	if err := validateEvidence(result, request); err == nil {
 		t.Fatal("low confidence accepted")
 	}
+	result.Findings[0].Confidence = .85
+	if err := validateEvidence(result, request); err != nil {
+		t.Fatalf("threshold confidence rejected: %v", err)
+	}
+	for _, category := range []string{"INVENTORY", "CLEANLINESS", "OBSTRUCTION", "EVIDENCE_QUALITY"} {
+		severity, quality := "LOW", "ADEQUATE"
+		if category == "EVIDENCE_QUALITY" {
+			severity, quality = "NONE", "INSUFFICIENT"
+		}
+		result.Findings[0] = analysis.Finding{Category: category, Title: "Observação", Description: "Observação visual", Severity: severity, Quality: quality, RecommendedAction: "Verificar", Confidence: .8499, EvidenceIDs: []string{"known"}}
+		if err := validateEvidence(result, request); err == nil {
+			t.Fatalf("below-threshold %s finding accepted", category)
+		}
+		result.Findings[0].Confidence = .85
+		if err := validateEvidence(result, request); err != nil {
+			t.Fatalf("threshold %s finding rejected: %v", category, err)
+		}
+	}
 }
 
-func TestIsInsufficientEvidence(t *testing.T) {
-	if !isInsufficientEvidence(analysis.Result{CoverageStatus: "INSUFFICIENT", ComparisonStatus: "INCONCLUSIVE", Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY", ChangeType: "NOT_APPLICABLE", Quality: "INSUFFICIENT"}}}) {
-		t.Fatal("insufficient evidence not detected")
+func TestValidateEvidenceModes(t *testing.T) {
+	current := llm.StructuredRequest{Mode: "CURRENT_ONLY", MinimumConfidenceBPS: 8500, Images: []llm.NormalizedImage{{EvidenceID: "c", Source: "CURRENT"}}}
+	if err := validateEvidence(analysis.Result{}, current); err != nil {
+		t.Fatalf("current-only null rejected: %v", err)
+	}
+	trueValue := true
+	if err := validateEvidence(analysis.Result{NoRelevantChange: &trueValue}, current); err == nil {
+		t.Fatal("current-only boolean accepted")
+	}
+	comparative := llm.StructuredRequest{Mode: "COMPARE_ORIGIN_CURRENT", MinimumConfidenceBPS: 8500, Images: []llm.NormalizedImage{{EvidenceID: "o", Source: "ORIGIN", PairID: "p"}, {EvidenceID: "c", Source: "CURRENT", PairID: "p"}}}
+	falseValue := false
+	f := analysis.Finding{Category: "OBSTRUCTION", Title: "Gabinete obstruído", Description: "Saco encobre o gabinete", Severity: "LOW", Confidence: .9, EvidenceIDs: []string{"o", "c"}, Quality: "ADEQUATE", RecommendedAction: "Retirar o objeto e fotografar"}
+	if err := validateEvidence(analysis.Result{NoRelevantChange: &falseValue, Findings: []analysis.Finding{f}}, comparative); err != nil {
+		t.Fatalf("paired changed result rejected: %v", err)
+	}
+	if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{f}}, comparative); err != nil {
+		t.Fatalf("inconclusive result with finding rejected: %v", err)
+	}
+	if err := validateEvidence(analysis.Result{}, comparative); err == nil {
+		t.Fatal("empty inconclusive comparison accepted")
+	}
+	if err := validateEvidence(analysis.Result{NoRelevantChange: &falseValue, Findings: []analysis.Finding{analysis.Finding{Category: "OBSTRUCTION", Title: "Gabinete obstruído", Description: "Saco encobre o gabinete", Severity: "LOW", Confidence: .9, EvidenceIDs: []string{"c"}, Quality: "ADEQUATE", RecommendedAction: "Retirar o objeto e fotografar"}}}, comparative); err == nil {
+		t.Fatal("unpaired change was accepted")
+	}
+	if isInsufficientEvidence(analysis.Result{NoRelevantChange: &trueValue}, "CURRENT_ONLY") {
+		t.Fatal("current-only result was marked inconclusive because its comparison value is null")
+	}
+	if !isInsufficientEvidence(analysis.Result{Findings: []analysis.Finding{{Category: "EVIDENCE_QUALITY"}}}, "CURRENT_ONLY") {
+		t.Fatal("evidence quality finding did not mark the assessment incomplete")
 	}
 }
 

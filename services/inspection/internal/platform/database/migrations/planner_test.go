@@ -60,9 +60,19 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 41 {
-		t.Fatalf("latest version=%d, want 41", got)
+	if got := LatestVersion(); got != 42 {
+		t.Fatalf("latest version=%d, want 42", got)
 	}
+}
+
+func TestAnalysisFindingChangeTypeIsRemoved(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 42 {
+			if step.Name != "remove_analysis_finding_change_type" || !strings.Contains(step.SQL, "DROP COLUMN IF EXISTS change_type") { t.Fatalf("unexpected analysis finding migration: %+v", step) }
+			return
+		}
+	}
+	t.Fatal("analysis finding removal migration missing")
 }
 
 func TestGlobalLLMUsageMigrationAddsRestrictedReaders(t *testing.T) {
