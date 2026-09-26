@@ -34,7 +34,7 @@ func TestInspectionLLMUsageAggregatesDeliveredKnownDataAndPaginates(t *testing.T
 	inputOne, outputOne, costOne := int64(10), int64(5), 0.25
 	inputTwo := int64(20)
 	rows := []database.LLMCallRecord{
-		{CallID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "corr-1", Attempt: 1, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "inspection-vision", PromptDigest: "digest", State: "FINISHED", TechnicalOutcome: "success", TransportDelivered: boolPtr(true), InputTokens: &inputOne, OutputTokens: &outputOne, ReportedCost: &costOne, StartedAt: now.Add(-4 * time.Minute), FinishedAt: timePtr(now.Add(-4 * time.Minute)), Provider: "provider", Model: "model"},
+		{CallID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "corr-1", Attempt: 1, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "inspection-vision", PromptDigest: "digest", State: "FINISHED", TechnicalOutcome: "success", TransportDelivered: boolPtr(true), InputTokens: &inputOne, OutputTokens: &outputOne, CachedInputTokens: int64Ptr(10), ImageCount: intPtr(2), RequestBodyBytes: int64Ptr(4096), ReportedCost: &costOne, StartedAt: now.Add(-4 * time.Minute), FinishedAt: timePtr(now.Add(-4 * time.Minute)), Provider: "provider", Model: "model"},
 		{CallID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "corr-2", Attempt: 2, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "inspection-vision", PromptDigest: "digest", State: "FINISHED", TechnicalOutcome: "malformed_response", TransportDelivered: boolPtr(true), InputTokens: &inputTwo, StartedAt: now.Add(-3 * time.Minute), FinishedAt: timePtr(now.Add(-3 * time.Minute)), Provider: "provider", Model: "model"},
 		{CallID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "corr-3", Attempt: 1, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "inspection-vision", PromptDigest: "digest", State: "FINISHED", TechnicalOutcome: "transport", TransportDelivered: boolPtr(false), InputTokens: int64Ptr(100), ReportedCost: floatPtr(1), StartedAt: now.Add(-2 * time.Minute), FinishedAt: timePtr(now.Add(-2 * time.Minute)), Provider: "provider", Model: "model"},
 		{CallID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "corr-4", Attempt: 1, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "inspection-vision", PromptDigest: "digest", State: "STARTED", TechnicalOutcome: "pending", StartedAt: now.Add(-time.Minute), Provider: "", Model: ""},
@@ -48,7 +48,7 @@ func TestInspectionLLMUsageAggregatesDeliveredKnownDataAndPaginates(t *testing.T
 		t.Fatal(err)
 	}
 	result := raw.(Result)
-	if result.AttemptedCalls != 4 || result.DeliveredCalls != 2 || result.IncompleteCalls != 1 || result.InputTokens != 30 || result.OutputTokens != 5 || result.KnownReportedCost != costOne || result.UnknownCostCalls != 1 || result.CostComplete || !result.HasNextPage || len(result.Calls) != 2 {
+	if result.AttemptedCalls != 4 || result.DeliveredCalls != 2 || result.IncompleteCalls != 1 || result.InputTokens != 30 || result.OutputTokens != 5 || result.CachedInputTokens != 10 || result.CacheHitCalls != 1 || result.KnownCacheCalls != 1 || result.UnknownCacheCalls != 1 || result.KnownReportedCost != costOne || result.UnknownCostCalls != 1 || result.CostComplete || !result.HasNextPage || len(result.Calls) != 2 {
 		t.Fatalf("unexpected aggregate: %+v", result)
 	}
 	if result.Calls[0].CorrelationID != "corr-4" || result.Calls[1].CorrelationID != "corr-3" {
@@ -95,7 +95,8 @@ func usageQueryDB(t *testing.T) *gorm.DB {
 		replay_generation integer NOT NULL, mode text NOT NULL, comparison_mode text NOT NULL, model_alias text NOT NULL,
 		prompt_digest text NOT NULL, provider text NOT NULL, model text NOT NULL, gateway_request_id text NOT NULL,
 		state text NOT NULL, technical_outcome text NOT NULL, transport_delivered numeric, http_status integer,
-		input_tokens integer, output_tokens integer, reported_cost numeric, duration_ms integer,
+		input_tokens integer, output_tokens integer, cached_input_tokens integer, image_count integer,
+		request_body_bytes integer, reported_cost numeric, duration_ms integer,
 		started_at datetime NOT NULL, finished_at datetime, updated_at datetime
 	)`).Error; err != nil {
 		t.Fatal(err)
@@ -108,5 +109,6 @@ func usageQueryDB(t *testing.T) *gorm.DB {
 
 func boolPtr(value bool) *bool           { return &value }
 func int64Ptr(value int64) *int64        { return &value }
+func intPtr(value int) *int              { return &value }
 func floatPtr(value float64) *float64    { return &value }
 func timePtr(value time.Time) *time.Time { return &value }

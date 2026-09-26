@@ -23,7 +23,7 @@ func TestHydrateReportMediaSignsAvailableDisplayDerivative(t *testing.T) {
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("CREATE TABLE media.derivatives (id blob primary key, tenant_id blob not null, media_id blob not null, object_key text not null, kind text not null, sha256 text not null, created_at datetime)").Error; err != nil {
+	if err := db.Exec("CREATE TABLE media.derivatives (id blob primary key, tenant_id blob not null, media_id blob not null, object_key text not null, kind text not null, sha256 text not null, content_type text not null default 'image/jpeg', width integer, height integer, size_bytes integer, profile text, created_at datetime)").Error; err != nil {
 		t.Fatal(err)
 	}
 

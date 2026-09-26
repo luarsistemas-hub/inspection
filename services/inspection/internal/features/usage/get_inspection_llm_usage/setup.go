@@ -37,6 +37,10 @@ type Result struct {
 	OutputTokens      int64
 	KnownReportedCost float64
 	UnknownCostCalls  int
+	CachedInputTokens int64
+	CacheHitCalls     int
+	KnownCacheCalls   int
+	UnknownCacheCalls int
 	CostComplete      bool
 	CoverageStartedAt *time.Time
 	CoverageComplete  bool
@@ -66,6 +70,9 @@ type Call struct {
 	HTTPStatus         *int
 	InputTokens        *int64
 	OutputTokens       *int64
+	CachedInputTokens  *int64
+	ImageCount         *int
+	RequestBodyBytes   *int64
 	ReportedCost       *float64
 	DurationMS         *int64
 	StartedAt          time.Time
@@ -122,6 +129,10 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 			OutputTokens      int64   `gorm:"column:output_tokens"`
 			KnownReportedCost float64 `gorm:"column:known_reported_cost"`
 			UnknownCostCalls  int64   `gorm:"column:unknown_cost_calls"`
+			CachedInputTokens int64   `gorm:"column:cached_input_tokens"`
+			CacheHitCalls     int64   `gorm:"column:cache_hit_calls"`
+			KnownCacheCalls   int64   `gorm:"column:known_cache_calls"`
+			UnknownCacheCalls int64   `gorm:"column:unknown_cache_calls"`
 		}
 		aggregateQuery := tx.Model(&database.LLMCallRecord{}).
 			Select(`
@@ -131,7 +142,11 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 				COALESCE(SUM(CASE WHEN transport_delivered = TRUE THEN COALESCE(input_tokens, 0) ELSE 0 END), 0) AS input_tokens,
 				COALESCE(SUM(CASE WHEN transport_delivered = TRUE THEN COALESCE(output_tokens, 0) ELSE 0 END), 0) AS output_tokens,
 				COALESCE(SUM(CASE WHEN transport_delivered = TRUE THEN COALESCE(reported_cost, 0) ELSE 0 END), 0) AS known_reported_cost,
-				COALESCE(SUM(CASE WHEN transport_delivered = TRUE AND reported_cost IS NULL THEN 1 ELSE 0 END), 0) AS unknown_cost_calls`).
+				COALESCE(SUM(CASE WHEN transport_delivered = TRUE AND reported_cost IS NULL THEN 1 ELSE 0 END), 0) AS unknown_cost_calls,
+				COALESCE(SUM(CASE WHEN transport_delivered = TRUE THEN COALESCE(cached_input_tokens, 0) ELSE 0 END), 0) AS cached_input_tokens,
+				COALESCE(SUM(CASE WHEN transport_delivered = TRUE AND cached_input_tokens > 0 THEN 1 ELSE 0 END), 0) AS cache_hit_calls,
+				COALESCE(SUM(CASE WHEN transport_delivered = TRUE AND cached_input_tokens IS NOT NULL THEN 1 ELSE 0 END), 0) AS known_cache_calls,
+				COALESCE(SUM(CASE WHEN transport_delivered = TRUE AND cached_input_tokens IS NULL THEN 1 ELSE 0 END), 0) AS unknown_cache_calls`).
 			Where("tenant_id = ? AND inspection_id = ? AND mode = ?", q.TenantID, q.InspectionID, mode)
 		if err := aggregateQuery.Scan(&aggregate).Error; err != nil {
 			return apperror.Wrap(apperror.Internal, err)
@@ -152,6 +167,8 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 			OutputTokens:      aggregate.OutputTokens,
 			KnownReportedCost: aggregate.KnownReportedCost,
 			UnknownCostCalls:  int(aggregate.UnknownCostCalls),
+			CachedInputTokens: aggregate.CachedInputTokens, CacheHitCalls: int(aggregate.CacheHitCalls),
+			KnownCacheCalls: int(aggregate.KnownCacheCalls), UnknownCacheCalls: int(aggregate.UnknownCacheCalls),
 			CoverageStartedAt: coverageStartedAt,
 			CoverageComplete:  coverageComplete,
 		}
@@ -191,6 +208,7 @@ func handle(ctx context.Context, deps Dependencies, q Query) (Result, error) {
 				Provider: row.Provider, Model: row.Model, GatewayRequestID: row.GatewayRequestID,
 				State: row.State, TechnicalOutcome: row.TechnicalOutcome, TransportDelivered: row.TransportDelivered,
 				HTTPStatus: row.HTTPStatus, InputTokens: row.InputTokens, OutputTokens: row.OutputTokens,
+				CachedInputTokens: row.CachedInputTokens, ImageCount: row.ImageCount, RequestBodyBytes: row.RequestBodyBytes,
 				ReportedCost: row.ReportedCost, DurationMS: row.DurationMS, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt,
 			})
 		}

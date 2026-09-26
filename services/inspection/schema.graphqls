@@ -274,6 +274,10 @@ type LLMUsage {
   incompleteCalls: Int!
   inputTokens: Int!
   outputTokens: Int!
+  cachedInputTokens: Int!
+  cacheHitCalls: Int!
+  knownCacheCalls: Int!
+  unknownCacheCalls: Int!
   knownReportedCost: Float!
   unknownCostCalls: Int!
   costComplete: Boolean!
@@ -305,6 +309,9 @@ type GlobalLLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  cachedInputTokens: Int
+  imageCount: Int
+  requestBodyBytes: Int
   reportedCost: Float
   durationMs: Int
   startedAt: String!
@@ -318,6 +325,10 @@ type InspectionLLMUsage {
   incompleteCalls: Int!
   inputTokens: Int!
   outputTokens: Int!
+  cachedInputTokens: Int!
+  cacheHitCalls: Int!
+  knownCacheCalls: Int!
+  unknownCacheCalls: Int!
   knownReportedCost: Float!
   unknownCostCalls: Int!
   costComplete: Boolean!
@@ -346,6 +357,9 @@ type LLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  cachedInputTokens: Int
+  imageCount: Int
+  requestBodyBytes: Int
   reportedCost: Float
   durationMs: Int
   startedAt: String!

@@ -402,6 +402,7 @@ services:
       args:
         NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
         NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
+        NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION: ${NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION:-false}
     depends_on:
       inspection-api:
         condition: service_started
@@ -410,6 +411,7 @@ services:
     environment:
       NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
       NEXT_PUBLIC_CAPTURE_BASE_URL: ${NEXT_PUBLIC_CAPTURE_BASE_URL:-http://localhost:3003}
+      NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION: ${NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION:-false}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3003/manifest.webmanifest"]
       interval: 10s

@@ -60,8 +60,8 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 43 {
-		t.Fatalf("latest version=%d, want 43", got)
+	if got := LatestVersion(); got != 45 {
+		t.Fatalf("latest version=%d, want 45", got)
 	}
 }
 
@@ -114,6 +114,24 @@ func TestGlobalLLMUsageMigrationAddsRestrictedReaders(t *testing.T) {
 	} {
 		if !strings.Contains(step.SQL, required) {
 			t.Fatalf("global usage migration does not contain %q", required)
+		}
+	}
+}
+
+func TestCacheAndDerivativeMetadataMigrationsAreAdditive(t *testing.T) {
+	steps := Foundation()
+	for version, name := range map[int]string{44: "llm_cache_usage_and_request_sizes", 45: "media_derivative_normalization_metadata"} {
+		found := false
+		for _, step := range steps {
+			if step.Version == version && step.Name == name {
+				found = true
+				if step.Destructive {
+					t.Fatalf("migration %d must be additive", version)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("migration %d (%s) missing", version, name)
 		}
 	}
 }

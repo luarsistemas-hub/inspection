@@ -87,6 +87,17 @@ func TestIT192IT196IT200VerifiedConsumerCreatesPrivateDerivativesAndResumes(t *t
 	if err := db.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Find(&derivatives).Error; err != nil || len(derivatives) != 2 {
 		t.Fatalf("derivatives=%d err=%v", len(derivatives), err)
 	}
+	for _, derivative := range derivatives {
+		if derivative.ContentType != "image/jpeg" || derivative.Width != 16 || derivative.Height != 16 || derivative.SizeBytes <= 0 || derivative.Profile == "" {
+			t.Fatalf("derivative metadata missing: %+v", derivative)
+		}
+		if derivative.Kind == "ANALYSIS" && derivative.Profile != "analysis-pass-through-v1" {
+			t.Fatalf("small metadata-free analysis JPEG should be reused: %+v", derivative)
+		}
+		if derivative.Kind == "DISPLAY" && derivative.Profile != "normalized-jpeg-q85-v2" {
+			t.Fatalf("display derivative should use JPEG normalization: %+v", derivative)
+		}
+	}
 	var run database.ScreeningRun
 	if err := db.Where("tenant_id=? AND media_id=?", tenantID, mediaID).First(&run).Error; err != nil || run.Status != "CLEARED" {
 		t.Fatalf("screening=%+v err=%v", run, err)

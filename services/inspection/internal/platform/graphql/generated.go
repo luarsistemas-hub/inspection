@@ -259,6 +259,7 @@ type ComplexityRoot struct {
 
 	GlobalLLMCallUsage struct {
 		Attempt            func(childComplexity int) int
+		CachedInputTokens  func(childComplexity int) int
 		CallID             func(childComplexity int) int
 		ComparisonMode     func(childComplexity int) int
 		CorrelationID      func(childComplexity int) int
@@ -268,6 +269,7 @@ type ComplexityRoot struct {
 		FinishedAt         func(childComplexity int) int
 		GatewayRequestID   func(childComplexity int) int
 		HTTPStatus         func(childComplexity int) int
+		ImageCount         func(childComplexity int) int
 		InputTokens        func(childComplexity int) int
 		InspectionID       func(childComplexity int) int
 		JobID              func(childComplexity int) int
@@ -278,6 +280,7 @@ type ComplexityRoot struct {
 		Provider           func(childComplexity int) int
 		ReplayGeneration   func(childComplexity int) int
 		ReportedCost       func(childComplexity int) int
+		RequestBodyBytes   func(childComplexity int) int
 		StartedAt          func(childComplexity int) int
 		State              func(childComplexity int) int
 		TechnicalOutcome   func(childComplexity int) int
@@ -314,6 +317,8 @@ type ComplexityRoot struct {
 
 	InspectionLLMUsage struct {
 		AttemptedCalls    func(childComplexity int) int
+		CacheHitCalls     func(childComplexity int) int
+		CachedInputTokens func(childComplexity int) int
 		Calls             func(childComplexity int) int
 		CostComplete      func(childComplexity int) int
 		CoverageComplete  func(childComplexity int) int
@@ -322,10 +327,12 @@ type ComplexityRoot struct {
 		IncompleteCalls   func(childComplexity int) int
 		InputTokens       func(childComplexity int) int
 		InspectionID      func(childComplexity int) int
+		KnownCacheCalls   func(childComplexity int) int
 		KnownReportedCost func(childComplexity int) int
 		Mode              func(childComplexity int) int
 		OutputTokens      func(childComplexity int) int
 		PageInfo          func(childComplexity int) int
+		UnknownCacheCalls func(childComplexity int) int
 		UnknownCostCalls  func(childComplexity int) int
 	}
 
@@ -349,6 +356,7 @@ type ComplexityRoot struct {
 
 	LLMCallUsage struct {
 		Attempt            func(childComplexity int) int
+		CachedInputTokens  func(childComplexity int) int
 		CallID             func(childComplexity int) int
 		ComparisonMode     func(childComplexity int) int
 		CorrelationID      func(childComplexity int) int
@@ -358,6 +366,7 @@ type ComplexityRoot struct {
 		FinishedAt         func(childComplexity int) int
 		GatewayRequestID   func(childComplexity int) int
 		HTTPStatus         func(childComplexity int) int
+		ImageCount         func(childComplexity int) int
 		InputTokens        func(childComplexity int) int
 		JobID              func(childComplexity int) int
 		Mode               func(childComplexity int) int
@@ -367,6 +376,7 @@ type ComplexityRoot struct {
 		Provider           func(childComplexity int) int
 		ReplayGeneration   func(childComplexity int) int
 		ReportedCost       func(childComplexity int) int
+		RequestBodyBytes   func(childComplexity int) int
 		StartedAt          func(childComplexity int) int
 		State              func(childComplexity int) int
 		TechnicalOutcome   func(childComplexity int) int
@@ -375,6 +385,8 @@ type ComplexityRoot struct {
 
 	LLMUsage struct {
 		AttemptedCalls    func(childComplexity int) int
+		CacheHitCalls     func(childComplexity int) int
+		CachedInputTokens func(childComplexity int) int
 		Calls             func(childComplexity int) int
 		CostComplete      func(childComplexity int) int
 		CoverageComplete  func(childComplexity int) int
@@ -383,10 +395,12 @@ type ComplexityRoot struct {
 		From              func(childComplexity int) int
 		IncompleteCalls   func(childComplexity int) int
 		InputTokens       func(childComplexity int) int
+		KnownCacheCalls   func(childComplexity int) int
 		KnownReportedCost func(childComplexity int) int
 		OutputTokens      func(childComplexity int) int
 		PageInfo          func(childComplexity int) int
 		To                func(childComplexity int) int
+		UnknownCacheCalls func(childComplexity int) int
 		UnknownCostCalls  func(childComplexity int) int
 	}
 
@@ -2276,6 +2290,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.Attempt(childComplexity), true
+	case "GlobalLLMCallUsage.cachedInputTokens":
+		if e.ComplexityRoot.GlobalLLMCallUsage.CachedInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.CachedInputTokens(childComplexity), true
 	case "GlobalLLMCallUsage.callId":
 		if e.ComplexityRoot.GlobalLLMCallUsage.CallID == nil {
 			break
@@ -2330,6 +2350,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.HTTPStatus(childComplexity), true
+	case "GlobalLLMCallUsage.imageCount":
+		if e.ComplexityRoot.GlobalLLMCallUsage.ImageCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.ImageCount(childComplexity), true
 	case "GlobalLLMCallUsage.inputTokens":
 		if e.ComplexityRoot.GlobalLLMCallUsage.InputTokens == nil {
 			break
@@ -2390,6 +2416,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.GlobalLLMCallUsage.ReportedCost(childComplexity), true
+	case "GlobalLLMCallUsage.requestBodyBytes":
+		if e.ComplexityRoot.GlobalLLMCallUsage.RequestBodyBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.GlobalLLMCallUsage.RequestBodyBytes(childComplexity), true
 	case "GlobalLLMCallUsage.startedAt":
 		if e.ComplexityRoot.GlobalLLMCallUsage.StartedAt == nil {
 			break
@@ -2555,6 +2587,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InspectionLLMUsage.AttemptedCalls(childComplexity), true
+	case "InspectionLLMUsage.cacheHitCalls":
+		if e.ComplexityRoot.InspectionLLMUsage.CacheHitCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionLLMUsage.CacheHitCalls(childComplexity), true
+	case "InspectionLLMUsage.cachedInputTokens":
+		if e.ComplexityRoot.InspectionLLMUsage.CachedInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionLLMUsage.CachedInputTokens(childComplexity), true
 	case "InspectionLLMUsage.calls":
 		if e.ComplexityRoot.InspectionLLMUsage.Calls == nil {
 			break
@@ -2603,6 +2647,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InspectionLLMUsage.InspectionID(childComplexity), true
+	case "InspectionLLMUsage.knownCacheCalls":
+		if e.ComplexityRoot.InspectionLLMUsage.KnownCacheCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionLLMUsage.KnownCacheCalls(childComplexity), true
 	case "InspectionLLMUsage.knownReportedCost":
 		if e.ComplexityRoot.InspectionLLMUsage.KnownReportedCost == nil {
 			break
@@ -2627,6 +2677,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InspectionLLMUsage.PageInfo(childComplexity), true
+	case "InspectionLLMUsage.unknownCacheCalls":
+		if e.ComplexityRoot.InspectionLLMUsage.UnknownCacheCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionLLMUsage.UnknownCacheCalls(childComplexity), true
 	case "InspectionLLMUsage.unknownCostCalls":
 		if e.ComplexityRoot.InspectionLLMUsage.UnknownCostCalls == nil {
 			break
@@ -2697,6 +2753,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.Attempt(childComplexity), true
+	case "LLMCallUsage.cachedInputTokens":
+		if e.ComplexityRoot.LLMCallUsage.CachedInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.CachedInputTokens(childComplexity), true
 	case "LLMCallUsage.callId":
 		if e.ComplexityRoot.LLMCallUsage.CallID == nil {
 			break
@@ -2751,6 +2813,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.HTTPStatus(childComplexity), true
+	case "LLMCallUsage.imageCount":
+		if e.ComplexityRoot.LLMCallUsage.ImageCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.ImageCount(childComplexity), true
 	case "LLMCallUsage.inputTokens":
 		if e.ComplexityRoot.LLMCallUsage.InputTokens == nil {
 			break
@@ -2805,6 +2873,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMCallUsage.ReportedCost(childComplexity), true
+	case "LLMCallUsage.requestBodyBytes":
+		if e.ComplexityRoot.LLMCallUsage.RequestBodyBytes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMCallUsage.RequestBodyBytes(childComplexity), true
 	case "LLMCallUsage.startedAt":
 		if e.ComplexityRoot.LLMCallUsage.StartedAt == nil {
 			break
@@ -2836,6 +2910,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMUsage.AttemptedCalls(childComplexity), true
+	case "LLMUsage.cacheHitCalls":
+		if e.ComplexityRoot.LLMUsage.CacheHitCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.CacheHitCalls(childComplexity), true
+	case "LLMUsage.cachedInputTokens":
+		if e.ComplexityRoot.LLMUsage.CachedInputTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.CachedInputTokens(childComplexity), true
 	case "LLMUsage.calls":
 		if e.ComplexityRoot.LLMUsage.Calls == nil {
 			break
@@ -2884,6 +2970,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMUsage.InputTokens(childComplexity), true
+	case "LLMUsage.knownCacheCalls":
+		if e.ComplexityRoot.LLMUsage.KnownCacheCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.KnownCacheCalls(childComplexity), true
 	case "LLMUsage.knownReportedCost":
 		if e.ComplexityRoot.LLMUsage.KnownReportedCost == nil {
 			break
@@ -2908,6 +3000,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.LLMUsage.To(childComplexity), true
+	case "LLMUsage.unknownCacheCalls":
+		if e.ComplexityRoot.LLMUsage.UnknownCacheCalls == nil {
+			break
+		}
+
+		return e.ComplexityRoot.LLMUsage.UnknownCacheCalls(childComplexity), true
 	case "LLMUsage.unknownCostCalls":
 		if e.ComplexityRoot.LLMUsage.UnknownCostCalls == nil {
 			break
@@ -7380,6 +7478,10 @@ type LLMUsage {
   incompleteCalls: Int!
   inputTokens: Int!
   outputTokens: Int!
+  cachedInputTokens: Int!
+  cacheHitCalls: Int!
+  knownCacheCalls: Int!
+  unknownCacheCalls: Int!
   knownReportedCost: Float!
   unknownCostCalls: Int!
   costComplete: Boolean!
@@ -7411,6 +7513,9 @@ type GlobalLLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  cachedInputTokens: Int
+  imageCount: Int
+  requestBodyBytes: Int
   reportedCost: Float
   durationMs: Int
   startedAt: String!
@@ -7424,6 +7529,10 @@ type InspectionLLMUsage {
   incompleteCalls: Int!
   inputTokens: Int!
   outputTokens: Int!
+  cachedInputTokens: Int!
+  cacheHitCalls: Int!
+  knownCacheCalls: Int!
+  unknownCacheCalls: Int!
   knownReportedCost: Float!
   unknownCostCalls: Int!
   costComplete: Boolean!
@@ -7452,6 +7561,9 @@ type LLMCallUsage {
   httpStatus: Int
   inputTokens: Int
   outputTokens: Int
+  cachedInputTokens: Int
+  imageCount: Int
+  requestBodyBytes: Int
   reportedCost: Float
   durationMs: Int
   startedAt: String!
@@ -8048,6 +8160,12 @@ func (ec *executionContext) childFields_GlobalLLMCallUsage(ctx context.Context, 
 		return ec.fieldContext_GlobalLLMCallUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_GlobalLLMCallUsage_outputTokens(ctx, field)
+	case "cachedInputTokens":
+		return ec.fieldContext_GlobalLLMCallUsage_cachedInputTokens(ctx, field)
+	case "imageCount":
+		return ec.fieldContext_GlobalLLMCallUsage_imageCount(ctx, field)
+	case "requestBodyBytes":
+		return ec.fieldContext_GlobalLLMCallUsage_requestBodyBytes(ctx, field)
 	case "reportedCost":
 		return ec.fieldContext_GlobalLLMCallUsage_reportedCost(ctx, field)
 	case "durationMs":
@@ -8128,6 +8246,14 @@ func (ec *executionContext) childFields_InspectionLLMUsage(ctx context.Context, 
 		return ec.fieldContext_InspectionLLMUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_InspectionLLMUsage_outputTokens(ctx, field)
+	case "cachedInputTokens":
+		return ec.fieldContext_InspectionLLMUsage_cachedInputTokens(ctx, field)
+	case "cacheHitCalls":
+		return ec.fieldContext_InspectionLLMUsage_cacheHitCalls(ctx, field)
+	case "knownCacheCalls":
+		return ec.fieldContext_InspectionLLMUsage_knownCacheCalls(ctx, field)
+	case "unknownCacheCalls":
+		return ec.fieldContext_InspectionLLMUsage_unknownCacheCalls(ctx, field)
 	case "knownReportedCost":
 		return ec.fieldContext_InspectionLLMUsage_knownReportedCost(ctx, field)
 	case "unknownCostCalls":
@@ -8222,6 +8348,12 @@ func (ec *executionContext) childFields_LLMCallUsage(ctx context.Context, field 
 		return ec.fieldContext_LLMCallUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_LLMCallUsage_outputTokens(ctx, field)
+	case "cachedInputTokens":
+		return ec.fieldContext_LLMCallUsage_cachedInputTokens(ctx, field)
+	case "imageCount":
+		return ec.fieldContext_LLMCallUsage_imageCount(ctx, field)
+	case "requestBodyBytes":
+		return ec.fieldContext_LLMCallUsage_requestBodyBytes(ctx, field)
 	case "reportedCost":
 		return ec.fieldContext_LLMCallUsage_reportedCost(ctx, field)
 	case "durationMs":
@@ -8250,6 +8382,14 @@ func (ec *executionContext) childFields_LLMUsage(ctx context.Context, field grap
 		return ec.fieldContext_LLMUsage_inputTokens(ctx, field)
 	case "outputTokens":
 		return ec.fieldContext_LLMUsage_outputTokens(ctx, field)
+	case "cachedInputTokens":
+		return ec.fieldContext_LLMUsage_cachedInputTokens(ctx, field)
+	case "cacheHitCalls":
+		return ec.fieldContext_LLMUsage_cacheHitCalls(ctx, field)
+	case "knownCacheCalls":
+		return ec.fieldContext_LLMUsage_knownCacheCalls(ctx, field)
+	case "unknownCacheCalls":
+		return ec.fieldContext_LLMUsage_unknownCacheCalls(ctx, field)
 	case "knownReportedCost":
 		return ec.fieldContext_LLMUsage_knownReportedCost(ctx, field)
 	case "unknownCostCalls":
@@ -15764,6 +15904,75 @@ func (ec *executionContext) fieldContext_GlobalLLMCallUsage_outputTokens(_ conte
 	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _GlobalLLMCallUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_cachedInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CachedInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_cachedInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_imageCount(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_imageCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_imageCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _GlobalLLMCallUsage_requestBodyBytes(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_GlobalLLMCallUsage_requestBodyBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequestBodyBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_GlobalLLMCallUsage_requestBodyBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("GlobalLLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _GlobalLLMCallUsage_reportedCost(ctx context.Context, field graphql.CollectedField, obj *GlobalLLMCallUsage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16492,6 +16701,98 @@ func (ec *executionContext) _InspectionLLMUsage_outputTokens(ctx context.Context
 	)
 }
 func (ec *executionContext) fieldContext_InspectionLLMUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionLLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionLLMUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *InspectionLLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionLLMUsage_cachedInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CachedInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionLLMUsage_cachedInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionLLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionLLMUsage_cacheHitCalls(ctx context.Context, field graphql.CollectedField, obj *InspectionLLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionLLMUsage_cacheHitCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CacheHitCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionLLMUsage_cacheHitCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionLLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionLLMUsage_knownCacheCalls(ctx context.Context, field graphql.CollectedField, obj *InspectionLLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionLLMUsage_knownCacheCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.KnownCacheCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionLLMUsage_knownCacheCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionLLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionLLMUsage_unknownCacheCalls(ctx context.Context, field graphql.CollectedField, obj *InspectionLLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionLLMUsage_unknownCacheCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnknownCacheCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionLLMUsage_unknownCacheCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InspectionLLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -17354,6 +17655,75 @@ func (ec *executionContext) fieldContext_LLMCallUsage_outputTokens(_ context.Con
 	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _LLMCallUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_cachedInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CachedInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_cachedInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_imageCount(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_imageCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_imageCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMCallUsage_requestBodyBytes(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMCallUsage_requestBodyBytes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequestBodyBytes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_LLMCallUsage_requestBodyBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMCallUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _LLMCallUsage_reportedCost(ctx context.Context, field graphql.CollectedField, obj *LLMCallUsage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17604,6 +17974,98 @@ func (ec *executionContext) _LLMUsage_outputTokens(ctx context.Context, field gr
 	)
 }
 func (ec *executionContext) fieldContext_LLMUsage_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_cachedInputTokens(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_cachedInputTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CachedInputTokens, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_cachedInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_cacheHitCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_cacheHitCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CacheHitCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_cacheHitCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_knownCacheCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_knownCacheCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.KnownCacheCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_knownCacheCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _LLMUsage_unknownCacheCalls(ctx context.Context, field graphql.CollectedField, obj *LLMUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_LLMUsage_unknownCacheCalls(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnknownCacheCalls, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_LLMUsage_unknownCacheCalls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("LLMUsage", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -40610,6 +41072,21 @@ func (ec *executionContext) _GlobalLLMCallUsage(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "cachedInputTokens":
+			out.Values[i] = ec._GlobalLLMCallUsage_cachedInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "imageCount":
+			out.Values[i] = ec._GlobalLLMCallUsage_imageCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "requestBodyBytes":
+			out.Values[i] = ec._GlobalLLMCallUsage_requestBodyBytes(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "reportedCost":
 			out.Values[i] = ec._GlobalLLMCallUsage_reportedCost(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -40861,6 +41338,26 @@ func (ec *executionContext) _InspectionLLMUsage(ctx context.Context, sel ast.Sel
 			}
 		case "outputTokens":
 			out.Values[i] = ec._InspectionLLMUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cachedInputTokens":
+			out.Values[i] = ec._InspectionLLMUsage_cachedInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cacheHitCalls":
+			out.Values[i] = ec._InspectionLLMUsage_cacheHitCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "knownCacheCalls":
+			out.Values[i] = ec._InspectionLLMUsage_knownCacheCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unknownCacheCalls":
+			out.Values[i] = ec._InspectionLLMUsage_unknownCacheCalls(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -41171,6 +41668,21 @@ func (ec *executionContext) _LLMCallUsage(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "cachedInputTokens":
+			out.Values[i] = ec._LLMCallUsage_cachedInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "imageCount":
+			out.Values[i] = ec._LLMCallUsage_imageCount(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "requestBodyBytes":
+			out.Values[i] = ec._LLMCallUsage_requestBodyBytes(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "reportedCost":
 			out.Values[i] = ec._LLMCallUsage_reportedCost(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -41256,6 +41768,26 @@ func (ec *executionContext) _LLMUsage(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "outputTokens":
 			out.Values[i] = ec._LLMUsage_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cachedInputTokens":
+			out.Values[i] = ec._LLMUsage_cachedInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cacheHitCalls":
+			out.Values[i] = ec._LLMUsage_cacheHitCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "knownCacheCalls":
+			out.Values[i] = ec._LLMUsage_knownCacheCalls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unknownCacheCalls":
+			out.Values[i] = ec._LLMUsage_unknownCacheCalls(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

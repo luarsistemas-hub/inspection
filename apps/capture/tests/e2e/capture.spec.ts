@@ -37,7 +37,7 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
     if (query.includes("externalCapture")) return route.fulfill({ json: { data: bootstrap } });
     if (query.includes("acceptProcessing")) return route.fulfill({ json: { data: { acceptProcessing: { status: "ACCEPTED", userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("createMediaUpload")) return route.fulfill({ json: { data: { createMediaUpload: { upload: { mediaId: "media-1", uploadId: "upload-1", expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 5 * 1024 * 1024 }, userErrors: [], clientMutationId: "c" } } } });
-    if (query.includes("presignMediaParts")) return route.fulfill({ json: { data: { presignMediaParts: { parts: [{ partNumber: 1, url: "http://localhost:3003/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [], clientMutationId: "c" } } } });
+    if (query.includes("presignMediaParts")) return route.fulfill({ json: { data: { presignMediaParts: { parts: [{ partNumber: 1, url: "/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("completeMediaUpload")) return route.fulfill({ json: { data: { completeMediaUpload: { media: { id: "media-1", status: "VERIFIED" }, userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("saveCaptureMetadata")) {
       metadataAttempts += 1;
@@ -60,8 +60,12 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
   await expect(page.getByText("Escolher da galeria")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Adicionar descrição" })).toBeVisible();
-  await page.getByLabel("Tirar foto").setInputFiles({ name: "overview.jpg", mimeType: "image/jpeg", buffer: Buffer.from("image") });
+  const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
+  const photoInput = page.locator(".capture-camera-action input[type=file]");
+  await photoInput.setInputFiles({ name: "overview.png", mimeType: "image/png", buffer: photo });
 
+  await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
+  await page.getByRole("button", { name: "Usar esta foto" }).click();
   await expect(page.getByRole("progressbar", { name: "Progresso do envio de Visão geral do imóvel" })).toBeVisible();
   await expect(page.getByText(/aguardando (envio|verificação)/i).first()).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Upload concluído" })).toBeVisible({ timeout: 15_000 });

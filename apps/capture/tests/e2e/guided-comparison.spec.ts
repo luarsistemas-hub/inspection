@@ -13,7 +13,7 @@ test("guided comparison shows each real reference, previews photos, and advances
   const bootstrap = {
     responsibilityId: "responsibility-guided", recaptureRequestId: null, status: "OPEN", confirmationOnly: false, kind: "INSPECTION", disclosureVersion: "v1",
     reference: { comparisonMode: "FIXED_ORIGIN" }, policy: { allowGallery: false, gpsRequired: false, geofenceMeters: 0 },
-    referenceItems: keys.map((key, index) => ({ mediaId: `reference-${index + 1}`, requirementKey: key, description: index === 0 ? "Cozinha" : "Sala", availability: "AVAILABLE", imageUrl: `http://localhost:3003/mock-reference-${index + 1}.svg`, imageUrlExpiresAt: "2099-01-01T00:00:00Z" })),
+    referenceItems: keys.map((key, index) => ({ mediaId: `reference-${index + 1}`, requirementKey: key, description: index === 0 ? "Cozinha" : "Sala", availability: "AVAILABLE", imageUrl: `/mock-reference-${index + 1}.svg`, imageUrlExpiresAt: "2099-01-01T00:00:00Z" })),
     requirements: keys.map((key, index) => ({ key, section: "Referência", label: "Referência", instructions: index === 0 ? "Cozinha" : "Sala", required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", comparisonTarget: "FIXED_ORIGIN", impossibilityAllowed: true })),
     answers: []
   };
@@ -28,7 +28,7 @@ test("guided comparison shows each real reference, previews photos, and advances
     if (query.includes("externalCapture")) return route.fulfill({ json: { data: { externalCapture: { ...bootstrap, answers: completedAnswers } } } });
     if (query.includes("acceptProcessing")) return route.fulfill({ json: { data: { acceptProcessing: { status: "ACCEPTED", userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("createMediaUpload")) { createdUploads += 1; return route.fulfill({ json: { data: { createMediaUpload: { upload: { mediaId: `media-${createdUploads}`, uploadId: `upload-${createdUploads}`, expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 5 * 1024 * 1024 }, userErrors: [], clientMutationId: "c" } } } }); }
-    if (query.includes("presignMediaParts")) return route.fulfill({ json: { data: { presignMediaParts: { parts: [{ partNumber: 1, url: "http://localhost:3003/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [], clientMutationId: "c" } } } });
+    if (query.includes("presignMediaParts")) return route.fulfill({ json: { data: { presignMediaParts: { parts: [{ partNumber: 1, url: "/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("completeMediaUpload")) return route.fulfill({ json: { data: { completeMediaUpload: { media: { id: `media-${createdUploads}`, status: "READY" }, userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("saveCaptureMetadata")) {
       const requirementKey = body.variables?.input?.requirementKey ?? keys[createdUploads - 1];

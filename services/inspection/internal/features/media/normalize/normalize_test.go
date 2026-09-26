@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"testing"
 
 	"github.com/gen2brain/h265/heic"
@@ -25,6 +26,27 @@ func TestSupportedWebPAndHEICNormalizeToJPEG(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertNormalized(t, encoded.Bytes())
+}
+
+func TestAnalysisReusesCleanWebPAndNormalizesOversizedImages(t *testing.T) {
+	webp, err := base64.StdEncoding.DecodeString("UklGRrIBAABXRUJQVlA4TKUBAAAvSsAYAA8w//M///MfeJAkbXvaSG7m8Q3GfYSBJekwQztm/IcZlgwnmWImn2BK7aFmBtnVir6q//8VOkFE/xm4baTIu8c48ArEo6+B3zFKYln3pqClSCKX0begFTAXFOLXHSyF8cCNcZEG4OywuA4KVVfJCiArU7GAgJI8+lJP/OKMT/fBAjevg1cYB7YVkFuWga2lyPi5I0HFy5YTpWIHg0RZpkniRVW9odHAKOwosWuOGdxIyn2OvaCDvhg/we6TwadPBPbqBV58MsLmMJ8yZnOWk8SRz4N+QoyPL+MnamzMvcE1rHNEr91F9GKZPVUcS9w7PhhH36suB9qPeYb/oLk6cuTiJ0wOK3m5h1cKjW6EVZCYMK7dxcKCBdgP9HkKr9gkAO2P8GKZGWVdIAatQa+1IDpt6qyorVwdy01xdW8Jkfk6xjEXmVQQ+HQdFr6OKhIN34dXWq0+0qr6EJSCeeVLH9+gvGTLyqM65PQ44ihzlTXxQKjKbAvshXgir7Lil9w4L2bvMycmjQcqXaMCO6BlY28i+FOLzbfI1vEqxAhotocAAA==")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := Analysis(context.Background(), webp, 2048)
+	if err != nil || result.ContentType != "image/webp" || result.Profile != "analysis-pass-through-v1" || !bytes.Equal(result.Bytes, webp) {
+		t.Fatalf("clean WebP was not reused: %+v err=%v", result, err)
+	}
+
+	large := image.NewRGBA(image.Rect(0, 0, 8, 4))
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, large, nil); err != nil {
+		t.Fatal(err)
+	}
+	result, err = Analysis(context.Background(), encoded.Bytes(), 4)
+	if err != nil || result.Width != 4 || result.Height != 2 || result.ContentType != "image/jpeg" || result.Profile != "normalized-jpeg-q85-v2" {
+		t.Fatalf("oversized image was not normalized: %+v err=%v", result, err)
+	}
 }
 
 func assertNormalized(t *testing.T, data []byte) {

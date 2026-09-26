@@ -53,6 +53,10 @@ type Result struct {
 	OutputTokens      int64
 	KnownReportedCost float64
 	UnknownCostCalls  int
+	CachedInputTokens int64
+	CacheHitCalls     int
+	KnownCacheCalls   int
+	UnknownCacheCalls int
 	CoverageStartedAt *time.Time
 	CoverageComplete  bool
 	CostComplete      bool
@@ -71,6 +75,8 @@ type Call struct {
 	TransportDelivered                                           *bool
 	HTTPStatus                                                   *int
 	InputTokens, OutputTokens                                    *int64
+	CachedInputTokens, RequestBodyBytes                          *int64
+	ImageCount                                                   *int
 	ReportedCost                                                 *float64
 	DurationMS                                                   *int64
 	StartedAt                                                    time.Time
@@ -146,11 +152,26 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 			nullableString(state), nullableString(costState)).Scan(&aggregate).Error; err != nil {
 			return fmt.Errorf("global LLM usage summary: %w", err)
 		}
+		var cacheAggregate struct {
+			CachedInputTokens int64
+			CacheHitCalls     int64
+			KnownCacheCalls   int64
+			UnknownCacheCalls int64
+		}
+		if err := tx.Raw(`SELECT cached_input_tokens, cache_hit_calls, known_cache_calls, unknown_cache_calls
+			FROM usage.read_llm_cache_summary_v1(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			from, to, nullableID(q.TenantID), nullableID(q.InspectionID), nullableString(q.Provider),
+			nullableString(q.Model), nullableString(q.ModelAlias), mode, nullableString(q.TechnicalOutcome),
+			nullableString(state), nullableString(costState)).Scan(&cacheAggregate).Error; err != nil {
+			return fmt.Errorf("global LLM cache usage summary: %w", err)
+		}
 		coverageComplete := aggregate.CoverageStartedAt != nil && !from.Before(aggregate.CoverageStartedAt.UTC()) && aggregate.LegacyCoverageCalls == 0
 		result = Result{
 			From: from, To: to, AttemptedCalls: int(aggregate.AttemptedCalls), DeliveredCalls: int(aggregate.DeliveredCalls),
 			IncompleteCalls: int(aggregate.IncompleteCalls), InputTokens: aggregate.InputTokens, OutputTokens: aggregate.OutputTokens,
 			KnownReportedCost: aggregate.KnownReportedCost, UnknownCostCalls: int(aggregate.UnknownCostCalls),
+			CachedInputTokens: cacheAggregate.CachedInputTokens, CacheHitCalls: int(cacheAggregate.CacheHitCalls),
+			KnownCacheCalls: int(cacheAggregate.KnownCacheCalls), UnknownCacheCalls: int(cacheAggregate.UnknownCacheCalls),
 			CoverageStartedAt: aggregate.CoverageStartedAt, CoverageComplete: coverageComplete,
 		}
 		result.CostComplete = coverageComplete && aggregate.IncompleteCalls == 0 && aggregate.UnknownCostCalls == 0
@@ -159,8 +180,9 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 			SELECT call_id, tenant_id, tenant_name, inspection_id, job_id, event_id, execution_id,
 			       correlation_id, attempt, replay_generation, mode, comparison_mode, model_alias,
 			       provider, model, gateway_request_id, state, technical_outcome, transport_delivered,
-			       http_status, input_tokens, output_tokens, reported_cost, duration_ms, started_at, finished_at
-			FROM usage.read_llm_usage_calls(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			       http_status, input_tokens, output_tokens, reported_cost, duration_ms, started_at, finished_at,
+			       cached_input_tokens, image_count, request_body_bytes
+			FROM usage.read_llm_usage_calls_v2(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			from, to, nullableID(q.TenantID), nullableID(q.InspectionID), nullableString(q.Provider),
 			nullableString(q.Model), nullableString(q.ModelAlias), mode, nullableString(q.TechnicalOutcome),
 			nullableString(state), nullableString(costState), cursorTime, cursorID, first+1).Scan(&rows).Error; err != nil {
@@ -184,11 +206,12 @@ func handle(ctx context.Context, db *gorm.DB, q Query) (Result, error) {
 }
 
 type globalAggregate struct {
-	AttemptedCalls, DeliveredCalls, IncompleteCalls int64
-	InputTokens, OutputTokens                       int64
-	KnownReportedCost                               float64
-	UnknownCostCalls, LegacyCoverageCalls           int64
-	CoverageStartedAt                               *time.Time
+	AttemptedCalls, DeliveredCalls, IncompleteCalls                      int64
+	InputTokens, OutputTokens                                            int64
+	CachedInputTokens, CacheHitCalls, KnownCacheCalls, UnknownCacheCalls int64
+	KnownReportedCost                                                    float64
+	UnknownCostCalls, LegacyCoverageCalls                                int64
+	CoverageStartedAt                                                    *time.Time
 }
 
 type globalCallRow struct {
@@ -199,6 +222,8 @@ type globalCallRow struct {
 	TransportDelivered                                           *bool
 	HTTPStatus                                                   *int
 	InputTokens, OutputTokens                                    *int64
+	CachedInputTokens, RequestBodyBytes                          *int64
+	ImageCount                                                   *int
 	ReportedCost                                                 *float64
 	DurationMS                                                   *int64
 	StartedAt                                                    time.Time
@@ -206,7 +231,7 @@ type globalCallRow struct {
 }
 
 func (r globalCallRow) call() Call {
-	return Call{CallID: r.CallID, TenantID: r.TenantID, TenantName: r.TenantName, InspectionID: r.InspectionID, JobID: r.JobID, EventID: r.EventID, ExecutionID: r.ExecutionID, CorrelationID: r.CorrelationID, Attempt: r.Attempt, ReplayGeneration: r.ReplayGeneration, Mode: r.Mode, ComparisonMode: r.ComparisonMode, ModelAlias: r.ModelAlias, Provider: r.Provider, Model: r.Model, GatewayRequestID: r.GatewayRequestID, State: r.State, TechnicalOutcome: r.TechnicalOutcome, TransportDelivered: r.TransportDelivered, HTTPStatus: r.HTTPStatus, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, ReportedCost: r.ReportedCost, DurationMS: r.DurationMS, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
+	return Call{CallID: r.CallID, TenantID: r.TenantID, TenantName: r.TenantName, InspectionID: r.InspectionID, JobID: r.JobID, EventID: r.EventID, ExecutionID: r.ExecutionID, CorrelationID: r.CorrelationID, Attempt: r.Attempt, ReplayGeneration: r.ReplayGeneration, Mode: r.Mode, ComparisonMode: r.ComparisonMode, ModelAlias: r.ModelAlias, Provider: r.Provider, Model: r.Model, GatewayRequestID: r.GatewayRequestID, State: r.State, TechnicalOutcome: r.TechnicalOutcome, TransportDelivered: r.TransportDelivered, HTTPStatus: r.HTTPStatus, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens, CachedInputTokens: r.CachedInputTokens, ImageCount: r.ImageCount, RequestBodyBytes: r.RequestBodyBytes, ReportedCost: r.ReportedCost, DurationMS: r.DurationMS, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt}
 }
 
 func normalizeWindow(from, to time.Time) (time.Time, time.Time, error) {

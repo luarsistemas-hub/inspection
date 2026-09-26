@@ -23,6 +23,8 @@ type LLMEvent struct {
 	TransportDelivered                  bool
 	DurationMS                          int64
 	InputTokens, OutputTokens           *int64
+	CachedInputTokens                   *int64
+	RequestBodyBytes                    int64
 	Cost                                *float64
 	Images, Findings                    int
 }
@@ -92,6 +94,7 @@ func (l slogLLMLogger) LogLLM(ctx context.Context, event LLMEvent) {
 		"transportDelivered", event.TransportDelivered,
 		"durationMs", event.DurationMS,
 		"images", event.Images,
+		"requestBodyBytes", event.RequestBodyBytes,
 		"findings", event.Findings,
 	}
 	if event.InputTokens != nil {
@@ -99,6 +102,9 @@ func (l slogLLMLogger) LogLLM(ctx context.Context, event LLMEvent) {
 	}
 	if event.OutputTokens != nil {
 		attrs = append(attrs, "outputTokens", *event.OutputTokens)
+	}
+	if event.CachedInputTokens != nil {
+		attrs = append(attrs, "cachedInputTokens", *event.CachedInputTokens)
 	}
 	if event.Cost != nil {
 		attrs = append(attrs, "cost", *event.Cost)

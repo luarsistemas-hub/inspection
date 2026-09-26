@@ -76,6 +76,11 @@ func NewMetrics() *Metrics {
 			"inspection_llm_call_duration_seconds":       {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
 			"inspection_llm_inflight":                    {typeName: "gauge", help: "LLM gateway calls currently in flight."},
 			"inspection_llm_tokens_total":                {typeName: "counter", help: "Provider reported LLM tokens."},
+			"inspection_llm_cached_input_tokens_total":   {typeName: "counter", help: "Provider reported input tokens served from cache."},
+			"inspection_llm_cache_hit_calls_total":       {typeName: "counter", help: "LLM calls with at least one provider reported cached input token."},
+			"inspection_llm_cache_usage_missing_total":   {typeName: "counter", help: "Delivered LLM calls without cached input token metadata."},
+			"inspection_llm_images_total":                {typeName: "counter", help: "Images sent to the LLM gateway."},
+			"inspection_llm_request_body_bytes_total":    {typeName: "counter", help: "Serialized request body bytes sent to the LLM gateway."},
 			"inspection_llm_usage_missing_total":         {typeName: "counter", help: "LLM calls without provider usage metadata."},
 			"inspection_llm_ledger_writes_total":         {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
 			"inspection_analysis_validation_total":       {typeName: "counter", help: "Structured analysis validation outcomes."},
@@ -182,12 +187,19 @@ func (m *Metrics) LLMLedgerWrite(phase, result string) {
 
 // LLMCallFinished records a transport invocation, including calls that return
 // an error or a response later rejected by the analysis validator.
-func (m *Metrics) LLMCallFinished(mode, comparisonMode, modelAlias, outcome string, duration time.Duration, transportDelivered bool, inputTokens, outputTokens *int64) {
+func (m *Metrics) LLMCallFinished(mode, comparisonMode, modelAlias, outcome string, duration time.Duration, transportDelivered bool, inputTokens, outputTokens, cachedInputTokens *int64, imageCount int, requestBodyBytes int64) {
 	m.gaugeDelta("inspection_llm_inflight", llmLabels(mode, "", modelAlias), -1)
+	labels := map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias)}
+	if imageCount >= 0 {
+		m.counter("inspection_llm_images_total", labels, float64(imageCount))
+	}
+	if requestBodyBytes >= 0 {
+		m.counter("inspection_llm_request_body_bytes_total", labels, float64(requestBodyBytes))
+	}
 	if !transportDelivered {
 		return
 	}
-	labels := llmLabels(mode, comparisonMode, modelAlias)
+	labels = llmLabels(mode, comparisonMode, modelAlias)
 	labels["outcome"] = safeLLMOutcome(outcome)
 	m.counter("inspection_llm_calls_total", labels, 1)
 	m.observeHistogram("inspection_llm_call_duration_seconds", labels, duration.Seconds(), llmDurationBuckets)
@@ -196,6 +208,14 @@ func (m *Metrics) LLMCallFinished(mode, comparisonMode, modelAlias, outcome stri
 	}
 	if outputTokens != nil {
 		m.counter("inspection_llm_tokens_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias), "direction": "output"}, float64(*outputTokens))
+	}
+	if cachedInputTokens != nil {
+		m.counter("inspection_llm_cached_input_tokens_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias)}, float64(*cachedInputTokens))
+		if *cachedInputTokens > 0 {
+			m.counter("inspection_llm_cache_hit_calls_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias)}, 1)
+		}
+	} else {
+		m.counter("inspection_llm_cache_usage_missing_total", map[string]string{"mode": safeLLMMode(mode), "model_alias": safeModelAlias(modelAlias)}, 1)
 	}
 	missing := ""
 	if inputTokens == nil {

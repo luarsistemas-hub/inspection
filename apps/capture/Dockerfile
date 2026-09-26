@@ -7,6 +7,8 @@ RUN npm run build
 
 FROM node:22-alpine AS build
 WORKDIR /workspace/apps/capture
+ARG NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=false
+ENV NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=$NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION
 COPY apps/capture/package.json apps/capture/package-lock.json ./
 COPY --from=design-system /workspace/packages/inspection-design-system /workspace/packages/inspection-design-system
 RUN npm ci

@@ -4,6 +4,7 @@
   "cases": [
     {
       "id": "preexisting-unchanged-001",
+      "scenarios": ["no_change"],
       "requirement": "Compare ORIGIN and CURRENT for the wall finish.",
       "confidenceThreshold": 0.85,
       "expectedNoRelevantChange": true,

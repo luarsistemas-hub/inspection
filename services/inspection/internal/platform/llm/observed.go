@@ -80,6 +80,7 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 		finishErr := g.Ledger.Finish(finishContext, CallFinish{
 			CallID: callID, Provider: result.Provider, Model: result.Model, GatewayRequestID: result.GatewayRequestID,
 			TechnicalOutcome: outcome, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			CachedInputTokens: result.CachedInputTokens, ImageCount: len(request.Images), RequestBodyBytes: result.RequestBodyBytes,
 			TransportDelivered: result.TransportDelivered, HTTPStatus: result.HTTPStatus, Duration: duration, FinishedAt: time.Now().UTC(),
 		})
 		cancel()
@@ -98,7 +99,7 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 		}
 	}
 	if g.Metrics != nil {
-		g.Metrics.LLMCallFinished(g.Mode, request.Mode, request.ModelAlias, outcome, duration, result.TransportDelivered, result.InputTokens, result.OutputTokens)
+		g.Metrics.LLMCallFinished(g.Mode, request.Mode, request.ModelAlias, outcome, duration, result.TransportDelivered, result.InputTokens, result.OutputTokens, result.CachedInputTokens, len(request.Images), result.RequestBodyBytes)
 	}
 	endEvent := observability.EventFromContext(ctx, "llm_call_finished", level, "llm", outcome, code)
 	endEvent.CallID = callID
@@ -114,8 +115,14 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	endEvent.DurationMS = duration.Milliseconds()
 	endEvent.InputTokens = result.InputTokens
 	endEvent.OutputTokens = result.OutputTokens
-	endEvent.Cost = result.Cost
+	endEvent.CachedInputTokens = result.CachedInputTokens
 	endEvent.Images = len(request.Images)
+	endEvent.RequestBodyBytes = result.RequestBodyBytes
+	endEvent.Cost = result.Cost
+	if result.InvalidCachedInputTokens {
+		endEvent.Level = "warn"
+		endEvent.Code = "invalid_cache_usage"
+	}
 	g.Logger.LogLLM(ctx, endEvent)
 	return result, err
 }

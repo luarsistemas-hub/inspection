@@ -53,13 +53,20 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		if err != nil {
 			return err
 		}
-		for _, kind := range []string{"DISPLAY", "ANALYSIS"} {
-			key, digest, err := d.Store.PutDerivative(ctx, envelope.TenantID, media.ID, kind, display.ContentType, display.Bytes)
+		analysis, err := normalize.Analysis(ctx, original, 2048)
+		if err != nil {
+			return err
+		}
+		for _, derivative := range []struct {
+			kind  string
+			image normalize.Result
+		}{{"DISPLAY", display}, {"ANALYSIS", analysis}} {
+			key, digest, err := d.Store.PutDerivative(ctx, envelope.TenantID, media.ID, derivative.kind, derivative.image.ContentType, derivative.image.Bytes)
 			if err != nil {
 				return err
 			}
-			derivative := database.MediaDerivative{ID: identity.NewID(), TenantID: envelope.TenantID, MediaID: media.ID, ObjectKey: key, Kind: kind, SHA256: digest, CreatedAt: envelope.OccurredAt}
-			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&derivative).Error; err != nil {
+			row := database.MediaDerivative{ID: identity.NewID(), TenantID: envelope.TenantID, MediaID: media.ID, ObjectKey: key, Kind: derivative.kind, SHA256: digest, ContentType: derivative.image.ContentType, Width: derivative.image.Width, Height: derivative.image.Height, SizeBytes: int64(len(derivative.image.Bytes)), Profile: derivative.image.Profile, CreatedAt: envelope.OccurredAt}
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 				return err
 			}
 		}

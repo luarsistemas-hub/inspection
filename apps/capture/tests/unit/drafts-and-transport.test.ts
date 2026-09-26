@@ -72,6 +72,11 @@ describe("Capture drafts and transport", () => {
     expect(hasDuplicateDraft("other", "same-image", [existing])).toBe(false);
     expect(hasDuplicateDraft("front", "same-image", [{ ...existing, mediaStatus: "ABORTED" }])).toBe(false);
   });
+  it("preserves source-file duplicate detection when the stored image was compressed", () => {
+    const prepared = { ...draft(), sha256: "compressed-image", sourceSha256: "source-image", imageProfile: "capture-2048-webp85-v1" };
+    expect(hasDuplicateDraft("front", "source-image", [prepared])).toBe(true);
+    expect(hasDuplicateDraft("front", "compressed-image", [prepared])).toBe(true);
+  });
   it("blocks terminal bootstrap states before capture", () => {
     expect(isTerminalBootstrapStatus("EXPIRED")).toBe(true);
     expect(isTerminalBootstrapStatus("REVOKED")).toBe(true);

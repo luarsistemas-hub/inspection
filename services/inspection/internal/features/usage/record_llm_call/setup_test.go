@@ -34,9 +34,11 @@ func TestLedgerPersistsStartAndFinishWithPartialUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	inputTokens := int64(17)
+	cachedTokens, imageCount, requestBytes := int64(5), 3, int64(4096)
 	if err := ledger.Finish(ctx, llm.CallFinish{
 		CallID: callID.String(), Provider: "provider", Model: "model", GatewayRequestID: "request",
 		TechnicalOutcome: "success", TransportDelivered: true, HTTPStatus: 200, InputTokens: &inputTokens,
+		CachedInputTokens: &cachedTokens, ImageCount: imageCount, RequestBodyBytes: requestBytes,
 		Duration: 1500 * time.Millisecond, FinishedAt: startedAt.Add(2 * time.Second),
 	}); err != nil {
 		t.Fatal(err)
@@ -48,7 +50,7 @@ func TestLedgerPersistsStartAndFinishWithPartialUsage(t *testing.T) {
 	if row.State != "FINISHED" || row.TechnicalOutcome != "success" || row.Provider != "provider" || row.Model != "model" || row.GatewayRequestID != "request" {
 		t.Fatalf("unexpected ledger row: %+v", row)
 	}
-	if row.TransportDelivered == nil || !*row.TransportDelivered || row.InputTokens == nil || *row.InputTokens != inputTokens || row.OutputTokens != nil || row.ReportedCost != nil {
+	if row.TransportDelivered == nil || !*row.TransportDelivered || row.InputTokens == nil || *row.InputTokens != inputTokens || row.CachedInputTokens == nil || *row.CachedInputTokens != cachedTokens || row.ImageCount == nil || *row.ImageCount != imageCount || row.RequestBodyBytes == nil || *row.RequestBodyBytes != requestBytes || row.OutputTokens != nil || row.ReportedCost != nil {
 		t.Fatalf("partial usage was not preserved: %+v", row)
 	}
 	if row.HTTPStatus == nil || *row.HTTPStatus != 200 || row.DurationMS == nil || *row.DurationMS != 1500 {

@@ -601,13 +601,17 @@ type UploadPart struct {
 func (UploadPart) TableName() string { return "media.upload_parts" }
 
 type MediaDerivative struct {
-	ID        identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID  identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_media_derivative_kind,priority:1"`
-	MediaID   identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_media_derivative_kind,priority:2"`
-	ObjectKey string      `gorm:"size:1000;not null;uniqueIndex"`
-	Kind      string      `gorm:"size:50;not null;uniqueIndex:idx_media_derivative_kind,priority:3"`
-	SHA256    string      `gorm:"size:64;not null"`
-	CreatedAt time.Time
+	ID            identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID      identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_media_derivative_kind,priority:1"`
+	MediaID       identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_media_derivative_kind,priority:2"`
+	ObjectKey     string      `gorm:"size:1000;not null;uniqueIndex"`
+	Kind          string      `gorm:"size:50;not null;uniqueIndex:idx_media_derivative_kind,priority:3"`
+	SHA256        string      `gorm:"size:64;not null"`
+	ContentType   string      `gorm:"size:100;not null;default:image/jpeg"`
+	Width, Height int
+	SizeBytes     int64
+	Profile       string `gorm:"size:100"`
+	CreatedAt     time.Time
 }
 
 func (MediaDerivative) TableName() string { return "media.derivatives" }
@@ -1152,6 +1156,9 @@ type LLMCallRecord struct {
 	TransportDelivered                                          *bool
 	HTTPStatus                                                  *int
 	InputTokens, OutputTokens                                   *int64
+	CachedInputTokens                                           *int64
+	ImageCount                                                  *int
+	RequestBodyBytes                                            *int64
 	ReportedCost                                                *float64 `gorm:"type:numeric(20,12)"`
 	DurationMS                                                  *int64
 	StartedAt                                                   time.Time `gorm:"not null"`

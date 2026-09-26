@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "6bfb3cccb9fbccbd98d0782741a9fefb61aa976046334b854401509deb3c78fb",
+  "schemaSha256": "bcaf7d3139711952fde24a8a1ba198d36db006ee2c82e527e9a359008423a1d9",
   "capabilities": [
     {
       "root": "Query.me",
@@ -751,107 +751,107 @@
         {
           "name": "AdminAccess",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminAnalysisPrompt",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminAssets",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminAudit",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminCatalogs",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminConfigurePublicationPolicy",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminCorrectInspectionResponsibleEmail",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminCreateBusinessUnit",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminGate",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminGovernance",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminHistory",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminIdentity",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminInspectionLLMUsage",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminInviteInternalUser",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminLLMUsage",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminLLMUsageTenants",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminOrganization",
           "type": "query",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminRegisterAsset",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminUpdateAnalysisPrompt",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "AdminUpsertParticipant",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         },
         {
           "name": "BootstrapTenant",
           "type": "mutation",
-          "documentSha256": "ab634319837f64f1d6d8703d59231498fdaa910833ccdb5224f4ae23ed7f7215"
+          "documentSha256": "8f25fe495dca99b7c08efeb997573eadc1f55db0c730696123603c5d3e7ca9c3"
         }
       ]
     },

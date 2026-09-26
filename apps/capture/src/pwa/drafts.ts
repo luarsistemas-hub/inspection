@@ -2,6 +2,7 @@ export type PendingPart = { number: number; etag?: string; complete: boolean };
 export type CaptureGPS = { latitude: number; longitude: number; accuracyMeters: number; capturedAt: string; windowStartedAt: string };
 export type CaptureDraft = {
   schemaVersion?: 1; id: string; responsibilityId: string; blob: Blob; sha256: string;
+  sourceSha256?: string; imageProfile?: string;
   uploadId?: string; mediaId?: string; parts: PendingPart[];
   expiresAt?: string; partSizeBytes?: number;
   mediaStatus?: string;
@@ -31,6 +32,8 @@ function valid(draft: unknown): draft is CaptureDraft {
   if (!isRecord(draft)) return false;
   const value = draft as Partial<CaptureDraft>;
   if (value.schemaVersion !== 1 || !isNonEmptyString(value.id) || !isNonEmptyString(value.responsibilityId) || !value.blob || !isNonEmptyString(value.sha256)) return false;
+  if (value.sourceSha256 !== undefined && !/^[a-f\d]{64}$/i.test(value.sourceSha256)) return false;
+  if (value.imageProfile !== undefined && (!isNonEmptyString(value.imageProfile) || value.imageProfile.length > 80)) return false;
   if (!Array.isArray(value.parts)) return false;
   const preUpload = value.parts.length === 0 && value.uploadId === undefined && value.mediaId === undefined && value.metadataSaved === false;
   if (value.parts.length === 0 && !preUpload) return false;
@@ -118,7 +121,7 @@ export const mediaCountForRequirement = (requirementKey: string, answers: Captur
   return count;
 };
 export const hasDuplicateDraft = (requirementKey: string, sha256: string, drafts: CaptureDraft[]): boolean => drafts.some((draft) =>
-  draft.metadata.requirementKey === requirementKey && draft.sha256 === sha256 && !["ABORTED", "PURGED"].includes(draft.mediaStatus ?? "")
+  draft.metadata.requirementKey === requirementKey && (draft.sha256 === sha256 || draft.sourceSha256 === sha256) && !["ABORTED", "PURGED"].includes(draft.mediaStatus ?? "")
 );
 export const readyForSubmission = (drafts: CaptureDraft[], online: boolean, allRequirementsSatisfied?: boolean, confirmIncomplete = false): boolean => {
   if (!online) return false;

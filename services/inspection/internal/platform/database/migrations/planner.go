@@ -1249,6 +1249,102 @@ ALTER TABLE media.media_objects ADD CONSTRAINT chk_media_attention_items CHECK (
 ALTER TABLE origins.origin_evidence DROP CONSTRAINT IF EXISTS chk_origin_evidence_attention_items;
 ALTER TABLE origins.origin_evidence ADD CONSTRAINT chk_origin_evidence_attention_items CHECK (jsonb_typeof(attention_items) = 'array');
 `},
+		{Version: 44, Name: "llm_cache_usage_and_request_sizes", Compatible: true, SQL: `
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS cached_input_tokens bigint;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS image_count integer;
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS request_body_bytes bigint;
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_cache_usage;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_cache_usage CHECK (
+  (cached_input_tokens IS NULL OR (cached_input_tokens >= 0 AND (input_tokens IS NULL OR cached_input_tokens <= input_tokens)))
+  AND (image_count IS NULL OR image_count >= 0)
+  AND (request_body_bytes IS NULL OR request_body_bytes >= 0)
+);
+
+CREATE OR REPLACE FUNCTION usage.read_llm_cache_summary_v1(
+  p_from timestamptz, p_to timestamptz, p_tenant_id uuid, p_inspection_id uuid,
+  p_provider text, p_model text, p_model_alias text, p_mode text, p_outcome text,
+  p_state text, p_cost_state text
+)
+RETURNS TABLE(cached_input_tokens bigint, cache_hit_calls bigint, known_cache_calls bigint, unknown_cache_calls bigint)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = usage, pg_catalog
+AS $function$
+  SELECT
+    coalesce(sum(l.cached_input_tokens) FILTER (WHERE l.transport_delivered IS TRUE), 0)::bigint,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens > 0)::bigint,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NOT NULL)::bigint,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NULL)::bigint
+  FROM usage.llm_calls l
+  WHERE l.started_at >= p_from AND l.started_at < p_to
+    AND (p_tenant_id IS NULL OR l.tenant_id = p_tenant_id)
+    AND (p_inspection_id IS NULL OR l.inspection_id = p_inspection_id)
+    AND (p_provider IS NULL OR l.provider ILIKE '%' || p_provider || '%')
+    AND (p_model IS NULL OR l.model ILIKE '%' || p_model || '%')
+    AND (p_model_alias IS NULL OR l.model_alias ILIKE '%' || p_model_alias || '%')
+    AND (p_mode IS NULL OR l.mode = p_mode)
+    AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%' || p_outcome || '%')
+    AND (p_state IS NULL OR l.state = p_state)
+    AND (p_cost_state IS NULL
+      OR (p_cost_state = 'informed' AND l.transport_delivered IS TRUE AND l.reported_cost IS NOT NULL)
+      OR (p_cost_state = 'missing' AND l.transport_delivered IS TRUE AND l.reported_cost IS NULL))
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_cache_summary_v1(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_cache_summary_v1(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text) TO inspection_runtime;
+
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_calls_v2(
+  p_from timestamptz, p_to timestamptz, p_tenant_id uuid, p_inspection_id uuid,
+  p_provider text, p_model text, p_model_alias text, p_mode text, p_outcome text,
+  p_state text, p_cost_state text, p_after_started_at timestamptz, p_after_call_id uuid, p_limit integer
+)
+RETURNS TABLE(
+  call_id uuid, tenant_id uuid, tenant_name text, inspection_id uuid, job_id uuid,
+  event_id uuid, execution_id uuid, correlation_id varchar, attempt integer,
+  replay_generation integer, mode varchar, comparison_mode varchar, model_alias varchar,
+  provider varchar, model varchar, gateway_request_id varchar, state varchar,
+  technical_outcome varchar, transport_delivered boolean, http_status integer,
+  input_tokens bigint, output_tokens bigint, reported_cost numeric, duration_ms bigint,
+  started_at timestamptz, finished_at timestamptz, cached_input_tokens bigint,
+  image_count integer, request_body_bytes bigint
+)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = usage, tenancy, pg_catalog
+AS $function$
+  SELECT l.call_id, l.tenant_id, t.name::text, l.inspection_id, l.job_id, l.event_id,
+         l.execution_id, l.correlation_id, l.attempt, l.replay_generation, l.mode,
+         l.comparison_mode, l.model_alias, l.provider, l.model, l.gateway_request_id,
+         l.state, l.technical_outcome, l.transport_delivered, l.http_status,
+         l.input_tokens, l.output_tokens, l.reported_cost, l.duration_ms,
+         l.started_at, l.finished_at, l.cached_input_tokens, l.image_count, l.request_body_bytes
+  FROM usage.llm_calls l JOIN tenancy.tenants t ON t.id = l.tenant_id
+  WHERE l.started_at >= p_from AND l.started_at < p_to
+    AND (p_tenant_id IS NULL OR l.tenant_id = p_tenant_id)
+    AND (p_inspection_id IS NULL OR l.inspection_id = p_inspection_id)
+    AND (p_provider IS NULL OR l.provider ILIKE '%' || p_provider || '%')
+    AND (p_model IS NULL OR l.model ILIKE '%' || p_model || '%')
+    AND (p_model_alias IS NULL OR l.model_alias ILIKE '%' || p_model_alias || '%')
+    AND (p_mode IS NULL OR l.mode = p_mode)
+    AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%' || p_outcome || '%')
+    AND (p_state IS NULL OR l.state = p_state)
+    AND (p_cost_state IS NULL
+      OR (p_cost_state = 'informed' AND l.transport_delivered IS TRUE AND l.reported_cost IS NOT NULL)
+      OR (p_cost_state = 'missing' AND l.transport_delivered IS TRUE AND l.reported_cost IS NULL))
+    AND (p_after_started_at IS NULL OR l.started_at < p_after_started_at OR (l.started_at = p_after_started_at AND l.call_id < p_after_call_id))
+  ORDER BY l.started_at DESC, l.call_id DESC LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_calls_v2(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text, timestamptz, uuid, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls_v2(timestamptz, timestamptz, uuid, uuid, text, text, text, text, text, text, text, timestamptz, uuid, integer) TO inspection_runtime;
+`},
+		{Version: 45, Name: "media_derivative_normalization_metadata", Compatible: true, SQL: `
+ALTER TABLE media.derivatives ADD COLUMN IF NOT EXISTS content_type varchar(100) NOT NULL DEFAULT 'image/jpeg';
+ALTER TABLE media.derivatives ADD COLUMN IF NOT EXISTS width integer;
+ALTER TABLE media.derivatives ADD COLUMN IF NOT EXISTS height integer;
+ALTER TABLE media.derivatives ADD COLUMN IF NOT EXISTS size_bytes bigint;
+ALTER TABLE media.derivatives ADD COLUMN IF NOT EXISTS profile varchar(100);
+ALTER TABLE media.derivatives DROP CONSTRAINT IF EXISTS chk_media_derivative_dimensions;
+ALTER TABLE media.derivatives ADD CONSTRAINT chk_media_derivative_dimensions CHECK (
+  (width IS NULL OR width > 0) AND (height IS NULL OR height > 0) AND (size_bytes IS NULL OR size_bytes >= 0)
+);
+`},
 	}
 }
 

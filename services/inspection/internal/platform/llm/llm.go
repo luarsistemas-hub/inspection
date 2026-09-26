@@ -36,6 +36,9 @@ type StructuredResult struct {
 	GatewayRequestID, Provider, Model string
 	CallID                            string
 	InputTokens, OutputTokens         *int64
+	CachedInputTokens                 *int64
+	RequestBodyBytes                  int64
+	InvalidCachedInputTokens          bool
 	Cost                              *float64
 	Latency                           time.Duration
 	HTTPStatus                        int
@@ -62,6 +65,9 @@ type CallStart struct {
 type CallFinish struct {
 	CallID, Provider, Model, GatewayRequestID, TechnicalOutcome string
 	InputTokens, OutputTokens                                   *int64
+	CachedInputTokens                                           *int64
+	ImageCount                                                  int
+	RequestBodyBytes                                            int64
 	Cost                                                        *float64
 	TransportDelivered                                          bool
 	HTTPStatus                                                  int

@@ -65,7 +65,7 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		} else if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			code = CodeCancelled
 		}
-		return StructuredResult{Latency: time.Since(started)}, NewError(code, 0, err)
+		return StructuredResult{Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(code, 0, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
@@ -76,7 +76,7 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		} else if response.StatusCode == http.StatusTooManyRequests {
 			code = CodeRateLimit
 		}
-		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started)}, NewError(code, response.StatusCode, fmt.Errorf("provider response status %d", response.StatusCode))
+		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(code, response.StatusCode, fmt.Errorf("provider response status %d", response.StatusCode))
 	}
 	var wire struct {
 		ID, Model string
@@ -86,17 +86,28 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens     *int64 `json:"prompt_tokens"`
-			CompletionTokens *int64 `json:"completion_tokens"`
+			PromptTokens        *int64 `json:"prompt_tokens"`
+			CompletionTokens    *int64 `json:"completion_tokens"`
+			PromptTokensDetails *struct {
+				CachedTokens json.RawMessage `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
 		} `json:"usage"`
 		Cost     *float64 `json:"cost"`
 		Provider string   `json:"provider"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
 	if err := decoder.Decode(&wire); err != nil {
-		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started)}, NewError(CodeMalformedResponse, response.StatusCode, fmt.Errorf("malformed structured response"))
+		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(CodeMalformedResponse, response.StatusCode, fmt.Errorf("malformed structured response"))
 	}
-	result := StructuredResult{GatewayRequestID: wire.ID, Provider: wire.Provider, Model: wire.Model, InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Cost, HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started)}
+	result := StructuredResult{GatewayRequestID: wire.ID, Provider: wire.Provider, Model: wire.Model, InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Cost, HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}
+	if wire.Usage.PromptTokensDetails != nil && len(wire.Usage.PromptTokensDetails.CachedTokens) > 0 && string(wire.Usage.PromptTokensDetails.CachedTokens) != "null" {
+		var cached int64
+		if decodeErr := json.Unmarshal(wire.Usage.PromptTokensDetails.CachedTokens, &cached); decodeErr != nil || cached < 0 || (wire.Usage.PromptTokens != nil && cached > *wire.Usage.PromptTokens) {
+			result.InvalidCachedInputTokens = true
+		} else {
+			result.CachedInputTokens = &cached
+		}
+	}
 	if len(wire.Choices) != 1 || wire.Choices[0].Message.Content == "" {
 		return result, NewError(CodeMalformedResponse, response.StatusCode, fmt.Errorf("malformed structured response"))
 	}

@@ -119,7 +119,11 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 				return llm.StructuredRequest{}, err
 			}
 			digest := sha256.Sum256(data)
-			current = append(current, comparative.Evidence{ID: mediaID, Source: "CURRENT", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
+			dataURL, err := imageDataURL(derivative.ContentType, data)
+			if err != nil {
+				return llm.StructuredRequest{}, err
+			}
+			current = append(current, comparative.Evidence{ID: mediaID, Source: "CURRENT", Digest: hex.EncodeToString(digest[:]), DataURL: dataURL})
 		}
 		schema, err := json.Marshal(outputSchema)
 		if err != nil {
@@ -165,7 +169,11 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 				return llm.StructuredRequest{}, err
 			}
 			digest := sha256.Sum256(data)
-			origin = append(origin, comparative.Evidence{ID: item.MediaID, Source: "ORIGIN", PairID: pairID, Position: "ORIGIN", Digest: hex.EncodeToString(digest[:]), DataURL: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)})
+			dataURL, err := imageDataURL(derivative.ContentType, data)
+			if err != nil {
+				return llm.StructuredRequest{}, err
+			}
+			origin = append(origin, comparative.Evidence{ID: item.MediaID, Source: "ORIGIN", PairID: pairID, Position: "ORIGIN", Digest: hex.EncodeToString(digest[:]), DataURL: dataURL})
 			break
 		}
 		if len(origin) != 1 {
@@ -183,6 +191,16 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 		}
 		return llm.StructuredRequest{ModelAlias: modelAlias, PromptDigest: promptSnapshot.CanonicalDigest, Mode: comparisonMode, SystemPrompt: systemPrompt, UserPrompt: userPrompt, JSONSchema: schema, MinimumConfidenceBPS: minimumConfidence, Images: images}, nil
 	}
+}
+
+func imageDataURL(contentType string, data []byte) (string, error) {
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	if contentType != "image/jpeg" && contentType != "image/webp" {
+		return "", fmt.Errorf("analysis: unsupported derivative media type")
+	}
+	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
 func mustCurrentImages(evidence []comparative.Evidence) []llm.NormalizedImage {

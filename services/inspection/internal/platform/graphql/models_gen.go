@@ -466,6 +466,9 @@ type GlobalLLMCallUsage struct {
 	HTTPStatus         *int             `json:"httpStatus,omitempty"`
 	InputTokens        *int             `json:"inputTokens,omitempty"`
 	OutputTokens       *int             `json:"outputTokens,omitempty"`
+	CachedInputTokens  *int             `json:"cachedInputTokens,omitempty"`
+	ImageCount         *int             `json:"imageCount,omitempty"`
+	RequestBodyBytes   *int             `json:"requestBodyBytes,omitempty"`
 	ReportedCost       *float64         `json:"reportedCost,omitempty"`
 	DurationMs         *int             `json:"durationMs,omitempty"`
 	StartedAt          string           `json:"startedAt"`
@@ -506,6 +509,10 @@ type InspectionLLMUsage struct {
 	IncompleteCalls   int              `json:"incompleteCalls"`
 	InputTokens       int              `json:"inputTokens"`
 	OutputTokens      int              `json:"outputTokens"`
+	CachedInputTokens int              `json:"cachedInputTokens"`
+	CacheHitCalls     int              `json:"cacheHitCalls"`
+	KnownCacheCalls   int              `json:"knownCacheCalls"`
+	UnknownCacheCalls int              `json:"unknownCacheCalls"`
 	KnownReportedCost float64          `json:"knownReportedCost"`
 	UnknownCostCalls  int              `json:"unknownCostCalls"`
 	CostComplete      bool             `json:"costComplete"`
@@ -588,6 +595,9 @@ type LLMCallUsage struct {
 	HTTPStatus         *int             `json:"httpStatus,omitempty"`
 	InputTokens        *int             `json:"inputTokens,omitempty"`
 	OutputTokens       *int             `json:"outputTokens,omitempty"`
+	CachedInputTokens  *int             `json:"cachedInputTokens,omitempty"`
+	ImageCount         *int             `json:"imageCount,omitempty"`
+	RequestBodyBytes   *int             `json:"requestBodyBytes,omitempty"`
 	ReportedCost       *float64         `json:"reportedCost,omitempty"`
 	DurationMs         *int             `json:"durationMs,omitempty"`
 	StartedAt          string           `json:"startedAt"`
@@ -602,6 +612,10 @@ type LLMUsage struct {
 	IncompleteCalls   int                   `json:"incompleteCalls"`
 	InputTokens       int                   `json:"inputTokens"`
 	OutputTokens      int                   `json:"outputTokens"`
+	CachedInputTokens int                   `json:"cachedInputTokens"`
+	CacheHitCalls     int                   `json:"cacheHitCalls"`
+	KnownCacheCalls   int                   `json:"knownCacheCalls"`
+	UnknownCacheCalls int                   `json:"unknownCacheCalls"`
 	KnownReportedCost float64               `json:"knownReportedCost"`
 	UnknownCostCalls  int                   `json:"unknownCostCalls"`
 	CostComplete      bool                  `json:"costComplete"`

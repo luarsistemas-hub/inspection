@@ -1675,6 +1675,9 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Product and audience come from the verified OIDC token, not the membership store.
+		resolved.Audience = principal.Audience
+		resolved.Product = principal.Product
 		principal = resolved
 	}
 	scopes := make([]*graphql1.Scope, 0, len(principal.Scopes))
@@ -2702,8 +2705,10 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 		InspectionID: view.InspectionID.String(), Mode: modeEnum,
 		AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls,
 		IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens),
-		OutputTokens: int(view.OutputTokens), KnownReportedCost: view.KnownReportedCost,
-		UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete,
+		OutputTokens: int(view.OutputTokens), CachedInputTokens: int(view.CachedInputTokens),
+		CacheHitCalls: view.CacheHitCalls, KnownCacheCalls: view.KnownCacheCalls, UnknownCacheCalls: view.UnknownCacheCalls,
+		KnownReportedCost: view.KnownReportedCost,
+		UnknownCostCalls:  view.UnknownCostCalls, CostComplete: view.CostComplete,
 		CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.LLMCallUsage, 0, len(view.Calls)),
 		PageInfo: pageInfo(view.EndCursor, view.HasNextPage),
 	}
@@ -2747,6 +2752,18 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 		if call.OutputTokens != nil {
 			value := int(*call.OutputTokens)
 			mapped.OutputTokens = &value
+		}
+		if call.CachedInputTokens != nil {
+			value := int(*call.CachedInputTokens)
+			mapped.CachedInputTokens = &value
+		}
+		if call.ImageCount != nil {
+			value := *call.ImageCount
+			mapped.ImageCount = &value
+		}
+		if call.RequestBodyBytes != nil {
+			value := int(*call.RequestBodyBytes)
+			mapped.RequestBodyBytes = &value
 		}
 		if call.DurationMS != nil {
 			value := int(*call.DurationMS)
@@ -2801,7 +2818,7 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 		return nil, err
 	}
 	view := raw.(getgloballlmusage.Result)
-	response := &graphql1.LLMUsage{From: view.From.Format(time.RFC3339Nano), To: view.To.Format(time.RFC3339Nano), AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls, IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens), OutputTokens: int(view.OutputTokens), KnownReportedCost: view.KnownReportedCost, UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete, CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.GlobalLLMCallUsage, 0, len(view.Calls)), PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}
+	response := &graphql1.LLMUsage{From: view.From.Format(time.RFC3339Nano), To: view.To.Format(time.RFC3339Nano), AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls, IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens), OutputTokens: int(view.OutputTokens), CachedInputTokens: int(view.CachedInputTokens), CacheHitCalls: view.CacheHitCalls, KnownCacheCalls: view.KnownCacheCalls, UnknownCacheCalls: view.UnknownCacheCalls, KnownReportedCost: view.KnownReportedCost, UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete, CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.GlobalLLMCallUsage, 0, len(view.Calls)), PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}
 	if view.CoverageStartedAt != nil {
 		value := view.CoverageStartedAt.UTC().Format(time.RFC3339Nano)
 		response.CoverageStartedAt = &value
@@ -2831,6 +2848,18 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 		if call.OutputTokens != nil {
 			value := int(*call.OutputTokens)
 			mapped.OutputTokens = &value
+		}
+		if call.CachedInputTokens != nil {
+			value := int(*call.CachedInputTokens)
+			mapped.CachedInputTokens = &value
+		}
+		if call.ImageCount != nil {
+			value := *call.ImageCount
+			mapped.ImageCount = &value
+		}
+		if call.RequestBodyBytes != nil {
+			value := int(*call.RequestBodyBytes)
+			mapped.RequestBodyBytes = &value
 		}
 		if call.DurationMS != nil {
 			value := int(*call.DurationMS)
