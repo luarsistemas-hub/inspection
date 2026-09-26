@@ -167,7 +167,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 				return err
 			}
 		}
-		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: mediaKey, ContentType: mediaContentType, SHA256: mediaDigest, SizeBytes: int64(len(mediaBytes)), Status: "READY", IdempotencyKey: "task06-media", RequirementKey: options.RequirementKey, Description: "Fixture evidence", CaptureSource: "CAMERA", Flags: json.RawMessage(`[]`), CreatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: mediaKey, ContentType: mediaContentType, SHA256: mediaDigest, SizeBytes: int64(len(mediaBytes)), Status: "READY", IdempotencyKey: "task06-media", RequirementKey: options.RequirementKey, Description: "Fixture evidence", CaptureSource: "CAMERA", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.MediaDerivative{ID: f.DerivativeID, TenantID: f.TenantID, MediaID: f.MediaID, ObjectKey: derivativeKey, Kind: "NORMALIZED", SHA256: mediaDigest, CreatedAt: createdAt}).Error; err != nil {

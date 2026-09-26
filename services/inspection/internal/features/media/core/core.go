@@ -127,7 +127,7 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 		if err != nil {
 			return dependency(err)
 		}
-		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", IdempotencyKey: idempotencyKey, Flags: json.RawMessage(`[]`), CreatedAt: now}
+		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", IdempotencyKey: idempotencyKey, AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}
 		upload := database.MultipartUpload{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, UploadID: remoteID, ObjectKey: key, Status: "UPLOADING", ExpiresAt: expires, CreatedAt: now}
 		if err := tx.Create(&media).Error; err != nil {
 			return err

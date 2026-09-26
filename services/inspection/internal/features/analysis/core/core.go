@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -22,6 +23,24 @@ const (
 )
 
 var ErrInvalidStructuredOutput = errors.New("invalid structured analysis output")
+
+var customerImageLabels = []struct {
+	pattern *regexp.Regexp
+	replace string
+}{
+	{regexp.MustCompile(`(?i)\bde\s+CURRENT\b`), "da vistoria atual"},
+	{regexp.MustCompile(`(?i)\bcom\s+CURRENT\b`), "com a vistoria atual"},
+	{regexp.MustCompile(`(?i)\bcom\s+ORIGIN\b`), "com a imagem de referência"},
+	{regexp.MustCompile(`(?i)\bem\s+ORIGIN\b`), "na imagem de referência"},
+	{regexp.MustCompile(`(?i)\bna imagem\s+CURRENT\b`), "na vistoria atual"},
+	{regexp.MustCompile(`(?i)\bda imagem\s+CURRENT\b`), "da vistoria atual"},
+	{regexp.MustCompile(`(?i)\bimagem\s+CURRENT\b`), "vistoria atual"},
+	{regexp.MustCompile(`(?i)\bna imagem\s+ORIGIN\b`), "na imagem de referência"},
+	{regexp.MustCompile(`(?i)\bda imagem\s+ORIGIN\b`), "da imagem de referência"},
+	{regexp.MustCompile(`(?i)\bimagem\s+ORIGIN\b`), "imagem de referência"},
+	{regexp.MustCompile(`(?i)\bCURRENT\b`), "vistoria atual"},
+	{regexp.MustCompile(`(?i)\bORIGIN\b`), "imagem de referência"},
+}
 
 // Finding is the provider-neutral result of one visual observation.
 type Finding struct {
@@ -76,9 +95,21 @@ func ParseResult(data []byte) (Result, error) {
 	}
 	result := Result{NoRelevantChange: wire.NoRelevantChange, Findings: make([]Finding, 0, len(wire.Findings))}
 	for _, finding := range wire.Findings {
-		result.Findings = append(result.Findings, Finding{Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Confidence: finding.Confidence, EvidenceIDs: finding.EvidenceIDs, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction})
+		result.Findings = append(result.Findings, Finding{Category: finding.Category, Title: presentCustomerImageLabels(finding.Title), Description: presentCustomerImageLabels(finding.Description), Severity: finding.Severity, Confidence: finding.Confidence, EvidenceIDs: finding.EvidenceIDs, Quality: finding.Quality, RecommendedAction: presentCustomerImageLabels(finding.RecommendedAction)})
 	}
 	return result, ValidateResult(result)
+}
+
+func presentCustomerImageLabels(value string) string {
+	for _, label := range customerImageLabels {
+		value = label.pattern.ReplaceAllStringFunc(value, func(match string) string {
+			if strings.HasPrefix(match, "Na imagem") || strings.HasPrefix(match, "Da imagem") {
+				return strings.ToUpper(label.replace[:1]) + label.replace[1:]
+			}
+			return label.replace
+		})
+	}
+	return value
 }
 
 // ComparisonFacts are terminal facts only. They are sufficient to reproduce a classification.

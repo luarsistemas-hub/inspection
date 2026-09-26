@@ -39,6 +39,15 @@ func TestParseResultFindingsRemainIndependentOfQualityFindings(t *testing.T) {
 	require.Equal(t, "OBSTRUCTION", result.Findings[0].Category)
 }
 
+func TestParseResultPresentsFriendlyImageLabels(t *testing.T) {
+	payload := []byte(`{"noRelevantChange":false,"findings":[{"category":"OBSTRUCTION","title":"Obstrução · CURRENT","description":"Na imagem CURRENT, um saco encobre o gabinete. Não estava presente na imagem ORIGIN.","severity":"LOW","confidence":0.9,"evidenceIds":["current","origin"],"quality":"ADEQUATE","recommendedAction":"Refazer a captura de CURRENT e comparar com ORIGIN."}]}`)
+	result, err := ParseResult(payload)
+	require.NoError(t, err)
+	require.Equal(t, "Obstrução · vistoria atual", result.Findings[0].Title)
+	require.Equal(t, "Na vistoria atual, um saco encobre o gabinete. Não estava presente na imagem de referência.", result.Findings[0].Description)
+	require.Equal(t, "Refazer a captura da vistoria atual e comparar com a imagem de referência.", result.Findings[0].RecommendedAction)
+}
+
 func TestValidateResultDoesNotInferFromEmptyFindings(t *testing.T) {
 	require.NoError(t, ValidateResult(Result{Findings: []Finding{}}))
 }

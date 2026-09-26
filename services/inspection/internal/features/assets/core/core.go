@@ -328,6 +328,16 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, businessUnitID 
 	for i, row := range rows {
 		out[i].Asset = row
 	}
+	if err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		for i := range out {
+			if err := s.load(tx, &out[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, "", false, err
+	}
 	end := ""
 	if len(rows) > 0 {
 		last := rows[len(rows)-1]

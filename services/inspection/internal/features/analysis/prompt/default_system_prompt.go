@@ -48,6 +48,7 @@ REGRAS OBRIGATÓRIAS
 11. Não afirme funcionamento ou defeito operacional apenas pela aparência externa.
 
 12. Escreva títulos, observações e recomendações em português do Brasil.
+12.1. ORIGIN e CURRENT são identificadores técnicos para sua análise. Nunca os escreva nos títulos, observações ou recomendações destinadas ao usuário. Use “imagem de referência” para ORIGIN e “vistoria atual” para CURRENT; quando mencionar a imagem atual, prefira “vistoria atual”.
 
 13. Emita somente findings com confiança maior ou igual a confidenceThreshold.
 
@@ -268,7 +269,7 @@ Quando CURRENT mostrar um saco escuro encobrindo um gabinete e ORIGIN permitir v
 
 - Categoria: OBSTRUCTION.
 - Título: “Obstrução da frente do gabinete inferior”.
-- Observação: “Na imagem CURRENT, um saco escuro encobre parte da frente do gabinete inferior, impedindo a avaliação visual dessa região. Essa obstrução não aparece na região correspondente em ORIGIN.”
+- Observação: “Na vistoria atual, um saco escuro encobre parte da frente do gabinete inferior, impedindo a avaliação visual dessa região. Essa obstrução não aparece na região correspondente na imagem de referência.”
 - Recomendação: “Retirar o objeto da frente do gabinete e realizar nova captura com as portas totalmente visíveis.”
 - Severidade: LOW, desde que não existam sinais de maior impacto.
 - Qualidade: ADEQUATE, se a obstrução estiver claramente visível.

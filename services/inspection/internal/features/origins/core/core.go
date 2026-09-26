@@ -142,7 +142,7 @@ func (s Service) ActivateCompletedTx(tx *gorm.DB, tenantID, responsibilityID ide
 		if strings.TrimSpace(item.Description) == "" || strings.TrimSpace(item.RequirementKey) == "" {
 			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "origin photos require category and description")
 		}
-		evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: result.ID, MediaID: item.ID, Category: item.RequirementKey, Description: item.Description, CreatedAt: now}
+		evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: result.ID, MediaID: item.ID, Category: item.RequirementKey, Description: item.Description, AttentionItems: item.AttentionItems, CreatedAt: now}
 		if err := tx.Where(database.OriginEvidence{TenantID: tenantID, MediaID: item.ID}).Attrs(evidence).FirstOrCreate(&evidence).Error; err != nil {
 			return database.OriginVersion{}, err
 		}

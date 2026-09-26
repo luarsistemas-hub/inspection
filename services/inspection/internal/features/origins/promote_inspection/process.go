@@ -149,7 +149,7 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			if err := tx.Where("tenant_id=? AND id=?", tenantID, item.SourceID).First(&source).Error; err != nil {
 				return err
 			}
-			media := database.MediaObject{ID: item.TargetID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: item.OriginalKey, ContentType: source.ContentType, SHA256: item.OriginalHash, SizeBytes: source.SizeBytes, Status: "READY", IdempotencyKey: "promotion:" + promotion.ID.String() + ":" + item.TargetID.String(), RequirementKey: "origin:" + item.TargetID.String(), Description: source.Description, CaptureSource: source.CaptureSource, CapturedAt: source.CapturedAt, DeviceContext: source.DeviceContext, LatitudeE6: source.LatitudeE6, LongitudeE6: source.LongitudeE6, AccuracyMM: source.AccuracyMM, DistanceMM: source.DistanceMM, Flags: source.Flags, CreatedAt: now}
+			media := database.MediaObject{ID: item.TargetID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: item.OriginalKey, ContentType: source.ContentType, SHA256: item.OriginalHash, SizeBytes: source.SizeBytes, Status: "READY", IdempotencyKey: "promotion:" + promotion.ID.String() + ":" + item.TargetID.String(), RequirementKey: "origin:" + item.TargetID.String(), Description: source.Description, AttentionItems: source.AttentionItems, CaptureSource: source.CaptureSource, CapturedAt: source.CapturedAt, DeviceContext: source.DeviceContext, LatitudeE6: source.LatitudeE6, LongitudeE6: source.LongitudeE6, AccuracyMM: source.AccuracyMM, DistanceMM: source.DistanceMM, Flags: source.Flags, CreatedAt: now}
 			if err := tx.Create(&media).Error; err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			if err := tx.Create(&derivative).Error; err != nil {
 				return err
 			}
-			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, MediaID: item.TargetID, Category: "property", Description: source.Description, CreatedAt: now}
+			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, MediaID: item.TargetID, Category: "property", Description: source.Description, AttentionItems: source.AttentionItems, CreatedAt: now}
 			if err := tx.Create(&evidence).Error; err != nil {
 				return err
 			}
