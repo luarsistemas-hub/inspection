@@ -212,8 +212,12 @@ func (r *mutationResolver) CorrectOnboardingResponsibleEmail(ctx context.Context
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
 	var responsibility database.Responsibility
-	if err := r.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id IN (SELECT inspection_id FROM onboarding.requests WHERE tenant_id=? AND session_id=?)", *session.TenantID, *session.TenantID, session.ID).First(&responsibility).Error; err != nil {
+	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, *session.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND inspection_id IN (SELECT inspection_id FROM onboarding.requests WHERE tenant_id=? AND session_id=?)", *session.TenantID, *session.TenantID, session.ID).First(&responsibility).Error
+	}); err == gorm.ErrRecordNotFound {
 		return onboardingValidationPayload(apperror.New(apperror.NotFound, "inspectionId", "inspection not found"), input.ClientMutationID)
+	} else if err != nil {
+		return nil, err
 	}
 	result, err := r.ResponsibleEmail.Correct(ctx, responsibleemail.Input{TenantID: *session.TenantID, InspectionID: responsibility.InspectionID, ResponsibilityID: responsibility.ID, Email: input.Email, EmailConfirmation: input.EmailConfirmation, ExpectedResponsibilityVersion: int64(input.ExpectedResponsibilityVersion), IdempotencyKey: "onboarding:" + input.ClientMutationID, Source: "ONBOARDING", ActorID: responsibility.ID, CorrelationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
@@ -845,7 +849,7 @@ func (r *mutationResolver) CreateSchedule(ctx context.Context, input graphql1.Cr
 	if err != nil {
 		return nil, err
 	}
-	startsAt, err := parseInstant(input.StartsAt, "startsAt")
+	startsAt, err := parseScheduleStart(input.StartsAt, input.Timezone)
 	if err != nil {
 		return nil, err
 	}
@@ -866,7 +870,7 @@ func (r *mutationResolver) UpdateSchedule(ctx context.Context, input graphql1.Up
 	if err != nil {
 		return nil, invalidID("scheduleId")
 	}
-	startsAt, err := parseInstant(input.StartsAt, "startsAt")
+	startsAt, err := parseScheduleStart(input.StartsAt, input.Timezone)
 	if err != nil {
 		return nil, err
 	}

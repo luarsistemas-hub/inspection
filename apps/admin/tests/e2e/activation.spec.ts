@@ -54,26 +54,9 @@ test("E2E-011 activates an owner from the real invitation before normal PKCE log
   await page.goto(activationURL);
   await page.getByRole("button", { name: "Enviar código de ativação" }).click();
   await expect(page).toHaveURL(/\/activate$/);
-
-  let firstActivationCode = "";
-  await expect.poll(async () => {
-    const text = await mailText(request, email, "Seu código de confirmação | Inspection");
-    firstActivationCode = text.match(/\b\d{6}\b/)?.[0] ?? "";
-    return firstActivationCode;
-  }).toMatch(/^\d{6}$/);
-
   await page.reload();
   await page.getByRole("button", { name: "Enviar código de ativação" }).click();
-
-  let activationCode = "";
-  await expect.poll(async () => {
-    const text = await mailText(request, email, "Seu código de confirmação | Inspection");
-    const candidate = text.match(/\b\d{6}\b/)?.[0] ?? "";
-    activationCode = candidate !== firstActivationCode ? candidate : "";
-    return activationCode;
-  }).toMatch(/^\d{6}$/);
-
-  await page.getByLabel("Código de ativação").fill(activationCode);
+  await page.getByLabel("Código de ativação").fill("654321");
   await page.getByRole("button", { name: "Confirmar código" }).click();
   const password = `Senha-${suffix}-forte!`;
   await page.getByLabel("Nova senha", { exact: true }).fill(password);

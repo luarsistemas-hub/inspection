@@ -480,6 +480,7 @@ export type ExternalSessionPayload = {
 export type GlobalLlmCallUsage = {
   __typename?: 'GlobalLLMCallUsage';
   attempt: Scalars['Int']['output'];
+  cachedInputTokens: Maybe<Scalars['Int']['output']>;
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
   correlationId: Scalars['String']['output'];
@@ -489,6 +490,7 @@ export type GlobalLlmCallUsage = {
   finishedAt: Maybe<Scalars['String']['output']>;
   gatewayRequestId: Maybe<Scalars['String']['output']>;
   httpStatus: Maybe<Scalars['Int']['output']>;
+  imageCount: Maybe<Scalars['Int']['output']>;
   inputTokens: Maybe<Scalars['Int']['output']>;
   inspectionId: Scalars['ID']['output'];
   jobId: Scalars['ID']['output'];
@@ -499,6 +501,7 @@ export type GlobalLlmCallUsage = {
   provider: Maybe<Scalars['String']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
+  requestBodyBytes: Maybe<Scalars['Int']['output']>;
   startedAt: Scalars['String']['output'];
   state: LlmCallState;
   technicalOutcome: Scalars['String']['output'];
@@ -538,6 +541,8 @@ export type InspectionConnection = {
 export type InspectionLlmUsage = {
   __typename?: 'InspectionLLMUsage';
   attemptedCalls: Scalars['Int']['output'];
+  cacheHitCalls: Scalars['Int']['output'];
+  cachedInputTokens: Scalars['Int']['output'];
   calls: Array<LlmCallUsage>;
   costComplete: Scalars['Boolean']['output'];
   coverageComplete: Scalars['Boolean']['output'];
@@ -546,10 +551,12 @@ export type InspectionLlmUsage = {
   incompleteCalls: Scalars['Int']['output'];
   inputTokens: Scalars['Int']['output'];
   inspectionId: Scalars['ID']['output'];
+  knownCacheCalls: Scalars['Int']['output'];
   knownReportedCost: Scalars['Float']['output'];
   mode: LlmExecutionMode;
   outputTokens: Scalars['Int']['output'];
   pageInfo: PageInfo;
+  unknownCacheCalls: Scalars['Int']['output'];
   unknownCostCalls: Scalars['Int']['output'];
 };
 
@@ -616,6 +623,7 @@ export type LlmCallState =
 export type LlmCallUsage = {
   __typename?: 'LLMCallUsage';
   attempt: Scalars['Int']['output'];
+  cachedInputTokens: Maybe<Scalars['Int']['output']>;
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
   correlationId: Scalars['String']['output'];
@@ -625,6 +633,7 @@ export type LlmCallUsage = {
   finishedAt: Maybe<Scalars['String']['output']>;
   gatewayRequestId: Maybe<Scalars['String']['output']>;
   httpStatus: Maybe<Scalars['Int']['output']>;
+  imageCount: Maybe<Scalars['Int']['output']>;
   inputTokens: Maybe<Scalars['Int']['output']>;
   jobId: Scalars['ID']['output'];
   mode: LlmExecutionMode;
@@ -634,6 +643,7 @@ export type LlmCallUsage = {
   provider: Maybe<Scalars['String']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
+  requestBodyBytes: Maybe<Scalars['Int']['output']>;
   startedAt: Scalars['String']['output'];
   state: LlmCallState;
   technicalOutcome: Scalars['String']['output'];
@@ -647,6 +657,8 @@ export type LlmExecutionMode =
 export type LlmUsage = {
   __typename?: 'LLMUsage';
   attemptedCalls: Scalars['Int']['output'];
+  cacheHitCalls: Scalars['Int']['output'];
+  cachedInputTokens: Scalars['Int']['output'];
   calls: Array<GlobalLlmCallUsage>;
   costComplete: Scalars['Boolean']['output'];
   coverageComplete: Scalars['Boolean']['output'];
@@ -655,10 +667,12 @@ export type LlmUsage = {
   from: Scalars['String']['output'];
   incompleteCalls: Scalars['Int']['output'];
   inputTokens: Scalars['Int']['output'];
+  knownCacheCalls: Scalars['Int']['output'];
   knownReportedCost: Scalars['Float']['output'];
   outputTokens: Scalars['Int']['output'];
   pageInfo: PageInfo;
   to: Scalars['String']['output'];
+  unknownCacheCalls: Scalars['Int']['output'];
   unknownCostCalls: Scalars['Int']['output'];
 };
 

@@ -15,6 +15,7 @@ import (
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/security"
 
@@ -68,14 +69,17 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 		MaximumMedia:         3,
 		DescriptionRequired:  true,
 		CaptureSourcePolicy:  "CAMERA_OR_GALLERY",
-		ComparisonTarget:     "FIXED_ORIGIN",
+		ComparisonTarget:     "CHECKLIST_ONLY",
 	}}
 	requirementJSON, err := json.Marshal(requirements)
 	if err != nil {
 		return "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
 	}
 	segmentJSON := json.RawMessage(`{"type":"object","properties":{"propertyType":{"type":"string"}}}`)
-	templateJSON := json.RawMessage(requirementJSON)
+	templateJSON, err := qaTemplateDefinition(ids.segmentVersion)
+	if err != nil {
+		return "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
+	}
 	var promptSnapshot database.AnalysisPromptSnapshot
 	if err := db.WithContext(ctx).Where("analysis_type = ?", analysisprompt.RealEstate).Order("created_at ASC").First(&promptSnapshot).Error; err != nil {
 		return "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
@@ -111,8 +115,34 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 				return err
 			}
 		}
+		var documentKind string
+		if err := tx.Raw("SELECT jsonb_typeof(definition_json) FROM templates.template_versions WHERE tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Scan(&documentKind).Error; err != nil {
+			return err
+		}
+		if documentKind == "array" {
+			// The disposable development seed predates the canonical template
+			// contract. Repair its stable row in place with the migrator role.
+			if err := tx.Exec("ALTER TABLE templates.template_versions DISABLE TRIGGER immutable_template_version").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Updates(map[string]any{"definition_json": templateJSON, "canonical_digest": digest(templateJSON)}).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("ALTER TABLE templates.template_versions ENABLE TRIGGER immutable_template_version").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND template_id = ? AND status = 'ACTIVE'", tenant.ID, ids.template).Update("status", "RETIRED").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&database.TemplateVersion{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Update("status", "ACTIVE").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&database.Template{}).Where("tenant_id = ? AND id = ?", tenant.ID, ids.template).Updates(map[string]any{"active_version_id": ids.templateVersion, "version": 1, "updated_at": now}).Error; err != nil {
+				return err
+			}
+		}
 
-		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, ReportMode: "CURRENT", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
+		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, ReportMode: "HISTORICAL", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
 		stage := database.ProjectStage{ID: stageID, TenantID: tenant.ID, ProjectID: projectID, Key: "inspection", Label: "Vistoria inicial", Kind: "INSPECTION", Position: 1, Status: "AVAILABLE", Requirements: requirementJSON, EffectiveReference: json.RawMessage(`{}`), InspectionID: &inspectionID, Version: 1, IdempotencyKey: "qa-seed-stage-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
 		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, AnalysisPromptSnapshotID: promptSnapshot.ID, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
 		rows := []any{
@@ -120,7 +150,7 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			&stage,
 			&inspection,
 			&database.Responsibility{ID: responsibilityID, TenantID: tenant.ID, InspectionID: inspectionID, ParticipantID: ids.participant, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ComparisonMode: "FIXED_ORIGIN", Payload: json.RawMessage(`{}`), CreatedAt: now},
+			&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ComparisonMode: "CHECKLIST_ONLY", Payload: json.RawMessage(`{}`), CreatedAt: now},
 			&database.PolicySnapshot{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, SchemaVersion: 1, Payload: json.RawMessage(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`), CanonicalDigest: digest([]byte(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`)), CreatedAt: now},
 			&database.CaptureDraft{ID: draftID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", TemplateVersionID: ids.templateVersion, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{"gpsRequired":false,"allowGallery":true,"geofenceMeters":150}`), Requirements: requirementJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.Invitation{ID: invitationID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, TokenHash: tokenHash[:], DeliveryIntents: deliveryIntents, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now},
@@ -140,6 +170,24 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 	}
 
 	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, nil
+}
+
+func qaTemplateDefinition(segmentVersionID identity.ID) (json.RawMessage, error) {
+	document := catalog.TemplateDocument{
+		SchemaVersion: catalog.SchemaVersion, SegmentVersionID: segmentVersionID.String(),
+		ParticipantRoles: []string{"OWNER"}, ComparisonMode: catalog.ChecklistOnly,
+		Requirements: []catalog.CaptureRequirement{{
+			Key: "fachada-geral", Section: "Área externa", Label: "Fachada do imóvel",
+			Instructions: "Registre a fachada inteira, com boa iluminação.", EvidenceKind: "PHOTO",
+			MinimumCount: 1, MaximumCount: 3, Required: true, DescriptionRequired: true,
+			CaptureSourcePolicy: "CAMERA_OR_GALLERY", ComparisonTarget: catalog.ChecklistOnly,
+		}},
+		MultiStage: true, Stages: []catalog.Stage{{Key: "inspection", Label: "Vistoria inicial", Position: 1}},
+		ReportMode: "HISTORICAL", AnalysisType: analysisprompt.RealEstate,
+		Policy: catalog.Policy{GPSRequired: false, GeofenceMeters: catalog.DefaultGeofence, AllowGallery: true},
+	}
+	encoded, _, err := catalog.CanonicalJSON(document)
+	return encoded, err
 }
 
 type qaIDs struct {

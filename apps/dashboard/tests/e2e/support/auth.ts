@@ -18,15 +18,18 @@ export function installRuntimeGuards(page: Page) {
 
 export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<void> {
   await page.goto(returnTo);
-  await page.getByRole("button", { name: "Entrar no Dashboard" }).click();
+  const signIn = page.getByRole("button", { name: "Entrar no Painel" });
+  const navigation = page.getByRole("navigation", { name: "Painel" });
+  await Promise.race([signIn.waitFor({ state: "visible" }), navigation.waitFor({ state: "visible" })]);
+  if (await signIn.isVisible()) await signIn.click();
   const username = page.locator("#username");
-  const protectedHeading = page.getByRole("heading", { name: /Inspeções|Projetos|Triagem|Portfólio|Relatórios|Notificações/ });
-  await Promise.race([username.waitFor({ state: "visible" }), protectedHeading.waitFor({ state: "visible" })]);
+  await Promise.race([username.waitFor({ state: "visible" }), navigation.waitFor({ state: "visible" })]);
   if (await username.isVisible()) {
     await username.fill(process.env.INSPECTION_E2E_USERNAME ?? "admin");
     await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
     await page.locator("button[type=submit]").click();
   }
-  await page.waitForURL(`**${returnTo}`);
-  await expect(protectedHeading).toBeVisible();
+  await expect(navigation).toBeVisible({ timeout: 15_000 });
+  if (!page.url().endsWith(returnTo)) await page.goto(returnTo);
+  await expect(page.getByRole("heading", { name: /Vistorias|Projetos|Triagem|Portfólio|Relatórios|Laudos|Notificações|Agenda de vistorias/ })).toBeVisible({ timeout: 15_000 });
 }

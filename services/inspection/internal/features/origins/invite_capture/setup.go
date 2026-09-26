@@ -108,7 +108,7 @@ func Setup(d Dependencies) error {
 		if created.LinkToken != "" {
 			for _, target := range delivery {
 				template, variables := notificationcore.CaptureLinkNotification(notificationcore.Channel(target.Channel), participant.Participant.Name, asset.Asset.Name, asset.Asset.Address, command.ExpiresAt)
-				_, err := d.Notifications.Send(ctx, notificationcore.Notification{TenantID: command.TenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: template, Variables: variables, CorrelationID: "origin-invite-" + created.VersionID.String(), IdempotencyKey: created.InvitationID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: created.InvitationID, Token: created.LinkToken, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: command.ExpiresAt.Unix()}})
+				_, err := d.Notifications.Send(ctx, notificationcore.Notification{TenantID: command.TenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: template, Variables: variables, CorrelationID: "origin-invite-" + created.VersionID.String(), IdempotencyKey: notificationcore.RecipientIdempotencyKey(created.InvitationID, notificationcore.Channel(target.Channel), target.Destination), Execution: &notificationcore.ExecutionPayload{InvitationID: created.InvitationID, Token: created.LinkToken, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: command.ExpiresAt.Unix()}})
 				if err != nil {
 					return nil, err
 				}

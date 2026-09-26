@@ -7,13 +7,15 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
 )
 
 type Service struct {
-	DB  *gorm.DB
-	Now func() time.Time
+	DB     *gorm.DB
+	Now    func() time.Time
+	Within func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 type Status struct {
@@ -27,11 +29,25 @@ type Status struct {
 }
 
 func (s Service) Load(ctx context.Context, tenantID, sessionID identity.ID) (Status, error) {
-	if s.DB == nil {
+	if s.DB == nil && s.Within == nil {
 		return Status{}, errors.New("onboarding delivery status: database unavailable")
 	}
 	var result Status
-	err := s.DB.WithContext(ctx).Table("onboarding.requests r").
+	within := s.Within
+	if within == nil {
+		within = (tenanttx.Runner{DB: s.DB}).Within
+	}
+	err := within(ctx, tenantID, func(tx *gorm.DB) error {
+		var loadErr error
+		result, loadErr = s.load(ctx, tx, tenantID, sessionID)
+		return loadErr
+	})
+	return result, err
+}
+
+func (s Service) load(ctx context.Context, tx *gorm.DB, tenantID, sessionID identity.ID) (Status, error) {
+	var result Status
+	err := tx.WithContext(ctx).Table("onboarding.requests r").
 		Select("r.id AS request_id, r.inspection_id, r.status AS request_status").
 		Where("r.tenant_id=? AND r.session_id=?", tenantID, sessionID).Scan(&result).Error
 	if err != nil {
@@ -47,7 +63,7 @@ func (s Service) Load(ctx context.Context, tenantID, sessionID identity.ID) (Sta
 		return result, nil
 	}
 	var responsibility database.Responsibility
-	if err := s.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", tenantID, *result.InspectionID).First(&responsibility).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", tenantID, *result.InspectionID).First(&responsibility).Error; err != nil {
 		return Status{}, err
 	}
 	status := responsibility.Status
@@ -55,20 +71,20 @@ func (s Service) Load(ctx context.Context, tenantID, sessionID identity.ID) (Sta
 	version := responsibility.Version
 	result.ResponsibilityVersion = &version
 	var email string
-	if err := s.DB.WithContext(ctx).Table("participants.contacts c").Select("c.value").Joins("JOIN participants.channel_selections s ON s.tenant_id=c.tenant_id AND s.contact_id=c.id").Where("c.tenant_id=? AND c.participant_id=? AND c.channel='EMAIL' AND c.active=true", tenantID, responsibility.ParticipantID).Order("c.updated_at desc").Limit(1).Scan(&email).Error; err != nil {
+	if err := tx.WithContext(ctx).Table("participants.contacts c").Select("c.value").Joins("JOIN participants.channel_selections s ON s.tenant_id=c.tenant_id AND s.contact_id=c.id").Where("c.tenant_id=? AND c.participant_id=? AND c.channel='EMAIL' AND c.active=true", tenantID, responsibility.ParticipantID).Order("c.updated_at desc").Limit(1).Scan(&email).Error; err != nil {
 		return Status{}, err
 	}
 	if email != "" {
 		result.ResponsibleEmail = &email
 	}
 	var delivery database.Delivery
-	err = s.DB.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND logical_template='capture-link'", tenantID, *result.InspectionID).Order("created_at desc").First(&delivery).Error
+	err = tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND logical_template='capture-link'", tenantID, *result.InspectionID).Order("created_at desc").First(&delivery).Error
 	if err == nil {
 		result.DeliveryStatus = delivery.Status
 		result.UpdatedAt = &delivery.UpdatedAt
 		if delivery.Status == "FAILED" || delivery.Status == "UNKNOWN" {
 			var attempt database.ChannelAttempt
-			if attemptErr := s.DB.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", tenantID, delivery.ID).Order("updated_at desc").First(&attempt).Error; attemptErr == nil && attempt.LastError != "" {
+			if attemptErr := tx.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", tenantID, delivery.ID).Order("updated_at desc").First(&attempt).Error; attemptErr == nil && attempt.LastError != "" {
 				code := attempt.LastError
 				result.DeliveryFailureCode = &code
 			}

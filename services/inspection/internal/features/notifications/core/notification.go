@@ -86,6 +86,13 @@ type NotificationService interface {
 	Send(context.Context, Notification) (NotificationResult, error)
 }
 
+// RecipientIdempotencyKey identifies one delivery without placing an email
+// address or phone number in the persisted key.
+func RecipientIdempotencyKey(id identity.ID, channel Channel, destination string) string {
+	digest := sha256.Sum256([]byte(string(channel) + ":" + destination))
+	return id.String() + ":" + hex.EncodeToString(digest[:])
+}
+
 // ErrorCode classifies safe caller-visible validation and idempotency errors.
 type ErrorCode string
 

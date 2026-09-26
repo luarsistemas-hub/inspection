@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -10,11 +11,30 @@ import (
 
 type recordingSender struct {
 	intent notifications.Intent
+	err    error
 }
 
 func (s *recordingSender) Send(_ context.Context, intent notifications.Intent) (notifications.Receipt, error) {
 	s.intent = intent
+	if s.err != nil {
+		return notifications.Receipt{}, s.err
+	}
 	return notifications.Receipt{Provider: "smtp", ID: "mail-1"}, nil
+}
+
+func TestRegistryNotifierRetainsDeliveryFailureForDiagnostics(t *testing.T) {
+	deliveryFailure := &notifications.DeliveryError{Kind: notifications.ErrorPermanent, Code: "smtp_auth_failed", PreSend: true}
+	registry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
+		notifications.Email: &recordingSender{err: deliveryFailure},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = (RegistryNotifier{Registry: registry}).SendActivationInvitation(context.Background(), "ana@example.test", "https://admin.example.test/activate")
+	if !errors.Is(err, deliveryFailure) {
+		t.Fatalf("delivery error was lost: %v", err)
+	}
 }
 
 func TestRegistryNotifierSendsReadableOTPEmail(t *testing.T) {

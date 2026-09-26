@@ -1,4 +1,4 @@
-const owned = ["/tenants/", "/inspections", "/projects", "/triage", "/portfolio", "/reports", "/notifications"];
+const owned = ["/tenants/", "/schedules", "/inspections", "/projects", "/triage", "/portfolio", "/reports", "/notifications"];
 
 export function safeDashboardPath(value: string | undefined, fallback = "/tenants/current"): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;

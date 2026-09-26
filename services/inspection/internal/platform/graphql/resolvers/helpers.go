@@ -316,6 +316,23 @@ func parseInstant(value string, field string) (time.Time, error) {
 	return parsed.UTC(), nil
 }
 
+func parseScheduleStart(value, timezone string) (time.Time, error) {
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed.UTC(), nil
+	}
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		return time.Time{}, graphql1Error("timezone")
+	}
+	for _, layout := range []string{"2006-01-02T15:04", "2006-01-02T15:04:05"} {
+		parsed, parseErr := time.ParseInLocation(layout, value, location)
+		if parseErr == nil && parsed.In(location).Format(layout) == value {
+			return parsed.UTC(), nil
+		}
+	}
+	return time.Time{}, graphql1Error("startsAt")
+}
+
 func parseInstants(values []string, field string) ([]time.Time, error) {
 	result := make([]time.Time, 0, len(values))
 	for _, value := range values {

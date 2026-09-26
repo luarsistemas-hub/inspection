@@ -15,6 +15,7 @@ import (
 	"inspection/services/inspection/internal/platform/messaging"
 	platformnotifications "inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/observability"
+	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -28,6 +29,7 @@ type Dependencies struct {
 	Payloads  *platformnotifications.PayloadCipher
 	Metrics   *observability.Metrics
 	Now       func() time.Time
+	Within    func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 // Setup constructs the provider-neutral notification service. Catalog may be
@@ -49,7 +51,11 @@ func Setup(dependencies Dependencies) (core.NotificationService, error) {
 			return nil, err
 		}
 	}
-	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now}, nil
+	within := dependencies.Within
+	if within == nil {
+		within = (tenanttx.Runner{DB: dependencies.DB}).Within
+	}
+	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now, within: within}, nil
 }
 
 type service struct {
@@ -59,6 +65,7 @@ type service struct {
 	payloads  *platformnotifications.PayloadCipher
 	metrics   *observability.Metrics
 	now       func() time.Time
+	within    func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 type transactionKey struct{}
@@ -82,7 +89,7 @@ func (s service) Send(ctx context.Context, notification core.Notification) (core
 		return s.persist(ctx, tx, notification, digest)
 	}
 	var result core.NotificationResult
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.within(ctx, notification.TenantID, func(tx *gorm.DB) error {
 		var persistErr error
 		result, persistErr = s.persist(ctx, tx, notification, digest)
 		return persistErr

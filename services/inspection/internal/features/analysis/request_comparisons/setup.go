@@ -82,6 +82,10 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		now := deps.Now().UTC()
 		for _, answer := range answers {
+			status, err := comparisonStatus(answer)
+			if err != nil {
+				return err
+			}
 			// The reference snapshot is pinned at inspection creation. Including
 			// it in the job identity makes a retry or a changed origin produce a
 			// distinct job and prevents current-only input from masquerading as a
@@ -89,7 +93,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			digestInput := append(append([]byte{}, answer.MediaIDs...), answer.Flags...)
 			digestInput = append(digestInput, reference.Payload...)
 			digestBytes := sha256.Sum256(digestInput)
-			job := database.ComparisonJob{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: in.InspectionID, PromptSnapshotID: snapshot.ID, RequirementKey: answer.RequirementKey, ModelAlias: "inspection-vision", PromptDigest: snapshot.CanonicalDigest, InputDigest: hex.EncodeToString(digestBytes[:]), Status: "PENDING", CreatedAt: now, UpdatedAt: now}
+			job := database.ComparisonJob{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: in.InspectionID, PromptSnapshotID: snapshot.ID, RequirementKey: answer.RequirementKey, ModelAlias: "inspection-vision", PromptDigest: snapshot.CanonicalDigest, InputDigest: hex.EncodeToString(digestBytes[:]), Status: status, CreatedAt: now, UpdatedAt: now}
 			result := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
 			if result.Error != nil {
 				return result.Error
@@ -100,10 +104,25 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				}
 			}
 			requestID := identity.NewID()
-			if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: requestID, Type: "analysis.comparison_requested.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: job.ID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"inspectionId": in.InspectionID, "jobId": job.ID, "requirementKey": job.RequirementKey}}); err != nil {
+			eventType := "analysis.comparison_requested.v1"
+			if job.Status == "INCONCLUSIVE" {
+				eventType = "analysis.comparison_completed.v1"
+			}
+			if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: requestID, Type: eventType, SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: job.ID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"inspectionId": in.InspectionID, "jobId": job.ID, "requirementKey": job.RequirementKey, "status": job.Status}}); err != nil {
 				return err
 			}
 		}
 		return nil
 	}, nil
+}
+
+func comparisonStatus(answer database.RequirementAnswer) (string, error) {
+	var mediaIDs []identity.ID
+	if err := json.Unmarshal(answer.MediaIDs, &mediaIDs); err != nil {
+		return "", messaging.ErrPermanent
+	}
+	if len(mediaIDs) == 0 && answer.ImpossibilityReason != "" {
+		return "INCONCLUSIVE", nil
+	}
+	return "PENDING", nil
 }

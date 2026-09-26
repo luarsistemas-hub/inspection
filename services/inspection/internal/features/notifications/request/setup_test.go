@@ -152,7 +152,9 @@ func TestServicePersistsV2Request(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	service, err := Setup(Dependencies{DB: db, Metrics: observability.NewMetrics()})
+	service, err := Setup(Dependencies{DB: db, Metrics: observability.NewMetrics(), Within: func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
+		return db.WithContext(ctx).Transaction(fn)
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}

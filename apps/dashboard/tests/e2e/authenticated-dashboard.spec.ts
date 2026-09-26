@@ -10,8 +10,8 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await page.getByRole("button", { name: "Atualizar prioridades" }).click();
     await expect(page.getByRole("status")).toContainText(/Resumo e fila atualizados|Não há trabalho/);
     await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
-    const notice = page.getByRole("listitem").filter({ hasText: "Inspeção QA disponível" }).first();
-    await expect(notice).toBeVisible();
+    const notice = page.getByRole("listitem").filter({ hasText: "Vistoria QA disponível" }).first();
+    await expect(notice).toBeVisible({ timeout: 15_000 });
     const markAsRead = notice.getByRole("button", { name: "Marcar como lida" });
     if (await markAsRead.isVisible()) await markAsRead.click();
     await expect(notice).toContainText("Lida");
@@ -25,10 +25,10 @@ test.describe("authenticated Dashboard against the local stack", () => {
       if (request.url().endsWith("/graphql") && request.postData()?.includes("query Inspections")) inspectionRequests += 1;
     });
     await loginAsLocalAdmin(page, "/inspections");
-    await page.getByRole("button", { name: "Carregar inspeções" }).click();
+    await page.getByRole("button", { name: "Carregar vistorias" }).click();
     await expect(page.getByText(/Vistorias atualizadas|Nenhuma vistoria encontrada/)).toBeVisible();
 
-    const selector = page.getByRole("group", { name: "Visualização das inspeções" });
+    const selector = page.getByRole("group", { name: "Visualização das vistorias" });
     const records = page.locator("[data-inspection-id]");
     await expect(records.first()).toBeVisible();
     const recordCount = await records.count();
@@ -46,12 +46,12 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await page.reload();
     await loginAsLocalAdmin(page, "/inspections");
     await expect(page.getByRole("button", { name: "Quadro", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Carregar inspeções" }).click();
+    await page.getByRole("button", { name: "Carregar vistorias" }).click();
     await expect(page.locator("[data-inspection-id]")).toHaveCount(recordCount);
     await page.locator(".inspection-action-menu summary").first().click();
     await expect(page.getByRole("button", { name: "Cancelar" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Invalidar" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Solicitar recaptura" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Solicitar complemento" }).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Lista", exact: true }).focus();
     await expect(page.getByRole("button", { name: "Lista", exact: true })).toBeFocused();

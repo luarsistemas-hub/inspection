@@ -15,6 +15,7 @@ import (
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	notificationcore "inspection/services/inspection/internal/features/notifications/core"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
+	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -96,11 +97,19 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
 		return database.Schedule{}, fmt.Errorf("decode schedule template: %w", err)
 	}
-	if (document.ComparisonMode == catalog.FixedOrigin || document.ComparisonMode == catalog.PlannedStage || document.ComparisonMode == catalog.BeforeAfter) && in.ReferenceVersionID == nil {
+	if (document.ComparisonMode == catalog.PlannedStage || document.ComparisonMode == catalog.BeforeAfter) && in.ReferenceVersionID == nil {
 		return database.Schedule{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
 	}
 	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 		return database.Schedule{}, err
+	}
+	if document.ComparisonMode == catalog.FixedOrigin {
+		// Validate that an active origin exists without pinning it: each
+		// occurrence resolves the origin active at its own creation, so a later
+		// promotion does not break the remaining recurrences.
+		if _, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, TemplateID: in.TemplateID, VersionID: in.ReferenceVersionID}); err != nil {
+			return database.Schedule{}, err
+		}
 	}
 	next, err := recurrence.Next(in.StartsAt.Add(-time.Nanosecond))
 	if err != nil {
@@ -331,7 +340,7 @@ func (s Service) DispatchDueReminders(ctx context.Context, tenantID identity.ID,
 				correlationID = "reminder-" + plan.ID.String()
 			}
 			for _, target := range delivery {
-				_, err := s.Notifications.Send(notificationrequest.InTransaction(ctx, tx), notificationcore.Notification{TenantID: tenantID, InspectionID: &plan.InspectionID, InvitationID: &invitation.ID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "reminder", Version: "v1"}, Variables: map[string]string{"recipientName": participant.Name}, CorrelationID: correlationID, IdempotencyKey: plan.ID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: s.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+				_, err := s.Notifications.Send(notificationrequest.InTransaction(ctx, tx), notificationcore.Notification{TenantID: tenantID, InspectionID: &plan.InspectionID, InvitationID: &invitation.ID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "reminder", Version: "v1"}, Variables: map[string]string{"recipientName": participant.Name}, CorrelationID: correlationID, IdempotencyKey: notificationcore.RecipientIdempotencyKey(plan.ID, notificationcore.Channel(target.Channel), target.Destination), Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: s.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
 				if err != nil {
 					return err
 				}

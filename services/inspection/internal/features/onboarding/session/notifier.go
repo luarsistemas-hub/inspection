@@ -25,6 +25,9 @@ func (n RegistryNotifier) SendOTP(ctx context.Context, destination, code string)
 		},
 	})
 	if result.Status != "DELIVERED" {
+		if len(result.Attempts) > 0 && result.Attempts[0].Err != nil {
+			return fmt.Errorf("onboarding notifier: delivery failed: %w", result.Attempts[0].Err)
+		}
 		return errors.New("onboarding notifier: delivery failed")
 	}
 	return nil
@@ -65,6 +68,9 @@ func (n RegistryNotifier) SendActivationInvitation(ctx context.Context, destinat
 		},
 	})
 	if result.Status != "DELIVERED" {
+		if len(result.Attempts) > 0 && result.Attempts[0].Err != nil {
+			return fmt.Errorf("onboarding notifier: activation invitation delivery failed: %w", result.Attempts[0].Err)
+		}
 		return errors.New("onboarding notifier: activation invitation delivery failed")
 	}
 	return nil

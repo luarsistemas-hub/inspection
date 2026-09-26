@@ -89,7 +89,7 @@ func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore
 		return err
 	}
 	for _, target := range delivery {
-		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": recipientName}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: requestID.String() + ":" + target.Channel + ":" + target.Destination, Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": recipientName}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: notificationcore.RecipientIdempotencyKey(requestID, notificationcore.Channel(target.Channel), target.Destination), Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
 		if err != nil {
 			return err
 		}
