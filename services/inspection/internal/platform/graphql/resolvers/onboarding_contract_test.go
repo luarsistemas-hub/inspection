@@ -123,9 +123,9 @@ func TestOnboardingSessionWithExpiredCookieReturnsNullAndClearsCookie(t *testing
 }
 
 func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
-	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", Version: 2})
+	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", Version: 2, Owner: onboardingsession.Owner{Name: "Ana", Email: "ana@example.test"}})
 
-	if value == nil || value.Definition["schemaVersion"] != 1 || value.Definition["version"] != 3 {
+	if value == nil || value.Definition["schemaVersion"] != real_estate_catalog.DefinitionSchema || value.Definition["version"] != real_estate_catalog.DefinitionVersion {
 		t.Fatalf("session definition versions: %#v", value.Definition)
 	}
 	if value.Definition["segment"] != "REAL_ESTATE" || value.Definition["segmentVersion"] != "real-estate-v1" {
@@ -133,6 +133,9 @@ func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
 	}
 	if len(value.Definition["steps"].([]real_estate_catalog.Step)) == 0 || len(value.Definition["templates"].([]string)) != 2 {
 		t.Fatalf("session definition content: %#v", value.Definition)
+	}
+	if value.Owner == nil || value.Owner.Name != "Ana" || value.Owner.Email != "ana@example.test" {
+		t.Fatalf("session owner: %#v", value.Owner)
 	}
 }
 

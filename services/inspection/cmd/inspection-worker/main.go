@@ -24,6 +24,7 @@ import (
 	alertdelivery "inspection/services/inspection/internal/features/notifications/alert_delivery"
 	consumedelivery "inspection/services/inspection/internal/features/notifications/consume_delivery"
 	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
+	recordinapp "inspection/services/inspection/internal/features/notifications/record_in_app"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
@@ -191,6 +192,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	inAppNotification := recordinapp.Setup()
 	createReport, err := generatesnapshot.Setup(generatesnapshot.Dependencies{DB: db, Now: time.Now})
 	if err != nil {
 		return err
@@ -281,7 +283,7 @@ func run() error {
 			}
 		}
 		var jobs []database.ComparisonJob
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("requirement_key ASC").Find(&jobs).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND inspection_id=? AND id IN (SELECT DISTINCT ON (requirement_key) id FROM analysis.comparison_jobs WHERE tenant_id=? AND inspection_id=? ORDER BY requirement_key, created_at DESC, id DESC)", envelope.TenantID, payload.InspectionID, envelope.TenantID, payload.InspectionID).Order("requirement_key ASC").Find(&jobs).Error; err != nil {
 			return err
 		}
 		findings := make([]reportcore.Finding, 0)
@@ -391,9 +393,44 @@ func run() error {
 			return err
 		}
 		var class database.ClassificationRun
-		_ = tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").First(&class).Error
+		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").First(&class).Error; err != nil {
+			return err
+		}
 		row := database.DashboardInspection{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, AssetID: inspection.AssetID, Classification: class.Classification, Status: inspection.Status, Invalidated: inspection.Status == "INVALIDATED", Sequence: time.Now().UnixNano(), UpdatedAt: time.Now().UTC()}
-		return upsertDashboardInspection(tx.WithContext(ctx), row)
+		if err := upsertDashboardInspection(tx.WithContext(ctx), row); err != nil {
+			return err
+		}
+		var triage database.TriageCase
+		triageErr := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).First(&triage).Error
+		if triageErr != nil && triageErr != gorm.ErrRecordNotFound {
+			return triageErr
+		}
+		var snapshot database.ReportSnapshot
+		snapshotErr := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("version_number DESC").First(&snapshot).Error
+		if snapshotErr != nil && snapshotErr != gorm.ErrRecordNotFound {
+			return snapshotErr
+		}
+		if triageErr == gorm.ErrRecordNotFound && class.Classification != "CRITICAL" && class.Classification != "ATTENTION" {
+			return nil
+		}
+		if triageErr == nil && triage.Status == "ARCHIVED" {
+			return nil
+		}
+		now := time.Now().UTC()
+		if triageErr == gorm.ErrRecordNotFound {
+			triage = database.TriageCase{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Status: "NEW", Classification: class.Classification, ReasonCodes: class.ReasonCodes, ReportVersion: snapshot.VersionNumber, Version: 1, CreatedAt: now, UpdatedAt: now}
+			if err := tx.WithContext(ctx).Create(&triage).Error; err != nil {
+				return err
+			}
+			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "RESULT_READY", Body: fmt.Sprintf("Resultado %s · laudo v%d", class.Classification, snapshot.VersionNumber), CreatedAt: now}).Error
+		}
+		if snapshot.VersionNumber <= triage.ReportVersion {
+			return nil
+		}
+		if err := tx.WithContext(ctx).Model(&triage).Updates(map[string]any{"status": "IN_REVIEW", "classification": class.Classification, "reason_codes": class.ReasonCodes, "report_version": snapshot.VersionNumber, "version": triage.Version + 1, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "RESULT_READY", Body: fmt.Sprintf("Novo resultado %s · laudo v%d; revisão retomada.", class.Classification, snapshot.VersionNumber), CreatedAt: now}).Error
 	}
 	retentionHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {
@@ -439,17 +476,58 @@ func run() error {
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
 	}
 	handlers := map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error{
-		"origin.invitation_requested.v1":     invitationHandler,
-		"origin.promotion_requested.v1":      promotionHandler,
-		"media.verified.v1":                  mediaHandler,
-		"recapture.deadline_reached.v1":      deadlineHandler,
-		"capture.submitted.v1":               requestJobs,
-		"recapture.completed.v1":             requestJobs,
-		"analysis.comparison_requested.v1":   analysisRequestHandler,
-		"analysis.comparison_completed.v1":   classify,
-		"inspection.classified.v1":           classifiedHandler,
-		"report.snapshot_created.v1":         render,
-		"report.ready.v1":                    dashboardHandler,
+		"inspection.created.v1": inspectionCreatedHandler(inAppNotification),
+		"inspection.state_changed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			var payload struct {
+				InspectionID identity.ID `json:"inspectionId"`
+			}
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
+				return messaging.ErrPermanent
+			}
+			var inspection database.Inspection
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).Take(&inspection).Error; err != nil {
+				return err
+			}
+			if inspection.Status != "CANCELED" && inspection.Status != "INVALIDATED" {
+				return nil
+			}
+			var triage database.TriageCase
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Take(&triage).Error; err == gorm.ErrRecordNotFound {
+				return nil
+			} else if err != nil {
+				return err
+			}
+			if triage.Status == "ARCHIVED" {
+				return nil
+			}
+			now := time.Now().UTC()
+			if err := tx.WithContext(ctx).Model(&triage).Updates(map[string]any{"status": "ARCHIVED", "assignee_id": nil, "version": triage.Version + 1, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "ARCHIVED", Body: "Vistoria cancelada ou invalidada.", CreatedAt: now}).Error
+		},
+		"origin.invitation_requested.v1": invitationHandler,
+		"origin.promotion_requested.v1":  promotionHandler,
+		"media.verified.v1":              mediaHandler,
+		"recapture.deadline_reached.v1":  deadlineHandler,
+		"recapture.requested.v1":         inAppNotification,
+		"capture.submitted.v1":           requestJobs,
+		"recapture.completed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			if err := requestJobs(ctx, tx, envelope); err != nil {
+				return err
+			}
+			return inAppNotification(ctx, tx, envelope)
+		},
+		"analysis.comparison_requested.v1": analysisRequestHandler,
+		"analysis.comparison_completed.v1": classify,
+		"inspection.classified.v1":         classifiedHandler,
+		"report.snapshot_created.v1":       render,
+		"report.ready.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			if err := dashboardHandler(ctx, tx, envelope); err != nil {
+				return err
+			}
+			return inAppNotification(ctx, tx, envelope)
+		},
 		"notification.delivery_requested.v2": consumedelivery.Setup(),
 		"notification.delivery_terminal.v1":  terminalAlert,
 		"retention.purge_due.v1":             retentionHandler,
@@ -496,6 +574,15 @@ func run() error {
 			return err
 		}
 	})
+}
+
+func inspectionCreatedHandler(inApp func(context.Context, *gorm.DB, events.RawEnvelope) error) func(context.Context, *gorm.DB, events.RawEnvelope) error {
+	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+		if err := consumeevents.HandleLifecycleEvent(ctx, tx, envelope); err != nil {
+			return err
+		}
+		return inApp(ctx, tx, envelope)
+	}
 }
 
 // operationalNotificationGateway composes operational providers in the worker

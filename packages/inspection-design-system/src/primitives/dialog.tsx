@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
-export type DialogProps = { children: ReactNode; isOpen: boolean; onClose: () => void; title: string };
+export type DialogProps = { children: ReactNode; isOpen: boolean; onClose: () => void; title: string; size?: "default" | "wide" };
 
 /** Provides a modal dialog with Escape handling and initial focus for keyboard users. */
-export function Dialog({ children, isOpen, onClose, title }: DialogProps) {
+export function Dialog({ children, isOpen, onClose, title, size = "default" }: DialogProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -13,6 +13,8 @@ export function Dialog({ children, isOpen, onClose, title }: DialogProps) {
   useEffect(() => {
     if (!isOpen) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     dialogRef.current?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -41,6 +43,7 @@ export function Dialog({ children, isOpen, onClose, title }: DialogProps) {
     window.addEventListener("keydown", keydown);
     return () => {
       window.removeEventListener("keydown", keydown);
+      document.body.style.overflow = previousOverflow;
       if (openerRef.current && document.contains(openerRef.current)) {
         openerRef.current.focus();
       }
@@ -50,7 +53,7 @@ export function Dialog({ children, isOpen, onClose, title }: DialogProps) {
 
   if (!isOpen) return null;
   return <div className="inspection-backdrop" onMouseDown={onClose}>
-    <div aria-labelledby={titleId} aria-modal="true" className="inspection-dialog" onMouseDown={(event) => event.stopPropagation()} ref={dialogRef} role="dialog" tabIndex={-1}>
+    <div aria-labelledby={titleId} aria-modal="true" className={`inspection-dialog${size === "wide" ? " inspection-dialog--wide" : ""}`} onMouseDown={(event) => event.stopPropagation()} ref={dialogRef} role="dialog" tabIndex={-1}>
       <h2 id={titleId}>{title}</h2>
       {children}
     </div>

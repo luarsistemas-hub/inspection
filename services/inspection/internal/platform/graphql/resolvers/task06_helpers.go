@@ -122,7 +122,24 @@ func mapRecipientNotification(row database.RecipientNotification) *graphql1.Reci
 		value := row.ReadAt.UTC().Format(time.RFC3339Nano)
 		readAt = &value
 	}
-	return &graphql1.RecipientNotification{ID: row.ID.String(), Kind: row.Kind, Title: row.Title, Body: row.Body, ResourceKind: row.ResourceKind, ResourceID: resourceID, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), ReadAt: readAt}
+	action := "NONE"
+	priority := "NORMAL"
+	switch row.Kind {
+	case "INSPECTION_INVITED", "INSPECTION_CREATED", "INSPECTION_OVERDUE", "INSPECTION_DEADLINE", "RECAPTURE_REQUESTED", "RECAPTURE_COMPLETED", "RECAPTURE_EXPIRED":
+		action = "OPEN_INSPECTION"
+	case "TRIAGE_ASSIGNED", "TRIAGE_REVIEW_REQUIRED":
+		action = "OPEN_TRIAGE"
+	case "SCHEDULE_CREATED", "SCHEDULE_CHANGED", "SCHEDULE_CANCELED":
+		action = "OPEN_SCHEDULE"
+	case "REPORT_READY", "REPORT_PUBLISHED":
+		action = "OPEN_REPORT"
+	case "RESPONSIBLE_EMAIL_DELIVERY":
+		action = "OPEN_DELIVERY"
+	}
+	if row.Kind == "RESPONSIBLE_EMAIL_DELIVERY" || row.Kind == "INSPECTION_OVERDUE" {
+		priority = "ATTENTION"
+	}
+	return &graphql1.RecipientNotification{ID: row.ID.String(), Kind: row.Kind, Title: row.Title, Body: row.Body, ResourceKind: row.ResourceKind, ResourceID: resourceID, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), ReadAt: readAt, Action: action, Context: map[string]any{}, Priority: priority}
 }
 
 // mapNotificationChannelDelivery deliberately projects only operational state

@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 const routes = [
-  ["E2E-005–008", "/organization", "Organização"], ["E2E-009–013", "/access", "Acessos"],
-  ["E2E-014–017", "/catalogs", "Catálogos"], ["E2E-016", "/assets", "Ativos"], ["E2E-018–021", "/governance", "Governança"], ["E2E-022", "/audit", "Auditoria"], ["E2E-LLM-001", "/llm-usage", "Consumo de LLM"]
+  ["E2E-001–004", "/overview", "Visão administrativa"], ["E2E-005–008", "/organization", "Organização"], ["E2E-009–013", "/access", "Acessos"],
+  ["E2E-014–017", "/catalogs", "Catálogos"], ["E2E-016", "/assets", "Ativos"], ["E2E-018–021", "/governance", "Governança"], ["E2E-022", "/audit", "Auditoria"], ["E2E-LLM-001", "/llm-usage", "Consumo de LLM"],
+  ["E2E-ADMIN-PROMPTS", "/prompts", "Prompts de análise"], ["E2E-ADMIN-TENANT", "/tenants/playwright-smoke", "Detalhes da organização"]
 ] as const;
 
 for (const [caseID, route, heading] of routes) test(`${caseID} keeps ${heading} behind the Admin guard`, async ({ page }) => {

@@ -4,6 +4,11 @@ export type OnboardingField = { key: string; label: string; type: string; requir
 export type OnboardingStep = { key: string; label: string; position: number; required: boolean; fields: OnboardingField[] };
 export type OnboardingDefinition = { schemaVersion: number; segment: string; steps: OnboardingStep[]; originModes: Array<{ key: string; label: string; required: boolean }> };
 export type StepValues = Record<string, string>;
+export type OnboardingOwner = { name: string; email: string };
+
+export function valuesForParticipantMode(values: StepValues, mode: string, owner: OnboardingOwner): StepValues {
+  return mode === "SELF" ? { ...values, mode, name: owner.name, email: owner.email } : { ...values, mode };
+}
 
 export function isSupportedDefinition(definition: OnboardingDefinition) {
   return definition.schemaVersion === 1 && definition.segment === "REAL_ESTATE" && definition.steps.length > 0;

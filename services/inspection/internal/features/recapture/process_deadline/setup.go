@@ -38,7 +38,24 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			return nil
 		}
 		service := core.Service{DB: tx, Now: d.Now}
-		_, err := service.FinalizeTx(tx, envelope.TenantID, payload.RequestID, false)
-		return err
+		request, err := service.FinalizeTx(tx, envelope.TenantID, payload.RequestID, false)
+		if err != nil {
+			return err
+		}
+		var triage database.TriageCase
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, request.InspectionID).First(&triage).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil
+			}
+			return err
+		}
+		if triage.Status != "AWAITING_EVIDENCE" {
+			return nil
+		}
+		now := d.Now().UTC()
+		if err := tx.Model(&triage).Updates(map[string]any{"status": "IN_REVIEW", "version": triage.Version + 1, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "EVIDENCE_EXPIRED", Body: "O prazo do complemento expirou; o caso retornou à revisão sem novas evidências.", CreatedAt: now}).Error
 	}, nil
 }

@@ -7,14 +7,17 @@ import { beginPKCE } from "@/auth/pkce";
 import { clearSession, getMembershipId, selectMembership, setIdentity, type DashboardIdentity } from "@/auth/session";
 import { composeCapabilities, type Capability } from "@/features/dashboard/capabilities";
 import { filterInspections, InspectionViewSelector, InspectionViews, useInspectionView, type InspectionActionHandlers, type InspectionColumnKey } from "@/features/dashboard/inspection-views";
+import { SchedulesJourney } from "@/features/dashboard/schedules-journey";
+import { ReportsJourney } from "@/features/dashboard/reports-journey";
+import { TriageJourney } from "@/features/dashboard/triage-journey";
 import { useNotifications } from "@/features/notifications/use-notifications";
 import { deliveryPresentation } from "@/features/notifications/delivery-status";
-import { Combobox, type ComboboxOption } from "@inspection/design-system";
+import { Combobox, Dialog, type ComboboxOption } from "@inspection/design-system";
 import {
-  AddExceptionalStageDocument, CancelInspectionDocument, CancelScheduleDocument, CloseProjectDocument, CreateInspectionDocument, CreateProjectDocument, CreateScheduleDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
+  AddExceptionalStageDocument, CancelInspectionDocument, CloseProjectDocument, CreateInspectionDocument, CreateProjectDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
   CustomerTimelineDocument, DashboardFormOptionsDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, OperationalOverviewDocument, OriginPromotionDocument, PromoteInspectionPhotosDocument, ProjectDetailDocument,
-  InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, ReportWorkspaceDocument, RequestRecaptureDocument, SchedulesDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument, UpdateScheduleDocument,
-  type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardFormOptionsQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type InspectionsQuery, type OperationalOverviewQuery, type OriginPromotionQuery, type ProjectsQuery, type ReportDownloadQuery, type ReportWorkspaceQuery, type SchedulesQuery,
+  InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, RequestRecaptureDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument,
+  type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardFormOptionsQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type InspectionsQuery, type OperationalOverviewQuery, type OriginPromotionQuery, type ProjectsQuery, type ReportDownloadQuery,
 } from "@/graphql/generated";
 import { graphql, type GraphQLFailure } from "@/graphql/client";
 import { presentClassification, presentDashboardStatus, presentNotificationChannel, presentProjectStage, presentReportMode } from "./presentation";
@@ -30,6 +33,7 @@ export function DashboardShell({ section }: { section: Page }) {
   const [capability, setCapability] = useState<Capability>();
   const [memberships, setMemberships] = useState<DashboardMembershipsQuery["me"]["memberships"]>([]);
   const [message, setMessage] = useState("Verificando acesso…");
+  const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
 
   const loadGate = useCallback(async () => {
     try {
@@ -58,22 +62,29 @@ export function DashboardShell({ section }: { section: Page }) {
   const switchMembership = (membershipId: string) => { selectMembership(membershipId); setCurrentIdentity(undefined); setCapability(undefined); setMessage("Trocando o contexto de acesso. Dados protegidos anteriores foram removidos."); void loadGate(); };
 
   if (!identity || !capability) return <main className="denial"><h1>Painel</h1><p role="status">{message}</p>{memberships.length > 0 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}{memberships.length === 0 && <button onClick={signIn}>Entrar no Painel</button>}</main>;
-  return <main><header><strong>Inspection <span>/ Painel</span></strong><div className="dashboard-context">{memberships.length > 1 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}<span>{identity.tenantName}</span><span className="dashboard-role">{capability.audience === "customer" ? "Cliente" : "Operação"}</span><span className="dashboard-avatar" aria-label={`Contexto ${identity.tenantName}`}>{tenantInitials(identity.tenantName)}</span></div></header><nav aria-label="Painel"><p className="dashboard-nav-label">Área operacional</p>{capability.links.map(([label, href]) => <Link key={href} aria-current={pathname === href ? "page" : undefined} href={href}>{label}{label === "Notificações" && notifications.unreadCount > 0 ? ` (${notifications.unreadCount})` : ""}</Link>)}<p className="dashboard-nav-label dashboard-nav-label--context">Contexto protegido</p><span className="dashboard-nav-context">{identity.tenantName}</span>{capability.canUseAdmin && <a href={process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000"}>Abrir Administração</a>}</nav><section>{section !== "Vistorias" && <div className="actions"><h1>{section}</h1><button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); }}>Atualizar</button></div>}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
+  return <main><header><strong>Inspection <span>/ Painel</span></strong><div className="dashboard-context">{memberships.length > 1 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}<span>{identity.tenantName}</span><span className="dashboard-role">{capability.audience === "customer" ? "Cliente" : "Operação"}</span><span className="dashboard-avatar" aria-label={`Contexto ${identity.tenantName}`}>{tenantInitials(identity.tenantName)}</span></div></header><nav aria-label="Painel"><p className="dashboard-nav-label">Área operacional</p>{capability.links.map(([label, href]) => <Link key={href} aria-current={pathname === href ? "page" : undefined} href={href}>{label}{label === "Notificações" && notifications.unreadCount > 0 ? ` (${notifications.unreadCount})` : ""}</Link>)}<p className="dashboard-nav-label dashboard-nav-label--context">Contexto protegido</p><span className="dashboard-nav-context">{identity.tenantName}</span>{capability.canUseAdmin && <a href={process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000"}>Abrir Administração</a>}</nav><section>{section !== "Vistorias" && <div className={`actions${section === "Laudos" ? " report-page-heading" : ""}`}><h1>{section}</h1><button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); if (capability.audience === "internal" && section === "Laudos") setReportsRefreshKey((value) => value + 1); }}>Atualizar</button></div>}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} reportsRefreshKey={reportsRefreshKey} notifications={notifications} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
 }
 
 function MembershipPicker({ memberships, selected, onChange }: { memberships: DashboardMembershipsQuery["me"]["memberships"]; selected?: string; onChange: (id: string) => void }) {
   return <label className="membership">Contexto de acesso<select aria-label="Contexto de acesso" value={selected ?? ""} onChange={(event) => onChange(event.target.value)}><option value="" disabled>Selecione</option>{memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.role === "CUSTOMER_VIEWER" ? "Visualizador cliente" : membership.role === "VIEWER" ? "Visualizador" : membership.role === "MANAGER" ? "Gestor" : "Perfil de acesso"} · {membership.tenantId}</option>)}</select></label>;
 }
 
-function OperationsDashboard({ section, capability }: { section: Page; capability: Capability }) {
+function OperationsDashboard({ section, capability, reportsRefreshKey, notifications }: { section: Page; capability: Capability; reportsRefreshKey: number; notifications: ReturnType<typeof useNotifications> }) {
   const needsFormOptions = capability.canMutate && ["Agenda de vistorias", "Vistorias", "Projetos e etapas"].includes(section);
   const formOptions = useDashboardFormOptions(needsFormOptions);
   if (section === "Agenda de vistorias") return <SchedulesJourney canMutate={capability.canMutate} options={formOptions} />;
   if (section === "Vistorias") return <InspectionsJourney canMutate={capability.canMutate} canPromoteOrigin={capability.canPromoteOrigin} options={formOptions} />;
   if (section === "Projetos e etapas") return <ProjectsJourney canMutate={capability.canMutate} options={formOptions} />;
-  if (section === "Laudos") return <ReportsJourney canPublish={capability.canPublish} />;
+  if (section === "Laudos") return <ReportsJourney canPublish={capability.canPublish} refreshKey={reportsRefreshKey} />;
+  if (section === "Triagem") return <TriageJourney capability={capability} />;
   if (section === "Notificações") return null;
-  return <OverviewJourney />;
+  return <>{section === "Início" && <NotificationSummary notifications={notifications} />}<OverviewJourney /></>;
+}
+
+function NotificationSummary({ notifications }: { notifications: ReturnType<typeof useNotifications> }) {
+  const items = notifications.items.slice(0, 3);
+  if (notifications.unreadCount === 0) return null;
+  return <aside className="notification-summary" aria-label="Notificações importantes"><div><strong>{notifications.unreadCount} notificações não lidas</strong><Link href="/notifications">Abrir central</Link></div>{items.map((item) => <Link key={item.id} href={notificationHref(item.action, item.resourceId) ?? "/notifications"} onClick={() => void notifications.markRead(item.id)}><span>{item.title}</span><small>{item.context.assetName ? String(item.context.assetName) : item.body}</small></Link>)}</aside>;
 }
 
 type FormOptionsState = { data?: DashboardFormOptionsQuery; loading: boolean; error?: string };
@@ -107,8 +118,6 @@ function entityOptions(options: FormOptionsState["data"], kind: "asset" | "parti
   return options.templates.nodes.filter((item) => item.activeVersionId && (!asset || item.segmentVersionId === asset.segmentVersionId)).map((item) => ({ value: item.id, label: item.name, description: item.key }));
 }
 
-const timezoneOptions: ComboboxOption[] = ["UTC", ...(typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone").filter((zone) => zone !== "UTC") : ["America/Sao_Paulo", "America/New_York", "Europe/Lisbon"])].map((zone) => ({ value: zone, label: zone }));
-
 function RelationshipField({ label, value, onChange, options, required = false, disabled = false }: { label: string; value: string; onChange: (value: string) => void; options: ComboboxOption[]; required?: boolean; disabled?: boolean }) {
   return <label>{label}<Combobox value={value} options={options} onChange={onChange} required={required} disabled={disabled} aria-label={label} /></label>;
 }
@@ -119,15 +128,6 @@ function OverviewJourney() {
   const load = async () => { try { const next = await loadOverview(); setData(next); setMessage(next.triageInspections.nodes.length ? "Resumo e fila atualizados com o mesmo filtro." : "Não há itens para os filtros selecionados."); } catch (error) { setMessage(`Dados exibidos podem estar desatualizados. ${(error as Error).message}`); } };
   return <div className="feature"><p>Resumo e triagem usam o mesmo filtro e contexto de servidor. A fila é somente leitura para o perfil Visualizador; a autorização é sempre revalidada no servidor.</p><div className="filters"><label>Classificação<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="">Todas</option><option value="CRITICAL">Crítica</option><option value="ATTENTION">Atenção</option></select></label><label>Situação<input value={status} onChange={(event) => setStatus(event.target.value)} placeholder="Código da situação, por exemplo PENDING" /></label><button onClick={() => void load()}>Atualizar prioridades</button></div><p role="status">{message}</p>{data && <><div className="cards">{Object.entries(data.dashboardSummary).map(([name, value]) => <article className="card" key={name}><strong>{presentClassification(name) === "Situação não reconhecida" ? "Resumo geral" : presentClassification(name)}</strong><div>{value}</div></article>)}</div><Collection items={data.triageInspections.nodes.map((item) => ({ id: item.inspectionId, title: `${presentClassification(item.classification)} · ${presentDashboardStatus(item.status)}`, detail: `Atualizado em ${item.updatedAt}` }))} /></>}</div>;
 }
-
-function SchedulesJourney({ canMutate, options }: { canMutate: boolean; options: FormOptionsState }) {
-  const [data, setData] = useState<SchedulesQuery>(); const [message, setMessage] = useState("Agendas futuras preservam vistorias históricas após cancelamento.");
-  const load = async () => { try { const next = await graphql<SchedulesQuery, { after: string | null }>(SchedulesDocument, { after: null }); setData(next); setMessage(next.schedules.nodes.length ? "Agendas atualizadas." : "Nenhuma agenda encontrada. Crie uma agenda após configurar dependências elegíveis."); } catch (error) { setMessage((error as Error).message); } };
-  const mutate = async (document: typeof CreateScheduleDocument | typeof UpdateScheduleDocument | typeof CancelScheduleDocument, input: Record<string, unknown>) => { try { const result = await graphql(document as never, { input } as never); const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> }; setMessage(payload.userErrors?.length ? formatMutationErrors(payload.userErrors) : "Agenda salva. Atualizando dados…"); if (!payload.userErrors?.length) await load(); } catch (error) { setMessage(formatFailure(error)); } };
-  return <div className="feature"><p>Criação e atualização mostram recorrência, prazo, lembretes, próxima ocorrência e versão. Conflitos preservam os valores enviados para recuperação.</p>{canMutate && <><FormOptionsNotice options={options} />{options.data && <ScheduleForm options={options.data} onSubmit={(input) => void mutate(CreateScheduleDocument, input)} />}</>}<button onClick={() => void load()}>Carregar agendas</button><p role="status">{message}</p>{data && <ul className="collection">{data.schedules.nodes.map((item) => <li key={item.id}><strong>{presentDashboardStatus(item.status)} · próxima: {item.nextDueAt}</strong><span>Regra de repetição: {item.rrule} · {item.timezone} · v{item.version}</span>{canMutate && <div className="actions"><button onClick={() => void mutate(UpdateScheduleDocument, { scheduleId: item.id, expectedVersion: item.version, clientMutationId: mutationId(), rrule: item.rrule, timezone: item.timezone, startsAt: item.startsAt, deadlineMinutes: item.deadlineMinutes, reminderOffsetsMinutes: item.reminderOffsetsMinutes })}>Salvar configuração atual</button><button className="secondary" onClick={() => { if (window.confirm("Cancelar esta agenda? As vistorias históricas serão preservadas.")) void mutate(CancelScheduleDocument, { scheduleId: item.id, expectedVersion: item.version, clientMutationId: mutationId() }); }}>Cancelar agenda</button></div>}</li>)}</ul>}</div>;
-}
-
-function ScheduleForm({ onSubmit, options }: { onSubmit: (input: Record<string, unknown>) => void; options: DashboardFormOptionsQuery }) { const [assetId, setAssetId] = useState(""); const [participantId, setParticipantId] = useState(""); const [templateId, setTemplateId] = useState(""); const [rrule, setRrule] = useState("FREQ=MONTHLY"); const [startsAt, setStartsAt] = useState(""); const [timezone, setTimezone] = useState("UTC"); const [deadlineMinutes, setDeadlineMinutes] = useState("60"); const [reminders, setReminders] = useState("30"); const participants = entityOptions(options, "participant", assetId); const templates = entityOptions(options, "template", assetId); useEffect(() => { if (participantId && !participants.some((option) => option.value === participantId)) setParticipantId(""); if (templateId && !templates.some((option) => option.value === templateId)) setTemplateId(""); }, [assetId, participantId, participants, templateId, templates]); return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ assetId, participantId, templateId, rrule, startsAt, timezone, deadlineMinutes: Number(deadlineMinutes), reminderOffsetsMinutes: parseNumbers(reminders), referenceVersionId: null, clientMutationId: mutationId() }); }}><h2>Nova agenda</h2><RelationshipField label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={entityOptions(options, "asset")} required /><RelationshipField label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={participants} required disabled={!assetId} /><RelationshipField label="Modelo de vistoria" value={templateId} onChange={setTemplateId} options={templates} required disabled={!assetId} /><Field label="Início" value={startsAt} onChange={setStartsAt} type="datetime-local" required /><RelationshipField label="Fuso horário" value={timezone} onChange={setTimezone} options={timezoneOptions} required /><Field label="Regra de repetição" value={rrule} onChange={setRrule} required /><Field label="Prazo (minutos)" value={deadlineMinutes} onChange={setDeadlineMinutes} type="number" required /><Field label="Lembretes (minutos, separados por vírgula)" value={reminders} onChange={setReminders} required /><button type="submit">Criar agenda</button></form>; }
 
 function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutate: boolean; canPromoteOrigin: boolean; options: FormOptionsState }) {
   const params = useSearchParams(); const [data, setData] = useState<InspectionsQuery>(); const [message, setMessage] = useState("Carregando vistorias…"); const [query, setQuery] = useState(""); const [statusFilter, setStatusFilter] = useState<InspectionColumnKey | "todas">("todas"); const selected = params.get("inspectionId"); const [view, setView] = useInspectionView();
@@ -168,20 +168,6 @@ function ProjectsJourney({ canMutate, options }: { canMutate: boolean; options: 
 
 function ProjectForm({ onSubmit, options }: { onSubmit: (input: Record<string, unknown>) => void; options: DashboardFormOptionsQuery }) { const [assetId, setAssetId] = useState(""); const [participantId, setParticipantId] = useState(""); const [templateId, setTemplateId] = useState(""); const participants = entityOptions(options, "participant", assetId); const templates = entityOptions(options, "template", assetId); useEffect(() => { if (participantId && !participants.some((option) => option.value === participantId)) setParticipantId(""); if (templateId && !templates.some((option) => option.value === templateId)) setTemplateId(""); }, [assetId, participantId, participants, templateId, templates]); return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ assetId, participantId, templateId: templateId || null, clientMutationId: mutationId() }); }}><h2>Novo projeto</h2><RelationshipField label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={entityOptions(options, "asset")} required /><RelationshipField label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={participants} required disabled={!assetId} /><RelationshipField label="Modelo de vistoria (opcional)" value={templateId} onChange={setTemplateId} options={templates} disabled={!assetId} /><button type="submit">Criar projeto</button></form>; }
 
-function ReportsJourney({ canPublish }: { canPublish: boolean }) {
-  const params = useSearchParams(); const inspectionId = params.get("inspectionId"); const [message, setMessage] = useState("Selecione uma vistoria para abrir o laudo versionado."); const [data, setData] = useState<ReportWorkspaceQuery | null>(); const [download, setDownload] = useState<ReportDownloadQuery["reportDownload"]>(); const [inspections, setInspections] = useState<InspectionsQuery["inspections"]["nodes"]>([]); const [inspectionMessage, setInspectionMessage] = useState("Carregando vistorias disponíveis…");
-  const mediaRefreshes = useRef(0);
-  const loadInspections = useCallback(async () => { try { const next = await graphql<InspectionsQuery, { after: string | null; history: boolean }>(InspectionsDocument, { after: null, history: true }); setInspections(next.inspections.nodes); setInspectionMessage(next.inspections.nodes.length ? "Selecione uma vistoria para consultar o laudo." : "Nenhuma vistoria encontrada neste contexto."); } catch (error) { setInspectionMessage((error as Error).message); } }, []);
-  const load = useCallback(async (): Promise<ReportWorkspaceQuery | null> => inspectionId ? graphql<ReportWorkspaceQuery, { inspectionId: string; version: number | null }>(ReportWorkspaceDocument, { inspectionId, version: null }) : null, [inspectionId]);
-  const open = useCallback(async () => { try { const next = await load(); setData(next); setMessage(next?.report ? "Laudo, evidências e constatações carregados." : "Laudo ainda não está pronto ou não está disponível."); } catch (error) { setMessage((error as Error).message); } }, [load]);
-  useEffect(() => { void loadInspections(); }, [loadInspections]); useEffect(() => { mediaRefreshes.current = 0; if (inspectionId) void open(); }, [inspectionId, open]);
-  const report = data?.report;
-  const refreshExpiredMedia = useCallback(() => { if (mediaRefreshes.current > 0) return; mediaRefreshes.current += 1; void open(); }, [open]);
-  const prepareDownload = async () => { if (!report) return; setDownload(undefined); setMessage("Preparando o download PDF…"); try { const next = await graphql<ReportDownloadQuery, { snapshotId: string }>(ReportDownloadDocument, { snapshotId: report.id }); setDownload(next.reportDownload); setMessage(next.reportDownload ? `Download PDF: ${presentDashboardStatus(next.reportDownload.status)}.` : "O PDF ainda não está disponível."); } catch (error) { setMessage((error as Error).message); } };
-  const mutate = async (document: typeof PublishReportDocument | typeof InvalidateReportPublicationDocument, input: Record<string, unknown>) => { try { const result = await graphql(document as never, { input } as never); const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> }; setMessage(payload.userErrors?.length ? formatMutationErrors(payload.userErrors) : "Publicação atualizada. Recarregue para confirmar o estado atual."); if (!payload.userErrors?.length) await open(); } catch (error) { setMessage(formatFailure(error)); } };
-  return <div className="feature"><p>As evidências são reautorizadas ao abrir e as fotos pertencem ao conteúdo do laudo, não apenas ao download.</p><section className="card" aria-labelledby="report-inspection-selection"><h2 id="report-inspection-selection">Vistorias</h2><p role="status">{inspectionMessage}</p>{inspections.length > 0 && <ul className="collection">{inspections.map((inspection) => <li key={inspection.id}><strong>{inspection.status === "COMPLETED" ? "Vistoria concluída" : "Vistoria"}</strong><span>{presentDashboardStatus(inspection.status)} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span>{inspection.status === "COMPLETED" ? <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo →</Link> : <span>Laudo disponível após a conclusão</span>}</li>)}</ul>}</section><button disabled={!inspectionId} onClick={() => void open()}>Abrir laudo</button><p role="status">{message}</p>{report && <><ReportVisual report={report} onDownload={() => void prepareDownload()} onMediaError={refreshExpiredMedia} />{download && <div className="download-status"><p>PDF: {presentDashboardStatus(download.status)}</p><p>Digest de integridade: {download.sha256 ?? "indisponível"}</p>{download.url && <a href={download.url} target="_blank" rel="noreferrer">Baixar PDF</a>}</div>}<details><summary>Informações técnicas</summary><p>Digest canônico: {report.jsonDigest}</p><p>Digest renderizado: {report.htmlDigest}</p><pre>{JSON.stringify(report.canonicalJSON, null, 2)}</pre></details>{canPublish && <div className="actions"><button onClick={() => void mutate(PublishReportDocument, { inspectionId: report.inspectionId, snapshotId: report.id, clientMutationId: mutationId() })}>Publicar laudo</button><button className="secondary" onClick={() => { const reason = window.prompt("Motivo da invalidação"); if (reason) void mutate(InvalidateReportPublicationDocument, { publicationId: report.id, expectedVersion: report.version, reason, clientMutationId: mutationId() }); }}>Invalidar publicação</button></div>}</>}</div>;
-}
-
 function CustomerPortal({ section }: { section: Page }) {
   const params = useSearchParams(); const [message, setMessage] = useState("Esta experiência usa somente projeções de cliente aprovadas pelo servidor."); const [portfolio, setPortfolio] = useState<CustomerPortfolioQuery>();
   async function loadPortfolio(): Promise<CustomerPortfolioQuery> { return graphql<CustomerPortfolioQuery, { after: string | null }>(CustomerPortfolioDocument, { after: null }); }
@@ -201,13 +187,107 @@ function CustomerReportJourney({ inspectionId }: { inspectionId: string | null }
 }
 
 function NotificationCenter({ notifications }: { notifications: ReturnType<typeof useNotifications> }) {
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const visible = notifications.items.filter((item) => !unreadOnly || !item.readAt);
-  return <div className="feature"><label><input type="checkbox" checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} /> Mostrar apenas não lidas</label>{visible.length ? <ul>{visible.map((notice) => <li key={notice.id}><strong>{notice.title}</strong><p>{notice.body}</p>{notice.readAt ? "Lida" : <button onClick={() => void notifications.markRead(notice.id)}>Marcar como lida</button>}</li>)}</ul> : <p role="status">Não há notificações neste filtro.</p>}{notifications.deliveryVisibility && <section aria-labelledby="delivery-status-heading" className="notification-deliveries"><h2 id="delivery-status-heading">Estado das entregas</h2><p>Solicitada, em processamento, aceita, enviada e entregue são etapas diferentes. O status de aceite não confirma recebimento.</p>{notifications.deliveries.length ? <ul data-testid="notification-delivery-list">{notifications.deliveries.map((delivery) => { const presentation = deliveryPresentation(delivery.aggregateStatus, delivery.channels); return <li key={delivery.id} data-testid={`notification-delivery-${delivery.id}`}><strong data-testid={`notification-delivery-state-${delivery.id}`}>{presentation.label}</strong><p>{presentation.description}</p>{presentation.partial && <p data-testid={`notification-delivery-partial-${delivery.id}`}><strong>Entrega parcial:</strong> nem todos os canais foram confirmados.</p>}{presentation.retryExhausted && <p><strong>Tentativas esgotadas:</strong> a próxima ação exige revisão operacional.</p>}{presentation.needsReview && <p><strong>Revisão necessária:</strong> não presuma entrega nem reenvie automaticamente.</p>}<ul aria-label={`Canais da entrega ${delivery.id}`}>{delivery.channels.map((channel) => { const channelState = deliveryPresentation(channel.status, [channel]); return <li key={channel.id} data-testid={`notification-channel-${channel.id}`}><strong>{presentNotificationChannel(channel.channel)}: {channelState.label}</strong><span> · {channel.attempts} tentativa(s)</span>{channel.lastAttemptAt && <span> · última tentativa em {new Date(channel.lastAttemptAt).toLocaleString("pt-BR")}</span>}</li>; })}</ul></li>; })}</ul> : <p role="status">Não há entregas operacionais neste contexto.</p>}{notifications.hasMoreDeliveries && <button className="secondary" onClick={() => void notifications.loadMoreDeliveries()}>Carregar mais entregas</button>}</section>}<p>Links são autorizados novamente ao abrir. Preferências externas aceitam somente destinos verificados; avisos obrigatórios no produto permanecem ativos.</p></div>;
+  const [deliveriesOpen, setDeliveriesOpen] = useState(false);
+  const showingAll = notifications.filter === "all";
+  const kinds = [...new Set(notifications.items.map((item) => item.kind))];
+  const projects = [...new Set(notifications.items.map((item) => String(item.context.projectId ?? "")).filter(Boolean))];
+  const groups = groupNotificationsByDay(notifications.items);
+  const openDeliveries = () => {
+    setDeliveriesOpen(true);
+    void notifications.loadDeliveries();
+  };
+
+  return <div className="feature notifications-page">
+    <div className="notification-toolbar">
+      <div className="notification-tabs" role="group" aria-label="Filtro de notificações">
+        <button type="button" aria-pressed={!showingAll} onClick={() => notifications.changeFilter("unread")}>Não lidas ({notifications.unreadCount})</button>
+        <button type="button" aria-pressed={showingAll} onClick={() => notifications.changeFilter("all")}>Todas</button>
+      </div>
+      <label>Tipo<select aria-label="Filtrar por tipo" value={notifications.kindFilter} onChange={(event) => notifications.changeKindFilter(event.target.value)}><option value="">Todos os tipos</option>{kinds.map((kind) => <option key={kind} value={kind}>{notificationKindLabel(kind)}</option>)}</select></label>
+      {projects.length > 0 && <label>Projeto<select aria-label="Filtrar por projeto" value={notifications.projectFilter} onChange={(event) => notifications.changeProjectFilter(event.target.value)}><option value="">Todos os projetos</option>{projects.map((project) => <option key={project} value={project}>{project.slice(0, 8)}</option>)}</select></label>}
+      {notifications.unreadCount > 0 && <button className="secondary" disabled={notifications.readingAll} onClick={() => void notifications.markAllRead()}>{notifications.readingAll ? "Marcando…" : "Marcar todas como lidas"}</button>}
+      {notifications.deliveryVisibility && <button className="secondary notification-delivery-button" onClick={openDeliveries}>Acompanhar envios</button>}
+    </div>
+    {notifications.items.length ? <div aria-label="Lista de notificações">{groups.map(([label, items]) => <section className="notification-day-group" key={label}><h2>{label}</h2><ul className="notifications-list">{groupNotificationItems(items).map((group) => <NotificationCard key={group[0].id} notices={group} notifications={notifications} openDeliveries={openDeliveries} />)}</ul></section>)}</div> : <p className="notification-empty" role="status">{notifications.loadingNotifications ? "Carregando notificações…" : showingAll ? "Não há notificações." : "Não há notificações não lidas."}</p>}
+    {notifications.hasMoreNotifications && <button className="secondary notification-load-more" disabled={notifications.loadingMoreNotifications} onClick={() => void notifications.loadMoreNotifications()}>{notifications.loadingMoreNotifications ? "Carregando…" : "Carregar mais"}</button>}
+    <Dialog isOpen={deliveriesOpen} onClose={() => setDeliveriesOpen(false)} title="Estado das entregas">
+      <div className="notification-deliveries">
+        <p>Solicitada, em processamento, aceita, enviada e entregue são etapas diferentes. O status de aceite não confirma recebimento.</p>
+        {notifications.loadingDeliveries ? <p role="status">Carregando entregas…</p> : notifications.deliveries.length ? <ul data-testid="notification-delivery-list">{notifications.deliveries.map((delivery) => { const presentation = deliveryPresentation(delivery.aggregateStatus, delivery.channels); return <li key={delivery.id} data-testid={`notification-delivery-${delivery.id}`}><strong data-testid={`notification-delivery-state-${delivery.id}`}>{presentation.label}</strong><p>{presentation.description}</p>{presentation.partial && <p data-testid={`notification-delivery-partial-${delivery.id}`}><strong>Entrega parcial:</strong> nem todos os canais foram confirmados.</p>}{presentation.retryExhausted && <p><strong>Tentativas esgotadas:</strong> a próxima ação exige revisão operacional.</p>}{presentation.needsReview && <p><strong>Revisão necessária:</strong> não presuma entrega nem reenvie automaticamente.</p>}<ul aria-label={`Canais da entrega ${delivery.id}`}>{delivery.channels.map((channel) => { const channelState = deliveryPresentation(channel.status, [channel]); return <li key={channel.id} data-testid={`notification-channel-${channel.id}`}><strong>{presentNotificationChannel(channel.channel)}: {channelState.label}</strong><span> · {channel.attempts} tentativa(s)</span>{channel.lastAttemptAt && <span> · última tentativa em {new Date(channel.lastAttemptAt).toLocaleString("pt-BR")}</span>}</li>; })}</ul></li>; })}</ul> : <p role="status">Não há entregas operacionais neste contexto.</p>}
+        {notifications.hasMoreDeliveries && <button className="secondary" onClick={() => void notifications.loadMoreDeliveries()}>Carregar mais entregas</button>}
+        <button className="secondary" onClick={() => setDeliveriesOpen(false)}>Fechar</button>
+      </div>
+    </Dialog>
+  </div>;
 }
 
-function Field({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) { return <label>{label}{label === "Regra de repetição" && <small>Exemplo técnico: FREQ=MONTHLY (mensal).</small>}<input type={type} value={value} required={required} onChange={(event) => onChange(event.target.value)} /></label>; }
-function parseNumbers(value: string) { return value.split(",").map((part) => Number(part.trim())).filter((number) => Number.isFinite(number)); }
+function NotificationCard({ notices, notifications, openDeliveries }: { notices: ReturnType<typeof useNotifications>["items"]; notifications: ReturnType<typeof useNotifications>; openDeliveries: () => void }) {
+  const notice = notices[0];
+  const hasUnread = notices.some((item) => !item.readAt);
+  const markGroupRead = () => { for (const item of notices) if (!item.readAt) void notifications.markRead(item.id); };
+  const href = notificationHref(notice.action, notice.resourceId);
+  return <li className="notification-card notification-card--list" data-read={hasUnread ? "false" : "true"} data-priority={notice.priority.toLowerCase()}>
+    <div className="notification-card-heading"><h3>{notice.title}</h3><span className={`notification-state${hasUnread ? "" : " notification-state--read"}`}>{hasUnread ? "Não lida" : "Lida"}</span></div>
+    {typeof notice.context.assetName === "string" && <strong>{notice.context.assetName}</strong>}{typeof notice.context.address === "string" && <span className="notification-address">{notice.context.address}</span>}
+    <p>{notice.body}</p>{notice.dueAt && <p><strong>Prazo:</strong> {formatNotificationDate(notice.dueAt)}</p>}
+    <time dateTime={notice.createdAt} title={formatNotificationDate(notice.createdAt)}>{formatNotificationRelativeDate(notice.createdAt)}</time>
+    {notices.length > 1 && <details className="notification-history"><summary>{notices.length - 1} atualização(ões) anterior(es)</summary><ul>{notices.slice(1).map((item) => <li key={item.id}><strong>{item.title}</strong><p>{item.body}</p><time dateTime={item.createdAt} title={formatNotificationDate(item.createdAt)}>{formatNotificationRelativeDate(item.createdAt)}</time><span>{item.readAt ? "Lida" : "Não lida"}</span></li>)}</ul></details>}
+    <div className="notification-card-actions">{href ? <Link className="secondary" href={href} onClick={markGroupRead}>{notificationActionLabel(notice.action)}</Link> : notice.action === "OPEN_DELIVERY" ? <button className="secondary" onClick={() => { markGroupRead(); openDeliveries(); }}>{notificationActionLabel(notice.action)}</button> : null}
+    {hasUnread && <button className="notification-mark-read" type="button" aria-label="Marcar como lida" title="Marcar como lida" onClick={markGroupRead}><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m3 8 3.2 3.2L13 4.5" /></svg></button>}</div>
+  </li>;
+}
+
+function groupNotificationItems(items: ReturnType<typeof useNotifications>["items"]) {
+  const groups = new Map<string, typeof items>();
+  for (const item of items) {
+    const key = item.resourceId ? `${item.kind}:${item.resourceKind}:${item.resourceId}` : item.id;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return [...groups.values()];
+}
+
+function groupNotificationsByDay(items: ReturnType<typeof useNotifications>["items"]) {
+  const today = new Date();
+  const dateKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const groups = new Map<string, typeof items>();
+  for (const item of items) {
+    const date = new Date(item.createdAt);
+    const key = dateKey(date) === dateKey(today) ? "Hoje" : dateKey(date) === dateKey(yesterday) ? "Ontem" : "Anteriores";
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return ["Hoje", "Ontem", "Anteriores"].filter((key) => groups.has(key)).map((key) => [key, groups.get(key)!] as const);
+}
+
+function notificationKindLabel(kind: string) { return ({ INSPECTION_INVITED: "Vistoria disponível", INSPECTION_CREATED: "Nova vistoria", INSPECTION_OVERDUE: "Prazo vencido", INSPECTION_DEADLINE: "Prazo próximo", TRIAGE_ASSIGNED: "Triagem atribuída", RECAPTURE_REQUESTED: "Complemento solicitado", RECAPTURE_COMPLETED: "Complemento concluído", RECAPTURE_EXPIRED: "Complemento vencido", REPORT_READY: "Laudo disponível", REPORT_PUBLISHED: "Laudo publicado", RESPONSIBLE_EMAIL_DELIVERY: "Falha no envio", SCHEDULE_CREATED: "Agenda criada", SCHEDULE_CHANGED: "Agenda alterada", SCHEDULE_CANCELED: "Agenda cancelada" } as Record<string, string>)[kind] ?? kind.replaceAll("_", " ").toLowerCase() }
+function notificationActionLabel(action: string) { return ({ OPEN_INSPECTION: "Ver vistoria", OPEN_TRIAGE: "Abrir triagem", OPEN_SCHEDULE: "Ver vistoria", OPEN_REPORT: "Abrir laudo", OPEN_DELIVERY: "Acompanhar envios" } as Record<string, string>)[action] ?? "Abrir" }
+function notificationHref(action: string, resourceId: string | null) {
+  if (!resourceId) return null;
+  if (action === "OPEN_TRIAGE") return `/triage?case=${encodeURIComponent(resourceId)}`;
+  if (action === "OPEN_SCHEDULE") return `/schedules?scheduleId=${encodeURIComponent(resourceId)}`;
+  if (action === "OPEN_REPORT") return `/reports?inspectionId=${encodeURIComponent(resourceId)}`;
+  if (action === "OPEN_INSPECTION") return `/inspections?inspectionId=${encodeURIComponent(resourceId)}`;
+  return null;
+}
+
+function formatNotificationDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Data indisponível" : date.toLocaleString("pt-BR");
+}
+
+function formatNotificationRelativeDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data indisponível";
+  const minutes = Math.round((date.getTime() - Date.now()) / 60_000);
+  const relative = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+  if (Math.abs(minutes) < 60) return relative.format(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return relative.format(hours, "hour");
+  const days = Math.round(hours / 24);
+  return relative.format(days, "day");
+}
+
+function Field({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) { return <label>{label}<input type={type} value={value} required={required} onChange={(event) => onChange(event.target.value)} /></label>; }
 function mutationId() { return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`; }
 function formatMutationErrors(errors: Array<{ message: string; code: string }>) { const conflict = errors.find((error) => error.code === "CONFLICT" || error.code === "VERSION_CONFLICT"); return conflict ? `Conflito de versão: ${conflict.message} Recarregue os dados e tente novamente.` : errors.map((error) => error.message).join(" "); }
 function formatFailure(error: unknown) { const failure = error as GraphQLFailure; return failure.code === "CONFLICT" || failure.code === "VERSION_CONFLICT" ? `Conflito de versão: ${failure.message} Recarregue os dados e tente novamente.` : failure.message ?? "Não foi possível concluir a operação."; }

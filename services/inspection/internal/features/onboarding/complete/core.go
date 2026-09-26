@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -159,15 +158,11 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		return Result{}, fmt.Errorf("prepare onboarding participant: %w", err)
 	}
 	property := submission.Steps[onboardingsession.StepProperty]
-	rooms, err := strconv.ParseFloat(stepString(property, "rooms"), 64)
-	if err != nil || rooms <= 0 || rooms != float64(int64(rooms)) {
-		return Result{}, apperror.New(apperror.InvalidInput, "rooms", "rooms must be a positive integer")
-	}
 	asset, err := (assetcore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}).Register(domainCtx, assetcore.Input{
 		TenantID: tenantID, BusinessUnitID: unit.ID, SegmentVersionID: segment.ID, TemplateID: &template.ID,
 		Name: limitedName(stepString(property, "address")), ExternalKey: "onboarding-" + submission.Session.ID.String(),
 		Address: stepString(property, "address"), GeofenceMeters: templatecatalog.DefaultGeofence,
-		Attributes:     map[string]any{"propertyType": property["propertyType"], "rooms": rooms, "purpose": property["purpose"]},
+		Attributes:     map[string]any{"propertyType": property["propertyType"], "purpose": property["purpose"]},
 		Assignments:    []assetcore.AssignmentInput{{ParticipantID: participant.Participant.ID, Role: "PROPERTY_OWNER"}},
 		IdempotencyKey: "onboarding:asset:" + submission.Session.ID.String(),
 	})
@@ -293,7 +288,7 @@ func (s Service) ensureActivationInvitation(ctx context.Context, current onboard
 
 func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.ID, mode templatecatalog.ComparisonMode) (database.SegmentDefinitionVersion, string, database.Template, error) {
 	segmentService := segmentcore.Service{DB: s.DB, Authorizer: auth.Authorizer{}}
-	segmentView, err := segmentService.Publish(ctx, tenantID, "real-estate", "Imóveis", "onboarding:segment:v1", []byte(`{"type":"object","properties":{"propertyType":{"type":"string","maxLength":100},"rooms":{"type":"integer"},"purpose":{"type":"string","maxLength":100}},"required":["propertyType","rooms","purpose"],"additionalProperties":false}`), []byte(`{}`))
+	segmentView, err := segmentService.Publish(ctx, tenantID, "real-estate", "Imóveis", "onboarding:segment:v2", []byte(`{"type":"object","properties":{"propertyType":{"type":"string","maxLength":100},"purpose":{"type":"string","maxLength":100}},"required":["propertyType","purpose"],"additionalProperties":false}`), []byte(`{}`))
 	if err != nil {
 		return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 	}

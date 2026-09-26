@@ -156,10 +156,16 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			&database.Invitation{ID: invitationID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, TokenHash: tokenHash[:], DeliveryIntents: deliveryIntents, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now},
 			&database.DashboardInspection{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ProjectID: &projectID, AssetID: ids.asset, Classification: "ATTENTION", Status: "INVITED", Sequence: now.UnixNano(), UpdatedAt: now},
 			&database.AuditEvent{ID: identity.NewID(), TenantID: tenant.ID, ActorID: membership.IdentityID, Action: "QA_SCENARIO_SEEDED", TargetType: "INSPECTION", TargetID: inspectionID.String(), Outcome: "SUCCESS", Reason: "Local browser QA", CorrelationID: "qa-seed-" + scenarioID.String(), OccurredAt: now},
-			&database.RecipientNotification{ID: identity.NewID(), TenantID: tenant.ID, RecipientMembershipID: membership.ID, EventID: identity.NewID(), Kind: "INSPECTION_INVITED", Title: "Vistoria QA disponível", Body: "Uma vistoria de demonstração está pronta para registro.", ResourceKind: "INSPECTION", ResourceID: &inspectionID, CreatedAt: now},
+			&database.RecipientNotification{ID: identity.NewDeterministicID("inspection/qa-notification", tenant.ID.String()+":"+membership.ID.String()), TenantID: tenant.ID, RecipientMembershipID: membership.ID, EventID: identity.NewDeterministicID("inspection/qa-notification-event", tenant.ID.String()+":"+membership.ID.String()), Kind: "INSPECTION_CREATED", Title: "Vistoria a iniciar · Imóvel QA", Body: "Rua de Teste, 100 · Responsável pela captura convidado. Prazo até " + deadline.Format("02/01/2006 15:04") + ".", ResourceKind: "INSPECTION", ResourceID: &inspectionID, CreatedAt: now},
 		}
 		for _, row := range rows {
-			if err := tx.Create(row).Error; err != nil {
+			var err error
+			if _, isNotification := row.(*database.RecipientNotification); isNotification {
+				err = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"event_id", "title", "body", "resource_id", "created_at", "read_at"})}).Create(row).Error
+			} else {
+				err = tx.Create(row).Error
+			}
+			if err != nil {
 				return err
 			}
 		}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentDashboardStatus, presentInspectionSource, presentReportMode } from "@/features/dashboard/presentation";
+import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentDashboardStatus, presentInspectionSource, presentReportMode, presentReportPDFStatus } from "@/features/dashboard/presentation";
 
 describe("dashboard presenters", () => {
   it("presents known codes and hides unknown values", () => {
@@ -16,5 +16,11 @@ describe("dashboard presenters", () => {
     expect(presentNoRelevantChange(null)).toBe("Comparação inconclusiva");
     expect(presentNoRelevantChange(true)).toBe("Sem alteração relevante identificada");
     expect(presentNoRelevantChange(false)).toBe("Alteração relevante identificada");
+  });
+
+  it("presents PDF preparation and availability in Portuguese", () => {
+    expect(presentReportPDFStatus("PENDING")).toBe("Em preparação");
+    expect(presentReportPDFStatus("PROCESSING")).toBe("Em geração");
+    expect(presentReportPDFStatus("READY")).toBe("Disponível");
   });
 });

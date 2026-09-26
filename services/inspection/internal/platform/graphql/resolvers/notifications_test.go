@@ -23,7 +23,7 @@ func TestNotificationsAllowTenantAdmin(t *testing.T) {
 		},
 	})
 
-	result, err := (&queryResolver{Resolver: &Resolver{}}).MyNotifications(ctx, nil, nil, nil)
+	result, err := (&queryResolver{Resolver: &Resolver{}}).MyNotifications(ctx, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("tenant admin notifications denied: %v", err)
 	}

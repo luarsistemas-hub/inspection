@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getOnboardingCsrfToken, setOnboardingCsrfToken } from "@/auth/onboarding-session";
 import { graphql, mapUserErrors, uploadReferencePhoto } from "@/graphql/client";
 import { OnboardingDefinitionDocument } from "@/graphql/generated";
-import { resolveResume, validateStep } from "@/features/onboarding/definition";
+import { resolveResume, validateStep, valuesForParticipantMode } from "@/features/onboarding/definition";
 
 describe("onboarding session client", () => {
   afterEach(() => { setOnboardingCsrfToken(undefined); vi.unstubAllGlobals(); });
@@ -64,6 +64,11 @@ describe("onboarding session client", () => {
 
   it("UT-042 resumes from the server-confirmed current step", () => {
     expect(resolveResume({ currentStep: "property" }, { step: "agency" })).toBe("property");
+  });
+
+  it("copies the verified owner into the participant fields whenever SELF is selected", () => {
+    const values = valuesForParticipantMode({ mode: "DELEGATE", name: "Pessoa anterior", email: "old@example.test" }, "SELF", { name: "Ana", email: "ana@example.test" });
+    expect(values).toEqual({ mode: "SELF", name: "Ana", email: "ana@example.test" });
   });
 
   it("validates required dynamic controls before a checkpoint", () => {

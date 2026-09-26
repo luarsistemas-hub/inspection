@@ -17,8 +17,12 @@ test.describe("authenticated Admin against the local stack", () => {
     for (const [label, route] of [["Visão geral", "/overview"], ["Organização", "/organization"], ["Usuários e acessos", "/access"], ["Responsáveis pela vistoria", "/catalogs"], ["Configuração", "/assets"], ["Governança", "/governance"], ["Auditoria", "/audit"], ["Consumo de LLM", "/llm-usage"]] as const) {
       await page.getByRole("link", { name: label }).click();
       await expect(page).toHaveURL(new RegExp(`${route}(?:\\?|$)`));
-      if (route === "/llm-usage") await expect(page.getByRole("table", { name: "Chamadas de LLM" })).toBeVisible();
-      else await expect(page.locator(".status-line")).toContainText("atualizado");
+      if (route === "/llm-usage") {
+        await page.getByRole("combobox", { name: "Modo" }).selectOption("MOCK");
+        await page.getByRole("button", { name: "Aplicar" }).click();
+        await expect(page.getByLabel("Resumo do consumo de LLM")).toBeVisible();
+        await expect(page.getByRole("table", { name: "Chamadas de LLM" }).or(page.getByRole("heading", { name: "Nenhuma chamada encontrada" }))).toBeVisible();
+      } else await expect(page.locator(".status-line")).toContainText("atualizado");
       await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
     }
     await assertRuntimeClean();

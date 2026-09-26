@@ -13,7 +13,7 @@ import (
 const (
 	Segment              = "REAL_ESTATE"
 	DefinitionSchema     = 1
-	DefinitionVersion    = 3
+	DefinitionVersion    = 4
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = "real-estate-fixed-origin"
 )
@@ -66,7 +66,6 @@ var definition = Definition{
 		{Key: "property", Label: "Imóvel", Position: 2, Required: true, Fields: []Field{
 			{Key: "address", Label: "Endereço do imóvel", Type: "textarea", Required: true},
 			{Key: "propertyType", Label: "Tipo de imóvel", Type: "select", Required: true, Options: []string{"APARTMENT", "HOUSE", "COMMERCIAL", "LAND"}, OptionLabels: map[string]string{"APARTMENT": "Apartamento", "HOUSE": "Casa", "COMMERCIAL": "Imóvel comercial", "LAND": "Terreno"}},
-			{Key: "rooms", Label: "Quantidade de cômodos", Type: "number", Required: true},
 			{Key: "purpose", Label: "Finalidade da vistoria", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}, OptionLabels: map[string]string{"SALE": "Venda", "RENTAL": "Locação", "MAINTENANCE": "Manutenção", "INSURANCE": "Seguro"}},
 			{Key: "deadline", Label: "Prazo para concluir a vistoria", Type: "date", Required: true},
 		}},

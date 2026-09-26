@@ -28,12 +28,16 @@ die() { printf 'erro: %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "comando obrigatório não encontrado: $1"; }
 
 load_env() {
+  local file_keys=" "
   [[ -f "$env_file" ]] || die "arquivo $env_file não existe; execute ./scripts/local.sh init"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ "$line" =~ ^[[:space:]]*$|^[[:space:]]*# ]] && continue
     [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
     key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
-    if printenv "$key" >/dev/null 2>&1; then :; else export "$key=$value"; fi
+    if [[ "$file_keys" == *" $key "* ]] || ! printenv "$key" >/dev/null 2>&1; then
+      export "$key=$value"
+      file_keys+="$key "
+    fi
   done < "$env_file"
   if [[ "${NEXT_PUBLIC_INSPECTION_API_URL:-}" == "http://localhost:8080/graphql" && "${INSPECTION_API_PORT:-8080}" != "8080" ]]; then
     export NEXT_PUBLIC_INSPECTION_API_URL="http://localhost:${INSPECTION_API_PORT}/graphql"

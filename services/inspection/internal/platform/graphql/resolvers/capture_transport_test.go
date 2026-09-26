@@ -137,7 +137,10 @@ func captureSessionFixture(t *testing.T, tenantID, responsibilityID identity.ID)
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS invitations").Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, model := range []any{&database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}} {
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS dashboard").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []any{&database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}, &database.TriageCase{}, &database.TriageCaseEvent{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}

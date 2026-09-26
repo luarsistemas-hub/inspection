@@ -526,6 +526,7 @@ type ComplexityRoot struct {
 		UpdateAsset                            func(childComplexity int, input UpdateAssetInput) int
 		UpdateSchedule                         func(childComplexity int, input UpdateScheduleInput) int
 		UpdateTenant                           func(childComplexity int, input UpdateTenantInput) int
+		UpdateTriageCase                       func(childComplexity int, input UpdateTriageCaseInput) int
 		UpsertBusinessUnit                     func(childComplexity int, input UpsertBusinessUnitInput) int
 		UpsertParticipant                      func(childComplexity int, input UpsertParticipantInput) int
 		VerifyAdminActivationOtp               func(childComplexity int, input VerifyAdminActivationOtpInput) int
@@ -624,6 +625,11 @@ type ComplexityRoot struct {
 		TemplateKey func(childComplexity int) int
 	}
 
+	OnboardingOwner struct {
+		Email func(childComplexity int) int
+		Name  func(childComplexity int) int
+	}
+
 	OnboardingPayload struct {
 		Activation       func(childComplexity int) int
 		ClientMutationID func(childComplexity int) int
@@ -650,6 +656,7 @@ type ComplexityRoot struct {
 		ExistingAgency func(childComplexity int) int
 		ExpiresAt      func(childComplexity int) int
 		ID             func(childComplexity int) int
+		Owner          func(childComplexity int) int
 		State          func(childComplexity int) int
 		Version        func(childComplexity int) int
 	}
@@ -859,7 +866,7 @@ type ComplexityRoot struct {
 		LlmUsageTenants        func(childComplexity int, search *string, first *int, after *string) int
 		Me                     func(childComplexity int) int
 		Memberships            func(childComplexity int, first *int, after *string) int
-		MyNotifications        func(childComplexity int, unreadOnly *bool, first *int, after *string) int
+		MyNotifications        func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
 		NotificationDeliveries func(childComplexity int, first *int, after *string) int
 		OnboardingDefinition   func(childComplexity int, segment string) int
 		OnboardingSession      func(childComplexity int) int
@@ -874,13 +881,17 @@ type ComplexityRoot struct {
 		PublicationPolicy      func(childComplexity int) int
 		Report                 func(childComplexity int, inspectionID string, version *int) int
 		ReportDownload         func(childComplexity int, snapshotID string, kind *string) int
+		Reports                func(childComplexity int, first *int, after *string, search *string, classification *string) int
 		RetentionPolicies      func(childComplexity int) int
 		Schedules              func(childComplexity int, first *int, after *string) int
 		SegmentDefinitions     func(childComplexity int, search *string, first *int, after *string) int
 		TemplateVersion        func(childComplexity int, id string) int
 		Templates              func(childComplexity int, search *string, first *int, after *string) int
 		Tenant                 func(childComplexity int) int
+		TriageAssignees        func(childComplexity int, inspectionID string) int
+		TriageCase             func(childComplexity int, inspectionID string) int
 		TriageInspections      func(childComplexity int, first *int, after *string, classification *string, status *string) int
+		TriageWorkspace        func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
 		UsageSummary           func(childComplexity int, from *string, to *string) int
 	}
 
@@ -898,10 +909,14 @@ type ComplexityRoot struct {
 	}
 
 	RecipientNotification struct {
+		Action       func(childComplexity int) int
 		Body         func(childComplexity int) int
+		Context      func(childComplexity int) int
 		CreatedAt    func(childComplexity int) int
+		DueAt        func(childComplexity int) int
 		ID           func(childComplexity int) int
 		Kind         func(childComplexity int) int
+		Priority     func(childComplexity int) int
 		ReadAt       func(childComplexity int) int
 		ResourceID   func(childComplexity int) int
 		ResourceKind func(childComplexity int) int
@@ -916,7 +931,9 @@ type ComplexityRoot struct {
 
 	RecipientNotificationPayload struct {
 		ClientMutationID func(childComplexity int) int
+		MarkedCount      func(childComplexity int) int
 		Notification     func(childComplexity int) int
+		UnreadCount      func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -946,6 +963,11 @@ type ComplexityRoot struct {
 		ExternalKey func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Name        func(childComplexity int) int
+	}
+
+	ReportConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
 	}
 
 	ReportContext struct {
@@ -1029,6 +1051,18 @@ type ComplexityRoot struct {
 		Label               func(childComplexity int) int
 		NoRelevantChange    func(childComplexity int) int
 		Section             func(childComplexity int) int
+	}
+
+	ReportSummary struct {
+		AssetAddress     func(childComplexity int) int
+		AssetExternalKey func(childComplexity int) int
+		AssetName        func(childComplexity int) int
+		Classification   func(childComplexity int) int
+		GeneratedAt      func(childComplexity int) int
+		ID               func(childComplexity int) int
+		InspectionID     func(childComplexity int) int
+		ParticipantName  func(childComplexity int) int
+		Version          func(childComplexity int) int
 	}
 
 	ReportTemplateContext struct {
@@ -1229,6 +1263,51 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	TriageAssignee struct {
+		Current func(childComplexity int) int
+		ID      func(childComplexity int) int
+		Role    func(childComplexity int) int
+	}
+
+	TriageCase struct {
+		Address        func(childComplexity int) int
+		AssetID        func(childComplexity int) int
+		AssetName      func(childComplexity int) int
+		AssigneeID     func(childComplexity int) int
+		Classification func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		Events         func(childComplexity int) int
+		InspectionID   func(childComplexity int) int
+		ReasonCodes    func(childComplexity int) int
+		Report         func(childComplexity int) int
+		ReportVersion  func(childComplexity int) int
+		ReviewStatus   func(childComplexity int) int
+		Status         func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		Version        func(childComplexity int) int
+	}
+
+	TriageCaseEvent struct {
+		ActorID   func(childComplexity int) int
+		Body      func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Kind      func(childComplexity int) int
+	}
+
+	TriageCasePayload struct {
+		ClientMutationID func(childComplexity int) int
+		TriageCase       func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	TriageCounts struct {
+		AwaitingEvidence func(childComplexity int) int
+		CriticalOpen     func(childComplexity int) int
+		InReview         func(childComplexity int) int
+		New              func(childComplexity int) int
+	}
+
 	TriageInspection struct {
 		AssetID        func(childComplexity int) int
 		Classification func(childComplexity int) int
@@ -1239,6 +1318,29 @@ type ComplexityRoot struct {
 	}
 
 	TriageInspectionConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
+	TriageQueueItem struct {
+		Address        func(childComplexity int) int
+		AssetID        func(childComplexity int) int
+		AssetName      func(childComplexity int) int
+		AssigneeID     func(childComplexity int) int
+		Classification func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		FindingCount   func(childComplexity int) int
+		InspectionID   func(childComplexity int) int
+		ReasonCodes    func(childComplexity int) int
+		ReportVersion  func(childComplexity int) int
+		ReviewStatus   func(childComplexity int) int
+		Status         func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		Version        func(childComplexity int) int
+	}
+
+	TriageWorkspace struct {
+		Counts   func(childComplexity int) int
 		Nodes    func(childComplexity int) int
 		PageInfo func(childComplexity int) int
 	}
@@ -1320,6 +1422,7 @@ type MutationResolver interface {
 	DeclareCaptureImpossibility(ctx context.Context, input DeclareCaptureImpossibilityInput) (*CapturePayload, error)
 	SubmitCapture(ctx context.Context, input SubmitCaptureInput) (*SubmissionPayload, error)
 	RequestRecapture(ctx context.Context, input RequestRecaptureInput) (*RecapturePayload, error)
+	UpdateTriageCase(ctx context.Context, input UpdateTriageCaseInput) (*TriageCasePayload, error)
 	SubmitRecapture(ctx context.Context, input SubmitRecaptureInput) (*RecapturePayload, error)
 	DeclareSensitiveDetectionFalsePositive(ctx context.Context, input SensitiveFalsePositiveInput) (*MediaPayload, error)
 	ConfigureRetentionPolicy(ctx context.Context, input ConfigureRetentionPolicyInput) (*RetentionPolicyPayload, error)
@@ -1357,9 +1460,13 @@ type QueryResolver interface {
 	Inspections(ctx context.Context, first *int, after *string, history *bool) (*InspectionConnection, error)
 	Inspection(ctx context.Context, id string) (*Inspection, error)
 	Report(ctx context.Context, inspectionID string, version *int) (*Report, error)
+	Reports(ctx context.Context, first *int, after *string, search *string, classification *string) (*ReportConnection, error)
 	ReportDownload(ctx context.Context, snapshotID string, kind *string) (*ReportDownload, error)
 	DashboardSummary(ctx context.Context, projectID *string, businessUnitID *string) (*DashboardSummary, error)
 	TriageInspections(ctx context.Context, first *int, after *string, classification *string, status *string) (*TriageInspectionConnection, error)
+	TriageWorkspace(ctx context.Context, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) (*TriageWorkspace, error)
+	TriageCase(ctx context.Context, inspectionID string) (*TriageCase, error)
+	TriageAssignees(ctx context.Context, inspectionID string) ([]*TriageAssignee, error)
 	ProjectTimeline(ctx context.Context, projectID string) (*ProjectTimeline, error)
 	NotificationDeliveries(ctx context.Context, first *int, after *string) (*NotificationDeliveryConnection, error)
 	PublicationPolicy(ctx context.Context) (*PublicationPolicy, error)
@@ -1367,7 +1474,7 @@ type QueryResolver interface {
 	CustomerTimeline(ctx context.Context, assetID *string, projectID *string, first *int, after *string) (*CustomerTimelineConnection, error)
 	CustomerReport(ctx context.Context, inspectionID string, version *int) (*CustomerReport, error)
 	CustomerEvidence(ctx context.Context, inspectionID string, mode *EvidenceMode, first *int, after *string) (*CustomerEvidenceConnection, error)
-	MyNotifications(ctx context.Context, unreadOnly *bool, first *int, after *string) (*RecipientNotificationConnection, error)
+	MyNotifications(ctx context.Context, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) (*RecipientNotificationConnection, error)
 	RetentionPolicies(ctx context.Context) (*RetentionPolicyConnection, error)
 	UsageSummary(ctx context.Context, from *string, to *string) (*UsageSummary, error)
 	InspectionLLMUsage(ctx context.Context, inspectionID string, mode *LLMExecutionMode, first *int, after *string) (*InspectionLLMUsage, error)
@@ -3903,6 +4010,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateTenant(childComplexity, args["input"].(UpdateTenantInput)), true
+	case "Mutation.updateTriageCase":
+		if e.ComplexityRoot.Mutation.UpdateTriageCase == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateTriageCase_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateTriageCase(childComplexity, args["input"].(UpdateTriageCaseInput)), true
 	case "Mutation.upsertBusinessUnit":
 		if e.ComplexityRoot.Mutation.UpsertBusinessUnit == nil {
 			break
@@ -4340,6 +4458,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OnboardingOriginMode.TemplateKey(childComplexity), true
 
+	case "OnboardingOwner.email":
+		if e.ComplexityRoot.OnboardingOwner.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingOwner.Email(childComplexity), true
+	case "OnboardingOwner.name":
+		if e.ComplexityRoot.OnboardingOwner.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingOwner.Name(childComplexity), true
+
 	case "OnboardingPayload.activation":
 		if e.ComplexityRoot.OnboardingPayload.Activation == nil {
 			break
@@ -4456,6 +4587,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OnboardingSession.ID(childComplexity), true
+	case "OnboardingSession.owner":
+		if e.ComplexityRoot.OnboardingSession.Owner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OnboardingSession.Owner(childComplexity), true
 	case "OnboardingSession.state":
 		if e.ComplexityRoot.OnboardingSession.State == nil {
 			break
@@ -5359,7 +5496,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["unreadOnly"].(*bool), args["first"].(*int), args["after"].(*string)), true
+		return e.ComplexityRoot.Query.MyNotifications(childComplexity, args["unreadOnly"].(*bool), args["kind"].(*string), args["projectId"].(*string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.notificationDeliveries":
 		if e.ComplexityRoot.Query.NotificationDeliveries == nil {
 			break
@@ -5499,6 +5636,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ReportDownload(childComplexity, args["snapshotId"].(string), args["kind"].(*string)), true
+	case "Query.reports":
+		if e.ComplexityRoot.Query.Reports == nil {
+			break
+		}
+
+		args, err := ec.field_Query_reports_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Reports(childComplexity, args["first"].(*int), args["after"].(*string), args["search"].(*string), args["classification"].(*string)), true
 	case "Query.retentionPolicies":
 		if e.ComplexityRoot.Query.RetentionPolicies == nil {
 			break
@@ -5555,6 +5703,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Tenant(childComplexity), true
+	case "Query.triageAssignees":
+		if e.ComplexityRoot.Query.TriageAssignees == nil {
+			break
+		}
+
+		args, err := ec.field_Query_triageAssignees_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TriageAssignees(childComplexity, args["inspectionId"].(string)), true
+	case "Query.triageCase":
+		if e.ComplexityRoot.Query.TriageCase == nil {
+			break
+		}
+
+		args, err := ec.field_Query_triageCase_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TriageCase(childComplexity, args["inspectionId"].(string)), true
 	case "Query.triageInspections":
 		if e.ComplexityRoot.Query.TriageInspections == nil {
 			break
@@ -5566,6 +5736,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.TriageInspections(childComplexity, args["first"].(*int), args["after"].(*string), args["classification"].(*string), args["status"].(*string)), true
+	case "Query.triageWorkspace":
+		if e.ComplexityRoot.Query.TriageWorkspace == nil {
+			break
+		}
+
+		args, err := ec.field_Query_triageWorkspace_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.TriageWorkspace(childComplexity, args["first"].(*int), args["after"].(*string), args["status"].(*TriageReviewStatus), args["classification"].(*string), args["search"].(*string), args["assigneeId"].(*string), args["reason"].(*string)), true
 	case "Query.usageSummary":
 		if e.ComplexityRoot.Query.UsageSummary == nil {
 			break
@@ -5622,18 +5803,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.RecapturePayload.UserErrors(childComplexity), true
 
+	case "RecipientNotification.action":
+		if e.ComplexityRoot.RecipientNotification.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotification.Action(childComplexity), true
 	case "RecipientNotification.body":
 		if e.ComplexityRoot.RecipientNotification.Body == nil {
 			break
 		}
 
 		return e.ComplexityRoot.RecipientNotification.Body(childComplexity), true
+	case "RecipientNotification.context":
+		if e.ComplexityRoot.RecipientNotification.Context == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotification.Context(childComplexity), true
 	case "RecipientNotification.createdAt":
 		if e.ComplexityRoot.RecipientNotification.CreatedAt == nil {
 			break
 		}
 
 		return e.ComplexityRoot.RecipientNotification.CreatedAt(childComplexity), true
+	case "RecipientNotification.dueAt":
+		if e.ComplexityRoot.RecipientNotification.DueAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotification.DueAt(childComplexity), true
 	case "RecipientNotification.id":
 		if e.ComplexityRoot.RecipientNotification.ID == nil {
 			break
@@ -5646,6 +5845,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RecipientNotification.Kind(childComplexity), true
+	case "RecipientNotification.priority":
+		if e.ComplexityRoot.RecipientNotification.Priority == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotification.Priority(childComplexity), true
 	case "RecipientNotification.readAt":
 		if e.ComplexityRoot.RecipientNotification.ReadAt == nil {
 			break
@@ -5696,12 +5901,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RecipientNotificationPayload.ClientMutationID(childComplexity), true
+	case "RecipientNotificationPayload.markedCount":
+		if e.ComplexityRoot.RecipientNotificationPayload.MarkedCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotificationPayload.MarkedCount(childComplexity), true
 	case "RecipientNotificationPayload.notification":
 		if e.ComplexityRoot.RecipientNotificationPayload.Notification == nil {
 			break
 		}
 
 		return e.ComplexityRoot.RecipientNotificationPayload.Notification(childComplexity), true
+	case "RecipientNotificationPayload.unreadCount":
+		if e.ComplexityRoot.RecipientNotificationPayload.UnreadCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RecipientNotificationPayload.UnreadCount(childComplexity), true
 	case "RecipientNotificationPayload.userErrors":
 		if e.ComplexityRoot.RecipientNotificationPayload.UserErrors == nil {
 			break
@@ -5842,6 +6059,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportAssetContext.Name(childComplexity), true
+
+	case "ReportConnection.nodes":
+		if e.ComplexityRoot.ReportConnection.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportConnection.Nodes(childComplexity), true
+	case "ReportConnection.pageInfo":
+		if e.ComplexityRoot.ReportConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportConnection.PageInfo(childComplexity), true
 
 	case "ReportContext.asset":
 		if e.ComplexityRoot.ReportContext.Asset == nil {
@@ -6187,6 +6417,61 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ReportRequirement.Section(childComplexity), true
+
+	case "ReportSummary.assetAddress":
+		if e.ComplexityRoot.ReportSummary.AssetAddress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.AssetAddress(childComplexity), true
+	case "ReportSummary.assetExternalKey":
+		if e.ComplexityRoot.ReportSummary.AssetExternalKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.AssetExternalKey(childComplexity), true
+	case "ReportSummary.assetName":
+		if e.ComplexityRoot.ReportSummary.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.AssetName(childComplexity), true
+	case "ReportSummary.classification":
+		if e.ComplexityRoot.ReportSummary.Classification == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.Classification(childComplexity), true
+	case "ReportSummary.generatedAt":
+		if e.ComplexityRoot.ReportSummary.GeneratedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.GeneratedAt(childComplexity), true
+	case "ReportSummary.id":
+		if e.ComplexityRoot.ReportSummary.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.ID(childComplexity), true
+	case "ReportSummary.inspectionId":
+		if e.ComplexityRoot.ReportSummary.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.InspectionID(childComplexity), true
+	case "ReportSummary.participantName":
+		if e.ComplexityRoot.ReportSummary.ParticipantName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.ParticipantName(childComplexity), true
+	case "ReportSummary.version":
+		if e.ComplexityRoot.ReportSummary.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReportSummary.Version(childComplexity), true
 
 	case "ReportTemplateContext.id":
 		if e.ComplexityRoot.ReportTemplateContext.ID == nil {
@@ -6934,6 +7219,191 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TenantPayload.UserErrors(childComplexity), true
 
+	case "TriageAssignee.current":
+		if e.ComplexityRoot.TriageAssignee.Current == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageAssignee.Current(childComplexity), true
+	case "TriageAssignee.id":
+		if e.ComplexityRoot.TriageAssignee.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageAssignee.ID(childComplexity), true
+	case "TriageAssignee.role":
+		if e.ComplexityRoot.TriageAssignee.Role == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageAssignee.Role(childComplexity), true
+
+	case "TriageCase.address":
+		if e.ComplexityRoot.TriageCase.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Address(childComplexity), true
+	case "TriageCase.assetId":
+		if e.ComplexityRoot.TriageCase.AssetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.AssetID(childComplexity), true
+	case "TriageCase.assetName":
+		if e.ComplexityRoot.TriageCase.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.AssetName(childComplexity), true
+	case "TriageCase.assigneeId":
+		if e.ComplexityRoot.TriageCase.AssigneeID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.AssigneeID(childComplexity), true
+	case "TriageCase.classification":
+		if e.ComplexityRoot.TriageCase.Classification == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Classification(childComplexity), true
+	case "TriageCase.createdAt":
+		if e.ComplexityRoot.TriageCase.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.CreatedAt(childComplexity), true
+	case "TriageCase.events":
+		if e.ComplexityRoot.TriageCase.Events == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Events(childComplexity), true
+	case "TriageCase.inspectionId":
+		if e.ComplexityRoot.TriageCase.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.InspectionID(childComplexity), true
+	case "TriageCase.reasonCodes":
+		if e.ComplexityRoot.TriageCase.ReasonCodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.ReasonCodes(childComplexity), true
+	case "TriageCase.report":
+		if e.ComplexityRoot.TriageCase.Report == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Report(childComplexity), true
+	case "TriageCase.reportVersion":
+		if e.ComplexityRoot.TriageCase.ReportVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.ReportVersion(childComplexity), true
+	case "TriageCase.reviewStatus":
+		if e.ComplexityRoot.TriageCase.ReviewStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.ReviewStatus(childComplexity), true
+	case "TriageCase.status":
+		if e.ComplexityRoot.TriageCase.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Status(childComplexity), true
+	case "TriageCase.updatedAt":
+		if e.ComplexityRoot.TriageCase.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.UpdatedAt(childComplexity), true
+	case "TriageCase.version":
+		if e.ComplexityRoot.TriageCase.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCase.Version(childComplexity), true
+
+	case "TriageCaseEvent.actorId":
+		if e.ComplexityRoot.TriageCaseEvent.ActorID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCaseEvent.ActorID(childComplexity), true
+	case "TriageCaseEvent.body":
+		if e.ComplexityRoot.TriageCaseEvent.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCaseEvent.Body(childComplexity), true
+	case "TriageCaseEvent.createdAt":
+		if e.ComplexityRoot.TriageCaseEvent.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCaseEvent.CreatedAt(childComplexity), true
+	case "TriageCaseEvent.id":
+		if e.ComplexityRoot.TriageCaseEvent.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCaseEvent.ID(childComplexity), true
+	case "TriageCaseEvent.kind":
+		if e.ComplexityRoot.TriageCaseEvent.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCaseEvent.Kind(childComplexity), true
+
+	case "TriageCasePayload.clientMutationId":
+		if e.ComplexityRoot.TriageCasePayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCasePayload.ClientMutationID(childComplexity), true
+	case "TriageCasePayload.triageCase":
+		if e.ComplexityRoot.TriageCasePayload.TriageCase == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCasePayload.TriageCase(childComplexity), true
+	case "TriageCasePayload.userErrors":
+		if e.ComplexityRoot.TriageCasePayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCasePayload.UserErrors(childComplexity), true
+
+	case "TriageCounts.awaitingEvidence":
+		if e.ComplexityRoot.TriageCounts.AwaitingEvidence == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCounts.AwaitingEvidence(childComplexity), true
+	case "TriageCounts.criticalOpen":
+		if e.ComplexityRoot.TriageCounts.CriticalOpen == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCounts.CriticalOpen(childComplexity), true
+	case "TriageCounts.inReview":
+		if e.ComplexityRoot.TriageCounts.InReview == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCounts.InReview(childComplexity), true
+	case "TriageCounts.new":
+		if e.ComplexityRoot.TriageCounts.New == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageCounts.New(childComplexity), true
+
 	case "TriageInspection.assetId":
 		if e.ComplexityRoot.TriageInspection.AssetID == nil {
 			break
@@ -6983,6 +7453,110 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TriageInspectionConnection.PageInfo(childComplexity), true
+
+	case "TriageQueueItem.address":
+		if e.ComplexityRoot.TriageQueueItem.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.Address(childComplexity), true
+	case "TriageQueueItem.assetId":
+		if e.ComplexityRoot.TriageQueueItem.AssetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.AssetID(childComplexity), true
+	case "TriageQueueItem.assetName":
+		if e.ComplexityRoot.TriageQueueItem.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.AssetName(childComplexity), true
+	case "TriageQueueItem.assigneeId":
+		if e.ComplexityRoot.TriageQueueItem.AssigneeID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.AssigneeID(childComplexity), true
+	case "TriageQueueItem.classification":
+		if e.ComplexityRoot.TriageQueueItem.Classification == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.Classification(childComplexity), true
+	case "TriageQueueItem.createdAt":
+		if e.ComplexityRoot.TriageQueueItem.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.CreatedAt(childComplexity), true
+	case "TriageQueueItem.findingCount":
+		if e.ComplexityRoot.TriageQueueItem.FindingCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.FindingCount(childComplexity), true
+	case "TriageQueueItem.inspectionId":
+		if e.ComplexityRoot.TriageQueueItem.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.InspectionID(childComplexity), true
+	case "TriageQueueItem.reasonCodes":
+		if e.ComplexityRoot.TriageQueueItem.ReasonCodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.ReasonCodes(childComplexity), true
+	case "TriageQueueItem.reportVersion":
+		if e.ComplexityRoot.TriageQueueItem.ReportVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.ReportVersion(childComplexity), true
+	case "TriageQueueItem.reviewStatus":
+		if e.ComplexityRoot.TriageQueueItem.ReviewStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.ReviewStatus(childComplexity), true
+	case "TriageQueueItem.status":
+		if e.ComplexityRoot.TriageQueueItem.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.Status(childComplexity), true
+	case "TriageQueueItem.updatedAt":
+		if e.ComplexityRoot.TriageQueueItem.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.UpdatedAt(childComplexity), true
+	case "TriageQueueItem.version":
+		if e.ComplexityRoot.TriageQueueItem.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageQueueItem.Version(childComplexity), true
+
+	case "TriageWorkspace.counts":
+		if e.ComplexityRoot.TriageWorkspace.Counts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageWorkspace.Counts(childComplexity), true
+	case "TriageWorkspace.nodes":
+		if e.ComplexityRoot.TriageWorkspace.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageWorkspace.Nodes(childComplexity), true
+	case "TriageWorkspace.pageInfo":
+		if e.ComplexityRoot.TriageWorkspace.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TriageWorkspace.PageInfo(childComplexity), true
 
 	case "UsageSummary.cost":
 		if e.ComplexityRoot.UsageSummary.Cost == nil {
@@ -7121,6 +7695,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputUpdateAssetInput,
 		ec.unmarshalInputUpdateScheduleInput,
 		ec.unmarshalInputUpdateTenantInput,
+		ec.unmarshalInputUpdateTriageCaseInput,
 		ec.unmarshalInputUpsertBusinessUnitInput,
 		ec.unmarshalInputUpsertParticipantInput,
 		ec.unmarshalInputVerifyAdminActivationOtpInput,
@@ -7229,9 +7804,13 @@ type Query {
   inspections(first: Int = 25, after: String, history: Boolean = false): InspectionConnection!
   inspection(id: ID!): Inspection
   report(inspectionId: ID!, version: Int): Report
+  reports(first: Int = 25, after: String, search: String, classification: String): ReportConnection!
   reportDownload(snapshotId: ID!, kind: String = "PDF"): ReportDownload
   dashboardSummary(projectId: ID, businessUnitId: ID): DashboardSummary!
   triageInspections(first: Int = 25, after: String, classification: String, status: String): TriageInspectionConnection!
+  triageWorkspace(first: Int = 25, after: String, status: TriageReviewStatus, classification: String, search: String, assigneeId: ID, reason: String): TriageWorkspace!
+  triageCase(inspectionId: ID!): TriageCase
+  triageAssignees(inspectionId: ID!): [TriageAssignee!]!
   projectTimeline(projectId: ID!): ProjectTimeline!
   notificationDeliveries(first: Int = 25, after: String): NotificationDeliveryConnection!
   publicationPolicy: PublicationPolicy!
@@ -7239,7 +7818,7 @@ type Query {
   customerTimeline(assetId: ID, projectId: ID, first: Int = 25, after: String): CustomerTimelineConnection!
   customerReport(inspectionId: ID!, version: Int): CustomerReport
   customerEvidence(inspectionId: ID!, mode: EvidenceMode = SIMPLE, first: Int = 25, after: String): CustomerEvidenceConnection!
-  myNotifications(unreadOnly: Boolean = false, first: Int = 25, after: String): RecipientNotificationConnection!
+  myNotifications(unreadOnly: Boolean = false, kind: String, projectId: ID, first: Int = 25, after: String): RecipientNotificationConnection!
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
   inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
@@ -7254,7 +7833,8 @@ type OnboardingStep { key: String!, label: String!, position: Int!, required: Bo
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
 type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisType: AnalysisType! }
 type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, businessUnitCode: String!, status: String! }
-type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
+type OnboardingOwner { name: String!, email: String! }
+type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, owner: OnboardingOwner!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
 type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
 type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String!, responsibleEmail: String, responsibilityStatus: String, responsibilityVersion: Int, deliveryFailureCode: String, canCorrectResponsibleEmail: Boolean!, updatedAt: String }
@@ -7325,6 +7905,7 @@ type Mutation {
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
+  updateTriageCase(input: UpdateTriageCaseInput!): TriageCasePayload!
   submitRecapture(input: SubmitRecaptureInput!): RecapturePayload!
   declareSensitiveDetectionFalsePositive(input: SensitiveFalsePositiveInput!): MediaPayload!
   configureRetentionPolicy(input: ConfigureRetentionPolicyInput!): RetentionPolicyPayload!
@@ -7411,6 +7992,8 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
 type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
+type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
+type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
@@ -7423,14 +8006,24 @@ type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classifica
 enum EvidenceMode { SIMPLE ADVANCED }
 type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
-type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String }
+type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String action: String! context: JSON! priority: String! dueAt: String }
 type RecipientNotificationConnection { nodes: [RecipientNotification!]! pageInfo: PageInfo! unreadCount: Int! }
 type NotificationPreferencesPayload { userErrors: [UserError!]! clientMutationId: String! }
-type RecipientNotificationPayload { notification: RecipientNotification userErrors: [UserError!]! clientMutationId: String! }
+type RecipientNotificationPayload { notification: RecipientNotification markedCount: Int! unreadCount: Int! userErrors: [UserError!]! clientMutationId: String! }
 type ReportDownload { snapshotId: ID! kind: String! objectKey: String! url: String! status: String! sha256: String }
 type DashboardSummary { total: Int! normal: Int! attention: Int! critical: Int! pending: Int! invalidated: Int! }
 type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classification: String! status: String! updatedAt: String! }
 type TriageInspectionConnection { nodes: [TriageInspection!]! pageInfo: PageInfo! }
+enum TriageReviewStatus { NEW IN_REVIEW AWAITING_EVIDENCE REVIEWED ARCHIVED }
+enum TriageCaseAction { TAKE ASSIGN NOTE COMPLETE REOPEN WAIT_FOR_EVIDENCE }
+enum TriageDisposition { NO_ACTION REFERRED EXTERNAL_FOLLOWUP }
+type TriageWorkspace { counts: TriageCounts! nodes: [TriageQueueItem!]! pageInfo: PageInfo! }
+type TriageCounts { new: Int! inReview: Int! awaitingEvidence: Int! criticalOpen: Int! }
+type TriageQueueItem { inspectionId: ID! assetId: ID! assetName: String! address: String! classification: String! status: String! reviewStatus: TriageReviewStatus! assigneeId: ID reportVersion: Int! version: Int! findingCount: Int! reasonCodes: [String!]! createdAt: String! updatedAt: String! }
+type TriageCase { inspectionId: ID! assetId: ID! assetName: String! address: String! classification: String! status: String! reviewStatus: TriageReviewStatus! assigneeId: ID reportVersion: Int! version: Int! reasonCodes: [String!]! createdAt: String! updatedAt: String! report: Report events: [TriageCaseEvent!]! }
+type TriageCaseEvent { id: ID! actorId: ID! kind: String! body: String! createdAt: String! }
+type TriageAssignee { id: ID! role: String! current: Boolean! }
+type TriageCasePayload { triageCase: TriageCase! userErrors: [UserError!]! clientMutationId: String! }
 type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
 type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
 type NotificationDelivery {
@@ -7622,6 +8215,7 @@ input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String!
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
+input UpdateTriageCaseInput { inspectionId: ID! expectedVersion: Int! action: TriageCaseAction! assigneeId: ID body: String disposition: TriageDisposition clientMutationId: String! }
 input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
 input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
 input ConfigureRetentionPolicyInput { evidenceDays: Int! operationalDays: Int! securityDays: Int clientMutationId: String! }
@@ -7630,7 +8224,7 @@ input LegalHoldInput { inspectionId: ID! reason: String! clientMutationId: Strin
 input ConfigurePublicationPolicyInput { mode: String! expectedVersion: Int! clientMutationId: String! }
 input PublishReportInput { inspectionId: ID! snapshotId: ID! clientMutationId: String! }
 input InvalidateReportPublicationInput { publicationId: ID! reason: String! expectedVersion: Int! clientMutationId: String! }
-input MarkNotificationReadInput { notificationId: ID! clientMutationId: String! }
+input MarkNotificationReadInput { notificationId: ID all: Boolean = false kind: String projectId: ID through: String clientMutationId: String! }
 input ConfigureNotificationPreferencesInput { channels: [ID!]! expectedVersion: Int! clientMutationId: String! }
 input CustomerPortfolioFilter { assetId: ID projectId: ID search: String }
 
@@ -8710,6 +9304,16 @@ func (ec *executionContext) childFields_OnboardingOriginMode(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type OnboardingOriginMode", field.Name)
 }
 
+func (ec *executionContext) childFields_OnboardingOwner(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_OnboardingOwner_name(ctx, field)
+	case "email":
+		return ec.fieldContext_OnboardingOwner_email(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OnboardingOwner", field.Name)
+}
+
 func (ec *executionContext) childFields_OnboardingPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "session":
@@ -8764,6 +9368,8 @@ func (ec *executionContext) childFields_OnboardingSession(ctx context.Context, f
 		return ec.fieldContext_OnboardingSession_definition(ctx, field)
 	case "completedSteps":
 		return ec.fieldContext_OnboardingSession_completedSteps(ctx, field)
+	case "owner":
+		return ec.fieldContext_OnboardingSession_owner(ctx, field)
 	case "existingAgency":
 		return ec.fieldContext_OnboardingSession_existingAgency(ctx, field)
 	}
@@ -9186,6 +9792,14 @@ func (ec *executionContext) childFields_RecipientNotification(ctx context.Contex
 		return ec.fieldContext_RecipientNotification_createdAt(ctx, field)
 	case "readAt":
 		return ec.fieldContext_RecipientNotification_readAt(ctx, field)
+	case "action":
+		return ec.fieldContext_RecipientNotification_action(ctx, field)
+	case "context":
+		return ec.fieldContext_RecipientNotification_context(ctx, field)
+	case "priority":
+		return ec.fieldContext_RecipientNotification_priority(ctx, field)
+	case "dueAt":
+		return ec.fieldContext_RecipientNotification_dueAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RecipientNotification", field.Name)
 }
@@ -9206,6 +9820,10 @@ func (ec *executionContext) childFields_RecipientNotificationPayload(ctx context
 	switch field.Name {
 	case "notification":
 		return ec.fieldContext_RecipientNotificationPayload_notification(ctx, field)
+	case "markedCount":
+		return ec.fieldContext_RecipientNotificationPayload_markedCount(ctx, field)
+	case "unreadCount":
+		return ec.fieldContext_RecipientNotificationPayload_unreadCount(ctx, field)
 	case "userErrors":
 		return ec.fieldContext_RecipientNotificationPayload_userErrors(ctx, field)
 	case "clientMutationId":
@@ -9268,6 +9886,16 @@ func (ec *executionContext) childFields_ReportAssetContext(ctx context.Context, 
 		return ec.fieldContext_ReportAssetContext_address(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportAssetContext", field.Name)
+}
+
+func (ec *executionContext) childFields_ReportConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodes":
+		return ec.fieldContext_ReportConnection_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_ReportConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportConnection", field.Name)
 }
 
 func (ec *executionContext) childFields_ReportContext(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9434,6 +10062,30 @@ func (ec *executionContext) childFields_ReportRequirement(ctx context.Context, f
 		return ec.fieldContext_ReportRequirement_analysisStatus(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReportRequirement", field.Name)
+}
+
+func (ec *executionContext) childFields_ReportSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_ReportSummary_id(ctx, field)
+	case "inspectionId":
+		return ec.fieldContext_ReportSummary_inspectionId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_ReportSummary_assetName(ctx, field)
+	case "assetAddress":
+		return ec.fieldContext_ReportSummary_assetAddress(ctx, field)
+	case "assetExternalKey":
+		return ec.fieldContext_ReportSummary_assetExternalKey(ctx, field)
+	case "participantName":
+		return ec.fieldContext_ReportSummary_participantName(ctx, field)
+	case "generatedAt":
+		return ec.fieldContext_ReportSummary_generatedAt(ctx, field)
+	case "classification":
+		return ec.fieldContext_ReportSummary_classification(ctx, field)
+	case "version":
+		return ec.fieldContext_ReportSummary_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReportSummary", field.Name)
 }
 
 func (ec *executionContext) childFields_ReportTemplateContext(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9832,6 +10484,96 @@ func (ec *executionContext) childFields_TenantPayload(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type TenantPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_TriageAssignee(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_TriageAssignee_id(ctx, field)
+	case "role":
+		return ec.fieldContext_TriageAssignee_role(ctx, field)
+	case "current":
+		return ec.fieldContext_TriageAssignee_current(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageAssignee", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageCase(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_TriageCase_inspectionId(ctx, field)
+	case "assetId":
+		return ec.fieldContext_TriageCase_assetId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_TriageCase_assetName(ctx, field)
+	case "address":
+		return ec.fieldContext_TriageCase_address(ctx, field)
+	case "classification":
+		return ec.fieldContext_TriageCase_classification(ctx, field)
+	case "status":
+		return ec.fieldContext_TriageCase_status(ctx, field)
+	case "reviewStatus":
+		return ec.fieldContext_TriageCase_reviewStatus(ctx, field)
+	case "assigneeId":
+		return ec.fieldContext_TriageCase_assigneeId(ctx, field)
+	case "reportVersion":
+		return ec.fieldContext_TriageCase_reportVersion(ctx, field)
+	case "version":
+		return ec.fieldContext_TriageCase_version(ctx, field)
+	case "reasonCodes":
+		return ec.fieldContext_TriageCase_reasonCodes(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_TriageCase_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_TriageCase_updatedAt(ctx, field)
+	case "report":
+		return ec.fieldContext_TriageCase_report(ctx, field)
+	case "events":
+		return ec.fieldContext_TriageCase_events(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageCase", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageCaseEvent(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_TriageCaseEvent_id(ctx, field)
+	case "actorId":
+		return ec.fieldContext_TriageCaseEvent_actorId(ctx, field)
+	case "kind":
+		return ec.fieldContext_TriageCaseEvent_kind(ctx, field)
+	case "body":
+		return ec.fieldContext_TriageCaseEvent_body(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_TriageCaseEvent_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageCaseEvent", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageCasePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "triageCase":
+		return ec.fieldContext_TriageCasePayload_triageCase(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_TriageCasePayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_TriageCasePayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageCasePayload", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageCounts(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "new":
+		return ec.fieldContext_TriageCounts_new(ctx, field)
+	case "inReview":
+		return ec.fieldContext_TriageCounts_inReview(ctx, field)
+	case "awaitingEvidence":
+		return ec.fieldContext_TriageCounts_awaitingEvidence(ctx, field)
+	case "criticalOpen":
+		return ec.fieldContext_TriageCounts_criticalOpen(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageCounts", field.Name)
+}
+
 func (ec *executionContext) childFields_TriageInspection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "inspectionId":
@@ -9858,6 +10600,52 @@ func (ec *executionContext) childFields_TriageInspectionConnection(ctx context.C
 		return ec.fieldContext_TriageInspectionConnection_pageInfo(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TriageInspectionConnection", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageQueueItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_TriageQueueItem_inspectionId(ctx, field)
+	case "assetId":
+		return ec.fieldContext_TriageQueueItem_assetId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_TriageQueueItem_assetName(ctx, field)
+	case "address":
+		return ec.fieldContext_TriageQueueItem_address(ctx, field)
+	case "classification":
+		return ec.fieldContext_TriageQueueItem_classification(ctx, field)
+	case "status":
+		return ec.fieldContext_TriageQueueItem_status(ctx, field)
+	case "reviewStatus":
+		return ec.fieldContext_TriageQueueItem_reviewStatus(ctx, field)
+	case "assigneeId":
+		return ec.fieldContext_TriageQueueItem_assigneeId(ctx, field)
+	case "reportVersion":
+		return ec.fieldContext_TriageQueueItem_reportVersion(ctx, field)
+	case "version":
+		return ec.fieldContext_TriageQueueItem_version(ctx, field)
+	case "findingCount":
+		return ec.fieldContext_TriageQueueItem_findingCount(ctx, field)
+	case "reasonCodes":
+		return ec.fieldContext_TriageQueueItem_reasonCodes(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_TriageQueueItem_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_TriageQueueItem_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageQueueItem", field.Name)
+}
+
+func (ec *executionContext) childFields_TriageWorkspace(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "counts":
+		return ec.fieldContext_TriageWorkspace_counts(ctx, field)
+	case "nodes":
+		return ec.fieldContext_TriageWorkspace_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_TriageWorkspace_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TriageWorkspace", field.Name)
 }
 
 func (ec *executionContext) childFields_UsageSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10848,6 +11636,20 @@ func (ec *executionContext) field_Mutation_updateTenant_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateTriageCase_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (UpdateTriageCaseInput, error) {
+			return ec.unmarshalNUpdateTriageCaseInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateTriageCaseInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_upsertBusinessUnit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11381,22 +12183,38 @@ func (ec *executionContext) field_Query_myNotifications_args(ctx context.Context
 		return nil, err
 	}
 	args["unreadOnly"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (*int, error) {
-			return ec.unmarshalOInt2ᚖint(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["first"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "kind",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg2
+	args["kind"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "projectId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["projectId"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg4
 	return args, nil
 }
 
@@ -11618,6 +12436,44 @@ func (ec *executionContext) field_Query_report_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_reports_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "search",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "classification",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["classification"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_schedules_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11714,6 +12570,34 @@ func (ec *executionContext) field_Query_templates_args(ctx context.Context, rawA
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_triageAssignees_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inspectionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["inspectionId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_triageCase_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inspectionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["inspectionId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_triageInspections_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11749,6 +12633,68 @@ func (ec *executionContext) field_Query_triageInspections_args(ctx context.Conte
 		return nil, err
 	}
 	args["status"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_triageWorkspace_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*TriageReviewStatus, error) {
+			return ec.unmarshalOTriageReviewStatus2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "classification",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["classification"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "search",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "assigneeId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["assigneeId"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "reason",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["reason"] = arg6
 	return args, nil
 }
 
@@ -21618,6 +22564,50 @@ func (ec *executionContext) fieldContext_Mutation_requestRecapture(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_updateTriageCase(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateTriageCase(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateTriageCase(ctx, fc.Args["input"].(UpdateTriageCaseInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TriageCasePayload) graphql.Marshaler {
+			return ec.marshalNTriageCasePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCasePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateTriageCase(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageCasePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateTriageCase_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_submitRecapture(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23545,6 +24535,52 @@ func (ec *executionContext) fieldContext_OnboardingOriginMode_required(_ context
 	return graphql.NewScalarFieldContext("OnboardingOriginMode", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _OnboardingOwner_name(ctx context.Context, field graphql.CollectedField, obj *OnboardingOwner) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingOwner_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingOwner_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingOwner", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingOwner_email(ctx context.Context, field graphql.CollectedField, obj *OnboardingOwner) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingOwner_email(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingOwner_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OnboardingOwner", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _OnboardingPayload_session(ctx context.Context, field graphql.CollectedField, obj *OnboardingPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24048,6 +25084,38 @@ func (ec *executionContext) _OnboardingSession_completedSteps(ctx context.Contex
 }
 func (ec *executionContext) fieldContext_OnboardingSession_completedSteps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("OnboardingSession", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _OnboardingSession_owner(ctx context.Context, field graphql.CollectedField, obj *OnboardingSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OnboardingSession_owner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Owner, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OnboardingOwner) graphql.Marshaler {
+			return ec.marshalNOnboardingOwner2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOwner(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OnboardingSession_owner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OnboardingSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OnboardingOwner(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _OnboardingSession_existingAgency(ctx context.Context, field graphql.CollectedField, obj *OnboardingSession) (ret graphql.Marshaler) {
@@ -27886,6 +28954,50 @@ func (ec *executionContext) fieldContext_Query_report(ctx context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_reports(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_reports(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Reports(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["search"].(*string), fc.Args["classification"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReportConnection) graphql.Marshaler {
+			return ec.marshalNReportConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_reports(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportConnection(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_reports_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_reportDownload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28012,6 +29124,138 @@ func (ec *executionContext) fieldContext_Query_triageInspections(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_triageInspections_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_triageWorkspace(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_triageWorkspace(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TriageWorkspace(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["status"].(*TriageReviewStatus), fc.Args["classification"].(*string), fc.Args["search"].(*string), fc.Args["assigneeId"].(*string), fc.Args["reason"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TriageWorkspace) graphql.Marshaler {
+			return ec.marshalNTriageWorkspace2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageWorkspace(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_triageWorkspace(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageWorkspace(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_triageWorkspace_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_triageCase(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_triageCase(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TriageCase(ctx, fc.Args["inspectionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TriageCase) graphql.Marshaler {
+			return ec.marshalOTriageCase2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCase(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_triageCase(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageCase(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_triageCase_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_triageAssignees(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_triageAssignees(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().TriageAssignees(ctx, fc.Args["inspectionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TriageAssignee) graphql.Marshaler {
+			return ec.marshalNTriageAssignee2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageAssigneeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_triageAssignees(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageAssignee(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_triageAssignees_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -28324,7 +29568,7 @@ func (ec *executionContext) _Query_myNotifications(ctx context.Context, field gr
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["unreadOnly"].(*bool), fc.Args["first"].(*int), fc.Args["after"].(*string))
+			return ec.Resolvers.Query().MyNotifications(ctx, fc.Args["unreadOnly"].(*bool), fc.Args["kind"].(*string), fc.Args["projectId"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *RecipientNotificationConnection) graphql.Marshaler {
@@ -29037,6 +30281,98 @@ func (ec *executionContext) fieldContext_RecipientNotification_readAt(_ context.
 	return graphql.NewScalarFieldContext("RecipientNotification", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _RecipientNotification_action(ctx context.Context, field graphql.CollectedField, obj *RecipientNotification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotification_action(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotification_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _RecipientNotification_context(ctx context.Context, field graphql.CollectedField, obj *RecipientNotification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotification_context(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Context, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalNJSON2map(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotification_context(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotification", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _RecipientNotification_priority(ctx context.Context, field graphql.CollectedField, obj *RecipientNotification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotification_priority(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Priority, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotification_priority(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _RecipientNotification_dueAt(ctx context.Context, field graphql.CollectedField, obj *RecipientNotification) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotification_dueAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DueAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotification_dueAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotification", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _RecipientNotificationConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *RecipientNotificationConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29154,6 +30490,52 @@ func (ec *executionContext) fieldContext_RecipientNotificationPayload_notificati
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _RecipientNotificationPayload_markedCount(ctx context.Context, field graphql.CollectedField, obj *RecipientNotificationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotificationPayload_markedCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MarkedCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotificationPayload_markedCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotificationPayload", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _RecipientNotificationPayload_unreadCount(ctx context.Context, field graphql.CollectedField, obj *RecipientNotificationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RecipientNotificationPayload_unreadCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UnreadCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RecipientNotificationPayload_unreadCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RecipientNotificationPayload", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _RecipientNotificationPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *RecipientNotificationPayload) (ret graphql.Marshaler) {
@@ -29760,6 +31142,70 @@ func (ec *executionContext) _ReportAssetContext_address(ctx context.Context, fie
 }
 func (ec *executionContext) fieldContext_ReportAssetContext_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportAssetContext", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *ReportConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportConnection_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ReportSummary) graphql.Marshaler {
+			return ec.marshalNReportSummary2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportSummaryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportConnection_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReportSummary(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReportConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *ReportConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReportConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _ReportContext_asset(ctx context.Context, field graphql.CollectedField, obj *ReportContext) (ret graphql.Marshaler) {
@@ -31102,6 +32548,213 @@ func (ec *executionContext) _ReportRequirement_analysisStatus(ctx context.Contex
 }
 func (ec *executionContext) fieldContext_ReportRequirement_analysisStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ReportRequirement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_id(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_assetName(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_assetAddress(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_assetAddress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetAddress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_assetAddress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_assetExternalKey(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_assetExternalKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetExternalKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_assetExternalKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_participantName(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_participantName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ParticipantName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_participantName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_generatedAt(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_generatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GeneratedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_generatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_classification(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_classification(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Classification, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_classification(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ReportSummary_version(ctx context.Context, field graphql.CollectedField, obj *ReportSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReportSummary_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReportSummary_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReportSummary", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _ReportTemplateContext_id(ctx context.Context, field graphql.CollectedField, obj *ReportTemplateContext) (ret graphql.Marshaler) {
@@ -34107,6 +35760,732 @@ func (ec *executionContext) fieldContext_TenantPayload_clientMutationId(_ contex
 	return graphql.NewScalarFieldContext("TenantPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _TriageAssignee_id(ctx context.Context, field graphql.CollectedField, obj *TriageAssignee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageAssignee_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageAssignee_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageAssignee", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageAssignee_role(ctx context.Context, field graphql.CollectedField, obj *TriageAssignee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageAssignee_role(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Role, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageAssignee_role(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageAssignee", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageAssignee_current(ctx context.Context, field graphql.CollectedField, obj *TriageAssignee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageAssignee_current(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Current, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageAssignee_current(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageAssignee", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_inspectionId(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_assetId(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_assetId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_assetName(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_address(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_address(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_classification(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_classification(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Classification, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_classification(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_status(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_reviewStatus(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_reviewStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v TriageReviewStatus) graphql.Marshaler {
+			return ec.marshalNTriageReviewStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_reviewStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type TriageReviewStatus does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_assigneeId(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_assigneeId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssigneeID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_assigneeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_reportVersion(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_reportVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReportVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_reportVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_version(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_reasonCodes(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_reasonCodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReasonCodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_reasonCodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_createdAt(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_updatedAt(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCase", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCase_report(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_report(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Report, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Report) graphql.Marshaler {
+			return ec.marshalOReport2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReport(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_report(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageCase",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Report(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageCase_events(ctx context.Context, field graphql.CollectedField, obj *TriageCase) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCase_events(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Events, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TriageCaseEvent) graphql.Marshaler {
+			return ec.marshalNTriageCaseEvent2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseEventᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCase_events(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageCase",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageCaseEvent(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageCaseEvent_id(ctx context.Context, field graphql.CollectedField, obj *TriageCaseEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCaseEvent_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCaseEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCaseEvent", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCaseEvent_actorId(ctx context.Context, field graphql.CollectedField, obj *TriageCaseEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCaseEvent_actorId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActorID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCaseEvent_actorId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCaseEvent", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCaseEvent_kind(ctx context.Context, field graphql.CollectedField, obj *TriageCaseEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCaseEvent_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCaseEvent_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCaseEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCaseEvent_body(ctx context.Context, field graphql.CollectedField, obj *TriageCaseEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCaseEvent_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCaseEvent_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCaseEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCaseEvent_createdAt(ctx context.Context, field graphql.CollectedField, obj *TriageCaseEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCaseEvent_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCaseEvent_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCaseEvent", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCasePayload_triageCase(ctx context.Context, field graphql.CollectedField, obj *TriageCasePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCasePayload_triageCase(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TriageCase, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TriageCase) graphql.Marshaler {
+			return ec.marshalNTriageCase2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCase(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCasePayload_triageCase(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageCasePayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageCase(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageCasePayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *TriageCasePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCasePayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCasePayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageCasePayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageCasePayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *TriageCasePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCasePayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCasePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCasePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCounts_new(ctx context.Context, field graphql.CollectedField, obj *TriageCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCounts_new(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.New, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCounts_new(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCounts_inReview(ctx context.Context, field graphql.CollectedField, obj *TriageCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCounts_inReview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InReview, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCounts_inReview(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCounts_awaitingEvidence(ctx context.Context, field graphql.CollectedField, obj *TriageCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCounts_awaitingEvidence(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AwaitingEvidence, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCounts_awaitingEvidence(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageCounts_criticalOpen(ctx context.Context, field graphql.CollectedField, obj *TriageCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageCounts_criticalOpen(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CriticalOpen, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageCounts_criticalOpen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _TriageInspection_inspectionId(ctx context.Context, field graphql.CollectedField, obj *TriageInspection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34299,6 +36678,424 @@ func (ec *executionContext) _TriageInspectionConnection_pageInfo(ctx context.Con
 func (ec *executionContext) fieldContext_TriageInspectionConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "TriageInspectionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageQueueItem_inspectionId(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_assetId(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_assetId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_assetName(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_address(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_address(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_classification(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_classification(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Classification, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_classification(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_status(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_reviewStatus(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_reviewStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v TriageReviewStatus) graphql.Marshaler {
+			return ec.marshalNTriageReviewStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_reviewStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type TriageReviewStatus does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_assigneeId(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_assigneeId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssigneeID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_assigneeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_reportVersion(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_reportVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReportVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_reportVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_version(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_findingCount(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_findingCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FindingCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_findingCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_reasonCodes(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_reasonCodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReasonCodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_reasonCodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_createdAt(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageQueueItem_updatedAt(ctx context.Context, field graphql.CollectedField, obj *TriageQueueItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageQueueItem_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageQueueItem_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TriageQueueItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _TriageWorkspace_counts(ctx context.Context, field graphql.CollectedField, obj *TriageWorkspace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageWorkspace_counts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Counts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TriageCounts) graphql.Marshaler {
+			return ec.marshalNTriageCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCounts(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageWorkspace_counts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageWorkspace",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageCounts(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageWorkspace_nodes(ctx context.Context, field graphql.CollectedField, obj *TriageWorkspace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageWorkspace_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TriageQueueItem) graphql.Marshaler {
+			return ec.marshalNTriageQueueItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageQueueItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageWorkspace_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageWorkspace",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TriageQueueItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TriageWorkspace_pageInfo(ctx context.Context, field graphql.CollectedField, obj *TriageWorkspace) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TriageWorkspace_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TriageWorkspace_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TriageWorkspace",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -37565,7 +40362,11 @@ func (ec *executionContext) unmarshalInputMarkNotificationReadInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"notificationId", "clientMutationId"}
+	if _, present := asMap["all"]; !present {
+		asMap["all"] = false
+	}
+
+	fieldsInOrder := [...]string{"notificationId", "all", "kind", "projectId", "through", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -37574,11 +40375,39 @@ func (ec *executionContext) unmarshalInputMarkNotificationReadInput(ctx context.
 		switch k {
 		case "notificationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationId"))
-			data, err := ec.unmarshalNID2string(ctx, v)
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.NotificationID = data
+		case "all":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("all"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.All = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectID = data
+		case "through":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("through"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Through = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -39046,6 +41875,78 @@ func (ec *executionContext) unmarshalInputUpdateTenantInput(ctx context.Context,
 				return it, err
 			}
 			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputUpdateTriageCaseInput(ctx context.Context, obj any) (UpdateTriageCaseInput, error) {
+	var it UpdateTriageCaseInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "expectedVersion", "action", "assigneeId", "body", "disposition", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "action":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("action"))
+			data, err := ec.unmarshalNTriageCaseAction2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseAction(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Action = data
+		case "assigneeId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assigneeId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AssigneeID = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		case "disposition":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("disposition"))
+			data, err := ec.unmarshalOTriageDisposition2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageDisposition(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Disposition = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -42701,6 +45602,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "updateTriageCase":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateTriageCase(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "submitRecapture":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_submitRecapture(ctx, field)
@@ -43429,6 +46337,49 @@ func (ec *executionContext) _OnboardingOriginMode(ctx context.Context, sel ast.S
 	return out
 }
 
+var onboardingOwnerImplementors = []string{"OnboardingOwner"}
+
+func (ec *executionContext) _OnboardingOwner(ctx context.Context, sel ast.SelectionSet, obj *OnboardingOwner) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, onboardingOwnerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OnboardingOwner")
+		case "name":
+			out.Values[i] = ec._OnboardingOwner_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._OnboardingOwner_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var onboardingPayloadImplementors = []string{"OnboardingPayload"}
 
 func (ec *executionContext) _OnboardingPayload(ctx context.Context, sel ast.SelectionSet, obj *OnboardingPayload) graphql.Marshaler {
@@ -43604,6 +46555,11 @@ func (ec *executionContext) _OnboardingSession(ctx context.Context, sel ast.Sele
 			}
 		case "completedSteps":
 			out.Values[i] = ec._OnboardingSession_completedSteps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "owner":
+			out.Values[i] = ec._OnboardingSession_owner(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -45561,6 +48517,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "reports":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_reports(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "reportDownload":
 			field := field
 
@@ -45615,6 +48593,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_triageInspections(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "triageWorkspace":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_triageWorkspace(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "triageCase":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_triageCase(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "triageAssignees":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_triageAssignees(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -46123,6 +49167,26 @@ func (ec *executionContext) _RecipientNotification(ctx context.Context, sel ast.
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "action":
+			out.Values[i] = ec._RecipientNotification_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "context":
+			out.Values[i] = ec._RecipientNotification_context(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "priority":
+			out.Values[i] = ec._RecipientNotification_priority(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dueAt":
+			out.Values[i] = ec._RecipientNotification_dueAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -46207,6 +49271,16 @@ func (ec *executionContext) _RecipientNotificationPayload(ctx context.Context, s
 		case "notification":
 			out.Values[i] = ec._RecipientNotificationPayload_notification(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "markedCount":
+			out.Values[i] = ec._RecipientNotificationPayload_markedCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unreadCount":
+			out.Values[i] = ec._RecipientNotificationPayload_unreadCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "userErrors":
@@ -46392,6 +49466,49 @@ func (ec *executionContext) _ReportAssetContext(ctx context.Context, sel ast.Sel
 			}
 		case "address":
 			out.Values[i] = ec._ReportAssetContext_address(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reportConnectionImplementors = []string{"ReportConnection"}
+
+func (ec *executionContext) _ReportConnection(ctx context.Context, sel ast.SelectionSet, obj *ReportConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportConnection")
+		case "nodes":
+			out.Values[i] = ec._ReportConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._ReportConnection_pageInfo(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -46969,6 +50086,84 @@ func (ec *executionContext) _ReportRequirement(ctx context.Context, sel ast.Sele
 			}
 		case "analysisStatus":
 			out.Values[i] = ec._ReportRequirement_analysisStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reportSummaryImplementors = []string{"ReportSummary"}
+
+func (ec *executionContext) _ReportSummary(ctx context.Context, sel ast.SelectionSet, obj *ReportSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reportSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReportSummary")
+		case "id":
+			out.Values[i] = ec._ReportSummary_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inspectionId":
+			out.Values[i] = ec._ReportSummary_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetName":
+			out.Values[i] = ec._ReportSummary_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetAddress":
+			out.Values[i] = ec._ReportSummary_assetAddress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetExternalKey":
+			out.Values[i] = ec._ReportSummary_assetExternalKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "participantName":
+			out.Values[i] = ec._ReportSummary_participantName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "generatedAt":
+			out.Values[i] = ec._ReportSummary_generatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "classification":
+			out.Values[i] = ec._ReportSummary_classification(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._ReportSummary_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -48451,6 +51646,321 @@ func (ec *executionContext) _TenantPayload(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var triageAssigneeImplementors = []string{"TriageAssignee"}
+
+func (ec *executionContext) _TriageAssignee(ctx context.Context, sel ast.SelectionSet, obj *TriageAssignee) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageAssigneeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageAssignee")
+		case "id":
+			out.Values[i] = ec._TriageAssignee_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "role":
+			out.Values[i] = ec._TriageAssignee_role(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "current":
+			out.Values[i] = ec._TriageAssignee_current(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageCaseImplementors = []string{"TriageCase"}
+
+func (ec *executionContext) _TriageCase(ctx context.Context, sel ast.SelectionSet, obj *TriageCase) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageCaseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageCase")
+		case "inspectionId":
+			out.Values[i] = ec._TriageCase_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetId":
+			out.Values[i] = ec._TriageCase_assetId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetName":
+			out.Values[i] = ec._TriageCase_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "address":
+			out.Values[i] = ec._TriageCase_address(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "classification":
+			out.Values[i] = ec._TriageCase_classification(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._TriageCase_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewStatus":
+			out.Values[i] = ec._TriageCase_reviewStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assigneeId":
+			out.Values[i] = ec._TriageCase_assigneeId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reportVersion":
+			out.Values[i] = ec._TriageCase_reportVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._TriageCase_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reasonCodes":
+			out.Values[i] = ec._TriageCase_reasonCodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._TriageCase_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._TriageCase_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "report":
+			out.Values[i] = ec._TriageCase_report(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "events":
+			out.Values[i] = ec._TriageCase_events(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageCaseEventImplementors = []string{"TriageCaseEvent"}
+
+func (ec *executionContext) _TriageCaseEvent(ctx context.Context, sel ast.SelectionSet, obj *TriageCaseEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageCaseEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageCaseEvent")
+		case "id":
+			out.Values[i] = ec._TriageCaseEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "actorId":
+			out.Values[i] = ec._TriageCaseEvent_actorId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._TriageCaseEvent_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._TriageCaseEvent_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._TriageCaseEvent_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageCasePayloadImplementors = []string{"TriageCasePayload"}
+
+func (ec *executionContext) _TriageCasePayload(ctx context.Context, sel ast.SelectionSet, obj *TriageCasePayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageCasePayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageCasePayload")
+		case "triageCase":
+			out.Values[i] = ec._TriageCasePayload_triageCase(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._TriageCasePayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._TriageCasePayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageCountsImplementors = []string{"TriageCounts"}
+
+func (ec *executionContext) _TriageCounts(ctx context.Context, sel ast.SelectionSet, obj *TriageCounts) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageCountsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageCounts")
+		case "new":
+			out.Values[i] = ec._TriageCounts_new(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inReview":
+			out.Values[i] = ec._TriageCounts_inReview(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "awaitingEvidence":
+			out.Values[i] = ec._TriageCounts_awaitingEvidence(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "criticalOpen":
+			out.Values[i] = ec._TriageCounts_criticalOpen(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var triageInspectionImplementors = []string{"TriageInspection"}
 
 func (ec *executionContext) _TriageInspection(ctx context.Context, sel ast.SelectionSet, obj *TriageInspection) graphql.Marshaler {
@@ -48533,6 +52043,157 @@ func (ec *executionContext) _TriageInspectionConnection(ctx context.Context, sel
 			}
 		case "pageInfo":
 			out.Values[i] = ec._TriageInspectionConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageQueueItemImplementors = []string{"TriageQueueItem"}
+
+func (ec *executionContext) _TriageQueueItem(ctx context.Context, sel ast.SelectionSet, obj *TriageQueueItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageQueueItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageQueueItem")
+		case "inspectionId":
+			out.Values[i] = ec._TriageQueueItem_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetId":
+			out.Values[i] = ec._TriageQueueItem_assetId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetName":
+			out.Values[i] = ec._TriageQueueItem_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "address":
+			out.Values[i] = ec._TriageQueueItem_address(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "classification":
+			out.Values[i] = ec._TriageQueueItem_classification(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._TriageQueueItem_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewStatus":
+			out.Values[i] = ec._TriageQueueItem_reviewStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assigneeId":
+			out.Values[i] = ec._TriageQueueItem_assigneeId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reportVersion":
+			out.Values[i] = ec._TriageQueueItem_reportVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._TriageQueueItem_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "findingCount":
+			out.Values[i] = ec._TriageQueueItem_findingCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reasonCodes":
+			out.Values[i] = ec._TriageQueueItem_reasonCodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._TriageQueueItem_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._TriageQueueItem_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var triageWorkspaceImplementors = []string{"TriageWorkspace"}
+
+func (ec *executionContext) _TriageWorkspace(ctx context.Context, sel ast.SelectionSet, obj *TriageWorkspace) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, triageWorkspaceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TriageWorkspace")
+		case "counts":
+			out.Values[i] = ec._TriageWorkspace_counts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nodes":
+			out.Values[i] = ec._TriageWorkspace_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._TriageWorkspace_pageInfo(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -50235,6 +53896,16 @@ func (ec *executionContext) marshalNOnboardingOriginMode2ᚖinspectionᚋservice
 	return ec._OnboardingOriginMode(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNOnboardingOwner2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingOwner(ctx context.Context, sel ast.SelectionSet, v *OnboardingOwner) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OnboardingOwner(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNOnboardingPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOnboardingPayload(ctx context.Context, sel ast.SelectionSet, v *OnboardingPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -50759,6 +54430,16 @@ func (ec *executionContext) marshalNReportAssetContext2ᚖinspectionᚋservices�
 	return ec._ReportAssetContext(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNReportConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportConnection(ctx context.Context, sel ast.SelectionSet, v *ReportConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReportConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNReportContext2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportContext(ctx context.Context, sel ast.SelectionSet, v *ReportContext) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -50875,6 +54556,32 @@ func (ec *executionContext) marshalNReportRequirement2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._ReportRequirement(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNReportSummary2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportSummaryᚄ(ctx context.Context, sel ast.SelectionSet, v []*ReportSummary) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNReportSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportSummary(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNReportSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportSummary(ctx context.Context, sel ast.SelectionSet, v *ReportSummary) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReportSummary(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNReportTemplateContext2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReportTemplateContext(ctx context.Context, sel ast.SelectionSet, v *ReportTemplateContext) graphql.Marshaler {
@@ -51354,6 +55061,98 @@ func (ec *executionContext) marshalNTenantPayload2ᚖinspectionᚋservicesᚋins
 	return ec._TenantPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNTriageAssignee2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageAssigneeᚄ(ctx context.Context, sel ast.SelectionSet, v []*TriageAssignee) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTriageAssignee2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageAssignee(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTriageAssignee2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageAssignee(ctx context.Context, sel ast.SelectionSet, v *TriageAssignee) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageAssignee(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTriageCase2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCase(ctx context.Context, sel ast.SelectionSet, v *TriageCase) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageCase(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNTriageCaseAction2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseAction(ctx context.Context, v any) (TriageCaseAction, error) {
+	var res TriageCaseAction
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTriageCaseAction2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseAction(ctx context.Context, sel ast.SelectionSet, v TriageCaseAction) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNTriageCaseEvent2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseEventᚄ(ctx context.Context, sel ast.SelectionSet, v []*TriageCaseEvent) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTriageCaseEvent2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseEvent(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTriageCaseEvent2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCaseEvent(ctx context.Context, sel ast.SelectionSet, v *TriageCaseEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageCaseEvent(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTriageCasePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCasePayload(ctx context.Context, sel ast.SelectionSet, v *TriageCasePayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageCasePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTriageCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCounts(ctx context.Context, sel ast.SelectionSet, v *TriageCounts) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageCounts(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNTriageInspection2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageInspectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*TriageInspection) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -51390,6 +55189,52 @@ func (ec *executionContext) marshalNTriageInspectionConnection2ᚖinspectionᚋs
 	return ec._TriageInspectionConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNTriageQueueItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageQueueItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*TriageQueueItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTriageQueueItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageQueueItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTriageQueueItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageQueueItem(ctx context.Context, sel ast.SelectionSet, v *TriageQueueItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageQueueItem(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNTriageReviewStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx context.Context, v any) (TriageReviewStatus, error) {
+	var res TriageReviewStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTriageReviewStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx context.Context, sel ast.SelectionSet, v TriageReviewStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNTriageWorkspace2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageWorkspace(ctx context.Context, sel ast.SelectionSet, v *TriageWorkspace) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TriageWorkspace(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNUpdateAnalysisPromptInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateAnalysisPromptInput(ctx context.Context, v any) (UpdateAnalysisPromptInput, error) {
 	res, err := ec.unmarshalInputUpdateAnalysisPromptInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -51407,6 +55252,11 @@ func (ec *executionContext) unmarshalNUpdateScheduleInput2inspectionᚋservices�
 
 func (ec *executionContext) unmarshalNUpdateTenantInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateTenantInput(ctx context.Context, v any) (UpdateTenantInput, error) {
 	res, err := ec.unmarshalInputUpdateTenantInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNUpdateTriageCaseInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateTriageCaseInput(ctx context.Context, v any) (UpdateTriageCaseInput, error) {
+	res, err := ec.unmarshalInputUpdateTriageCaseInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -52052,6 +55902,45 @@ func (ec *executionContext) marshalOTenant2ᚖinspectionᚋservicesᚋinspection
 		return graphql.Null
 	}
 	return ec._Tenant(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOTriageCase2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageCase(ctx context.Context, sel ast.SelectionSet, v *TriageCase) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._TriageCase(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOTriageDisposition2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageDisposition(ctx context.Context, v any) (*TriageDisposition, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(TriageDisposition)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTriageDisposition2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageDisposition(ctx context.Context, sel ast.SelectionSet, v *TriageDisposition) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOTriageReviewStatus2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx context.Context, v any) (*TriageReviewStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(TriageReviewStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTriageReviewStatus2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐTriageReviewStatus(ctx context.Context, sel ast.SelectionSet, v *TriageReviewStatus) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

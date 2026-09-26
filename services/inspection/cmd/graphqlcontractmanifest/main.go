@@ -46,6 +46,22 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	if previous, readErr := os.ReadFile(*outputPath); readErr == nil {
+		var tracked graphqlcontract.Manifest
+		if json.Unmarshal(previous, &tracked) == nil {
+			known := make(map[string]struct{}, len(manifest.Capabilities))
+			for _, capability := range manifest.Capabilities {
+				known[capability.Root] = struct{}{}
+			}
+			for _, capability := range tracked.Capabilities {
+				if _, exists := known[capability.Root]; !exists {
+					manifest.Capabilities = append(manifest.Capabilities, capability)
+				}
+			}
+		}
+	} else if !os.IsNotExist(readErr) {
+		fail(readErr)
+	}
 	if err := graphqlcontract.ValidateManifest(schema, manifest, []string{"admin", "dashboard", "capture", "onboarding"}); err != nil {
 		fail(err)
 	}

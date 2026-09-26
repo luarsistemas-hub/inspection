@@ -17,11 +17,11 @@ test("completes the real onboarding flow and creates the first vistoria", async 
   // proof and continue from the next server-confirmed step.
   await page.reload();
   await onboarding.expectStep("Imóvel");
-  await onboarding.saveProperty({ address: "Rua do Fluxo, 123", propertyType: "APARTMENT", rooms: "3", purpose: "RENTAL", deadline });
+  await onboarding.saveProperty({ address: "Rua do Fluxo, 123", propertyType: "APARTMENT", purpose: "RENTAL", deadline });
   await onboarding.expectStep("Fotos de referência");
   await onboarding.saveChecklistOrigin();
   await onboarding.expectStep("Responsável pela vistoria");
-  await onboarding.saveSelfParticipant();
+  await onboarding.saveSelfParticipant("Ana E2E", `ana.${suffix}@example.test`);
   await onboarding.submit();
   await onboarding.expectCreated();
 });

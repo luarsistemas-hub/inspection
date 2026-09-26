@@ -23,21 +23,44 @@ test.describe("Dashboard creation forms against the local stack", () => {
     return { request: response.request().postDataJSON() as { variables: { input: Record<string, unknown> } }, body: await response.json() as { errors?: unknown[]; data?: Record<string, { userErrors?: unknown[]; [key: string]: unknown }> } };
   }
 
-  test("Agenda accepts a local start time in the selected IANA timezone", async ({ page }) => {
-    const assertRuntimeClean = installRuntimeGuards(page);
-    await loginAsLocalAdmin(page, "/schedules");
-    const form = page.locator("form").filter({ has: page.getByRole("heading", { name: "Nova agenda" }) });
-    await expect(form).toBeVisible();
-    await chooseEligibleDependencies(form);
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-    await form.getByLabel("Início").fill(`${tomorrow}T23:32`);
-    await form.getByRole("combobox", { name: "Fuso horário" }).fill("Africa/Accra");
-    await form.getByRole("listbox", { name: "Fuso horário" }).getByRole("option", { name: "Africa/Accra" }).click();
-    const { request, body } = await mutationResponse(page, "CreateSchedule", form.getByRole("button", { name: "Criar agenda" }));
-    expect(request.variables.input).toMatchObject({ startsAt: `${tomorrow}T23:32`, timezone: "Africa/Accra" });
-    expect(body.errors).toBeUndefined();
-    expect(body.data?.createSchedule?.userErrors).toEqual([]);
-    await assertRuntimeClean();
+  test.describe("Agendas in the Brazil timezone", () => {
+    test.use({ timezoneId: "Pacific/Honolulu" });
+
+    test("sends the local start time in São Paulo for every available frequency", async ({ page }) => {
+      const assertRuntimeClean = installRuntimeGuards(page);
+      await loginAsLocalAdmin(page, "/schedules");
+      const form = page.locator("form").filter({ has: page.getByRole("heading", { name: "Nova agenda" }) });
+      await expect(form).toBeVisible();
+      await chooseEligibleDependencies(form);
+      await expect(form.getByLabel("Fuso horário")).toHaveCount(0);
+
+      const start = `${new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10)}T23:32`;
+      await form.getByLabel("Primeira vistoria").fill(start);
+      const repeat = form.getByLabel("Repetir");
+      await expect(repeat.locator("option")).toHaveText(["Diariamente", "Semanalmente", "Mensalmente", "Anualmente"]);
+
+      for (const [frequency, label] of [["DAILY", "Diariamente"], ["WEEKLY", "Semanalmente"], ["MONTHLY", "Mensalmente"], ["YEARLY", "Anualmente"]]) {
+        await repeat.selectOption(frequency);
+        const { request, body } = await mutationResponse(page, "CreateSchedule", form.getByRole("button", { name: "Criar agenda" }));
+        expect(request.variables.input).toMatchObject({ startsAt: start, timezone: "America/Sao_Paulo", rrule: `FREQ=${frequency}` });
+        expect(await repeat.locator("option:checked").textContent()).toBe(label);
+        expect(body.errors).toBeUndefined();
+        expect(body.data?.createSchedule?.userErrors).toEqual([]);
+      }
+
+      const localStart = new Date(`${start}:00-03:00`);
+      const startLabel = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(localStart);
+      const firstSchedule = page.locator(".schedules-collection > li").filter({ hasText: `Próxima vistoria: ${startLabel}` }).first();
+      await expect(firstSchedule).toBeVisible();
+      await firstSchedule.getByRole("button", { name: "Editar agenda" }).click();
+      await expect(firstSchedule.getByRole("heading", { name: "Editar agenda" })).toBeVisible();
+      await firstSchedule.getByLabel("Repetir").selectOption("WEEKLY");
+      const { request: updateRequest, body: updateBody } = await mutationResponse(page, "UpdateSchedule", firstSchedule.getByRole("button", { name: "Salvar alterações" }));
+      expect(updateRequest.variables.input).toMatchObject({ rrule: "FREQ=WEEKLY", timezone: "America/Sao_Paulo" });
+      expect(updateBody.errors).toBeUndefined();
+      expect(updateBody.data?.updateSchedule?.userErrors).toEqual([]);
+      await assertRuntimeClean();
+    });
   });
 
   test("Vistorias sends explicit instants for both dates", async ({ page }) => {

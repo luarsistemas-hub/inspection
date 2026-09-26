@@ -20,10 +20,9 @@ export class OnboardingPage {
     await this.saveStep();
   }
 
-  async saveProperty(input: { address: string; propertyType: string; rooms: string; purpose: string; deadline: string }) {
+  async saveProperty(input: { address: string; propertyType: string; purpose: string; deadline: string }) {
     await this.page.getByLabel("Endereço do imóvel").fill(input.address);
     await this.page.getByLabel("Tipo de imóvel").selectOption(input.propertyType);
-    await this.page.getByLabel("Quantidade de cômodos").fill(input.rooms);
     await this.page.getByLabel("Finalidade da vistoria").selectOption(input.purpose);
     await this.page.getByLabel("Prazo para concluir a vistoria").fill(input.deadline);
     await this.saveStep();
@@ -34,8 +33,12 @@ export class OnboardingPage {
     await this.saveStep();
   }
 
-  async saveSelfParticipant() {
+  async saveSelfParticipant(name: string, email: string) {
     await this.page.getByLabel("Quem realizará a vistoria?").selectOption("SELF");
+    await expect(this.page.getByLabel("Nome do responsável")).toHaveValue(name);
+    await expect(this.page.getByLabel("E-mail do responsável")).toHaveValue(email);
+    await expect(this.page.getByLabel("Nome do responsável")).toBeEditable();
+    await expect(this.page.getByLabel("E-mail do responsável")).toBeEditable();
     await this.saveStep();
   }
 

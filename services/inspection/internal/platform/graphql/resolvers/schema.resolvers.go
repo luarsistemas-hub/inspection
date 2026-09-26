@@ -8,6 +8,7 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
@@ -60,6 +61,7 @@ import (
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
+	listreports "inspection/services/inspection/internal/features/reports/list_reports"
 	"inspection/services/inspection/internal/features/reports/publication"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
@@ -224,6 +226,11 @@ func (r *mutationResolver) CorrectOnboardingResponsibleEmail(ctx context.Context
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
 	status := &graphql1.OnboardingStatus{State: "SUBMITTED", InspectionID: stringPointer(result.InspectionID.String()), NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", DeliveryStatus: result.DeliveryStatus, ResponsibleEmail: stringPointer(result.Recipient), ResponsibilityStatus: stringPointer(result.ResponsibilityStatus), ResponsibilityVersion: intPointer(int(result.ResponsibilityVersion)), CanCorrectResponsibleEmail: result.ResponsibilityStatus == "PENDING"}
+	if r.OnboardingDeliveryStatus.DB != nil {
+		if current, statusErr := r.OnboardingDeliveryStatus.Load(ctx, *session.TenantID, session.ID); statusErr == nil {
+			status = mapDeliveryStatus(current)
+		}
+	}
 	return &graphql1.OnboardingPayload{Status: status, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -857,6 +864,9 @@ func (r *mutationResolver) CreateSchedule(ctx context.Context, input graphql1.Cr
 	if err != nil {
 		return nil, err
 	}
+	if err := recordScheduleNotification(ctx, r.DB, meta.TenantID, row, "SCHEDULE_CREATED", "Nova agenda de vistoria", "Uma agenda recorrente foi criada."); err != nil {
+		return nil, err
+	}
 	return &graphql1.SchedulePayload{Schedule: mapSchedule(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -878,6 +888,9 @@ func (r *mutationResolver) UpdateSchedule(ctx context.Context, input graphql1.Up
 	if err != nil {
 		return nil, err
 	}
+	if err := recordScheduleNotification(ctx, r.DB, meta.TenantID, row, "SCHEDULE_CHANGED", "Agenda de vistoria alterada", "A próxima ocorrência é "+row.NextDueAt.Local().Format("02/01/2006 15:04")+"."); err != nil {
+		return nil, err
+	}
 	return &graphql1.SchedulePayload{Schedule: mapSchedule(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
@@ -893,6 +906,9 @@ func (r *mutationResolver) CancelSchedule(ctx context.Context, input graphql1.Ca
 	}
 	row, err := r.ScheduleService.Cancel(ctx, meta.TenantID, scheduleID, int64(input.ExpectedVersion))
 	if err != nil {
+		return nil, err
+	}
+	if err := recordScheduleNotification(ctx, r.DB, meta.TenantID, row, "SCHEDULE_CANCELED", "Agenda de vistoria cancelada", "As próximas ocorrências desta agenda foram canceladas."); err != nil {
 		return nil, err
 	}
 	return &graphql1.SchedulePayload{Schedule: mapSchedule(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
@@ -1292,7 +1308,15 @@ func (r *mutationResolver) RequestRecapture(ctx context.Context, input graphql1.
 		return nil, err
 	}
 	created := raw.(recapturecore.Result)
+	if err := recordTriageRecaptureRequest(ctx, r.DB, meta, inspectionID, input.ClientMutationID); err != nil {
+		return nil, err
+	}
 	return &graphql1.RecapturePayload{Recapture: &graphql1.Recapture{ID: created.RequestID.String(), ResponsibilityID: created.ResponsibilityID.String(), Status: created.Status, DeadlineAt: &input.DeadlineAt}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// UpdateTriageCase is the resolver for the updateTriageCase field.
+func (r *mutationResolver) UpdateTriageCase(ctx context.Context, input graphql1.UpdateTriageCaseInput) (*graphql1.TriageCasePayload, error) {
+	return r.updateTriageCase(ctx, input)
 }
 
 // SubmitRecapture is the resolver for the submitRecapture field.
@@ -1514,13 +1538,20 @@ func (r *mutationResolver) MarkNotificationRead(ctx context.Context, input graph
 	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
-	notificationID, err := identity.ParseID(input.NotificationID)
+	if input.All != nil && *input.All {
+		return r.markAllNotificationsRead(ctx, meta, input)
+	}
+	if input.NotificationID == nil {
+		return nil, invalidID("notificationId")
+	}
+	notificationID, err := identity.ParseID(*input.NotificationID)
 	if err != nil {
 		return nil, invalidID("notificationId")
 	}
 	var row database.RecipientNotification
 	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND id=? AND recipient_membership_id=?", meta.TenantID, notificationID, meta.Principal.MembershipID).First(&row).Error; err != nil {
+		query := tx.Where("tenant_id=? AND id=? AND recipient_membership_id=?", meta.TenantID, notificationID, meta.Principal.MembershipID)
+		if err := filterNotificationScope(query, tx, meta).First(&row).Error; err != nil {
 			return apperror.New(apperror.NotFound, "notificationId", "notification not found")
 		}
 		now := time.Now().UTC()
@@ -1535,7 +1566,14 @@ func (r *mutationResolver) MarkNotificationRead(ctx context.Context, input graph
 	if err != nil {
 		return nil, err
 	}
-	return &graphql1.RecipientNotificationPayload{Notification: mapRecipientNotification(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	var unread int64
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		query := filterNotificationScope(tx.Model(&database.RecipientNotification{}).Where("tenant_id=? AND recipient_membership_id=? AND read_at IS NULL", meta.TenantID, meta.Principal.MembershipID), tx, meta)
+		return query.Count(&unread).Error
+	}); err != nil {
+		return nil, err
+	}
+	return &graphql1.RecipientNotificationPayload{Notification: mapRecipientNotification(row), MarkedCount: 1, UnreadCount: int(unread), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // ConfigureMyNotificationPreferences is the resolver for the configureMyNotificationPreferences field.
@@ -2129,6 +2167,9 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	if err != nil {
 		return nil, invalidID("inspectionId")
 	}
+	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
+		return nil, err
+	}
 	var row database.ReportSnapshot
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		query := tx.Where("inspection_id=?", id).Order("version_number DESC")
@@ -2154,6 +2195,72 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	return view, nil
 }
 
+// Reports is the resolver for the reports field.
+func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, search *string, classification *string) (*graphql1.ReportConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
+	input := listreports.Input{TenantID: meta.TenantID, TenantAdmin: hasRole(meta, auth.TenantAdmin)}
+	for _, scope := range meta.Principal.Scopes {
+		switch scope.Kind {
+		case "BUSINESS_UNIT":
+			input.Scopes = append(input.Scopes, scope.ID)
+		case "ASSET":
+			input.AssetScopes = append(input.AssetScopes, scope.ID)
+		case "PROJECT":
+			input.ProjectScopes = append(input.ProjectScopes, scope.ID)
+		case "INSPECTION":
+			input.InspectionScopes = append(input.InspectionScopes, scope.ID)
+		}
+	}
+	if first != nil {
+		input.First = *first
+	}
+	if after != nil {
+		input.After = *after
+	}
+	if search != nil {
+		input.Search = *search
+	}
+	if classification != nil {
+		input.Classification = *classification
+	}
+	var result listreports.Result
+	listOn := func(tx *gorm.DB) error {
+		operation, setupErr := listreports.Setup(listreports.Dependencies{DB: tx})
+		if setupErr != nil {
+			return setupErr
+		}
+		value, operationErr := operation(ctx, input)
+		result = value
+		return operationErr
+	}
+	var err error
+	if r.DB.Dialector.Name() == "postgres" {
+		err = withTask06Tenant(ctx, r.DB, meta.TenantID, listOn)
+	} else {
+		err = listOn(r.DB)
+	}
+	if err != nil {
+		if errors.Is(err, listreports.ErrInvalidCursor) {
+			return nil, graphql1Error("after")
+		}
+		if errors.Is(err, listreports.ErrInvalidClassification) {
+			return nil, graphql1Error("classification")
+		}
+		return nil, err
+	}
+	nodes := make([]*graphql1.ReportSummary, 0, len(result.Items))
+	for _, item := range result.Items {
+		nodes = append(nodes, &graphql1.ReportSummary{ID: item.ID.String(), InspectionID: item.InspectionID.String(), AssetName: item.AssetName, AssetAddress: item.AssetAddress, AssetExternalKey: item.AssetExternalKey, ParticipantName: item.ParticipantName, GeneratedAt: item.GeneratedAt.UTC().Format(time.RFC3339Nano), Classification: item.Classification, Version: item.Version})
+	}
+	return &graphql1.ReportConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
+}
+
 // ReportDownload is the resolver for the reportDownload field.
 func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, kind *string) (*graphql1.ReportDownload, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2172,6 +2279,15 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	if isCustomer {
 		value = "PDF_CUSTOMER"
 	} else if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
+	var snapshot database.ReportSnapshot
+	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=?", id).Take(&snapshot).Error
+	}); err != nil {
+		return nil, err
+	}
+	if err := authorizeReportInspection(ctx, r.DB, meta, snapshot.InspectionID); err != nil {
 		return nil, err
 	}
 	var row database.ReportArtifact
@@ -2303,6 +2419,21 @@ func (r *queryResolver) TriageInspections(ctx context.Context, first *int, after
 		end = dashboardcore.EncodeTriageCursor(dashboardcore.Projection{InspectionID: last.InspectionID.String(), Classification: last.Classification, UpdatedAt: last.UpdatedAt})
 	}
 	return &graphql1.TriageInspectionConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
+}
+
+// TriageWorkspace is the resolver for the triageWorkspace field.
+func (r *queryResolver) TriageWorkspace(ctx context.Context, first *int, after *string, status *graphql1.TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) (*graphql1.TriageWorkspace, error) {
+	return r.triageWorkspace(ctx, first, after, status, classification, search, assigneeID, reason)
+}
+
+// TriageCase is the resolver for the triageCase field.
+func (r *queryResolver) TriageCase(ctx context.Context, inspectionID string) (*graphql1.TriageCase, error) {
+	return r.triageCase(ctx, inspectionID)
+}
+
+// TriageAssignees is the resolver for the triageAssignees field.
+func (r *queryResolver) TriageAssignees(ctx context.Context, inspectionID string) ([]*graphql1.TriageAssignee, error) {
+	return r.triageAssignees(ctx, inspectionID)
 }
 
 // ProjectTimeline is the resolver for the projectTimeline field.
@@ -2543,7 +2674,7 @@ func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID strin
 }
 
 // MyNotifications is the resolver for the myNotifications field.
-func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, first *int, after *string) (*graphql1.RecipientNotificationConnection, error) {
+func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) (*graphql1.RecipientNotificationConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
@@ -2562,10 +2693,21 @@ func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, f
 		limit = 100
 	}
 	var rows []database.RecipientNotification
-	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		query := tx.Where("tenant_id=? AND recipient_membership_id=?", meta.TenantID, meta.Principal.MembershipID)
+	parsedProjectID, err := parseOptionalNotificationProjectID(projectID)
+	if err != nil {
+		return nil, err
+	}
+	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		query := filterNotificationScope(tx.Where("tenant_id=? AND recipient_membership_id=?", meta.TenantID, meta.Principal.MembershipID), tx, meta)
 		if unreadOnly != nil && *unreadOnly {
 			query = query.Where("read_at IS NULL")
+		}
+		if kind != nil && strings.TrimSpace(*kind) != "" {
+			query = query.Where("kind=?", strings.TrimSpace(*kind))
+		}
+		if parsedProjectID != nil {
+			inspectionIDs := tx.Model(&database.Inspection{}).Select("id").Where("tenant_id=? AND project_id=?", meta.TenantID, *parsedProjectID)
+			query = query.Where("resource_kind IN ('INSPECTION','REPORT') AND resource_id IN (?)", inspectionIDs)
 		}
 		if after != nil && *after != "" {
 			cursorTime, cursorID, err := dashboardcore.DecodeCursor(*after)
@@ -2581,7 +2723,8 @@ func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, f
 	}
 	var unread int64
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.RecipientNotification{}).Where("tenant_id=? AND recipient_membership_id=? AND read_at IS NULL", meta.TenantID, meta.Principal.MembershipID).Count(&unread).Error
+		query := filterNotificationScope(tx.Model(&database.RecipientNotification{}).Where("tenant_id=? AND recipient_membership_id=? AND read_at IS NULL", meta.TenantID, meta.Principal.MembershipID), tx, meta)
+		return query.Count(&unread).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -2592,6 +2735,67 @@ func (r *queryResolver) MyNotifications(ctx context.Context, unreadOnly *bool, f
 	nodes := make([]*graphql1.RecipientNotification, 0, len(rows))
 	for _, row := range rows {
 		nodes = append(nodes, mapRecipientNotification(row))
+	}
+	if len(rows) > 0 {
+		ids := make([]identity.ID, 0, len(rows))
+		for _, row := range rows {
+			if row.ResourceID != nil && (row.ResourceKind == "INSPECTION" || row.ResourceKind == "REPORT") {
+				ids = append(ids, *row.ResourceID)
+			}
+		}
+		if len(ids) > 0 {
+			var contexts []struct {
+				ID            identity.ID  `gorm:"column:id"`
+				AssetName     string       `gorm:"column:asset_name"`
+				Address       string       `gorm:"column:address"`
+				ProjectID     *identity.ID `gorm:"column:project_id"`
+				ProjectStatus *string      `gorm:"column:project_status"`
+				Status        string       `gorm:"column:status"`
+				DueAt         time.Time    `gorm:"column:due_at"`
+			}
+			if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+				return tx.Table("inspections.inspections AS i").
+					Select("i.id, a.name AS asset_name, a.address, i.project_id, p.status AS project_status, i.status, i.deadline_at AS due_at").
+					Joins("JOIN assets.assets AS a ON a.tenant_id=i.tenant_id AND a.id=i.asset_id").
+					Joins("LEFT JOIN projects.projects AS p ON p.tenant_id=i.tenant_id AND p.id=i.project_id").
+					Where("i.tenant_id=? AND i.id IN ?", meta.TenantID, ids).Scan(&contexts).Error
+			}); err != nil {
+				return nil, err
+			}
+			byID := make(map[identity.ID]struct {
+				asset, address, status, projectStatus string
+				projectID                             *identity.ID
+				dueAt                                 time.Time
+			}, len(contexts))
+			for _, item := range contexts {
+				byID[item.ID] = struct {
+					asset, address, status, projectStatus string
+					projectID                             *identity.ID
+					dueAt                                 time.Time
+				}{item.AssetName, item.Address, item.Status, stringValue(item.ProjectStatus), item.ProjectID, item.DueAt}
+			}
+			for i, row := range rows {
+				if row.ResourceID == nil {
+					continue
+				}
+				item, found := byID[*row.ResourceID]
+				if !found {
+					continue
+				}
+				context := map[string]any{"assetName": item.asset, "address": item.address, "inspectionStatus": item.status}
+				if item.projectID != nil {
+					context["projectId"] = item.projectID.String()
+				}
+				if item.projectStatus != "" {
+					context["projectStatus"] = item.projectStatus
+				}
+				nodes[i].Context = context
+				if !item.dueAt.IsZero() && (row.Kind == "INSPECTION_CREATED" || row.Kind == "INSPECTION_DEADLINE" || row.Kind == "INSPECTION_OVERDUE") {
+					due := item.dueAt.UTC().Format(time.RFC3339Nano)
+					nodes[i].DueAt = &due
+				}
+			}
+		}
 	}
 	end := ""
 	if len(rows) > 0 {

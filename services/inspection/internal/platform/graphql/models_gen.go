@@ -646,8 +646,12 @@ type LegalHoldInput struct {
 }
 
 type MarkNotificationReadInput struct {
-	NotificationID   string `json:"notificationId"`
-	ClientMutationID string `json:"clientMutationId"`
+	NotificationID   *string `json:"notificationId,omitempty"`
+	All              *bool   `json:"all,omitempty"`
+	Kind             *string `json:"kind,omitempty"`
+	ProjectID        *string `json:"projectId,omitempty"`
+	Through          *string `json:"through,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type Me struct {
@@ -804,6 +808,11 @@ type OnboardingOriginMode struct {
 	Required    bool   `json:"required"`
 }
 
+type OnboardingOwner struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 type OnboardingPayload struct {
 	Session          *OnboardingSession    `json:"session,omitempty"`
 	SessionLocator   *string               `json:"sessionLocator,omitempty"`
@@ -831,6 +840,7 @@ type OnboardingSession struct {
 	ExpiresAt      string            `json:"expiresAt"`
 	Definition     map[string]any    `json:"definition"`
 	CompletedSteps map[string]any    `json:"completedSteps"`
+	Owner          *OnboardingOwner  `json:"owner"`
 	ExistingAgency *OnboardingAgency `json:"existingAgency,omitempty"`
 }
 
@@ -1095,14 +1105,18 @@ type RecapturePayload struct {
 }
 
 type RecipientNotification struct {
-	ID           string  `json:"id"`
-	Kind         string  `json:"kind"`
-	Title        string  `json:"title"`
-	Body         string  `json:"body"`
-	ResourceKind string  `json:"resourceKind"`
-	ResourceID   *string `json:"resourceId,omitempty"`
-	CreatedAt    string  `json:"createdAt"`
-	ReadAt       *string `json:"readAt,omitempty"`
+	ID           string         `json:"id"`
+	Kind         string         `json:"kind"`
+	Title        string         `json:"title"`
+	Body         string         `json:"body"`
+	ResourceKind string         `json:"resourceKind"`
+	ResourceID   *string        `json:"resourceId,omitempty"`
+	CreatedAt    string         `json:"createdAt"`
+	ReadAt       *string        `json:"readAt,omitempty"`
+	Action       string         `json:"action"`
+	Context      map[string]any `json:"context"`
+	Priority     string         `json:"priority"`
+	DueAt        *string        `json:"dueAt,omitempty"`
 }
 
 type RecipientNotificationConnection struct {
@@ -1113,6 +1127,8 @@ type RecipientNotificationConnection struct {
 
 type RecipientNotificationPayload struct {
 	Notification     *RecipientNotification `json:"notification,omitempty"`
+	MarkedCount      int                    `json:"markedCount"`
+	UnreadCount      int                    `json:"unreadCount"`
 	UserErrors       []*UserError           `json:"userErrors"`
 	ClientMutationID string                 `json:"clientMutationId"`
 }
@@ -1161,6 +1177,11 @@ type ReportAssetContext struct {
 	Name        string `json:"name"`
 	ExternalKey string `json:"externalKey"`
 	Address     string `json:"address"`
+}
+
+type ReportConnection struct {
+	Nodes    []*ReportSummary `json:"nodes"`
+	PageInfo *PageInfo        `json:"pageInfo"`
 }
 
 type ReportContext struct {
@@ -1244,6 +1265,18 @@ type ReportRequirement struct {
 	NoRelevantChange    *bool   `json:"noRelevantChange,omitempty"`
 	AnalysisMode        string  `json:"analysisMode"`
 	AnalysisStatus      string  `json:"analysisStatus"`
+}
+
+type ReportSummary struct {
+	ID               string `json:"id"`
+	InspectionID     string `json:"inspectionId"`
+	AssetName        string `json:"assetName"`
+	AssetAddress     string `json:"assetAddress"`
+	AssetExternalKey string `json:"assetExternalKey"`
+	ParticipantName  string `json:"participantName"`
+	GeneratedAt      string `json:"generatedAt"`
+	Classification   string `json:"classification"`
+	Version          int    `json:"version"`
 }
 
 type ReportTemplateContext struct {
@@ -1536,6 +1569,51 @@ type TenantPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type TriageAssignee struct {
+	ID      string `json:"id"`
+	Role    string `json:"role"`
+	Current bool   `json:"current"`
+}
+
+type TriageCase struct {
+	InspectionID   string             `json:"inspectionId"`
+	AssetID        string             `json:"assetId"`
+	AssetName      string             `json:"assetName"`
+	Address        string             `json:"address"`
+	Classification string             `json:"classification"`
+	Status         string             `json:"status"`
+	ReviewStatus   TriageReviewStatus `json:"reviewStatus"`
+	AssigneeID     *string            `json:"assigneeId,omitempty"`
+	ReportVersion  int                `json:"reportVersion"`
+	Version        int                `json:"version"`
+	ReasonCodes    []string           `json:"reasonCodes"`
+	CreatedAt      string             `json:"createdAt"`
+	UpdatedAt      string             `json:"updatedAt"`
+	Report         *Report            `json:"report,omitempty"`
+	Events         []*TriageCaseEvent `json:"events"`
+}
+
+type TriageCaseEvent struct {
+	ID        string `json:"id"`
+	ActorID   string `json:"actorId"`
+	Kind      string `json:"kind"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type TriageCasePayload struct {
+	TriageCase       *TriageCase  `json:"triageCase"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type TriageCounts struct {
+	New              int `json:"new"`
+	InReview         int `json:"inReview"`
+	AwaitingEvidence int `json:"awaitingEvidence"`
+	CriticalOpen     int `json:"criticalOpen"`
+}
+
 type TriageInspection struct {
 	InspectionID   string  `json:"inspectionId"`
 	ProjectID      *string `json:"projectId,omitempty"`
@@ -1548,6 +1626,29 @@ type TriageInspection struct {
 type TriageInspectionConnection struct {
 	Nodes    []*TriageInspection `json:"nodes"`
 	PageInfo *PageInfo           `json:"pageInfo"`
+}
+
+type TriageQueueItem struct {
+	InspectionID   string             `json:"inspectionId"`
+	AssetID        string             `json:"assetId"`
+	AssetName      string             `json:"assetName"`
+	Address        string             `json:"address"`
+	Classification string             `json:"classification"`
+	Status         string             `json:"status"`
+	ReviewStatus   TriageReviewStatus `json:"reviewStatus"`
+	AssigneeID     *string            `json:"assigneeId,omitempty"`
+	ReportVersion  int                `json:"reportVersion"`
+	Version        int                `json:"version"`
+	FindingCount   int                `json:"findingCount"`
+	ReasonCodes    []string           `json:"reasonCodes"`
+	CreatedAt      string             `json:"createdAt"`
+	UpdatedAt      string             `json:"updatedAt"`
+}
+
+type TriageWorkspace struct {
+	Counts   *TriageCounts      `json:"counts"`
+	Nodes    []*TriageQueueItem `json:"nodes"`
+	PageInfo *PageInfo          `json:"pageInfo"`
 }
 
 type UpdateAnalysisPromptInput struct {
@@ -1581,6 +1682,16 @@ type UpdateTenantInput struct {
 	Timezone         string `json:"timezone"`
 	ExpectedVersion  int    `json:"expectedVersion"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type UpdateTriageCaseInput struct {
+	InspectionID     string             `json:"inspectionId"`
+	ExpectedVersion  int                `json:"expectedVersion"`
+	Action           TriageCaseAction   `json:"action"`
+	AssigneeID       *string            `json:"assigneeId,omitempty"`
+	Body             *string            `json:"body,omitempty"`
+	Disposition      *TriageDisposition `json:"disposition,omitempty"`
+	ClientMutationID string             `json:"clientMutationId"`
 }
 
 type UpsertBusinessUnitInput struct {
@@ -1909,6 +2020,187 @@ func (e *LLMUsageCostState) UnmarshalJSON(b []byte) error {
 }
 
 func (e LLMUsageCostState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TriageCaseAction string
+
+const (
+	TriageCaseActionTake            TriageCaseAction = "TAKE"
+	TriageCaseActionAssign          TriageCaseAction = "ASSIGN"
+	TriageCaseActionNote            TriageCaseAction = "NOTE"
+	TriageCaseActionComplete        TriageCaseAction = "COMPLETE"
+	TriageCaseActionReopen          TriageCaseAction = "REOPEN"
+	TriageCaseActionWaitForEvidence TriageCaseAction = "WAIT_FOR_EVIDENCE"
+)
+
+var AllTriageCaseAction = []TriageCaseAction{
+	TriageCaseActionTake,
+	TriageCaseActionAssign,
+	TriageCaseActionNote,
+	TriageCaseActionComplete,
+	TriageCaseActionReopen,
+	TriageCaseActionWaitForEvidence,
+}
+
+func (e TriageCaseAction) IsValid() bool {
+	switch e {
+	case TriageCaseActionTake, TriageCaseActionAssign, TriageCaseActionNote, TriageCaseActionComplete, TriageCaseActionReopen, TriageCaseActionWaitForEvidence:
+		return true
+	}
+	return false
+}
+
+func (e TriageCaseAction) String() string {
+	return string(e)
+}
+
+func (e *TriageCaseAction) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TriageCaseAction(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TriageCaseAction", str)
+	}
+	return nil
+}
+
+func (e TriageCaseAction) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TriageCaseAction) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TriageCaseAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TriageDisposition string
+
+const (
+	TriageDispositionNoAction         TriageDisposition = "NO_ACTION"
+	TriageDispositionReferred         TriageDisposition = "REFERRED"
+	TriageDispositionExternalFollowup TriageDisposition = "EXTERNAL_FOLLOWUP"
+)
+
+var AllTriageDisposition = []TriageDisposition{
+	TriageDispositionNoAction,
+	TriageDispositionReferred,
+	TriageDispositionExternalFollowup,
+}
+
+func (e TriageDisposition) IsValid() bool {
+	switch e {
+	case TriageDispositionNoAction, TriageDispositionReferred, TriageDispositionExternalFollowup:
+		return true
+	}
+	return false
+}
+
+func (e TriageDisposition) String() string {
+	return string(e)
+}
+
+func (e *TriageDisposition) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TriageDisposition(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TriageDisposition", str)
+	}
+	return nil
+}
+
+func (e TriageDisposition) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TriageDisposition) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TriageDisposition) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type TriageReviewStatus string
+
+const (
+	TriageReviewStatusNew              TriageReviewStatus = "NEW"
+	TriageReviewStatusInReview         TriageReviewStatus = "IN_REVIEW"
+	TriageReviewStatusAwaitingEvidence TriageReviewStatus = "AWAITING_EVIDENCE"
+	TriageReviewStatusReviewed         TriageReviewStatus = "REVIEWED"
+	TriageReviewStatusArchived         TriageReviewStatus = "ARCHIVED"
+)
+
+var AllTriageReviewStatus = []TriageReviewStatus{
+	TriageReviewStatusNew,
+	TriageReviewStatusInReview,
+	TriageReviewStatusAwaitingEvidence,
+	TriageReviewStatusReviewed,
+	TriageReviewStatusArchived,
+}
+
+func (e TriageReviewStatus) IsValid() bool {
+	switch e {
+	case TriageReviewStatusNew, TriageReviewStatusInReview, TriageReviewStatusAwaitingEvidence, TriageReviewStatusReviewed, TriageReviewStatusArchived:
+		return true
+	}
+	return false
+}
+
+func (e TriageReviewStatus) String() string {
+	return string(e)
+}
+
+func (e *TriageReviewStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TriageReviewStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TriageReviewStatus", str)
+	}
+	return nil
+}
+
+func (e TriageReviewStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TriageReviewStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TriageReviewStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

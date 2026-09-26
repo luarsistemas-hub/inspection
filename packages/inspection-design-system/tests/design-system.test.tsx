@@ -161,7 +161,7 @@ describe("design-system public contracts", () => {
     await act(async () => reactRoot.render(
       <>
         <button>Abrir</button>
-        <Dialog isOpen onClose={() => {}} title="Confirmação">
+        <Dialog isOpen onClose={() => {}} title="Confirmação" size="wide">
         <button>Cancelar</button>
         <button>Confirmar</button>
         </Dialog>
@@ -171,6 +171,8 @@ describe("design-system public contracts", () => {
     const dialog = container.querySelector('[role="dialog"]');
     const buttons = [...container.querySelectorAll('[role="dialog"] button')];
     expect(document.activeElement).toBe(dialog);
+    expect(dialog?.classList.contains("inspection-dialog--wide")).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
     expect(buttons).toHaveLength(2);
 
     const duplicateContainer = document.createElement("div");
@@ -207,6 +209,9 @@ describe("design-system public contracts", () => {
       </>
     ));
     expect(document.activeElement).toBe(opener);
+    expect(document.body.style.overflow).toBe("");
+    const css = await readFile(resolve(packageRoot, "src/styles.css"), "utf8");
+    expect(css).toContain(".inspection-dialog--wide");
 
     await act(async () => reactRoot.unmount());
     container.remove();

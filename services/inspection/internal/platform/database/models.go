@@ -1126,6 +1126,32 @@ type DashboardInspection struct {
 
 func (DashboardInspection) TableName() string { return "dashboard.inspections" }
 
+// TriageCase tracks the human review lifecycle independently from the rebuildable dashboard projection.
+type TriageCase struct {
+	ID, TenantID, InspectionID identity.ID  `gorm:"type:uuid;primaryKey"`
+	Status                     string       `gorm:"size:32;not null;index"`
+	AssigneeID                 *identity.ID `gorm:"type:uuid;index"`
+	Classification             string       `gorm:"size:16;not null"`
+	ReasonCodes                []byte       `gorm:"type:jsonb;not null;default:'[]'"`
+	ReportVersion              int          `gorm:"not null;default:0"`
+	Version                    int64        `gorm:"not null;default:1"`
+	UpdatedAt                  time.Time    `gorm:"not null;index"`
+	CreatedAt                  time.Time    `gorm:"not null"`
+}
+
+func (TriageCase) TableName() string { return "dashboard.triage_cases" }
+
+// TriageCaseEvent is an append-only audit entry for review decisions and notes.
+type TriageCaseEvent struct {
+	ID, TenantID, CaseID, ActorID identity.ID `gorm:"type:uuid;primaryKey"`
+	Kind                          string      `gorm:"size:32;not null;index"`
+	ClientMutationID              string      `gorm:"size:200;not null;default:''"`
+	Body                          string      `gorm:"type:text;not null;default:''"`
+	CreatedAt                     time.Time   `gorm:"not null;index"`
+}
+
+func (TriageCaseEvent) TableName() string { return "dashboard.triage_case_events" }
+
 // UsageRecord stores provider-neutral metering for reproducibility and
 // reconciliation. It intentionally contains no prompt or image content.
 type UsageRecord struct {
@@ -1228,6 +1254,6 @@ func Models() []any {
 		&ComparisonJob{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
 		&ReportSnapshot{}, &ReportArtifact{}, &RetentionPolicy{},
 		&PublicationPolicy{}, &ReportPublication{}, &RecipientChannel{}, &RecipientNotification{},
-		&DashboardInspection{}, &UsageRecord{}, &LLMCallRecord{}, &UsageDailySummary{},
+		&DashboardInspection{}, &TriageCase{}, &TriageCaseEvent{}, &UsageRecord{}, &LLMCallRecord{}, &UsageDailySummary{},
 		&DeletionRequest{}, &LegalHold{}, &PurgeRun{}}
 }

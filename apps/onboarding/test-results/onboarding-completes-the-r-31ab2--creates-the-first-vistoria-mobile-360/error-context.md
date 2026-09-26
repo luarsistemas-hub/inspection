@@ -1,0 +1,59 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - paragraph [ref=e5]: Inspection · Imobiliárias
+        - heading "Imóvel" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Seus dados ficam protegidos nesta sessão. Você pode continuar no mesmo navegador.
+        - list "Etapas do cadastro" [ref=e8]:
+          - listitem [ref=e9]: Imobiliária
+          - listitem [ref=e10]: Imóvel
+          - listitem [ref=e11]: Fotos de referência
+          - listitem [ref=e12]: Responsável pela vistoria
+      - generic [ref=e15]:
+        - paragraph [ref=e16]: Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - text: Endereço do imóvel
+            - generic [ref=e19]: "*"
+          - textbox "Endereço do imóvel" [ref=e21]: Rua do Fluxo, 123
+        - generic [ref=e22]:
+          - generic [ref=e23]:
+            - text: Tipo de imóvel
+            - generic [ref=e24]: "*"
+          - combobox "Tipo de imóvel" [ref=e26]:
+            - option "Selecione"
+            - option "Apartamento" [selected]
+            - option "Casa"
+            - option "Imóvel comercial"
+            - option "Terreno"
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - text: Quantidade de cômodos
+            - generic [ref=e29]: "*"
+          - spinbutton "Quantidade de cômodos Preencha este campo para continuar." [ref=e31]
+          - alert [ref=e33]: Preencha este campo para continuar.
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - text: Finalidade da vistoria
+            - generic [ref=e36]: "*"
+          - combobox "Finalidade da vistoria" [ref=e38]:
+            - option "Selecione"
+            - option "Venda"
+            - option "Locação" [selected]
+            - option "Manutenção"
+            - option "Seguro"
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - text: Prazo para concluir a vistoria
+            - generic [ref=e41]: "*"
+          - textbox "Prazo para concluir a vistoria" [ref=e43]: 2026-10-03
+        - generic [ref=e44]:
+          - button "Salvar e continuar" [active] [ref=e45] [cursor=pointer]
+          - button "Revisar dados salvos" [ref=e46] [cursor=pointer]
+          - button "Iniciar novo cadastro" [ref=e47] [cursor=pointer]
+  - alert [ref=e48]
+```

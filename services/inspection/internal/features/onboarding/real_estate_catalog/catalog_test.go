@@ -10,7 +10,7 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != 1 || got.Version != 3 || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
+	if got.SchemaVersion != 1 || got.Version != 4 || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
 	if got.OriginModes[0].TemplateKey != ChecklistTemplateKey || got.OriginModes[1].TemplateKey != OriginTemplateKey {

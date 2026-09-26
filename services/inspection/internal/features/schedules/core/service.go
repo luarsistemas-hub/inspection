@@ -160,7 +160,7 @@ func (s Service) Update(ctx context.Context, in UpdateInput) (database.Schedule,
 	}
 	offsets, _ := json.Marshal(in.ReminderOffsetsMinutes)
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
-		r := tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND version=? AND status='ACTIVE'", in.TenantID, in.ScheduleID, in.ExpectedVersion).Updates(map[string]any{"rrule": strings.TrimSpace(in.RRule), "timezone": strings.TrimSpace(in.Timezone), "starts_at": in.StartsAt.UTC(), "next_due_at": next.UTC(), "deadline_minutes": in.DeadlineMinutes, "reminder_offsets": offsets, "version": in.ExpectedVersion + 1, "updated_at": now})
+		r := tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND version=? AND status='ACTIVE'", in.TenantID, in.ScheduleID, in.ExpectedVersion).Updates(map[string]any{"r_rule": strings.TrimSpace(in.RRule), "timezone": strings.TrimSpace(in.Timezone), "starts_at": in.StartsAt.UTC(), "next_due_at": next.UTC(), "deadline_minutes": in.DeadlineMinutes, "reminder_offsets": offsets, "version": in.ExpectedVersion + 1, "updated_at": now})
 		if r.Error != nil {
 			return r.Error
 		}

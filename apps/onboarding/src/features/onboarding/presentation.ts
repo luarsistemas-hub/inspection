@@ -8,7 +8,6 @@ const legacyLabels: Record<string, string> = {
   "Agency name": "Nome da imobiliária",
   "Property address": "Endereço do imóvel",
   "Property type": "Tipo de imóvel",
-  Rooms: "Quantidade de cômodos",
   Purpose: "Finalidade da vistoria",
   "Inspection deadline": "Prazo para concluir a vistoria",
   "Reference mode": "Base de comparação",

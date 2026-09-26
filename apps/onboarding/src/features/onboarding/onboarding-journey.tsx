@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
 import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
 import { CompleteOnboardingDocument, CorrectOnboardingResponsibleEmailDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, OnboardingStatusDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery, type OnboardingStatusQuery } from "@/graphql/generated";
-import { isSupportedDefinition, sortedSteps, validateStep, type OnboardingDefinition, type StepValues } from "./definition";
+import { isSupportedDefinition, sortedSteps, validateStep, valuesForParticipantMode, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, type OriginUpload } from "./origin-upload";
 import { presentOnboardingLabel, presentOnboardingOption, presentOnboardingStatus } from "./presentation";
 
@@ -160,7 +160,13 @@ function VerificationForm({ generation, email, locator, onVerified, onBack, onEr
 function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { step: OnboardingDefinition["steps"][number]; session: Session; onSaved: (session: Session, status: Status | undefined, values: StepValues) => void; onReview: () => void; onRestart: () => void; onError: (message: string) => void }) {
   const existingAgency = step.key === "agency" ? session.existingAgency : null;
   const [values, setValues] = useState<StepValues>(() => existingAgency ? { name: existingAgency.name, agencyName: existingAgency.name, existingAgencyId: existingAgency.tenantId } : readDraft(session.id, step.key)); const [errors, setErrors] = useState<Record<string, string>>({}); const [uploads, setUploads] = useState<OriginUpload[]>([]); const [saving, setSaving] = useState(false);
-  const update = (key: string, value: string) => { const next = { ...values, [key]: value }; setValues(next); writeDraft(session.id, step.key, next); };
+  const updateField = (key: string, value: string) => {
+    const next = step.key === "participant" && key === "mode"
+      ? valuesForParticipantMode(values, value, session.owner)
+      : { ...values, [key]: value };
+    setValues(next);
+    writeDraft(session.id, step.key, next);
+  };
   const uploadOne = async (upload: OriginUpload) => {
     if (upload.mediaId) return upload.mediaId;
     setUploads((current) => current.map((item) => item.id === upload.id ? { ...item, sending: true, failed: false } : item));
@@ -198,7 +204,7 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
       onSaved(response.session, response.status ?? undefined, values);
     } catch (cause) { onError(failureText(cause)); } finally { setSaving(false); }
   };
-  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.filter((field) => field.key !== "emailConfirmation" || values.mode === "DELEGATE").map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => update(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
+  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.filter((field) => field.key !== "emailConfirmation" || values.mode === "DELEGATE").map((field) => <DynamicField key={field.key} field={field} value={values[field.key] ?? ""} error={errors[field.key]} onChange={(value) => updateField(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar e continuar"}</Button><Button variant="secondary" onClick={onReview}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart}>Iniciar novo cadastro</Button></div></form>;
 }
 
 function DynamicField({ field, value, error, onChange }: { field: OnboardingDefinition["steps"][number]["fields"][number]; value: string; error?: string; onChange: (value: string) => void }) {
@@ -234,7 +240,7 @@ function ResponsibleEmailCorrection({ status, onCorrected }: { status: Status; o
       if (payload.status) onCorrected(payload.status);
     } catch (cause) { setError(failureText(cause)); } finally { setBusy(false); }
   };
-  return <form className="onboarding-form" onSubmit={submit}><p><strong>Corrigir e reenviar</strong></p><p>O link anterior será invalidado. O responsável não precisa estar online agora.</p><Field label="Novo e-mail" required><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field><Field label="Confirme o novo e-mail" required><Input type="email" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Field>{error ? <Alert tone="danger">{error}</Alert> : null}<Button type="submit" disabled={busy}>{busy ? "Reenviando…" : "Corrigir e reenviar"}</Button></form>;
+  return <form className="onboarding-form" onSubmit={submit}><p><strong>Corrigir e reenviar</strong></p><p>{status.deliveryStatus === "NOT_STARTED" ? "Confirme o endereço para gerar e enviar o link. O responsável não precisa estar online agora." : "O link anterior será invalidado. O responsável não precisa estar online agora."}</p><Field label="Novo e-mail" required><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field><Field label="Confirme o novo e-mail" required><Input type="email" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Field>{error ? <Alert tone="danger">{error}</Alert> : null}<Button type="submit" disabled={busy}>{busy ? "Reenviando…" : "Corrigir e reenviar"}</Button></form>;
 }
 
 function Fragment({ children }: { children: React.ReactNode }) { return <>{children}</>; }

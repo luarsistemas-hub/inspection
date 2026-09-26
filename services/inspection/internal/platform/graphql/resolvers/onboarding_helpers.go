@@ -100,6 +100,7 @@ func mapOnboardingSession(value onboardingsession.Session) *graphql1.OnboardingS
 		Version:        int(value.Version),
 		ExpiresAt:      value.ExpiresAt.Format(time.RFC3339Nano),
 		CompletedSteps: completedSteps,
+		Owner:          &graphql1.OnboardingOwner{Name: value.Owner.Name, Email: value.Owner.Email},
 		ExistingAgency: existingAgency,
 		Definition: map[string]any{
 			"schemaVersion":  definition.SchemaVersion,

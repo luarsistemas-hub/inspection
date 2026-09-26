@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   formatInspectionDate,
   formatInspectionStatus,
@@ -16,7 +16,14 @@ function inspection(id: string, status: string, dueAt: string): InspectionRecord
 }
 
 describe("Inspection views", () => {
-  beforeEach(() => localStorage.clear());
+  const entries = new Map<string, string>();
+  beforeAll(() => Object.defineProperty(window, "localStorage", { configurable: true, value: {
+    clear: () => entries.clear(),
+    getItem: (key: string) => entries.get(key) ?? null,
+    removeItem: (key: string) => { entries.delete(key); },
+    setItem: (key: string, value: string) => { entries.set(key, String(value)); },
+  } }));
+  beforeEach(() => window.localStorage.clear());
 
   it("persists and reads the selected view per membership", () => {
     persistInspectionView("membership-a", "quadro");

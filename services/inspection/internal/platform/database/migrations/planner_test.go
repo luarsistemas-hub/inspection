@@ -60,9 +60,23 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 45 {
-		t.Fatalf("latest version=%d, want 45", got)
+	if got := LatestVersion(); got != 46 {
+		t.Fatalf("latest version=%d, want 46", got)
 	}
+}
+
+func TestTriageCaseMigrationEnablesTenantIsolationAndBackfillsCurrentRisks(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 46 {
+			for _, required := range []string{"dashboard.triage_cases", "dashboard.triage_case_events", "FORCE ROW LEVEL SECURITY", "idx_triage_case_tenant_inspection", "analysis.classification_runs", "c.classification IN ('CRITICAL','ATTENTION')"} {
+				if !strings.Contains(step.SQL, required) {
+					t.Fatalf("triage migration does not contain %q", required)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("triage review migration missing")
 }
 
 func TestOriginAttentionItemsMigrationUsesJSONArrays(t *testing.T) {

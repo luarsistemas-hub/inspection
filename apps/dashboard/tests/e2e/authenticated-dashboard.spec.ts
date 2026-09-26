@@ -4,17 +4,32 @@ import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
 test.describe("authenticated Dashboard against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
-  test("loads triage and seeded notifications, then marks one as read", async ({ page }) => {
+  test("shows unread notifications first, allows all notifications, and opens delivery status", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/triage");
-    await page.getByRole("button", { name: "Atualizar prioridades" }).click();
-    await expect(page.getByRole("status")).toContainText(/Resumo e fila atualizados|Não há trabalho/);
+    await page.getByRole("button", { name: "Atualizar fila" }).click();
+    await expect(page.getByRole("region", { name: "Casos para revisão" }).locator(".triage-list-heading strong")).not.toHaveText("Carregando fila…");
     await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
-    const notice = page.getByRole("listitem").filter({ hasText: "Vistoria QA disponível" }).first();
+    const matchingNotices = page.locator(".notification-card").filter({ hasText: "Vistoria QA disponível" });
+    const notice = matchingNotices.first();
     await expect(notice).toBeVisible({ timeout: 15_000 });
+    const unreadNoticeCount = await matchingNotices.count();
     const markAsRead = notice.getByRole("button", { name: "Marcar como lida" });
-    if (await markAsRead.isVisible()) await markAsRead.click();
-    await expect(notice).toContainText("Lida");
+    if (await markAsRead.isVisible()) {
+      await markAsRead.click();
+      await expect(matchingNotices).toHaveCount(unreadNoticeCount - 1);
+      await page.getByLabel("Mostrar todas").check();
+      const readNotice = page.locator('.notification-card[data-read="true"]').filter({ hasText: "Vistoria QA disponível" }).first();
+      await expect(readNotice).toContainText("Lida");
+      await page.getByLabel("Mostrar todas").uncheck();
+      await expect(matchingNotices).toHaveCount(unreadNoticeCount - 1);
+    }
+    await page.getByRole("button", { name: "Estado das entregas" }).click();
+    const dialog = page.getByRole("dialog", { name: "Estado das entregas" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Solicitada, em processamento, aceita, enviada e entregue");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
     await assertRuntimeClean();
   });
 
@@ -55,6 +70,34 @@ test.describe("authenticated Dashboard against the local stack", () => {
 
     await page.getByRole("button", { name: "Lista", exact: true }).focus();
     await expect(page.getByRole("button", { name: "Lista", exact: true })).toBeFocused();
+    await assertRuntimeClean();
+  });
+
+  test("opens a generated report in a modal and follows browser history", async ({ page }) => {
+    const assertRuntimeClean = installRuntimeGuards(page);
+    await loginAsLocalAdmin(page, "/reports");
+    await expect(page.getByRole("heading", { name: "Laudos" })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "Buscar laudo" })).toBeVisible();
+    await expect(page.locator(".report-table, .report-list-state").first()).toBeVisible();
+
+    const openButton = page.getByRole("button", { name: "Abrir laudo" }).first();
+    if (!(await openButton.isVisible().catch(() => false))) {
+      await expect(page.getByRole("status")).toContainText(/Nenhum laudo/);
+      await assertRuntimeClean();
+      return;
+    }
+
+    await openButton.click();
+    const dialog = page.getByRole("dialog", { name: "Laudo de vistoria" });
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/inspectionId=/);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page).not.toHaveURL(/inspectionId=/);
+    await page.goForward();
+    await expect(dialog).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("dialog", { name: "Laudo de vistoria" })).toBeVisible();
     await assertRuntimeClean();
   });
 });

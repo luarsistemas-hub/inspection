@@ -93,7 +93,7 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", in.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
 			return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
 		}
-		if inspection.Status != "SUBMITTED" && inspection.Status != "ANALYZING" && inspection.Status != "RECAPTURE_PENDING" {
+		if inspection.Status != "SUBMITTED" && inspection.Status != "ANALYZING" && inspection.Status != "RECAPTURE_PENDING" && inspection.Status != "COMPLETED" {
 			return apperror.New(apperror.InvalidState, "inspectionId", "recapture requires submitted evidence")
 		}
 		var originalDraft database.CaptureDraft

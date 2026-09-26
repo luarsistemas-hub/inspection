@@ -13,3 +13,5 @@ node_modules/
 .vscode/
 .cursor/
 .compozy/
+
+.env2.inspection

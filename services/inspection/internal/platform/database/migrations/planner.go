@@ -1345,6 +1345,31 @@ ALTER TABLE media.derivatives ADD CONSTRAINT chk_media_derivative_dimensions CHE
   (width IS NULL OR width > 0) AND (height IS NULL OR height > 0) AND (size_bytes IS NULL OR size_bytes >= 0)
 );
 `},
+		{Version: 46, Name: "dashboard_triage_review_cases", Compatible: true, SQL: `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_triage_case_tenant_inspection ON dashboard.triage_cases(tenant_id, inspection_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_triage_case_event_mutation ON dashboard.triage_case_events(tenant_id, client_mutation_id) WHERE client_mutation_id <> '';
+INSERT INTO dashboard.triage_cases(id,tenant_id,inspection_id,status,classification,reason_codes,report_version,version,created_at,updated_at)
+SELECT gen_random_uuid(), d.tenant_id, d.inspection_id, 'NEW', c.classification, c.reason_codes,
+       coalesce(r.version_number, 0), 1, now(), now()
+FROM dashboard.inspections d
+JOIN LATERAL (SELECT classification,reason_codes FROM analysis.classification_runs c WHERE c.tenant_id=d.tenant_id AND c.inspection_id=d.inspection_id ORDER BY created_at DESC LIMIT 1) c ON true
+LEFT JOIN LATERAL (SELECT version_number FROM reports.report_snapshots r WHERE r.tenant_id=d.tenant_id AND r.inspection_id=d.inspection_id ORDER BY version_number DESC LIMIT 1) r ON true
+WHERE NOT d.invalidated AND c.classification IN ('CRITICAL','ATTENTION')
+ON CONFLICT (tenant_id,inspection_id) DO NOTHING;
+ALTER TABLE dashboard.triage_cases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard.triage_cases FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON dashboard.triage_cases;
+CREATE POLICY tenant_isolation ON dashboard.triage_cases USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+ALTER TABLE dashboard.triage_case_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard.triage_case_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON dashboard.triage_case_events;
+CREATE POLICY tenant_isolation ON dashboard.triage_case_events USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE INDEX IF NOT EXISTS idx_triage_case_queue ON dashboard.triage_cases(tenant_id, status, classification, updated_at);
+CREATE INDEX IF NOT EXISTS idx_triage_case_events_history ON dashboard.triage_case_events(tenant_id, case_id, created_at);
+GRANT USAGE ON SCHEMA dashboard TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE ON dashboard.triage_cases TO inspection_runtime;
+GRANT SELECT, INSERT ON dashboard.triage_case_events TO inspection_runtime;
+`},
 	}
 }
 

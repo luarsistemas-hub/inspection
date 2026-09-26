@@ -30,6 +30,7 @@ type Service struct {
 	CaptureBaseURL string
 	Metrics        *observability.Metrics
 	Now            func() time.Time
+	Within         func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 type Input struct {
@@ -72,10 +73,17 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 	}
 
 	var result Result
-	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
+	within := s.Within
+	if within == nil {
+		within = (tenanttx.Runner{DB: s.DB}).Within
+	}
+	err = within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		var existing database.Invitation
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", in.TenantID, in.IdempotencyKey).First(&existing).Error; err == nil {
-			if err := s.loadResult(tx, in.TenantID, in.InspectionID, existing, &result); err != nil {
+			if existing.ResponsibilityID != in.ResponsibilityID {
+				return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
+			}
+			if err := s.loadResult(tx, in.TenantID, in.InspectionID, email, existing, &result); err != nil {
 				return err
 			}
 			s.Metrics.ResponsibleEmailCorrection(in.Source)
@@ -112,8 +120,11 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 			return err
 		}
 		var old database.Invitation
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", in.TenantID, in.ResponsibilityID).Order("created_at desc").First(&old).Error; err != nil {
-			return apperror.New(apperror.InvalidState, "responsibleEmail", "active invitation not found")
+		hasOld := true
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", in.TenantID, in.ResponsibilityID).Order("created_at desc").First(&old).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			hasOld = false
+		} else if err != nil {
+			return err
 		}
 
 		var contact database.ParticipantContact
@@ -149,19 +160,21 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 			return err
 		}
 
-		if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND invitation_id=? AND revoked_at IS NULL", in.TenantID, old.ID).Update("revoked_at", now).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", in.TenantID, old.ID).Updates(map[string]any{"status": "REVOKED", "revoked_at": now}).Error; err != nil {
-			return err
-		}
-		var oldDeliveries []database.Delivery
-		if err := tx.Where("tenant_id=? AND invitation_id=?", in.TenantID, old.ID).Find(&oldDeliveries).Error; err != nil {
-			return err
-		}
-		for _, delivery := range oldDeliveries {
-			if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND delivery_id=? AND status IN ('QUEUED','PROCESSING')", in.TenantID, delivery.ID).Updates(map[string]any{"status": "CANCELED", "last_error": "recipient_corrected", "lease_expires_at": nil, "updated_at": now}).Error; err != nil {
+		if hasOld {
+			if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND invitation_id=? AND revoked_at IS NULL", in.TenantID, old.ID).Update("revoked_at", now).Error; err != nil {
 				return err
+			}
+			if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", in.TenantID, old.ID).Updates(map[string]any{"status": "REVOKED", "revoked_at": now}).Error; err != nil {
+				return err
+			}
+			var oldDeliveries []database.Delivery
+			if err := tx.Where("tenant_id=? AND invitation_id=?", in.TenantID, old.ID).Find(&oldDeliveries).Error; err != nil {
+				return err
+			}
+			for _, delivery := range oldDeliveries {
+				if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND delivery_id=? AND status IN ('QUEUED','PROCESSING')", in.TenantID, delivery.ID).Updates(map[string]any{"status": "CANCELED", "last_error": "recipient_corrected", "lease_expires_at": nil, "updated_at": now}).Error; err != nil {
+					return err
+				}
 			}
 		}
 
@@ -193,6 +206,9 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 		if err := tx.Model(&responsibility).Updates(map[string]any{"version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
 			return err
 		}
+		if err := tx.Model(&inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
+			return err
+		}
 		responsibility.Version++
 		if in.ActorID == (identity.ID{}) {
 			in.ActorID = responsibility.ID
@@ -213,10 +229,20 @@ type invitationDelivery struct {
 	Destination string `json:"destination"`
 }
 
-func (s Service) loadResult(tx *gorm.DB, tenantID, inspectionID identity.ID, invitation database.Invitation, result *Result) error {
+func (s Service) loadResult(tx *gorm.DB, tenantID, inspectionID identity.ID, email string, invitation database.Invitation, result *Result) error {
 	var responsibility database.Responsibility
 	if err := tx.Where("tenant_id=? AND id=?", tenantID, invitation.ResponsibilityID).First(&responsibility).Error; err != nil {
 		return err
+	}
+	if responsibility.InspectionID != inspectionID {
+		return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
+	}
+	var destinations []invitationDelivery
+	if err := json.Unmarshal(invitation.DeliveryIntents, &destinations); err != nil {
+		return err
+	}
+	if len(destinations) != 1 || destinations[0].Channel != "EMAIL" || destinations[0].Destination != email {
+		return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
 	}
 	var delivery database.Delivery
 	err := tx.Where("tenant_id=? AND invitation_id=?", tenantID, invitation.ID).Order("created_at desc").First(&delivery).Error
@@ -233,5 +259,6 @@ func (s Service) loadResult(tx *gorm.DB, tenantID, inspectionID identity.ID, inv
 	result.DeliveryStatus = delivery.Status
 	result.ResponsibilityStatus = responsibility.Status
 	result.ResponsibilityVersion = responsibility.Version
+	result.Recipient = email
 	return nil
 }

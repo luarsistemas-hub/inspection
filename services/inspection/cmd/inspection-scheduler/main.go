@@ -10,6 +10,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
 	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
+	reminddeadlines "inspection/services/inspection/internal/features/notifications/remind_deadlines"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
@@ -45,6 +46,10 @@ func run() error {
 		return err
 	}
 	db, err := database.Open(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	deadlineNotifications, err := reminddeadlines.Setup(reminddeadlines.Dependencies{DB: db})
 	if err != nil {
 		return err
 	}
@@ -84,7 +89,7 @@ func run() error {
 			return err
 		}
 	}
-	go runMaterializer(db, bus)
+	go runMaterializer(db, bus, deadlineNotifications)
 	mux := http.NewServeMux()
 	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
@@ -92,13 +97,13 @@ func run() error {
 	return process.Serve(cfg.HTTPAddress, mux, cfg.ShutdownTimeout)
 }
 
-func runMaterializer(db *gorm.DB, bus *mediator.Bus) {
+func runMaterializer(db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(context.Context, identity.ID, time.Time) error) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		now := time.Now().UTC()
 		var tenantIDs []identity.ID
-		if err := db.Raw("SELECT tenant_id FROM schedules.schedules WHERE status='ACTIVE' AND next_due_at<=? UNION SELECT tenant_id FROM schedules.reminder_plans WHERE status='PLANNED' AND remind_at<=? UNION SELECT tenant_id FROM inspections.inspections WHERE status IN ('COMPLETED','CANCELED','INVALIDATED') AND updated_at<=?", now, now, now.AddDate(-5, 0, 0)).Scan(&tenantIDs).Error; err != nil {
+		if err := db.Raw("SELECT tenant_id FROM schedules.schedules WHERE status='ACTIVE' AND next_due_at<=? UNION SELECT tenant_id FROM schedules.reminder_plans WHERE status='PLANNED' AND remind_at<=? UNION SELECT tenant_id FROM inspections.inspections WHERE status IN ('COMPLETED','CANCELED','INVALIDATED') AND updated_at<=? UNION SELECT tenant_id FROM inspections.inspections WHERE status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND deadline_at<=?", now, now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
 			log.Printf("scheduler tenant discovery failed: %v", err)
 		} else {
 			for _, tenantID := range tenantIDs {
@@ -111,6 +116,9 @@ func runMaterializer(db *gorm.DB, bus *mediator.Bus) {
 				}
 				if err := emitRetentionDue(db, tenantID, now); err != nil {
 					log.Printf("scheduler retention discovery failed: %v", err)
+				}
+				if err := deadlineNotifications(ctx, tenantID, now); err != nil {
+					log.Printf("scheduler deadline notification failed: %v", err)
 				}
 			}
 		}

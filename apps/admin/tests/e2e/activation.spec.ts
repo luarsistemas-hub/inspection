@@ -33,7 +33,6 @@ test("E2E-011 activates an owner from the real invitation before normal PKCE log
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
   await page.getByLabel("Endereço do imóvel").fill("Rua da Ativação, 123");
   await page.getByLabel("Tipo de imóvel").selectOption("APARTMENT");
-  await page.getByLabel("Quantidade de cômodos").fill("3");
   await page.getByLabel("Finalidade da vistoria").selectOption("RENTAL");
   await page.getByLabel("Prazo para concluir a vistoria").fill(deadline);
   await page.getByRole("button", { name: "Salvar e continuar" }).click();

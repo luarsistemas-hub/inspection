@@ -1,5 +1,5 @@
 import type { CustomerEvidenceQuery, CustomerReportQuery, ReportWorkspaceQuery } from "@/graphql/generated";
-import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification } from "./presentation";
+import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentReportPDFStatus } from "./presentation";
 
 type InternalReport = NonNullable<ReportWorkspaceQuery["report"]>;
 type CustomerReport = NonNullable<CustomerReportQuery["customerReport"]>;
@@ -7,7 +7,7 @@ type CustomerReport = NonNullable<CustomerReportQuery["customerReport"]>;
 export function ReportVisual({ report, onDownload, onMediaError }: { report: InternalReport; onDownload: () => void; onMediaError?: () => void }) {
   return <article className="report-visual">
     <ReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} />
-    <div className="report-visual-actions"><button onClick={onDownload}>Preparar download PDF</button><span>PDF: {report.pdfStatus}</span></div>
+    <div className="report-visual-actions"><button onClick={onDownload}>Preparar download PDF</button><span>PDF: {presentReportPDFStatus(report.pdfStatus)}</span></div>
     <ReportEvidence requirements={report.requirements} evidence={report.evidence} findings={report.findings} onMediaError={onMediaError} />
   </article>;
 }

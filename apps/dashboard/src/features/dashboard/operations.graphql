@@ -21,6 +21,22 @@ query OperationalOverview($after: String, $classification: String, $status: Stri
   }
 }
 
+query TriageWorkspace($first: Int, $after: String, $status: TriageReviewStatus, $classification: String, $search: String, $assigneeId: ID, $reason: String) {
+  triageWorkspace(first: $first, after: $after, status: $status, classification: $classification, search: $search, assigneeId: $assigneeId, reason: $reason) {
+    counts { new inReview awaitingEvidence criticalOpen }
+    nodes { inspectionId assetId assetName address classification status reviewStatus assigneeId reportVersion version findingCount reasonCodes createdAt updatedAt }
+    pageInfo { endCursor hasNextPage }
+  }
+}
+query TriageCase($inspectionId: ID!) {
+  triageCase(inspectionId: $inspectionId) {
+    inspectionId assetId assetName address classification status reviewStatus assigneeId reportVersion version reasonCodes createdAt updatedAt
+    report { id version classification advisory context { asset { name address } participant { name } inspection { generatedAt } } requirements { key label analysisStatus coverage impossibilityReason } findings { id title category description severity confidence quality recommendedAction evidenceIds } evidence { id requirementKey role description capturedAt availability flags url } }
+    events { id actorId kind body createdAt }
+  }
+}
+query TriageAssignees($inspectionId: ID!) { triageAssignees(inspectionId: $inspectionId) { id role current } }
+
 query Schedules($after: String) { schedules(first: 25, after: $after) { nodes { id assetId participantId templateId rrule timezone startsAt nextDueAt deadlineMinutes reminderOffsetsMinutes status version } pageInfo { endCursor hasNextPage } } }
 query Inspections($after: String, $history: Boolean!) { inspections(first: 25, after: $after, history: $history) { nodes { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } pageInfo { endCursor hasNextPage } } }
 query InspectionDetail($id: ID!) { inspection(id: $id) { id assetId participantId projectId stageId source sourceReason stateReason status evidenceCount dueAt deadlineAt reminderInstants version } }
@@ -29,13 +45,14 @@ query Projects($after: String) { projects(first: 25, after: $after) { nodes { id
 query ProjectDetail($id: ID!) { project(id: $id) { id assetId participantId templateId reportMode status version stages { id key label kind position status plannedAt reason inspectionId version } transitions { id stageId fromState toState reason occurredAt } } }
 query ProjectTimeline($projectId: ID!) { projectTimeline(projectId: $projectId) { projectId entries { stageId label status inspectionId occurredAt } } }
 query ReportWorkspace($inspectionId: ID!, $version: Int) { report(inspectionId: $inspectionId, version: $version) { id inspectionId projectId version mode classification jsonDigest htmlDigest canonicalJSON html createdAt advisory pdfStatus context { asset { id name externalKey address } participant { id name } template { id name version } inspection { projectId stageId stageLabel dueAt submittedAt generatedAt } } requirements { key section label instructions coverage impossibilityReason noRelevantChange analysisMode analysisStatus } evidence { id requirementKey role description captureSource capturedAt displayDigest availability flags url } findings { id category title description severity confidence quality recommendedAction evidenceIds } timeline { stageId classification status position } } }
+query Reports($first: Int!, $after: String, $search: String, $classification: String) { reports(first: $first, after: $after, search: $search, classification: $classification) { nodes { id inspectionId assetName assetAddress assetExternalKey participantName generatedAt classification version } pageInfo { endCursor hasNextPage } } }
 query ReportDownload($snapshotId: ID!) { reportDownload(snapshotId: $snapshotId, kind: "PDF") { snapshotId kind objectKey url status sha256 } }
 
 query CustomerPortfolio($after: String) { customerPortfolio(first: 25, after: $after) { nodes { assetId projectId publishedClassification status progress updatedAt } pageInfo { endCursor hasNextPage } } }
 query CustomerTimeline($assetId: ID, $projectId: ID, $after: String) { customerTimeline(assetId: $assetId, projectId: $projectId, first: 25, after: $after) { nodes { id kind status occurredAt historical } pageInfo { endCursor hasNextPage } } }
 query CustomerReport($inspectionId: ID!, $version: Int) { customerReport(inspectionId: $inspectionId, version: $version) { inspectionId snapshotId version classification advisory status historical context { asset { id name externalKey address } participant { id name } template { id name version } inspection { projectId stageId stageLabel dueAt submittedAt generatedAt } } requirements { key section label instructions coverage impossibilityReason noRelevantChange analysisMode analysisStatus } } }
 query CustomerEvidence($inspectionId: ID!, $mode: EvidenceMode!, $after: String) { customerEvidence(inspectionId: $inspectionId, mode: $mode, first: 25, after: $after) { nodes { id requirementKey section label role description captureSource capturedAt state lineageId replacedBy mediaAvailability flags url } pageInfo { endCursor hasNextPage } } }
-query MyNotifications($after: String, $unreadOnly: Boolean!) { myNotifications(first: 25, after: $after, unreadOnly: $unreadOnly) { nodes { id kind title body resourceKind resourceId createdAt readAt } unreadCount pageInfo { endCursor hasNextPage } } }
+query MyNotifications($after: String, $unreadOnly: Boolean!, $kind: String, $projectId: ID) { myNotifications(first: 25, after: $after, unreadOnly: $unreadOnly, kind: $kind, projectId: $projectId) { nodes { id kind title body resourceKind resourceId createdAt readAt action context priority dueAt } unreadCount pageInfo { endCursor hasNextPage } } }
 query NotificationDeliveries($after: String) {
   notificationDeliveries(first: 25, after: $after) {
     nodes {
@@ -62,5 +79,7 @@ mutation ReopenProject($input: ReopenProjectInput!) { reopenProject(input: $inpu
 mutation PublishReport($input: PublishReportInput!) { publishReport(input: $input) { publication { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation InvalidateReportPublication($input: InvalidateReportPublicationInput!) { invalidateReportPublication(input: $input) { publication { id status version } userErrors { code field message correlationId } clientMutationId } }
 mutation RequestRecapture($input: RequestRecaptureInput!) { requestRecapture(input: $input) { recapture { id status deadlineAt } userErrors { code field message correlationId } clientMutationId } }
+mutation UpdateTriageCase($input: UpdateTriageCaseInput!) { updateTriageCase(input: $input) { triageCase { inspectionId reviewStatus assigneeId version } userErrors { code field message correlationId } clientMutationId } }
 mutation MarkNotificationRead($input: MarkNotificationReadInput!) { markNotificationRead(input: $input) { notification { id readAt } userErrors { code field message correlationId } clientMutationId } }
+mutation MarkAllNotificationsRead($input: MarkNotificationReadInput!) { markNotificationRead(input: $input) { markedCount unreadCount userErrors { code field message correlationId } clientMutationId } }
 mutation ConfigureNotificationPreferences($input: ConfigureNotificationPreferencesInput!) { configureMyNotificationPreferences(input: $input) { userErrors { code field message correlationId } clientMutationId } }

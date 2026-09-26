@@ -35,7 +35,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		var jobs []database.ComparisonJob
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("requirement_key ASC").Find(&jobs).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND id IN (SELECT DISTINCT ON (requirement_key) id FROM analysis.comparison_jobs WHERE tenant_id=? AND inspection_id=? ORDER BY requirement_key, created_at DESC, id DESC)", envelope.TenantID, payload.InspectionID, envelope.TenantID, payload.InspectionID).Order("requirement_key ASC").Find(&jobs).Error; err != nil {
 			return err
 		}
 		if len(jobs) == 0 {

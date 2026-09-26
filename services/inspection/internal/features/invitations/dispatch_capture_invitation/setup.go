@@ -20,6 +20,7 @@ import (
 	"inspection/services/inspection/internal/platform/security"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Dependencies struct {
@@ -34,6 +35,7 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		return nil, fmt.Errorf("slice invitations/dispatch_capture_invitation: missing dependency")
 	}
 	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+		tx = tx.WithContext(ctx)
 		var payload struct {
 			InspectionID     identity.ID `json:"inspectionId"`
 			ResponsibilityID identity.ID `json:"responsibilityId"`
@@ -45,13 +47,23 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		if payload.InspectionID == (identity.ID{}) || payload.ParticipantID == (identity.ID{}) {
 			return nil
 		}
-		var existing int64
-		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", envelope.TenantID, payload.ResponsibilityID).Count(&existing).Error; err != nil || existing > 0 {
+		var responsibility database.Responsibility
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND inspection_id=? AND participant_id=?", envelope.TenantID, payload.ResponsibilityID, payload.InspectionID, payload.ParticipantID).First(&responsibility).Error; err != nil {
 			return err
+		}
+		if responsibility.Status != "PENDING" {
+			return nil
 		}
 		var inspection database.Inspection
 		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
 			return err
+		}
+		var existing int64
+		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", envelope.TenantID, payload.ResponsibilityID).Count(&existing).Error; err != nil {
+			return err
+		}
+		if existing > 0 {
+			return markInvited(tx, &inspection, time.Now().UTC())
 		}
 		var participant database.Participant
 		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.ParticipantID).First(&participant).Error; err != nil {
@@ -91,8 +103,12 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 				return err
 			}
 		}
-		return tx.Model(&inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error
+		return markInvited(tx, &inspection, now)
 	}, nil
+}
+
+func markInvited(tx *gorm.DB, inspection *database.Inspection, now time.Time) error {
+	return tx.Model(inspection).Where("status='PLANNED'").Updates(map[string]any{"status": "INVITED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error
 }
 
 func deliveryIdempotencyKey(invitationID identity.ID, target invitationcore.DeliveryIntent) string {

@@ -126,13 +126,21 @@ func TestRecaptureRequestContractsIT221ToIT230(t *testing.T) {
 			t.Fatalf("early recapture accepted: %v", err)
 		}
 	})
-	t.Run("IT-229 terminal inspection rejects recapture", func(t *testing.T) {
-		for _, status := range []string{"CANCELED", "INVALIDATED", "COMPLETED"} {
+	t.Run("IT-229 canceled or invalidated inspection rejects recapture", func(t *testing.T) {
+		for _, status := range []string{"CANCELED", "INVALIDATED"} {
 			fixture := newRecaptureFixture(t, status, 1)
 			if _, err := fixture.service.Request(context.Background(), fixture.input("requirement-1", "blur", "terminal-"+status)); errorCode(err) != apperror.InvalidState {
 				t.Fatalf("%s recapture accepted: %v", status, err)
 			}
 		}
+	})
+	t.Run("IT-229 completed inspection can request recapture", func(t *testing.T) {
+		fixture := newRecaptureFixture(t, "COMPLETED", 1)
+		if _, err := fixture.service.Request(context.Background(), fixture.input("requirement-1", "supplement", "completed-inspection")); err != nil {
+			t.Fatalf("completed inspection recapture rejected: %v", err)
+		}
+	})
+	t.Run("IT-229 expired active recapture rejects a new request", func(t *testing.T) {
 		fixture, _ := requestedFixture(t, 1)
 		fixture.service.Now = func() time.Time { return fixture.now.Add(2 * time.Hour) }
 		late := fixture.input("requirement-1", "late", "late")

@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -69,10 +67,6 @@ func ValidateProperty(payload StepPayload, now time.Time) error {
 	case "SALE", "RENTAL", "MAINTENANCE", "INSURANCE":
 	default:
 		return apperror.New(apperror.InvalidInput, "purpose", "invalid property purpose")
-	}
-	rooms, exists := payload["rooms"]
-	if !exists || !positiveInteger(rooms) {
-		return apperror.New(apperror.InvalidInput, "rooms", "rooms must be a positive integer")
 	}
 	return nil
 }
@@ -241,42 +235,6 @@ func boolValue(payload StepPayload, key string) bool {
 	return value
 }
 
-func positiveInteger(value any) bool {
-	switch value := value.(type) {
-	case string:
-		parsed, err := strconv.Atoi(strings.TrimSpace(value))
-		return err == nil && parsed > 0
-	case json.Number:
-		parsed, err := strconv.ParseInt(string(value), 10, 64)
-		return err == nil && parsed > 0
-	case int:
-		return value > 0
-	case int8:
-		return value > 0
-	case int16:
-		return value > 0
-	case int32:
-		return value > 0
-	case int64:
-		return value > 0
-	case uint:
-		return value > 0
-	case uint8:
-		return value > 0
-	case uint16:
-		return value > 0
-	case uint32:
-		return value > 0
-	case uint64:
-		return value > 0
-	case float32:
-		return value > 0 && !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0) && float32(math.Trunc(float64(value))) == value
-	case float64:
-		return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) && math.Trunc(value) == value
-	default:
-		return false
-	}
-}
 func timeValue(payload StepPayload, key string) (time.Time, bool) {
 	value := stringValue(payload, key)
 	if value == "" {

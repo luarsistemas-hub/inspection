@@ -25,9 +25,13 @@ type Query {
   inspections(first: Int = 25, after: String, history: Boolean = false): InspectionConnection!
   inspection(id: ID!): Inspection
   report(inspectionId: ID!, version: Int): Report
+  reports(first: Int = 25, after: String, search: String, classification: String): ReportConnection!
   reportDownload(snapshotId: ID!, kind: String = "PDF"): ReportDownload
   dashboardSummary(projectId: ID, businessUnitId: ID): DashboardSummary!
   triageInspections(first: Int = 25, after: String, classification: String, status: String): TriageInspectionConnection!
+  triageWorkspace(first: Int = 25, after: String, status: TriageReviewStatus, classification: String, search: String, assigneeId: ID, reason: String): TriageWorkspace!
+  triageCase(inspectionId: ID!): TriageCase
+  triageAssignees(inspectionId: ID!): [TriageAssignee!]!
   projectTimeline(projectId: ID!): ProjectTimeline!
   notificationDeliveries(first: Int = 25, after: String): NotificationDeliveryConnection!
   publicationPolicy: PublicationPolicy!
@@ -35,7 +39,7 @@ type Query {
   customerTimeline(assetId: ID, projectId: ID, first: Int = 25, after: String): CustomerTimelineConnection!
   customerReport(inspectionId: ID!, version: Int): CustomerReport
   customerEvidence(inspectionId: ID!, mode: EvidenceMode = SIMPLE, first: Int = 25, after: String): CustomerEvidenceConnection!
-  myNotifications(unreadOnly: Boolean = false, first: Int = 25, after: String): RecipientNotificationConnection!
+  myNotifications(unreadOnly: Boolean = false, kind: String, projectId: ID, first: Int = 25, after: String): RecipientNotificationConnection!
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
   inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
@@ -50,7 +54,8 @@ type OnboardingStep { key: String!, label: String!, position: Int!, required: Bo
 type OnboardingOriginMode { key: String!, label: String!, templateKey: String!, required: Boolean! }
 type OnboardingDefinition { schemaVersion: Int!, version: Int!, segment: String!, segmentVersion: String!, steps: [OnboardingStep!]!, purposes: [String!]!, originModes: [OnboardingOriginMode!]!, templates: [String!]!, analysisType: AnalysisType! }
 type OnboardingAgency { tenantId: ID!, businessUnitId: ID!, name: String!, businessUnitCode: String!, status: String! }
-type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, existingAgency: OnboardingAgency }
+type OnboardingOwner { name: String!, email: String! }
+type OnboardingSession { id: ID!, state: String!, currentStep: String!, version: Int!, expiresAt: String!, definition: JSON!, completedSteps: JSON!, owner: OnboardingOwner!, existingAgency: OnboardingAgency }
 type OnboardingRequest { id: ID!, status: String!, assetId: ID, participantId: ID, originVersionId: ID, templateId: ID! }
 type OnboardingActivation { tenantId: ID!, identityId: ID!, purpose: String!, status: String!, activatedAt: String }
 type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAction: String!, originStatus: String!, deliveryStatus: String!, responsibleEmail: String, responsibilityStatus: String, responsibilityVersion: Int, deliveryFailureCode: String, canCorrectResponsibleEmail: Boolean!, updatedAt: String }
@@ -121,6 +126,7 @@ type Mutation {
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
+  updateTriageCase(input: UpdateTriageCaseInput!): TriageCasePayload!
   submitRecapture(input: SubmitRecaptureInput!): RecapturePayload!
   declareSensitiveDetectionFalsePositive(input: SensitiveFalsePositiveInput!): MediaPayload!
   configureRetentionPolicy(input: ConfigureRetentionPolicyInput!): RetentionPolicyPayload!
@@ -207,6 +213,8 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
 type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
+type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
+type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
@@ -219,14 +227,24 @@ type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classifica
 enum EvidenceMode { SIMPLE ADVANCED }
 type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
-type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String }
+type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String action: String! context: JSON! priority: String! dueAt: String }
 type RecipientNotificationConnection { nodes: [RecipientNotification!]! pageInfo: PageInfo! unreadCount: Int! }
 type NotificationPreferencesPayload { userErrors: [UserError!]! clientMutationId: String! }
-type RecipientNotificationPayload { notification: RecipientNotification userErrors: [UserError!]! clientMutationId: String! }
+type RecipientNotificationPayload { notification: RecipientNotification markedCount: Int! unreadCount: Int! userErrors: [UserError!]! clientMutationId: String! }
 type ReportDownload { snapshotId: ID! kind: String! objectKey: String! url: String! status: String! sha256: String }
 type DashboardSummary { total: Int! normal: Int! attention: Int! critical: Int! pending: Int! invalidated: Int! }
 type TriageInspection { inspectionId: ID! projectId: ID assetId: ID classification: String! status: String! updatedAt: String! }
 type TriageInspectionConnection { nodes: [TriageInspection!]! pageInfo: PageInfo! }
+enum TriageReviewStatus { NEW IN_REVIEW AWAITING_EVIDENCE REVIEWED ARCHIVED }
+enum TriageCaseAction { TAKE ASSIGN NOTE COMPLETE REOPEN WAIT_FOR_EVIDENCE }
+enum TriageDisposition { NO_ACTION REFERRED EXTERNAL_FOLLOWUP }
+type TriageWorkspace { counts: TriageCounts! nodes: [TriageQueueItem!]! pageInfo: PageInfo! }
+type TriageCounts { new: Int! inReview: Int! awaitingEvidence: Int! criticalOpen: Int! }
+type TriageQueueItem { inspectionId: ID! assetId: ID! assetName: String! address: String! classification: String! status: String! reviewStatus: TriageReviewStatus! assigneeId: ID reportVersion: Int! version: Int! findingCount: Int! reasonCodes: [String!]! createdAt: String! updatedAt: String! }
+type TriageCase { inspectionId: ID! assetId: ID! assetName: String! address: String! classification: String! status: String! reviewStatus: TriageReviewStatus! assigneeId: ID reportVersion: Int! version: Int! reasonCodes: [String!]! createdAt: String! updatedAt: String! report: Report events: [TriageCaseEvent!]! }
+type TriageCaseEvent { id: ID! actorId: ID! kind: String! body: String! createdAt: String! }
+type TriageAssignee { id: ID! role: String! current: Boolean! }
+type TriageCasePayload { triageCase: TriageCase! userErrors: [UserError!]! clientMutationId: String! }
 type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
 type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
 type NotificationDelivery {
@@ -418,6 +436,7 @@ input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String!
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
+input UpdateTriageCaseInput { inspectionId: ID! expectedVersion: Int! action: TriageCaseAction! assigneeId: ID body: String disposition: TriageDisposition clientMutationId: String! }
 input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
 input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
 input ConfigureRetentionPolicyInput { evidenceDays: Int! operationalDays: Int! securityDays: Int clientMutationId: String! }
@@ -426,7 +445,7 @@ input LegalHoldInput { inspectionId: ID! reason: String! clientMutationId: Strin
 input ConfigurePublicationPolicyInput { mode: String! expectedVersion: Int! clientMutationId: String! }
 input PublishReportInput { inspectionId: ID! snapshotId: ID! clientMutationId: String! }
 input InvalidateReportPublicationInput { publicationId: ID! reason: String! expectedVersion: Int! clientMutationId: String! }
-input MarkNotificationReadInput { notificationId: ID! clientMutationId: String! }
+input MarkNotificationReadInput { notificationId: ID all: Boolean = false kind: String projectId: ID through: String clientMutationId: String! }
 input ConfigureNotificationPreferencesInput { channels: [ID!]! expectedVersion: Int! clientMutationId: String! }
 input CustomerPortfolioFilter { assetId: ID projectId: ID search: String }
 

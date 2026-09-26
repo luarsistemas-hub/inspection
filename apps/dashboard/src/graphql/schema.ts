@@ -701,8 +701,12 @@ export type LegalHoldInput = {
 };
 
 export type MarkNotificationReadInput = {
+  all: InputMaybe<Scalars['Boolean']['input']>;
   clientMutationId: Scalars['String']['input'];
-  notificationId: Scalars['ID']['input'];
+  kind: InputMaybe<Scalars['String']['input']>;
+  notificationId: InputMaybe<Scalars['ID']['input']>;
+  projectId: InputMaybe<Scalars['ID']['input']>;
+  through: InputMaybe<Scalars['String']['input']>;
 };
 
 export type Me = {
@@ -836,6 +840,7 @@ export type Mutation = {
   updateAsset: AssetPayload;
   updateSchedule: SchedulePayload;
   updateTenant: TenantPayload;
+  updateTriageCase: TriageCasePayload;
   upsertBusinessUnit: BusinessUnitPayload;
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
@@ -1142,6 +1147,11 @@ export type MutationUpdateScheduleArgs = {
 
 export type MutationUpdateTenantArgs = {
   input: UpdateTenantInput;
+};
+
+
+export type MutationUpdateTriageCaseArgs = {
+  input: UpdateTriageCaseInput;
 };
 
 
@@ -1606,13 +1616,17 @@ export type Query = {
   publicationPolicy: PublicationPolicy;
   report: Maybe<Report>;
   reportDownload: Maybe<ReportDownload>;
+  reports: ReportConnection;
   retentionPolicies: RetentionPolicyConnection;
   schedules: ScheduleConnection;
   segmentDefinitions: SegmentDefinitionConnection;
   templateVersion: Maybe<TemplateVersion>;
   templates: TemplateConnection;
   tenant: Maybe<Tenant>;
+  triageAssignees: Array<TriageAssignee>;
+  triageCase: Maybe<TriageCase>;
   triageInspections: TriageInspectionConnection;
+  triageWorkspace: TriageWorkspace;
   usageSummary: UsageSummary;
 };
 
@@ -1725,6 +1739,8 @@ export type QueryMembershipsArgs = {
 export type QueryMyNotificationsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+  kind: InputMaybe<Scalars['String']['input']>;
+  projectId: InputMaybe<Scalars['ID']['input']>;
   unreadOnly?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
@@ -1792,6 +1808,14 @@ export type QueryReportDownloadArgs = {
 };
 
 
+export type QueryReportsArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  classification: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+};
+
+
 export type QuerySchedulesArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1817,11 +1841,32 @@ export type QueryTemplatesArgs = {
 };
 
 
+export type QueryTriageAssigneesArgs = {
+  inspectionId: Scalars['ID']['input'];
+};
+
+
+export type QueryTriageCaseArgs = {
+  inspectionId: Scalars['ID']['input'];
+};
+
+
 export type QueryTriageInspectionsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   classification: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   status: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryTriageWorkspaceArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  assigneeId: InputMaybe<Scalars['ID']['input']>;
+  classification: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  reason: InputMaybe<Scalars['String']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+  status: InputMaybe<TriageReviewStatus>;
 };
 
 
@@ -1853,10 +1898,14 @@ export type RecapturePayload = {
 
 export type RecipientNotification = {
   __typename?: 'RecipientNotification';
+  action: Scalars['String']['output'];
   body: Scalars['String']['output'];
+  context: Scalars['JSON']['output'];
   createdAt: Scalars['String']['output'];
+  dueAt: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   kind: Scalars['String']['output'];
+  priority: Scalars['String']['output'];
   readAt: Maybe<Scalars['String']['output']>;
   resourceId: Maybe<Scalars['ID']['output']>;
   resourceKind: Scalars['String']['output'];
@@ -1873,7 +1922,9 @@ export type RecipientNotificationConnection = {
 export type RecipientNotificationPayload = {
   __typename?: 'RecipientNotificationPayload';
   clientMutationId: Scalars['String']['output'];
+  markedCount: Scalars['Int']['output'];
   notification: Maybe<RecipientNotification>;
+  unreadCount: Scalars['Int']['output'];
   userErrors: Array<UserError>;
 };
 
@@ -1923,6 +1974,12 @@ export type ReportAssetContext = {
   externalKey: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
+};
+
+export type ReportConnection = {
+  __typename?: 'ReportConnection';
+  nodes: Array<ReportSummary>;
+  pageInfo: PageInfo;
 };
 
 export type ReportContext = {
@@ -2015,6 +2072,19 @@ export type ReportRequirement = {
   label: Scalars['String']['output'];
   noRelevantChange: Maybe<Scalars['Boolean']['output']>;
   section: Scalars['String']['output'];
+};
+
+export type ReportSummary = {
+  __typename?: 'ReportSummary';
+  assetAddress: Scalars['String']['output'];
+  assetExternalKey: Scalars['String']['output'];
+  assetName: Scalars['String']['output'];
+  classification: Scalars['String']['output'];
+  generatedAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  inspectionId: Scalars['ID']['output'];
+  participantName: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
 };
 
 export type ReportTemplateContext = {
@@ -2333,6 +2403,69 @@ export type TenantPayload = {
   userErrors: Array<UserError>;
 };
 
+export type TriageAssignee = {
+  __typename?: 'TriageAssignee';
+  current: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  role: Scalars['String']['output'];
+};
+
+export type TriageCase = {
+  __typename?: 'TriageCase';
+  address: Scalars['String']['output'];
+  assetId: Scalars['ID']['output'];
+  assetName: Scalars['String']['output'];
+  assigneeId: Maybe<Scalars['ID']['output']>;
+  classification: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  events: Array<TriageCaseEvent>;
+  inspectionId: Scalars['ID']['output'];
+  reasonCodes: Array<Scalars['String']['output']>;
+  report: Maybe<Report>;
+  reportVersion: Scalars['Int']['output'];
+  reviewStatus: TriageReviewStatus;
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type TriageCaseAction =
+  | 'ASSIGN'
+  | 'COMPLETE'
+  | 'NOTE'
+  | 'REOPEN'
+  | 'TAKE'
+  | 'WAIT_FOR_EVIDENCE';
+
+export type TriageCaseEvent = {
+  __typename?: 'TriageCaseEvent';
+  actorId: Scalars['ID']['output'];
+  body: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+};
+
+export type TriageCasePayload = {
+  __typename?: 'TriageCasePayload';
+  clientMutationId: Scalars['String']['output'];
+  triageCase: TriageCase;
+  userErrors: Array<UserError>;
+};
+
+export type TriageCounts = {
+  __typename?: 'TriageCounts';
+  awaitingEvidence: Scalars['Int']['output'];
+  criticalOpen: Scalars['Int']['output'];
+  inReview: Scalars['Int']['output'];
+  new: Scalars['Int']['output'];
+};
+
+export type TriageDisposition =
+  | 'EXTERNAL_FOLLOWUP'
+  | 'NO_ACTION'
+  | 'REFERRED';
+
 export type TriageInspection = {
   __typename?: 'TriageInspection';
   assetId: Maybe<Scalars['ID']['output']>;
@@ -2346,6 +2479,38 @@ export type TriageInspection = {
 export type TriageInspectionConnection = {
   __typename?: 'TriageInspectionConnection';
   nodes: Array<TriageInspection>;
+  pageInfo: PageInfo;
+};
+
+export type TriageQueueItem = {
+  __typename?: 'TriageQueueItem';
+  address: Scalars['String']['output'];
+  assetId: Scalars['ID']['output'];
+  assetName: Scalars['String']['output'];
+  assigneeId: Maybe<Scalars['ID']['output']>;
+  classification: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  findingCount: Scalars['Int']['output'];
+  inspectionId: Scalars['ID']['output'];
+  reasonCodes: Array<Scalars['String']['output']>;
+  reportVersion: Scalars['Int']['output'];
+  reviewStatus: TriageReviewStatus;
+  status: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type TriageReviewStatus =
+  | 'ARCHIVED'
+  | 'AWAITING_EVIDENCE'
+  | 'IN_REVIEW'
+  | 'NEW'
+  | 'REVIEWED';
+
+export type TriageWorkspace = {
+  __typename?: 'TriageWorkspace';
+  counts: TriageCounts;
+  nodes: Array<TriageQueueItem>;
   pageInfo: PageInfo;
 };
 
@@ -2380,6 +2545,16 @@ export type UpdateTenantInput = {
   language: Scalars['String']['input'];
   name: Scalars['String']['input'];
   timezone: Scalars['String']['input'];
+};
+
+export type UpdateTriageCaseInput = {
+  action: TriageCaseAction;
+  assigneeId: InputMaybe<Scalars['ID']['input']>;
+  body: InputMaybe<Scalars['String']['input']>;
+  clientMutationId: Scalars['String']['input'];
+  disposition: InputMaybe<TriageDisposition>;
+  expectedVersion: Scalars['Int']['input'];
+  inspectionId: Scalars['ID']['input'];
 };
 
 export type UpsertBusinessUnitInput = {

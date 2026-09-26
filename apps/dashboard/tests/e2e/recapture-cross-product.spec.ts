@@ -6,9 +6,6 @@ import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
 test.describe("Dashboard to Capture recapture journey", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
-  test.beforeEach(() => { execFileSync("docker", ["stop", "inspection-inspection-worker-1"]); });
-  test.afterEach(() => { execFileSync("docker", ["start", "inspection-inspection-worker-1"]); });
-
   test("requests a replacement and records the authoritative operation outcome", async ({ page }) => {
     test.setTimeout(60_000);
     const output = execFileSync("./scripts/local.sh", ["seed"], { cwd: resolve(process.cwd(), "../.."), encoding: "utf8" });
@@ -34,10 +31,15 @@ test.describe("Dashboard to Capture recapture journey", () => {
 
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/inspections");
-    await page.getByRole("button", { name: "Carregar vistorias" }).click();
-    await page.getByRole("combobox", { name: "Situação" }).selectOption("execucao");
-    const item = page.locator("[data-inspection-id]").filter({ hasText: /Em análise|Enviada/ }).first();
-    await expect(item).toBeVisible();
+    const refreshInspections = async () => {
+      const responsePromise = page.waitForResponse((response) => response.url().endsWith("/graphql") && response.request().postData()?.includes("query Inspections") === true);
+      await page.getByRole("button", { name: "Carregar vistorias" }).click();
+      expect((await responsePromise).ok()).toBe(true);
+    };
+    await refreshInspections();
+    await page.getByRole("combobox", { name: "Situação" }).selectOption("concluidas");
+    const item = page.locator("[data-inspection-id]").filter({ hasText: "Concluída" }).first();
+    await expect(item).toBeVisible({ timeout: 15_000 });
     const answers = ["A imagem precisa de mais detalhes.", new Date(Date.now() + 86_400_000).toISOString(), "fachada-geral"];
     page.on("dialog", (dialog) => void dialog.accept(answers.shift()));
     await item.locator(".inspection-action-menu summary").click();
