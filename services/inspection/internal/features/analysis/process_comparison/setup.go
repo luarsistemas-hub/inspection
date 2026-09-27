@@ -16,6 +16,7 @@ import (
 	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Payload struct {
@@ -346,37 +347,7 @@ func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 	if err := tx.Create(&database.UsageRecord{ID: identity.NewID(), TenantID: tenantID, InspectionID: job.InspectionID, JobID: job.ID, PromptSnapshotID: job.PromptSnapshotID, Provider: provider.Provider, Model: provider.Model, PromptDigest: job.PromptDigest, InputTokens: provider.InputTokens, OutputTokens: provider.OutputTokens, Cost: provider.Cost, LatencyMS: run.LatencyMS, CreatedAt: now}).Error; err != nil {
 		return err
 	}
-	var daily database.UsageDailySummary
-	day := now.UTC().Truncate(24 * time.Hour)
-	if err := tx.Where("tenant_id=? AND day=?", tenantID, day).First(&daily).Error; err == gorm.ErrRecordNotFound {
-		daily = database.UsageDailySummary{ID: identity.NewID(), TenantID: tenantID, Day: day, Requests: 1, UpdatedAt: now}
-		if provider.InputTokens != nil {
-			daily.InputTokens = *provider.InputTokens
-		}
-		if provider.OutputTokens != nil {
-			daily.OutputTokens = *provider.OutputTokens
-		}
-		if provider.Cost != nil {
-			daily.Cost = *provider.Cost
-		}
-		if err := tx.Create(&daily).Error; err != nil {
-			return err
-		}
-	} else if err == nil {
-		updates := map[string]any{"requests": gorm.Expr("requests + 1"), "updated_at": now}
-		if provider.InputTokens != nil {
-			updates["input_tokens"] = gorm.Expr("input_tokens + ?", *provider.InputTokens)
-		}
-		if provider.OutputTokens != nil {
-			updates["output_tokens"] = gorm.Expr("output_tokens + ?", *provider.OutputTokens)
-		}
-		if provider.Cost != nil {
-			updates["cost"] = gorm.Expr("cost + ?", *provider.Cost)
-		}
-		if err := tx.Model(&database.UsageDailySummary{}).Where("tenant_id=? AND day=?", tenantID, day).Updates(updates).Error; err != nil {
-			return err
-		}
-	} else {
+	if err := upsertDailySummary(ctx, tx, tenantID, provider, now); err != nil {
 		return err
 	}
 	for _, finding := range result.Findings {
@@ -391,6 +362,35 @@ func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 	}
 	job.Status = status
 	return emitCompleted(tx, tenantID, job, now)
+}
+
+func upsertDailySummary(ctx context.Context, tx *gorm.DB, tenantID identity.ID, provider llm.StructuredResult, now time.Time) error {
+	var inputTokens, outputTokens int64
+	var cost float64
+	if provider.InputTokens != nil {
+		inputTokens = *provider.InputTokens
+	}
+	if provider.OutputTokens != nil {
+		outputTokens = *provider.OutputTokens
+	}
+	if provider.Cost != nil {
+		cost = *provider.Cost
+	}
+	daily := database.UsageDailySummary{
+		ID: identity.NewID(), TenantID: tenantID, Day: now.UTC().Truncate(24 * time.Hour),
+		Requests: 1, InputTokens: inputTokens, OutputTokens: outputTokens, Cost: cost, UpdatedAt: now,
+	}
+	updates := map[string]any{
+		"requests":      gorm.Expr("usage.daily_summaries.requests + EXCLUDED.requests"),
+		"input_tokens":  gorm.Expr("usage.daily_summaries.input_tokens + EXCLUDED.input_tokens"),
+		"output_tokens": gorm.Expr("usage.daily_summaries.output_tokens + EXCLUDED.output_tokens"),
+		"cost":          gorm.Expr("usage.daily_summaries.cost + EXCLUDED.cost"),
+		"updated_at":    now,
+	}
+	return tx.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "day"}},
+		DoUpdates: clause.Assignments(updates),
+	}).Create(&daily).Error
 }
 
 func persistTechnicalFailure(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {

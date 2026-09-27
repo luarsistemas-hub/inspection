@@ -1195,7 +1195,8 @@ type LLMCallRecord struct {
 func (LLMCallRecord) TableName() string { return "usage.llm_calls" }
 
 type UsageDailySummary struct {
-	ID, TenantID identity.ID `gorm:"type:uuid;primaryKey"`
+	ID           identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID     identity.ID `gorm:"type:uuid;primaryKey;uniqueIndex:idx_usage_daily,priority:1"`
 	Day          time.Time   `gorm:"type:date;not null;uniqueIndex:idx_usage_daily,priority:2"`
 	Requests     int64       `gorm:"not null"`
 	InputTokens  int64       `gorm:"not null"`

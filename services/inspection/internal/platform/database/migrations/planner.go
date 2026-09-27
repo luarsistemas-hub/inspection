@@ -1370,6 +1370,10 @@ GRANT USAGE ON SCHEMA dashboard TO inspection_runtime;
 GRANT SELECT, INSERT, UPDATE ON dashboard.triage_cases TO inspection_runtime;
 GRANT SELECT, INSERT ON dashboard.triage_case_events TO inspection_runtime;
 `},
+		{Version: 47, Name: "usage_daily_summary_tenant_day_index", Compatible: true, SQL: `
+DROP INDEX IF EXISTS usage.idx_usage_daily;
+CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day);
+`},
 	}
 }
 

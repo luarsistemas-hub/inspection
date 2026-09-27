@@ -76,8 +76,9 @@ test("guided comparison shows each real reference, previews photos, and advances
   const confirmBounds = await confirmPhoto.boundingBox();
   expect(confirmBounds?.width).toBeGreaterThanOrEqual(44);
   expect(confirmBounds?.height).toBeGreaterThanOrEqual(44);
-  await confirmPhoto.focus();
+  await confirmPhoto.hover();
   await expect.poll(() => confirmPhoto.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+  await confirmPhoto.focus();
   await confirmPhoto.press("Enter");
   await expect(page.getByText("Foto 2 de 2")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("img", { name: "Foto de referência: Sala" })).toBeVisible();

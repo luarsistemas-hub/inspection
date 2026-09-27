@@ -60,8 +60,8 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 46 {
-		t.Fatalf("latest version=%d, want 46", got)
+	if got := LatestVersion(); got != 47 {
+		t.Fatalf("latest version=%d, want 47", got)
 	}
 }
 
@@ -130,6 +130,22 @@ func TestGlobalLLMUsageMigrationAddsRestrictedReaders(t *testing.T) {
 			t.Fatalf("global usage migration does not contain %q", required)
 		}
 	}
+}
+
+func TestUsageDailySummaryIndexMigrationScopesUniquenessByTenantAndDay(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 47 {
+			continue
+		}
+		if step.Name != "usage_daily_summary_tenant_day_index" || !strings.Contains(step.SQL, "DROP INDEX IF EXISTS usage.idx_usage_daily") || !strings.Contains(step.SQL, "CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day)") {
+			t.Fatalf("unexpected usage summary migration: %+v", step)
+		}
+		if got := LatestVersion(); got != 47 {
+			t.Fatalf("latest version=%d, want 47", got)
+		}
+		return
+	}
+	t.Fatal("usage daily summary migration missing")
 }
 
 func TestCacheAndDerivativeMetadataMigrationsAreAdditive(t *testing.T) {

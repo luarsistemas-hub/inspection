@@ -6,8 +6,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/platform/database/migrations"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/driver/postgres"
@@ -31,9 +33,17 @@ func TestPostgresMigrationAndRLSIT341ToIT349(t *testing.T) {
 	if err := m.Migrate(ctx); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
-	if err := Compatible(ctx, admin, 11, 15); err != nil {
+	var usageIndex string
+	if err := admin.Raw(`SELECT pg_get_indexdef(indexrelid) FROM pg_index WHERE indexrelid = to_regclass('usage.idx_usage_daily')`).Scan(&usageIndex).Error; err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(usageIndex, "(tenant_id, day)") {
+		t.Fatalf("usage daily index is not tenant scoped: %s", usageIndex)
+	}
+	if err := Compatible(ctx, admin, 13, migrations.LatestVersion()); err != nil {
+		t.Fatal(err)
+	}
+	assertLegacyUsageDailyIndexMigration(t, ctx, admin, m)
 	var task5Indexes int64
 	if err := admin.Raw(`SELECT count(*) FROM pg_indexes WHERE indexname IN ('idx_capture_draft_responsibility','idx_screening_media','idx_recapture_inspection','idx_recapture_one_active')`).Scan(&task5Indexes).Error; err != nil || task5Indexes != 4 {
 		t.Fatalf("task 5 indexes=%d err=%v", task5Indexes, err)
@@ -123,5 +133,50 @@ func TestPostgresMigrationAndRLSIT341ToIT349(t *testing.T) {
 	other := Tenant{ID: identity.NewID(), TenantID: tenants[1], Name: "blocked", Language: "pt-BR", DefaultTimezone: "UTC", Status: "ACTIVE", Version: 1}
 	if err := runner.Within(ctx, tenants[0], func(tx *gorm.DB) error { return tx.Create(&other).Error }); err == nil {
 		t.Fatal("cross-tenant insert accepted")
+	}
+}
+
+func assertLegacyUsageDailyIndexMigration(t *testing.T, ctx context.Context, admin *gorm.DB, migrator Migrator) {
+	t.Helper()
+	day := time.Date(2001, 2, 3, 0, 0, 0, 0, time.UTC)
+	seed := UsageDailySummary{
+		ID:       identity.NewDeterministicID("usage-daily-migration-test", "summary"),
+		TenantID: identity.NewDeterministicID("usage-daily-migration-test", "tenant"),
+		Day:      day, Requests: 7, InputTokens: 11, OutputTokens: 13, Cost: 0.25, UpdatedAt: time.Now().UTC(),
+	}
+	t.Cleanup(func() {
+		if err := admin.Where("tenant_id=?", seed.TenantID).Delete(&UsageDailySummary{}).Error; err != nil {
+			t.Errorf("cleanup usage summary seed: %v", err)
+		}
+		// Reapplies version 47 when the test stops before the migrator restores the index.
+		if err := migrator.Migrate(ctx); err != nil {
+			t.Errorf("restore usage summary index: %v", err)
+		}
+	})
+	if err := admin.Exec(`DELETE FROM platform.schema_migrations WHERE version=47`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Where("tenant_id=?", seed.TenantID).Delete(&UsageDailySummary{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Exec(`DROP INDEX usage.idx_usage_daily`).Error; err != nil {
+		t.Fatal(err)
+	}
+	// Scoped to the seed tenant so rows written by other tests cannot collide on the legacy day-only key.
+	if err := admin.Exec(fmt.Sprintf(`CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(day) WHERE tenant_id = '%s'`, seed.TenantID)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Create(&seed).Error; err != nil {
+		t.Fatalf("seed legacy usage summary: %v", err)
+	}
+	if err := migrator.Migrate(ctx); err != nil {
+		t.Fatalf("apply tenant-scoped usage summary migration: %v", err)
+	}
+	var preserved UsageDailySummary
+	if err := admin.Where("tenant_id=? AND day=?", seed.TenantID, day).First(&preserved).Error; err != nil {
+		t.Fatalf("read preserved usage summary: %v", err)
+	}
+	if preserved.ID != seed.ID || preserved.Requests != seed.Requests || preserved.InputTokens != seed.InputTokens || preserved.OutputTokens != seed.OutputTokens || preserved.Cost != seed.Cost {
+		t.Fatalf("legacy usage summary changed during index migration: got %+v want %+v", preserved, seed)
 	}
 }

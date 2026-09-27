@@ -17,7 +17,7 @@ func TestAttentionItemsAreScopedToTheirOriginEvidence(t *testing.T) {
 	first, second := identity.NewID(), identity.NewID()
 	snapshot := referenceSnapshot{Items: []referenceEvidence{{MediaID: first, AttentionItems: []string{"Cafeteira"}}, {MediaID: second, AttentionItems: []string{"Torneira"}}}}
 	prompt, err := addAttentionItemsToPrompt("base", snapshot.attentionItemsFor(second))
-	if err != nil || !strings.Contains(prompt, `["Torneira"]`) || strings.Contains(prompt, "Cafeteira") {
+	if err != nil || !strings.Contains(prompt, `{"attentionItems":["Torneira"]}`) || strings.Contains(prompt, "Cafeteira") {
 		t.Fatalf("prompt=%q err=%v", prompt, err)
 	}
 	withoutItems, err := addAttentionItemsToPrompt("base", nil)
