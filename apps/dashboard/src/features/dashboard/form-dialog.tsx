@@ -1,0 +1,41 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { Dialog } from "@inspection/design-system";
+
+/** Hosts a create or edit form without moving the page content below it. */
+export function FormDialog({ isOpen, onClose, title, busy, error, children }: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  busy: boolean;
+  error?: string;
+  children: ReactNode;
+}) {
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => { if (!isOpen) setDirty(false); }, [isOpen]);
+
+  const requestClose = () => {
+    if (busy) return;
+    if (dirty && !window.confirm("Descartar as alterações não salvas?")) return;
+    onClose();
+  };
+
+  return <Dialog isOpen={isOpen} onClose={requestClose} title={title}>
+    <div className="form-dialog-body" onChangeCapture={() => setDirty(true)} onInputCapture={() => setDirty(true)} onClickCapture={(event) => {
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[role="option"]')) setDirty(true);
+      if (event.target.closest('button[type="button"]') && !event.target.closest(".form-dialog-close, .form-dialog-actions")) setDirty(true);
+    }} onKeyDownCapture={(event) => {
+      if (event.key === "Enter" && event.target instanceof Element && event.target.getAttribute("role") === "combobox") setDirty(true);
+    }}>
+      <button type="button" className="form-dialog-close secondary" onClick={requestClose} disabled={busy}>Fechar</button>
+      {busy && <p role="status">Salvando…</p>}
+      {error && <p className="warning" role="alert">{error}</p>}
+      {children}
+      <div className="form-dialog-actions">
+        <button type="button" className="secondary" onClick={requestClose} disabled={busy}>Cancelar</button>
+      </div>
+    </div>
+  </Dialog>;
+}

@@ -7,7 +7,7 @@ type Requirement = ExternalCaptureBootstrapQuery["externalCapture"]["requirement
 type Answer = ExternalCaptureBootstrapQuery["externalCapture"]["answers"][number];
 const requirement = (key: string): Requirement => ({ key, section: "Referência", label: "Referência", instructions: key, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", comparisonTarget: "FIXED_ORIGIN", impossibilityAllowed: true });
 const answer = (key: string, mediaIds: string[], impossibilityReason: string | null = null): Answer => ({ requirementKey: key, mediaIds, impossibilityReason, version: 1 });
-const draft = (key: string, mediaId: string | undefined, mediaStatus: string | undefined, metadataSaved: boolean): CaptureDraft => ({ metadata: { requirementKey: key }, mediaId, mediaStatus, metadataSaved }) as CaptureDraft;
+const draft = (key: string, mediaId: string | undefined, mediaStatus: string | undefined, metadataSaved: boolean, replacesMediaId?: string): CaptureDraft => ({ metadata: { requirementKey: key }, mediaId, mediaStatus, metadataSaved, replacesMediaId }) as CaptureDraft;
 
 describe("guided comparison flow", () => {
   const kitchen = requirement("origin:kitchen");
@@ -31,5 +31,11 @@ describe("guided comparison flow", () => {
     expect(requirementState(kitchen, answers, [draft(kitchen.key, "photo-1", undefined, false)])).toBe("pending");
     expect(requirementState(kitchen, answers, [draft(kitchen.key, "photo-1", "SCREENED", true)])).toBe("blocked");
     expect(nextGuidedRequirement([kitchen, bedroom], bedroom.key, answers, [draft(kitchen.key, "photo-1", "SCREENED", true)])).toBeUndefined();
+  });
+
+  it("marks an offline replacement as pending until the replacement is accepted", () => {
+    const answers = [answer(kitchen.key, ["photo-1"])];
+    expect(requirementState(kitchen, answers, [draft(kitchen.key, undefined, undefined, false, "photo-1")])).toBe("pending");
+    expect(guidedProgress([kitchen], answers, [draft(kitchen.key, undefined, undefined, false, "photo-1")])).toBe(0);
   });
 });

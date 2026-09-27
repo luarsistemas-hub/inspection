@@ -67,6 +67,7 @@ export type SaveCaptureMetadataInput = {
   deviceContext: Record<string, unknown> | null | undefined;
   gps: CaptureGpsInput | null | undefined;
   mediaId: string | number;
+  replacesMediaId: string | number | null | undefined;
   requirementKey: string;
 };
 

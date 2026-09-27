@@ -7,6 +7,7 @@ export type CaptureDraft = {
   expiresAt?: string; partSizeBytes?: number;
   mediaStatus?: string;
   replacesMediaId?: string;
+  replacesDraftId?: string;
   metadataSaved?: boolean;
   metadata: { requirementKey: string; description: string; source: "camera" | "gallery"; capturedAt: string; gps?: CaptureGPS; deviceContext?: Record<string, unknown> };
 };
@@ -39,6 +40,7 @@ function valid(draft: unknown): draft is CaptureDraft {
   if (value.parts.length === 0 && !preUpload) return false;
   if (value.expiresAt !== undefined && !isNonEmptyString(value.expiresAt)) return false;
   if (value.replacesMediaId !== undefined && !isNonEmptyString(value.replacesMediaId)) return false;
+  if (value.replacesDraftId !== undefined && !isNonEmptyString(value.replacesDraftId)) return false;
   if (value.partSizeBytes !== undefined && (!Number.isInteger(value.partSizeBytes) || value.partSizeBytes < 1)) return false;
   const partNumbers = new Set<number>();
   if (!value.parts.every((part) => {

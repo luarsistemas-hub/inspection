@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Combobox, type ComboboxOption } from "@inspection/design-system";
+import { FormDialog } from "./form-dialog";
 import {
   CancelScheduleDocument,
   CreateScheduleDocument,
@@ -33,7 +34,14 @@ export function SchedulesJourney({
 }) {
   const [data, setData] = useState<SchedulesQuery>();
   const [message, setMessage] = useState("Carregando agendas…");
-  const [editingId, setEditingId] = useState<string>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editItem, setEditItem] = useState<Schedule>();
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [editError, setEditError] = useState("");
+  const busyRef = useRef(false);
+  const openedScheduleRef = useRef<string | undefined>(undefined);
   const scheduleId = useSearchParams().get("scheduleId");
 
   const load = useCallback(async (targetScheduleId?: string) => {
@@ -53,35 +61,44 @@ export function SchedulesJourney({
 
   useEffect(() => { void load(scheduleId ?? undefined); }, [load, scheduleId]);
   useEffect(() => {
-    if (scheduleId && data?.schedules.nodes.some((item) => item.id === scheduleId)) setEditingId(scheduleId);
+    if (!scheduleId) { openedScheduleRef.current = undefined; return; }
+    if (openedScheduleRef.current === scheduleId) return;
+    const item = data?.schedules.nodes.find((schedule) => schedule.id === scheduleId);
+    if (item) { openedScheduleRef.current = scheduleId; setEditItem(item); }
   }, [scheduleId, data]);
 
   const mutate = async (
     document: typeof CreateScheduleDocument | typeof UpdateScheduleDocument | typeof CancelScheduleDocument,
     input: Record<string, unknown>,
-  ) => {
+  ): Promise<string | undefined> => {
     try {
       const result = await graphql(document as never, { input } as never);
       const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> };
       if (payload.userErrors?.length) {
         setMessage(formatMutationErrors(payload.userErrors));
-        return false;
+        return formatMutationErrors(payload.userErrors);
       }
       setMessage("Agenda salva. Atualizando dados…");
       await load();
-      return true;
+      return undefined;
     } catch (error) {
       setMessage(formatFailure(error));
-      return false;
+      return formatFailure(error);
     }
   };
 
   const create = async (input: Record<string, unknown>) => {
-    await mutate(CreateScheduleDocument, input);
+    if (busyRef.current) return;
+    busyRef.current = true; setCreating(true); setCreateError("");
+    const error = await mutate(CreateScheduleDocument, input);
+    busyRef.current = false; setCreating(false);
+    if (error) setCreateError(error); else setCreateOpen(false);
   };
 
   const update = async (item: Schedule, input: ScheduleUpdateValues) => {
-    const saved = await mutate(UpdateScheduleDocument, {
+    if (busyRef.current) return;
+    busyRef.current = true; setEditing(true); setEditError("");
+    const error = await mutate(UpdateScheduleDocument, {
       scheduleId: item.id,
       expectedVersion: item.version,
       clientMutationId: mutationId(),
@@ -91,7 +108,8 @@ export function SchedulesJourney({
       deadlineMinutes: input.deadlineMinutes,
       reminderOffsetsMinutes: input.reminderOffsetsMinutes,
     });
-    if (saved) setEditingId(undefined);
+    busyRef.current = false; setEditing(false);
+    if (error) setEditError(error); else setEditItem(undefined);
   };
 
   const cancel = async (item: Schedule) => {
@@ -104,14 +122,13 @@ export function SchedulesJourney({
   };
 
   return <div className="feature schedules-journey">
-    {canMutate && <>
-      <FormOptionsNotice options={options} />
-      {options.data && <CreateScheduleForm options={options.data} onSubmit={(input) => void create(input)} />}
-    </>}
     <section className="schedules-list" aria-labelledby="schedules-list-title">
       <div className="schedules-list-heading">
         <h2 id="schedules-list-title">Agendas cadastradas</h2>
-        <button className="secondary" onClick={() => void load()}>Atualizar agendas</button>
+        <div className="actions">
+          {canMutate && <button onClick={() => { setCreateError(""); setCreateOpen(true); }}>Nova agenda</button>}
+          <button className="secondary" onClick={() => void load()}>Atualizar agendas</button>
+        </div>
       </div>
       <p role="status" aria-live="polite">{message}</p>
       {data && data.schedules.nodes.length === 0 && <p className="schedules-empty">Crie uma agenda para programar vistorias recorrentes.</p>}
@@ -124,15 +141,22 @@ export function SchedulesJourney({
             <span>Prazo: {item.deadlineMinutes} minutos · {presentReminders(item.reminderOffsetsMinutes)}</span>
           </div>
           {canMutate && item.status === "ACTIVE" && <div className="actions">
-            <button className="secondary" aria-expanded={editingId === item.id} onClick={() => setEditingId(editingId === item.id ? undefined : item.id)}>
-              {editingId === item.id ? "Fechar edição" : "Editar agenda"}
-            </button>
+            <button className="secondary" onClick={() => { setEditError(""); setEditItem(item); }}>Editar agenda</button>
             <button className="secondary" onClick={() => void cancel(item)}>Cancelar agenda</button>
           </div>}
-          {editingId === item.id && <EditScheduleForm key={`${item.id}:${item.version}`} item={item} onCancel={() => setEditingId(undefined)} onSubmit={(input) => void update(item, input)} />}
         </li>)}
       </ul>}
     </section>
+    {canMutate && <>
+      <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nova agenda" busy={creating} error={createError}>
+        {options.loading && <p role="status">Carregando imóveis, responsáveis pela vistoria e modelos de vistoria…</p>}
+        {options.error && <p className="warning" role="alert">Não foi possível carregar as opções do cadastro. {options.error}</p>}
+        {options.data && <CreateScheduleForm options={options.data} onSubmit={(input) => void create(input)} busy={creating} />}
+      </FormDialog>
+      <FormDialog isOpen={Boolean(editItem)} onClose={() => setEditItem(undefined)} title="Editar agenda" busy={editing} error={editError}>
+        {editItem && <EditScheduleForm key={`${editItem.id}:${editItem.version}`} item={editItem} onSubmit={(input) => void update(editItem, input)} busy={editing} />}
+      </FormDialog>
+    </>}
   </div>;
 }
 
@@ -142,7 +166,7 @@ function FormOptionsNotice({ options }: { options: { loading: boolean; error?: s
   return null;
 }
 
-function CreateScheduleForm({ options, onSubmit }: { options: DashboardFormOptionsQuery; onSubmit: (input: Record<string, unknown>) => void }) {
+function CreateScheduleForm({ options, onSubmit, busy }: { options: DashboardFormOptionsQuery; onSubmit: (input: Record<string, unknown>) => void; busy: boolean }) {
   const [assetId, setAssetId] = useState("");
   const [participantId, setParticipantId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -179,7 +203,6 @@ function CreateScheduleForm({ options, onSubmit }: { options: DashboardFormOptio
   };
 
   return <form className="schedule-form" onSubmit={submit}>
-    <h2>Nova agenda</h2>
     <fieldset className="schedule-form-section">
       <legend>Dados da vistoria</legend>
       <RelationshipField label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={scheduleEntityOptions(options, "asset")} required />
@@ -192,13 +215,13 @@ function CreateScheduleForm({ options, onSubmit }: { options: DashboardFormOptio
       <label>Repetir<select aria-label="Repetir" value={frequency} onChange={(event) => setFrequency(event.target.value)}>{frequencies.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     </fieldset>
     <ScheduleNotices deadlineMinutes={deadlineMinutes} onDeadlineChange={setDeadlineMinutes} reminders={reminders} onRemindersChange={setReminders} validationError={validationError} />
-    <button type="submit">Criar agenda</button>
+    <button type="submit" disabled={busy}>Criar agenda</button>
   </form>;
 }
 
 type ScheduleUpdateValues = { rrule: string; startsAt: string; deadlineMinutes: number; reminderOffsetsMinutes: number[] };
 
-function EditScheduleForm({ item, onCancel, onSubmit }: { item: Schedule; onCancel: () => void; onSubmit: (input: ScheduleUpdateValues) => void }) {
+function EditScheduleForm({ item, onSubmit, busy }: { item: Schedule; onSubmit: (input: ScheduleUpdateValues) => void; busy: boolean }) {
   const initialFrequency = scheduleFrequencyValue(item.rrule);
   const isBrazilTimezone = item.timezone === scheduleTimezone;
   const [frequency, setFrequency] = useState(initialFrequency ?? "CUSTOM");
@@ -220,7 +243,6 @@ function EditScheduleForm({ item, onCancel, onSubmit }: { item: Schedule; onCanc
   };
 
   return <form className="schedule-edit-form" onSubmit={submit}>
-    <h3>Editar agenda</h3>
     <fieldset className="schedule-form-section">
       <legend>Quando acontece</legend>
       {isBrazilTimezone
@@ -233,7 +255,7 @@ function EditScheduleForm({ item, onCancel, onSubmit }: { item: Schedule; onCanc
     </fieldset>
     <ScheduleNotices deadlineMinutes={deadlineMinutes} onDeadlineChange={setDeadlineMinutes} reminders={reminders} onRemindersChange={setReminders} validationError={validationError} />
     {initialFrequency === null && <p className="schedule-custom-rule-note">A repetição personalizada será mantida enquanto uma frequência da lista não for escolhida.</p>}
-    <div className="actions"><button type="submit">Salvar alterações</button><button type="button" className="secondary" onClick={onCancel}>Descartar</button></div>
+    <button type="submit" disabled={busy}>Salvar alterações</button>
   </form>;
 }
 

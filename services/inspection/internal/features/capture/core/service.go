@@ -41,6 +41,7 @@ type Bootstrap struct {
 
 type MetadataInput struct {
 	TenantID, ResponsibilityID, MediaID        identity.ID
+	ReplacesMediaID                            *identity.ID
 	RequirementKey, Description, CaptureSource string
 	CapturedAt, WindowStartedAt                time.Time
 	Latitude, Longitude, AccuracyMeters        *float64
@@ -164,12 +165,29 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			return apperror.New(apperror.Conflict, "mediaId", "capture metadata was already saved")
 		}
 		var replacedMediaIDs []identity.ID
+		if in.ReplacesMediaID != nil {
+			var replaced database.MediaObject
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND id=?", in.TenantID, in.ResponsibilityID, *in.ReplacesMediaID).First(&replaced).Error; err != nil {
+				return apperror.New(apperror.NotFound, "replacesMediaId", "replacement media not found")
+			}
+			var replacements int64
+			if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND replaces_media_id=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, replaced.ID, []string{"ABORTED", "PURGED"}).Count(&replacements).Error; err != nil {
+				return err
+			}
+			if replaced.RequirementKey != in.RequirementKey || replaced.Status != "READY" || replacements > 0 {
+				return apperror.New(apperror.Conflict, "replacesMediaId", "media is not available for replacement")
+			}
+			if out.Status != "READY" {
+				return apperror.New(apperror.InvalidState, "mediaId", "replacement media must be approved")
+			}
+			replacedMediaIDs = append(replacedMediaIDs, replaced.ID)
+		}
 		if selected.MaximumMedia > 0 {
 			var active []database.MediaObject
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Order("created_at,id").Find(&active).Error; err != nil {
 				return err
 			}
-			if len(active) >= selected.MaximumMedia {
+			if len(active) >= selected.MaximumMedia && len(replacedMediaIDs) == 0 {
 				requiredSlots := len(active) - selected.MaximumMedia + 1
 				for _, media := range active {
 					if media.Status == "SCREENED" && len(replacedMediaIDs) < requiredSlots {
@@ -186,9 +204,21 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 				if aborted.RowsAffected != int64(len(replacedMediaIDs)) {
 					return apperror.New(apperror.Conflict, "requirementKey", "blocked media replacement changed concurrently")
 				}
-				replacedID := replacedMediaIDs[len(replacedMediaIDs)-1]
-				out.ReplacesMediaID = &replacedID
 			}
+		}
+		if in.ReplacesMediaID != nil {
+			aborted := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND id=? AND status='READY'", in.TenantID, in.ResponsibilityID, *in.ReplacesMediaID).Update("status", "ABORTED")
+			if aborted.Error != nil {
+				return aborted.Error
+			}
+			if aborted.RowsAffected != 1 {
+				return apperror.New(apperror.Conflict, "replacesMediaId", "replacement media changed concurrently")
+			}
+			replacedID := *in.ReplacesMediaID
+			out.ReplacesMediaID = &replacedID
+		} else if len(replacedMediaIDs) > 0 {
+			replacedID := replacedMediaIDs[len(replacedMediaIDs)-1]
+			out.ReplacesMediaID = &replacedID
 		}
 		var existingFlags []string
 		_ = json.Unmarshal(out.Flags, &existingFlags)
@@ -257,6 +287,9 @@ func withoutRequiredGPS(payload json.RawMessage) (json.RawMessage, error) {
 }
 
 func metadataMatches(media database.MediaObject, in MetadataInput, reading *GPSReading, device json.RawMessage, capturedAtProvided bool) bool {
+	if in.ReplacesMediaID != nil && (media.ReplacesMediaID == nil || *media.ReplacesMediaID != *in.ReplacesMediaID) {
+		return false
+	}
 	if media.RequirementKey != in.RequirementKey || media.Description != strings.TrimSpace(in.Description) || media.CaptureSource != in.CaptureSource {
 		return false
 	}

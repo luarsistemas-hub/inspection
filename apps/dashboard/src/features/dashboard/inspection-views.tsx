@@ -6,6 +6,7 @@ import { presentDashboardStatus, presentInspectionSource } from "./presentation"
 
 export type InspectionView = "lista" | "quadro" | "agenda";
 export type InspectionRecord = InspectionsQuery["inspections"]["nodes"][number];
+const defaultInspectionView: InspectionView = "quadro";
 export type InspectionActionHandlers = {
   onCancel: (inspection: InspectionRecord) => void;
   onInvalidate: (inspection: InspectionRecord) => void;
@@ -50,12 +51,12 @@ export function isInspectionView(value: string | null | undefined): value is Ins
 }
 
 export function readInspectionView(membershipId?: string): InspectionView {
-  if (typeof window === "undefined") return "lista";
+  if (typeof window === "undefined") return defaultInspectionView;
   try {
     const stored = window.localStorage.getItem(inspectionViewStorageKey(membershipId));
-    return isInspectionView(stored) ? stored : "lista";
+    return isInspectionView(stored) ? stored : defaultInspectionView;
   } catch {
-    return "lista";
+    return defaultInspectionView;
   }
 }
 
@@ -107,7 +108,7 @@ export function formatInspectionDate(value: string | null | undefined): string {
 
 export function useInspectionView(): [InspectionView, (view: InspectionView) => void] {
   const membershipId = getMembershipId();
-  const [view, setView] = useState<InspectionView>("lista");
+  const [view, setView] = useState<InspectionView>(defaultInspectionView);
 
   useEffect(() => {
     setView(readInspectionView(membershipId));

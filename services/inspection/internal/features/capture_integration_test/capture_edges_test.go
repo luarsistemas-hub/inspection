@@ -87,6 +87,65 @@ func TestScreenedMediaCanBeReplacedWithinRequirementLimit(t *testing.T) {
 	}
 }
 
+func TestApprovedMediaCanBeExplicitlyReplacedWithinRequirementLimit(t *testing.T) {
+	f := newSubmissionFixture(t)
+	setRequirements(t, f, []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 1, DescriptionRequired: true}})
+	original := f.addMedia(t, "READY", "room", "original room", true)
+	replacement := f.addMedia(t, "READY", "", "", false)
+
+	result, err := f.service.SaveMetadata(context.Background(), capturecore.MetadataInput{
+		TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, MediaID: replacement.ID,
+		ReplacesMediaID: &original.ID, RequirementKey: "room", Description: "updated room", CaptureSource: "CAMERA", WindowStartedAt: f.now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReplacesMediaID == nil || *result.ReplacesMediaID != original.ID {
+		t.Fatalf("replacement lineage missing: %+v", result)
+	}
+	if err := f.db.First(&original, "id=?", original.ID).Error; err != nil || original.Status != "ABORTED" {
+		t.Fatalf("original media remained active: %+v %v", original, err)
+	}
+	var answer database.RequirementAnswer
+	if err := f.db.Where("draft_id=? AND requirement_key='room'", f.draft.ID).First(&answer).Error; err != nil {
+		t.Fatal(err)
+	}
+	var mediaIDs []identity.ID
+	if err := json.Unmarshal(answer.MediaIDs, &mediaIDs); err != nil || len(mediaIDs) != 1 || mediaIDs[0] != replacement.ID {
+		t.Fatalf("replacement answer is inconsistent: %s %v", answer.MediaIDs, err)
+	}
+	if _, err := f.service.SaveMetadata(context.Background(), capturecore.MetadataInput{
+		TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, MediaID: replacement.ID,
+		ReplacesMediaID: &original.ID, RequirementKey: "room", Description: "updated room", CaptureSource: "CAMERA", WindowStartedAt: f.now,
+	}); err != nil {
+		t.Fatalf("idempotent replacement retry failed: %v", err)
+	}
+	concurrent := f.addMedia(t, "READY", "", "", false)
+	if _, err := f.service.SaveMetadata(context.Background(), capturecore.MetadataInput{
+		TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, MediaID: concurrent.ID,
+		ReplacesMediaID: &original.ID, RequirementKey: "room", Description: "concurrent update", CaptureSource: "CAMERA", WindowStartedAt: f.now,
+	}); code(err) != apperror.Conflict {
+		t.Fatalf("replaced photo accepted a second replacement: %v", err)
+	}
+}
+
+func TestBlockedPhotoCannotReplaceApprovedMedia(t *testing.T) {
+	f := newSubmissionFixture(t)
+	setRequirements(t, f, []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 1, DescriptionRequired: true}})
+	original := f.addMedia(t, "READY", "room", "original room", true)
+	blocked := f.addMedia(t, "SCREENED", "", "", false)
+	_, err := f.service.SaveMetadata(context.Background(), capturecore.MetadataInput{
+		TenantID: f.draft.TenantID, ResponsibilityID: f.draft.ResponsibilityID, MediaID: blocked.ID,
+		ReplacesMediaID: &original.ID, RequirementKey: "room", Description: "blocked replacement", CaptureSource: "CAMERA", WindowStartedAt: f.now,
+	})
+	if code(err) != apperror.InvalidState {
+		t.Fatalf("blocked replacement error = %v", err)
+	}
+	if err := f.db.First(&original, "id=?", original.ID).Error; err != nil || original.Status != "READY" {
+		t.Fatalf("original photo was changed: %+v %v", original, err)
+	}
+}
+
 func TestIT155IT156IT157MetadataVersionAndRefreshContracts(t *testing.T) {
 	f := newSubmissionFixture(t)
 	setRequirements(t, f, []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 10, DescriptionRequired: true}})

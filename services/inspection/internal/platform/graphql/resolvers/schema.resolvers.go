@@ -1212,6 +1212,14 @@ func (r *mutationResolver) SaveCaptureMetadata(ctx context.Context, input graphq
 	if err != nil {
 		return nil, invalidID("mediaId")
 	}
+	var replacesMediaID *identity.ID
+	if input.ReplacesMediaID != nil {
+		parsed, parseErr := identity.ParseID(*input.ReplacesMediaID)
+		if parseErr != nil {
+			return nil, invalidID("replacesMediaId")
+		}
+		replacesMediaID = &parsed
+	}
 	bootstrapRaw, err := r.Bus.Ask(ctx, capturebootstrap.Query{TenantID: tenantID, ResponsibilityID: responsibilityID})
 	if err != nil {
 		return nil, err
@@ -1229,7 +1237,7 @@ func (r *mutationResolver) SaveCaptureMetadata(ctx context.Context, input graphq
 		a, b := float64(*policyDoc.AssetLatitudeE6)/1e6, float64(*policyDoc.AssetLongitudeE6)/1e6
 		lat, lon = &a, &b
 	}
-	metadata := capturecore.MetadataInput{TenantID: tenantID, ResponsibilityID: responsibilityID, MediaID: mediaID, RequirementKey: input.RequirementKey, Description: input.Description, CaptureSource: input.CaptureSource, DeviceContext: input.DeviceContext, Policy: capturecore.GPSPolicy{Required: policyDoc.GPSRequired, AllowGallery: policyDoc.AllowGallery, AssetLatitude: lat, AssetLongitude: lon, GeofenceMeters: policyDoc.GeofenceMeters}}
+	metadata := capturecore.MetadataInput{TenantID: tenantID, ResponsibilityID: responsibilityID, MediaID: mediaID, ReplacesMediaID: replacesMediaID, RequirementKey: input.RequirementKey, Description: input.Description, CaptureSource: input.CaptureSource, DeviceContext: input.DeviceContext, Policy: capturecore.GPSPolicy{Required: policyDoc.GPSRequired, AllowGallery: policyDoc.AllowGallery, AssetLatitude: lat, AssetLongitude: lon, GeofenceMeters: policyDoc.GeofenceMeters}}
 	if input.Gps != nil {
 		captured, _ := time.Parse(time.RFC3339, input.Gps.CapturedAt)
 		started, _ := time.Parse(time.RFC3339, input.Gps.WindowStartedAt)

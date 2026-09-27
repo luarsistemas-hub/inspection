@@ -100,7 +100,7 @@ export function Combobox({ value, options, onChange, placeholder = "Pesquisar…
         if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActiveIndex((index) => Math.min(index + 1, filtered.length - 1)); }
         if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); }
         if (event.key === "Enter" && open && filtered[activeIndex]) { event.preventDefault(); choose(filtered[activeIndex]); }
-        if (event.key === "Escape") { event.preventDefault(); resetQuery(); setOpen(false); setActiveIndex(-1); }
+        if (event.key === "Escape") { event.preventDefault(); if (open) event.stopPropagation(); resetQuery(); setOpen(false); setActiveIndex(-1); }
       }}
     />
     {open && <ul id={listID} className="inspection-combobox-options" role="listbox" aria-label={ariaLabel ?? "Opções"}>

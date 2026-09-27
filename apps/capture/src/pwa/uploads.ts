@@ -160,7 +160,7 @@ export function uploadDraft(draft: CaptureDraft, onProgress?: UploadProgressCall
     for (let attempt = 0; attempt < metadataRetryAttempts; attempt++) {
       try {
         reportProgress(onProgress, { phase: "saving", percent: Math.min(95, 80 + attempt), completedParts: currentTotalParts, totalParts: currentTotalParts });
-        const metadata = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: current.metadata.requirementKey, description: current.metadata.description, captureSource: current.metadata.source.toUpperCase(), gps: current.metadata.gps, deviceContext: current.metadata.deviceContext, clientMutationId: `${draft.id}:metadata` } });
+        const metadata = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: current.metadata.requirementKey, description: current.metadata.description, captureSource: current.metadata.source.toUpperCase(), gps: current.metadata.gps, deviceContext: current.metadata.deviceContext, replacesMediaId: current.replacesMediaId, clientMutationId: `${draft.id}:metadata` } });
         throwOnUserErrors(metadata.saveCaptureMetadata);
         current = { ...current, metadataSaved: true, mediaStatus: metadata.saveCaptureMetadata.media?.status ?? current.mediaStatus, replacesMediaId: metadata.saveCaptureMetadata.media?.replacesMediaId ?? current.replacesMediaId };
         await saveDraft(current);

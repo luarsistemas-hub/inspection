@@ -8210,7 +8210,7 @@ input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationI
 input CompletedPartInput { partNumber: Int! etag: String! }
 input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clientMutationId: String! }
 input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
-input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON clientMutationId: String! }
+input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON replacesMediaId: ID clientMutationId: String! }
 input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String! expectedVersion: Int clientMutationId: String! }
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
@@ -41193,7 +41193,7 @@ func (ec *executionContext) unmarshalInputSaveCaptureMetadataInput(ctx context.C
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"mediaId", "requirementKey", "description", "captureSource", "gps", "deviceContext", "clientMutationId"}
+	fieldsInOrder := [...]string{"mediaId", "requirementKey", "description", "captureSource", "gps", "deviceContext", "replacesMediaId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41242,6 +41242,13 @@ func (ec *executionContext) unmarshalInputSaveCaptureMetadataInput(ctx context.C
 				return it, err
 			}
 			it.DeviceContext = data
+		case "replacesMediaId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("replacesMediaId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReplacesMediaID = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)

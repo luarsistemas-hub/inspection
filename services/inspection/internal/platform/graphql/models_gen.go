@@ -1373,6 +1373,7 @@ type SaveCaptureMetadataInput struct {
 	CaptureSource    string           `json:"captureSource"`
 	Gps              *CaptureGPSInput `json:"gps,omitempty"`
 	DeviceContext    map[string]any   `json:"deviceContext,omitempty"`
+	ReplacesMediaID  *string          `json:"replacesMediaId,omitempty"`
 	ClientMutationID string           `json:"clientMutationId"`
 }
 

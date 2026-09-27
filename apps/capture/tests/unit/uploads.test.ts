@@ -132,8 +132,9 @@ describe("multipart reconciliation", () => {
     const gps = { latitude: -23.55, longitude: -46.63, accuracyMeters: 8, capturedAt: "2026-09-09T10:00:00.000Z", windowStartedAt: "2026-09-09T10:00:00.000Z" };
     const deviceContext = { platform: "test", language: "pt-BR" };
     vi.stubGlobal("fetch", fetch);
-    await uploadDraft({ id: "metadata", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "", source: "gallery", capturedAt: gps.capturedAt, gps, deviceContext } });
+    await uploadDraft({ id: "metadata", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], replacesMediaId: "prior-media", metadata: { requirementKey: "k", description: "", source: "gallery", capturedAt: gps.capturedAt, gps, deviceContext } });
     const metadataRequest = fetch.mock.calls.map((call) => JSON.parse(String(call[1]?.body))).find((body) => String(body.query).includes("saveCaptureMetadata"));
+    expect(metadataRequest.variables.input.replacesMediaId).toBe("prior-media");
     expect(metadataRequest.variables).toMatchObject({ input: { captureSource: "GALLERY", gps, deviceContext } });
     vi.unstubAllGlobals();
   });

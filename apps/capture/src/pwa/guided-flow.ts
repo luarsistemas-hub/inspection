@@ -13,6 +13,8 @@ export function requirementState(requirement: Requirement, answers: Answer[], dr
   if (answer?.impossibilityReason?.trim()) return "complete";
   const matching = drafts.filter((draft) => draft.metadata.requirementKey === requirement.key);
   const blocked = matching.filter((draft) => ["SCREENED", "REJECTED", "PURGED", "ABORTED"].includes(draft.mediaStatus ?? ""));
+  if (blocked.some((draft) => draft.replacesMediaId)) return "blocked";
+  if (matching.some((draft) => draft.replacesMediaId && draft.metadataSaved !== true)) return "pending";
   const blockedIds = new Set(blocked.map((draft) => draft.mediaId));
   const readyIds = answer?.mediaIds.filter((id) => !blockedIds.has(id) && !matching.some((draft) => draft.mediaId === id && draft.metadataSaved !== true)) ?? [];
   if (readyIds.length >= requirement.minimumMedia) return "complete";

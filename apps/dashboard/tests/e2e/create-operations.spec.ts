@@ -29,23 +29,24 @@ test.describe("Dashboard creation forms against the local stack", () => {
     test("sends the local start time in São Paulo for every available frequency", async ({ page }) => {
       const assertRuntimeClean = installRuntimeGuards(page);
       await loginAsLocalAdmin(page, "/schedules");
-      const form = page.locator("form").filter({ has: page.getByRole("heading", { name: "Nova agenda" }) });
-      await expect(form).toBeVisible();
-      await chooseEligibleDependencies(form);
-      await expect(form.getByLabel("Fuso horário")).toHaveCount(0);
-
       const start = `${new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10)}T23:32`;
-      await form.getByLabel("Primeira vistoria").fill(start);
-      const repeat = form.getByLabel("Repetir");
-      await expect(repeat.locator("option")).toHaveText(["Diariamente", "Semanalmente", "Mensalmente", "Anualmente"]);
-
       for (const [frequency, label] of [["DAILY", "Diariamente"], ["WEEKLY", "Semanalmente"], ["MONTHLY", "Mensalmente"], ["YEARLY", "Anualmente"]]) {
+        await page.getByRole("button", { name: "Nova agenda" }).click();
+        const dialog = page.getByRole("dialog", { name: "Nova agenda" });
+        const form = dialog.locator("form");
+        await expect(form).toBeVisible();
+        await chooseEligibleDependencies(form);
+        await expect(form.getByLabel("Fuso horário")).toHaveCount(0);
+        await form.getByLabel("Primeira vistoria").fill(start);
+        const repeat = form.getByLabel("Repetir");
+        await expect(repeat.locator("option")).toHaveText(["Diariamente", "Semanalmente", "Mensalmente", "Anualmente"]);
         await repeat.selectOption(frequency);
         const { request, body } = await mutationResponse(page, "CreateSchedule", form.getByRole("button", { name: "Criar agenda" }));
         expect(request.variables.input).toMatchObject({ startsAt: start, timezone: "America/Sao_Paulo", rrule: `FREQ=${frequency}` });
         expect(await repeat.locator("option:checked").textContent()).toBe(label);
         expect(body.errors).toBeUndefined();
         expect(body.data?.createSchedule?.userErrors).toEqual([]);
+        await expect(dialog).toBeHidden();
       }
 
       const localStart = new Date(`${start}:00-03:00`);
@@ -53,9 +54,10 @@ test.describe("Dashboard creation forms against the local stack", () => {
       const firstSchedule = page.locator(".schedules-collection > li").filter({ hasText: `Próxima vistoria: ${startLabel}` }).first();
       await expect(firstSchedule).toBeVisible();
       await firstSchedule.getByRole("button", { name: "Editar agenda" }).click();
-      await expect(firstSchedule.getByRole("heading", { name: "Editar agenda" })).toBeVisible();
-      await firstSchedule.getByLabel("Repetir").selectOption("WEEKLY");
-      const { request: updateRequest, body: updateBody } = await mutationResponse(page, "UpdateSchedule", firstSchedule.getByRole("button", { name: "Salvar alterações" }));
+      const editDialog = page.getByRole("dialog", { name: "Editar agenda" });
+      await expect(editDialog).toBeVisible();
+      await editDialog.getByLabel("Repetir").selectOption("WEEKLY");
+      const { request: updateRequest, body: updateBody } = await mutationResponse(page, "UpdateSchedule", editDialog.getByRole("button", { name: "Salvar alterações" }));
       expect(updateRequest.variables.input).toMatchObject({ rrule: "FREQ=WEEKLY", timezone: "America/Sao_Paulo" });
       expect(updateBody.errors).toBeUndefined();
       expect(updateBody.data?.updateSchedule?.userErrors).toEqual([]);
@@ -66,8 +68,9 @@ test.describe("Dashboard creation forms against the local stack", () => {
   test("Vistorias sends explicit instants for both dates", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/inspections");
-    await page.locator(".inspection-create-panel summary").click();
-    const form = page.locator("form").filter({ has: page.getByRole("heading", { name: "Nova vistoria" }) });
+    await page.getByRole("button", { name: "Nova vistoria" }).click();
+    const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
+    const form = dialog.locator("form");
     await expect(form).toBeVisible();
     await chooseFirst(form, "Imóvel");
     await chooseFirst(form, "Responsável pela vistoria");
@@ -80,18 +83,55 @@ test.describe("Dashboard creation forms against the local stack", () => {
     expect(request.variables.input.deadlineAt).toMatch(/Z$/);
     expect(body.errors).toBeUndefined();
     expect(body.data?.createInspection?.userErrors).toEqual([]);
+    await expect(dialog).toBeHidden();
     await assertRuntimeClean();
   });
 
   test("Projetos has a working mediator in the GraphQL resolver", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/projects");
-    const form = page.locator("form").filter({ has: page.getByRole("heading", { name: "Novo projeto" }) });
+    await page.getByRole("button", { name: "Novo projeto" }).click();
+    const dialog = page.getByRole("dialog", { name: "Novo projeto" });
+    const form = dialog.locator("form");
     await expect(form).toBeVisible();
     await chooseEligibleDependencies(form);
     const { body } = await mutationResponse(page, "CreateProject", form.getByRole("button", { name: "Criar projeto" }));
     expect(body.errors).toBeUndefined();
     expect(body.data?.createProject?.userErrors).toEqual([]);
+    await expect(dialog).toBeHidden();
     await assertRuntimeClean();
+  });
+
+  test("inspection draft can be kept or discarded without moving the board", async ({ page }) => {
+    await loginAsLocalAdmin(page, "/inspections");
+    const opener = page.getByRole("button", { name: "Nova vistoria" });
+    const board = page.locator("#inspection-collection");
+    const before = await board.boundingBox();
+    await opener.click();
+    const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
+    await dialog.getByLabel("Vencimento").fill("2030-05-10T12:00");
+    page.once("dialog", (confirm) => confirm.dismiss());
+    await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Vencimento")).toHaveValue("2030-05-10T12:00");
+    page.once("dialog", (confirm) => confirm.accept());
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(opener).toBeFocused();
+    expect(await board.boundingBox()).toEqual(before);
+  });
+
+  test("Escape closes an open selector before it closes the inspection dialog", async ({ page }) => {
+    await loginAsLocalAdmin(page, "/inspections");
+    await page.getByRole("button", { name: "Nova vistoria" }).click();
+    const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
+    const asset = dialog.getByRole("combobox", { name: "Imóvel" });
+    await asset.focus();
+    await expect(dialog.getByRole("listbox", { name: "Imóvel" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("listbox", { name: "Imóvel" })).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
   });
 });
