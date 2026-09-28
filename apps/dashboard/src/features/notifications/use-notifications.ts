@@ -31,6 +31,9 @@ export function useNotifications(enabled: boolean, includeDeliveries: boolean) {
   const [visible, setVisible] = useState(true);
   const loadedCount = useRef(PAGE_SIZE);
   const filterGeneration = useRef(0);
+  const pendingReads = useRef(new Set<string>());
+  const readingAllRef = useRef(false);
+  const deliveryRequest = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!enabled || document.visibilityState === "hidden") return;
@@ -128,12 +131,15 @@ export function useNotifications(enabled: boolean, includeDeliveries: boolean) {
 
   const loadDeliveries = useCallback(async () => {
     if (!enabled || !includeDeliveries || state.loadingDeliveries) return;
+    const request = ++deliveryRequest.current;
     setState((current) => ({ ...current, loadingDeliveries: true, error: "" }));
     try {
       const result = await graphql<NotificationDeliveriesQuery, { after: string | null }>(NotificationDeliveriesDocument, { after: null });
       const next = result.notificationDeliveries;
+      if (request !== deliveryRequest.current) return;
       setState((current) => ({ ...current, deliveries: next.nodes, deliveryCursor: next.pageInfo.endCursor, hasMoreDeliveries: next.pageInfo.hasNextPage, loadingDeliveries: false }));
     } catch (error) {
+      if (request !== deliveryRequest.current) return;
       setState((current) => ({ ...current, loadingDeliveries: false, error: (error as { message?: string }).message ?? "Não foi possível carregar o estado das entregas." }));
     }
   }, [enabled, includeDeliveries, state.loadingDeliveries]);
@@ -150,10 +156,14 @@ export function useNotifications(enabled: boolean, includeDeliveries: boolean) {
   }, [enabled, includeDeliveries, state.deliveryCursor, state.hasMoreDeliveries]);
 
   const markRead = useCallback(async (notificationId: string) => {
+    if (pendingReads.current.has(notificationId)) return;
+    pendingReads.current.add(notificationId);
+    const generation = filterGeneration.current;
     try {
       const clientMutationId = crypto.randomUUID();
       const result = await graphql<MarkNotificationReadMutation, { input: { notificationId: string; all: boolean; kind: string | null; projectId: string | null; through: string | null; clientMutationId: string } }>(MarkNotificationReadDocument, { input: { notificationId, all: false, kind: null, projectId: null, through: null, clientMutationId } }, clientMutationId);
       const readAt = result.markNotificationRead.notification?.readAt;
+      if (generation !== filterGeneration.current) return;
       setState((current) => {
         const wasUnread = current.items.some((item) => item.id === notificationId && !item.readAt);
         return {
@@ -165,22 +175,30 @@ export function useNotifications(enabled: boolean, includeDeliveries: boolean) {
         };
       });
     } catch (error) {
+      if (generation !== filterGeneration.current) return;
       setState((current) => ({ ...current, error: (error as { message?: string }).message ?? "Não foi possível marcar a notificação como lida." }));
+    } finally {
+      pendingReads.current.delete(notificationId);
     }
   }, [filter]);
 
   const markAllRead = useCallback(async () => {
-    if (!enabled || readingAll) return;
+    if (!enabled || readingAll || readingAllRef.current) return;
+    readingAllRef.current = true;
+    const generation = filterGeneration.current;
     setReadingAll(true);
     try {
       const clientMutationId = crypto.randomUUID();
       const result = await graphql<MarkAllNotificationsReadMutation, { input: { all: boolean; notificationId: string | null; kind: string | null; projectId: string | null; through: string; clientMutationId: string } }>(MarkAllNotificationsReadDocument, { input: { all: true, notificationId: null, kind: kindFilter || null, projectId: projectFilter || null, through: new Date().toISOString(), clientMutationId } }, clientMutationId);
       const payload = result.markNotificationRead;
       if (payload.userErrors.length) throw new Error(payload.userErrors.map((error) => error.message).join(" "));
+      if (generation !== filterGeneration.current) return;
       setState((current) => ({ ...current, unreadCount: payload.unreadCount, items: filter === "unread" ? [] : current.items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })) }));
     } catch (error) {
+      if (generation !== filterGeneration.current) return;
       setState((current) => ({ ...current, error: (error as { message?: string }).message ?? "Não foi possível marcar todas como lidas." }));
     } finally {
+      readingAllRef.current = false;
       setReadingAll(false);
     }
   }, [enabled, filter, kindFilter, projectFilter, readingAll]);

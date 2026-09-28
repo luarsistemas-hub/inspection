@@ -40,11 +40,15 @@ test.describe("Dashboard to Capture recapture journey", () => {
     await page.getByRole("combobox", { name: "Situação" }).selectOption("concluidas");
     const item = page.locator("[data-inspection-id]").filter({ hasText: "Concluída" }).first();
     await expect(item).toBeVisible({ timeout: 15_000 });
-    const answers = ["A imagem precisa de mais detalhes.", new Date(Date.now() + 86_400_000).toISOString(), "fachada-geral"];
-    page.on("dialog", (dialog) => void dialog.accept(answers.shift()));
     await item.locator(".inspection-action-menu summary").click();
     const responsePromise = page.waitForResponse((response) => response.url().endsWith("/graphql") && response.request().postData()?.includes("mutation RequestRecapture") === true);
     await item.getByRole("button", { name: "Solicitar complemento" }).click();
+    const dialog = page.getByRole("dialog", { name: "Solicitar complemento" });
+    await dialog.getByLabel("Requisito do complemento").fill("fachada-geral");
+    const deadline = new Date(Date.now() + 86_400_000);
+    await dialog.getByLabel("Prazo final").fill(deadline.toISOString().slice(0, 16));
+    await dialog.getByLabel("Motivo do complemento").fill("A imagem precisa de mais detalhes.");
+    await dialog.getByRole("button", { name: "Solicitar complemento", exact: true }).click();
     const response = await responsePromise;
     const body = await response.json() as { errors?: unknown[]; data?: { requestRecapture?: { userErrors?: unknown[] } } };
     expect(body.errors).toBeUndefined();

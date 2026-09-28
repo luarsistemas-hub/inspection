@@ -1,1 +1,0 @@
-{"query":"mutation RequestInvitationOtp($input: RequestInvitationOtpInput!) {\n  requestInvitationOtp(input: $input) {\n    status\n    userErrors {\n      code\n      field\n      message\n      correlationId\n    }\n    clientMutationId\n  }\n}","variables":{"input":{"linkToken":"guided-test-link","clientMutationId":"66e94376-bda2-4d50-8d4e-010425fe0ec8"}}}

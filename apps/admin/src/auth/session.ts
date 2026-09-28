@@ -34,6 +34,21 @@ export function hasAdminAccess(current = identity): boolean {
   );
 }
 
+const adminPageRoles: Record<string, string[]> = {
+  "/organization": ["TENANT_ADMIN", "ORGANIZATION_ADMIN"],
+  "/access": ["TENANT_ADMIN", "ORGANIZATION_ADMIN", "ACCESS_ADMIN"],
+  "/catalogs": ["TENANT_ADMIN", "PARTICIPATION_ADMIN"],
+  "/assets": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
+  "/governance": ["TENANT_ADMIN", "GOVERNANCE_ADMIN"],
+  "/prompts": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
+};
+
+/** Checks the role boundary for one Admin route before its protected query runs. */
+export function hasAdminRouteAccess(pathname: string, roles: string[]): boolean {
+  const requiredRoles = adminPageRoles[pathname];
+  return requiredRoles ? roles.some((role) => requiredRoles.includes(role)) : roles.some((role) => ["TENANT_ADMIN", "ORGANIZATION_ADMIN", "ACCESS_ADMIN", "PARTICIPATION_ADMIN", "INSPECTION_CONFIG_ADMIN", "GOVERNANCE_ADMIN", "AUDITOR"].includes(role));
+}
+
 /** Reports whether the current Admin session may open the global analysis prompt. */
 export function hasAnalysisPromptAccess(current = identity): boolean {
   return Boolean(

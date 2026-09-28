@@ -14,7 +14,9 @@ query AdminCatalogs($first: Int!, $after: String, $search: String) { participant
 
 query AdminAssets($first: Int!, $after: String, $search: String) { assets(first: $first, after: $after, search: $search) { nodes { id name externalKey address status businessUnitId version } pageInfo { endCursor hasNextPage } } }
 
-query AdminGovernance($first: Int!, $after: String) { publicationPolicy { mode version } retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt inspectionId invitationId logicalTemplate failureCode recipientMasked responsibilityVersion canCorrectResponsibleEmail } pageInfo { endCursor hasNextPage } } }
+query AdminPublicationPolicy { publicationPolicy { mode version } }
+query AdminRetentionPolicies { retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } }
+query AdminNotificationDeliveries($first: Int!, $after: String) { notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt inspectionId invitationId logicalTemplate failureCode recipientMasked responsibilityVersion canCorrectResponsibleEmail } pageInfo { endCursor hasNextPage } } }
 
 query AdminAudit($first: Int!, $after: String) { auditEvents(first: $first, after: $after) { nodes { id action targetType targetId outcome reason correlationId occurredAt } pageInfo { endCursor hasNextPage } } usageSummary { from to requests inputTokens outputTokens cost } }
 

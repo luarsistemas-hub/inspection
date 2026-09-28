@@ -17,6 +17,9 @@ const databaseName = "inspection-capture-v3";
 const storeName = "drafts";
 const quarantineStore = "quarantine";
 const databaseVersion = 1;
+type StoredCaptureDraft = Omit<CaptureDraft, "blob"> & { blob: Blob | ArrayBuffer; blobType?: string };
+const isArrayBuffer = (value: unknown): value is ArrayBuffer => Object.prototype.toString.call(value) === "[object ArrayBuffer]";
+const isBlob = (value: unknown): value is Blob => Object.prototype.toString.call(value) === "[object Blob]";
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -29,10 +32,12 @@ function open(): Promise<IDBDatabase> {
 const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 
-function valid(draft: unknown): draft is CaptureDraft {
+function valid(draft: unknown): draft is StoredCaptureDraft {
   if (!isRecord(draft)) return false;
-  const value = draft as Partial<CaptureDraft>;
-  if (value.schemaVersion !== 1 || !isNonEmptyString(value.id) || !isNonEmptyString(value.responsibilityId) || !value.blob || !isNonEmptyString(value.sha256)) return false;
+  const value = draft as Partial<StoredCaptureDraft>;
+  const storedBlob = isBlob(value.blob) || isArrayBuffer(value.blob);
+  if (value.schemaVersion !== 1 || !isNonEmptyString(value.id) || !isNonEmptyString(value.responsibilityId) || !storedBlob || !isNonEmptyString(value.sha256)) return false;
+  if (isArrayBuffer(value.blob) && typeof value.blobType !== "string") return false;
   if (value.sourceSha256 !== undefined && !/^[a-f\d]{64}$/i.test(value.sourceSha256)) return false;
   if (value.imageProfile !== undefined && (!isNonEmptyString(value.imageProfile) || value.imageProfile.length > 80)) return false;
   if (!Array.isArray(value.parts)) return false;
@@ -54,9 +59,33 @@ function valid(draft: unknown): draft is CaptureDraft {
   return value.metadata.deviceContext === undefined || isRecord(value.metadata.deviceContext);
 }
 
+function restoreBlob(draft: StoredCaptureDraft): CaptureDraft {
+  if (isArrayBuffer(draft.blob)) {
+    const blobType = draft.blobType ?? "";
+    return { ...draft, blob: new Blob([draft.blob], { type: blobType }) };
+  }
+  return { ...draft, blob: draft.blob as Blob };
+}
+
+function readBlob(blob: Blob): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => reader.result instanceof ArrayBuffer ? resolve(reader.result) : reject(new Error("Não foi possível ler a foto salva."));
+    reader.onerror = () => reject(reader.error ?? new Error("Não foi possível ler a foto salva."));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
 async function transact<T>(store: string, mode: IDBTransactionMode, action: (objectStore: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await open();
-  try { return await new Promise<T>((resolve, reject) => { const request = action(db.transaction(store, mode).objectStore(store)); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); } finally { db.close(); }
+  try { return await new Promise<T>((resolve, reject) => {
+    const transaction = db.transaction(store, mode);
+    const request = action(transaction.objectStore(store));
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve(request.result);
+    transaction.onerror = () => reject(transaction.error ?? request.error);
+    transaction.onabort = () => reject(transaction.error ?? request.error);
+  }); } finally { db.close(); }
 }
 
 async function quarantine(value: unknown): Promise<void> {
@@ -79,19 +108,38 @@ export async function hasDraftCapacity(bytes: number): Promise<boolean> {
 }
 
 export async function saveDraft(draft: CaptureDraft): Promise<void> {
-  if (!await hasDraftCapacity(draft.blob.size)) throw new Error("O armazenamento deste dispositivo está quase cheio. Libere espaço antes de salvar outra foto.");
-  await transact(storeName, "readwrite", (store) => store.put({ ...draft, schemaVersion: 1 }));
+  if (!await hasDraftCapacity(draft.blob.size)) throw new DOMException("O armazenamento deste dispositivo está quase cheio. Libere espaço antes de salvar outra foto.", "QuotaExceededError");
+  const { blob, ...metadata } = draft;
+  const storedBytes = await readBlob(blob);
+  await transact(storeName, "readwrite", (store) => store.put({ ...metadata, blob: storedBytes, blobType: blob.type, schemaVersion: 1 }));
 }
 
 export async function persistDraftMediaStatus(draft: CaptureDraft, mediaStatus: string): Promise<CaptureDraft> {
   const updated = { ...draft, mediaStatus };
-  await saveDraft(updated);
+  const db = await open();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readwrite");
+      const store = transaction.objectStore(storeName);
+      const request = store.get(draft.id);
+      request.onsuccess = () => {
+        if (!valid(request.result)) {
+          transaction.abort();
+          return;
+        }
+        store.put({ ...request.result, mediaStatus });
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? request.error);
+      transaction.onabort = () => reject(transaction.error ?? request.error ?? new Error("Não foi possível atualizar o status da foto salva."));
+    });
+  } finally { db.close(); }
   return updated;
 }
 
 export async function loadDraft(id: string): Promise<CaptureDraft | undefined> {
   const value = await transact<unknown>(storeName, "readonly", (store) => store.get(id));
-  if (valid(value)) return value;
+  if (valid(value)) return restoreBlob(value);
   if (value !== undefined) await quarantine(value);
   return undefined;
 }
@@ -101,7 +149,7 @@ export async function loadDraftsForResponsibility(responsibilityId: string): Pro
   try {
     const values = await new Promise<unknown[]>((resolve, reject) => { const request = db.transaction(storeName, "readonly").objectStore(storeName).index("responsibilityId").getAll(responsibilityId); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
     const validDrafts: CaptureDraft[] = [];
-    for (const value of values) { if (valid(value)) validDrafts.push(value); else await quarantine(value); }
+    for (const value of values) { if (valid(value)) validDrafts.push(restoreBlob(value)); else await quarantine(value); }
     return validDrafts;
   } finally { db.close(); }
 }
@@ -109,6 +157,7 @@ export async function loadDraftsForResponsibility(responsibilityId: string): Pro
 export const removeDraft = (id: string): Promise<unknown> => transact(storeName, "readwrite", (store) => store.delete(id));
 export async function removeDraftsForResponsibility(responsibilityId: string): Promise<void> { await Promise.all((await loadDraftsForResponsibility(responsibilityId)).map((draft) => removeDraft(draft.id))); }
 export async function digest(file: Blob): Promise<string> { return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((byte) => byte.toString(16).padStart(2, "0")).join(""); }
+export const isReadyCaptureDraft = (draft: CaptureDraft): boolean => draft.mediaStatus === "READY" && Boolean(draft.mediaId) && draft.metadataSaved === true && draft.parts.length > 0 && draft.parts.every((part) => part.complete);
 export const mediaCountForRequirement = (requirementKey: string, answers: CaptureAnswer[], drafts: CaptureDraft[]): number => {
   const blockedStatuses = new Set(["SCREENED", "REJECTED", "PURGED", "ABORTED"]);
   const blockedMediaIds = new Set(drafts.filter((draft) => blockedStatuses.has(draft.mediaStatus ?? "") && draft.mediaId).map((draft) => draft.mediaId));
@@ -127,7 +176,7 @@ export const hasDuplicateDraft = (requirementKey: string, sha256: string, drafts
 );
 export const readyForSubmission = (drafts: CaptureDraft[], online: boolean, allRequirementsSatisfied?: boolean, confirmIncomplete = false): boolean => {
   if (!online) return false;
-  const mediaReady = drafts.length > 0 && drafts.every((draft) => !["SCREENED", "REJECTED", "PURGED", "ABORTED"].includes(draft.mediaStatus ?? "") && !!draft.mediaId && draft.metadataSaved === true && draft.parts.length > 0 && draft.parts.every((part) => part.complete));
+  const mediaReady = drafts.length > 0 && drafts.every(isReadyCaptureDraft);
   if (allRequirementsSatisfied === undefined) return mediaReady;
   return (confirmIncomplete || allRequirementsSatisfied) && (drafts.length === 0 || mediaReady);
 };

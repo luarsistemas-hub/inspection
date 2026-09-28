@@ -9,6 +9,8 @@ trap 'code=$?; set +e; mkdir -p "$artifacts"; [[ -f "$env_file" ]] && docker com
 
 cd "$workspace"
 [[ -f "$env_file" ]] || cp .env.example "$env_file"
+node scripts/lib/design-system-migration.mjs validate --repository "$workspace" --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
+node scripts/lib/design-system-migration.mjs prerequisites --repository "$workspace"
 export INSPECTION_SCHEMA_HASH="$(node -e 'const fs=require("node:fs"); const c=require("node:crypto"); process.stdout.write(c.createHash("sha256").update(fs.readFileSync("services/inspection/schema.graphqls")).digest("hex"))')"
 ./scripts/local.sh up
 ./scripts/local.sh seed
@@ -17,7 +19,7 @@ git diff --exit-code -- services/inspection/internal/platform/graphql services/i
 go test ./...
 go vet ./...
 go build ./...
-for product in admin dashboard capture; do
+for product in admin dashboard capture onboarding; do
   (cd "apps/$product" && npm ci && npm run codegen:check && npm run lint && npm run test && npm run build && npm run test:e2e)
 done
 node scripts/lib/parity-evidence.mjs generate --journey E2E-033 --test-id E2E-001,E2E-027,E2E-033,E2E-034.01,E2E-060,E2E-066 --input "$workspace/artifacts" --output "$artifacts/evidence"

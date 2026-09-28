@@ -4,15 +4,18 @@ import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
 test.describe("Dashboard creation forms against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
 
-  async function chooseFirst(form: Locator, label: string) {
-    await form.getByRole("combobox", { name: label }).click();
-    await form.getByRole("listbox", { name: label }).getByRole("option").first().click();
+  async function chooseFirst(page: Page, form: Locator, label: string) {
+    const combobox = form.getByRole("combobox", { name: label });
+    await expect(combobox).toBeEnabled();
+    await combobox.click();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
   }
 
-  async function chooseEligibleDependencies(form: Locator) {
-    await chooseFirst(form, "Imóvel");
-    await chooseFirst(form, "Responsável pela vistoria");
-    await chooseFirst(form, "Modelo de vistoria");
+  async function chooseEligibleDependencies(page: Page, form: Locator) {
+    await chooseFirst(page, form, "Imóvel");
+    await chooseFirst(page, form, "Responsável pela vistoria");
+    await chooseFirst(page, form, "Modelo de vistoria");
   }
 
   async function mutationResponse(page: Page, operation: string, button: Locator) {
@@ -35,15 +38,15 @@ test.describe("Dashboard creation forms against the local stack", () => {
         const dialog = page.getByRole("dialog", { name: "Nova agenda" });
         const form = dialog.locator("form");
         await expect(form).toBeVisible();
-        await chooseEligibleDependencies(form);
+        await chooseEligibleDependencies(page, form);
         await expect(form.getByLabel("Fuso horário")).toHaveCount(0);
         await form.getByLabel("Primeira vistoria").fill(start);
         const repeat = form.getByLabel("Repetir");
         await expect(repeat.locator("option")).toHaveText(["Diariamente", "Semanalmente", "Mensalmente", "Anualmente"]);
         await repeat.selectOption(frequency);
+        expect(await repeat.locator("option:checked").textContent()).toBe(label);
         const { request, body } = await mutationResponse(page, "CreateSchedule", form.getByRole("button", { name: "Criar agenda" }));
         expect(request.variables.input).toMatchObject({ startsAt: start, timezone: "America/Sao_Paulo", rrule: `FREQ=${frequency}` });
-        expect(await repeat.locator("option:checked").textContent()).toBe(label);
         expect(body.errors).toBeUndefined();
         expect(body.data?.createSchedule?.userErrors).toEqual([]);
         await expect(dialog).toBeHidden();
@@ -72,8 +75,8 @@ test.describe("Dashboard creation forms against the local stack", () => {
     const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
     const form = dialog.locator("form");
     await expect(form).toBeVisible();
-    await chooseFirst(form, "Imóvel");
-    await chooseFirst(form, "Responsável pela vistoria");
+    await chooseFirst(page, form, "Imóvel");
+    await chooseFirst(page, form, "Responsável pela vistoria");
     const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
     const nextDay = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
     await form.getByLabel("Vencimento").fill(`${tomorrow}T23:34`);
@@ -94,7 +97,7 @@ test.describe("Dashboard creation forms against the local stack", () => {
     const dialog = page.getByRole("dialog", { name: "Novo projeto" });
     const form = dialog.locator("form");
     await expect(form).toBeVisible();
-    await chooseEligibleDependencies(form);
+    await chooseEligibleDependencies(page, form);
     const { body } = await mutationResponse(page, "CreateProject", form.getByRole("button", { name: "Criar projeto" }));
     expect(body.errors).toBeUndefined();
     expect(body.data?.createProject?.userErrors).toEqual([]);
@@ -106,16 +109,17 @@ test.describe("Dashboard creation forms against the local stack", () => {
     await loginAsLocalAdmin(page, "/inspections");
     const opener = page.getByRole("button", { name: "Nova vistoria" });
     const board = page.locator("#inspection-collection");
+    await expect(page.getByText(/Vistorias atualizadas|Nenhuma vistoria encontrada/)).toBeVisible();
     const before = await board.boundingBox();
     await opener.click();
     const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
     await dialog.getByLabel("Vencimento").fill("2030-05-10T12:00");
-    page.once("dialog", (confirm) => confirm.dismiss());
     await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel("Vencimento")).toHaveValue("2030-05-10T12:00");
-    page.once("dialog", (confirm) => confirm.accept());
-    await page.keyboard.press("Escape");
+    const discard = page.getByRole("dialog", { name: "Descartar alterações?" });
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "Descartar alterações" }).click();
     await expect(dialog).toBeHidden();
     await expect(opener).toBeFocused();
     expect(await board.boundingBox()).toEqual(before);
@@ -127,10 +131,11 @@ test.describe("Dashboard creation forms against the local stack", () => {
     const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
     const asset = dialog.getByRole("combobox", { name: "Imóvel" });
     await asset.focus();
-    await expect(dialog.getByRole("listbox", { name: "Imóvel" })).toBeVisible();
+    const listbox = page.getByRole("listbox", { name: "Imóvel" });
+    await expect(listbox).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("listbox", { name: "Imóvel" })).toBeHidden();
+    await expect(listbox).toBeHidden();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
   });

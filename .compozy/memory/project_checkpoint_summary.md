@@ -24,7 +24,6 @@ Orientar a execução das tarefas da spec `autonomous-inspection-platform` no Co
 - Não expor e-mails, planos, credenciais ou segredos.
 - Não modificar arquivos do repositório.
 - Operações do Compozy devem usar superfícies nativas quando disponíveis.
-- `RTK.md` não deve ser carregado sem solicitação explícita.
 
 ## Completed Actions
 1. Confirmado anteriormente que o runtime usa provider Codex e modelo `gpt-5.6-luna`, com raciocínio médio e velocidade normal.

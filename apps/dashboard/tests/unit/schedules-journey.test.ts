@@ -56,7 +56,7 @@ describe("schedule presentation and form rules", () => {
     ["60", ["61"], "Cada lembrete deve ser um número inteiro entre zero e o prazo."],
     ["60", ["-1"], "Cada lembrete deve ser um número inteiro entre zero e o prazo."],
     ["60", ["1.5"], "Cada lembrete deve ser um número inteiro entre zero e o prazo."],
-    ["60", ["1", "2", "3", "4"], "Adicione no máximo três lembretes."],
+    ["60", ["1", "2", "3", "4"], "Adicione no máximo três lembretes."], // UT-054
   ])("rejects invalid deadline/reminder combination %#", (deadline, reminders, error) => {
     expect(validateScheduleSettings(deadline, reminders).error).toBe(error);
   });

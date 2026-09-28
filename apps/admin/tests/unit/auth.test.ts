@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { beginPKCE, takePKCE } from "@/auth/pkce";
 import { safeAdminPath } from "@/auth/return-path";
-import { clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasAnalysisPromptAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
+import { clearProtectedContext, clearSession, getAccessToken, hasAdminAccess, hasAdminRouteAccess, hasAnalysisPromptAccess, hasDashboardAccess, restoreMembershipContext, setMembershipContext, setSession } from "@/auth/session";
 
 describe("Admin authentication safety", () => {
   beforeEach(() => { sessionStorage.clear(); clearSession(); vi.stubGlobal("location", { origin: "http://localhost:3000", assign: vi.fn() }); });
@@ -31,7 +31,15 @@ describe("Admin authentication safety", () => {
 
   it("keeps the analysis prompt restricted to its administrative roles", () => {
     expect(hasAnalysisPromptAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] })).toBe(false);
+    expect(hasAnalysisPromptAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["AUDITOR"] })).toBe(false);
     expect(hasAnalysisPromptAccess({ tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["INSPECTION_CONFIG_ADMIN"] })).toBe(true);
+  });
+
+  it("UT-050 denies prompt configuration and organization records to roles without route access", () => {
+    expect(hasAdminRouteAccess("/prompts", ["AUDITOR"])).toBe(false);
+    expect(hasAdminRouteAccess("/organization", ["AUDITOR"])).toBe(false);
+    expect(hasAdminRouteAccess("/prompts", ["INSPECTION_CONFIG_ADMIN"])).toBe(true);
+    expect(hasAdminRouteAccess("/organization", ["ORGANIZATION_ADMIN"])).toBe(true);
   });
 
   it("allows delegated administrative roles in Admin but reserves Dashboard for tenant administrators", () => {

@@ -1,24 +1,46 @@
 "use client";
 
-import { Button, Field, Input, Status } from "@inspection/design-system";
+import { Alert, Button, Field, Input, Status } from "@inspection/design-system";
 import Image from "next/image";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 export type OriginUpload = { id: string; file: File; description: string; attentionItems: string[]; mediaId?: string; sending: boolean; failed: boolean };
 
-const maxAttentionItems = 20;
-const maxAttentionItemLength = 80;
+export const maxAttentionItems = 20;
+export const maxAttentionItemLength = 80;
+
+export function attentionItemError(value: string, currentItems: string[]) {
+  const item = value.trim();
+  if (!item) return undefined;
+  if (Array.from(item).length > maxAttentionItemLength) return "Cada item pode ter no máximo 80 caracteres.";
+  if (currentItems.some((current) => current.toLocaleLowerCase() === item.toLocaleLowerCase())) return "Este item já foi adicionado.";
+  if (currentItems.length >= maxAttentionItems) return "Adicione no máximo 20 itens.";
+  return undefined;
+}
+
+export function originUploadError(uploads: OriginUpload[]) {
+  return !uploads.length || uploads.some((upload) => !upload.description.trim())
+    ? "Adicione e descreva ao menos uma foto de referência."
+    : undefined;
+}
+
+export function isOriginUploadLocked(upload: Pick<OriginUpload, "sending" | "mediaId">) {
+  return upload.sending || Boolean(upload.mediaId);
+}
 
 export function OriginUploadCards({ uploads, onChange, onRetry }: { uploads: OriginUpload[]; onChange: Dispatch<SetStateAction<OriginUpload[]>>; onRetry: (id: string) => void }) {
+  const [fileError, setFileError] = useState("");
   const addFiles = (files: FileList | null) => {
     if (!files) return;
     const selected = Array.from(files).filter((file) => /^image\/(jpeg|png|webp|heic|heif)$/.test(file.type));
+    setFileError(selected.length === files.length ? "" : "Selecione arquivos de imagem compatíveis (JPG, PNG, WebP ou HEIC).");
     onChange((current) => [...current, ...selected.map((file) => ({ id: crypto.randomUUID(), file, description: "", attentionItems: [], sending: false, failed: false }))]);
   };
   return <div className="onboarding-upload-list">
     <Field label="Fotos de referência" hint="Cada foto precisa de uma descrição antes de ser enviada.">
       <Input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
     </Field>
+    {fileError ? <Alert tone="danger">{fileError}</Alert> : null}
     {uploads.map((upload) => <UploadCard key={upload.id} upload={upload} onChange={(next) => onChange((current) => current.map((item) => item.id === next.id ? next : item))} onRemove={() => onChange((current) => current.filter((item) => item.id !== upload.id))} onRetry={() => onRetry(upload.id)} />)}
   </div>;
 }
@@ -28,7 +50,7 @@ function UploadCard({ upload, onChange, onRemove, onRetry }: { upload: OriginUpl
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [attentionValue, setAttentionValue] = useState("");
   const [attentionError, setAttentionError] = useState("");
-  const locked = upload.sending || Boolean(upload.mediaId);
+  const locked = isOriginUploadLocked(upload);
   useEffect(() => {
     const url = URL.createObjectURL(upload.file);
     setPreview(url);
@@ -37,16 +59,9 @@ function UploadCard({ upload, onChange, onRemove, onRetry }: { upload: OriginUpl
   const addAttentionItem = () => {
     const item = attentionValue.trim();
     if (!item) return;
-    if (Array.from(item).length > maxAttentionItemLength) {
-      setAttentionError("Cada item pode ter no máximo 80 caracteres.");
-      return;
-    }
-    if (upload.attentionItems.some((current) => current.toLocaleLowerCase() === item.toLocaleLowerCase())) {
-      setAttentionError("Este item já foi adicionado.");
-      return;
-    }
-    if (upload.attentionItems.length >= maxAttentionItems) {
-      setAttentionError("Adicione no máximo 20 itens.");
+    const error = attentionItemError(item, upload.attentionItems);
+    if (error) {
+      setAttentionError(error);
       return;
     }
     onChange({ ...upload, attentionItems: [...upload.attentionItems, item] });

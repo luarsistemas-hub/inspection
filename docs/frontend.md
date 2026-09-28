@@ -1,6 +1,12 @@
 # Frontend e captura
 
-O Admin, o Dashboard e o Capture são aplicações Next.js 15 com React 19 e responsabilidades separadas. O Admin administra tenant, unidades, acessos, participantes, catálogos, ativos e governança. O Dashboard administra agendas, projetos, relatórios, triagem, recaptura, notificações e portfólio. O Capture fica em `/capture/[linkToken]`, usa IndexedDB para rascunhos e upload multipart para URLs assinadas.
+O Admin, o Dashboard, o Capture e o Onboarding são aplicações Next.js 15 com React 19 e responsabilidades separadas. O Admin administra tenant, unidades, acessos, participantes, catálogos, ativos e governança. O Dashboard administra agendas, projetos, relatórios, triagem, recaptura, notificações e portfólio. O Capture fica em `/capture/[linkToken]`, usa IndexedDB para rascunhos e upload multipart para URLs assinadas. O Onboarding usa definição dinâmica, mantém campos e etapas confirmadas pelo servidor e mantém arquivos ainda não enviados somente na página atual.
+
+Os controles recorrentes vêm de `@inspection/design-system`. Shells, autorização,
+rotas, consultas, estados de domínio, políticas de mídia e composições de lista,
+quadro, agenda e relatório permanecem nas aplicações. Consulte o
+[guia de uso](design-system/usage.md) e o [inventário atual](design-system/migration-inventory.json)
+antes de criar uma nova apresentação.
 
 O login usa Authorization Code + PKCE S256. O verifier fica associado ao `state`; o callback troca o código no Keycloak e mantém o access token em memória. A API valida issuer, audience, JWKS e membership. A captura usa cookie `inspection_external` e `X-CSRF-Token`.
 

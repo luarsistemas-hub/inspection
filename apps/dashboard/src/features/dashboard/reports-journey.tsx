@@ -7,9 +7,15 @@ import { graphql } from "@/graphql/client";
 import { InvalidateReportPublicationDocument, PublishReportDocument, ReportDownloadDocument, ReportWorkspaceDocument, ReportsDocument, type ReportDownloadQuery, type ReportWorkspaceQuery, type ReportsQuery } from "@/graphql/generated";
 import { presentClassification, presentReportPDFStatus } from "./presentation";
 import { ReportVisual } from "./report-visual";
+import { ConfirmationDialog } from "./confirmation-dialog";
 
 type ReportSummary = ReportsQuery["reports"]["nodes"][number];
 type Report = NonNullable<ReportWorkspaceQuery["report"]>;
+
+/** Prevents a superseded report-list request from replacing the active filters. */
+export function isCurrentReportListRequest(request: number, currentRequest: number): boolean {
+  return request === currentRequest;
+}
 
 export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boolean; refreshKey?: number }) {
   const router = useRouter();
@@ -32,6 +38,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
   const [detailError, setDetailError] = useState("");
   const [download, setDownload] = useState<ReportDownloadQuery["reportDownload"]>();
   const [detailMessage, setDetailMessage] = useState("");
+  const [invalidating, setInvalidating] = useState(false);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
   const mediaRefreshes = useRef(0);
@@ -59,15 +66,15 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
     try {
       const after = reset ? null : cursorRef.current;
       const data = await graphql<ReportsQuery, { first: number; after: string | null; search: string | null; classification: string | null }>(ReportsDocument, { first: 25, after, search: search || null, classification: classification || null });
-      if (request !== listRequest.current) return;
+      if (!isCurrentReportListRequest(request, listRequest.current)) return;
       setItems((current) => reset ? data.reports.nodes : [...current, ...data.reports.nodes]);
       cursorRef.current = data.reports.pageInfo.endCursor ?? null;
       setHasMore(data.reports.pageInfo.hasNextPage);
     } catch (error) {
-      if (request !== listRequest.current) return;
+      if (!isCurrentReportListRequest(request, listRequest.current)) return;
       setListError((error as Error).message || "Não foi possível carregar os laudos.");
     } finally {
-      if (request === listRequest.current) setListLoading(false);
+      if (isCurrentReportListRequest(request, listRequest.current)) setListLoading(false);
     }
   }, [classification, search]);
 
@@ -145,16 +152,18 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
     } catch (error) { setDetailMessage((error as Error).message); }
   };
 
-  const updatePublication = async (document: typeof PublishReportDocument | typeof InvalidateReportPublicationDocument, input: Record<string, unknown>) => {
+  const updatePublication = async (document: typeof PublishReportDocument | typeof InvalidateReportPublicationDocument, input: Record<string, unknown>): Promise<string | undefined> => {
     const requestedInspection = inspectionId;
     const request = detailRequest.current;
     try {
       const result = await graphql(document as never, { input } as never);
-      if (request !== detailRequest.current || requestedInspection !== inspectionIdRef.current) return;
+      if (request !== detailRequest.current || requestedInspection !== inspectionIdRef.current) return undefined;
       const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> };
-      setDetailMessage(payload.userErrors?.length ? payload.userErrors.map((item) => item.message).join(" · ") : "Publicação atualizada.");
+      const failure = payload.userErrors?.length ? payload.userErrors.map((item) => item.message).join(" · ") : undefined;
+      setDetailMessage(failure ?? "Publicação atualizada.");
       if (!payload.userErrors?.length && requestedInspection) await loadDetail(requestedInspection);
-    } catch (error) { setDetailMessage((error as Error).message); }
+      return failure;
+    } catch (error) { const failure = (error as Error).message; setDetailMessage(failure); return failure; }
   };
 
   const currentReport = loadedInspectionId === inspectionId ? report : null;
@@ -182,10 +191,11 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       {currentReport && <>
         <ReportVisual report={currentReport} onDownload={() => void prepareDownload()} onMediaError={refreshMedia} />
         <p className="report-detail-status" role="status">{detailMessage}{download?.url && <> <a href={download.url} target="_blank" rel="noreferrer">Baixar PDF</a></>}</p>
-        {canPublish && <div className="actions"><button onClick={() => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() })}>Publicar laudo</button><button className="secondary" onClick={() => { const reason = window.prompt("Motivo da invalidação"); if (reason) void updatePublication(InvalidateReportPublicationDocument, { publicationId: currentReport.id, expectedVersion: currentReport.version, reason, clientMutationId: crypto.randomUUID() }); }}>Invalidar publicação</button></div>}
+        {canPublish && <div className="actions"><button onClick={() => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() })}>Publicar laudo</button><button className="secondary" onClick={() => setInvalidating(true)}>Invalidar publicação</button></div>}
         <details><summary>Informações técnicas</summary><p>Digest canônico: {currentReport.jsonDigest}</p><p>Digest renderizado: {currentReport.htmlDigest}</p>{download?.sha256 && <p>Digest do PDF: {download.sha256}</p>}<pre>{JSON.stringify(currentReport.canonicalJSON, null, 2)}</pre></details>
       </>}
     </Dialog>
+    <ConfirmationDialog isOpen={invalidating && Boolean(currentReport)} onClose={() => setInvalidating(false)} title="Invalidar publicação" target="Publicação do laudo selecionado" scope="Contexto operacional atual" consequence="A publicação deixará de estar disponível para o cliente." confirmLabel="Invalidar publicação" reasonLabel="Motivo da invalidação" onConfirm={async (reason) => { if (!currentReport) return; const failure = await updatePublication(InvalidateReportPublicationDocument, { publicationId: currentReport.id, expectedVersion: currentReport.version, reason, clientMutationId: crypto.randomUUID() }); if (failure) throw new Error(failure); }} />
   </div>;
 }
 

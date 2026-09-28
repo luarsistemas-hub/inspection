@@ -36,11 +36,16 @@ export function graphql<TData>(query: TypedDocumentNode<TData, Record<string, ne
 export function graphql<TData, TVariables>(query: TypedDocumentNode<TData, TVariables>, variables: TVariables): Promise<TData>;
 export async function graphql<TData, TVariables>(query: TypedDocumentNode<TData, TVariables>, variables?: TVariables): Promise<TData> {
   const csrf = getCaptureCsrfToken();
-  const response = await fetch(endpoint, {
-    method: "POST", credentials: "include",
-    headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
-    body: JSON.stringify({ query: print(query), variables })
-  });
+  let response: globalThis.Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json", ...(csrf ? { "X-CSRF-Token": csrf } : {}) },
+      body: JSON.stringify({ query: print(query), variables })
+    });
+  } catch {
+    throw { message: "Não foi possível conectar à API.", code: "NETWORK_ERROR" } satisfies GraphQLFailure;
+  }
   let body: Response<TData> = {};
   const raw = await response.text();
   if (raw.trimStart().startsWith("{")) { try { body = JSON.parse(raw) as Response<TData>; } catch { body = {}; } }

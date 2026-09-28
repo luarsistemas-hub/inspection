@@ -27,6 +27,7 @@ const optionLabels: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   PENDING: "Pendente", READY: "Pronta", NOT_REQUIRED: "Não se aplica", FAILED: "Falhou", NOT_STARTED: "Não iniciada",
   RETRY: "Tentar novamente", WAIT_FOR_DELIVERY: "Aguardar envio", REVIEW_AND_SUBMIT: "Revisar e enviar", CONTINUE_ONBOARDING: "Continuar cadastro",
+  SUBMITTED: "Configuração aceita", DELIVERY_PENDING: "Processando criação", PROCESSING: "Processando", CREATED: "Vistoria criada", QUEUED: "Na fila de envio", SENT: "Convite enviado", DELIVERED: "Convite entregue", ACCEPTED: "Envio aceito", UNKNOWN: "Ainda não confirmado", WAIT_FOR_ORIGIN: "Aguardar processamento das fotos",
 };
 
 export function presentOnboardingLabel(label: string) { return legacyLabels[label] ?? label; }

@@ -8,7 +8,7 @@ Run the complete local gate from the repository root:
 ./scripts/parity-gate.sh
 ```
 
-The script starts and seeds the isolated Compose stack, regenerates and checks GraphQL artifacts, runs Go verification, runs the three product checks and authenticated Playwright suites, writes redacted evidence, validates the legacy inventory against `docs/legacy-inventory.json`, captures Compose logs, and removes the temporary volumes. Set `INSPECTION_PARITY_ARTIFACTS` to retain artifacts outside the repository.
+The script first validates the current four-application migration inventory and requires real-E2E credentials. It then starts and seeds the isolated Compose stack, regenerates and checks GraphQL artifacts, runs Go verification, runs all four product checks and authenticated Playwright suites, writes redacted evidence, validates the legacy inventory against `docs/legacy-inventory.json`, captures Compose logs, and removes the temporary volumes. Set `INSPECTION_PARITY_ARTIFACTS` to retain artifacts outside the repository.
 
 The inventory is independently reviewable:
 

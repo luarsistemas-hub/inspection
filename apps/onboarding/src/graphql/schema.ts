@@ -2196,6 +2196,7 @@ export type SaveCaptureMetadataInput = {
   deviceContext: InputMaybe<Scalars['JSON']['input']>;
   gps: InputMaybe<CaptureGpsInput>;
   mediaId: Scalars['ID']['input'];
+  replacesMediaId: InputMaybe<Scalars['ID']['input']>;
   requirementKey: Scalars['String']['input'];
 };
 

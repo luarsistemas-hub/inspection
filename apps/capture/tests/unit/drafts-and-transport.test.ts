@@ -18,11 +18,31 @@ describe("Capture drafts and transport", () => {
     expect(getCaptureLinkToken()).toBeUndefined();
   });
 
-  it("UT-059 restores only a valid responsibility-scoped draft", async () => {
+  it("restores only a valid responsibility-scoped draft", async () => {
     await saveDraft(draft()); await saveDraft({ ...draft("other"), responsibilityId: "other" });
     expect(await loadDraftsForResponsibility("responsibility-1")).toHaveLength(1);
   });
-  it("UT-060 ignores corrupt or version-mismatched data", async () => {
+  it("persists photo bytes in a WebKit-safe form and restores the original Blob", async () => {
+    const original = draft();
+    await saveDraft(original);
+
+    const request = indexedDB.open("inspection-capture-v3");
+    const db = await new Promise<IDBDatabase>((resolve) => { request.onsuccess = () => resolve(request.result); });
+    const stored = await new Promise<Record<string, unknown>>((resolve) => {
+      const get = db.transaction("drafts", "readonly").objectStore("drafts").get(original.id);
+      get.onsuccess = () => resolve(get.result as Record<string, unknown>);
+    });
+    db.close();
+
+    expect(Object.prototype.toString.call(stored.blob)).toBe("[object ArrayBuffer]");
+    const restored = await loadDraft(original.id);
+    expect(restored?.blob).toBeInstanceOf(Blob);
+    expect(restored?.blob.type).toBe(original.blob.type);
+    expect(restored?.blob.size).toBe(original.blob.size);
+    const restoredBytes = await new Promise<ArrayBuffer>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.readAsArrayBuffer(restored?.blob as Blob); });
+    expect(Array.from(new Uint8Array(restoredBytes))).toEqual(Array.from(new Uint8Array([112, 104, 111, 116, 111])));
+  });
+  it("ignores corrupt or version-mismatched data", async () => {
     const request = indexedDB.open("inspection-capture-v3");
     const db = await new Promise<IDBDatabase>((resolve) => { request.onsuccess = () => resolve(request.result); });
     const tx = db.transaction("drafts", "readwrite"); tx.objectStore("drafts").put({ id: "corrupt", responsibilityId: "responsibility-1", schemaVersion: 99 }); await new Promise<void>((resolve) => { tx.oncomplete = () => resolve(); }); db.close();
@@ -55,10 +75,19 @@ describe("Capture drafts and transport", () => {
     await saveDraft(offlineDraft);
     expect(await loadDraft("offline")).toEqual(expect.objectContaining({ id: "offline", responsibilityId: offlineDraft.responsibilityId, parts: [], metadataSaved: false, schemaVersion: 1 }));
   });
-  it("UT-063 removes actionable local state when bootstrap is final", async () => { await saveDraft(draft()); await removeDraftsForResponsibility("responsibility-1"); expect(await loadDraftsForResponsibility("responsibility-1")).toEqual([]); });
-  it("persists the post-false-positive media status so SCREENED is no longer actionable", async () => { const screened = { ...draft(), mediaId: "media-1", mediaStatus: "SCREENED" }; await saveDraft(screened); await persistDraftMediaStatus(screened, "READY"); expect((await loadDraft("draft-1"))?.mediaStatus).toBe("READY"); });
-  it("UT-065 warns before the storage quota threshold", async () => { vi.stubGlobal("navigator", { storage: { estimate: vi.fn().mockResolvedValue({ quota: 100, usage: 90 }) } }); expect(await hasDraftCapacity(1)).toBe(false); vi.unstubAllGlobals(); });
-  it("UT-066 blocks finalization while any media is not verified", () => { expect(readyForSubmission([draft()], true)).toBe(false); expect(readyForSubmission([{ ...draft(), mediaId: "m", metadataSaved: true, parts: [{ number: 1, complete: true, etag: "e" }] }], true)).toBe(true); });
+  it("removes actionable local state when bootstrap is final", async () => { await saveDraft(draft()); await removeDraftsForResponsibility("responsibility-1"); expect(await loadDraftsForResponsibility("responsibility-1")).toEqual([]); });
+  it("persists the post-false-positive status without requiring capacity for existing photo bytes", async () => {
+    const screened = { ...draft(), mediaId: "media-1", mediaStatus: "SCREENED" };
+    await saveDraft(screened);
+    vi.stubGlobal("navigator", { storage: { estimate: vi.fn().mockResolvedValue({ quota: 100, usage: 100 }) } });
+
+    await persistDraftMediaStatus(screened, "READY");
+
+    expect((await loadDraft("draft-1"))?.mediaStatus).toBe("READY");
+    vi.unstubAllGlobals();
+  });
+  it("warns before the storage quota threshold", async () => { vi.stubGlobal("navigator", { storage: { estimate: vi.fn().mockResolvedValue({ quota: 100, usage: 90 }) } }); expect(await hasDraftCapacity(1)).toBe(false); vi.unstubAllGlobals(); });
+  it("blocks finalization while any media is not verified", () => { expect(readyForSubmission([draft()], true)).toBe(false); expect(readyForSubmission([{ ...draft(), mediaId: "m", mediaStatus: "READY", metadataSaved: true, parts: [{ number: 1, complete: true, etag: "e" }] }], true)).toBe(true); });
   it("allows an online submission with no media when every required answer is impossible", () => { expect(readyForSubmission([], true, true)).toBe(true); expect(readyForSubmission([{ ...draft(), mediaId: "m", metadataSaved: false, parts: [{ number: 1, complete: true, etag: "e" }] }], true, true)).toBe(false); });
   it("allows an explicitly confirmed incomplete submission while retaining upload guards", () => { expect(readyForSubmission([], true, false, true)).toBe(true); expect(readyForSubmission([{ ...draft(), mediaId: "m", metadataSaved: false, parts: [{ number: 1, complete: true, etag: "e" }] }], true, false, true)).toBe(false); expect(readyForSubmission([], false, false, true)).toBe(false); });
   it("counts answered and pending media once when enforcing a requirement maximum", () => {
@@ -88,7 +117,7 @@ describe("Capture drafts and transport", () => {
     const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 2, maximumMedia: 3, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }];
     const answers = [{ requirementKey: "front", mediaIds: ["media-1"], impossibilityReason: null, version: 0 }];
     expect(requirementsSatisfied(requirements, answers, [])).toBe(false);
-    expect(requirementsSatisfied(requirements, answers, [{ ...draft(), metadata: { ...draft().metadata, requirementKey: "front" }, mediaId: "media-2" }])).toBe(true);
+    expect(requirementsSatisfied(requirements, answers, [{ ...draft(), metadata: { ...draft().metadata, requirementKey: "front" }, mediaId: "media-2", mediaStatus: "READY", metadataSaved: true, parts: [{ number: 1, complete: true, etag: "etag" }] }])).toBe(true);
   });
   it("does not treat server-screened media as a satisfied requirement or submission-ready", () => {
     const requirements = [{ key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false }];
@@ -109,7 +138,12 @@ describe("Capture drafts and transport", () => {
     expect(isGalleryAllowed({ allowGallery: false }, requirement)).toBe(false);
     expect(isGalleryAllowed({ allowGallery: true }, { ...requirement, captureSourcePolicy: "CAMERA_ONLY" })).toBe(false);
   });
-  it("UT-064 and UT-073 send only external CSRF with the session cookie", async () => { setCaptureCsrfToken("csrf-proof"); const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { externalCapture: {} } }), { status: 200 })); vi.stubGlobal("fetch", fetch); await graphql(ExternalCaptureBootstrapDocument); expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentials: "include", headers: expect.objectContaining({ "X-CSRF-Token": "csrf-proof" }) })); expect(fetch.mock.calls[0][1].headers.Authorization).toBeUndefined(); vi.unstubAllGlobals(); });
+  it("UT-073 sends only external CSRF with the session cookie", async () => { setCaptureCsrfToken("csrf-proof"); const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { externalCapture: {} } }), { status: 200 })); vi.stubGlobal("fetch", fetch); await graphql(ExternalCaptureBootstrapDocument); expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentials: "include", headers: expect.objectContaining({ "X-CSRF-Token": "csrf-proof" }) })); expect(fetch.mock.calls[0][1].headers.Authorization).toBeUndefined(); vi.unstubAllGlobals(); });
+  it("normalizes browser-specific fetch rejections as recoverable network failures", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Load failed")));
+    await expect(graphql(ExternalCaptureBootstrapDocument)).rejects.toMatchObject({ code: "NETWORK_ERROR", message: "Não foi possível conectar à API." });
+    vi.unstubAllGlobals();
+  });
   it("clears capture authority but preserves the link for OTP reauthentication when GraphQL reports an expired session in a 200 response", async () => {
     setCaptureCsrfToken("csrf-proof"); setCaptureLinkToken("invite-token");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "expired", extensions: { code: "SESSION_EXPIRED" } }] }), { status: 200 })));

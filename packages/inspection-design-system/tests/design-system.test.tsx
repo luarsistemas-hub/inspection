@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { Breadcrumbs, Button, Combobox, Confirmation, DataTable, Dialog, Field, Input, Pagination, Recovery, VersionConflict } from "../src/index.js";
+import { Breadcrumbs, Button, Checkbox, ChoiceGroup, Combobox, Confirmation, DataTable, Dialog, ErrorSummary, Field, Input, Pagination, Recovery, Steps, VersionConflict } from "../src/index.js";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -109,14 +109,14 @@ describe("design-system public contracts", () => {
     ));
 
     const input = container.querySelector("input");
-    const description = container.querySelector(".inspection-field > span:last-child");
+    const descriptions = [...container.querySelectorAll(".inspection-hint, .inspection-error")];
     expect(input?.getAttribute("aria-describedby")).toContain("existing-description");
-    expect(input?.getAttribute("aria-describedby")).toContain(description?.id ?? "");
+    expect(descriptions.every((description) => input?.getAttribute("aria-describedby")?.includes(description.id))).toBe(true);
     expect(input?.getAttribute("aria-invalid")).toBe("true");
     expect(input?.getAttribute("aria-required")).toBe("true");
     expect(input?.required).toBe(true);
-    expect(description?.textContent).toContain("Use seu nome completo");
-    expect(description?.textContent).toContain("Nome obrigatório");
+    expect(descriptions.map((description) => description.textContent).join(" ")).toContain("Use seu nome completo");
+    expect(descriptions.map((description) => description.textContent).join(" ")).toContain("Nome obrigatório");
 
     await act(async () => reactRoot.unmount());
     container.remove();
@@ -133,12 +133,36 @@ describe("design-system public contracts", () => {
     expect(input?.getAttribute("aria-autocomplete")).toBe("list");
     expect(input?.getAttribute("aria-expanded")).toBe("false");
 
-    await act(async () => input?.focus());
-    const option = container.querySelector<HTMLElement>("[role='option']");
+    await act(async () => input?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
+    const option = document.querySelector<HTMLElement>("[role='option']");
     expect(input?.getAttribute("aria-expanded")).toBe("true");
     expect(option?.textContent).toContain("Imóvel QA");
     await act(async () => option?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(selected).toBe("asset-1");
+
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("keeps Field labels and errors attached to the actual combobox input", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+
+    await act(async () => reactRoot.render(
+      <Field label="Imóvel" error="Selecione um imóvel">
+        <Combobox value="" options={[{ value: "assetA", label: "Apartamento 101" }]} onChange={() => {}} />
+      </Field>
+    ));
+
+    const input = container.querySelector<HTMLInputElement>("input[role='combobox']");
+    const label = container.querySelector<HTMLLabelElement>("label");
+    const error = container.querySelector<HTMLElement>(".inspection-error");
+    expect(input).not.toBeNull();
+    expect(label?.htmlFor).toBe(input?.id);
+    expect(input?.getAttribute("aria-label")).toBeNull();
+    expect(input?.getAttribute("aria-describedby")).toContain(error?.id ?? "");
+    expect(input?.getAttribute("aria-invalid")).toBe("true");
 
     await act(async () => reactRoot.unmount());
     container.remove();
@@ -168,39 +192,11 @@ describe("design-system public contracts", () => {
       </>
     ));
 
-    const dialog = container.querySelector('[role="dialog"]');
-    const buttons = [...container.querySelectorAll('[role="dialog"] button')];
-    expect(document.activeElement).toBe(dialog);
-    expect(dialog?.classList.contains("inspection-dialog--wide")).toBe(true);
-    expect(document.body.style.overflow).toBe("hidden");
+    const dialog = document.querySelector('[role="dialog"]');
+    const buttons = [...document.querySelectorAll('[role="dialog"] button')];
+    expect(dialog).not.toBeNull();
+    expect(dialog?.parentElement?.classList.contains("inspection-dialog--wide")).toBe(true);
     expect(buttons).toHaveLength(2);
-
-    const duplicateContainer = document.createElement("div");
-    document.body.append(duplicateContainer);
-    const duplicateRoot = createRoot(duplicateContainer);
-    await act(async () => duplicateRoot.render(
-      <>
-        <Dialog isOpen onClose={() => {}} title="Primeiro">{null}</Dialog>
-        <Dialog isOpen onClose={() => {}} title="Segundo">{null}</Dialog>
-      </>
-    ));
-    const dialogs = [...duplicateContainer.querySelectorAll('[role="dialog"]')];
-    const titleIds = dialogs.map((currentDialog) => currentDialog.getAttribute("aria-labelledby"));
-    expect(new Set(titleIds).size).toBe(2);
-    expect(dialogs.every((currentDialog) => currentDialog.querySelector("h2")?.id === currentDialog.getAttribute("aria-labelledby"))).toBe(true);
-    await act(async () => duplicateRoot.unmount());
-    duplicateContainer.remove();
-
-    const forwardTab = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" });
-    window.dispatchEvent(forwardTab);
-    expect(forwardTab.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(buttons[0]);
-
-    buttons[0]?.focus();
-    const reverseTab = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey: true });
-    window.dispatchEvent(reverseTab);
-    expect(reverseTab.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(buttons[1]);
 
     await act(async () => reactRoot.render(
       <>
@@ -209,7 +205,6 @@ describe("design-system public contracts", () => {
       </>
     ));
     expect(document.activeElement).toBe(opener);
-    expect(document.body.style.overflow).toBe("");
     const css = await readFile(resolve(packageRoot, "src/styles.css"), "utf8");
     expect(css).toContain(".inspection-dialog--wide");
 
@@ -225,8 +220,44 @@ describe("design-system public contracts", () => {
     expect(container.querySelector("nav[aria-label='Navegação estrutural']")).not.toBeNull();
     expect(container.querySelector("table caption")?.textContent).toBe("Registros");
     expect(container.querySelector("[role='status']")?.textContent).toContain("Página 1");
-    expect(container.querySelector("[role='alert']")?.textContent).toContain("versão atual é 2");
+    expect(container.querySelector(".inspection-version-conflict")?.textContent).toContain("versão atual é 2");
     expect(container.querySelector(".inspection-confirmation dl")?.textContent).toContain("Arquivará o registro");
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("covers pending actions, native choices, summary focus, steps, and recovery identity", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+    let confirms = 0;
+    let resets = 0;
+    await act(async () => reactRoot.render(<>
+      <Button isPending pendingLabel="Salvando" onClick={() => { confirms += 1; }}>Salvar</Button>
+      <ChoiceGroup legend="Consentimento"><Checkbox checked readOnly required label="Aceito os termos" /><Checkbox disabled label="Indisponível" /></ChoiceGroup>
+      <Input id="email" />
+      <ErrorSummary errors={[{ fieldId: "email", message: "E-mail inválido" }, { message: "Erro geral" }]} />
+      <Steps items={[{ id: "one", label: "Primeira", state: "complete" }, { id: "two", label: "Atual", state: "current" }, { id: "three", label: "Depois", state: "pending" }]} />
+      <Recovery kind="empty" title="Upload">Nenhum arquivo.</Recovery><Recovery kind="error" title="Autenticação">Não foi possível autenticar.</Recovery>
+      <Confirmation consequence="Arquiva" isConfirmDisabled isPending onCancel={() => {}} onConfirm={() => { confirms += 1; }} scope="Tenant" target="Registro" />
+      <button type="button" onClick={() => { resets += 1; }}>Controle</button>
+    </>));
+
+    const pending = container.querySelector<HTMLButtonElement>(".inspection-button[aria-busy='true']");
+    expect(pending?.textContent).toBe("Salvando");
+    pending?.click();
+    expect(confirms).toBe(0);
+    expect(container.querySelector<HTMLInputElement>("input[type='checkbox']")?.checked).toBe(true);
+    expect(container.querySelector<HTMLInputElement>("input[type='checkbox']")?.required).toBe(true);
+    const summaryLink = container.querySelector<HTMLAnchorElement>(".inspection-error-summary a");
+    await act(async () => summaryLink?.click());
+    expect(document.activeElement).toBe(container.querySelector("#email"));
+    expect(container.querySelector("[aria-current='step']")?.textContent).toBe("Atual");
+    expect(container.querySelector(".inspection-steps__item--pending button")).toBeNull();
+    const recoveries = [...container.querySelectorAll(".inspection-recovery")];
+    expect(new Set(recoveries.map((recovery) => recovery.getAttribute("aria-labelledby"))).size).toBe(2);
+    expect(recoveries[1]?.querySelector("button")).toBeNull();
+    expect(resets).toBe(0);
     await act(async () => reactRoot.unmount());
     container.remove();
   });

@@ -67,3 +67,18 @@ export function presentUploadFailure(error: unknown): string {
   if (/network|fetch/i.test(message)) return "Não foi possível concluir agora por causa da conexão. Verifique sua internet e toque em “Retomar envio”.";
   return message || "Não foi possível concluir o envio. Toque em “Retomar envio” para tentar novamente.";
 }
+
+export function presentDraftPersistenceFailure(error: unknown): string {
+  const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+  if (name === "QuotaExceededError") return "Não foi possível salvar a foto neste dispositivo. A prévia ainda não foi salva; libere espaço e tente novamente.";
+  return "Não foi possível salvar a foto neste dispositivo. A prévia ainda não foi salva; tente novamente.";
+}
+
+export function presentUploadProgress(progress: { phase: string; percent: number; completedParts: number; totalParts: number }): string {
+  if (progress.phase === "preparing") return "Preparando upload";
+  if (progress.phase === "uploading") return progress.totalParts > 0 ? `Enviando partes (${progress.completedParts}/${progress.totalParts})` : "Enviando foto";
+  if (progress.phase === "verifying") return "Aguardando verificação da foto";
+  if (progress.phase === "saving") return "Salvando metadados";
+  if (progress.phase === "complete") return "Upload concluído";
+  return "Não foi possível concluir; retome o envio";
+}

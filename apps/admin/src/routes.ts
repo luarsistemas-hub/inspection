@@ -1,4 +1,5 @@
-export const adminRoutes = ["/auth/callback", "/overview", "/tenants/[tenantId]", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit", "/llm-usage"] as const;
+/** Every application-owned route, including the public activation and prompt journeys. */
+export const adminRoutes = ["/", "/activate", "/auth/callback", "/overview", "/tenants/[tenantId]", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit", "/prompts", "/llm-usage"] as const;
 
 export function legacyRedirects(dashboardOrigin: string, captureOrigin: string) {
   return [

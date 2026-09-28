@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
 
@@ -6,11 +8,12 @@ test.describe("authenticated Dashboard against the local stack", () => {
 
   test("shows unread notifications first, allows all notifications, and opens delivery status", async ({ page }) => {
     const assertRuntimeClean = installRuntimeGuards(page);
+    execFileSync("./scripts/local.sh", ["seed"], { cwd: resolve(process.cwd(), "../.."), encoding: "utf8" });
     await loginAsLocalAdmin(page, "/triage");
     await page.getByRole("button", { name: "Atualizar fila" }).click();
     await expect(page.getByRole("region", { name: "Casos para revisão" }).locator(".triage-list-heading strong")).not.toHaveText("Carregando fila…");
     await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
-    const matchingNotices = page.locator(".notification-card").filter({ hasText: "Vistoria QA disponível" });
+    const matchingNotices = page.locator(".notification-card").filter({ hasText: "Vistoria a iniciar · Imóvel QA" });
     const notice = matchingNotices.first();
     await expect(notice).toBeVisible({ timeout: 15_000 });
     const unreadNoticeCount = await matchingNotices.count();
@@ -18,13 +21,13 @@ test.describe("authenticated Dashboard against the local stack", () => {
     if (await markAsRead.isVisible()) {
       await markAsRead.click();
       await expect(matchingNotices).toHaveCount(unreadNoticeCount - 1);
-      await page.getByLabel("Mostrar todas").check();
-      const readNotice = page.locator('.notification-card[data-read="true"]').filter({ hasText: "Vistoria QA disponível" }).first();
+      await page.getByRole("button", { name: "Todas", exact: true }).click();
+      const readNotice = page.locator('.notification-card[data-read="true"]').filter({ hasText: "Vistoria a iniciar · Imóvel QA" }).first();
       await expect(readNotice).toContainText("Lida");
-      await page.getByLabel("Mostrar todas").uncheck();
+      await page.getByRole("button", { name: /Não lidas/ }).click();
       await expect(matchingNotices).toHaveCount(unreadNoticeCount - 1);
     }
-    await page.getByRole("button", { name: "Estado das entregas" }).click();
+    await page.getByRole("button", { name: "Acompanhar envios" }).click();
     const dialog = page.getByRole("dialog", { name: "Estado das entregas" });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("Solicitada, em processamento, aceita, enviada e entregue");

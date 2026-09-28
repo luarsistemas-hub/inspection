@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearActivationProof, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
+import { clearActivationProof, isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
+
+describe("C07 activation constraints", () => {
+  it("UT-047 keeps eleven-character passwords outside the frontend minimum", () => {
+    expect(isInitialPasswordValid("abcdefghijk", "abcdefghijk")).toBe(false);
+    expect(isInitialPasswordValid("abcdefghijkl", "abcdefghijkl")).toBe(true);
+    expect(isInitialPasswordValid("abcdefghijkl", "abcdefghijkL")).toBe(false);
+  });
+});
 
 describe("Admin activation transport", () => {
   afterEach(() => { clearActivationProof(); vi.unstubAllGlobals(); });

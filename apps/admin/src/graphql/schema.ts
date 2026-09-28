@@ -1285,6 +1285,12 @@ export type OnboardingOriginMode = {
   templateKey: Scalars['String']['output'];
 };
 
+export type OnboardingOwner = {
+  __typename?: 'OnboardingOwner';
+  email: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+};
+
 export type OnboardingPayload = {
   __typename?: 'OnboardingPayload';
   activation: Maybe<OnboardingActivation>;
@@ -1314,6 +1320,7 @@ export type OnboardingSession = {
   existingAgency: Maybe<OnboardingAgency>;
   expiresAt: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  owner: OnboardingOwner;
   state: Scalars['String']['output'];
   version: Scalars['Int']['output'];
 };
@@ -2189,6 +2196,7 @@ export type SaveCaptureMetadataInput = {
   deviceContext: InputMaybe<Scalars['JSON']['input']>;
   gps: InputMaybe<CaptureGpsInput>;
   mediaId: Scalars['ID']['input'];
+  replacesMediaId: InputMaybe<Scalars['ID']['input']>;
   requirementKey: Scalars['String']['input'];
 };
 

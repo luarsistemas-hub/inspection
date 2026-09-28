@@ -26,7 +26,8 @@
     "lint": "eslint src tests",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run --cache /tmp/inspection-design-system-npm-cache",
+    "test:e2e": "npm run build && playwright test"
   },
   "publishConfig": {
     "access": "restricted"
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.36.0",
+    "@playwright/test": "1.55.1",
     "@types/node": "22.15.33",
     "@types/react": "19.1.10",
     "@types/react-dom": "19.1.7",
@@ -48,5 +50,8 @@
     "typescript-eslint": "8.44.1",
     "vite": "7.1.7",
     "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "react-aria-components": "1.21.1"
   }
 }

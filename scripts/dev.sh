@@ -77,10 +77,7 @@ load_env() {
 }
 
 prepare_design_system() {
-  local package_dir="$workspace/packages/inspection-design-system"
-  if [[ ! -f "$package_dir/dist/index.js" || ! -f "$package_dir/dist/styles.css" ]]; then
-    (cd "$package_dir" && npm ci && npm run build)
-  fi
+  node "$workspace/scripts/prepare-design-system.mjs"
 }
 
 prepare_frontend() {

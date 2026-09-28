@@ -13,3 +13,7 @@ Documentos baseados no código atual do Inspection. Stubs WireMock, Mailpit e Go
 - [Operação](operations.md): checks e diagnóstico.
 - [Observabilidade de LLM](llm-observability.md): eventos, métricas Prometheus, scrape e consultas.
 - [Limitações](limitations.md): escopo dos stubs, artefatos residuais e lacunas conhecidas.
+- [Uso do design system](design-system/usage.md): padrões comuns, limites de domínio e exceções de composição.
+- [Inventário de migração](design-system/migration-inventory.json): rotas, estados, responsáveis e evidências da migração atual.
+- [Evidência de acessibilidade](design-system/accessibility-evidence.md): registro executável de critérios WCAG e avaliações manuais.
+- [Contrato machine-readable de acessibilidade](design-system/accessibility-evidence.json): 55 critérios e seus resultados atuais.

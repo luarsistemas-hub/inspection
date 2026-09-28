@@ -15,9 +15,11 @@ describe("deliveryPresentation", () => {
     });
   });
 
-  it("flags partial delivery, exhausted retries, and unknown outcomes", () => {
-    expect(deliveryPresentation("SENT", [{ status: "DELIVERED", attempts: 1 }, { status: "FAILED", attempts: 4 }]).partial).toBe(true);
-    expect(deliveryPresentation("FAILED", [{ status: "FAILED", attempts: 4 }]).retryExhausted).toBe(true);
+  it("UT-056 flags partial and exhausted delivery for review without claiming success", () => {
+    const partial = deliveryPresentation("SENT", [{ status: "DELIVERED", attempts: 1 }, { status: "FAILED", attempts: 4 }]);
+    const exhausted = deliveryPresentation("FAILED", [{ status: "FAILED", attempts: 4 }]);
+    expect(partial).toMatchObject({ label: "Enviada", needsReview: true, partial: true });
+    expect(exhausted).toMatchObject({ label: "Falhou", needsReview: true, retryExhausted: true });
     expect(deliveryPresentation("UNKNOWN").needsReview).toBe(true);
   });
 });

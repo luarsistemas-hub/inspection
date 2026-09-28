@@ -4,8 +4,7 @@ const referenceSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height
 const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
 const replacementPhoto = Buffer.concat([photo, Buffer.from([1])]);
 
-test("guided comparison shows each real reference, previews photos, and advances after upload", async ({ page, browserName }) => {
-  test.skip(browserName === "webkit", "The existing WebKit mobile harness does not dispatch the second GraphQL interaction after OTP; Android and desktop Chrome cover the interactive comparison flow.");
+test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, and advances after upload", async ({ page }) => {
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: -27.4487, longitude: -48.428, accuracy: 35 });
   let createdUploads = 0;

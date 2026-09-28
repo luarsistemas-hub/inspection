@@ -95,15 +95,19 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 	projectID, stageID, draftID, invitationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	deadline := now.Add(24 * time.Hour)
 	deliveryIntents, _ := json.Marshal([]invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "qa.inspection@example.test"}})
+	llmDelivered, llmHTTPStatus := true, 200
+	llmInputTokens, llmOutputTokens, llmRequestBytes, llmDuration := int64(840), int64(126), int64(4096), int64(1250)
+	llmCost := 0.015
 
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		stableRows := []any{
+			&database.PublicationPolicy{ID: ids.publicationPolicy, TenantID: tenant.ID, Mode: "MANUAL", Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.Participant{ID: ids.participant, TenantID: tenant.ID, BusinessUnitID: unit.ID, Name: "Participante QA", SegmentRole: "OWNER", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-participant", CreatedAt: now, UpdatedAt: now},
 			&database.ParticipantContact{ID: ids.contact, TenantID: tenant.ID, ParticipantID: ids.participant, Channel: "EMAIL", Value: "qa.inspection@example.test", Normalized: "qa.inspection@example.test", Active: true, CreatedAt: now, UpdatedAt: now},
 			&database.ContactVerification{ID: ids.verification, TenantID: tenant.ID, ContactID: ids.contact, IdempotencyKey: "qa-seed-verification", Status: "VERIFIED", VerifiedAt: &now, CreatedAt: now},
 			&database.ChannelSelection{ID: ids.channelSelection, TenantID: tenant.ID, ParticipantID: ids.participant, ContactID: ids.contact, CreatedAt: now},
 			&database.SegmentDefinition{ID: ids.segment, TenantID: tenant.ID, Key: "qa-property", Name: "Imóvel QA", ActiveVersionID: &ids.segmentVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.SegmentDefinitionVersion{ID: ids.segmentVersion, TenantID: tenant.ID, DefinitionID: ids.segment, VersionNumber: 1, SchemaVersion: 1, SchemaJSON: segmentJSON, UISchemaJSON: json.RawMessage(`{}`), CanonicalDigest: digest(segmentJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-segment", PublishedAt: now, CreatedBy: membership.IdentityID},
+			&database.SegmentDefinitionVersion{ID: ids.segmentVersion, TenantID: tenant.ID, DefinitionID: ids.segment, VersionNumber: 1, SchemaVersion: 1, SchemaJSON: segmentJSON, UISchemaJSON: json.RawMessage(`{}`), CanonicalDigest: digest(segmentJSON), Status: "PUBLISHED", IdempotencyKey: "qa-seed-segment", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Template{ID: ids.template, TenantID: tenant.ID, Key: "qa-basic-inspection", Name: "Vistoria básica QA", SegmentVersionID: ids.segmentVersion, ActiveVersionID: &ids.templateVersion, Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.TemplateVersion{ID: ids.templateVersion, TenantID: tenant.ID, TemplateID: ids.template, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "qa-seed-template", PublishedAt: now, CreatedBy: membership.IdentityID},
 			&database.Asset{ID: ids.asset, TenantID: tenant.ID, BusinessUnitID: unit.ID, SegmentVersionID: ids.segmentVersion, TemplateID: &ids.template, Name: "Imóvel QA", ExternalKey: "QA-001", Address: "Rua de Teste, 100", GeofenceMeters: 150, PolicyOverrides: json.RawMessage(`{"allowGallery":true}`), Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-asset", CreatedAt: now, UpdatedAt: now},
@@ -114,6 +118,13 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(row).Error; err != nil {
 				return err
 			}
+		}
+		// Keep older local seed rows compatible with segment resolution, which
+		// accepts published versions only.
+		if err := tx.Model(&database.SegmentDefinitionVersion{}).
+			Where("tenant_id = ? AND id = ?", tenant.ID, ids.segmentVersion).
+			Update("status", "PUBLISHED").Error; err != nil {
+			return err
 		}
 		var documentKind string
 		if err := tx.Raw("SELECT jsonb_typeof(definition_json) FROM templates.template_versions WHERE tenant_id = ? AND id = ?", tenant.ID, ids.templateVersion).Scan(&documentKind).Error; err != nil {
@@ -156,12 +167,13 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			&database.Invitation{ID: invitationID, TenantID: tenant.ID, ResponsibilityID: responsibilityID, TokenHash: tokenHash[:], DeliveryIntents: deliveryIntents, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now},
 			&database.DashboardInspection{ID: identity.NewID(), TenantID: tenant.ID, InspectionID: inspectionID, ProjectID: &projectID, AssetID: ids.asset, Classification: "ATTENTION", Status: "INVITED", Sequence: now.UnixNano(), UpdatedAt: now},
 			&database.AuditEvent{ID: identity.NewID(), TenantID: tenant.ID, ActorID: membership.IdentityID, Action: "QA_SCENARIO_SEEDED", TargetType: "INSPECTION", TargetID: inspectionID.String(), Outcome: "SUCCESS", Reason: "Local browser QA", CorrelationID: "qa-seed-" + scenarioID.String(), OccurredAt: now},
+			&database.LLMCallRecord{CallID: identity.NewDeterministicID("inspection/qa-llm-call", scenarioID.String()), TenantID: tenant.ID, InspectionID: inspectionID, JobID: identity.NewID(), EventID: identity.NewID(), ExecutionID: identity.NewID(), CorrelationID: "qa-seed-llm-" + scenarioID.String(), Attempt: 1, ReplayGeneration: 0, Mode: "live", ComparisonMode: "CURRENT_ONLY", ModelAlias: "qa-inspection-vision", PromptDigest: digest([]byte("Local QA usage record")), Provider: "qa", Model: "qa-vision-model", GatewayRequestID: "qa-gateway-" + scenarioID.String(), State: "FINISHED", TechnicalOutcome: "success", TransportDelivered: &llmDelivered, HTTPStatus: &llmHTTPStatus, InputTokens: &llmInputTokens, OutputTokens: &llmOutputTokens, RequestBodyBytes: &llmRequestBytes, ReportedCost: &llmCost, DurationMS: &llmDuration, StartedAt: now, FinishedAt: &now, UpdatedAt: now},
 			&database.RecipientNotification{ID: identity.NewDeterministicID("inspection/qa-notification", tenant.ID.String()+":"+membership.ID.String()), TenantID: tenant.ID, RecipientMembershipID: membership.ID, EventID: identity.NewDeterministicID("inspection/qa-notification-event", tenant.ID.String()+":"+membership.ID.String()), Kind: "INSPECTION_CREATED", Title: "Vistoria a iniciar · Imóvel QA", Body: "Rua de Teste, 100 · Responsável pela captura convidado. Prazo até " + deadline.Format("02/01/2006 15:04") + ".", ResourceKind: "INSPECTION", ResourceID: &inspectionID, CreatedAt: now},
 		}
 		for _, row := range rows {
 			var err error
 			if _, isNotification := row.(*database.RecipientNotification); isNotification {
-				err = tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"event_id", "title", "body", "resource_id", "created_at", "read_at"})}).Create(row).Error
+				err = tx.Clauses(clause.OnConflict{OnConstraint: "recipient_notifications_pkey", DoUpdates: clause.AssignmentColumns([]string{"event_id", "title", "body", "resource_id", "created_at", "read_at"})}).Create(row).Error
 			} else {
 				err = tx.Create(row).Error
 			}
@@ -198,6 +210,7 @@ func qaTemplateDefinition(segmentVersionID identity.ID) (json.RawMessage, error)
 
 type qaIDs struct {
 	participant, contact, verification, channelSelection identity.ID
+	publicationPolicy                                    identity.ID
 	segment, segmentVersion, template, templateVersion   identity.ID
 	asset, assetAttributes                               identity.ID
 	assetAssignment                                      identity.ID
@@ -209,7 +222,8 @@ func stableIDs(tenantID identity.ID) qaIDs {
 	}
 	return qaIDs{
 		participant: id("participant"), contact: id("contact"), verification: id("verification"), channelSelection: id("channel-selection"),
-		segment: id("segment"), segmentVersion: id("segment-version"), template: id("template"), templateVersion: id("template-version"),
+		publicationPolicy: id("publication-policy"),
+		segment:           id("segment"), segmentVersion: id("segment-version"), template: id("template"), templateVersion: id("template-version"),
 		asset: id("asset"), assetAttributes: id("asset-attributes"), assetAssignment: id("asset-assignment"),
 	}
 }

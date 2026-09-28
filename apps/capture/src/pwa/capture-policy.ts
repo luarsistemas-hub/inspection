@@ -1,5 +1,5 @@
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
-import { type CaptureDraft, mediaCountForRequirement } from "@/pwa/drafts";
+import { type CaptureDraft, isReadyCaptureDraft } from "@/pwa/drafts";
 
 type CaptureRequirement = ExternalCaptureBootstrapQuery["externalCapture"]["requirements"][number];
 type CaptureAnswer = ExternalCaptureBootstrapQuery["externalCapture"]["answers"][number];
@@ -11,9 +11,25 @@ export const isTerminalBootstrapStatus = (status: string): boolean => terminalBo
 export const isBlockedMediaStatus = (status?: string): boolean => status !== undefined && blockedMediaStatuses.has(status);
 export const isFalsePositiveActionable = (status?: string): boolean => status === "SCREENED";
 
+export function createDraftResumeGuard() {
+  const activeDrafts = new Set<string>();
+  return {
+    start(draftId: string): boolean {
+      if (activeDrafts.has(draftId)) return false;
+      activeDrafts.add(draftId);
+      return true;
+    },
+    finish(draftId: string): void {
+      activeDrafts.delete(draftId);
+    }
+  };
+}
+
 export const requirementsSatisfied = (requirements: CaptureRequirement[], answers: ExternalCaptureBootstrapQuery["externalCapture"]["answers"], drafts: CaptureDraft[]): boolean => requirements.filter((requirement) => requirement.required).every((requirement) => {
   const answer = answers.find((item) => item.requirementKey === requirement.key);
-  return Boolean(answer?.impossibilityReason || mediaCountForRequirement(requirement.key, answers, drafts) >= requirement.minimumMedia);
+  const readyAnswerCount = answer?.mediaIds.filter((mediaId) => !drafts.some((draft) => draft.mediaId === mediaId && !isReadyCaptureDraft(draft))).length ?? 0;
+  const readyDraftCount = new Set(drafts.filter((draft) => draft.metadata.requirementKey === requirement.key && isReadyCaptureDraft(draft)).map((draft) => draft.mediaId)).size;
+  return Boolean(answer?.impossibilityReason || readyAnswerCount + readyDraftCount >= requirement.minimumMedia);
 });
 
 export const isGalleryAllowed = (capturePolicy: Record<string, unknown>, requirement?: CaptureRequirement): boolean => capturePolicy.allowGallery === true && requirement?.captureSourcePolicy !== "CAMERA_ONLY";

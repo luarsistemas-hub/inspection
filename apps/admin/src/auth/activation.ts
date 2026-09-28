@@ -71,3 +71,8 @@ export async function setInitialPassword(password: string): Promise<UserError[]>
 }
 
 export function clearActivationProof(): void { csrfToken = undefined; }
+
+/** Checks the existing initial-password length and confirmation constraints. */
+export function isInitialPasswordValid(password: string, confirmation: string): boolean {
+  return password.length >= 12 && password === confirmation;
+}

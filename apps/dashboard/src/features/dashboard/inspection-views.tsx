@@ -6,7 +6,7 @@ import { presentDashboardStatus, presentInspectionSource } from "./presentation"
 
 export type InspectionView = "lista" | "quadro" | "agenda";
 export type InspectionRecord = InspectionsQuery["inspections"]["nodes"][number];
-const defaultInspectionView: InspectionView = "quadro";
+const defaultInspectionView: InspectionView = "lista";
 export type InspectionActionHandlers = {
   onCancel: (inspection: InspectionRecord) => void;
   onInvalidate: (inspection: InspectionRecord) => void;

@@ -134,6 +134,20 @@ somente quando o comportamento depender de PostgreSQL ou outro adapter real.
   sobre o código atual.
 - Não altere `.compozy/` salvo quando a tarefa for especificamente sobre o
   workflow do Compozy.
-- `RTK.md` é uma referência opcional: carregue-o somente quando o usuário pedir
-  explicitamente para usar RTK.
 - Preserve mudanças existentes do usuário e mantenha o escopo da tarefa.
+
+## Investigação de interfaces com agent-browser
+
+- Para investigar visualmente ou reproduzir um fluxo de UI a pedido do usuário,
+  use o MCP `agent-browser` quando disponível. As aplicações locais usam Admin
+  em `http://localhost:3000`, Dashboard em `http://localhost:3002`, Capture em
+  `http://localhost:3003` e Onboarding em `http://localhost:3004`.
+- Siga o fluxo local documentado no `README.md`: `./scripts/local.sh up` inicia
+  a stack e `./scripts/local.sh seed` prepara o cenário de QA. O seed imprime a
+  URL descartável do Capture; códigos OTP locais chegam ao Mailpit em
+  `http://localhost:8026`.
+- Use somente contas e dados de QA fornecidos/configurados para o ambiente
+  local. Não copie credenciais, cookies ou tokens para relatórios; não use
+  ambientes de produção.
+- `agent-browser` é para investigação interativa. Mantenha os testes de
+  regressão no Playwright existente (`npm run test:e2e` em cada app).

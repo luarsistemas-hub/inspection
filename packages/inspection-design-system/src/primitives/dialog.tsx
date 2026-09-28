@@ -1,61 +1,31 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+"use client";
 
-export type DialogProps = { children: ReactNode; isOpen: boolean; onClose: () => void; title: string; size?: "default" | "wide" };
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { Dialog as AriaDialog, Modal, ModalOverlay } from "react-aria-components";
+
+export type DialogProps = { children: ReactNode; isOpen: boolean; onClose: () => void; title: string; size?: "default" | "wide"; isDismissable?: boolean; restoreFocusRef?: RefObject<HTMLElement | null> };
 
 /** Provides a modal dialog with Escape handling and initial focus for keyboard users. */
-export function Dialog({ children, isOpen, onClose, title, size = "default" }: DialogProps) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
+export function Dialog({ children, isOpen, onClose, title, size = "default", isDismissable = true, restoreFocusRef }: DialogProps) {
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (!isOpen) return;
-    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    dialogRef.current?.focus();
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onCloseRef.current();
-        return;
+    if (isOpen) {
+      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      return;
+    }
+    const target = restoreFocusRef?.current ?? previousFocusRef.current;
+    if (target && document.contains(target)) target.focus();
+    else {
+      const fallback = document.querySelector<HTMLElement>("main h1, h1");
+      if (fallback) {
+        fallback.tabIndex = -1;
+        window.setTimeout(() => { if (document.contains(fallback)) fallback.focus(); }, 0);
       }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"));
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable.at(-1)!;
-      const focusIsInsideDialog = dialogRef.current.contains(document.activeElement);
-      const focusIsOnDialog = document.activeElement === dialogRef.current;
-      if (event.shiftKey && (!focusIsInsideDialog || focusIsOnDialog || document.activeElement === first)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (!focusIsInsideDialog || focusIsOnDialog || document.activeElement === last)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", keydown);
-    return () => {
-      window.removeEventListener("keydown", keydown);
-      document.body.style.overflow = previousOverflow;
-      if (openerRef.current && document.contains(openerRef.current)) {
-        openerRef.current.focus();
-      }
-      openerRef.current = null;
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-  return <div className="inspection-backdrop" onMouseDown={onClose}>
-    <div aria-labelledby={titleId} aria-modal="true" className={`inspection-dialog${size === "wide" ? " inspection-dialog--wide" : ""}`} onMouseDown={(event) => event.stopPropagation()} ref={dialogRef} role="dialog" tabIndex={-1}>
-      <h2 id={titleId}>{title}</h2>
-      {children}
-    </div>
-  </div>;
+    }
+  }, [isOpen, restoreFocusRef]);
+  return <ModalOverlay className="inspection-backdrop" isDismissable={isDismissable} isKeyboardDismissDisabled={!isDismissable} isOpen={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Modal className={`inspection-dialog${size === "wide" ? " inspection-dialog--wide" : ""}`}>
+      <AriaDialog aria-label={title}><h2>{title}</h2>{children}</AriaDialog>
+    </Modal>
+  </ModalOverlay>;
 }

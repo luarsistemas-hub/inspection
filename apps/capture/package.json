@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev --port 3003",
-    "prebuild": "npm run codegen",
+    "prebuild": "node ../../scripts/prepare-design-system.mjs && npm run codegen",
     "build": "next build",
     "start": "next start -p 3003",
     "lint": "eslint .",

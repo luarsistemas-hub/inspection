@@ -1,15 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.PLAYWRIGHT_PORT ?? "3004";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
-  use: { baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3004", trace: "retain-on-failure", screenshot: "only-on-failure" },
-  webServer: { command: "npm run build && npm run start", url: "http://localhost:3004", reuseExistingServer: !process.env.CI },
+  use: { baseURL: process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`, trace: "retain-on-failure", screenshot: "only-on-failure" },
+  webServer: { command: `npm run build && npm run start -- -p ${port}`, url: `http://localhost:${port}`, timeout: 180_000, reuseExistingServer: !process.env.CI },
   projects: [
-    { name: "mobile-320", use: { ...devices["iPhone SE"] } },
-    { name: "mobile-360", use: { ...devices["Pixel 7"] } },
-    { name: "tablet-768", use: { ...devices["iPad (gen 7)"] } },
+    { name: "viewport-320", use: { ...devices["iPhone SE"], viewport: { width: 320, height: 844 } } },
+    { name: "viewport-360", use: { ...devices["Pixel 7"], viewport: { width: 360, height: 800 } } },
+    { name: "viewport-768", use: { ...devices["iPad (gen 7)"], viewport: { width: 768, height: 900 } } },
     { name: "desktop-1440", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
   ],
 });

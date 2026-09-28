@@ -1,125 +1,104 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+"use client";
+
+import { Children, cloneElement, forwardRef, isValidElement, useId, type FieldsetHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { ComboBox as AriaComboBox, Input as AriaInput, ListBox, ListBoxItem, Popover } from "react-aria-components";
 
 export type FieldProps = { label: ReactNode; children: ReactNode; hint?: ReactNode; error?: ReactNode; required?: boolean };
+export type ControlAccessibilityProps = Pick<InputHTMLAttributes<HTMLInputElement>, "id" | "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid">;
 export type InputProps = InputHTMLAttributes<HTMLInputElement>;
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement>;
 export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
+export type CheckboxProps = InputHTMLAttributes<HTMLInputElement> & { label: ReactNode };
+export type RadioProps = InputHTMLAttributes<HTMLInputElement> & { label: ReactNode };
+export type ChoiceGroupProps = FieldsetHTMLAttributes<HTMLFieldSetElement> & { legend: ReactNode; children: ReactNode };
+export type ErrorSummaryProps = { title?: string; errors: Array<{ fieldId?: string; message: string }> };
 export type ComboboxOption = { value: string; label: string; description?: string };
-export type ComboboxProps = {
+export type ComboboxProps = ControlAccessibilityProps & {
   value: string;
   options: ComboboxOption[];
   onChange: (value: string) => void;
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
-  "aria-label"?: string;
+  inputRef?: Ref<HTMLInputElement>;
 };
 
 /** Associates an input with its label, help text, and error state. */
 export function Field({ label, children, hint, error, required = false }: FieldProps) {
-  const id = useId();
-  const descriptionId = hint || error ? `${id}-description` : undefined;
+  const generatedId = useId();
+  const controlId = isValidElement(children) && typeof (children.props as Record<string, unknown>).id === "string" ? (children.props as Record<string, string>).id : generatedId;
+  const labelId = `${generatedId}-label`;
+  const hintId = hint ? `${generatedId}-hint` : undefined;
+  const errorId = error ? `${generatedId}-error` : undefined;
   const control = Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
 
     const childProps = child.props as Record<string, unknown>;
     const describedBy = [
       typeof childProps["aria-describedby"] === "string" ? childProps["aria-describedby"] : null,
-      descriptionId,
+      hintId,
+      errorId,
     ].filter(Boolean).join(" ") || undefined;
+    const labelledBy = typeof childProps["aria-labelledby"] === "string" ? childProps["aria-labelledby"] : labelId;
 
     return cloneElement(child as ReactElement<Record<string, unknown>>, {
+      id: controlId,
       "aria-describedby": describedBy,
+      ...(!childProps["aria-label"] && !childProps["aria-labelledby"] ? { "aria-labelledby": labelledBy } : {}),
       ...(error ? { "aria-invalid": true } : {}),
       ...(required ? { "aria-required": true, required: true } : {}),
     });
   });
 
-  return <label className="inspection-field">
-    <span>{label}{required ? <span aria-hidden="true"> *</span> : null}</span>
+  return <div className="inspection-field">
+    <label id={labelId} htmlFor={controlId}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label>
     <span>{control}</span>
-    {hint || error ? <span id={descriptionId}>{hint ? <span className="inspection-hint">{hint}</span> : null}{error ? <span className="inspection-error" role="alert">{error}</span> : null}</span> : null}
-  </label>;
-}
-
-/** Renders a text input with shared accessible visual treatment. */
-export function Input({ className = "", ...props }: InputProps) {
-  return <input className={`inspection-input ${className}`.trim()} {...props} />;
-}
-
-/** Renders a select control with shared accessible visual treatment. */
-export function Select({ className = "", ...props }: SelectProps) {
-  return <select className={`inspection-select ${className}`.trim()} {...props} />;
-}
-
-/** Renders an accessible searchable listbox for selecting a known value. */
-export function Combobox({ value, options, onChange, placeholder = "Pesquisar…", required = false, disabled = false, "aria-label": ariaLabel }: ComboboxProps) {
-  const inputID = useId();
-  const listID = `${inputID}-options`;
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const selected = options.find((option) => option.value === value);
-  const filtered = query.trim() ? options.filter((option) => `${option.label} ${option.description ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) : options;
-
-  useEffect(() => {
-    setQuery(selected?.label ?? "");
-    setActiveIndex(-1);
-  }, [selected?.label, value]);
-
-  const choose = (option: ComboboxOption) => {
-    onChange(option.value);
-    setQuery(option.label);
-    setOpen(false);
-    setActiveIndex(-1);
-    inputRef.current?.setCustomValidity("");
-  };
-  const resetQuery = () => { setQuery(selected?.label ?? ""); inputRef.current?.setCustomValidity(""); };
-
-  return <div className="inspection-combobox">
-    <input
-      ref={inputRef}
-      id={inputID}
-      className="inspection-input"
-      role="combobox"
-      aria-label={ariaLabel}
-      aria-autocomplete="list"
-      aria-controls={listID}
-      aria-expanded={open}
-      aria-activedescendant={activeIndex >= 0 ? `${listID}-${activeIndex}` : undefined}
-      autoComplete="off"
-      disabled={disabled}
-      required={required}
-      placeholder={placeholder}
-      value={query}
-      onFocus={() => setOpen(true)}
-      onChange={(event) => { setQuery(event.target.value); setOpen(true); setActiveIndex(0); if (value) onChange(""); event.currentTarget.setCustomValidity("Selecione uma opção da lista."); }}
-      onBlur={() => window.setTimeout(() => { resetQuery(); setOpen(false); setActiveIndex(-1); }, 120)}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActiveIndex((index) => Math.min(index + 1, filtered.length - 1)); }
-        if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); }
-        if (event.key === "Enter" && open && filtered[activeIndex]) { event.preventDefault(); choose(filtered[activeIndex]); }
-        if (event.key === "Escape") { event.preventDefault(); if (open) event.stopPropagation(); resetQuery(); setOpen(false); setActiveIndex(-1); }
-      }}
-    />
-    {open && <ul id={listID} className="inspection-combobox-options" role="listbox" aria-label={ariaLabel ?? "Opções"}>
-      {filtered.length ? filtered.map((option, index) => <li
-        id={`${listID}-${index}`}
-        key={option.value}
-        role="option"
-        aria-selected={option.value === value}
-        data-active={index === activeIndex ? "true" : undefined}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => choose(option)}
-      >
-        <strong>{option.label}</strong>{option.description ? <span>{option.description}</span> : null}
-      </li>) : <li className="inspection-combobox-empty" role="status">Nenhuma opção encontrada.</li>}
-    </ul>}
+    {hint ? <span className="inspection-hint" id={hintId}>{hint}</span> : null}
+    {error ? <span className="inspection-error" id={errorId}>{error}</span> : null}
   </div>;
 }
 
+/** Renders a text input with shared accessible visual treatment. */
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className = "", ...props }, ref) {
+  return <input className={`inspection-input ${className}`.trim()} ref={ref} {...props} />;
+});
+
+/** Renders a select control with shared accessible visual treatment. */
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select({ className = "", ...props }, ref) {
+  return <select className={`inspection-select ${className}`.trim()} ref={ref} {...props} />;
+});
+
+/** Renders an accessible searchable listbox for selecting a known value. */
+export function Combobox({ value, options, onChange, placeholder = "Pesquisar…", required = false, disabled = false, inputRef, ...accessibility }: ComboboxProps) {
+  const selectedKey = options.some((option) => option.value === value) ? value : null;
+  const accessibleLabel = accessibility["aria-label"];
+  return <AriaComboBox allowsEmptyCollection aria-label={accessibleLabel} aria-labelledby={accessibility["aria-labelledby"]} className="inspection-combobox" isDisabled={disabled} isRequired={required} menuTrigger="focus" onSelectionChange={(key) => onChange(typeof key === "string" ? key : "")} selectedKey={selectedKey}>
+    <AriaInput {...accessibility} className="inspection-input" placeholder={placeholder} ref={inputRef} />
+    <Popover className="inspection-combobox-popover"><ListBox aria-label={accessibleLabel ?? "Opções"} className="inspection-combobox-options" renderEmptyState={() => <span className="inspection-combobox-empty">Nenhuma opção encontrada.</span>}>{options.map((option) => <ListBoxItem id={option.value} key={option.value} textValue={option.label}><strong>{option.label}</strong>{option.description ? <span>{option.description}</span> : null}</ListBoxItem>)}</ListBox></Popover>
+  </AriaComboBox>;
+}
+
 /** Renders a multiline field with shared accessible visual treatment. */
-export function Textarea({ className = "", ...props }: TextareaProps) {
-  return <textarea className={`inspection-textarea ${className}`.trim()} {...props} />;
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ className = "", ...props }, ref) {
+  return <textarea className={`inspection-textarea ${className}`.trim()} ref={ref} {...props} />;
+});
+
+/** Renders a native checkbox with a visible label. */
+export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox({ className = "", label, ...props }, ref) {
+  return <label className={`inspection-choice ${className}`.trim()}><input ref={ref} type="checkbox" {...props} /><span>{label}</span></label>;
+});
+
+/** Renders a native radio with a visible label. */
+export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio({ className = "", label, ...props }, ref) {
+  return <label className={`inspection-choice ${className}`.trim()}><input ref={ref} type="radio" {...props} /><span>{label}</span></label>;
+});
+
+/** Groups related native choices using their native fieldset semantics. */
+export function ChoiceGroup({ legend, children, className = "", ...props }: ChoiceGroupProps) {
+  return <fieldset className={`inspection-choice-group ${className}`.trim()} {...props}><legend>{legend}</legend>{children}</fieldset>;
+}
+
+/** Links form errors to existing controls without manufacturing focus targets. */
+export function ErrorSummary({ title = "Revise os campos indicados", errors }: ErrorSummaryProps) {
+  return <section className="inspection-error-summary" aria-labelledby="inspection-error-summary-title"><h2 id="inspection-error-summary-title">{title}</h2><ul>{errors.map((error, index) => <li key={`${error.fieldId ?? "form"}-${index}`}>{error.fieldId ? <a href={`#${error.fieldId}`} onClick={(event) => { const target = document.getElementById(error.fieldId!); if (target instanceof HTMLElement) { event.preventDefault(); target.focus(); } }}>{error.message}</a> : error.message}</li>)}</ul></section>;
 }

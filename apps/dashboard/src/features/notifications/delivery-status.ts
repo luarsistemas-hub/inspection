@@ -34,5 +34,6 @@ export function isPartialDelivery(channels: DeliveryChannel[]): boolean {
 export function deliveryPresentation(status: string, channels: DeliveryChannel[] = []): DeliveryPresentation {
   const normalized = normalizeState(status);
   const retryExhausted = normalized === "FAILED" && channels.some((channel) => normalizeState(channel.status) === "FAILED" && channel.attempts >= 4);
-  return { ...presentations[normalized], partial: isPartialDelivery(channels), retryExhausted };
+  const partial = isPartialDelivery(channels);
+  return { ...presentations[normalized], needsReview: presentations[normalized].needsReview || partial || retryExhausted, partial, retryExhausted };
 }

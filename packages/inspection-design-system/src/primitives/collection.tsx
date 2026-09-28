@@ -26,3 +26,11 @@ export type PaginationProps = { page: number; hasNextPage: boolean; onPrevious: 
 export function Pagination({ page, hasNextPage, onPrevious, onNext }: PaginationProps) {
   return <nav aria-label="Paginação" className="inspection-pagination"><button className="inspection-button inspection-button--secondary" type="button" disabled={page <= 1} onClick={onPrevious}>Anterior</button><span role="status" aria-live="polite">Página {page}</span><button className="inspection-button inspection-button--secondary" type="button" disabled={!hasNextPage} onClick={onNext}>Próxima</button></nav>;
 }
+
+export type Step = { id: string; label: string; state: "pending" | "current" | "complete" | "attention"; isSelectable?: boolean };
+export type StepsProps = { items: Step[]; onSelect?: (id: string) => void; label?: string };
+
+/** Shows caller-owned progress without advancing or authorizing a flow. */
+export function Steps({ items, onSelect, label = "Etapas" }: StepsProps) {
+  return <ol aria-label={label} className="inspection-steps">{items.map((item) => <li aria-current={item.state === "current" ? "step" : undefined} className={`inspection-steps__item inspection-steps__item--${item.state}`} key={item.id}>{item.isSelectable && onSelect ? <button type="button" onClick={() => onSelect(item.id)}>{item.label}</button> : <span>{item.label}</span>}</li>)}</ol>;
+}

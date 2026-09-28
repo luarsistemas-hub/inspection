@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useSearchParams } from "next/navigation";
 import { Combobox, type ComboboxOption } from "@inspection/design-system";
 import { FormDialog } from "./form-dialog";
+import { ConfirmationDialog } from "./confirmation-dialog";
 import {
   CancelScheduleDocument,
   CreateScheduleDocument,
@@ -40,6 +41,7 @@ export function SchedulesJourney({
   const [editing, setEditing] = useState(false);
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
+  const [cancelItem, setCancelItem] = useState<Schedule>();
   const busyRef = useRef(false);
   const openedScheduleRef = useRef<string | undefined>(undefined);
   const scheduleId = useSearchParams().get("scheduleId");
@@ -113,8 +115,7 @@ export function SchedulesJourney({
   };
 
   const cancel = async (item: Schedule) => {
-    if (!window.confirm("Cancelar esta agenda? As vistorias históricas serão preservadas.")) return;
-    await mutate(CancelScheduleDocument, {
+    return mutate(CancelScheduleDocument, {
       scheduleId: item.id,
       expectedVersion: item.version,
       clientMutationId: mutationId(),
@@ -142,7 +143,7 @@ export function SchedulesJourney({
           </div>
           {canMutate && item.status === "ACTIVE" && <div className="actions">
             <button className="secondary" onClick={() => { setEditError(""); setEditItem(item); }}>Editar agenda</button>
-            <button className="secondary" onClick={() => void cancel(item)}>Cancelar agenda</button>
+            <button className="secondary" onClick={() => setCancelItem(item)}>Cancelar agenda</button>
           </div>}
         </li>)}
       </ul>}
@@ -156,6 +157,7 @@ export function SchedulesJourney({
       <FormDialog isOpen={Boolean(editItem)} onClose={() => setEditItem(undefined)} title="Editar agenda" busy={editing} error={editError}>
         {editItem && <EditScheduleForm key={`${editItem.id}:${editItem.version}`} item={editItem} onSubmit={(input) => void update(editItem, input)} busy={editing} />}
       </FormDialog>
+      <ConfirmationDialog isOpen={Boolean(cancelItem)} onClose={() => setCancelItem(undefined)} title="Cancelar agenda" target="Agenda selecionada" scope="Contexto operacional atual" consequence="A agenda será cancelada; as vistorias históricas serão preservadas." confirmLabel="Cancelar agenda" onConfirm={async () => { if (!cancelItem) return; const failure = await cancel(cancelItem); if (failure) throw new Error(failure); }} />
     </>}
   </div>;
 }

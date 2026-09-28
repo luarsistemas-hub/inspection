@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("E2E-053 Capture owns only its invitation route", async ({ page }) => {
+test("Capture reaches the OTP boundary on its invitation route", async ({ page }) => {
   await page.route("**/graphql", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: { requestInvitationOtp: { userErrors: [] } } }) }));
   const otpResponse = page.waitForResponse((response) => response.url().includes("graphql") && (response.request().postData() ?? "").includes("requestInvitationOtp"));
   await page.goto("/capture/invalid-link");
@@ -8,11 +8,11 @@ test("E2E-053 Capture owns only its invitation route", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Confirme seu acesso" })).toBeVisible();
 });
 
-test("E2E-054 Capture displays media progress while metadata waits for screening", async ({ page, browserName }) => {
-  test.skip(browserName === "webkit", "The existing WebKit mobile harness does not dispatch the second GraphQL interaction after OTP; Android covers this interactive flow and WebKit retains the route smoke test.");
+test("IT-153; IT-155; IT-194; E2E-031; E2E-054 persisted evidence resumes once and waits for server screening", async ({ page }) => {
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: -27.4487, longitude: -48.428, accuracy: 35 });
   let metadataAttempts = 0;
+  let uploadAttempts = 0;
   const bootstrap = {
     externalCapture: {
       responsibilityId: "responsibility-1",
@@ -28,7 +28,11 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
     }
   };
 
-  await page.route("**/upload-part", async (route) => route.fulfill({ status: 200, headers: { etag: "etag-1" } }));
+  await page.route("**/upload-part", async (route) => {
+    uploadAttempts += 1;
+    if (uploadAttempts === 1) return route.abort("connectionreset");
+    return route.fulfill({ status: 200, headers: { etag: "etag-1" } });
+  });
   await page.route("**/*graphql*", async (route) => {
     const body = JSON.parse(route.request().postData() ?? "{}") as { query?: string };
     const query = body.query ?? "";
@@ -58,7 +62,7 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
   await page.getByLabel("Análise por inteligência artificial").check();
   await page.getByLabel("Localização quando necessária").check();
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await expect(page.getByText("Escolher da galeria")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Escolher da galeria" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Adicionar descrição" })).toBeVisible();
   const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
   const photoInput = page.locator(".capture-camera-action input[type=file]");
@@ -68,6 +72,9 @@ test("E2E-054 Capture displays media progress while metadata waits for screening
   await page.getByRole("button", { name: "Usar esta foto" }).click();
   await expect(page.getByRole("progressbar", { name: "Progresso do envio de Visão geral do imóvel" })).toBeVisible();
   await expect(page.getByText(/aguardando (envio|verificação)/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retomar envio" })).toBeVisible();
+  await page.getByRole("button", { name: "Retomar envio" }).dblclick();
   await expect(page.getByRole("status").filter({ hasText: "Upload concluído" })).toBeVisible({ timeout: 15_000 });
   expect(metadataAttempts).toBe(2);
+  expect(uploadAttempts).toBe(2);
 });
