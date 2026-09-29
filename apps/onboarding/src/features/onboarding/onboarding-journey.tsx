@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Card, Confirmation, Container, Dialog, Field, Input, Select, Stack, Steps, Textarea } from "@inspection/design-system";
+import { Alert, Button, Card, Confirmation, Container, Dialog, Field, Input, ProductIdentity, Select, Stack, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
 import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
@@ -160,7 +160,7 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
 
 function PageShell({ title, children, steps = [], currentStep = "" }: { title: string; children: React.ReactNode; steps?: OnboardingDefinition["steps"]; currentStep?: string }) {
   const currentIndex = steps.findIndex((item) => item.key === currentStep);
-  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><p>Inspection · Imobiliárias</p><h1>{title}</h1><p>Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</p>{steps.length ? <Steps label="Etapas do cadastro" items={steps.map((step, index) => ({ id: step.key, label: presentOnboardingLabel(step.label), state: index < currentIndex ? "complete" as const : step.key === currentStep ? "current" as const : "pending" as const }))} /> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
+  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><div className="onboarding-utility-bar"><ProductIdentity product="Onboarding" /><ThemeSelector /></div><h1>{title}</h1><p>Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</p>{steps.length ? <Steps label="Etapas do cadastro" items={steps.map((step, index) => ({ id: step.key, label: presentOnboardingLabel(step.label), state: index < currentIndex ? "complete" as const : step.key === currentStep ? "current" as const : "pending" as const }))} /> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
 }
 
 function responseStep(session: Session, steps: OnboardingDefinition["steps"]) {

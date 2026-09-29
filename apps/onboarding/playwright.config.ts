@@ -1,13 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = process.env.PLAYWRIGHT_PORT ?? "3004";
+const port = process.env.PLAYWRIGHT_PORT ?? "3114";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   use: { baseURL: process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${port}`, trace: "retain-on-failure", screenshot: "only-on-failure" },
-  webServer: { command: `npm run build && npm run start -- -p ${port}`, url: `http://localhost:${port}`, timeout: 180_000, reuseExistingServer: !process.env.CI },
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : { command: `npm run build && node_modules/.bin/next start --hostname localhost --port ${port}`, url: `http://localhost:${port}`, timeout: 180_000, reuseExistingServer: false },
   projects: [
     { name: "viewport-320", use: { ...devices["iPhone SE"], viewport: { width: 320, height: 844 } } },
     { name: "viewport-360", use: { ...devices["Pixel 7"], viewport: { width: 360, height: 800 } } },

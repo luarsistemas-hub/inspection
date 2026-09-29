@@ -50,7 +50,7 @@ export class OnboardingPage {
 
   async expectCreated() {
     await expect(this.page.getByRole("heading", { name: "Acompanhe a vistoria" })).toBeVisible();
-    await expect(this.page.getByText("Primeira vistoria criada")).toBeVisible();
+    await expect(this.page.getByText(/A vistoria .* foi criada\./)).toBeVisible();
     await expect(this.page.getByText(/vistoria [0-9a-f-]{36}/i)).toBeVisible();
   }
 

@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "tonal" | "text" | "danger";
   /** Prevents repeated activation while the owning feature has work in flight. */
   isPending?: boolean;
   pendingLabel?: ReactNode;

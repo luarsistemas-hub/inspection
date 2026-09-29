@@ -6,6 +6,20 @@ filters, cursors, media policy, upload persistence and domain labels.
 
 ## Common patterns
 
+- Wrap each frontend root in `ThemeProvider` and put `ThemeScript` in
+  `<head>` before first paint. Keep `ThemeSelector` visible on authenticated
+  shells and entry or recovery screens. Use `useTheme()` when product behavior
+  needs the current theme.
+- Use `PageHeader` for titles, supporting copy, breadcrumbs and page actions.
+  Reserve `emphasis="brand"` for the administrative overview, dashboard start
+  page and onboarding entry. Use `tonal` for quieter section context.
+- Use the shared color roles: `brand` and `on-brand` for primary actions,
+  `brand-container` and `on-brand-container` for selected navigation, and
+  explicit success, warning and danger roles for domain states. Never signal a
+  state through color alone.
+- At 1024 CSS pixels and below, compose product-owned links through
+  `MobileNavigation`. Keep routes and permission filtering in the app shell.
+
 - Use `Field` with a visible label and place the actual input or select inside
   it. Server and field errors stay associated with that control.
 - Use `Combobox` for searchable choices. Keep the visible label, option value,
@@ -31,8 +45,8 @@ Dialogs must remain usable with long Portuguese consequences at 320 CSS
 pixels. Content scrolls inside the dialog and both cancel and confirm remain
 reachable by keyboard. A table may switch to labelled cards when the domain
 layout permits it; the table header and cell relationship remains available to
-assistive technology when a table is retained. Test 320, 360, 768 and 1440 CSS
-pixel widths, 200% text and 400% browser zoom.
+assistive technology when a table is retained. Test 320, 360, 768, 1024 and
+1440 CSS pixel widths, 200% text and 400% browser zoom.
 
 Synthetic example:
 

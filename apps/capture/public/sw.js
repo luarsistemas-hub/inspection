@@ -1,7 +1,11 @@
-const CACHE = "inspection-capture-shell-v1";
+const CACHE = "inspection-capture-shell-v2";
 const ASSETS = ["/manifest.webmanifest", "/icon.svg"];
 self.addEventListener("install", (event) => event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS))));
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) => event.waitUntil((async () => {
+  const names = await caches.keys();
+  await Promise.all(names.filter((name) => name.startsWith("inspection-capture-shell-") && name !== CACHE).map((name) => caches.delete(name)));
+  await self.clients.claim();
+})()));
 self.addEventListener("fetch", (event) => {
   const request = event.request; const url = new URL(request.url);
   // Never cache pages, GraphQL, credentials, evidence, signed URLs, or any dynamic response.

@@ -100,6 +100,10 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     const mocks = await installMocks(page, "VIEWER");
     await loginAsLocalAdmin(page, "/inspections");
     await expect(page.getByRole("button", { name: "Nova vistoria" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Quadro" }).click();
+    const board = page.getByRole("region", { name: "Vistorias em quadro" });
+    await expect(board).toBeVisible();
+    await expect(board.locator(".inspection-column").first()).toHaveCSS("background-color", "rgb(237, 241, 255)");
     expect(mocks.calls.some(({ operation }) => operation === "DashboardMemberships")).toBe(true);
     expect(mocks.calls.some(({ operation }) => operation === "Inspections")).toBe(true);
   });

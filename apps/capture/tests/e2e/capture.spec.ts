@@ -69,6 +69,8 @@ test("IT-153; IT-155; IT-194; E2E-031; E2E-054 persisted evidence resumes once a
   await photoInput.setInputFiles({ name: "overview.png", mimeType: "image/png", buffer: photo });
 
   await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Aparência" }).selectOption("dark");
+  await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
   await page.getByRole("button", { name: "Usar esta foto" }).click();
   await expect(page.getByRole("progressbar", { name: "Progresso do envio de Visão geral do imóvel" })).toBeVisible();
   await expect(page.getByText(/aguardando (envio|verificação)/i).first()).toBeVisible();

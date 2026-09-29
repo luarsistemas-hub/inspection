@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Breadcrumbs, Button, Checkbox, DataTable, Dialog, Field, Input, Pagination, ProductIdentity, Recovery, Select, Status, Textarea } from "@inspection/design-system";
+import { Alert, Button, Checkbox, DataTable, Dialog, Field, Input, MobileNavigation, PageHeader, Pagination, ProductIdentity, Recovery, Select, Status, Textarea, ThemeSelector } from "@inspection/design-system";
 import { beginPKCE } from "@/auth/pkce";
 import { clearProtectedContext, hasAdminAccess, hasAdminRouteAccess, hasAnalysisPromptAccess, restoreMembershipContext, setIdentity, setMembershipContext, type AdminIdentity } from "@/auth/session";
 import { graphql, graphqlIdentity, type GraphQLFailure } from "@/graphql/client";
@@ -114,13 +114,19 @@ export function AdminShell({ section }: { section?: string }) {
     if (pathname === "/access" && !canInviteInternalUsers) return;
     setAction(pathname === "/organization" ? "unit" : pathname === "/access" ? "invite" : pathname === "/catalogs" ? "participant" : pathname === "/assets" ? "asset" : "policy");
   };
-  if (needsBootstrap) return <main className="admin-denial"><Recovery kind={error ? "error" : "unavailable"} title="Primeiro acesso">{error ?? status}</Recovery><Button disabled={bootstrapPending} isPending={bootstrapPending} pendingLabel="Criando…" onClick={() => void bootstrap()}>Criar operação local</Button></main>;
-  if (error && !identityData) return <main className="admin-denial"><Recovery kind="denied" title="Administração">{error}</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname)}>Entrar com conta administrativa</Button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Painel</a></main>;
-  return <main className="admin-shell">
+  if (needsBootstrap) return <main className="admin-denial"><ThemeSelector /><Recovery kind={error ? "error" : "unavailable"} title="Primeiro acesso">{error ?? status}</Recovery><Button disabled={bootstrapPending} isPending={bootstrapPending} pendingLabel="Criando…" onClick={() => void bootstrap()}>Criar operação local</Button></main>;
+  if (error && !identityData) return <main className="admin-denial"><ThemeSelector /><Recovery kind="denied" title="Administração">{error}</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname)}>Entrar com conta administrativa</Button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Painel</a></main>;
+  return <main className={`admin-shell${pathname === "/overview" ? " admin-shell--overview" : ""}`}>
     <a className="skip-link" href="#admin-content">Pular para o conteúdo</a>
     <header className="admin-header">
       <ProductIdentity product="Admin" context={tenantName} />
-      <div className="admin-header-context"><span>{tenantName}</span><span className="admin-role">{identityData?.me.roles.map(presentAdminRole).join(", ") || "Acesso pendente"}</span><span className="admin-avatar" aria-label={`Contexto ${tenantName}`}>{initials(tenantName)}</span></div>
+      <MobileNavigation label="Navegação administrativa"><nav aria-label="Opções da administração" className="admin-mobile-links">
+        {navItems.filter(([, href]) => Boolean(identityData && hasAdminRouteAccess(href, identityData.me.roles)) && (href !== "/prompts" || promptPermitted) && (href !== "/llm-usage" || identityData?.me.canViewLLMCosts)).map(([label, href]) => <Link key={href} href={href} prefetch={false} aria-current={pathname === href ? "page" : undefined}>{label}</Link>)}
+        <span className="admin-mobile-context">{tenantName} · {identityData?.me.roles.map(presentAdminRole).join(", ") || "Acesso pendente"}</span>
+        {membershipOptions.length > 1 && <Field label="Imobiliária"><Select aria-label="Imobiliária ativa" value={activeMembership?.id ?? ""} onChange={(event) => void selectMembership(event.target.value)}>{membershipOptions.map((x) => <option key={x.id} value={x.id}>{presentAdminRole(x.role)} · {x.tenantId}</option>)}</Select></Field>}
+        <a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Abrir Painel</a>
+      </nav></MobileNavigation>
+      <div className="admin-header-context"><ThemeSelector /><span className="admin-tenant-name">{tenantName}</span><span className="admin-role">{identityData?.me.roles.map(presentAdminRole).join(", ") || "Acesso pendente"}</span><span className="admin-avatar" aria-label={`Contexto ${tenantName}`}>{initials(tenantName)}</span></div>
     </header>
     <div className="admin-layout">
       <nav className="admin-nav" aria-label="Navegação administrativa">
@@ -134,8 +140,7 @@ export function AdminShell({ section }: { section?: string }) {
         </div>
       </nav>
       <section id="admin-content" className="admin-content" aria-labelledby="page-title">
-        <Breadcrumbs items={[{ label: "Administração", href: "/overview" }, { label: page.title }]} />
-        <div className="page-heading"><div><h1 id="page-title">{section ?? page.title}</h1><p>{page.responsibility}</p></div><Button hidden={pathname === "/llm-usage" || (pathname === "/access" && !canInviteInternalUsers)} disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button></div>
+        <PageHeader id="page-title" emphasis={pathname === "/overview" ? "brand" : "plain"} breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={section ?? page.title} description={page.responsibility} actions={<Button hidden={pathname === "/llm-usage" || (pathname === "/access" && !canInviteInternalUsers)} disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
         {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !routePermitted || (pathname === "/prompts" && !promptPermitted) ? <Recovery kind="denied" title="Acesso restrito">Você não tem permissão para acessar este recurso neste escopo.</Recovery> : pathname === "/prompts" ? error ? <Recovery kind="error" title="Não foi possível carregar o prompt" onRetry={() => void load()}>{error}</Recovery> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : <>
           <div className="collection-toolbar"><Field label={pathname === "/organization" ? "Buscar unidade" : "Buscar nesta coleção"}><Input value={query} onChange={(event) => updateParams({ search: event.target.value || null, after: null })} placeholder={pathname === "/organization" ? "Nome ou código da unidade" : "Nome, identificador ou contexto"} /></Field>{query && <Button variant="secondary" onClick={() => updateParams({ search: null, after: null })}>Limpar busca</Button>}</div>
           <p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>

@@ -3,7 +3,7 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clearCaptureCsrfToken, clearCaptureLinkToken, getCaptureLinkToken, setCaptureCsrfToken, setCaptureLinkToken } from "@/auth/capture-session";
 import { RegisterServiceWorker } from "@/components/register-service-worker";
-import { Alert, Button, Card, Checkbox, ChoiceGroup, Dialog, Field, Icon, Input, Select, Status, Steps, Textarea } from "@inspection/design-system";
+import { Alert, Button, Card, Checkbox, ChoiceGroup, Dialog, Field, Icon, Input, ProductIdentity, Select, Status, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
 import { captureOperations, graphql, isCaptureSessionFailure } from "@/graphql/client";
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
 import { type CaptureDraft, digest, hasDuplicateDraft, isReadyCaptureDraft, loadDraftsForResponsibility, mediaCountForRequirement, persistDraftMediaStatus, readyForSubmission, removeDraft, removeDraftsForResponsibility, saveDraft } from "@/pwa/drafts";
@@ -179,7 +179,7 @@ export default function CapturePage({ params }: Props) {
   const reviewBlock = presentSubmissionBlock({ online, pending, blocked: blockedDrafts, allRequirementsSatisfied });
 
   return <main className="capture-shell"><RegisterServiceWorker /><div className="capture-workspace">
-    <header className="capture-intro"><p>Inspection / Captura</p><h1>Registrar vistoria</h1></header>
+    <header className="capture-intro"><div className="capture-utility-bar"><ProductIdentity product="Capture" /><ThemeSelector /></div><h1>Registrar vistoria</h1></header>
     {currentStep !== undefined && <CaptureSteps current={currentStep} />}
     {!online && <Alert tone="warning">Você está sem conexão. Fotos pendentes ficam apenas neste dispositivo; a confirmação final permanece indisponível.</Alert>}
     {stage === "otp" && <Card className="capture-card"><h2>Confirme seu acesso</h2><p>Use o código de seis dígitos enviado para liberar esta responsabilidade.</p><Field label="Código de seis dígitos"><Input aria-label="Código de seis dígitos" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></Field><div className="capture-actions"><Button isPending={busy} pendingLabel="Confirmando código…" disabled={busy} onClick={() => void verify()}>Confirmar código</Button><Button variant="secondary" isPending={busy} pendingLabel="Solicitando código…" disabled={busy || !token} onClick={() => void retryOtp()}>Solicitar outro código</Button></div></Card>}

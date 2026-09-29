@@ -354,13 +354,17 @@ test("E2E-028 sanitizes the invitation URL and requires OTP again after reload",
   await expect(page.getByRole("heading", { name: "Confirme seu acesso" })).toBeVisible();
 });
 
-test("E2E-029 reaches either confirmation-only completion or ordinary capture after explicit consent", async ({ page }) => {
+test("E2E-029 reaches either confirmation-only completion or ordinary capture after explicit consent", async ({ page }, testInfo) => {
   await mockCapture(page, { confirmationOnly: true });
   await enterConsent(page);
   await acceptPurposes(page);
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
+  const confirmation = page.locator(".inspection-status");
   await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
+  await expect(confirmation).toHaveCSS("justify-self", "start");
+  await expect(confirmation).toHaveCSS("border-radius", "999px");
   await expect(page.getByRole("heading", { name: "Adicione as evidências" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("confirmation-status.png") });
 });
 
 test("E2E-029 sends an ordinary invitation to the evidence stage", async ({ page }) => {

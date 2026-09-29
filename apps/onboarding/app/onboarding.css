@@ -1,7 +1,8 @@
 body { background: var(--inspection-bg); }
 .onboarding-shell { min-block-size: 100dvh; padding: var(--inspection-space-4); }
 .onboarding-main { max-inline-size: 44rem; margin-inline: auto; }
-.onboarding-header { display: grid; gap: var(--inspection-space-2); margin-block-end: var(--inspection-space-5); }
+.onboarding-header { display: grid; gap: var(--inspection-space-3); margin-block-end: var(--inspection-space-5); }
+.onboarding-utility-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--inspection-space-3); max-inline-size: 100%; margin-block-end: var(--inspection-space-3); }
 .onboarding-header p, .onboarding-step-description { margin: 0; color: var(--inspection-muted); }
 .onboarding-progress { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); padding: 0; list-style: none; }
 .onboarding-progress li { padding: 0; color: var(--inspection-muted); font-size: .82rem; }
@@ -19,9 +20,9 @@ body { background: var(--inspection-bg); }
 .onboarding-attention-panel p { margin: 0; color: var(--inspection-muted); }
 .onboarding-attention-add { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); }
 .onboarding-attention-add .inspection-input { flex: 1 1 12rem; }
-.onboarding-attention-error { color: var(--inspection-danger, #b42318); }
+.onboarding-attention-error { color: var(--inspection-danger); }
 .onboarding-attention-items { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); padding: 0; margin: 0; list-style: none; }
-.onboarding-attention-items li { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .35rem .2rem .55rem; border-radius: 999px; background: var(--inspection-surface, #fff); border: 1px solid var(--inspection-border); }
+.onboarding-attention-items li { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .35rem .2rem .55rem; border-radius: 999px; background: var(--inspection-surface-raised); border: 1px solid var(--inspection-border); }
 .onboarding-attention-items button { border: 0; padding: 0 .2rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .onboarding-attention-summary { color: var(--inspection-muted); }
 .onboarding-upload-preview { display: block; inline-size: 100%; block-size: auto; max-block-size: 18rem; object-fit: contain; border-radius: var(--inspection-radius); background: var(--inspection-bg); }

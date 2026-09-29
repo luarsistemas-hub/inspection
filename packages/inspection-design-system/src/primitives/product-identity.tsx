@@ -1,6 +1,6 @@
 import { Icon } from "./icon.js";
 
-export type ProductName = "Admin" | "Dashboard" | "Capture";
+export type ProductName = "Admin" | "Dashboard" | "Capture" | "Onboarding";
 export type ProductIdentityProps = { product: ProductName; context?: string };
 
 /** Identifies the active Inspection product without imposing a product shell. */
