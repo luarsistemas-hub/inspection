@@ -1,5 +1,7 @@
 export { Button } from "./primitives/button.js";
 export type { ButtonProps } from "./primitives/button.js";
+export { IconButton } from "./primitives/icon-button.js";
+export type { IconButtonProps } from "./primitives/icon-button.js";
 export { Card, Container, Inline, Stack } from "./primitives/layout.js";
 export type { ContainerProps, InlineProps, StackProps } from "./primitives/layout.js";
 export { Checkbox, ChoiceGroup, Combobox, ErrorSummary, Field, Input, Radio, Select, Textarea } from "./primitives/form.js";
@@ -20,6 +22,8 @@ export { PageHeader } from "./primitives/page-header.js";
 export type { PageHeaderProps } from "./primitives/page-header.js";
 export { MobileNavigation } from "./primitives/mobile-navigation.js";
 export type { MobileNavigationProps } from "./primitives/mobile-navigation.js";
+export { AdaptiveNavigation } from "./primitives/adaptive-navigation.js";
+export type { AdaptiveNavigationItem, AdaptiveNavigationProps } from "./primitives/adaptive-navigation.js";
 export { Motion } from "./primitives/motion.js";
 export type { MotionProps } from "./primitives/motion.js";
 export { Breadcrumbs, DataTable, FilterBar, Pagination, Steps } from "./primitives/collection.js";

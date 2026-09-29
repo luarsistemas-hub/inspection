@@ -14,6 +14,7 @@ test("E2E-039 Admin organization stays operable and accessible across supported 
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("heading", { level: 1, name: "Organização" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Criar unidade" })).toBeVisible();
+    if (width === 768) await expect(page.locator("nav.inspection-adaptive-navigation__sidebar")).toBeVisible();
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(horizontalOverflow, `unexpected page overflow at ${width}px`).toBe(false);
 
@@ -35,4 +36,31 @@ test("E2E-039 Admin organization stays operable and accessible across supported 
   const errorScan = await new AxeBuilder({ page: axePage }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"]).include(".inspection-dialog").analyze();
   expect(errorScan.violations).toEqual([]);
   await expect(form).toBeVisible();
+});
+
+test("E2E-065 Admin secondary navigation and prompt metadata fit a 320px viewport in both themes", async ({ page }) => {
+  test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
+  await loginAsLocalAdmin(page, "/prompts");
+  await page.setViewportSize({ width: 320, height: 568 });
+
+  const bottomBar = page.locator("nav.inspection-adaptive-navigation__compact");
+  await expect(bottomBar).toBeVisible();
+  await bottomBar.getByRole("button", { name: /Mais destinos/ }).click();
+  const destinations = page.getByRole("navigation", { name: "Navegação administrativa — outros destinos" });
+  await expect(destinations.getByRole("link", { name: "Prompts de análise" })).toBeVisible();
+  await page.getByRole("button", { name: "Fechar" }).click();
+
+  for (const theme of ["light", "dark"]) {
+    await page.getByLabel("Aparência").selectOption(theme);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    const overflowingMetadata = await page.locator(".prompt-editor-meta > span").evaluateAll((items) => items.filter((item) => item.scrollWidth > item.clientWidth).map((item) => item.textContent));
+    expect(overflowingMetadata).toEqual([]);
+  }
+
+  await bottomBar.getByRole("link", { name: "Organização" }).click();
+  const mobileCollection = page.locator(".admin-mobile-collection");
+  await expect(mobileCollection).toBeVisible();
+  await expect(page.locator(".admin-content > .inspection-data-table")).toBeHidden();
+  await mobileCollection.getByRole("button", { name: "Abrir detalhes" }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

@@ -16,6 +16,19 @@ export function installRuntimeGuards(page: Page) {
   return async () => expect(failures, failures.join("\n")).toEqual([]);
 }
 
+export async function navigateAdmin(page: Page, label: string): Promise<void> {
+  const navigation = page.getByRole("navigation", { name: "Navegação administrativa", exact: true });
+  const primaryDestination = ["Visão geral", "Organização", "Usuários e acessos"].includes(label);
+  if (primaryDestination || (page.viewportSize()?.width ?? 1200) >= 1200) {
+    await navigation.getByRole("link", { name: label, exact: true }).click();
+    return;
+  }
+  await navigation.getByRole("button", { name: /Mais destinos/ }).click();
+  await page.getByRole("navigation", { name: "Navegação administrativa — outros destinos" }).getByRole("link", { name: label, exact: true }).click();
+}
+
+export const collectionRows = (page: Page) => page.locator(".inspection-data-table tbody tr:visible, .admin-mobile-collection > li:visible");
+
 export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<void> {
   await page.goto(returnTo);
   await page.getByRole("button", { name: "Entrar com conta administrativa" }).click();

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Dialog } from "@inspection/design-system";
+import { Dialog, IconButton } from "@inspection/design-system";
 import { graphql } from "@/graphql/client";
 import { InvalidateReportPublicationDocument, PublishReportDocument, ReportDownloadDocument, ReportWorkspaceDocument, ReportsDocument, type ReportDownloadQuery, type ReportWorkspaceQuery, type ReportsQuery } from "@/graphql/generated";
 import { presentClassification, presentReportPDFStatus } from "./presentation";
@@ -178,7 +178,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
         <td data-label="Imóvel"><strong>{item.assetName}</strong><span>{item.assetAddress}</span><small>{item.assetExternalKey}</small></td>
         <td data-label="Responsável">{item.participantName}</td><td data-label="Gerado em">{formatGenerated(item.generatedAt)}</td>
         <td data-label="Classificação"><span className={`report-classification report-classification--${item.classification.toLowerCase()}`}>{presentClassification(item.classification)}</span></td>
-        <td data-label="Versão">v{item.version}</td><td data-label="Ação"><button className="report-open-button" onClick={() => openDialog(item.inspectionId)}>Abrir laudo</button></td>
+        <td data-label="Versão">v{item.version}</td><td data-label="Ação" data-align="center" data-action><IconButton label={`Abrir detalhes do laudo de ${item.assetName}`} tooltip="Abrir detalhes" icon="eye" onPress={() => openDialog(item.inspectionId)} /></td>
       </tr>)}</tbody></table></div>
       {hasMore && <button className="secondary report-load-more" onClick={() => void loadList(false)} disabled={listLoading}>{listLoading ? "Carregando…" : "Carregar mais"}</button>}
       {listLoading && <p role="status">Atualizando laudos…</p>}

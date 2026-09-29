@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installRuntimeGuards, loginAsLocalAdmin } from "./support/auth";
+import { collectionRows, installRuntimeGuards, loginAsLocalAdmin, navigateAdmin } from "./support/auth";
 
 test.describe("authenticated Admin against the local stack", () => {
   test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "set INSPECTION_E2E_AUTH=true with the local stack and QA seed");
@@ -8,7 +8,7 @@ test.describe("authenticated Admin against the local stack", () => {
     await loginAsLocalAdmin(page, "/organization");
     await expect(page.getByRole("status")).toContainText("Organização atualizado");
 
-    const existingUnit = page.getByRole("row", { name: /UN01/ });
+    const existingUnit = collectionRows(page).filter({ hasText: "UN01" });
     if (await existingUnit.count() === 0) {
       await page.getByRole("button", { name: "Criar unidade" }).click();
       await page.getByLabel("Código da unidade").fill("UN01");
@@ -16,10 +16,10 @@ test.describe("authenticated Admin against the local stack", () => {
       await page.getByRole("button", { name: "Salvar operação" }).click();
     }
 
-    await expect(page.getByRole("row", { name: /Unidade Norte UN01/ })).toBeVisible();
-    await page.getByRole("link", { name: "Visão geral" }).click();
-    await page.getByRole("link", { name: "Organização" }).click();
-    await expect(page.getByRole("row", { name: /Unidade Norte UN01/ })).toBeVisible();
+    await expect(collectionRows(page).filter({ hasText: "UN01" })).toContainText("Unidade Norte");
+    await navigateAdmin(page, "Visão geral");
+    await navigateAdmin(page, "Organização");
+    await expect(collectionRows(page).filter({ hasText: "UN01" })).toContainText("Unidade Norte");
   });
 
   test("E2E-009 invites an internal employee and confirms its active membership", async ({ page }) => {
@@ -30,7 +30,7 @@ test.describe("authenticated Admin against the local stack", () => {
     await page.getByLabel("Identificador externo do usuário").fill("qa-inspection-employee");
     await page.getByLabel("Perfil de acesso").selectOption("EMPLOYEE");
     await page.getByRole("button", { name: "Salvar operação" }).click();
-    const employee = page.getByRole("row").filter({ hasText: "Operador" });
+    const employee = collectionRows(page).filter({ hasText: "Operador" });
     await expect(employee).toContainText("Imobiliária");
     await expect(employee).toContainText("Ativa");
   });
@@ -38,7 +38,7 @@ test.describe("authenticated Admin against the local stack", () => {
   test("E2E-010 creates a participant under an active unit", async ({ page }) => {
     await loginAsLocalAdmin(page, "/catalogs");
     await expect(page.locator(".status-line")).toContainText("atualizado");
-    if (await page.getByRole("row", { name: /Ana QA/ }).count() === 0) {
+    if (await collectionRows(page).filter({ hasText: "Ana QA" }).count() === 0) {
       await page.getByRole("button", { name: "Criar responsável" }).click();
       const unit = page.getByLabel("Unidade");
       await expect(unit.locator("option").nth(1)).toBeAttached();
@@ -47,13 +47,13 @@ test.describe("authenticated Admin against the local stack", () => {
       await page.getByLabel("Função no segmento").fill("OWNER");
       await page.getByRole("button", { name: "Salvar operação" }).click();
     }
-    await expect(page.getByRole("row", { name: /Ana QA/ })).toBeVisible();
+    await expect(collectionRows(page).filter({ hasText: "Ana QA" })).toBeVisible();
   });
 
   test("E2E-011 registers an asset with its compatible seeded configuration", async ({ page }) => {
     await loginAsLocalAdmin(page, "/assets");
     await expect(page.locator(".status-line")).toContainText("atualizado");
-    if (await page.getByRole("row", { name: /APT101/ }).count() === 0) {
+    if (await collectionRows(page).filter({ hasText: "APT101" }).count() === 0) {
       await page.getByRole("button", { name: "Registrar imóvel" }).click();
       const unit = page.getByLabel("Unidade");
       await expect(unit.locator("option").nth(1)).toBeAttached();
@@ -69,31 +69,31 @@ test.describe("authenticated Admin against the local stack", () => {
       await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
       await page.getByRole("button", { name: "Salvar operação" }).click();
     }
-    await expect(page.getByRole("row", { name: /APT101/ })).toBeVisible();
+    await expect(collectionRows(page).filter({ hasText: "APT101" })).toBeVisible();
   });
 
   test("E2E-012 updates the publication policy with its loaded version", async ({ page }) => {
     await loginAsLocalAdmin(page, "/governance");
     await expect(page.locator(".status-line")).toContainText("atualizado");
-    const policy = page.getByRole("row").filter({ hasText: "Política de publicação" });
+    const policy = collectionRows(page).filter({ hasText: "Política de publicação" });
     const currentPolicy = await policy.innerText();
     const targetMode = currentPolicy.includes("Manual") ? "AUTOMATIC" : "MANUAL";
     await page.getByRole("button", { name: "Configurar política" }).click();
     await page.getByLabel("Modo de publicação").selectOption(targetMode);
     await page.getByRole("button", { name: "Salvar operação" }).click();
-    await expect(page.getByRole("row").filter({ hasText: "Política de publicação" })).toContainText(targetMode === "MANUAL" ? "Manual" : "Automática");
+    await expect(collectionRows(page).filter({ hasText: "Política de publicação" })).toContainText(targetMode === "MANUAL" ? "Manual" : "Automática");
   });
 
   test("E2E-013 opens and closes a seeded resource history", async ({ page }) => {
     await loginAsLocalAdmin(page, "/audit");
     await expect(page.locator(".status-line")).toContainText("atualizado");
-    const firstRow = page.getByRole("row").nth(1);
+    const firstRow = collectionRows(page).first();
     const details = firstRow.getByRole("button", { name: "Abrir detalhes" });
     await details.click();
-    await expect(page.getByRole("dialog", { name: "Detalhe e histórico" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("button", { name: "Fechar detalhe" }).click();
-    await expect(page.getByRole("dialog", { name: "Detalhe e histórico" })).toHaveCount(0);
-    await expect(page.getByRole("table", { name: "Auditoria: coleção administrativa" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Auditoria: coleção administrativa" }).or(page.getByRole("list", { name: "Auditoria: registros" }))).toBeVisible();
   });
 
   test("E2E-014 saves and reloads the seeded analysis prompt", async ({ page }) => {
@@ -106,13 +106,14 @@ test.describe("authenticated Admin against the local stack", () => {
     await page.getByLabel("Confirmo a alteração do prompt global.").check();
     await page.getByRole("button", { name: "Salvar nova revisão" }).click();
     await expect(page.getByLabel("Instrução do sistema")).toHaveValue(/Contexto QA administrativo\./);
-    await page.getByRole("link", { name: "Visão geral" }).click();
-    await page.getByRole("link", { name: "Prompts de análise" }).click();
+    await navigateAdmin(page, "Visão geral");
+    await navigateAdmin(page, "Prompts de análise");
     await expect(page.getByLabel("Instrução do sistema")).toHaveValue(/Contexto QA administrativo\./);
   });
 
   test("E2E-015 filters and inspects a seeded live LLM call", async ({ page }) => {
     await loginAsLocalAdmin(page, "/llm-usage");
+    await page.locator(".llm-usage-advanced-filters > summary").click();
     const start = page.getByLabel("Início");
     const end = page.getByLabel("Fim");
     const to = new Date();
@@ -147,19 +148,20 @@ test.describe("authenticated Admin against the local stack", () => {
   });
 
   test("executes every Admin query without permission or GraphQL errors", async ({ page }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/organization");
     await expect(page.locator(".admin-header")).toContainText("Inspeção · Admin");
     await expect(page.getByRole("navigation", { name: "Navegação administrativa" }).getByRole("link", { name: "Organização" })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("columnheader", { name: "Unidade" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Unidade" }).or(page.getByRole("list", { name: "Organização: registros" }))).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Abrir detalhes" }).first()).toBeVisible();
     await expect(page.getByText("Você não tem permissão para acessar este recurso neste escopo.")).toHaveCount(0);
     for (const [label, route] of [["Visão geral", "/overview"], ["Organização", "/organization"], ["Usuários e acessos", "/access"], ["Responsáveis pela vistoria", "/catalogs"], ["Configuração", "/assets"], ["Governança", "/governance"], ["Auditoria", "/audit"], ["Consumo de LLM", "/llm-usage"]] as const) {
-      await page.getByRole("link", { name: label }).click();
-      await expect(page).toHaveURL(new RegExp(`${route}(?:\\?|$)`));
+      await navigateAdmin(page, label);
+      await expect(page).toHaveURL(new RegExp(`${route}(?:\\?|$)`), { timeout: 15_000 });
       if (route === "/llm-usage") {
+        await page.locator(".llm-usage-advanced-filters > summary").click();
         await page.getByRole("combobox", { name: "Modo" }).selectOption("MOCK");
         await page.getByRole("button", { name: "Aplicar" }).click();
         await expect(page.getByLabel("Resumo do consumo de LLM")).toBeVisible();

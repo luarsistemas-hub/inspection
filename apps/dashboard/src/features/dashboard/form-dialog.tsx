@@ -22,7 +22,7 @@ export function FormDialog({ isOpen, onClose, title, busy, error, children }: {
     onClose();
   };
 
-  return <Dialog isOpen={isOpen} isDismissable={!busy && !confirmDiscard} onClose={requestClose} title={title}>
+  return <Dialog isOpen={isOpen} isDismissable={!busy && !confirmDiscard} onClose={requestClose} size="fullscreen" title={title}>
     <div className="form-dialog-body" onChangeCapture={() => setDirty(true)} onInputCapture={() => setDirty(true)} onClickCapture={(event) => {
       if (!(event.target instanceof Element)) return;
       if (event.target.closest('[role="option"]')) setDirty(true);

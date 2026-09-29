@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.use({ serviceWorkers: "block" });
+
 type CaptureScenario = {
   confirmationOnly?: boolean;
   requiredAnswer?: boolean;

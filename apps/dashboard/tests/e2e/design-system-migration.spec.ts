@@ -112,7 +112,7 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     const mocks = await installMocks(page);
     mocks.enqueue("OperationalOverview", { data: { dashboardSummary: null, triageInspections: { nodes: [], pageInfo: pageInfo() } } });
     await loginAsLocalAdmin(page, "/inspections");
-    await page.goto("/tenants/current");
+    await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: "Início" }).click();
     await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
   });
 
@@ -151,6 +151,8 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     const mocks = await installMocks(page);
     await loginAsLocalAdmin(page, "/inspections?inspectionId=inspection-a");
     expect(mocks.calls.some(({ operation }) => operation === "InspectionDetail" || operation === "Inspections")).toBe(true);
+    await expect(page.getByRole("dialog", { name: "Detalhe da vistoria" })).toBeVisible();
+    await expect(page.locator("#inspection-collection")).toBeVisible();
   });
 
   test("IT-111, IT-112, IT-113, IT-114, IT-115 and E2E-023 preserve triage empty, viewer and recovery states", async ({ page }) => {
@@ -211,6 +213,56 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     await expect(page.getByRole("button", { name: "Nova vistoria" })).toBeVisible();
     await page.getByRole("button", { name: "Nova vistoria" }).click();
     await expect(page.getByRole("dialog", { name: "Nova vistoria" }).getByRole("button", { name: "Criar vistoria" })).toBeVisible();
+  });
+
+  test("E2E-064 keeps compact navigation links separated and operable at 412px and 320px", async ({ page }) => {
+    await installMocks(page);
+    await loginAsLocalAdmin(page, "/inspections");
+    const navigation = page.getByRole("navigation", { name: "Painel" });
+
+    await page.setViewportSize({ width: 412, height: 968 });
+    await expect(navigation).toBeVisible();
+    await expect(navigation.getByRole("link", { name: "Início" })).toBeVisible();
+    const bottomBar = page.locator("nav.inspection-adaptive-navigation__compact");
+    await expect(bottomBar).toBeVisible();
+    await bottomBar.getByRole("button", { name: /Mais destinos/ }).click();
+    const destinations = page.getByRole("navigation", { name: "Painel — outros destinos" });
+    await expect(destinations.getByRole("link", { name: "Agenda de vistorias" })).toBeVisible();
+    await expect(destinations.getByRole("link", { name: "Projetos de vistoria" })).toBeVisible();
+    const menuRows = await destinations.locator("a").evaluateAll((links) => links.map((link) => {
+      const rect = link.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, height: rect.height };
+    }));
+    expect(menuRows.every((row) => row.height >= 48)).toBe(true);
+    expect(menuRows.every((row, index) => index === 0 || row.top >= menuRows[index - 1]!.bottom)).toBe(true);
+    await page.getByRole("button", { name: "Fechar" }).click();
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(bottomBar).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+
+  test("E2E-066 opens an inspection in a modal and returns with its filters", async ({ page }) => {
+    await installMocks(page);
+    await loginAsLocalAdmin(page, "/inspections");
+    await page.setViewportSize({ width: 412, height: 915 });
+    const search = page.getByLabel("Buscar vistoria");
+    await search.fill("Manual");
+    const openDetails = page.locator("#inspection-collection").getByRole("button", { name: /Abrir detalhes da vistoria/ });
+    const touchTarget = await openDetails.boundingBox();
+    expect(touchTarget?.width).toBeGreaterThanOrEqual(48);
+    expect(touchTarget?.height).toBeGreaterThanOrEqual(48);
+    await openDetails.click();
+
+    const dialog = page.getByRole("dialog", { name: "Detalhe da vistoria" });
+    await expect(dialog).toBeVisible();
+    await expect(page.locator("#inspection-collection")).toBeVisible();
+    await expect(page).toHaveURL(/inspectionId=inspection-a/);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(search).toHaveValue("Manual");
+    await expect(page.locator("#inspection-collection")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(412);
   });
 
   test("IT-008 replaces an expired membership with an explicit recovery view", async ({ page }) => {

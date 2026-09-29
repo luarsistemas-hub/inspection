@@ -58,6 +58,7 @@ export function TriageJourney({ capability }: { capability: Capability }) {
   const openCase = (item: QueueItem) => updateURL("case", item.inspectionId);
   const title = reviewStatus ? statusLabel(reviewStatus) : "Fila de revisão";
   const counts = data?.counts;
+  const activeFilterCount = [classification, reviewStatus, reason, assignee].filter(Boolean).length;
 
   return <div className="triage-page">
     <div className="triage-intro"><div><span className="triage-kicker">CENTRAL DE QUALIDADE</span><h2>{title}</h2><p>Revise achados, confira as evidências e registre o próximo encaminhamento.</p></div><button className="secondary" type="button" onClick={refresh}>Atualizar fila</button></div>
@@ -69,10 +70,12 @@ export function TriageJourney({ capability }: { capability: Capability }) {
       <Metric label="Críticos em aberto" value={counts?.criticalOpen ?? "—"} active={classification === "CRITICAL"} onClick={() => updateURL("classification", classification === "CRITICAL" ? "" : "CRITICAL")} danger />
     </div>
     <div className="triage-toolbar"><form onSubmit={(event) => { event.preventDefault(); updateURL("q", search.trim()); }}><label>Buscar imóvel ou vistoria<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, endereço ou código" /></label><button type="submit">Buscar</button></form>
-      <label>Classificação<select value={classification} onChange={(event) => updateURL("classification", event.target.value)}><option value="">Todas</option><option value="CRITICAL">Crítica</option><option value="ATTENTION">Requer atenção</option></select></label>
-      <label>Estado da revisão<select value={reviewStatus} onChange={(event) => updateURL("status", event.target.value)}><option value="">Fila ativa</option><option value="NEW">Novo</option><option value="IN_REVIEW">Em revisão</option><option value="AWAITING_EVIDENCE">Aguardando complemento</option><option value="REVIEWED">Revisado</option><option value="ARCHIVED">Arquivado</option></select></label>
-      <label>Motivo<select value={reason} onChange={(event) => updateURL("reason", event.target.value)}><option value="">Todos os motivos</option>{Object.entries(reasonLabels).map(([code,label]) => <option value={code} key={code}>{label}</option>)}</select></label>
-      <label>Responsável<select value={assignee} onChange={(event) => updateURL("assignee", event.target.value)}><option value="">Todos</option><option value="mine">Meus casos</option><option value="unassigned">Sem responsável</option>{assignees.filter((item) => !item.current).map((item) => <option key={item.id} value={item.id}>{roleLabel(item.role)} · {shortId(item.id)}</option>)}</select></label>
+      <details className="triage-advanced-filters"><summary>Filtros{activeFilterCount > 0 ? ` · ${activeFilterCount} ativos` : ""}</summary><div className="triage-advanced-grid">
+        <label>Classificação<select value={classification} onChange={(event) => updateURL("classification", event.target.value)}><option value="">Todas</option><option value="CRITICAL">Crítica</option><option value="ATTENTION">Requer atenção</option></select></label>
+        <label>Estado da revisão<select value={reviewStatus} onChange={(event) => updateURL("status", event.target.value)}><option value="">Fila ativa</option><option value="NEW">Novo</option><option value="IN_REVIEW">Em revisão</option><option value="AWAITING_EVIDENCE">Aguardando complemento</option><option value="REVIEWED">Revisado</option><option value="ARCHIVED">Arquivado</option></select></label>
+        <label>Motivo<select value={reason} onChange={(event) => updateURL("reason", event.target.value)}><option value="">Todos os motivos</option>{Object.entries(reasonLabels).map(([code,label]) => <option value={code} key={code}>{label}</option>)}</select></label>
+        <label>Responsável<select value={assignee} onChange={(event) => updateURL("assignee", event.target.value)}><option value="">Todos</option><option value="mine">Meus casos</option><option value="unassigned">Sem responsável</option>{assignees.filter((item) => !item.current).map((item) => <option key={item.id} value={item.id}>{roleLabel(item.role)} · {shortId(item.id)}</option>)}</select></label>
+      </div></details>
     </div>
     <div className={`triage-workspace ${selected ? "triage-workspace--detail" : ""}`}>
       <section className="triage-list" aria-label="Casos para revisão"><div className="triage-list-heading"><strong>{data ? `${data.nodes.length} caso(s)` : "Carregando fila…"}</strong><span>Críticos primeiro · mais antigos no topo</span></div>

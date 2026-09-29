@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.use({ serviceWorkers: "block" });
+
 const referenceSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#d8e9e6"/><rect x="80" y="140" width="480" height="260" fill="#f5eee0"/><text x="320" y="270" text-anchor="middle" font-size="40">Referência</text></svg>`;
 const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
 const replacementPhoto = Buffer.concat([photo, Buffer.from([1])]);

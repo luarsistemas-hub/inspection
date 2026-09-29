@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { Breadcrumbs, Button, Checkbox, ChoiceGroup, Combobox, Confirmation, DataTable, Dialog, ErrorSummary, Field, Input, Pagination, Recovery, Steps, VersionConflict } from "../src/index.js";
+import { Breadcrumbs, Button, Checkbox, ChoiceGroup, Combobox, Confirmation, DataTable, Dialog, ErrorSummary, Field, IconButton, Input, Pagination, Recovery, Steps, VersionConflict } from "../src/index.js";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -196,7 +196,8 @@ describe("design-system public contracts", () => {
     const buttons = [...document.querySelectorAll('[role="dialog"] button')];
     expect(dialog).not.toBeNull();
     expect(dialog?.parentElement?.classList.contains("inspection-dialog--wide")).toBe(true);
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(3);
+    expect(dialog?.querySelector('[aria-label="Fechar"]')).not.toBeNull();
 
     await act(async () => reactRoot.render(
       <>
@@ -222,6 +223,23 @@ describe("design-system public contracts", () => {
     expect(container.querySelector("[role='status']")?.textContent).toContain("Página 1");
     expect(container.querySelector(".inspection-version-conflict")?.textContent).toContain("versão atual é 2");
     expect(container.querySelector(".inspection-confirmation dl")?.textContent).toContain("Arquivará o registro");
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
+  it("UT-076: compact tables expose column alignment and icon buttons keep accessible labels", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+    let activations = 0;
+    await act(async () => reactRoot.render(<><DataTable density="compact" caption="Unidades" columns={[{ id: "name", label: "Nome" }, { id: "actions", label: "Ação", align: "center", action: true }]}><tr><td>Unidade Norte</td><td data-action><IconButton label="Abrir detalhes de Unidade Norte" icon="eye" onPress={() => { activations += 1; }} /></td></tr></DataTable></>));
+    expect(container.querySelector(".inspection-data-table--compact")).not.toBeNull();
+    expect(container.querySelector("th[data-align='center'][data-action='true']")?.textContent).toBe("Ação");
+    const button = container.querySelector<HTMLButtonElement>("button[aria-label='Abrir detalhes de Unidade Norte']");
+    expect(button).not.toBeNull();
+    expect(button?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => button?.click());
+    expect(activations).toBe(1);
     await act(async () => reactRoot.unmount());
     container.remove();
   });

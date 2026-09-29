@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-export type IconName = "check" | "info" | "warning" | "error" | "menu" | "arrow-right" | "camera" | "layout-dashboard" | "building-2" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "moon" | "sun" | "monitor";
+export type IconName = "check" | "info" | "warning" | "error" | "menu" | "close" | "more-horizontal" | "calendar" | "arrow-right" | "camera" | "layout-dashboard" | "building-2" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "moon" | "sun" | "monitor" | "eye";
 export type IconProps = SVGProps<SVGSVGElement> & { name: IconName; title?: string; size?: number };
 
 const paths: Record<IconName, string> = {
@@ -9,6 +9,9 @@ const paths: Record<IconName, string> = {
   warning: "M12 3 2 21h20L12 3Zm0 6v5m0 3h.01",
   error: "M12 9v4m0 4h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z",
   menu: "M4 7h16M4 12h16M4 17h16",
+  close: "m18 6-12 12M6 6l12 12",
+  "more-horizontal": "M5 12h.01M12 12h.01M19 12h.01",
+  calendar: "M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z",
   "arrow-right": "M5 12h14m-5-5 5 5-5 5",
   camera: "M4 7h4l1.5-2h5L16 7h4v12H4V7Zm8 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
   "layout-dashboard": "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
@@ -25,7 +28,8 @@ const paths: Record<IconName, string> = {
   "arrow-up-right": "M7 17 17 7M7 7h10v10",
   moon: "M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z",
   sun: "M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z",
-  monitor: "M3 4h18v13H3zM8 21h8m-4-4v4"
+  monitor: "M3 4h18v13H3zM8 21h8m-4-4v4",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
 };
 
 /** Renders a product-neutral icon, hidden from assistive technology unless titled. */

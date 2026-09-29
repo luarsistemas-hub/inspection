@@ -14,11 +14,11 @@ export function FilterBar({ children, onReset, resetLabel = "Limpar filtros" }: 
   return <form className="inspection-filter-bar" onSubmit={(event) => event.preventDefault()} aria-label="Filtros">{children}{onReset ? <button className="inspection-button inspection-button--secondary" type="button" onClick={onReset}>{resetLabel}</button> : null}</form>;
 }
 
-export type DataTableColumn = { id: string; label: string };
-export type DataTableProps = { caption: string; columns: DataTableColumn[]; children: ReactNode; mobileLabel?: string };
+export type DataTableColumn = { id: string; label: string; align?: "start" | "center" | "end"; action?: boolean };
+export type DataTableProps = { caption: string; columns: DataTableColumn[]; children: ReactNode; mobileLabel?: string; density?: "standard" | "compact" };
 
-export function DataTable({ caption, columns, children, mobileLabel = "Registros" }: DataTableProps) {
-  return <div className="inspection-data-table" aria-label={mobileLabel}><table><caption>{caption}</caption><thead><tr>{columns.map((column) => <th key={column.id} scope="col">{column.label}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
+export function DataTable({ caption, columns, children, mobileLabel = "Registros", density = "standard" }: DataTableProps) {
+  return <div className={`inspection-data-table inspection-data-table--${density}`} aria-label={mobileLabel}><table><caption>{caption}</caption><thead><tr>{columns.map((column) => <th key={column.id} scope="col" data-align={column.align} data-action={column.action || undefined}>{column.label}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
 }
 
 export type PaginationProps = { page: number; hasNextPage: boolean; onPrevious: () => void; onNext: () => void };

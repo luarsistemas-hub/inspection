@@ -41,7 +41,7 @@ test("E2E-007 activates an owner from the real invitation before normal PKCE log
   await page.getByLabel("Quem realizará a vistoria?").selectOption("SELF");
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
   await page.getByRole("button", { name: "Criar primeira vistoria" }).click();
-  await expect(page.getByText("Primeira vistoria criada")).toBeVisible();
+  await expect(page.getByText("Vistoria criada:")).toBeVisible();
 
   let activationURL = "";
   await expect.poll(async () => {

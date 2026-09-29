@@ -54,6 +54,10 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 .llm-usage-context span { padding: .35rem .55rem; border: 1px solid var(--admin-border); border-radius: .3rem; background: var(--admin-surface); }
 .llm-usage-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; padding: 1rem; border: 1px solid var(--admin-border); border-radius: .5rem; background: var(--admin-surface); }
 .llm-usage-filters .inspection-field { position: relative; }
+.llm-usage-advanced-filters { grid-column: 1 / -1; min-inline-size: 0; border: 1px solid var(--admin-border); border-radius: .5rem; background: var(--admin-surface); }
+.llm-usage-advanced-filters > summary { min-block-size: 3rem; padding: .7rem 1rem; font-weight: 700; cursor: pointer; }
+.llm-usage-advanced-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; padding: 0 1rem 1rem; }
+.llm-usage-advanced-filters .llm-tenant-options { max-inline-size: 100%; overflow-wrap: anywhere; }
 .llm-usage-filter-actions { display: flex; align-items: flex-end; gap: .5rem; grid-column: 1 / -1; }
 .llm-tenant-options { position: absolute; z-index: 2; inset-block-start: calc(100% + .25rem); inset-inline: 0; display: grid; max-block-size: 14rem; overflow: auto; padding: .35rem; border: 1px solid var(--admin-border); border-radius: .35rem; background: var(--admin-surface); box-shadow: 0 .5rem 1.5rem color-mix(in oklch, var(--admin-fg) 15%, transparent); }
 .llm-usage-summary { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .65rem; margin-block: 1rem; }
@@ -106,6 +110,7 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
   .collection-toolbar { align-items: stretch; flex-direction: column; }
   .collection-toolbar button { inline-size: 100%; }
   .llm-usage-filters { grid-template-columns: 1fr; }
+  .llm-usage-advanced-grid { grid-template-columns: 1fr; padding-inline: .75rem; }
   .llm-usage-filter-actions { flex-direction: column; align-items: stretch; }
   .llm-usage-filter-actions button { inline-size: 100%; }
   .llm-usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -113,4 +118,65 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* Administrative navigation follows the same window classes as the dashboard. */
+.admin-layout { grid-template-columns: 14.5rem minmax(0, 1fr); }
+.admin-content { grid-column: 2; inline-size: min(100%, 1600px); min-inline-size: 0; margin-inline: auto; padding: clamp(1.5rem, 3vw, 2.5rem); }
+.admin-header { padding-block-start: max(.75rem, env(safe-area-inset-top)); }
+.admin-content > *, .admin-content form, .prompt-editor-meta { min-inline-size: 0; }
+.prompt-editor-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .5rem; }
+.prompt-editor-meta > span { min-inline-size: 0; overflow-wrap: anywhere; }
+.llm-usage-context span { min-inline-size: 0; overflow-wrap: anywhere; }
+.admin-content .inspection-data-table { min-inline-size: 0; }
+.admin-mobile-collection { display: none; }
+
+@media (min-width: 37.5rem) and (max-width: 74.99rem) {
+  .admin-layout { display: grid; grid-template-columns: 5rem minmax(0, 1fr); }
+  .admin-content { grid-column: 2; padding: 1.5rem; }
+  .llm-usage-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .llm-usage-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-header-context { gap: .5rem; }
+  .admin-header-context .admin-tenant-name { display: none; }
+}
+@media (max-width: 37.5rem) {
+  .admin-layout { display: block; min-block-size: auto; }
+  .admin-content { padding: 1rem 1rem calc(5.25rem + env(safe-area-inset-bottom)); }
+  .admin-header { align-items: flex-start; flex-wrap: wrap; }
+  .admin-header-context { inline-size: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .admin-header-context .inspection-field { flex: 1 1 100%; max-inline-size: none; }
+  .page-heading { align-items: flex-start; flex-wrap: wrap; }
+  .page-heading h1 { font-size: 1.75rem; }
+  .collection-toolbar { align-items: stretch; flex-direction: column; }
+  .collection-toolbar button { inline-size: 100%; }
+  .llm-usage-filters { grid-template-columns: 1fr; }
+  .llm-usage-filter-actions { flex-direction: column; align-items: stretch; }
+  .llm-usage-filter-actions button { inline-size: 100%; }
+  .llm-usage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-content > .inspection-data-table { display: none; }
+  .admin-mobile-collection { display: grid; gap: .75rem; margin: 0; padding: 0; list-style: none; }
+  .admin-mobile-collection > li { min-inline-size: 0; padding: 0; }
+  .admin-mobile-collection article { display: grid; gap: .75rem; min-inline-size: 0; padding: .9rem; border: 1px solid var(--admin-border); border-radius: .75rem; background: var(--admin-surface); overflow-wrap: anywhere; }
+  .admin-mobile-collection h2 { margin: 0; font: 700 1.1rem/1.3 var(--admin-display); }
+  .admin-mobile-collection dl { display: grid; gap: .5rem; margin: 0; }
+  .admin-mobile-collection dl > div { display: grid; grid-template-columns: minmax(5.5rem, .45fr) minmax(0, 1fr); gap: .5rem; padding-block-start: .45rem; border-block-start: 1px solid var(--admin-border); }
+  .admin-mobile-collection dt { color: var(--admin-muted); font-size: .8rem; font-weight: 700; }
+  .admin-mobile-collection dd { min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
+  .admin-mobile-collection .admin-mobile-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-inline-size: 0; }
+  .admin-mobile-collection .admin-mobile-row h2 { min-inline-size: 0; overflow-wrap: anywhere; font-size: 1rem; }
+  .admin-mobile-collection .admin-mobile-row p { margin: .15rem 0 0; color: var(--admin-muted); font-size: .85rem; }
+  .admin-mobile-collection .admin-mobile-row .inspection-icon-button { flex: none; }
+  .admin-mobile-collection article { gap: .4rem; padding: .5rem .75rem; }
+  .admin-mobile-collection dl { gap: .25rem; }
+  .admin-mobile-collection dl > div { grid-template-columns: minmax(5rem, .4fr) minmax(0, 1fr); padding-block-start: .25rem; }
+  .admin-mobile-collection dd { font-size: .9rem; }
+  .llm-usage-page .inspection-data-table { display: none; }
+  .llm-mobile-collection { display: grid; }
+}
+@media (max-height: 30rem) and (max-width: 74.99rem) and (orientation: landscape) {
+  .admin-content { padding-block-end: 1rem; }
+}
+
+@media (min-width: 37.51rem) {
+  .admin-mobile-collection { display: none; }
 }
