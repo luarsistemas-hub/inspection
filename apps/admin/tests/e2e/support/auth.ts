@@ -29,7 +29,30 @@ export async function navigateAdmin(page: Page, label: string): Promise<void> {
 
 export const collectionRows = (page: Page) => page.locator(".inspection-data-table tbody tr:visible, .admin-mobile-collection > li:visible");
 
+/** Supplies a deterministic OIDC redirect and token for GraphQL-mocked Admin tests. */
+export async function mockAdminOidc(page: Page): Promise<void> {
+  await page.route(/\/protocol\/openid-connect\/auth(?:\?|$)/, async (route) => {
+    const request = new URL(route.request().url());
+    const callback = request.searchParams.get("redirect_uri");
+    const state = request.searchParams.get("state");
+    if (!callback || !state) throw new Error("OIDC mock needs a callback and state");
+    const destination = new URL(callback);
+    destination.searchParams.set("code", "admin-e2e-code");
+    destination.searchParams.set("state", state);
+    await route.fulfill({ status: 302, headers: { location: destination.toString() }, body: "" });
+  });
+  await page.route(/\/protocol\/openid-connect\/token(?:\?|$)/, (route) =>
+    route.fulfill({ json: { access_token: "admin-e2e-access-token", token_type: "Bearer" } }));
+}
+
 export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<void> {
+  if (process.env.INSPECTION_E2E_MOCKS === "true") {
+    await mockAdminOidc(page);
+    await page.goto(returnTo);
+    await page.getByRole("button", { name: "Entrar com conta administrativa" }).click();
+    await page.waitForURL(`**${returnTo}`);
+    return;
+  }
   await page.goto(returnTo);
   await page.getByRole("button", { name: "Entrar com conta administrativa" }).click();
   await page.waitForURL(/localhost:8081\/realms\/inspection\/protocol\/openid-connect\/auth/);

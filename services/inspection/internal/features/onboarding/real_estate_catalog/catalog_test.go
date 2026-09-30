@@ -10,11 +10,21 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != 1 || got.Version != 4 || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
+	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
 	if got.OriginModes[0].TemplateKey != ChecklistTemplateKey || got.OriginModes[1].TemplateKey != OriginTemplateKey {
 		t.Fatal("origin modes are not pinned to curated templates")
+	}
+}
+
+func TestResolveVersionPreservesTheLegacyAddressContract(t *testing.T) {
+	got, err := ResolveVersion(Segment, DefinitionVersion-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != 1 || got.Version != 4 || got.Steps[1].Fields[0].Key != "address" || got.Steps[1].Fields[0].Type != "textarea" {
+		t.Fatalf("legacy onboarding definition changed: %+v", got)
 	}
 }
 

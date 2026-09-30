@@ -40,6 +40,7 @@ export function OriginUploadCards({ uploads, onChange, onRetry }: { uploads: Ori
     <Field label="Fotos de referência" hint="Cada foto precisa de uma descrição antes de ser enviada.">
       <Input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
     </Field>
+    {uploads.some((upload) => !upload.mediaId) ? <Alert tone="warning">Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada.</Alert> : null}
     {fileError ? <Alert tone="danger">{fileError}</Alert> : null}
     {uploads.map((upload) => <UploadCard key={upload.id} upload={upload} onChange={(next) => onChange((current) => current.map((item) => item.id === next.id ? next : item))} onRemove={() => onChange((current) => current.filter((item) => item.id !== upload.id))} onRetry={() => onRetry(upload.id)} />)}
   </div>;

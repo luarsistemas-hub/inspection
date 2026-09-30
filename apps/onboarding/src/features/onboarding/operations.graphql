@@ -2,6 +2,8 @@ query OnboardingSession {
   onboardingSession { id state currentStep version expiresAt definition completedSteps owner { name email } existingAgency { tenantId businessUnitId name businessUnitCode status } }
 }
 
+query OnboardingLookupPostalCode($postalCode: String!) { lookupPostalCode(postalCode: $postalCode) { found postalCode street district city state municipalityCode } }
+
 query OnboardingStatus { onboardingStatus { state requestId inspectionId nextAction originStatus deliveryStatus responsibleEmail responsibilityStatus responsibilityVersion deliveryFailureCode canCorrectResponsibleEmail updatedAt } }
 
 mutation RequestOnboardingOtp($input: RequestOnboardingOtpInput!) {

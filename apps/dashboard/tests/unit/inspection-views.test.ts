@@ -12,7 +12,7 @@ import {
 } from "@/features/dashboard/inspection-views";
 
 function inspection(id: string, status: string, dueAt: string): InspectionRecord {
-  return { id, assetId: "asset", participantId: "participant", projectId: null, stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1 };
+  return { id, assetId: "asset", participantId: "participant", projectId: null, stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1, assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio" };
 }
 
 describe("Inspection views", () => {
@@ -72,6 +72,7 @@ describe("Inspection views", () => {
     const records = [inspection("planned", "PLANNED", "2026-09-10T10:00:00Z"), inspection("done", "COMPLETED", "2026-09-11T10:00:00Z")];
 
     expect(filterInspections(records, "done", "todas").map(({ id }) => id)).toEqual(["done"]);
+    expect(filterInspections(records, "elvio", "todas").map(({ id }) => id)).toEqual(["planned", "done"]);
     expect(filterInspections(records, "", "planejamento").map(({ id }) => id)).toEqual(["planned"]);
     expect(filterInspections(records, "missing", "todas")).toEqual([]);
   });

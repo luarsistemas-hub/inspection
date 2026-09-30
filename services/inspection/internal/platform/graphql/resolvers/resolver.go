@@ -6,6 +6,7 @@ package resolvers
 // here.
 
 import (
+	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
@@ -38,6 +39,7 @@ type Resolver struct {
 	Onboarding               onboardingsession.Service
 	OnboardingComplete       onboardingcomplete.Service
 	AdminActivation          adminactivation.Service
+	UserActivation           activateinternal.Service
 	OnboardingBootstrap      onboardingbootstrap.Service
 	ResponsibleEmail         responsibleemail.Service
 	OnboardingDeliveryStatus deliverystatus.Service

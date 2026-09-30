@@ -77,6 +77,9 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 			}
 			if participant.IdempotencyKey == idempotencyKey {
 				result.Participant = participant
+				if err := ensureDefaultEmailSelection(tx, tenantID, participant.ID, normalized, time.Now().UTC()); err != nil {
+					return err
+				}
 				return s.load(tx, &result)
 			}
 			if participant.Version != expectedVersion {
@@ -99,12 +102,18 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 					return err
 				}
 			}
+			if err := ensureDefaultEmailSelection(tx, tenantID, participant.ID, normalized, now); err != nil {
+				return err
+			}
 			result.Participant = participant
 			return s.load(tx, &result)
 		}
 		err := tx.Where("tenant_id=? AND idempotency_key=?", tenantID, idempotencyKey).First(&participant).Error
 		if err == nil {
 			result.Participant = participant
+			if err := ensureDefaultEmailSelection(tx, tenantID, participant.ID, normalized, time.Now().UTC()); err != nil {
+				return err
+			}
 			return s.load(tx, &result)
 		}
 		if err != gorm.ErrRecordNotFound {
@@ -121,10 +130,35 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 				return err
 			}
 		}
+		if err := ensureDefaultEmailSelection(tx, tenantID, participant.ID, normalized, now); err != nil {
+			return err
+		}
 		result.Participant = participant
 		return s.load(tx, &result)
 	})
 	return result, err
+}
+
+func ensureDefaultEmailSelection(tx *gorm.DB, tenantID, participantID identity.ID, contacts []ContactInput, now time.Time) error {
+	var hasSelection int64
+	if err := tx.Model(&database.ChannelSelection{}).Where("tenant_id=? AND participant_id=?", tenantID, participantID).Count(&hasSelection).Error; err != nil {
+		return err
+	}
+	if hasSelection != 0 {
+		return nil
+	}
+	for _, contact := range contacts {
+		if contact.Channel != "EMAIL" {
+			continue
+		}
+		var row database.ParticipantContact
+		if err := tx.Where("tenant_id=? AND participant_id=? AND channel='EMAIL' AND normalized=? AND active=true", tenantID, participantID, contact.Value).First(&row).Error; err != nil {
+			return err
+		}
+		selection := database.ChannelSelection{ID: identity.NewID(), TenantID: tenantID, ParticipantID: participantID, ContactID: row.ID, CreatedAt: now}
+		return tx.Create(&selection).Error
+	}
+	return nil
 }
 
 func (s Service) Verify(ctx context.Context, tenantID, contactID identity.ID, success bool, idempotencyKey string) (database.ContactVerification, error) {

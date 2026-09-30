@@ -27,6 +27,7 @@ type Query struct {
 type Summary struct {
 	MembershipID, TenantID                           identity.ID
 	TenantName, TenantStatus, Role, MembershipStatus string
+	Name, Email, InvitationStatus                    string
 	MembershipVersion                                int64
 }
 
@@ -100,7 +101,7 @@ func handle(ctx context.Context, db *gorm.DB, query Query) (Result, error) {
 		}); err != nil {
 			return Result{}, err
 		}
-		result.Nodes = append(result.Nodes, Summary{MembershipID: membership.ID, TenantID: membership.TenantID, TenantName: tenant.Name, TenantStatus: tenant.Status, Role: membership.Role, MembershipStatus: membership.Status, MembershipVersion: membership.Version})
+		result.Nodes = append(result.Nodes, Summary{MembershipID: membership.ID, TenantID: membership.TenantID, TenantName: tenant.Name, TenantStatus: tenant.Status, Role: membership.Role, MembershipStatus: membership.Status, Name: membership.Name, Email: membership.Email, InvitationStatus: membership.InvitationStatus, MembershipVersion: membership.Version})
 	}
 	if len(memberships) > 0 {
 		result.EndCursor = memberships[len(memberships)-1].ID.String()

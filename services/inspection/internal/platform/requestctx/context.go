@@ -13,6 +13,9 @@ type Principal struct {
 	IdentityID          identity.ID
 	MembershipID        identity.ID
 	MembershipVersion   int64
+	Name                string
+	Email               string
+	InvitationStatus    string
 	TenantID            identity.ID
 	Issuer              string
 	Subject             string
@@ -59,6 +62,7 @@ type responseWriterKey struct{}
 type externalCredentialsKey struct{}
 type onboardingCredentialsKey struct{}
 type adminActivationCredentialsKey struct{}
+type userInvitationCredentialsKey struct{}
 type secureCookiesKey struct{}
 type clientIPKey struct{}
 
@@ -73,6 +77,11 @@ type OnboardingCredentials struct {
 }
 
 type AdminActivationCredentials struct {
+	SessionToken string
+	CSRFToken    string
+}
+
+type UserInvitationCredentials struct {
 	SessionToken string
 	CSRFToken    string
 }
@@ -145,6 +154,10 @@ func WithAdminActivationCredentials(ctx context.Context, credentials AdminActiva
 	return context.WithValue(ctx, adminActivationCredentialsKey{}, credentials)
 }
 
+func WithUserInvitationCredentials(ctx context.Context, credentials UserInvitationCredentials) context.Context {
+	return context.WithValue(ctx, userInvitationCredentialsKey{}, credentials)
+}
+
 func ExternalCredentialsFromContext(ctx context.Context) (ExternalCredentials, bool) {
 	credentials, ok := ctx.Value(externalCredentialsKey{}).(ExternalCredentials)
 	return credentials, ok && credentials.SessionToken != ""
@@ -157,5 +170,10 @@ func OnboardingCredentialsFromContext(ctx context.Context) (OnboardingCredential
 
 func AdminActivationCredentialsFromContext(ctx context.Context) (AdminActivationCredentials, bool) {
 	credentials, ok := ctx.Value(adminActivationCredentialsKey{}).(AdminActivationCredentials)
+	return credentials, ok && credentials.SessionToken != ""
+}
+
+func UserInvitationCredentialsFromContext(ctx context.Context) (UserInvitationCredentials, bool) {
+	credentials, ok := ctx.Value(userInvitationCredentialsKey{}).(UserInvitationCredentials)
 	return credentials, ok && credentials.SessionToken != ""
 }

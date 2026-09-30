@@ -75,6 +75,8 @@ type Asset struct {
 	Name             string             `json:"name"`
 	ExternalKey      string             `json:"externalKey"`
 	Address          string             `json:"address"`
+	AddressDetails   *PostalAddress     `json:"addressDetails,omitempty"`
+	AddressStatus    string             `json:"addressStatus"`
 	LatitudeE6       *int               `json:"latitudeE6,omitempty"`
 	LongitudeE6      *int               `json:"longitudeE6,omitempty"`
 	GeofenceMeters   int                `json:"geofenceMeters"`
@@ -107,7 +109,8 @@ type AssetInput struct {
 	TemplateID       *string                 `json:"templateId,omitempty"`
 	Name             string                  `json:"name"`
 	ExternalKey      string                  `json:"externalKey"`
-	Address          string                  `json:"address"`
+	Address          *string                 `json:"address,omitempty"`
+	AddressDetails   *PostalAddressInput     `json:"addressDetails,omitempty"`
 	LatitudeE6       *int                    `json:"latitudeE6,omitempty"`
 	LongitudeE6      *int                    `json:"longitudeE6,omitempty"`
 	GeofenceMeters   *int                    `json:"geofenceMeters,omitempty"`
@@ -214,6 +217,11 @@ type CaptureRequirement struct {
 	CaptureSourcePolicy  string  `json:"captureSourcePolicy"`
 	ComparisonTarget     string  `json:"comparisonTarget"`
 	ImpossibilityAllowed bool    `json:"impossibilityAllowed"`
+}
+
+type CompleteInternalUserActivationInput struct {
+	Password         *string `json:"password,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type CompleteMediaUploadInput struct {
@@ -494,6 +502,10 @@ type Inspection struct {
 	DeadlineAt               string   `json:"deadlineAt"`
 	ReminderInstants         []string `json:"reminderInstants"`
 	Version                  int      `json:"version"`
+	AssetName                *string  `json:"assetName,omitempty"`
+	AssetAddress             *string  `json:"assetAddress,omitempty"`
+	AssetExternalKey         *string  `json:"assetExternalKey,omitempty"`
+	ParticipantName          *string  `json:"participantName,omitempty"`
 }
 
 type InspectionConnection struct {
@@ -534,6 +546,20 @@ type InspectionTransitionInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type InternalUserActivation struct {
+	MembershipID string `json:"membershipId"`
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	NewIdentity  bool   `json:"newIdentity"`
+	Status       string `json:"status"`
+}
+
+type InternalUserActivationPayload struct {
+	Activation       *InternalUserActivation `json:"activation,omitempty"`
+	UserErrors       []*UserError            `json:"userErrors"`
+	ClientMutationID string                  `json:"clientMutationId"`
+}
+
 type InvalidateInspectionInput struct {
 	InspectionID     string `json:"inspectionId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
@@ -561,8 +587,8 @@ type InvitationPayload struct {
 }
 
 type InviteInternalUserInput struct {
-	Issuer           string                  `json:"issuer"`
-	Subject          string                  `json:"subject"`
+	Name             string                  `json:"name"`
+	Email            string                  `json:"email"`
 	Role             string                  `json:"role"`
 	Scopes           []*ScopeAssignmentInput `json:"scopes"`
 	ClientMutationID string                  `json:"clientMutationId"`
@@ -696,12 +722,15 @@ type MediaUploadPayload struct {
 }
 
 type Membership struct {
-	ID       string   `json:"id"`
-	TenantID string   `json:"tenantId"`
-	Role     string   `json:"role"`
-	Status   string   `json:"status"`
-	Version  int      `json:"version"`
-	Scopes   []*Scope `json:"scopes"`
+	ID               string   `json:"id"`
+	TenantID         string   `json:"tenantId"`
+	Name             string   `json:"name"`
+	Email            string   `json:"email"`
+	Role             string   `json:"role"`
+	Status           string   `json:"status"`
+	InvitationStatus string   `json:"invitationStatus"`
+	Version          int      `json:"version"`
+	Scopes           []*Scope `json:"scopes"`
 }
 
 type MembershipConnection struct {
@@ -966,6 +995,44 @@ type ParticipantPayload struct {
 	Participant      *Participant `json:"participant,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type PostalAddress struct {
+	CountryCode      string `json:"countryCode"`
+	PostalCode       string `json:"postalCode"`
+	Street           string `json:"street"`
+	Number           string `json:"number"`
+	WithoutNumber    bool   `json:"withoutNumber"`
+	Complement       string `json:"complement"`
+	District         string `json:"district"`
+	City             string `json:"city"`
+	State            string `json:"state"`
+	MunicipalityCode string `json:"municipalityCode"`
+	Reference        string `json:"reference"`
+}
+
+type PostalAddressInput struct {
+	CountryCode      *string `json:"countryCode,omitempty"`
+	PostalCode       string  `json:"postalCode"`
+	Street           string  `json:"street"`
+	Number           *string `json:"number,omitempty"`
+	WithoutNumber    bool    `json:"withoutNumber"`
+	Complement       *string `json:"complement,omitempty"`
+	District         *string `json:"district,omitempty"`
+	City             string  `json:"city"`
+	State            string  `json:"state"`
+	MunicipalityCode *string `json:"municipalityCode,omitempty"`
+	Reference        *string `json:"reference,omitempty"`
+}
+
+type PostalAddressLookup struct {
+	Found            bool    `json:"found"`
+	PostalCode       string  `json:"postalCode"`
+	Street           *string `json:"street,omitempty"`
+	District         *string `json:"district,omitempty"`
+	City             *string `json:"city,omitempty"`
+	State            *string `json:"state,omitempty"`
+	MunicipalityCode *string `json:"municipalityCode,omitempty"`
 }
 
 type PresignMediaPartsInput struct {
@@ -1297,15 +1364,21 @@ type RequestAdminActivationOtpInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type RequestInternalUserActivationOtpInput struct {
+	InvitationToken  *string `json:"invitationToken,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
+}
+
 type RequestInvitationOtpInput struct {
 	LinkToken        string `json:"linkToken"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
 type RequestOnboardingOtpInput struct {
-	Name             string `json:"name"`
-	Email            string `json:"email"`
-	ClientMutationID string `json:"clientMutationId"`
+	Name             string  `json:"name"`
+	Email            string  `json:"email"`
+	TurnstileToken   *string `json:"turnstileToken,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type RequestRecaptureInput struct {
@@ -1313,6 +1386,11 @@ type RequestRecaptureInput struct {
 	Items            []*RecaptureItemInput `json:"items"`
 	DeadlineAt       string                `json:"deadlineAt"`
 	ClientMutationID string                `json:"clientMutationId"`
+}
+
+type ResendInternalUserInvitationInput struct {
+	MembershipID     string `json:"membershipId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type ResponsibleEmailCorrection struct {
@@ -1741,6 +1819,11 @@ type VerifyContactInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type VerifyInternalUserActivationOtpInput struct {
+	Code             string `json:"code"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type VerifyInvitationOtpInput struct {
 	LinkToken        string `json:"linkToken"`
 	Code             string `json:"code"`
@@ -1856,6 +1939,65 @@ func (e *EvidenceMode) UnmarshalJSON(b []byte) error {
 }
 
 func (e EvidenceMode) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type InspectionStatusGroup string
+
+const (
+	InspectionStatusGroupPlanning  InspectionStatusGroup = "PLANNING"
+	InspectionStatusGroupExecution InspectionStatusGroup = "EXECUTION"
+	InspectionStatusGroupCompleted InspectionStatusGroup = "COMPLETED"
+	InspectionStatusGroupClosed    InspectionStatusGroup = "CLOSED"
+)
+
+var AllInspectionStatusGroup = []InspectionStatusGroup{
+	InspectionStatusGroupPlanning,
+	InspectionStatusGroupExecution,
+	InspectionStatusGroupCompleted,
+	InspectionStatusGroupClosed,
+}
+
+func (e InspectionStatusGroup) IsValid() bool {
+	switch e {
+	case InspectionStatusGroupPlanning, InspectionStatusGroupExecution, InspectionStatusGroupCompleted, InspectionStatusGroupClosed:
+		return true
+	}
+	return false
+}
+
+func (e InspectionStatusGroup) String() string {
+	return string(e)
+}
+
+func (e *InspectionStatusGroup) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InspectionStatusGroup(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InspectionStatusGroup", str)
+	}
+	return nil
+}
+
+func (e InspectionStatusGroup) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *InspectionStatusGroup) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e InspectionStatusGroup) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

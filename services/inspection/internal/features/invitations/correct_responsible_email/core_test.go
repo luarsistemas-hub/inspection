@@ -97,6 +97,13 @@ func TestCorrectCreatesFirstInvitationWhenInitialDispatchWasMissed(t *testing.T)
 	if recorder.requests[0].Execution == nil || recorder.requests[0].Execution.InvitationID != result.InvitationID {
 		t.Fatal("capture token was not queued")
 	}
+	if recorder.requests[0].Template.Version != "v1" || recorder.requests[0].Variables["assetAddress"] != "" {
+		t.Fatalf("unverified recipient received property details: %+v", recorder.requests[0])
+	}
+	var verified int64
+	if err := db.Model(&database.ContactVerification{}).Where("tenant_id=? AND status='VERIFIED'", input.TenantID).Count(&verified).Error; err != nil || verified != 0 {
+		t.Fatalf("corrected email was pre-verified: count=%d error=%v", verified, err)
+	}
 
 	if err := db.Create(&database.Delivery{ID: *result.DeliveryID, TenantID: input.TenantID, InvitationID: &result.InvitationID, Status: string(notificationcore.StateQueued)}).Error; err != nil {
 		t.Fatal(err)

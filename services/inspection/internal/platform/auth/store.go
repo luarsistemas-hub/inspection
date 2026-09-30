@@ -49,7 +49,7 @@ func (s GORMMembershipStore) Resolve(ctx context.Context, tenantID, identityID i
 	}); err != nil {
 		return requestctx.Principal{}, err
 	}
-	p := requestctx.Principal{IdentityID: identityID, MembershipID: membership.ID, MembershipVersion: membership.Version, TenantID: tenantID, Roles: []string{membership.Role}, Disabled: membership.Status != "ACTIVE" || tenant.Status != "ACTIVE"}
+	p := requestctx.Principal{IdentityID: identityID, MembershipID: membership.ID, MembershipVersion: membership.Version, Name: membership.Name, Email: membership.Email, InvitationStatus: membership.InvitationStatus, TenantID: tenantID, Roles: []string{membership.Role}, Disabled: membership.Status != "ACTIVE" || tenant.Status != "ACTIVE"}
 	for _, entitlement := range entitlements {
 		p.ProductEntitlements = append(p.ProductEntitlements, entitlement.Product)
 	}

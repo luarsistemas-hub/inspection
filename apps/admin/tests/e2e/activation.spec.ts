@@ -31,7 +31,12 @@ test("E2E-007 activates an owner from the real invitation before normal PKCE log
   await page.getByRole("button", { name: "Confirmar e continuar" }).click();
   await page.getByLabel("Nome da imobiliária").fill(`Imobiliária Ativação ${suffix}`);
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
-  await page.getByLabel("Endereço do imóvel").fill("Rua da Ativação, 123");
+  await page.getByLabel("CEP").fill("01001-000");
+  await page.getByRole("button", { name: "Buscar CEP" }).click();
+  await expect(page.getByLabel("Logradouro")).toHaveValue("Praça da Sé");
+  await page.getByRole("textbox", { name: "Número *" }).fill("123");
+  await page.getByLabel("Cidade").fill("São Paulo");
+  await page.getByLabel("UF").selectOption("SP");
   await page.getByLabel("Tipo de imóvel").selectOption("APARTMENT");
   await page.getByLabel("Finalidade da vistoria").selectOption("RENTAL");
   await page.getByLabel("Prazo para concluir a vistoria").fill(deadline);

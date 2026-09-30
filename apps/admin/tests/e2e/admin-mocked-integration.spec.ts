@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { collectionRows, loginAsLocalAdmin, navigateAdmin } from "./support/auth";
+import { collectionRows, loginAsLocalAdmin, mockAdminOidc, navigateAdmin } from "./support/auth";
 
 type GraphQLReply = { data?: Record<string, unknown>; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
 type GraphQLCall = { operation: string; variables: Record<string, unknown> };
@@ -16,13 +16,21 @@ const activeIdentity = (role = "TENANT_ADMIN", canViewLLMCosts = true): GraphQLR
 } });
 
 const pageInfo = (hasNextPage = false, endCursor: string | null = null) => ({ hasNextPage, endCursor });
+async function fillAssetAddress(page: Page, street: string, number = "101") {
+  await page.getByLabel("CEP").fill("01001-000");
+  await page.getByLabel("Logradouro").fill(street);
+  await page.getByRole("textbox", { name: "Número *" }).fill(number);
+  await page.getByLabel("Cidade").fill("São Paulo");
+  await page.getByLabel("UF").selectOption("SP");
+}
 const defaultReply = (operation: string): GraphQLReply => {
   switch (operation) {
     case "AdminIdentity": return activeIdentity();
     case "AdminOrganization": return { data: { businessUnits: { nodes: [{ id: "unit-a", code: "UN01", name: "Unidade Norte", status: "ACTIVE", version: 1 }], pageInfo: pageInfo() } } };
     case "AdminAccess": return { data: { memberships: { nodes: [{ id: "member-a", role: "EMPLOYEE", status: "ACTIVE", version: 1, scopes: [] }], pageInfo: pageInfo() } } };
     case "AdminCatalogs": return { data: { participants: { nodes: [{ id: "participant-a", name: "Ana QA", status: "ACTIVE", version: 1, contacts: [] }], pageInfo: pageInfo() }, segmentDefinitions: { nodes: [{ id: "segment-a", key: "RESIDENTIAL", name: "Residencial", activeVersionId: "segment-version-a", version: 1 }], pageInfo: pageInfo() }, templates: { nodes: [{ id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-version-a", activeVersionId: "template-version-a", version: 1 }], pageInfo: pageInfo() } } };
-    case "AdminAssets": return { data: { assets: { nodes: [{ id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101", status: "ACTIVE", businessUnitId: "unit-a", version: 1 }], pageInfo: pageInfo() } } };
+    case "AdminAssets": return { data: { assets: { nodes: [{ id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101", addressDetails: null, addressStatus: "LEGACY", status: "ACTIVE", businessUnitId: "unit-a", segmentVersionId: "segment-version-a", templateId: "template-a", latitudeE6: 12345, longitudeE6: 67890, geofenceMeters: 150, attributes: { propertyType: "residential" }, policyOverrides: { allowGallery: true }, assignments: [{ participantId: "participant-a", role: "OWNER", active: true }], version: 1 }], pageInfo: pageInfo() } } };
+    case "AdminLookupPostalCode": return { data: { lookupPostalCode: { found: true, postalCode: "01001000", street: "Praça da Sé", district: "Sé", city: "São Paulo", state: "SP", municipalityCode: "3550308" } } };
     case "AdminPublicationPolicy": return { data: { publicationPolicy: { mode: "MANUAL", version: 1 } } };
     case "AdminRetentionPolicies": return { data: { retentionPolicies: { nodes: [{ id: "retention-a", evidenceDays: 30, operationalDays: 60, securityDays: 90, version: 1 }], pageInfo: pageInfo() } } };
     case "AdminNotificationDeliveries": return { data: { notificationDeliveries: { nodes: [{ id: "delivery-a", status: "FAILED", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z", inspectionId: "inspection-a", invitationId: null, logicalTemplate: "invite", failureCode: "BOUNCE", recipientMasked: "a***@example.test", responsibilityVersion: 1, canCorrectResponsibleEmail: true }], pageInfo: pageInfo() } } };
@@ -35,6 +43,7 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminInviteInternalUser": return { data: { inviteInternalUser: { membership: { id: "member-created", role: "EMPLOYEE", status: "ACTIVE", version: 1, scopes: [] }, userErrors: [], clientMutationId: "invite-mutation" } } };
     case "AdminUpsertParticipant": return { data: { upsertParticipant: { participant: { id: "participant-created", name: "Ana QA", status: "ACTIVE", version: 1, contacts: [] }, userErrors: [], clientMutationId: "participant-mutation" } } };
     case "AdminRegisterAsset": return { data: { registerAsset: { asset: { id: "asset-created", name: "Apartamento 101", externalKey: "APT101", status: "ACTIVE", version: 1 }, userErrors: [], clientMutationId: "asset-mutation" } } };
+    case "AdminUpdateAsset": return { data: { updateAsset: { asset: { id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101 — São Paulo/SP — CEP 01001-000", addressStatus: "COMPLETE", status: "ACTIVE", version: 2 }, userErrors: [], clientMutationId: "address-mutation" } } };
     case "AdminConfigurePublicationPolicy": return { data: { configurePublicationPolicy: { policy: { mode: "AUTOMATIC", version: 2 }, userErrors: [], clientMutationId: "policy-mutation" } } };
     case "AdminUpdateAnalysisPrompt": return { data: { updateAnalysisPrompt: { prompt: { analysisType: "REAL_ESTATE", systemPrompt: "Revise as imagens", modelAlias: "inspection-vision", minimumConfidenceBps: 7000, canonicalDigest: "digest-b", revision: 2, updatedAt: "2026-01-02T00:00:00Z" }, userErrors: [], clientMutationId: "prompt-mutation" } } };
     case "BootstrapTenant": return { data: { createTenant: { tenant: { id: "tenant-a", name: "Minha operação", status: "ACTIVE" }, userErrors: [], clientMutationId: "bootstrap-mutation" } } };
@@ -71,6 +80,7 @@ async function installMocks(page: Page): Promise<MockController> {
 }
 
 async function loginIntoFirstAccess(page: Page): Promise<void> {
+  await mockAdminOidc(page);
   await page.goto("/organization");
   await page.getByRole("button", { name: "Entrar com conta administrativa" }).click();
   await page.waitForURL((url) => url.hostname === "localhost" && (url.port === "8081" || url.pathname === "/auth/callback"), { timeout: 15_000 });
@@ -105,11 +115,53 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await expect(page.getByLabel("Código de ativação")).toBeVisible();
     await page.getByLabel("Código de ativação").fill("12345");
     await expect(page.getByRole("button", { name: "Confirmar código" })).toBeDisabled();
-    await expect(page.getByLabel("Nova senha", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Nova senha", exact: true })).toHaveCount(0);
     expect(mutationCount).toBe(1);
   });
 
-  test("IT-032 enforces the twelve-character password minimum", async ({ page }) => {
+  test("invitation activation requires the emailed code and sets a password only for a new account", async ({ page }) => {
+    const calls: string[] = [];
+    await page.route("**/graphql", async (route) => {
+      const query = (route.request().postDataJSON() as { query: string }).query;
+      const field = query.match(/\{\s*(\w+)\(input/)?.[1] ?? "";
+      calls.push(field);
+      if (field === "requestInternalUserActivationOtp") return route.fulfill({ headers: { "x-csrf-token": "csrf-fixture" }, json: { data: { [field]: { activation: { membershipId: "member-a", email: "new@example.test", name: "New User", newIdentity: true, status: "OTP_SENT" }, userErrors: [] } } } });
+      if (field === "verifyInternalUserActivationOtp") return route.fulfill({ json: { data: { [field]: { activation: { membershipId: "member-a", email: "new@example.test", name: "New User", newIdentity: true, status: "VERIFIED" }, userErrors: [] } } } });
+      return route.fulfill({ json: { data: { [field]: { activation: { membershipId: "member-a", email: "new@example.test", name: "New User", newIdentity: true, status: "ACCEPTED" }, userErrors: [] } } } });
+    });
+    await page.goto("/activate/invitation?token=invitation-fixture");
+    await page.getByRole("button", { name: "Enviar código" }).click();
+    await expect(page.getByLabel("Código de confirmação")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nova senha", exact: true })).toHaveCount(0);
+    await page.getByLabel("Código de confirmação").fill("123456");
+    await page.getByRole("button", { name: "Confirmar código" }).click();
+    await expect(page.getByRole("textbox", { name: "Nova senha", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Criar senha e ativar" })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Nova senha", exact: true }).fill("NovaSenha1!");
+    await page.getByLabel("Confirme a nova senha").fill("NovaSenha1!");
+    await page.getByRole("button", { name: "Criar senha e ativar" }).click();
+    await expect(page.getByRole("heading", { name: "Acesso ativado" })).toBeVisible();
+    expect(calls).toEqual(["requestInternalUserActivationOtp", "verifyInternalUserActivationOtp", "completeInternalUserActivation"]);
+  });
+
+  test("existing account accepts an invitation without a password step", async ({ page }) => {
+    await page.route("**/graphql", async (route) => {
+      const query = (route.request().postDataJSON() as { query: string }).query;
+      const field = query.match(/\{\s*(\w+)\(input/)?.[1] ?? "";
+      const payload = field === "requestInternalUserActivationOtp"
+        ? { membershipId: "member-a", email: "existing@example.test", name: "Existing User", newIdentity: false, status: "OTP_SENT" }
+        : { membershipId: "member-a", email: "existing@example.test", name: "Existing User", newIdentity: false, status: "ACCEPTED" };
+      return route.fulfill({ headers: { "x-csrf-token": "csrf-fixture" }, json: { data: { [field]: { activation: payload, userErrors: [] } } } });
+    });
+    await page.goto("/activate/invitation?token=existing-fixture");
+    await page.getByRole("button", { name: "Enviar código" }).click();
+    await page.getByLabel("Código de confirmação").fill("123456");
+    await page.getByRole("button", { name: "Confirmar código" }).click();
+    await expect(page.getByRole("heading", { name: "Acesso ativado" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nova senha", exact: true })).toHaveCount(0);
+  });
+
+  test("IT-032 rejects passwords that do not meet the new password policy", async ({ page }) => {
     await page.route("**/graphql", async (route) => {
       const query = (route.request().postDataJSON() as { query: string }).query;
       if (query.includes("AdminActivationSession")) return route.fulfill({ status: 200, headers: { "x-csrf-token": "csrf-fixture" }, json: { data: { onboardingSession: { id: "session-a" } } } });
@@ -120,9 +172,9 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByRole("button", { name: "Enviar código de ativação" }).click();
     await page.getByLabel("Código de ativação").fill("123456");
     await page.getByRole("button", { name: "Confirmar código" }).click();
-    await page.getByLabel("Nova senha", { exact: true }).fill("abcdefghijk");
+    await page.getByRole("textbox", { name: "Nova senha", exact: true }).fill("abcdefghijk");
     await page.getByLabel("Confirme a nova senha").fill("abcdefghijk");
-    await expect(page.getByText("Use ao menos 12 caracteres.")).toBeVisible();
+    await expect(page.getByText("Use pelo menos 6 caracteres, uma letra maiúscula e um caractere especial.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Criar senha" })).toBeDisabled();
   });
 
@@ -137,7 +189,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-035 does not expose password setup before code verification", async ({ page }) => {
     await page.goto("/activate?token=activation-fixture");
     await expect(page.getByLabel("Código de ativação")).toHaveCount(0);
-    await expect(page.getByLabel("Nova senha", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Nova senha", exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Confirme a nova senha")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Enviar código de ativação" })).toBeVisible();
   });
@@ -244,19 +296,20 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     const mocks = await installMocks(page);
     mocks.enqueue("AdminAccess", { data: { memberships: { nodes: [], pageInfo: pageInfo() } } });
     mocks.enqueue("AdminInviteInternalUser",
-      { data: { inviteInternalUser: { membership: null, userErrors: [{ code: "INVALID_ISSUER", field: "issuer", message: "Emissor inválido." }], clientMutationId: "invite-error" } } },
+      { data: { inviteInternalUser: { membership: null, userErrors: [{ code: "INVALID_INPUT", field: "email", message: "E-mail inválido." }], clientMutationId: "invite-error" } } },
       { data: { inviteInternalUser: { membership: { id: "member-new", role: "EMPLOYEE", status: "ACTIVE", version: 1, scopes: [] }, userErrors: [], clientMutationId: "invite-success" } } },
     );
     const release = mocks.hold("AdminInviteInternalUser");
     await loginAsLocalAdmin(page, "/access");
     await expect(page.getByRole("heading", { name: "Nenhum registro configurado em Identidade e acesso." })).toBeVisible();
     await page.getByRole("button", { name: "Convidar usuário" }).click();
-    await page.getByLabel("Emissor").fill("https://issuer.example.test");
+    await page.getByLabel("Nome do usuário").fill("Usuário de teste");
+    await page.getByRole("textbox", { name: "E-mail", exact: true }).fill("user@example.test");
     await page.getByLabel("Perfil de acesso").selectOption("EMPLOYEE");
     await page.getByRole("button", { name: "Salvar operação" }).click();
-    expect(await page.getByLabel("Identificador externo do usuário").evaluate((el: HTMLInputElement) => el.validationMessage)).not.toBe("");
+    expect(await page.getByLabel("Confirme o e-mail").evaluate((el: HTMLInputElement) => el.validationMessage)).not.toBe("");
     expect(mocks.calls.filter((call) => call.operation === "AdminInviteInternalUser")).toHaveLength(0);
-    await page.getByLabel("Identificador externo do usuário").fill("user-a");
+    await page.getByLabel("Confirme o e-mail").fill("user@example.test");
     const save = page.getByRole("button", { name: "Salvar operação" });
     await save.click();
     await expect(page.getByRole("button", { name: "Salvando…" })).toBeDisabled();
@@ -264,7 +317,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     if (bounds) await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     expect(mocks.calls.filter((call) => call.operation === "AdminInviteInternalUser")).toHaveLength(1);
     release();
-    await expect(page.getByText("Emissor inválido.")).toBeVisible();
+    await expect(page.getByText("E-mail inválido.")).toBeVisible();
     await expect(page.getByLabel("Perfil de acesso")).toHaveValue("EMPLOYEE");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(collectionRows(page).filter({ hasText: "Operador" })).toBeVisible();
@@ -315,6 +368,8 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await expect(unit.locator("option[value='unit-b']")).toHaveCount(0);
     await unit.selectOption("unit-a");
     await page.getByLabel("Nome do responsável").fill("Ana QA");
+    await page.getByRole("textbox", { name: "E-mail", exact: true }).fill("ana@example.test");
+    await page.getByLabel("Confirme o e-mail").fill("ana@example.test");
     await page.getByLabel("Função no segmento").fill("OWNER");
     const save = page.getByRole("button", { name: "Salvar operação" });
     await save.click();
@@ -334,7 +389,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-051, IT-052, IT-054 and IT-055 preserve asset relationships and optional templates", async ({ page }) => {
     const mocks = await installMocks(page);
     const units = { data: { businessUnits: { nodes: [{ id: "unit-a", code: "UN01", name: "Unidade Norte", status: "ACTIVE", version: 1 }, { id: "unit-b", code: "UN02", name: "Unidade Sul", status: "ACTIVE", version: 1 }], pageInfo: pageInfo() } } };
-    const catalogs = { data: { segmentDefinitions: { nodes: [{ id: "segment-a", key: "RESIDENTIAL", name: "Residencial", activeVersionId: "segment-version-a", version: 1 }], pageInfo: pageInfo() }, templates: { nodes: [{ id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-version-a", activeVersionId: "template-version-a", version: 1 }], pageInfo: pageInfo() } } };
+    const catalogs = { data: { segmentDefinitions: { nodes: [{ id: "segment-version-a", key: "RESIDENTIAL", name: "Residencial", activeVersionId: "segment-version-a", version: 1 }], pageInfo: pageInfo() }, templates: { nodes: [{ id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-version-a", activeVersionId: "template-version-a", version: 1 }], pageInfo: pageInfo() } } };
     mocks.enqueue("AdminOrganization", units, units, units, units);
     mocks.enqueue("AdminCatalogs", catalogs,
       { data: { segmentDefinitions: catalogs.data.segmentDefinitions, templates: { nodes: [], pageInfo: pageInfo() } } },
@@ -346,7 +401,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento sem unidade");
     await page.getByLabel("Código do imóvel").fill("APT-INVALID");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     expect(await page.getByLabel("Unidade").evaluate((el: HTMLSelectElement) => el.validationMessage)).not.toBe("");
     await page.getByRole("button", { name: "Cancelar" }).click();
@@ -357,7 +412,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await expect(page.getByLabel("Modelo de vistoria").locator("option")).toHaveCount(1);
     await page.getByLabel("Nome do imóvel").fill("Apartamento 102");
     await page.getByLabel("Código do imóvel").fill("APT102");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 102");
+    await fillAssetAddress(page, "Rua de Teste", "102");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(collectionRows(page).filter({ hasText: "APT101" })).toBeVisible();
 
@@ -379,7 +434,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Modelo de vistoria").selectOption("template-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento pendente");
     await page.getByLabel("Código do imóvel").fill("APT-PENDING");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 103");
+    await fillAssetAddress(page, "Rua de Teste", "103");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(page.getByRole("button", { name: "Salvando…" })).toBeDisabled();
     const pending = await page.getByRole("button", { name: "Salvando…" }).boundingBox();
@@ -387,6 +442,86 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     expect(mocks.calls.filter((call) => call.operation === "AdminRegisterAsset")).toHaveLength(2);
     release();
     await expect(collectionRows(page).filter({ hasText: "APT101" })).toBeVisible();
+  });
+
+  test("CEP lookup preserves edits made while awaiting the provider", async ({ page }) => {
+    const mocks = await installMocks(page);
+    const release = mocks.hold("AdminLookupPostalCode");
+    await loginAsLocalAdmin(page, "/assets");
+    await page.getByRole("button", { name: "Registrar imóvel" }).click();
+    await page.getByLabel("CEP", { exact: false }).fill("01001-000");
+    await page.getByRole("button", { name: "Buscar CEP" }).click();
+    await expect(page.getByRole("button", { name: "Consultando…" })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Número *" }).fill("42");
+    await page.getByLabel("Complemento").fill("Casa dos fundos");
+    await page.getByLabel("Logradouro").fill("Via informada pelo morador");
+    release();
+    await expect(page.getByLabel("Cidade")).toHaveValue("São Paulo");
+    await expect(page.getByRole("textbox", { name: "Número *" })).toHaveValue("42");
+    await expect(page.getByLabel("Complemento")).toHaveValue("Casa dos fundos");
+    await expect(page.getByLabel("Logradouro")).toHaveValue("Via informada pelo morador");
+    await page.getByLabel("Sem número", { exact: true }).check();
+    await expect(page.getByRole("textbox", { name: "Número", exact: true })).toHaveValue("");
+    await expect(page.getByRole("textbox", { name: "Número", exact: true })).toBeDisabled();
+  });
+
+  test("changing CEP ignores the old result and allows a new lookup", async ({ page }) => {
+    const mocks = await installMocks(page);
+    const release = mocks.hold("AdminLookupPostalCode");
+    await loginAsLocalAdmin(page, "/assets");
+    await page.getByRole("button", { name: "Registrar imóvel" }).click();
+    await page.getByLabel("CEP").fill("01001000");
+    await page.getByRole("button", { name: "Buscar CEP" }).click();
+    await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminLookupPostalCode").length).toBe(1);
+    await page.getByLabel("CEP").fill("20040002");
+    release();
+    await expect(page.getByRole("button", { name: "Buscar CEP" })).toBeEnabled();
+    mocks.enqueue("AdminLookupPostalCode", { data: { lookupPostalCode: { found: true, postalCode: "20040002", street: null, district: null, city: "Rio de Janeiro", state: "RJ", municipalityCode: "3304557" } } });
+    await page.getByRole("button", { name: "Buscar CEP" }).click();
+    await expect(page.getByLabel("Cidade")).toHaveValue("Rio de Janeiro");
+    await expect(page.getByLabel("CEP")).toHaveValue("20040002");
+    await expect(page.getByLabel("Logradouro")).toHaveValue("");
+  });
+
+  test("address form fits small screens with enlarged text and both themes", async ({ page }) => {
+    await installMocks(page);
+    await loginAsLocalAdmin(page, "/assets");
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    for (const theme of ["light", "dark"]) {
+      await page.getByLabel("Aparência").selectOption(theme);
+      await page.getByRole("button", { name: "Registrar imóvel" }).click();
+      const form = page.getByRole("form", { name: "Operação administrativa" });
+      await expect(form).toBeVisible();
+      expect(await form.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+    }
+  });
+
+  test("completes a legacy address and preserves asset coordinates and configuration", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await loginAsLocalAdmin(page, "/assets");
+    await page.getByRole("button", { name: "Abrir detalhes de Apartamento 101" }).click();
+    await page.getByRole("button", { name: "Completar endereço" }).click();
+    await page.getByLabel("CEP").fill("01001-000");
+    await page.getByRole("button", { name: "Buscar CEP" }).click();
+    await expect(page.getByLabel("Logradouro")).toHaveValue("Praça da Sé");
+    await page.getByRole("textbox", { name: "Número *" }).fill("101");
+    await page.getByRole("button", { name: "Salvar endereço" }).click();
+    const update = mocks.calls.find((call) => call.operation === "AdminUpdateAsset");
+    expect(update?.variables.input).toMatchObject({
+      assetId: "asset-a",
+      expectedVersion: 1,
+      asset: {
+        addressDetails: { countryCode: "BR", postalCode: "01001-000", street: "Praça da Sé", number: "101", district: "Sé", city: "São Paulo", state: "SP" },
+        latitudeE6: 12345,
+        longitudeE6: 67890,
+        geofenceMeters: 150,
+        attributes: { propertyType: "residential" },
+        policyOverrides: { allowGallery: true },
+        assignments: [{ participantId: "participant-a", role: "OWNER" }],
+      },
+    });
   });
 
   test("IT-013 shows a forbidden asset relationship error and preserves the entered values", async ({ page }) => {
@@ -398,7 +533,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento 101");
     await page.getByLabel("Código do imóvel").fill("APT101");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(page.getByText("Você não tem permissão para esta operação.")).toBeVisible();
     await expect(page.getByLabel("Nome do imóvel")).toHaveValue("Apartamento 101");
@@ -413,7 +548,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Código do imóvel").fill("APT-EMPTY-NAME");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     const name = page.getByLabel("Nome do imóvel");
     await expect(name).toBeFocused();
@@ -431,7 +566,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento 101");
     await page.getByLabel("Código do imóvel").fill("APT101");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(page.getByText("O nome do imóvel excede o limite permitido.")).toBeVisible();
     await expect(page.getByLabel("Nome do imóvel")).toHaveValue("Apartamento 101");
@@ -447,7 +582,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento 101");
     await page.getByLabel("Código do imóvel").fill("APT101");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(page.getByText("A configuração mudou. Revise os valores atuais.")).toBeVisible();
     await expect(page.getByLabel("Nome do imóvel")).toHaveValue("Apartamento 101");
@@ -462,7 +597,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
     await page.getByLabel("Nome do imóvel").fill("Apartamento 101");
     await page.getByLabel("Código do imóvel").fill("APT101");
-    await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
+    await fillAssetAddress(page, "Rua de Teste", "101");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     await expect(page.getByText("Falha temporária ao registrar o imóvel.")).toBeVisible();
     await expect(page.getByLabel("Nome do imóvel")).toHaveValue("Apartamento 101");
@@ -679,7 +814,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     const releaseOldRequest = mocks.hold("AdminLLMUsage");
     await loginAsLocalAdmin(page, "/llm-usage");
     await page.locator(".llm-usage-advanced-filters > summary").click();
-    const tenant = page.getByLabel("Tenant");
+    const tenant = page.getByRole("textbox", { name: "Tenant", exact: true });
     await tenant.fill("Tenant A");
     await page.getByRole("button", { name: "Tenant A · tenant-a" }).click();
     await page.getByRole("button", { name: "Aplicar" }).click();

@@ -15,6 +15,7 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/features/onboarding/coordinator"
+	"inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/ratelimit"
@@ -47,17 +48,18 @@ type Owner struct {
 }
 
 type Session struct {
-	ID             identity.ID
-	TenantID       *identity.ID
-	Locator        string
-	CSRF           string
-	Owner          Owner
-	ExistingAgency *Agency
-	CompletedSteps map[string]coordinator.StepPayload
-	State          string
-	CurrentStep    string
-	Version        int64
-	ExpiresAt      time.Time
+	ID                identity.ID
+	TenantID          *identity.ID
+	Locator           string
+	CSRF              string
+	Owner             Owner
+	ExistingAgency    *Agency
+	CompletedSteps    map[string]coordinator.StepPayload
+	State             string
+	CurrentStep       string
+	DefinitionVersion int
+	Version           int64
+	ExpiresAt         time.Time
 }
 
 // Submission is the authenticated, server-confirmed onboarding aggregate used
@@ -110,14 +112,21 @@ type Limits interface {
 	AllowAttempt(context.Context, string) (ratelimit.Result, error)
 }
 
+// CaptchaVerifier validates a one-time anti-bot token for public OTP requests.
+type CaptchaVerifier interface {
+	Verify(context.Context, string) error
+}
+
 type Service struct {
-	DB       *gorm.DB
-	Pepper   []byte
-	Limits   Limits
-	Notifier Notifier
-	Stage    string
-	Clock    func() time.Time
-	NewID    func() identity.ID
+	DB             *gorm.DB
+	Pepper         []byte
+	Limits         Limits
+	Notifier       Notifier
+	Captcha        CaptchaVerifier
+	RequireCaptcha bool
+	Stage          string
+	Clock          func() time.Time
+	NewID          func() identity.ID
 }
 
 type RequestResult struct {
@@ -178,7 +187,7 @@ func ValidateOwner(name, email string) (Owner, error) {
 	return Owner{Name: name, Email: normalized}, nil
 }
 
-func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (RequestResult, error) {
+func (s Service) RequestOTP(ctx context.Context, name, email, ip, turnstileToken string) (RequestResult, error) {
 	if err := s.validate(); err != nil {
 		return RequestResult{}, err
 	}
@@ -199,6 +208,14 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (Reques
 			}
 		}
 	}
+	if s.RequireCaptcha {
+		if s.Captcha == nil {
+			return RequestResult{}, apperror.New(apperror.DependencyUnavailable, "", "service temporarily unavailable")
+		}
+		if err := s.Captcha.Verify(ctx, turnstileToken); err != nil {
+			return RequestResult{}, err
+		}
+	}
 	code, err := newCode()
 	if err != nil {
 		return RequestResult{}, apperror.Wrap(apperror.Internal, err)
@@ -213,7 +230,7 @@ func (s Service) RequestOTP(ctx context.Context, name, email, ip string) (Reques
 	}
 	now := s.now()
 	locatorDigest := digest(locator)
-	row := database.OnboardingSession{ID: s.id(), Email: owner.Email, OwnerName: owner.Name, SessionLocatorDigest: locatorDigest[:], State: StatePending, CurrentStep: StepIdentity, Version: 1, ExpiresAt: now.Add(security.SessionTTL), CreatedAt: now, UpdatedAt: now}
+	row := database.OnboardingSession{ID: s.id(), Email: owner.Email, OwnerName: owner.Name, SessionLocatorDigest: locatorDigest[:], State: StatePending, CurrentStep: StepIdentity, DefinitionVersion: real_estate_catalog.DefinitionVersion, Version: 1, ExpiresAt: now.Add(security.SessionTTL), CreatedAt: now, UpdatedAt: now}
 	challenge := database.OnboardingOTPChallenge{ID: s.id(), SessionID: row.ID, Purpose: PurposeOnboarding, CodeHMAC: hash[:], ExpiresAt: now.Add(security.OTPTTL), CreatedAt: now}
 	if err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := setSessionDigest(tx, locatorDigest); err != nil {
@@ -324,7 +341,7 @@ func (s Service) VerifyOTP(ctx context.Context, locator, code string) (Session, 
 		if promoted.OwnerSubject.Valid {
 			subject = promoted.OwnerSubject.String
 		}
-		result = Session{ID: row.ID, TenantID: row.TenantID, Locator: newLocator, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: subject}, ExistingAgency: agency, State: StateVerified, CurrentStep: StepAgency, Version: row.Version + 1, ExpiresAt: row.ExpiresAt}
+		result = Session{ID: row.ID, TenantID: row.TenantID, Locator: newLocator, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: subject}, ExistingAgency: agency, State: StateVerified, CurrentStep: StepAgency, DefinitionVersion: row.DefinitionVersion, Version: row.Version + 1, ExpiresAt: row.ExpiresAt}
 		return nil
 	})
 	if err != nil {
@@ -356,7 +373,7 @@ func (s Service) Load(ctx context.Context, locator string) (Session, error) {
 	if err != nil {
 		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 	}
-	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, State: row.State, CurrentStep: row.CurrentStep, DefinitionVersion: row.DefinitionVersion, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
 }
 
 // LoadAndRefreshCSRF restores a verified browser session and rotates its CSRF
@@ -411,7 +428,7 @@ func (s Service) LoadAndRefreshCSRF(ctx context.Context, locator string) (Sessio
 	if err != nil {
 		return Session{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 	}
-	return Session{ID: row.ID, TenantID: row.TenantID, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, CompletedSteps: steps, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+	return Session{ID: row.ID, TenantID: row.TenantID, CSRF: csrf, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, ExistingAgency: agency, CompletedSteps: steps, State: row.State, CurrentStep: row.CurrentStep, DefinitionVersion: row.DefinitionVersion, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
 }
 
 // ValidateCSRF authenticates a public onboarding mutation without changing
@@ -442,7 +459,7 @@ func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Sessio
 	if err != nil {
 		return Session{}, err
 	}
-	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
+	return Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, DefinitionVersion: row.DefinitionVersion, Version: row.Version, ExpiresAt: row.ExpiresAt}, nil
 }
 
 // LoadSubmission authenticates the mutation proof and returns the immutable
@@ -485,7 +502,7 @@ func (s Service) LoadSubmission(ctx context.Context, locator, csrf string) (Subm
 	if err != nil {
 		return Submission{}, err
 	}
-	return Submission{Session: Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, Version: row.Version, ExpiresAt: row.ExpiresAt}, Steps: steps}, nil
+	return Submission{Session: Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: row.State, CurrentStep: row.CurrentStep, DefinitionVersion: row.DefinitionVersion, Version: row.Version, ExpiresAt: row.ExpiresAt}, Steps: steps}, nil
 }
 
 // MarkSubmitted persists the terminal public-onboarding transition after
@@ -570,7 +587,7 @@ func (s Service) Checkpoint(ctx context.Context, locator, csrf, step string, exp
 		if err := tx.Model(&row).Updates(map[string]any{"current_step": step, "state": nextState, "version": expectedVersion + 1, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		result = Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: nextState, CurrentStep: step, Version: expectedVersion + 1, ExpiresAt: row.ExpiresAt}
+		result = Session{ID: row.ID, TenantID: row.TenantID, Owner: Owner{Name: row.OwnerName, Email: row.Email, Subject: row.OwnerSubject}, State: nextState, CurrentStep: step, DefinitionVersion: row.DefinitionVersion, Version: expectedVersion + 1, ExpiresAt: row.ExpiresAt}
 		return nil
 	})
 	if err != nil {
@@ -659,6 +676,11 @@ func (s Service) validateCheckpoint(tx *gorm.DB, locator, csrf, step string, exp
 	}
 	if stepRank(step) < stepRank(row.CurrentStep) {
 		return database.OnboardingSession{}, apperror.New(apperror.InvalidState, "step", "step already completed")
+	}
+	if row.DefinitionVersion >= 5 && step == StepProperty {
+		if _, ok := payload["addressDetails"].(map[string]any); !ok {
+			return database.OnboardingSession{}, apperror.New(apperror.InvalidInput, "addressDetails", "structured address is required")
+		}
 	}
 	if err := coordinator.ValidateCheckpointPayload(step, coordinator.StepPayload(payload), now); err != nil {
 		return database.OnboardingSession{}, err

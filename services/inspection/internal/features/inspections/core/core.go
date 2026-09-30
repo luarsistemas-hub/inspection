@@ -25,6 +25,7 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
+	"inspection/services/inspection/internal/platform/pagination"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
@@ -49,18 +50,24 @@ type CreateInput struct {
 }
 
 type View struct {
-	Inspection     database.Inspection
-	Responsibility database.Responsibility
-	Policy         database.PolicySnapshot
-	Reference      database.ReferenceSnapshot
-	EventID        identity.ID
+	Inspection       database.Inspection
+	Responsibility   database.Responsibility
+	Policy           database.PolicySnapshot
+	Reference        database.ReferenceSnapshot
+	EventID          identity.ID
+	AssetName        *string
+	AssetAddress     *string
+	AssetExternalKey *string
+	ParticipantName  *string
 }
 
 type ListInput struct {
-	TenantID identity.ID
-	First    int
-	After    string
-	History  bool
+	TenantID    identity.ID
+	First       int
+	After       string
+	History     bool
+	Search      string
+	StatusGroup string
 }
 
 type ListResult struct {
@@ -293,7 +300,28 @@ func (s Service) Get(ctx context.Context, tenantID, inspectionID identity.ID) (V
 		if err := tx.Where("tenant_id=? AND id=?", tenantID, inspectionID).First(&out.Inspection).Error; err != nil {
 			return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
 		}
-		return s.load(tx, &out)
+		if err := s.load(tx, &out); err != nil {
+			return err
+		}
+		var display struct {
+			AssetName        *string `gorm:"column:asset_name"`
+			AssetAddress     *string `gorm:"column:asset_address"`
+			AssetExternalKey *string `gorm:"column:asset_external_key"`
+			ParticipantName  *string `gorm:"column:participant_name"`
+		}
+		if err := tx.Table("inspections.inspections AS i").
+			Select("a.name AS asset_name, a.address AS asset_address, a.external_key AS asset_external_key, p.name AS participant_name").
+			Joins("LEFT JOIN assets.assets AS a ON a.tenant_id=i.tenant_id AND a.id=i.asset_id").
+			Joins("LEFT JOIN participants.participants AS p ON p.tenant_id=i.tenant_id AND p.id=i.participant_id").
+			Where("i.tenant_id=? AND i.id=?", tenantID, inspectionID).
+			Scan(&display).Error; err != nil {
+			return err
+		}
+		out.AssetName = display.AssetName
+		out.AssetAddress = display.AssetAddress
+		out.AssetExternalKey = display.AssetExternalKey
+		out.ParticipantName = display.ParticipantName
+		return nil
 	})
 	if err != nil {
 		return View{}, err
@@ -311,19 +339,54 @@ func (s Service) List(ctx context.Context, in ListInput) (ListResult, error) {
 	if in.First > 100 {
 		return ListResult{}, apperror.New(apperror.InvalidInput, "first", "page size cannot exceed 100")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+	principal, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
+	if err != nil {
 		return ListResult{}, err
 	}
-	var rows []database.Inspection
-	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
-		q := tx.Where("tenant_id=?", in.TenantID).Order("created_at ASC, id ASC").Limit(in.First + 1)
+	if !validInspectionStatusGroup(in.StatusGroup) {
+		return ListResult{}, apperror.New(apperror.InvalidInput, "statusGroup", "invalid inspection status group")
+	}
+	var rows []struct {
+		ID        identity.ID
+		CreatedAt time.Time
+	}
+	allowedUnits := businessUnitScopes(principal)
+	if !hasInspectionRole(principal.Roles, auth.TenantAdmin) && len(allowedUnits) == 0 {
+		return ListResult{}, nil
+	}
+	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
+		q := tx.Table("inspections.inspections AS i").
+			Select("i.id, i.created_at").
+			Joins("LEFT JOIN assets.assets AS a ON a.tenant_id=i.tenant_id AND a.id=i.asset_id").
+			Joins("LEFT JOIN participants.participants AS p ON p.tenant_id=i.tenant_id AND p.id=i.participant_id").
+			Where("i.tenant_id=?", in.TenantID)
+		if !hasInspectionRole(principal.Roles, auth.TenantAdmin) {
+			q = q.Where("i.business_unit_id IN ?", allowedUnits)
+		}
 		if !in.History {
-			q = q.Where("status <> 'INVALIDATED'")
+			q = q.Where("i.status <> 'INVALIDATED'")
+		}
+		if statuses := statusesForGroup(in.StatusGroup); len(statuses) > 0 {
+			q = q.Where("i.status IN ?", statuses)
+		}
+		if search := strings.TrimSpace(in.Search); search != "" {
+			term := "%" + escapeInspectionSearch(search) + "%"
+			operator := "ILIKE"
+			idExpression := "i.id::text"
+			if s.DB.Dialector.Name() == "sqlite" {
+				operator = "LIKE"
+				idExpression = "CAST(i.id AS TEXT)"
+			}
+			q = q.Where("("+idExpression+" "+operator+" ? ESCAPE '\\' OR a.name "+operator+" ? ESCAPE '\\' OR a.address "+operator+" ? ESCAPE '\\' OR a.external_key "+operator+" ? ESCAPE '\\' OR p.name "+operator+" ? ESCAPE '\\' OR i.source "+operator+" ? ESCAPE '\\' OR i.status "+operator+" ? ESCAPE '\\')", term, term, term, term, term, term, term)
 		}
 		if in.After != "" {
-			q = q.Where("id::text > ?", in.After)
+			at, id, err := inspectionListCursor(tx, in.TenantID, in.After, allowedUnits, hasInspectionRole(principal.Roles, auth.TenantAdmin))
+			if err != nil {
+				return err
+			}
+			q = q.Where("(i.created_at, i.id) > (?, ?)", at, id)
 		}
-		return q.Find(&rows).Error
+		return q.Order("i.created_at, i.id").Limit(in.First + 1).Find(&rows).Error
 	})
 	if err != nil {
 		return ListResult{}, err
@@ -338,9 +401,78 @@ func (s Service) List(ctx context.Context, in ListInput) (ListResult, error) {
 			return ListResult{}, err
 		}
 		result.Items = append(result.Items, view)
-		result.EndCursor = row.ID.String()
+		result.EndCursor = pagination.Encode(row.CreatedAt, row.ID)
 	}
 	return result, nil
+}
+
+func validInspectionStatusGroup(group string) bool {
+	switch group {
+	case "", "PLANNING", "EXECUTION", "COMPLETED", "CLOSED":
+		return true
+	default:
+		return false
+	}
+}
+
+func statusesForGroup(group string) []string {
+	switch group {
+	case "PLANNING":
+		return []string{"PLANNED", "INVITED"}
+	case "EXECUTION":
+		return []string{"IN_PROGRESS", "SUBMITTED", "ANALYZING", "RECAPTURE_PENDING"}
+	case "COMPLETED":
+		return []string{"COMPLETED"}
+	case "CLOSED":
+		return []string{"CANCELED", "INVALIDATED"}
+	default:
+		return nil
+	}
+}
+
+func businessUnitScopes(principal requestctx.Principal) []identity.ID {
+	if hasInspectionRole(principal.Roles, auth.TenantAdmin) {
+		return nil
+	}
+	ids := make([]identity.ID, 0, len(principal.Scopes))
+	for _, scope := range principal.Scopes {
+		if scope.Kind == "BUSINESS_UNIT" {
+			ids = append(ids, scope.ID)
+		}
+	}
+	return ids
+}
+
+func hasInspectionRole(roles []string, wanted string) bool {
+	for _, role := range roles {
+		if role == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func escapeInspectionSearch(search string) string {
+	return strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(search)
+}
+
+func inspectionListCursor(tx *gorm.DB, tenantID identity.ID, after string, allowedUnits []identity.ID, tenantAdmin bool) (time.Time, identity.ID, error) {
+	if at, id, err := pagination.After(after); err == nil {
+		return at, id, nil
+	}
+	legacyID, err := identity.ParseID(after)
+	if err != nil {
+		return time.Time{}, identity.ID{}, apperror.New(apperror.InvalidInput, "after", "invalid cursor")
+	}
+	var createdAt time.Time
+	q := tx.Table("inspections.inspections").Select("created_at").Where("tenant_id=? AND id=?", tenantID, legacyID)
+	if !tenantAdmin {
+		q = q.Where("business_unit_id IN ?", allowedUnits)
+	}
+	if err := q.Take(&createdAt).Error; err != nil {
+		return time.Time{}, identity.ID{}, apperror.New(apperror.InvalidInput, "after", "invalid cursor")
+	}
+	return createdAt, legacyID, nil
 }
 
 func ValidateInspectionTransition(current, target string, evidenceCount int, reason string) error {

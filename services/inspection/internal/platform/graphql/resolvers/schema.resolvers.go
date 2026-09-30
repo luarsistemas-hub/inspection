@@ -14,6 +14,7 @@ import (
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
+	postallookup "inspection/services/inspection/internal/features/addresses/lookup_postal_code"
 	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
 	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	assetarchive "inspection/services/inspection/internal/features/assets/archive_asset"
@@ -98,7 +99,7 @@ import (
 // RequestOnboardingOtp is the resolver for the requestOnboardingOtp field.
 func (r *mutationResolver) RequestOnboardingOtp(ctx context.Context, input graphql1.RequestOnboardingOtpInput) (*graphql1.OnboardingPayload, error) {
 	clientIP, _ := requestctx.ClientIP(ctx)
-	result, err := r.Onboarding.RequestOTP(ctx, input.Name, input.Email, clientIP)
+	result, err := r.Onboarding.RequestOTP(ctx, input.Name, input.Email, clientIP, stringValue(input.TurnstileToken))
 	if err != nil {
 		return onboardingValidationPayload(err, input.ClientMutationID)
 	}
@@ -283,6 +284,59 @@ func (r *mutationResolver) SetAdminInitialPassword(ctx context.Context, input gr
 	return &graphql1.OnboardingPayload{Activation: mapOnboardingActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// RequestInternalUserActivationOtp is the resolver for the requestInternalUserActivationOtp field.
+func (r *mutationResolver) RequestInternalUserActivationOtp(ctx context.Context, input graphql1.RequestInternalUserActivationOtpInput) (*graphql1.InternalUserActivationPayload, error) {
+	credentials, ok := requestctx.UserInvitationCredentialsFromContext(ctx)
+	if input.InvitationToken != nil && strings.TrimSpace(*input.InvitationToken) != "" {
+		claimed, err := r.UserActivation.ClaimInvitation(ctx, *input.InvitationToken)
+		if err != nil {
+			return internalUserActivationPayload(err, input.ClientMutationID)
+		}
+		setUserInvitationCookie(ctx, claimed.Locator, claimed.CSRF)
+		credentials = requestctx.UserInvitationCredentials{SessionToken: claimed.Locator, CSRFToken: claimed.CSRF}
+		ok = true
+	}
+	if !ok {
+		return nil, unauthenticated()
+	}
+	activation, err := r.UserActivation.RequestOTP(ctx, credentials.SessionToken, credentials.CSRFToken)
+	if err != nil {
+		return internalUserActivationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.InternalUserActivationPayload{Activation: mapInternalUserActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// VerifyInternalUserActivationOtp is the resolver for the verifyInternalUserActivationOtp field.
+func (r *mutationResolver) VerifyInternalUserActivationOtp(ctx context.Context, input graphql1.VerifyInternalUserActivationOtpInput) (*graphql1.InternalUserActivationPayload, error) {
+	credentials, ok := requestctx.UserInvitationCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	activation, err := r.UserActivation.VerifyOTP(ctx, credentials.SessionToken, credentials.CSRFToken, input.Code)
+	if err != nil {
+		return internalUserActivationPayload(err, input.ClientMutationID)
+	}
+	return &graphql1.InternalUserActivationPayload{Activation: mapInternalUserActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// CompleteInternalUserActivation is the resolver for the completeInternalUserActivation field.
+func (r *mutationResolver) CompleteInternalUserActivation(ctx context.Context, input graphql1.CompleteInternalUserActivationInput) (*graphql1.InternalUserActivationPayload, error) {
+	credentials, ok := requestctx.UserInvitationCredentialsFromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	password := ""
+	if input.Password != nil {
+		password = *input.Password
+	}
+	activation, err := r.UserActivation.Complete(ctx, credentials.SessionToken, credentials.CSRFToken, password)
+	if err != nil {
+		return internalUserActivationPayload(err, input.ClientMutationID)
+	}
+	clearUserInvitationCookie(ctx)
+	return &graphql1.InternalUserActivationPayload{Activation: mapInternalUserActivation(activation), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
 // CreateTenant is the resolver for the createTenant field.
 func (r *mutationResolver) CreateTenant(ctx context.Context, input graphql1.CreateTenantInput) (*graphql1.CreateTenantPayload, error) {
 	meta, _ := requestctx.FromContext(ctx)
@@ -395,15 +449,46 @@ func (r *mutationResolver) InviteInternalUser(ctx context.Context, input graphql
 		}
 		scopes = append(scopes, inviteinternal.Scope{Kind: scope.Kind, ResourceID: id})
 	}
-	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Issuer: input.Issuer, Subject: input.Subject, Role: input.Role, Scopes: scopes, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Name: input.Name, Email: input.Email, Role: input.Role, Scopes: scopes, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
 		return nil, err
 	}
-	membership, err := mapMembership(ctx, r.DB, raw.(database.Membership))
+	result := raw.(inviteinternal.Result)
+	membership, err := mapMembership(ctx, r.DB, result.Membership)
 	if err != nil {
 		return nil, err
 	}
+	membership.InvitationStatus = result.InvitationStatus
 	return &graphql1.MembershipPayload{Membership: membership, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ResendInternalUserInvitation is the resolver for the resendInternalUserInvitation field.
+func (r *mutationResolver) ResendInternalUserInvitation(ctx context.Context, input graphql1.ResendInternalUserInvitationInput) (*graphql1.MembershipPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	membershipID, err := identity.ParseID(input.MembershipID)
+	if err != nil {
+		return nil, invalidID("membershipId")
+	}
+	var row database.Membership
+	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND id=?", meta.TenantID, membershipID).First(&row).Error
+	}); err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, inviteinternal.Command{TenantID: meta.TenantID, Name: row.Name, Email: row.Email, Role: row.Role, ClientID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	if err != nil {
+		return nil, err
+	}
+	result := raw.(inviteinternal.Result)
+	mapped, err := mapMembership(ctx, r.DB, result.Membership)
+	if err != nil {
+		return nil, err
+	}
+	mapped.InvitationStatus = result.InvitationStatus
+	return &graphql1.MembershipPayload{Membership: mapped, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // AssignRoleScopes is the resolver for the assignRoleScopes field.
@@ -1736,7 +1821,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 	}
 	memberships := []*graphql1.Membership{}
 	if principal.MembershipID != (identity.ID{}) {
-		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), Version: int(principal.MembershipVersion), Scopes: scopes})
+		memberships = append(memberships, &graphql1.Membership{ID: principal.MembershipID.String(), TenantID: principal.TenantID.String(), Name: principal.Name, Email: principal.Email, Role: firstRole(principal.Roles), Status: membershipStatus(principal.Disabled), InvitationStatus: principal.InvitationStatus, Version: int(principal.MembershipVersion), Scopes: scopes})
 	} else if principal.Issuer != "" && principal.Subject != "" {
 		raw, err := r.Bus.Ask(ctx, listidentitymemberships.Query{Issuer: principal.Issuer, Subject: principal.Subject, First: 100})
 		if err != nil {
@@ -1747,7 +1832,7 @@ func (r *queryResolver) Me(ctx context.Context) (*graphql1.Me, error) {
 			if summary.TenantStatus != "ACTIVE" {
 				status = "INACTIVE"
 			}
-			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Role: summary.Role, Status: status, Version: int(summary.MembershipVersion), Scopes: []*graphql1.Scope{}})
+			memberships = append(memberships, &graphql1.Membership{ID: summary.MembershipID.String(), TenantID: summary.TenantID.String(), Name: summary.Name, Email: summary.Email, Role: summary.Role, Status: status, InvitationStatus: summary.InvitationStatus, Version: int(summary.MembershipVersion), Scopes: []*graphql1.Scope{}})
 		}
 	}
 	canViewLLMCosts := auth.IsConfiguredSuperAdmin(ctx, r.SuperAdminIssuer, r.SuperAdminSubject) && principal.Product == auth.AdminProduct && principal.ProductEntitled(auth.AdminProduct)
@@ -2003,6 +2088,20 @@ func (r *queryResolver) Assets(ctx context.Context, businessUnitID *string, sear
 	return &graphql1.AssetConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
 
+// LookupPostalCode resolves a CEP using the shared postal lookup slice.
+func (r *queryResolver) LookupPostalCode(ctx context.Context, postalCode string) (*graphql1.PostalAddressLookup, error) {
+	clientIP, ok := requestctx.ClientIP(ctx)
+	if !ok {
+		return nil, apperror.New(apperror.Unauthenticated, "", "trusted client context required")
+	}
+	raw, err := r.Bus.Ask(ctx, postallookup.Query{PostalCode: postalCode, ClientKey: clientIP})
+	if err != nil {
+		return nil, apperror.New(apperror.DependencyUnavailable, "postalCode", "consulta de CEP indisponível")
+	}
+	result := raw.(postallookup.Result)
+	return &graphql1.PostalAddressLookup{Found: result.Found, PostalCode: result.PostalCode, Street: result.Street, District: result.District, City: result.City, State: result.State, MunicipalityCode: result.MunicipalityCode}, nil
+}
+
 // Asset is the resolver for the asset field.
 func (r *queryResolver) Asset(ctx context.Context, id string) (*graphql1.Asset, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2125,7 +2224,7 @@ func (r *queryResolver) Project(ctx context.Context, id string) (*graphql1.Proje
 }
 
 // Inspections is the resolver for the inspections field.
-func (r *queryResolver) Inspections(ctx context.Context, first *int, after *string, history *bool) (*graphql1.InspectionConnection, error) {
+func (r *queryResolver) Inspections(ctx context.Context, first *int, after *string, history *bool, search *string, statusGroup *graphql1.InspectionStatusGroup) (*graphql1.InspectionConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
@@ -2134,7 +2233,11 @@ func (r *queryResolver) Inspections(ctx context.Context, first *int, after *stri
 	if history != nil {
 		includeHistory = *history
 	}
-	result, err := r.InspectionService.List(ctx, inspectioncore.ListInput{TenantID: meta.TenantID, First: intValue(first), After: stringValue(after), History: includeHistory})
+	statusGroupValue := ""
+	if statusGroup != nil {
+		statusGroupValue = string(*statusGroup)
+	}
+	result, err := r.InspectionService.List(ctx, inspectioncore.ListInput{TenantID: meta.TenantID, First: intValue(first), After: stringValue(after), History: includeHistory, Search: stringValue(search), StatusGroup: statusGroupValue})
 	if err != nil {
 		return nil, err
 	}

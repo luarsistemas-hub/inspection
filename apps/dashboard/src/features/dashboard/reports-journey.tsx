@@ -168,7 +168,6 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
 
   const currentReport = loadedInspectionId === inspectionId ? report : null;
   return <div className="feature report-page">
-    <p className="report-intro">Consulte os laudos gerados das suas vistorias.</p>
     <div className="report-toolbar" role="search">
       <label>Buscar laudo<input type="search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Imóvel, endereço, código ou responsável" /></label>
       <label>Classificação<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="">Todas</option><option value="NORMAL">Sem alertas identificados</option><option value="ATTENTION">Requer atenção</option><option value="CRITICAL">Crítica</option></select></label>

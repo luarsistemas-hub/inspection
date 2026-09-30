@@ -1,13 +1,15 @@
 "use client";
 
-import { Alert, Button, Card, Confirmation, Container, Dialog, Field, Input, ProductIdentity, Select, Stack, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
+import { Alert, Button, Card, Confirmation, Container, Dialog, Field, InfoDisclosure, Input, ProductIdentity, Select, Stack, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AddressFieldStyles, AddressForm, emptyPostalAddress, formatPostalAddress, type PostalAddress, type PostalLookup } from "@inspection/address";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
 import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
-import { CompleteOnboardingDocument, CorrectOnboardingResponsibleEmailDocument, OnboardingDefinitionDocument, OnboardingSessionDocument, OnboardingStatusDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery, type OnboardingStatusQuery } from "@/graphql/generated";
+import { CompleteOnboardingDocument, CorrectOnboardingResponsibleEmailDocument, OnboardingDefinitionDocument, OnboardingLookupPostalCodeDocument, OnboardingSessionDocument, OnboardingStatusDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery, type OnboardingStatusQuery } from "@/graphql/generated";
 import { isSupportedDefinition, nextConfirmedStep, sortedSteps, validateStep, valuesForParticipantMode, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, originUploadError, type OriginUpload } from "./origin-upload";
 import { presentOnboardingLabel, presentOnboardingOption, presentOnboardingStatus } from "./presentation";
+import { TurnstileWidget } from "./turnstile-widget";
 
 type View = "identity" | "verify" | "step" | "review" | "status";
 type Session = NonNullable<OnboardingSessionQuery["onboardingSession"]>;
@@ -66,11 +68,11 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
   useEffect(() => {
     void Promise.all([graphql(OnboardingDefinitionDocument, { segment: "REAL_ESTATE" }), graphql(OnboardingSessionDocument)])
       .then(([definitionResult, sessionResult]) => {
-        const nextDefinition = definitionFrom(definitionResult);
+        const serverSession = sessionResult.onboardingSession;
+        const nextDefinition = serverSession ? serverSession.definition as unknown as OnboardingDefinition : definitionFrom(definitionResult);
         if (!isSupportedDefinition(nextDefinition)) throw { message: "Esta versão do cadastro não é compatível. Tente novamente mais tarde." } satisfies GraphQLFailure;
         setDefinition(nextDefinition);
-        if (sessionResult.onboardingSession) {
-          const serverSession = sessionResult.onboardingSession;
+        if (serverSession) {
           setSession(serverSession);
           setConfirmedValues(confirmedSteps(serverSession.completedSteps));
           setActiveStep(nextServerStep(nextDefinition, serverSession));
@@ -149,8 +151,8 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
       setConfirmedValues((current) => ({ ...current, [step.key]: values }));
       const next = responseStep(nextSession, steps);
       if (next) setActiveStep(next); else setView("review");
-    }} onReview={() => setView("review")} onRestart={() => setRestartOpen(true)} onError={setError} /> : null}
-    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).filter(([key, value]) => key !== "emailConfirmation" && typeof value === "string").map(([key, value]) => ({ label: `${presentOnboardingLabel(item.label)}: ${presentOnboardingLabel(item.fields.find((field) => field.key === key)?.label ?? key)}`, value: item.fields.find((field) => field.key === key)?.type === "select" ? presentOnboardingOption(value as string, item.fields.find((field) => field.key === key)?.choices) : value as string })))} status={status} originMode={typeof confirmedValues.origin?.mode === "string" ? confirmedValues.origin.mode : undefined} originConfirmed={Array.isArray((confirmedValues.origin as Record<string, unknown> | undefined)?.mediaIds)} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={() => setRestartOpen(true)} onSubmit={complete} submitting={submitting} /> : null}
+    }} onRestart={() => setRestartOpen(true)} onError={setError} /> : null}
+    {view === "review" ? <Review values={steps.flatMap((item) => Object.entries(confirmedValues[item.key] ?? {}).filter(([key, value]) => key !== "emailConfirmation" && (typeof value === "string" || (key === "addressDetails" && typeof value === "object" && !Array.isArray(value)))).map(([key, value]) => { const field = item.fields.find((candidate) => candidate.key === key); const display = field?.type === "select" && typeof value === "string" ? presentOnboardingOption(value, field.choices) : field?.type === "address" && typeof value === "object" ? formatPostalAddress(value as PostalAddress) : String(value); return { label: `${presentOnboardingLabel(item.label)}: ${presentOnboardingLabel(field?.label ?? key)}`, value: display }; }))} status={status} originMode={typeof confirmedValues.origin?.mode === "string" ? confirmedValues.origin.mode : undefined} originConfirmed={Array.isArray((confirmedValues.origin as Record<string, unknown> | undefined)?.mediaIds)} onBack={() => { setActiveStep(session?.currentStep ?? steps.at(-1)?.key ?? ""); setView("step"); }} onRestart={() => setRestartOpen(true)} onSubmit={complete} submitting={submitting} /> : null}
     {view === "status" ? <StatusView status={status ?? statusFromSession(session)} submitting={submitting || reconciling} onRetry={refreshStatus} onRestart={() => setRestartOpen(true)} onCorrected={setStatus} /> : null}
     {restartOpen ? <Dialog isOpen onClose={() => setRestartOpen(false)} title="Iniciar novo cadastro?">
       <Confirmation target="Cadastro atual" scope="Esta sessão de onboarding" consequence="Os campos ainda não enviados e as fotos que só estão nesta página serão descartados. Será necessário iniciar uma nova verificação por e-mail." confirmLabel="Descartar e começar novamente" onCancel={() => setRestartOpen(false)} onConfirm={() => { setRestartOpen(false); restart(); }} />
@@ -161,7 +163,7 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
 function PageShell({ title, children, steps = [], currentStep = "" }: { title: string; children: React.ReactNode; steps?: OnboardingDefinition["steps"]; currentStep?: string }) {
   const currentIndex = steps.findIndex((item) => item.key === currentStep);
   const stepItems = steps.map((item, index) => ({ id: item.key, label: presentOnboardingLabel(item.label), state: index < currentIndex ? "complete" as const : item.key === currentStep ? "current" as const : "pending" as const }));
-  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><div className="onboarding-utility-bar"><ProductIdentity product="Onboarding" /><ThemeSelector /></div><h1>{title}</h1><p className="onboarding-guidance">Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</p>{currentStep && stepItems.length ? <details className="onboarding-steps-panel"><summary>Etapa {currentIndex + 1} de {steps.length}: {stepItems[currentIndex]?.label}</summary><Steps label="Etapas do cadastro" items={stepItems} /></details> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
+  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><div className="onboarding-utility-bar"><ProductIdentity product="Onboarding" /><ThemeSelector /></div><InfoDisclosure className="onboarding-title-disclosure" label="cadastro e salvamento" heading={<h1>{title}</h1>}>Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</InfoDisclosure>{currentStep && stepItems.length ? <details className="onboarding-steps-panel"><summary>Etapa {currentIndex + 1} de {steps.length}: {stepItems[currentIndex]?.label}</summary><Steps label="Etapas do cadastro" items={stepItems} /></details> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
 }
 
 function responseStep(session: Session, steps: OnboardingDefinition["steps"]) {
@@ -169,11 +171,11 @@ function responseStep(session: Session, steps: OnboardingDefinition["steps"]) {
 }
 
 function IdentityForm({ generation, onRequested, onError }: { generation: number; onRequested: (locator: string, email: string, generation: number) => void; onError: (message: string) => void }) {
-  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [submitting, setSubmitting] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({}); const inFlight = useRef(false);
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (inFlight.current) return; inFlight.current = true; setSubmitting(true); setErrors({}); onError("");
-    try { const result = await graphql(RequestOnboardingOtpDocument, { input: { name, email, clientMutationId: clientMutationId() } }); const payload = result.requestOnboardingOtp; if (showUserErrors(payload.userErrors, setErrors, onError)) return; if (!payload.sessionLocator) throw { message: "Não foi possível iniciar a verificação." } satisfies GraphQLFailure; onRequested(payload.sessionLocator, email.trim().toLowerCase(), generation); } catch (cause) { onError(failureText(cause)); } finally { inFlight.current = false; setSubmitting(false); }
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [submitting, setSubmitting] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({}); const [turnstileToken, setTurnstileToken] = useState(""); const [turnstileResetKey, setTurnstileResetKey] = useState(0); const inFlight = useRef(false);
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (inFlight.current || !turnstileToken) return; inFlight.current = true; setSubmitting(true); setErrors({}); onError("");
+    try { const result = await graphql(RequestOnboardingOtpDocument, { input: { name, email, turnstileToken, clientMutationId: clientMutationId() } }); const payload = result.requestOnboardingOtp; if (showUserErrors(payload.userErrors, setErrors, onError)) { const captchaError = payload.userErrors.find((item) => item.field === "turnstileToken"); if (captchaError) onError(captchaError.message); setTurnstileToken(""); setTurnstileResetKey((value) => value + 1); return; } if (!payload.sessionLocator) throw { message: "Não foi possível iniciar a verificação." } satisfies GraphQLFailure; onRequested(payload.sessionLocator, email.trim().toLowerCase(), generation); } catch (cause) { setTurnstileToken(""); setTurnstileResetKey((value) => value + 1); onError(failureText(cause)); } finally { inFlight.current = false; setSubmitting(false); }
   };
-  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Informe seus dados para receber um código de confirmação.</p><Field label="Seu nome" error={errors.name} required><Input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} /></Field><Field label="Seu e-mail" error={errors.email} required><Input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field><Button type="submit" isPending={submitting} pendingLabel="Enviando…">Enviar código</Button></form>;
+  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Informe seus dados para receber um código de confirmação.</p><Field label="Seu nome" error={errors.name} required><Input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} /></Field><Field label="Seu e-mail" error={errors.email} required><Input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></Field><TurnstileWidget onToken={setTurnstileToken} resetKey={turnstileResetKey} /><Button type="submit" disabled={submitting || !turnstileToken} isPending={submitting} pendingLabel="Enviando…">Enviar código</Button></form>;
 }
 
 function VerificationForm({ generation, email, locator, onVerified, onBack, onError }: { generation: number; email: string; locator: string; onVerified: (session: Session, generation: number) => void; onBack: () => void; onError: (message: string) => void }) {
@@ -182,7 +184,7 @@ function VerificationForm({ generation, email, locator, onVerified, onBack, onEr
   return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Digite o código de seis dígitos enviado para <strong>{email}</strong>.</p><Field label="Código de confirmação" error={errors.code} required><Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} /></Field><div className="onboarding-actions"><Button type="submit" disabled={submitting || code.length !== 6}>{submitting ? "Confirmando…" : "Confirmar e continuar"}</Button><Button variant="secondary" onClick={onBack}>Voltar</Button></div></form>;
 }
 
-function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { step: OnboardingDefinition["steps"][number]; session: Session; onSaved: (session: Session, status: Status | undefined, values: StepValues) => void; onReview: () => void; onRestart: () => void; onError: (message: string) => void }) {
+function StepForm({ step, session, onSaved, onRestart, onError }: { step: OnboardingDefinition["steps"][number]; session: Session; onSaved: (session: Session, status: Status | undefined, values: StepValues) => void; onRestart: () => void; onError: (message: string) => void }) {
   const existingAgency = step.key === "agency" ? session.existingAgency : null;
   const [values, setValues] = useState<StepValues>(() => existingAgency ? { name: existingAgency.name, agencyName: existingAgency.name, existingAgencyId: existingAgency.tenantId } : readDraft(session.id, step.key)); const [errors, setErrors] = useState<Record<string, string>>({}); const [uploads, setUploads] = useState<OriginUpload[]>([]); const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -193,6 +195,12 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
       : { ...values, [key]: value };
     setValues(next);
     writeDraft(session.id, step.key, next);
+  };
+  const updateAddress = (value: PostalAddress) => { const next = { ...values, addressDetails: value }; setValues(next); writeDraft(session.id, step.key, next); };
+  const lookupAddress = async (postalCode: string): Promise<PostalLookup | null> => {
+    const result = await graphql(OnboardingLookupPostalCodeDocument, { postalCode });
+    const lookup = result.lookupPostalCode;
+    return lookup.found ? { postalCode: lookup.postalCode, street: lookup.street ?? "", district: lookup.district ?? "", city: lookup.city ?? "", state: lookup.state ?? "", municipalityCode: lookup.municipalityCode ?? "" } : null;
   };
   const uploadOne = async (upload: OriginUpload) => {
     if (upload.mediaId) return upload.mediaId;
@@ -239,7 +247,7 @@ function StepForm({ step, session, onSaved, onReview, onRestart, onError }: { st
       onSaved(response.session, response.status ?? undefined, { ...values, ...(step.key === "origin" ? { mediaIds } : {}) });
     } catch (cause) { onError(failureText(cause)); } finally { savingRef.current = false; setSaving(false); }
   };
-  return <form className="onboarding-form" onSubmit={submit} noValidate><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.filter((field) => field.key !== "emailConfirmation" || values.mode === "DELEGATE").map((field) => <DynamicField key={field.key} field={field} value={typeof values[field.key] === "string" ? values[field.key] as string : ""} error={errors[field.key]} onChange={(value) => updateField(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" isPending={saving} pendingLabel="Salvando…">Salvar e continuar</Button><Button variant="secondary" onClick={onReview} disabled={saving}>Revisar dados salvos</Button><Button variant="secondary" onClick={onRestart} disabled={saving}>Iniciar novo cadastro</Button></div></form>;
+  return <form className="onboarding-form" onSubmit={submit} noValidate><AddressFieldStyles /><p className="onboarding-step-description">Preencha os dados solicitados. A etapa só avança depois da confirmação do servidor.</p>{existingAgency ? <><Alert tone="info">Encontramos a imobiliária <strong>{existingAgency.name}</strong> vinculada a este e-mail. Ela será reutilizada nesta solicitação.</Alert><Field label="Nome da imobiliária" required><Input value={existingAgency.name} readOnly /></Field></> : step.fields.filter((field) => field.key !== "emailConfirmation" || values.mode === "DELEGATE").map((field) => field.type === "address" ? <div key={field.key}><AddressForm value={values.addressDetails && typeof values.addressDetails === "object" && !Array.isArray(values.addressDetails) ? values.addressDetails as PostalAddress : emptyPostalAddress()} onChange={updateAddress} onLookup={lookupAddress} prefix="onboarding-address" disabled={saving} />{errors[field.key] ? <p role="alert">{errors[field.key]}</p> : null}</div> : <DynamicField key={field.key} field={field} value={typeof values[field.key] === "string" ? values[field.key] as string : ""} error={errors[field.key]} onChange={(value) => updateField(field.key, value)} />)}{step.key === "origin" && values.mode === "FIXED_ORIGIN" ? <OriginUploadCards uploads={uploads} onChange={setUploads} onRetry={retry} /> : null}{errors.referencePhotos ? <Alert tone="danger">{errors.referencePhotos}</Alert> : null}<div className="onboarding-actions"><Button type="submit" isPending={saving} pendingLabel="Salvando…">Salvar e continuar</Button><Button variant="secondary" onClick={onRestart} disabled={saving}>Iniciar novo cadastro</Button></div></form>;
 }
 
 function DynamicField({ field, value, error, onChange }: { field: OnboardingDefinition["steps"][number]["fields"][number]; value: string; error?: string; onChange: (value: string) => void }) {

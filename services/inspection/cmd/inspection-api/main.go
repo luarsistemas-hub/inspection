@@ -8,16 +8,19 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"inspection/libs/identity"
+	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
 	explaineffectiveaccess "inspection/services/inspection/internal/features/access/explain_effective_access"
 	inviteinternal "inspection/services/inspection/internal/features/access/invite_internal_user"
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
+	postallookup "inspection/services/inspection/internal/features/addresses/lookup_postal_code"
 	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
 	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	archiveasset "inspection/services/inspection/internal/features/assets/archive_asset"
@@ -188,8 +191,12 @@ func run() error {
 	}
 	limits := ratelimit.OTPPolicy{Limiter: ratelimit.Limiter{Store: ratelimit.DragonflyStore{Address: cfg.DragonflyAddress, Password: cfg.DragonflyPassword}}}
 	invitationService := invitationcore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Stage: cfg.Stage}, Stage: cfg.Stage}
-	onboardingService := onboardingsession.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Stage: cfg.Stage}
-	keycloakClient := keycloak.ProvisioningClient{BaseURL: cfg.KeycloakAdminURL, Realm: cfg.KeycloakRealm, ClientID: cfg.KeycloakClientID, ClientSecret: cfg.KeycloakClientSecret, Timeout: cfg.ProviderTimeout}
+	turnstileHostname := ""
+	if onboardingOrigin, parseErr := url.Parse(cfg.OnboardingOrigin); parseErr == nil {
+		turnstileHostname = onboardingOrigin.Hostname()
+	}
+	onboardingService := onboardingsession.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Captcha: onboardingsession.TurnstileVerifier{Secret: cfg.TurnstileSecret, Hostname: turnstileHostname, AllowTestResponse: cfg.Environment == "local" || cfg.Environment == "test"}, RequireCaptcha: cfg.TurnstileEnabled, Stage: cfg.Stage}
+	keycloakClient := keycloak.ProvisioningClient{BaseURL: cfg.KeycloakAdminURL, Realm: cfg.KeycloakRealm, ClientID: cfg.KeycloakClientID, ClientSecret: cfg.KeycloakClientSecret, Timeout: cfg.ProviderTimeout, Stage: cfg.Stage}
 	activationService := adminactivation.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.ActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}
 	bootstrapService := onboardingbootstrap.Service{DB: db}
 	minioClient, err := objectstore.NewMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
@@ -212,7 +219,9 @@ func run() error {
 		return err
 	}
 	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer, DisableRequiredGPS: cfg.Stage != "production"}
+	postalLookupService := &postallookup.Service{}
 	setups := []func() error{
+		func() error { return postallookup.Setup(bus, postalLookupService) },
 		func() error {
 			return acceptprocessing.Setup(acceptprocessing.Dependencies{Bus: bus, Service: invitationService})
 		},
@@ -241,7 +250,7 @@ func run() error {
 			return assignroles.Setup(assignroles.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
-			return inviteinternal.Setup(inviteinternal.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+			return inviteinternal.Setup(inviteinternal.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Issuer: cfg.OIDCIssuer, AdminOrigin: cfg.AdminOrigin, Provider: keycloakClient, Registry: channelRegistry})
 		},
 		func() error {
 			return disablemembership.Setup(disablemembership.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -437,7 +446,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer}, AdminActivation: activationService, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer}, AdminActivation: activationService, UserActivation: activateinternal.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: inviteinternal.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.InternalUserActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {
@@ -512,6 +521,9 @@ func run() error {
 		if cookie, cookieErr := r.Cookie("inspection_admin_activation"); cookieErr == nil {
 			ctx = requestctx.WithAdminActivationCredentials(ctx, requestctx.AdminActivationCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
 		}
+		if cookie, cookieErr := r.Cookie("inspection_user_invitation"); cookieErr == nil {
+			ctx = requestctx.WithUserInvitationCredentials(ctx, requestctx.UserInvitationCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
+		}
 		server.ServeHTTP(w, r.WithContext(requestctx.WithIdempotencyKey(ctx, r.Header.Get("Idempotency-Key"))))
 	}))
 	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
@@ -569,6 +581,9 @@ func isMembershipOptionalRequest(r *http.Request) bool {
 		allowed["requestAdminActivationOtp"] = struct{}{}
 		allowed["verifyAdminActivationOtp"] = struct{}{}
 		allowed["setAdminInitialPassword"] = struct{}{}
+		allowed["requestInternalUserActivationOtp"] = struct{}{}
+		allowed["verifyInternalUserActivationOtp"] = struct{}{}
+		allowed["completeInternalUserActivation"] = struct{}{}
 	default:
 		return false
 	}

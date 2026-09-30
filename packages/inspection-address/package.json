@@ -1,0 +1,9 @@
+{
+  "name": "@inspection/address",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": { ".": "./src/index.tsx", "./core": "./src/core.ts" },
+  "peerDependencies": { "react": "^19.1.1" }
+}

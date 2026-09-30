@@ -31,7 +31,7 @@ const definition = {
 type Scenario = { existingAgency?: boolean; completed?: boolean };
 
 function session(state: string, currentStep: string, version: number, completedSteps: Record<string, unknown>, scenario: Scenario) {
-  return { id: "session-migration", state, currentStep, version, expiresAt: "2099-01-01T00:00:00Z", definition: null, completedSteps, owner: { name: "Ana", email: "ana@example.test" }, existingAgency: scenario.existingAgency ? { tenantId: "tenant-1", businessUnitId: "unit-1", name: "Imobiliária existente", businessUnitCode: "IMOB", status: "ACTIVE" } : null };
+  return { id: "session-migration", state, currentStep, version, expiresAt: "2099-01-01T00:00:00Z", definition, completedSteps, owner: { name: "Ana", email: "ana@example.test" }, existingAgency: scenario.existingAgency ? { tenantId: "tenant-1", businessUnitId: "unit-1", name: "Imobiliária existente", businessUnitCode: "IMOB", status: "ACTIVE" } : null };
 }
 
 async function mockOnboarding(page: Page, scenario: Scenario = {}) {
@@ -125,6 +125,14 @@ test("E2E-042 onboarding remains operable at 320, 360, 768 and 1440 CSS pixels",
   test.skip(process.env.INSPECTION_E2E_MOCKS !== "true", "set INSPECTION_E2E_MOCKS=true to run the deterministic onboarding contract flow");
   await mockOnboarding(page);
   await page.goto("/");
+  const info = page.getByRole("button", { name: "Informações sobre cadastro e salvamento" });
+  await expect(info).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByText(/Os campos ficam neste navegador/)).toBeHidden();
+  await info.focus();
+  await info.press("Enter");
+  await expect(page.getByText(/Os campos ficam neste navegador/)).toBeVisible();
+  await info.press("Enter");
+  await expect(page.getByText(/Os campos ficam neste navegador/)).toBeHidden();
   for (const width of [320, 360, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("heading", { name: "Comece sua primeira vistoria" })).toBeVisible();
@@ -133,4 +141,37 @@ test("E2E-042 onboarding remains operable at 320, 360, 768 and 1440 CSS pixels",
     const scan = await new AxeBuilder({ page: axePage }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(scan.violations, `axe violations at ${width}px`).toEqual([]);
   }
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth,
+    elements: [...document.querySelectorAll("body *")].filter((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.right > innerWidth + 1 || rect.left < -1;
+    }).map((element) => ({ tag: element.tagName, className: typeof element.className === "string" ? element.className : "", right: Math.round(element.getBoundingClientRect().right) })).slice(0, 12),
+  }));
+  expect(overflow.scrollWidth <= overflow.innerWidth, `horizontal overflow with enlarged text: ${JSON.stringify(overflow)}`).toBe(true);
+});
+
+test("E2E keeps the unsent reference photo reload warning next to its file picker", async ({ page }) => {
+  test.skip(process.env.INSPECTION_E2E_MOCKS !== "true", "set INSPECTION_E2E_MOCKS=true to run the deterministic onboarding contract flow");
+  await mockOnboarding(page);
+  await page.goto("/");
+  await page.getByLabel("Seu nome").fill("Ana");
+  await page.getByLabel("Seu e-mail").fill("ana@example.test");
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  await page.getByLabel("Código de confirmação").fill("123456");
+  await page.getByRole("button", { name: "Confirmar e continuar" }).click();
+  await page.getByLabel("Nome da imobiliária").fill("Imobiliária Ana");
+  await page.getByRole("button", { name: "Salvar e continuar" }).click();
+  await page.getByLabel("Endereço do imóvel").fill("Rua do Fluxo, 123");
+  await page.getByLabel("Tipo de imóvel").selectOption("APARTMENT");
+  await page.getByLabel("Finalidade da vistoria").selectOption("RENTAL");
+  await page.getByLabel("Prazo para concluir a vistoria").fill("2099-01-10");
+  await page.getByRole("button", { name: "Salvar e continuar" }).click();
+  await page.getByLabel("Base de comparação").selectOption("FIXED_ORIGIN");
+  await page.getByRole("button", { name: "Salvar e continuar" }).click();
+  await page.getByLabel("Fotos de referência").setInputFiles({ name: "referencia.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64") });
+  await expect(page.getByRole("status")).toContainText("Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada.");
 });

@@ -83,7 +83,7 @@ describe("onboarding session client", () => {
 
   it("UT-068 rejects unsupported schema and malformed segment definitions", () => {
     expect(isSupportedDefinition(definition)).toBe(true);
-    expect(isSupportedDefinition({ ...definition, schemaVersion: 2 })).toBe(false);
+    expect(isSupportedDefinition({ ...definition, schemaVersion: 3 })).toBe(false);
     expect(isSupportedDefinition({ ...definition, segment: "UNKNOWN" })).toBe(false);
   });
 

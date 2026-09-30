@@ -140,16 +140,6 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 				return err
 			}
 		}
-		var verified int64
-		if err := tx.Model(&database.ContactVerification{}).Where("tenant_id=? AND contact_id=? AND status='VERIFIED'", in.TenantID, contact.ID).Count(&verified).Error; err != nil {
-			return err
-		}
-		if verified == 0 {
-			verification := database.ContactVerification{ID: identity.NewID(), TenantID: in.TenantID, ContactID: contact.ID, IdempotencyKey: in.IdempotencyKey + ":contact", Status: "VERIFIED", VerifiedAt: &now, CreatedAt: now}
-			if err := tx.Create(&verification).Error; err != nil {
-				return err
-			}
-		}
 		if err := tx.Exec("DELETE FROM participants.channel_selections WHERE tenant_id=? AND participant_id=? AND contact_id IN (SELECT id FROM participants.contacts WHERE tenant_id=? AND participant_id=? AND channel='EMAIL')", in.TenantID, participant.ID, in.TenantID, participant.ID).Error; err != nil {
 			return err
 		}
@@ -188,7 +178,8 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 		if err := tx.Create(&invitation).Error; err != nil {
 			return err
 		}
-		template, variables := notificationcore.CaptureLinkNotification(notificationcore.ChannelEmail, participant.Name, asset.Name, asset.Address, invitation.ExpiresAt)
+		template := notificationcore.TemplateRef{Name: "capture-link", Version: "v1"}
+		variables := map[string]string{"recipientName": participant.Name}
 		correlation := in.CorrelationID
 		if correlation == "" {
 			correlation = "responsible-email-correction:" + in.InspectionID.String()

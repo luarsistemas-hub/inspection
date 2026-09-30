@@ -8,7 +8,7 @@ import (
 )
 
 func TestHandleRejectsUnknownRoleBeforeDatabaseAccess(t *testing.T) {
-	_, err := handle(context.Background(), Dependencies{}, Command{TenantID: identity.NewID(), Issuer: "issuer", Subject: "subject", Role: "ROOT", ClientID: "mutation"})
+	_, err := handle(context.Background(), Dependencies{}, Command{TenantID: identity.NewID(), Name: "Ada", Email: "ada@example.test", Role: "ROOT", ClientID: "mutation"})
 	if err == nil {
 		t.Fatal("expected unknown role error")
 	}

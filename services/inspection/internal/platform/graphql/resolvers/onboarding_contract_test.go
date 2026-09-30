@@ -34,7 +34,7 @@ func TestIT031AndIT032OnboardingDefinitionGraphQLBoundary(t *testing.T) {
 	}
 
 	supported := request("REAL_ESTATE")
-	if !strings.Contains(supported, `"schemaVersion":1`) || !strings.Contains(supported, "CHECKLIST_ONLY") || !strings.Contains(supported, "FIXED_ORIGIN") {
+	if !strings.Contains(supported, `"schemaVersion":2`) || !strings.Contains(supported, "addressDetails") || !strings.Contains(supported, "CHECKLIST_ONLY") || !strings.Contains(supported, "FIXED_ORIGIN") {
 		t.Fatalf("supported definition response: %s", supported)
 	}
 	unsupported := request("UNKNOWN")
@@ -123,7 +123,7 @@ func TestOnboardingSessionWithExpiredCookieReturnsNullAndClearsCookie(t *testing
 }
 
 func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
-	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", Version: 2, Owner: onboardingsession.Owner{Name: "Ana", Email: "ana@example.test"}})
+	value := mapOnboardingSession(onboardingsession.Session{State: "IDENTITY_VERIFIED", CurrentStep: "AGENCY", DefinitionVersion: real_estate_catalog.DefinitionVersion, Version: 2, Owner: onboardingsession.Owner{Name: "Ana", Email: "ana@example.test"}})
 
 	if value == nil || value.Definition["schemaVersion"] != real_estate_catalog.DefinitionSchema || value.Definition["version"] != real_estate_catalog.DefinitionVersion {
 		t.Fatalf("session definition versions: %#v", value.Definition)

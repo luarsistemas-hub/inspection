@@ -54,7 +54,10 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 	if err := db.Exec(`ATTACH DATABASE ':memory:' AS inspections`).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob unique,disclosure_version text,photo_processing integer,ai_analysis integer,gps_use integer,accepted_at datetime)`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`} {
+	if err := db.Exec(`ATTACH DATABASE ':memory:' AS participants`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob unique,disclosure_version text,photo_processing integer,ai_analysis integer,gps_use integer,accepted_at datetime)`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -202,7 +205,7 @@ func TestExternalAccessContractsIT141ToIT150(t *testing.T) {
 			t.Fatalf("second participant inherited limit: %v", err)
 		}
 	})
-	t.Run("non-production accepts any valid OTP without weakening format validation", func(t *testing.T) {
+	t.Run("non-production still requires the delivered OTP", func(t *testing.T) {
 		_, token, notifier, _, _, service := newService(t)
 		service.Stage = "dev"
 		if err := service.RequestOTP(context.Background(), token); err != nil {
@@ -212,8 +215,11 @@ func TestExternalAccessContractsIT141ToIT150(t *testing.T) {
 		if code == notifier.code {
 			code = "123456"
 		}
-		if _, err := service.VerifyOTP(context.Background(), token, code); err != nil {
-			t.Fatalf("arbitrary valid OTP rejected: %v", err)
+		if _, err := service.VerifyOTP(context.Background(), token, code); appCode(err) != apperror.InvalidInput {
+			t.Fatalf("arbitrary valid OTP accepted: %v", err)
+		}
+		if _, err := service.VerifyOTP(context.Background(), token, notifier.code); err != nil {
+			t.Fatalf("delivered OTP rejected: %v", err)
 		}
 
 		_, token, _, _, _, service = newService(t)

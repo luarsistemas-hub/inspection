@@ -15,14 +15,15 @@ type Query {
   segmentDefinitions(search: String, first: Int = 25, after: String): SegmentDefinitionConnection!
   templates(search: String, first: Int = 25, after: String): TemplateConnection!
   templateVersion(id: ID!): TemplateVersion
-  assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
+	assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
+	lookupPostalCode(postalCode: String!): PostalAddressLookup!
   asset(id: ID!): Asset
   originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
   originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
-  inspections(first: Int = 25, after: String, history: Boolean = false): InspectionConnection!
+  inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
   report(inspectionId: ID!, version: Int): Report
   reports(first: Int = 25, after: String, search: String, classification: String): ReportConnection!
@@ -62,7 +63,7 @@ type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAct
 type OnboardingPayload { session: OnboardingSession, sessionLocator: String, request: OnboardingRequest, activation: OnboardingActivation, status: OnboardingStatus, userErrors: [UserError!]!, clientMutationId: String! }
 
 input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!, clientMutationId: String! }
-input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
+input RequestOnboardingOtpInput { name: String!, email: String!, turnstileToken: String, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
 input CorrectOnboardingResponsibleEmailInput { email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
@@ -79,12 +80,16 @@ type Mutation {
   requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
   verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
   setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!
+  requestInternalUserActivationOtp(input: RequestInternalUserActivationOtpInput!): InternalUserActivationPayload!
+  verifyInternalUserActivationOtp(input: VerifyInternalUserActivationOtpInput!): InternalUserActivationPayload!
+  completeInternalUserActivation(input: CompleteInternalUserActivationInput!): InternalUserActivationPayload!
   createTenant(input: CreateTenantInput!): CreateTenantPayload!
   updateTenant(input: UpdateTenantInput!): TenantPayload!
   createBusinessUnit(input: CreateBusinessUnitInput!): BusinessUnitPayload!
   upsertBusinessUnit(input: UpsertBusinessUnitInput!): BusinessUnitPayload!
   archiveBusinessUnit(input: ArchiveBusinessUnitInput!): BusinessUnitPayload!
   inviteInternalUser(input: InviteInternalUserInput!): MembershipPayload!
+  resendInternalUserInvitation(input: ResendInternalUserInvitationInput!): MembershipPayload!
   assignRoleScopes(input: AssignRoleScopesInput!): MembershipPayload!
   disableMembership(input: DisableMembershipInput!): MembershipPayload!
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
@@ -141,9 +146,11 @@ type Mutation {
 }
 
 type Scope { kind: String! resourceId: ID! }
-type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
+type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
+type InternalUserActivation { membershipId: ID! email: String! name: String! newIdentity: Boolean! status: String! }
+type InternalUserActivationPayload { activation: InternalUserActivation userErrors: [UserError!]! clientMutationId: String! }
 type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
 type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
 type TenantConnection { nodes: [Tenant!]! pageInfo: PageInfo! }
@@ -166,7 +173,9 @@ type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
 type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
-type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
+type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! addressDetails: PostalAddress addressStatus: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
+type PostalAddress { countryCode: String! postalCode: String! street: String! number: String! withoutNumber: Boolean! complement: String! district: String! city: String! state: String! municipalityCode: String! reference: String! }
+type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
 type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
@@ -175,7 +184,8 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
+enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -390,7 +400,11 @@ input CreateBusinessUnitInput { code: String! name: String! expectedTenantVersio
 input UpsertBusinessUnitInput { businessUnitId: ID code: String! name: String! expectedVersion: Int expectedTenantVersion: Int clientMutationId: String! }
 input ArchiveBusinessUnitInput { businessUnitId: ID! expectedVersion: Int! clientMutationId: String! }
 input ScopeAssignmentInput { kind: String! resourceId: ID! }
-input InviteInternalUserInput { issuer: String! subject: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input ResendInternalUserInvitationInput { membershipId: ID! clientMutationId: String! }
+input RequestInternalUserActivationOtpInput { invitationToken: String clientMutationId: String! }
+input VerifyInternalUserActivationOtpInput { code: String! clientMutationId: String! }
+input CompleteInternalUserActivationInput { password: String clientMutationId: String! }
 input AssignRoleScopesInput { membershipId: ID! role: String! scopes: [ScopeAssignmentInput!]! expectedVersion: Int clientMutationId: String! }
 input DisableMembershipInput { membershipId: ID! expectedVersion: Int! clientMutationId: String! }
 input ContactInput { channel: String! value: String! }
@@ -403,7 +417,8 @@ input PublishTemplateVersionInput { key: String! name: String! definition: JSON!
 input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
 input UpdateAnalysisPromptInput { analysisType: AnalysisType!, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
 input AssetAssignmentInput { participantId: ID! role: String! }
-input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
+input PostalAddressInput { countryCode: String postalCode: String! street: String! number: String withoutNumber: Boolean! complement: String district: String city: String! state: String! municipalityCode: String reference: String }
+input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String addressDetails: PostalAddressInput latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
 input RegisterAssetInput { asset: AssetInput! clientMutationId: String! }
 input UpdateAssetInput { assetId: ID! expectedVersion: Int! asset: AssetInput! clientMutationId: String! }
 input ArchiveAssetInput { assetId: ID! expectedVersion: Int! clientMutationId: String! }

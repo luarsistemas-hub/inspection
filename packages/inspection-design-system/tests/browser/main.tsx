@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { useRef, useState } from "react";
-import { Button, Combobox, Dialog, Field } from "../../dist/index.js";
+import { Button, Combobox, Dialog, Field, InfoDisclosure } from "../../dist/index.js";
 import "../../dist/styles.css";
 
 function Harness() {
@@ -8,6 +8,7 @@ function Harness() {
   const [asset, setAsset] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   return <>
+    <InfoDisclosure label="vistoria" heading={<h1>Nova vistoria</h1>}>A alteração será confirmada pelo servidor.</InfoDisclosure>
     <Button ref={triggerRef} onClick={() => setIsOpen(true)}>Nova vistoria</Button>
     <p data-testid="selection">{asset || "Nenhum imóvel selecionado"}</p>
     <Dialog isOpen={isOpen} onClose={() => setIsOpen(false)} restoreFocusRef={triggerRef} size="wide" title="Nova vistoria">

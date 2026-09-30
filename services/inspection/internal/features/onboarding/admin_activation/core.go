@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/features/onboarding/coordinator"
@@ -239,7 +240,7 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 	if s.DB == nil || s.Provider == nil {
 		return Activation{}, errors.New("admin activation: missing dependency")
 	}
-	if strings.TrimSpace(password) == "" || len(password) < 12 {
+	if !s.passwordAllowed(password) {
 		return Activation{}, apperror.New(apperror.InvalidInput, "password", "password does not meet policy")
 	}
 	var row database.OnboardingActivation
@@ -305,6 +306,25 @@ func (s Service) SetInitialPassword(ctx context.Context, activation Activation, 
 		return Activation{}, apperror.Wrap(apperror.DependencyUnavailable, err)
 	}
 	return Activation{TenantID: row.TenantID, IdentityID: row.IdentityID, Subject: activation.Subject, Purpose: row.Purpose, Status: "ACTIVE", ActivatedAt: &now}, nil
+}
+
+func (s Service) passwordAllowed(password string) bool {
+	if strings.TrimSpace(password) == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(s.Stage), "dev") {
+		return true
+	}
+	runes := []rune(password)
+	if len(runes) < 6 {
+		return false
+	}
+	var uppercase, special bool
+	for _, char := range runes {
+		uppercase = uppercase || unicode.IsUpper(char)
+		special = special || unicode.IsPunct(char) || unicode.IsSymbol(char)
+	}
+	return uppercase && special
 }
 
 func (s Service) SetInitialPasswordForSession(ctx context.Context, locator, csrf, password string) (Activation, error) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Combobox, type ComboboxOption } from "@inspection/design-system";
 import { FormDialog } from "./form-dialog";
@@ -8,9 +9,11 @@ import { ConfirmationDialog } from "./confirmation-dialog";
 import {
   CancelScheduleDocument,
   CreateScheduleDocument,
+  InspectionsDocument,
   SchedulesDocument,
   UpdateScheduleDocument,
   type DashboardFormOptionsQuery,
+  type InspectionsQuery,
   type SchedulesQuery,
 } from "@/graphql/generated";
 import { graphql, type GraphQLFailure } from "@/graphql/client";
@@ -25,16 +28,26 @@ const frequencies = [
 ] as const;
 
 type Schedule = SchedulesQuery["schedules"]["nodes"][number];
+type Inspection = InspectionsQuery["inspections"]["nodes"][number];
+type ScheduleView = "day" | "week" | "rules";
 
 export function SchedulesJourney({
   canMutate,
   options,
+  refreshKey,
 }: {
   canMutate: boolean;
   options: { data?: DashboardFormOptionsQuery; loading: boolean; error?: string };
+  refreshKey: number;
 }) {
   const [data, setData] = useState<SchedulesQuery>();
+  const [inspections, setInspections] = useState<Inspection[]>([]);
   const [message, setMessage] = useState("Carregando agendas…");
+  const [inspectionMessage, setInspectionMessage] = useState("Carregando vistorias…");
+  const [view, setView] = useState<ScheduleView>("day");
+  const [selectedDate, setSelectedDate] = useState(() => dateKeyInTimezone(new Date()));
+  const [participantFilter, setParticipantFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editItem, setEditItem] = useState<Schedule>();
   const [creating, setCreating] = useState(false);
@@ -45,6 +58,20 @@ export function SchedulesJourney({
   const busyRef = useRef(false);
   const openedScheduleRef = useRef<string | undefined>(undefined);
   const scheduleId = useSearchParams().get("scheduleId");
+
+  const loadInspections = useCallback(async () => {
+    setInspectionMessage("Atualizando vistorias…");
+    try {
+      const result = await graphql<InspectionsQuery, { first: number; after: string | null; history: boolean; search: string | null; statusGroup: null }>(
+        InspectionsDocument,
+        { first: 100, after: null, history: false, search: null, statusGroup: null },
+      );
+      setInspections(result.inspections.nodes.filter((item) => !["INVALIDATED", "CANCELED"].includes(item.status)));
+      setInspectionMessage("Vistorias atualizadas.");
+    } catch {
+      setInspectionMessage("Não foi possível carregar as vistorias. Tente atualizar a agenda.");
+    }
+  }, []);
 
   const load = useCallback(async (targetScheduleId?: string) => {
     try {
@@ -61,7 +88,7 @@ export function SchedulesJourney({
     }
   }, []);
 
-  useEffect(() => { void load(scheduleId ?? undefined); }, [load, scheduleId]);
+  useEffect(() => { void load(scheduleId ?? undefined); void loadInspections(); }, [load, loadInspections, scheduleId, refreshKey]);
   useEffect(() => {
     if (!scheduleId) { openedScheduleRef.current = undefined; return; }
     if (openedScheduleRef.current === scheduleId) return;
@@ -82,6 +109,7 @@ export function SchedulesJourney({
       }
       setMessage("Agenda salva. Atualizando dados…");
       await load();
+      await loadInspections();
       return undefined;
     } catch (error) {
       setMessage(formatFailure(error));
@@ -122,32 +150,59 @@ export function SchedulesJourney({
     });
   };
 
+  const activeSchedules = data?.schedules.nodes.filter((item) => item.status === "ACTIVE") ?? [];
+  const visibleInspections = inspections.filter((item) => {
+    const day = dateKeyInTimezone(new Date(item.dueAt));
+    const dateMatches = view === "day" ? day === selectedDate : view === "week" && dateInWeek(day, selectedDate);
+    return dateMatches
+      && (!participantFilter || item.participantId === participantFilter)
+      && (!statusFilter || item.status === statusFilter);
+  }).sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+  const weekDays = Array.from({ length: 7 }, (_, index) => shiftDateKey(startOfWeek(selectedDate), index));
+  const assetNames = new Map(options.data?.assets.nodes.map((item) => [item.id, item.name]) ?? []);
+  const participantNames = new Map(options.data?.participants.nodes.map((item) => [item.id, item.name]) ?? []);
+  const moveDate = (amount: number) => setSelectedDate((current) => shiftDateKey(current, amount * (view === "week" ? 7 : 1)));
+
   return <div className="feature schedules-journey">
-    <section className="schedules-list" aria-labelledby="schedules-list-title">
-      <div className="schedules-list-heading">
-        <h2 id="schedules-list-title">Agendas cadastradas</h2>
-        <div className="actions">
-          {canMutate && <button onClick={() => { setCreateError(""); setCreateOpen(true); }}>Nova agenda</button>}
-          <button className="secondary" onClick={() => void load()}>Atualizar agendas</button>
-        </div>
+    <div className="schedules-toolbar">
+      <div className="schedules-tabs" role="group" aria-label="Visualização da agenda">
+        {([ ["day", "Dia"], ["week", "Semana"], ["rules", "Recorrências"] ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)}>{label}</button>)}
       </div>
+      {canMutate && <button onClick={() => { setCreateError(""); setCreateOpen(true); }}>{view === "rules" ? "Nova recorrência" : "Nova agenda"}</button>}
+    </div>
+
+    {view !== "rules" && <section className="schedules-calendar" aria-labelledby="schedules-calendar-title">
+      <div className="schedules-calendar-heading">
+        <div><h2 id="schedules-calendar-title">{view === "day" ? weekdayDate(selectedDate) : weekRangeLabel(weekDays[0], weekDays[6])}</h2><p>{inspectionMessage}</p></div>
+        <div className="actions"><button className="secondary" type="button" onClick={() => setSelectedDate(dateKeyInTimezone(new Date()))}>Hoje</button><button className="secondary" type="button" aria-label="Período anterior" onClick={() => moveDate(-1)}>‹</button><button className="secondary" type="button" aria-label="Próximo período" onClick={() => moveDate(1)}>›</button><label className="schedule-date-picker">Data<input aria-label="Data da agenda" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label></div>
+      </div>
+      <div className="schedules-filter-row">
+        <label>Responsável<select aria-label="Filtrar por responsável" value={participantFilter} onChange={(event) => setParticipantFilter(event.target.value)}><option value="">Todos</option>{(options.data?.participants.nodes ?? []).map((participant) => <option key={participant.id} value={participant.id}>{participant.name}</option>)}</select></label>
+        <label>Situação<select aria-label="Filtrar por situação" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todas</option>{[...new Set(inspections.map((item) => item.status))].map((status) => <option key={status} value={status}>{presentDashboardStatus(status)}</option>)}</select></label>
+        {activeSchedules.length > 0 && <span>{activeSchedules.length} recorrência(s) ativa(s) · <button className="schedule-inline-link" type="button" onClick={() => setView("rules")}>Ver recorrências</button></span>}
+      </div>
+      {view === "day" && <InspectionList items={visibleInspections} />}
+      {view === "week" && <div className="schedules-week-grid">{weekDays.map((day) => <section className="schedules-week-day" key={day}><h3>{weekdayDate(day)}</h3><InspectionList items={visibleInspections.filter((item) => dateKeyInTimezone(new Date(item.dueAt)) === day)} compact /></section>)}</div>}
+    </section>}
+
+    {view === "rules" && <section className="schedules-list" aria-labelledby="schedules-list-title">
+      <div className="schedules-list-heading"><div><h2 id="schedules-list-title">Recorrências cadastradas</h2><p>Estas são próximas datas previstas; a vistoria aparece na agenda quando estiver confirmada.</p></div><button className="secondary" onClick={() => { void load(); void loadInspections(); }}>Atualizar agenda</button></div>
       <p role="status" aria-live="polite">{message}</p>
-      {data && data.schedules.nodes.length === 0 && <p className="schedules-empty">Crie uma agenda para programar vistorias recorrentes.</p>}
-      {data && data.schedules.nodes.length > 0 && <ul className="collection schedules-collection">
-        {data.schedules.nodes.map((item) => <li key={item.id}>
+      {data && activeSchedules.length === 0 && <p className="schedules-empty">Nenhuma recorrência ativa. Agende vistorias recorrentes para organizar a rotina.</p>}
+      {data && activeSchedules.length > 0 && <ul className="collection schedules-collection">
+        {activeSchedules.map((item) => <li key={item.id}>
           <div className="schedule-summary">
-            <strong>{presentDashboardStatus(item.status)}</strong>
-            <span>Próxima vistoria: {formatScheduleDateTime(item.nextDueAt)}</span>
-            <span>Repetição: {presentScheduleFrequency(item.rrule)}</span>
-            <span>Prazo: {item.deadlineMinutes} minutos · {presentReminders(item.reminderOffsetsMinutes)}</span>
+            <strong>{assetNames.get(item.assetId) || "Imóvel sem nome disponível"}</strong>
+            <span>Responsável · {participantNames.get(item.participantId) || "Responsável não disponível"}</span>
+            <span>Próxima ocorrência prevista · {formatScheduleDateTime(item.nextDueAt)}</span>
+            <span>Repetição · {presentScheduleFrequency(item.rrule)}</span>
+            <span>Prazo · {item.deadlineMinutes} minutos · lembretes {presentReminders(item.reminderOffsetsMinutes)}</span>
           </div>
-          {canMutate && item.status === "ACTIVE" && <div className="actions">
-            <button className="secondary" onClick={() => { setEditError(""); setEditItem(item); }}>Editar agenda</button>
-            <button className="secondary" onClick={() => setCancelItem(item)}>Cancelar agenda</button>
-          </div>}
+          {canMutate && <div className="actions"><button className="secondary" onClick={() => { setEditError(""); setEditItem(item); }}>Editar recorrência</button><button className="secondary" onClick={() => setCancelItem(item)}>Cancelar recorrência</button></div>}
         </li>)}
       </ul>}
-    </section>
+    </section>}
+    {view === "rules" && <p className="schedules-calendar-status" role="status">{inspectionMessage}</p>}
     {canMutate && <>
       <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nova agenda" busy={creating} error={createError}>
         {options.loading && <p role="status">Carregando imóveis, responsáveis pela vistoria e modelos de vistoria…</p>}
@@ -160,6 +215,51 @@ export function SchedulesJourney({
       <ConfirmationDialog isOpen={Boolean(cancelItem)} onClose={() => setCancelItem(undefined)} title="Cancelar agenda" target="Agenda selecionada" scope="Contexto operacional atual" consequence="A agenda será cancelada; as vistorias históricas serão preservadas." confirmLabel="Cancelar agenda" onConfirm={async () => { if (!cancelItem) return; const failure = await cancel(cancelItem); if (failure) throw new Error(failure); }} />
     </>}
   </div>;
+}
+
+function InspectionList({ items, compact = false }: { items: Inspection[]; compact?: boolean }) {
+  if (!items.length) return <p className="schedules-calendar-empty">Nenhuma vistoria confirmada neste período.</p>;
+  return <ul className={`schedules-calendar-events${compact ? " schedules-calendar-events--compact" : ""}`}>
+    {items.map((item) => <li className="schedules-calendar-event" key={item.id}>
+      <time dateTime={item.dueAt}>{new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: scheduleTimezone }).format(new Date(item.dueAt))}</time>
+      <div><strong>{item.assetName?.trim() || "Imóvel indisponível"}</strong>{item.assetAddress && <span>{item.assetAddress}</span>}<span>Responsável · {item.participantName?.trim() || "Indisponível"}</span></div>
+      <div className="schedules-calendar-event-side"><span className="home-status">{presentDashboardStatus(item.status)}</span><Link href={`/inspections?inspectionId=${encodeURIComponent(item.id)}`}>Abrir vistoria →</Link></div>
+    </li>)}
+  </ul>;
+}
+
+function dateKeyInTimezone(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: scheduleTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function shiftDateKey(value: string, amount: number): string {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfWeek(value: string): string {
+  const day = new Date(`${value}T12:00:00Z`).getUTCDay();
+  return shiftDateKey(value, -((day + 6) % 7));
+}
+
+function dateInWeek(day: string, selected: string): boolean {
+  const start = startOfWeek(selected);
+  return day >= start && day <= shiftDateKey(start, 6);
+}
+
+function weekdayDate(value: string): string {
+  const date = new Date(`${value}T12:00:00-03:00`);
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: scheduleTimezone }).format(date);
+}
+
+function weekRangeLabel(first: string, last: string): string {
+  const start = new Date(`${first}T12:00:00-03:00`);
+  const end = new Date(`${last}T12:00:00-03:00`);
+  const formatter = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", timeZone: scheduleTimezone });
+  return `${formatter.format(start)} – ${formatter.format(end)}`;
 }
 
 function FormOptionsNotice({ options }: { options: { loading: boolean; error?: string } }) {

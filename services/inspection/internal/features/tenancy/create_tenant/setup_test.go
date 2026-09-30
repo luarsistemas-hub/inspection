@@ -44,7 +44,7 @@ func TestHandleUT008BootstrapReplayProvisionsOneFixedAdminMembership(t *testing.
 		`CREATE TABLE tenancy.bootstrap_requests (id text PRIMARY KEY, tenant_id text NOT NULL, subject_key text NOT NULL, idempotency_key text NOT NULL, payload_digest text NOT NULL, result blob NOT NULL, created_at datetime NOT NULL)`,
 		`CREATE TABLE tenancy.tenants (id text PRIMARY KEY, tenant_id text NOT NULL, name text NOT NULL, language text NOT NULL, default_timezone text NOT NULL, status text NOT NULL, version integer NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
 		`CREATE TABLE tenancy.business_units (id text PRIMARY KEY, tenant_id text NOT NULL, code text NOT NULL, name text NOT NULL, status text NOT NULL, version integer NOT NULL, idempotency_key text NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
-		`CREATE TABLE access.memberships (id text PRIMARY KEY, tenant_id text NOT NULL, identity_id text NOT NULL, issuer text NOT NULL, subject text NOT NULL, role text NOT NULL, status text NOT NULL, version integer NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
+		`CREATE TABLE access.memberships (id text PRIMARY KEY, tenant_id text NOT NULL, identity_id text NOT NULL, issuer text NOT NULL, subject text NOT NULL, name text NOT NULL DEFAULT '', email text NOT NULL DEFAULT '', role text NOT NULL, status text NOT NULL, invitation_status text NOT NULL DEFAULT 'NONE', version integer NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
 		`CREATE TABLE access.product_entitlements (id text PRIMARY KEY, tenant_id text NOT NULL, membership_id text NOT NULL, product text NOT NULL, created_at datetime NOT NULL)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {

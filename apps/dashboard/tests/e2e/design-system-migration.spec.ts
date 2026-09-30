@@ -17,7 +17,7 @@ const options = { data: {
   templates: { nodes: [{ id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-a", activeVersionId: "template-version-a", version: 1 }], pageInfo: pageInfo() },
 } };
 
-const inspection = (status = "COMPLETED") => ({ id: "inspection-a", assetId: "asset-a", participantId: "participant-a", projectId: "project-a", stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt: "2030-05-10T12:00:00Z", deadlineAt: "2030-05-11T12:00:00Z", reminderInstants: [], version: 1 });
+const inspection = (status = "COMPLETED") => ({ id: "inspection-a", assetId: "asset-a", participantId: "participant-a", projectId: "project-a", stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt: "2030-05-10T12:00:00Z", deadlineAt: "2030-05-11T12:00:00Z", reminderInstants: [], version: 1, assetName: "Apartamento 101", assetAddress: "Rua QA, 10", assetExternalKey: "APT101", participantName: "Elvio QA" });
 const project = (status = "IN_PROGRESS") => ({ id: "project-a", assetId: "asset-a", participantId: "participant-a", templateId: "template-a", reportMode: "SIMPLE", status, version: 1, stages: [{ id: "stage-a", key: "INITIAL", label: "Inicial", kind: "REQUIRED", position: 1, status: "PLANNED", plannedAt: "2030-05-10T12:00:00Z", reason: null, inspectionId: "inspection-a", version: 1 }] });
 const report = (published = true) => ({ id: "report-a", inspectionId: "inspection-a", projectId: "project-a", version: 1, mode: "SIMPLE", classification: "NORMAL", jsonDigest: "digest", htmlDigest: "html", html: "<p>Resultado</p>", createdAt: "2030-05-10T12:00:00Z", advisory: "Revisão recomendada", pdfStatus: "READY", context: { asset: { id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua QA" }, participant: { id: "participant-a", name: "Ana QA" }, template: { id: "template-a", name: "Padrão", version: 1 }, inspection: { projectId: "project-a", stageId: null, stageLabel: "Inicial", dueAt: "2030-05-10T12:00:00Z", submittedAt: "2030-05-10T12:00:00Z", generatedAt: "2030-05-10T12:00:00Z" } }, requirements: [], evidence: [], findings: [], timeline: [], publication: published ? { id: "publication-a", status: "PUBLISHED", version: 1 } : null });
 
@@ -99,6 +99,13 @@ test.describe("Dashboard design-system migration deterministic integration", () 
   test("IT-081, IT-082, IT-083, IT-084, IT-085 and E2E-017 keep membership scope and viewer controls bounded", async ({ page }) => {
     const mocks = await installMocks(page, "VIEWER");
     await loginAsLocalAdmin(page, "/inspections");
+    const inspectionInfo = page.getByRole("button", { name: "Informações sobre vistorias" });
+    await expect(inspectionInfo).toHaveAttribute("aria-expanded", "false");
+    await inspectionInfo.press("Enter");
+    await expect(page.getByText("Acompanhe os registros pela lista, pela situação ou pelo prazo.")).toBeVisible();
+    const viewInfo = page.getByRole("button", { name: "Informações sobre visualização da lista" });
+    await viewInfo.click();
+    await expect(page.getByText("A troca preserva os registros e os filtros.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Nova vistoria" })).toHaveCount(0);
     await page.getByRole("button", { name: "Quadro" }).click();
     const board = page.getByRole("region", { name: "Vistorias em quadro" });
@@ -108,12 +115,70 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     expect(mocks.calls.some(({ operation }) => operation === "Inspections")).toBe(true);
   });
 
+  test("inspection search is sent to the server and the compact detail keeps the collection filters", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await loginAsLocalAdmin(page, "/inspections");
+
+    const search = page.getByRole("textbox", { name: "Buscar vistoria" });
+    const searchBox = await search.boundingBox();
+    const statusBox = await page.getByRole("combobox", { name: "Situação" }).boundingBox();
+    expect(searchBox).not.toBeNull();
+    expect(statusBox).not.toBeNull();
+    expect(statusBox!.x - (searchBox!.x + searchBox!.width)).toBeLessThan(40);
+    await search.fill("Elvio");
+    await expect.poll(() => mocks.calls.filter(({ operation }) => operation === "Inspections").at(-1)?.variables.search).toBe("Elvio");
+    await page.getByRole("combobox", { name: "Situação" }).selectOption("concluidas");
+    await expect.poll(() => mocks.calls.filter(({ operation }) => operation === "Inspections").at(-1)?.variables.statusGroup).toBe("COMPLETED");
+    expect(mocks.calls.filter(({ operation }) => operation === "Inspections").at(-1)?.variables.search).toBe("Elvio");
+    await page.getByRole("button", { name: "Buscar vistorias" }).click();
+
+    await page.getByRole("button", { name: "Abrir detalhes da vistoria Apartamento 101" }).click();
+    await expect.poll(() => mocks.calls.some(({ operation, variables }) => operation === "InspectionDetail" && variables.id === "inspection-a")).toBe(true);
+    const dialog = page.getByRole("dialog", { name: "Detalhe da vistoria" });
+    await expect(dialog.getByRole("heading", { name: "Apartamento 101" })).toBeVisible();
+    await expect(dialog.getByText("Elvio QA")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Abrir laudo" })).toBeVisible();
+    await expect(dialog.getByText("ID", { exact: true })).toBeHidden();
+    await dialog.getByText("Dados do registro").click();
+    await expect(dialog.getByText("inspection-a")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Abrir detalhes da vistoria Apartamento 101" })).toBeFocused();
+    await expect(search).toHaveValue("Elvio");
+    await expect(page.getByRole("combobox", { name: "Situação" })).toHaveValue("concluidas");
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await page.getByRole("button", { name: "Abrir detalhes da vistoria Apartamento 101" }).click();
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await page.keyboard.press("Escape");
+  });
+
+  test("inspection results load another server page without horizontal overflow on mobile", async ({ page }) => {
+    const mocks = await installMocks(page, "VIEWER");
+    mocks.enqueue("Inspections", { data: { inspections: { nodes: [inspection()], pageInfo: pageInfo(true, "cursor-1") } } });
+    await loginAsLocalAdmin(page, "/inspections");
+    mocks.enqueue("Inspections", { data: { inspections: { nodes: [{ ...inspection(), id: "inspection-b", assetName: "Apartamento 202", participantName: "Marina QA" }], pageInfo: pageInfo() } } });
+
+    await page.getByRole("button", { name: "Carregar mais" }).click();
+    await expect(page.getByText("Apartamento 202")).toBeVisible();
+    expect(mocks.calls.filter(({ operation }) => operation === "Inspections").at(-1)?.variables.after).toBe("cursor-1");
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+
   test("IT-086, IT-087, IT-088, IT-089 and IT-090 keep overview absence and recovery explicit", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("OperationalOverview", { data: { dashboardSummary: null, triageInspections: { nodes: [], pageInfo: pageInfo() } } });
     await loginAsLocalAdmin(page, "/inspections");
     await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: "Início" }).click();
     await expect(page.getByRole("heading", { name: "Início" })).toBeVisible();
+    const info = page.getByRole("button", { name: "Informações sobre Início" });
+    await expect(info).toHaveAttribute("aria-expanded", "false");
+    await info.click();
+    await expect(page.getByText("Resumo e triagem usam o mesmo filtro e contexto do servidor.")).toBeVisible();
+    await expect(page.getByText("A fila é somente leitura para o perfil Visualizador; a autorização é sempre revalidada no servidor.")).toBeVisible();
   });
 
   test("IT-091, IT-092, IT-093, IT-094, IT-095 and E2E-019 preserve schedule validation, dependencies and versions", async ({ page }) => {
@@ -166,6 +231,10 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     const mocks = await installMocks(page, "VIEWER");
     mocks.enqueue("Reports", { data: { reports: { nodes: [], pageInfo: pageInfo() } } });
     await loginAsLocalAdmin(page, "/reports");
+    const info = page.getByRole("button", { name: "Informações sobre Laudos" });
+    await expect(info).toHaveAttribute("aria-expanded", "false");
+    await info.click();
+    await expect(page.getByText("Consulte os laudos gerados das suas vistorias.")).toBeVisible();
     await expect(page.getByRole("status")).toContainText("Nenhum laudo");
     expect(mocks.calls.some(({ operation }) => operation === "Reports")).toBe(true);
   });

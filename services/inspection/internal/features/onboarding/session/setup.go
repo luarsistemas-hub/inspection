@@ -7,7 +7,7 @@ import (
 	"inspection/services/inspection/internal/platform/mediator"
 )
 
-type RequestOTPCommand struct{ Name, Email, IP string }
+type RequestOTPCommand struct{ Name, Email, IP, TurnstileToken string }
 type VerifyOTPCommand struct{ Locator, Code string }
 type LoadQuery struct{ Locator string }
 type CheckpointCommand struct {
@@ -30,7 +30,7 @@ func Setup(deps Dependencies) error {
 	}
 	if err := deps.Bus.RegisterCommand(RequestOTPCommand{}, func(ctx context.Context, raw any) (any, error) {
 		command := raw.(RequestOTPCommand)
-		return deps.Service.RequestOTP(ctx, command.Name, command.Email, command.IP)
+		return deps.Service.RequestOTP(ctx, command.Name, command.Email, command.IP, command.TurnstileToken)
 	}); err != nil {
 		return err
 	}

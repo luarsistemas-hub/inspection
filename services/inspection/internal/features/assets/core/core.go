@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/features/assets/address"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -31,6 +32,7 @@ type Input struct {
 	TenantID, BusinessUnitID, SegmentVersionID identity.ID
 	TemplateID                                 *identity.ID
 	Name, ExternalKey, Address, IdempotencyKey string
+	AddressDetails                             *address.Details
 	LatitudeE6, LongitudeE6                    *int32
 	GeofenceMeters                             int
 	Attributes                                 map[string]any
@@ -62,14 +64,32 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 		return View{}, err
 	}
 	status := "ACTIVE"
-	name, address, key := strings.TrimSpace(in.Name), strings.TrimSpace(in.Address), strings.TrimSpace(in.ExternalKey)
-	if name == "" || address == "" || key == "" {
+	name, legacyAddress, key := strings.TrimSpace(in.Name), strings.TrimSpace(in.Address), strings.TrimSpace(in.ExternalKey)
+	addressStatus := "INCOMPLETE"
+	var details address.Details
+	formattedAddress := legacyAddress
+	if legacyAddress != "" {
+		addressStatus = "LEGACY"
+	}
+	if in.AddressDetails != nil {
+		var err error
+		details, err = address.Validate(*in.AddressDetails)
+		if err != nil {
+			return View{}, apperror.New(apperror.InvalidInput, "addressDetails", err.Error())
+		}
+		addressStatus = "COMPLETE"
+		formattedAddress = address.Format(details)
+		if legacyAddress != "" && legacyAddress != formattedAddress {
+			return View{}, apperror.New(apperror.InvalidInput, "address", "address must match the formatted address details")
+		}
+	}
+	if name == "" || formattedAddress == "" || key == "" {
 		status = "DRAFT"
 	}
 	if name != "" && !catalog.ValidName(name) {
 		return View{}, apperror.New(apperror.InvalidInput, "name", "name exceeds limit")
 	}
-	if !catalog.ValidDescription(address) {
+	if !catalog.ValidDescription(formattedAddress) {
 		return View{}, apperror.New(apperror.InvalidInput, "address", "address exceeds limit")
 	}
 	if _, err := s.Bus.Ask(ctx, segmentresolve.ValidateAttributesQuery{TenantID: in.TenantID, VersionID: in.SegmentVersionID, Attributes: in.Attributes}); err != nil {
@@ -122,7 +142,7 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 			return apperror.New(apperror.InvalidState, "assets", "asset capacity reached")
 		}
 		now := time.Now().UTC()
-		asset := database.Asset{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: in.BusinessUnitID, SegmentVersionID: in.SegmentVersionID, TemplateID: in.TemplateID, Name: name, ExternalKey: key, Address: address, LatitudeE6: in.LatitudeE6, LongitudeE6: in.LongitudeE6, GeofenceMeters: in.GeofenceMeters, PolicyOverrides: overrides, Status: status, Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
+		asset := database.Asset{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: in.BusinessUnitID, SegmentVersionID: in.SegmentVersionID, TemplateID: in.TemplateID, Name: name, ExternalKey: key, Address: formattedAddress, AddressCountryCode: "BR", AddressPostalCode: details.PostalCode, AddressStreet: details.Street, AddressNumber: details.Number, AddressWithoutNumber: details.WithoutNumber, AddressComplement: details.Complement, AddressDistrict: details.District, AddressCity: details.City, AddressState: details.State, AddressMunicipalityCode: details.MunicipalityCode, AddressReference: details.Reference, AddressStatus: addressStatus, LegacyAddress: legacyAddress, LatitudeE6: in.LatitudeE6, LongitudeE6: in.LongitudeE6, GeofenceMeters: in.GeofenceMeters, PolicyOverrides: overrides, Status: status, Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&asset).Error; err != nil {
 			return err
 		}
@@ -164,8 +184,27 @@ func (s Service) Update(ctx context.Context, assetID identity.ID, expectedVersio
 	if err := validateLocation(in.LatitudeE6, in.LongitudeE6, &in.GeofenceMeters); err != nil {
 		return View{}, apperror.New(apperror.InvalidInput, "location", err.Error())
 	}
-	if !catalog.ValidName(in.Name) || !catalog.ValidDescription(in.Address) {
+	if !catalog.ValidName(in.Name) {
 		return View{}, apperror.New(apperror.InvalidInput, "asset", "text limit exceeded")
+	}
+	addressUpdate := map[string]any{}
+	if in.AddressDetails != nil {
+		details, err := address.Validate(*in.AddressDetails)
+		if err != nil {
+			return View{}, apperror.New(apperror.InvalidInput, "addressDetails", err.Error())
+		}
+		formatted := address.Format(details)
+		if in.Address != "" && strings.TrimSpace(in.Address) != formatted {
+			return View{}, apperror.New(apperror.InvalidInput, "address", "address must match the formatted address details")
+		}
+		addressUpdate = map[string]any{"address": formatted, "address_country_code": "BR", "address_postal_code": details.PostalCode, "address_street": details.Street, "address_number": details.Number, "address_without_number": details.WithoutNumber, "address_complement": details.Complement, "address_district": details.District, "address_city": details.City, "address_state": details.State, "address_municipality_code": details.MunicipalityCode, "address_reference": details.Reference, "address_status": "COMPLETE"}
+	} else if existing.Asset.AddressStatus == "COMPLETE" {
+		// Keep structured components authoritative for older text-only clients.
+	} else if strings.TrimSpace(in.Address) != existing.Asset.Address {
+		addressUpdate = map[string]any{"address": strings.TrimSpace(in.Address), "legacy_address": strings.TrimSpace(in.Address), "address_status": "LEGACY"}
+	}
+	if !catalog.ValidDescription(in.Address) {
+		return View{}, apperror.New(apperror.InvalidInput, "address", "address exceeds limit")
 	}
 	if _, err := s.Bus.Ask(ctx, segmentresolve.ValidateAttributesQuery{TenantID: in.TenantID, VersionID: in.SegmentVersionID, Attributes: in.Attributes}); err != nil {
 		return View{}, err
@@ -189,11 +228,15 @@ func (s Service) Update(ctx context.Context, assetID identity.ID, expectedVersio
 		return View{}, fmt.Errorf("decode stored asset policy: %w", err)
 	}
 	_, overrideDigest, _ := catalog.CanonicalJSON(in.PolicyOverrides)
-	if existing.Asset.Name == strings.TrimSpace(in.Name) && existing.Asset.ExternalKey == strings.TrimSpace(in.ExternalKey) && existing.Asset.Address == strings.TrimSpace(in.Address) && sameID(existing.Asset.TemplateID, in.TemplateID) && sameInt32(existing.Asset.LatitudeE6, in.LatitudeE6) && sameInt32(existing.Asset.LongitudeE6, in.LongitudeE6) && existing.Asset.GeofenceMeters == in.GeofenceMeters && existingPolicyDigest == overrideDigest && existing.Attributes.CanonicalDigest == digest {
+	if existing.Asset.Name == strings.TrimSpace(in.Name) && existing.Asset.ExternalKey == strings.TrimSpace(in.ExternalKey) && len(addressUpdate) == 0 && sameID(existing.Asset.TemplateID, in.TemplateID) && sameInt32(existing.Asset.LatitudeE6, in.LatitudeE6) && sameInt32(existing.Asset.LongitudeE6, in.LongitudeE6) && existing.Asset.GeofenceMeters == in.GeofenceMeters && existingPolicyDigest == overrideDigest && existing.Attributes.CanonicalDigest == digest {
 		return existing, nil
 	}
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
-		r := tx.Model(&database.Asset{}).Where("tenant_id=? AND id=? AND version=?", in.TenantID, assetID, expectedVersion).Updates(map[string]any{"name": strings.TrimSpace(in.Name), "external_key": strings.TrimSpace(in.ExternalKey), "address": strings.TrimSpace(in.Address), "template_id": in.TemplateID, "latitude_e6": in.LatitudeE6, "longitude_e6": in.LongitudeE6, "geofence_meters": in.GeofenceMeters, "policy_overrides": overrides, "status": "ACTIVE", "version": expectedVersion + 1, "updated_at": time.Now().UTC()})
+		updates := map[string]any{"name": strings.TrimSpace(in.Name), "external_key": strings.TrimSpace(in.ExternalKey), "template_id": in.TemplateID, "latitude_e6": in.LatitudeE6, "longitude_e6": in.LongitudeE6, "geofence_meters": in.GeofenceMeters, "policy_overrides": overrides, "status": "ACTIVE", "version": expectedVersion + 1, "updated_at": time.Now().UTC()}
+		for key, value := range addressUpdate {
+			updates[key] = value
+		}
+		r := tx.Model(&database.Asset{}).Where("tenant_id=? AND id=? AND version=?", in.TenantID, assetID, expectedVersion).Updates(updates)
 		if r.Error != nil {
 			return r.Error
 		}
@@ -306,7 +349,8 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, businessUnitID 
 			q = q.Where("business_unit_id IN ?", ids)
 		}
 		if search != "" {
-			q = q.Where("name ILIKE ?", "%"+search+"%")
+			term := "%" + strings.TrimSpace(search) + "%"
+			q = q.Where("(name ILIKE ? OR external_key ILIKE ? OR address ILIKE ? OR address_postal_code ILIKE ? OR address_city ILIKE ? OR address_status ILIKE ?)", term, term, term, term, term, term)
 		}
 		if after != "" {
 			at, id, err := pagination.After(after)

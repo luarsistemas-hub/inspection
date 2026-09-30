@@ -93,6 +93,10 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		}
 		for _, target := range delivery {
 			template, variables := core.CaptureLinkNotification(core.Channel(target.Channel), participant.Name, asset.Name, asset.Address, invitation.ExpiresAt)
+			if target.Channel == "EMAIL" && !target.Verified {
+				template = core.TemplateRef{Name: "capture-link", Version: "v1"}
+				variables = map[string]string{"recipientName": participant.Name}
+			}
 			_, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
 				TenantID: envelope.TenantID, InspectionID: &payload.InspectionID, InvitationID: &invitation.ID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
 				Template: template, Variables: variables,
@@ -118,13 +122,21 @@ func deliveryIdempotencyKey(invitationID identity.ID, target invitationcore.Deli
 
 func loadDelivery(tx *gorm.DB, tenantID, participantID identity.ID) ([]invitationcore.DeliveryIntent, error) {
 	var contacts []database.ParticipantContact
-	err := tx.Table("participants.contacts AS c").Select("c.*").Joins("JOIN participants.channel_selections s ON s.contact_id=c.id AND s.tenant_id=c.tenant_id").Joins("JOIN participants.contact_verifications v ON v.contact_id=c.id AND v.tenant_id=c.tenant_id AND v.status='VERIFIED'").Where("c.tenant_id=? AND c.participant_id=? AND c.active", tenantID, participantID).Find(&contacts).Error
+	err := tx.Table("participants.contacts AS c").Select("c.*").Joins("JOIN participants.channel_selections s ON s.contact_id=c.id AND s.tenant_id=c.tenant_id").Where("c.tenant_id=? AND c.participant_id=? AND c.active", tenantID, participantID).Find(&contacts).Error
 	if err != nil {
 		return nil, err
 	}
 	result := make([]invitationcore.DeliveryIntent, 0, len(contacts))
 	for _, contact := range contacts {
-		result = append(result, invitationcore.DeliveryIntent{Channel: contact.Channel, Destination: contact.Value})
+		var verified int64
+		if err := tx.Model(&database.ContactVerification{}).Where("tenant_id=? AND contact_id=? AND status='VERIFIED'", tenantID, contact.ID).Count(&verified).Error; err != nil {
+			return nil, err
+		}
+		// Only unverified EMAIL may receive the reduced template; other channels require verification.
+		if verified == 0 && contact.Channel != "EMAIL" {
+			continue
+		}
+		result = append(result, invitationcore.DeliveryIntent{Channel: contact.Channel, Destination: contact.Value, Verified: verified > 0})
 	}
 	return result, nil
 }

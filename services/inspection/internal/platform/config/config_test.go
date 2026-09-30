@@ -57,6 +57,24 @@ func TestConfigContractsUT058UT059(t *testing.T) {
 	}
 }
 
+func TestTurnstileConfigurationFailsClosedWhenEnabled(t *testing.T) {
+	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigin: "https://app.example", AllowedOrigins: []string{"https://app.example", "https://onboard.example"}, AdminOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", TurnstileEnabled: true, OnboardingOrigin: "https://onboard.example", TurnstileSiteKey: "public-site-key", TurnstileSecret: "private-secret"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid Turnstile config rejected: %v", err)
+	}
+
+	missingKey := valid
+	missingKey.TurnstileSiteKey = ""
+	if err := missingKey.Validate(); err == nil {
+		t.Fatal("enabled Turnstile accepted without a site key")
+	}
+	wrongOrigin := valid
+	wrongOrigin.OnboardingOrigin = "https://unlisted.example"
+	if err := wrongOrigin.Validate(); err == nil {
+		t.Fatal("Turnstile accepted an onboarding origin outside the allowlist")
+	}
+}
+
 func TestNotificationConfigurationUT013ToUT021(t *testing.T) {
 	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", PayloadKeys: map[string]string{}}
 	if err := c.Validate("local"); err != nil {

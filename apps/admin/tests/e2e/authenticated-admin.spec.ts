@@ -22,17 +22,19 @@ test.describe("authenticated Admin against the local stack", () => {
     await expect(collectionRows(page).filter({ hasText: "UN01" })).toContainText("Unidade Norte");
   });
 
-  test("E2E-009 invites an internal employee and confirms its active membership", async ({ page }) => {
+  test("E2E-009 invites an internal employee and shows the pending membership", async ({ page }) => {
     await loginAsLocalAdmin(page, "/access");
     await expect(page.locator(".status-line")).toContainText("atualizado");
     await page.getByRole("button", { name: "Convidar usuário" }).click();
-    await page.getByLabel("Emissor").fill(process.env.INSPECTION_OIDC_ISSUER ?? "http://localhost:8081/realms/inspection");
-    await page.getByLabel("Identificador externo do usuário").fill("qa-inspection-employee");
+    await page.getByLabel("Nome do usuário").fill("Operador QA");
+    const inviteEmail = process.env.INSPECTION_E2E_INVITE_EMAIL ?? "qa-inspection-employee@example.test";
+    await page.getByLabel("E-mail", { exact: true }).fill(inviteEmail);
+    await page.getByLabel("Confirme o e-mail").fill(inviteEmail);
     await page.getByLabel("Perfil de acesso").selectOption("EMPLOYEE");
     await page.getByRole("button", { name: "Salvar operação" }).click();
     const employee = collectionRows(page).filter({ hasText: "Operador" });
     await expect(employee).toContainText("Imobiliária");
-    await expect(employee).toContainText("Ativa");
+    await expect(employee).toContainText("Pendente");
   });
 
   test("E2E-010 creates a participant under an active unit", async ({ page }) => {
@@ -44,6 +46,8 @@ test.describe("authenticated Admin against the local stack", () => {
       await expect(unit.locator("option").nth(1)).toBeAttached();
       await unit.selectOption({ index: 1 });
       await page.getByLabel("Nome do responsável").fill("Ana QA");
+      await page.getByLabel("E-mail", { exact: true }).fill("ana-qa@example.test");
+      await page.getByLabel("Confirme o e-mail").fill("ana-qa@example.test");
       await page.getByLabel("Função no segmento").fill("OWNER");
       await page.getByRole("button", { name: "Salvar operação" }).click();
     }

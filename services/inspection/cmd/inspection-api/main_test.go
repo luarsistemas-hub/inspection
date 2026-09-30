@@ -29,6 +29,15 @@ func TestMembershipOptionalRequestAllowsOnlyIdentitySelectionAndBootstrap(t *tes
 			allowed: true,
 		},
 		{
+			name:    "public user invitation activation",
+			payload: `{"query":"mutation Activate { requestInternalUserActivationOtp(input: {invitationToken: \"token\", clientMutationId: \"1\"}) { clientMutationId } }"}`,
+			allowed: true,
+		},
+		{
+			name:    "invitation retry is protected",
+			payload: `{"query":"mutation Retry { resendInternalUserInvitation(input: {membershipId: \"id\", clientMutationId: \"1\"}) { clientMutationId } }"}`,
+		},
+		{
 			name:    "protected query",
 			payload: `{"query":"query Protected { businessUnits { nodes { id } } }"}`,
 		},

@@ -1374,6 +1374,45 @@ GRANT SELECT, INSERT ON dashboard.triage_case_events TO inspection_runtime;
 DROP INDEX IF EXISTS usage.idx_usage_daily;
 CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day);
 `},
+		{Version: 48, Name: "structured_brazilian_asset_addresses", Compatible: true, SQL: `
+UPDATE assets.assets
+SET legacy_address = address, address_status = 'LEGACY'
+WHERE legacy_address = '' AND address <> '';
+CREATE INDEX IF NOT EXISTS idx_asset_tenant_postal ON assets.assets(tenant_id, address_postal_code);
+CREATE INDEX IF NOT EXISTS idx_asset_tenant_city_state ON assets.assets(tenant_id, address_city, address_state);
+ALTER TABLE assets.assets DROP CONSTRAINT IF EXISTS chk_asset_address_status;
+ALTER TABLE assets.assets ADD CONSTRAINT chk_asset_address_status CHECK (address_status IN ('LEGACY','INCOMPLETE','COMPLETE'));
+ALTER TABLE assets.assets DROP CONSTRAINT IF EXISTS chk_asset_address_components;
+ALTER TABLE assets.assets ADD CONSTRAINT chk_asset_address_components CHECK (
+  address_status <> 'COMPLETE' OR (
+    address_country_code = 'BR' AND address_postal_code ~ '^[0-9]{8}$' AND
+    length(btrim(address_street)) > 0 AND
+    ((address_without_number AND address_number = '') OR (NOT address_without_number AND length(btrim(address_number)) > 0)) AND
+    length(btrim(address_city)) > 0 AND address_state IN ('AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO')
+  )
+);
+`},
+		{Version: 49, Name: "email_based_access_invitations", Compatible: true, SQL: `
+ALTER TABLE access.memberships ADD COLUMN IF NOT EXISTS name varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE access.memberships ADD COLUMN IF NOT EXISTS email varchar(320) NOT NULL DEFAULT '';
+ALTER TABLE access.memberships ADD COLUMN IF NOT EXISTS invitation_status varchar(24) NOT NULL DEFAULT 'NONE';
+CREATE INDEX IF NOT EXISTS idx_memberships_tenant_email ON access.memberships(tenant_id, email);
+ALTER TABLE access.user_invitations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access.user_invitations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON access.user_invitations;
+CREATE POLICY tenant_isolation ON access.user_invitations USING (
+  tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid
+  OR token_digest = decode(nullif(current_setting('app.user_invitation_digest', true), ''), 'hex')
+  OR session_digest = decode(nullif(current_setting('app.user_invitation_session', true), ''), 'hex')
+) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+DROP POLICY IF EXISTS invitation_token_lookup ON access.user_invitations;
+DROP POLICY IF EXISTS invitation_session_lookup ON access.user_invitations;
+ALTER TABLE access.user_invitation_otp_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access.user_invitation_otp_challenges FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON access.user_invitation_otp_challenges;
+CREATE POLICY tenant_isolation ON access.user_invitation_otp_challenges USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON access.user_invitations, access.user_invitation_otp_challenges TO inspection_runtime;
+`},
 	}
 }
 

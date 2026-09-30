@@ -91,7 +91,7 @@ export function filterInspections(inspections: InspectionRecord[], query: string
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
   return inspections.filter((inspection) => {
     const matchesColumn = column === "todas" || getInspectionColumn(inspection.status) === column;
-    const searchable = [inspection.id, inspection.assetId, inspection.participantId, inspection.source, inspection.status].join(" ").toLocaleLowerCase("pt-BR");
+    const searchable = [inspection.id, inspection.assetId, inspection.assetName, inspection.assetAddress, inspection.assetExternalKey, inspection.participantId, inspection.participantName, inspection.source, inspection.status].join(" ").toLocaleLowerCase("pt-BR");
     return matchesColumn && (!normalizedQuery || searchable.includes(normalizedQuery));
   });
 }
@@ -136,7 +136,7 @@ export function InspectionViews({ inspections, view, actions, onOpen }: { inspec
 }
 
 function InspectionList({ inspections, actions, onOpen }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers; onOpen: (inspection: InspectionRecord) => void }) {
-  return inspections.length ? <div className="inspection-table-box"><table className="inspection-table"><thead><tr><th>Vistoria</th><th>Situação</th><th>Vencimento</th><th>Ação</th></tr></thead><tbody>{inspections.map((inspection) => <tr key={inspection.id} data-inspection-id={inspection.id}><td data-label="Vistoria"><strong>{inspectionName(inspection)}</strong><span>{presentInspectionSource(inspection.source)} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span></td><td data-label="Situação"><InspectionStatus status={inspection.status} /></td><td data-label="Vencimento"><strong>{formatInspectionDate(inspection.dueAt)}</strong><span>Prazo final · {formatInspectionDate(inspection.deadlineAt)}</span></td><td data-label="Ação" data-align="center" data-action><div className="inspection-row-actions"><IconButton label={`Abrir detalhes da vistoria ${inspectionName(inspection)}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onOpen(inspection)} />{inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo</Link>}<InspectionActions inspection={inspection} actions={actions} /></div></td></tr>)}</tbody></table></div> : <EmptyInspections />;
+  return inspections.length ? <div className="inspection-table-box"><table className="inspection-table"><thead><tr><th>Vistoria</th><th>Situação</th><th>Vencimento</th><th>Ação</th></tr></thead><tbody>{inspections.map((inspection) => <tr key={inspection.id} data-inspection-id={inspection.id}><td data-label="Vistoria"><strong>{inspectionName(inspection)}</strong><span>Responsável · {inspection.participantName?.trim() || "indisponível"}</span><span>{presentInspectionSource(inspection.source)} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span></td><td data-label="Situação"><InspectionStatus status={inspection.status} /></td><td data-label="Vencimento"><strong>{formatInspectionDate(inspection.dueAt)}</strong><span>Prazo final · {formatInspectionDate(inspection.deadlineAt)}</span></td><td data-label="Ação" data-align="center" data-action><div className="inspection-row-actions"><IconButton label={`Abrir detalhes da vistoria ${inspectionName(inspection)}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onOpen(inspection)} />{inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo</Link>}<InspectionActions inspection={inspection} actions={actions} /></div></td></tr>)}</tbody></table></div> : <EmptyInspections />;
 }
 
 function InspectionBoard({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
@@ -153,6 +153,8 @@ function InspectionCompactCard({ inspection, actions }: { inspection: Inspection
   return <article className="inspection-record-card" data-inspection-id={inspection.id}>
     <span className="inspection-record-kicker">{presentInspectionSource(inspection.source)}</span>
     <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-record-title">{inspectionName(inspection)}</Link>
+    <span>Responsável · {inspection.participantName?.trim() || "indisponível"}</span>
+    {inspection.assetAddress && <span>{inspection.assetAddress}</span>}
     <span>Vencimento · {formatInspectionDate(inspection.dueAt)}</span>
     <span>{inspection.evidenceCount} evidência(s) · prazo final {formatInspectionDate(inspection.deadlineAt)} · v{inspection.version}</span>
     {inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo →</Link>}
@@ -185,5 +187,5 @@ function formatAgendaDay(value: string | null | undefined): string {
 }
 
 function inspectionName(inspection: InspectionRecord): string {
-  return inspection.source ? "Vistoria" : "Registro de vistoria";
+  return inspection.assetName?.trim() || "Imóvel indisponível";
 }

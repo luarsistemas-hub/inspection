@@ -3,12 +3,38 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import { Breadcrumbs, Button, Checkbox, ChoiceGroup, Combobox, Confirmation, DataTable, Dialog, ErrorSummary, Field, IconButton, Input, Pagination, Recovery, Steps, VersionConflict } from "../src/index.js";
+import { Breadcrumbs, Button, Checkbox, ChoiceGroup, Combobox, Confirmation, DataTable, Dialog, ErrorSummary, Field, IconButton, InfoDisclosure, Input, Pagination, Recovery, Steps, VersionConflict } from "../src/index.js";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("design-system public contracts", () => {
+  it("InfoDisclosure exposes its heading, accessible state and collapsed supplementary copy", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const reactRoot = createRoot(container);
+    await act(async () => reactRoot.render(<InfoDisclosure label="cadastro" heading={<h1>Comece sua primeira vistoria</h1>}>Os campos ficam neste navegador.</InfoDisclosure>));
+
+    const button = container.querySelector<HTMLButtonElement>("button[aria-label='Informações sobre cadastro']");
+    const panel = container.querySelector<HTMLDivElement>(".inspection-info-disclosure__panel");
+    expect(button?.getAttribute("aria-expanded")).toBe("false");
+    expect(button?.getAttribute("aria-controls")).toBe(panel?.id);
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
+    expect(panel?.hasAttribute("inert")).toBe(true);
+
+    await act(async () => button?.click());
+    expect(button?.getAttribute("aria-expanded")).toBe("true");
+    expect(panel?.getAttribute("aria-hidden")).toBe("false");
+    expect(panel?.hasAttribute("inert")).toBe(false);
+    expect(panel?.textContent).toContain("Os campos ficam neste navegador.");
+
+    await act(async () => button?.click());
+    expect(button?.getAttribute("aria-expanded")).toBe("false");
+    expect(panel?.getAttribute("aria-hidden")).toBe("true");
+    await act(async () => reactRoot.unmount());
+    container.remove();
+  });
+
   it("UT-067: Button supports keyboard activation, visible focus, and accessible disabled state", async () => {
     const container = document.createElement("div");
     document.body.append(container);

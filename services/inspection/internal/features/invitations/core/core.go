@@ -22,7 +22,11 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type DeliveryIntent struct{ Channel, Destination string }
+type DeliveryIntent struct {
+	Channel     string `json:"channel"`
+	Destination string `json:"destination"`
+	Verified    bool   `json:"verified,omitempty"`
+}
 type Notifier interface {
 	SendOTP(context.Context, identity.ID, identity.ID, string, []DeliveryIntent) error
 }
@@ -176,7 +180,7 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 			return apperror.New(apperror.InvalidInput, "code", "invalid code")
 		}
 		actual, err := security.HashOTP(code, s.Pepper)
-		accepted := err == nil && (s.acceptsAnyOTPCode() || (len(challenge.CodeHMAC) == 32 && security.Equal(actual, bytes32(challenge.CodeHMAC))))
+		accepted := err == nil && len(challenge.CodeHMAC) == 32 && security.Equal(actual, bytes32(challenge.CodeHMAC))
 		if !accepted {
 			if updateErr := tx.Model(&challenge).UpdateColumn("attempts", gorm.Expr("attempts + 1")).Error; updateErr != nil {
 				return updateErr
@@ -187,6 +191,9 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 		}
 		challenge.VerifiedAt = &now
 		if err := tx.Save(&challenge).Error; err != nil {
+			return err
+		}
+		if err := verifyInvitedEmail(tx, invitation, now); err != nil {
 			return err
 		}
 		if err := tx.Model(&database.Responsibility{}).
@@ -226,9 +233,37 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 	return result, rejection
 }
 
-func (s Service) acceptsAnyOTPCode() bool {
-	stage := strings.TrimSpace(s.Stage)
-	return stage != "" && !strings.EqualFold(stage, "production")
+func verifyInvitedEmail(tx *gorm.DB, invitation database.Invitation, now time.Time) error {
+	var responsibility database.Responsibility
+	if err := tx.Where("tenant_id=? AND id=?", invitation.TenantID, invitation.ResponsibilityID).First(&responsibility).Error; err != nil {
+		return err
+	}
+	var intents []DeliveryIntent
+	if err := json.Unmarshal(invitation.DeliveryIntents, &intents); err != nil {
+		return err
+	}
+	// The code may have been received on any channel, so an email is only proven
+	// when it is the single destination the code was sent to.
+	if len(intents) != 1 || intents[0].Channel != "EMAIL" {
+		return nil
+	}
+	for _, intent := range intents {
+		if intent.Verified {
+			continue
+		}
+		var contact database.ParticipantContact
+		if err := tx.Where("tenant_id=? AND participant_id=? AND channel='EMAIL' AND lower(value)=lower(?) AND active=true", invitation.TenantID, responsibility.ParticipantID, intent.Destination).First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			return err
+		}
+		verification := database.ContactVerification{ID: identity.NewID(), TenantID: invitation.TenantID, ContactID: contact.ID, IdempotencyKey: "capture-invitation:" + invitation.ID.String() + ":" + contact.ID.String(), Status: "VERIFIED", VerifiedAt: &now, CreatedAt: now}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "idempotency_key"}}, DoNothing: true}).Create(&verification).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s Service) Revoke(ctx context.Context, linkToken string) error {

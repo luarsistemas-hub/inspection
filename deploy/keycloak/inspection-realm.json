@@ -1,5 +1,10 @@
 {
   "realm": "inspection",
+  "displayName": "Inspection",
+  "loginTheme": "inspection",
+  "internationalizationEnabled": true,
+  "defaultLocale": "pt-BR",
+  "supportedLocales": ["pt-BR", "en"],
   "enabled": true,
   "requiredActions": [
     {"alias": "VERIFY_EMAIL", "enabled": false, "defaultAction": false, "priority": 10},

@@ -83,7 +83,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.2.5
-    command: start-dev --import-realm
+    command: start-dev --import-realm --spi-theme--static-max-age=-1 --spi-theme--cache-themes=false --spi-theme--cache-templates=false
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?set in .env.inspection}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?set in .env.inspection}
@@ -92,6 +92,7 @@ services:
       - "8081:8080"
     volumes:
       - ./keycloak/inspection-realm.json:/opt/keycloak/data/import/inspection-realm.json:ro
+      - ./keycloak/themes/inspection:/opt/keycloak/themes/inspection:ro
     healthcheck:
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8080'"]
       interval: 10s
@@ -147,6 +148,7 @@ services:
           exit 1
         fi
         /opt/keycloak/bin/kcadm.sh add-roles -r inspection --uid "$${provisioning_user_id}" --cclientid realm-management --rolename view-users --rolename query-users --rolename manage-users
+        /opt/keycloak/bin/kcadm.sh update realms/inspection -s loginTheme=inspection -s internationalizationEnabled=true -s defaultLocale=pt-BR -s 'supportedLocales=["pt-BR","en"]'
 
   inspection-migrate:
     build:
@@ -236,6 +238,10 @@ services:
       INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3002,http://localhost:3003,http://localhost:3004}
       INSPECTION_ADMIN_ORIGIN: ${INSPECTION_ADMIN_ORIGIN:-http://localhost:${INSPECTION_ADMIN_PORT:-3000}}
       INSPECTION_CAPTURE_ORIGIN: ${INSPECTION_CAPTURE_ORIGIN:-http://localhost:${INSPECTION_CAPTURE_PORT:-3003}}
+      INSPECTION_ONBOARDING_ORIGIN: ${INSPECTION_ONBOARDING_ORIGIN:-http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}}
+      INSPECTION_TURNSTILE_ENABLED: ${INSPECTION_TURNSTILE_ENABLED:-true}
+      INSPECTION_TURNSTILE_SITE_KEY: ${INSPECTION_TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
+      INSPECTION_TURNSTILE_SECRET: ${INSPECTION_TURNSTILE_SECRET:-1x0000000000000000000000000000000AA}
       INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
       INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
       # Public tokens use localhost. API gets signing keys over its private
@@ -341,10 +347,12 @@ services:
       dockerfile: apps/admin/Dockerfile
       args:
         NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
         NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${NEXT_PUBLIC_OIDC_AUTHORIZE_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/auth}
         NEXT_PUBLIC_OIDC_TOKEN_URL: ${NEXT_PUBLIC_OIDC_TOKEN_URL:-http://localhost:8081/realms/inspection/protocol/openid-connect/token}
         NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-admin
         NEXT_PUBLIC_STORAGE_URL: ${NEXT_PUBLIC_STORAGE_URL:-http://localhost:${INSPECTION_MINIO_PORT:-9002}}
+        STAGE: ${STAGE:-production}
     depends_on:
       inspection-api:
         condition: service_started
@@ -354,6 +362,7 @@ services:
       - "${INSPECTION_ADMIN_PORT:-3000}:3000"
     environment:
       NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-1x00000000000000000000AA}
       NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
       NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token
       NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-admin

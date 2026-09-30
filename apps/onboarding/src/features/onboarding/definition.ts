@@ -1,9 +1,11 @@
 import type { OnboardingChoice } from "./presentation";
+import type { PostalAddress } from "@inspection/address/core";
+import { validPostalAddress } from "@inspection/address/core";
 
 export type OnboardingField = { key: string; label: string; type: string; required: boolean; placeholder: string | null; options: string[]; choices?: OnboardingChoice[] };
 export type OnboardingStep = { key: string; label: string; position: number; required: boolean; fields: OnboardingField[] };
 export type OnboardingDefinition = { schemaVersion: number; version: number; segment: string; segmentVersion: string; steps: OnboardingStep[]; originModes: Array<{ key: string; label: string; templateKey: string; required: boolean }> };
-export type StepValues = Record<string, string | string[]>;
+export type StepValues = Record<string, string | string[] | PostalAddress>;
 export type OnboardingOwner = { name: string; email: string };
 
 export function valuesForParticipantMode(values: StepValues, mode: string, owner: OnboardingOwner): StepValues {
@@ -11,7 +13,7 @@ export function valuesForParticipantMode(values: StepValues, mode: string, owner
 }
 
 export function isSupportedDefinition(definition: OnboardingDefinition) {
-  return definition.schemaVersion === 1
+  return (definition.schemaVersion === 1 || definition.schemaVersion === 2)
     && definition.segment === "REAL_ESTATE"
     && definition.steps.length > 0
     && definition.steps.every((step) => step.key.trim() !== "" && step.label.trim() !== "" && Number.isInteger(step.position) && Array.isArray(step.fields));
@@ -24,6 +26,11 @@ export function sortedSteps(definition: OnboardingDefinition) {
 export function validateStep(step: OnboardingStep, values: StepValues) {
   const textValue = (key: string) => typeof values[key] === "string" ? values[key] as string : "";
   return step.fields.reduce<Record<string, string>>((errors, field) => {
+    if (field.type === "address") {
+      const address = values[field.key];
+      if (!address || typeof address !== "object" || Array.isArray(address) || !validPostalAddress(address as PostalAddress)) errors[field.key] = "Preencha o CEP, logradouro, número, cidade e UF.";
+      return errors;
+    }
     const value = textValue(field.key);
     if (field.required && !value) errors[field.key] = "Preencha este campo para continuar.";
     if (field.type === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) errors[field.key] = "Informe um e-mail válido.";

@@ -32,6 +32,27 @@ func TestUT022UT023InspectionStateMachine(t *testing.T) {
 	}
 }
 
+func TestInspectionListFiltersAndSearchEscaping(t *testing.T) {
+	if !validInspectionStatusGroup("") || !validInspectionStatusGroup("COMPLETED") || validInspectionStatusGroup("UNKNOWN") {
+		t.Fatal("inspection status group validation returned an unexpected result")
+	}
+	if got := statusesForGroup("PLANNING"); strings.Join(got, ",") != "PLANNED,INVITED" {
+		t.Fatalf("planning statuses = %v", got)
+	}
+	if got := statusesForGroup("EXECUTION"); strings.Join(got, ",") != "IN_PROGRESS,SUBMITTED,ANALYZING,RECAPTURE_PENDING" {
+		t.Fatalf("execution statuses = %v", got)
+	}
+	if got := statusesForGroup("COMPLETED"); strings.Join(got, ",") != "COMPLETED" {
+		t.Fatalf("completed statuses = %v", got)
+	}
+	if got := statusesForGroup("CLOSED"); strings.Join(got, ",") != "CANCELED,INVALIDATED" {
+		t.Fatalf("closed statuses = %v", got)
+	}
+	if got := escapeInspectionSearch(`Elvio%_\\`); got != `Elvio\%\_\\\\` {
+		t.Fatalf("escaped search = %q", got)
+	}
+}
+
 func TestIT121ToIT140ReminderAndLifecycleBoundaries(t *testing.T) {
 	due := time.Now().UTC().Truncate(time.Second)
 	deadline := due.Add(time.Hour)

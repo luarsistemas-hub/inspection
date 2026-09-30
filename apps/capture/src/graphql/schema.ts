@@ -76,6 +76,8 @@ export type ArchiveBusinessUnitInput = {
 export type Asset = {
   __typename?: 'Asset';
   address: Scalars['String']['output'];
+  addressDetails: Maybe<PostalAddress>;
+  addressStatus: Scalars['String']['output'];
   assignments: Array<AssetAssignment>;
   attributes: Scalars['JSON']['output'];
   businessUnitId: Scalars['ID']['output'];
@@ -111,7 +113,8 @@ export type AssetConnection = {
 };
 
 export type AssetInput = {
-  address: Scalars['String']['input'];
+  address: InputMaybe<Scalars['String']['input']>;
+  addressDetails: InputMaybe<PostalAddressInput>;
   assignments: Array<AssetAssignmentInput>;
   attributes: Scalars['JSON']['input'];
   businessUnitId: Scalars['ID']['input'];
@@ -1464,6 +1467,46 @@ export type ParticipantPayload = {
   userErrors: Array<UserError>;
 };
 
+export type PostalAddress = {
+  __typename?: 'PostalAddress';
+  city: Scalars['String']['output'];
+  complement: Scalars['String']['output'];
+  countryCode: Scalars['String']['output'];
+  district: Scalars['String']['output'];
+  municipalityCode: Scalars['String']['output'];
+  number: Scalars['String']['output'];
+  postalCode: Scalars['String']['output'];
+  reference: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  street: Scalars['String']['output'];
+  withoutNumber: Scalars['Boolean']['output'];
+};
+
+export type PostalAddressInput = {
+  city: Scalars['String']['input'];
+  complement: InputMaybe<Scalars['String']['input']>;
+  countryCode: InputMaybe<Scalars['String']['input']>;
+  district: InputMaybe<Scalars['String']['input']>;
+  municipalityCode: InputMaybe<Scalars['String']['input']>;
+  number: InputMaybe<Scalars['String']['input']>;
+  postalCode: Scalars['String']['input'];
+  reference: InputMaybe<Scalars['String']['input']>;
+  state: Scalars['String']['input'];
+  street: Scalars['String']['input'];
+  withoutNumber: Scalars['Boolean']['input'];
+};
+
+export type PostalAddressLookup = {
+  __typename?: 'PostalAddressLookup';
+  city: Maybe<Scalars['String']['output']>;
+  district: Maybe<Scalars['String']['output']>;
+  found: Scalars['Boolean']['output'];
+  municipalityCode: Maybe<Scalars['String']['output']>;
+  postalCode: Scalars['String']['output'];
+  state: Maybe<Scalars['String']['output']>;
+  street: Maybe<Scalars['String']['output']>;
+};
+
 export type PresignMediaPartsInput = {
   clientMutationId: Scalars['String']['input'];
   mediaId: Scalars['ID']['input'];
@@ -1606,6 +1649,7 @@ export type Query = {
   inspections: InspectionConnection;
   llmUsage: LlmUsage;
   llmUsageTenants: TenantConnection;
+  lookupPostalCode: PostalAddressLookup;
   me: Me;
   memberships: MembershipConnection;
   myNotifications: RecipientNotificationConnection;
@@ -1734,6 +1778,11 @@ export type QueryLlmUsageTenantsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryLookupPostalCodeArgs = {
+  postalCode: Scalars['String']['input'];
 };
 
 

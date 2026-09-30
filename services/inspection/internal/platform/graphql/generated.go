@@ -53,6 +53,8 @@ type ComplexityRoot struct {
 
 	Asset struct {
 		Address          func(childComplexity int) int
+		AddressDetails   func(childComplexity int) int
+		AddressStatus    func(childComplexity int) int
 		Assignments      func(childComplexity int) int
 		Attributes       func(childComplexity int) int
 		BusinessUnitID   func(childComplexity int) int
@@ -291,13 +293,17 @@ type ComplexityRoot struct {
 
 	Inspection struct {
 		AnalysisPromptSnapshotID func(childComplexity int) int
+		AssetAddress             func(childComplexity int) int
+		AssetExternalKey         func(childComplexity int) int
 		AssetID                  func(childComplexity int) int
+		AssetName                func(childComplexity int) int
 		BusinessUnitID           func(childComplexity int) int
 		DeadlineAt               func(childComplexity int) int
 		DueAt                    func(childComplexity int) int
 		EvidenceCount            func(childComplexity int) int
 		ID                       func(childComplexity int) int
 		ParticipantID            func(childComplexity int) int
+		ParticipantName          func(childComplexity int) int
 		ProjectID                func(childComplexity int) int
 		ReminderInstants         func(childComplexity int) int
 		Source                   func(childComplexity int) int
@@ -339,6 +345,20 @@ type ComplexityRoot struct {
 	InspectionPayload struct {
 		ClientMutationID func(childComplexity int) int
 		Inspection       func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	InternalUserActivation struct {
+		Email        func(childComplexity int) int
+		MembershipID func(childComplexity int) int
+		Name         func(childComplexity int) int
+		NewIdentity  func(childComplexity int) int
+		Status       func(childComplexity int) int
+	}
+
+	InternalUserActivationPayload struct {
+		Activation       func(childComplexity int) int
+		ClientMutationID func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -446,12 +466,15 @@ type ComplexityRoot struct {
 	}
 
 	Membership struct {
-		ID       func(childComplexity int) int
-		Role     func(childComplexity int) int
-		Scopes   func(childComplexity int) int
-		Status   func(childComplexity int) int
-		TenantID func(childComplexity int) int
-		Version  func(childComplexity int) int
+		Email            func(childComplexity int) int
+		ID               func(childComplexity int) int
+		InvitationStatus func(childComplexity int) int
+		Name             func(childComplexity int) int
+		Role             func(childComplexity int) int
+		Scopes           func(childComplexity int) int
+		Status           func(childComplexity int) int
+		TenantID         func(childComplexity int) int
+		Version          func(childComplexity int) int
 	}
 
 	MembershipConnection struct {
@@ -478,6 +501,7 @@ type ComplexityRoot struct {
 		CancelInspection                       func(childComplexity int, input InspectionTransitionInput) int
 		CancelSchedule                         func(childComplexity int, input CancelScheduleInput) int
 		CloseProject                           func(childComplexity int, input ProjectTransitionInput) int
+		CompleteInternalUserActivation         func(childComplexity int, input CompleteInternalUserActivationInput) int
 		CompleteMediaUpload                    func(childComplexity int, input CompleteMediaUploadInput) int
 		CompleteOnboarding                     func(childComplexity int, input CompleteOnboardingInput) int
 		ConfigureMyNotificationPreferences     func(childComplexity int, input ConfigureNotificationPreferencesInput) int
@@ -510,9 +534,11 @@ type ComplexityRoot struct {
 		ReleaseLegalHold                       func(childComplexity int, input LegalHoldInput) int
 		ReopenProject                          func(childComplexity int, input ReopenProjectInput) int
 		RequestAdminActivationOtp              func(childComplexity int, input RequestAdminActivationOtpInput) int
+		RequestInternalUserActivationOtp       func(childComplexity int, input RequestInternalUserActivationOtpInput) int
 		RequestInvitationOtp                   func(childComplexity int, input RequestInvitationOtpInput) int
 		RequestOnboardingOtp                   func(childComplexity int, input RequestOnboardingOtpInput) int
 		RequestRecapture                       func(childComplexity int, input RequestRecaptureInput) int
+		ResendInternalUserInvitation           func(childComplexity int, input ResendInternalUserInvitationInput) int
 		RevokeInvitation                       func(childComplexity int, input RevokeInvitationInput) int
 		SaveCaptureMetadata                    func(childComplexity int, input SaveCaptureMetadataInput) int
 		SaveOnboardingStep                     func(childComplexity int, input OnboardingStepInput) int
@@ -531,6 +557,7 @@ type ComplexityRoot struct {
 		UpsertParticipant                      func(childComplexity int, input UpsertParticipantInput) int
 		VerifyAdminActivationOtp               func(childComplexity int, input VerifyAdminActivationOtpInput) int
 		VerifyContact                          func(childComplexity int, input VerifyContactInput) int
+		VerifyInternalUserActivationOtp        func(childComplexity int, input VerifyInternalUserActivationOtpInput) int
 		VerifyInvitationOtp                    func(childComplexity int, input VerifyInvitationOtpInput) int
 		VerifyOnboardingOtp                    func(childComplexity int, input VerifyOnboardingOtpInput) int
 	}
@@ -773,6 +800,30 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	PostalAddress struct {
+		City             func(childComplexity int) int
+		Complement       func(childComplexity int) int
+		CountryCode      func(childComplexity int) int
+		District         func(childComplexity int) int
+		MunicipalityCode func(childComplexity int) int
+		Number           func(childComplexity int) int
+		PostalCode       func(childComplexity int) int
+		Reference        func(childComplexity int) int
+		State            func(childComplexity int) int
+		Street           func(childComplexity int) int
+		WithoutNumber    func(childComplexity int) int
+	}
+
+	PostalAddressLookup struct {
+		City             func(childComplexity int) int
+		District         func(childComplexity int) int
+		Found            func(childComplexity int) int
+		MunicipalityCode func(childComplexity int) int
+		PostalCode       func(childComplexity int) int
+		State            func(childComplexity int) int
+		Street           func(childComplexity int) int
+	}
+
 	PresignedPart struct {
 		ExpiresAt  func(childComplexity int) int
 		PartNumber func(childComplexity int) int
@@ -861,9 +912,10 @@ type ComplexityRoot struct {
 		ExternalCapture        func(childComplexity int) int
 		Inspection             func(childComplexity int, id string) int
 		InspectionLLMUsage     func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
-		Inspections            func(childComplexity int, first *int, after *string, history *bool) int
+		Inspections            func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
 		LlmUsage               func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
 		LlmUsageTenants        func(childComplexity int, search *string, first *int, after *string) int
+		LookupPostalCode       func(childComplexity int, postalCode string) int
 		Me                     func(childComplexity int) int
 		Memberships            func(childComplexity int, first *int, after *string) int
 		MyNotifications        func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
@@ -1375,12 +1427,16 @@ type MutationResolver interface {
 	RequestAdminActivationOtp(ctx context.Context, input RequestAdminActivationOtpInput) (*OnboardingPayload, error)
 	VerifyAdminActivationOtp(ctx context.Context, input VerifyAdminActivationOtpInput) (*OnboardingPayload, error)
 	SetAdminInitialPassword(ctx context.Context, input SetAdminInitialPasswordInput) (*OnboardingPayload, error)
+	RequestInternalUserActivationOtp(ctx context.Context, input RequestInternalUserActivationOtpInput) (*InternalUserActivationPayload, error)
+	VerifyInternalUserActivationOtp(ctx context.Context, input VerifyInternalUserActivationOtpInput) (*InternalUserActivationPayload, error)
+	CompleteInternalUserActivation(ctx context.Context, input CompleteInternalUserActivationInput) (*InternalUserActivationPayload, error)
 	CreateTenant(ctx context.Context, input CreateTenantInput) (*CreateTenantPayload, error)
 	UpdateTenant(ctx context.Context, input UpdateTenantInput) (*TenantPayload, error)
 	CreateBusinessUnit(ctx context.Context, input CreateBusinessUnitInput) (*BusinessUnitPayload, error)
 	UpsertBusinessUnit(ctx context.Context, input UpsertBusinessUnitInput) (*BusinessUnitPayload, error)
 	ArchiveBusinessUnit(ctx context.Context, input ArchiveBusinessUnitInput) (*BusinessUnitPayload, error)
 	InviteInternalUser(ctx context.Context, input InviteInternalUserInput) (*MembershipPayload, error)
+	ResendInternalUserInvitation(ctx context.Context, input ResendInternalUserInvitationInput) (*MembershipPayload, error)
 	AssignRoleScopes(ctx context.Context, input AssignRoleScopesInput) (*MembershipPayload, error)
 	DisableMembership(ctx context.Context, input DisableMembershipInput) (*MembershipPayload, error)
 	UpsertParticipant(ctx context.Context, input UpsertParticipantInput) (*ParticipantPayload, error)
@@ -1451,13 +1507,14 @@ type QueryResolver interface {
 	Templates(ctx context.Context, search *string, first *int, after *string) (*TemplateConnection, error)
 	TemplateVersion(ctx context.Context, id string) (*TemplateVersion, error)
 	Assets(ctx context.Context, businessUnitID *string, search *string, first *int, after *string) (*AssetConnection, error)
+	LookupPostalCode(ctx context.Context, postalCode string) (*PostalAddressLookup, error)
 	Asset(ctx context.Context, id string) (*Asset, error)
 	OriginVersions(ctx context.Context, assetID string, first *int, after *string) (*OriginVersionConnection, error)
 	OriginPromotion(ctx context.Context, inspectionID string) (*OriginPromotion, error)
 	Schedules(ctx context.Context, first *int, after *string) (*ScheduleConnection, error)
 	Projects(ctx context.Context, first *int, after *string) (*ProjectConnection, error)
 	Project(ctx context.Context, id string) (*Project, error)
-	Inspections(ctx context.Context, first *int, after *string, history *bool) (*InspectionConnection, error)
+	Inspections(ctx context.Context, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) (*InspectionConnection, error)
 	Inspection(ctx context.Context, id string) (*Inspection, error)
 	Report(ctx context.Context, inspectionID string, version *int) (*Report, error)
 	Reports(ctx context.Context, first *int, after *string, search *string, classification *string) (*ReportConnection, error)
@@ -1569,6 +1626,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Asset.Address(childComplexity), true
+	case "Asset.addressDetails":
+		if e.ComplexityRoot.Asset.AddressDetails == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Asset.AddressDetails(childComplexity), true
+	case "Asset.addressStatus":
+		if e.ComplexityRoot.Asset.AddressStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Asset.AddressStatus(childComplexity), true
 	case "Asset.assignments":
 		if e.ComplexityRoot.Asset.Assignments == nil {
 			break
@@ -2572,12 +2641,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Inspection.AnalysisPromptSnapshotID(childComplexity), true
+	case "Inspection.assetAddress":
+		if e.ComplexityRoot.Inspection.AssetAddress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inspection.AssetAddress(childComplexity), true
+	case "Inspection.assetExternalKey":
+		if e.ComplexityRoot.Inspection.AssetExternalKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inspection.AssetExternalKey(childComplexity), true
 	case "Inspection.assetId":
 		if e.ComplexityRoot.Inspection.AssetID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Inspection.AssetID(childComplexity), true
+	case "Inspection.assetName":
+		if e.ComplexityRoot.Inspection.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inspection.AssetName(childComplexity), true
 	case "Inspection.businessUnitId":
 		if e.ComplexityRoot.Inspection.BusinessUnitID == nil {
 			break
@@ -2614,6 +2701,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Inspection.ParticipantID(childComplexity), true
+	case "Inspection.participantName":
+		if e.ComplexityRoot.Inspection.ParticipantName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inspection.ParticipantName(childComplexity), true
 	case "Inspection.projectId":
 		if e.ComplexityRoot.Inspection.ProjectID == nil {
 			break
@@ -2815,6 +2908,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InspectionPayload.UserErrors(childComplexity), true
+
+	case "InternalUserActivation.email":
+		if e.ComplexityRoot.InternalUserActivation.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivation.Email(childComplexity), true
+	case "InternalUserActivation.membershipId":
+		if e.ComplexityRoot.InternalUserActivation.MembershipID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivation.MembershipID(childComplexity), true
+	case "InternalUserActivation.name":
+		if e.ComplexityRoot.InternalUserActivation.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivation.Name(childComplexity), true
+	case "InternalUserActivation.newIdentity":
+		if e.ComplexityRoot.InternalUserActivation.NewIdentity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivation.NewIdentity(childComplexity), true
+	case "InternalUserActivation.status":
+		if e.ComplexityRoot.InternalUserActivation.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivation.Status(childComplexity), true
+
+	case "InternalUserActivationPayload.activation":
+		if e.ComplexityRoot.InternalUserActivationPayload.Activation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivationPayload.Activation(childComplexity), true
+	case "InternalUserActivationPayload.clientMutationId":
+		if e.ComplexityRoot.InternalUserActivationPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivationPayload.ClientMutationID(childComplexity), true
+	case "InternalUserActivationPayload.userErrors":
+		if e.ComplexityRoot.InternalUserActivationPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InternalUserActivationPayload.UserErrors(childComplexity), true
 
 	case "InvitationOtpPayload.clientMutationId":
 		if e.ComplexityRoot.InvitationOtpPayload.ClientMutationID == nil {
@@ -3281,12 +3424,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MediaUploadPayload.UserErrors(childComplexity), true
 
+	case "Membership.email":
+		if e.ComplexityRoot.Membership.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Membership.Email(childComplexity), true
 	case "Membership.id":
 		if e.ComplexityRoot.Membership.ID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Membership.ID(childComplexity), true
+	case "Membership.invitationStatus":
+		if e.ComplexityRoot.Membership.InvitationStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Membership.InvitationStatus(childComplexity), true
+	case "Membership.name":
+		if e.ComplexityRoot.Membership.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Membership.Name(childComplexity), true
 	case "Membership.role":
 		if e.ComplexityRoot.Membership.Role == nil {
 			break
@@ -3482,6 +3643,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CloseProject(childComplexity, args["input"].(ProjectTransitionInput)), true
+	case "Mutation.completeInternalUserActivation":
+		if e.ComplexityRoot.Mutation.CompleteInternalUserActivation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_completeInternalUserActivation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CompleteInternalUserActivation(childComplexity, args["input"].(CompleteInternalUserActivationInput)), true
 	case "Mutation.completeMediaUpload":
 		if e.ComplexityRoot.Mutation.CompleteMediaUpload == nil {
 			break
@@ -3834,6 +4006,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestAdminActivationOtp(childComplexity, args["input"].(RequestAdminActivationOtpInput)), true
+	case "Mutation.requestInternalUserActivationOtp":
+		if e.ComplexityRoot.Mutation.RequestInternalUserActivationOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestInternalUserActivationOtp_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestInternalUserActivationOtp(childComplexity, args["input"].(RequestInternalUserActivationOtpInput)), true
 	case "Mutation.requestInvitationOtp":
 		if e.ComplexityRoot.Mutation.RequestInvitationOtp == nil {
 			break
@@ -3867,6 +4050,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestRecapture(childComplexity, args["input"].(RequestRecaptureInput)), true
+	case "Mutation.resendInternalUserInvitation":
+		if e.ComplexityRoot.Mutation.ResendInternalUserInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resendInternalUserInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResendInternalUserInvitation(childComplexity, args["input"].(ResendInternalUserInvitationInput)), true
 	case "Mutation.revokeInvitation":
 		if e.ComplexityRoot.Mutation.RevokeInvitation == nil {
 			break
@@ -4065,6 +4259,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.VerifyContact(childComplexity, args["input"].(VerifyContactInput)), true
+	case "Mutation.verifyInternalUserActivationOtp":
+		if e.ComplexityRoot.Mutation.VerifyInternalUserActivationOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_verifyInternalUserActivationOtp_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.VerifyInternalUserActivationOtp(childComplexity, args["input"].(VerifyInternalUserActivationOtpInput)), true
 	case "Mutation.verifyInvitationOtp":
 		if e.ComplexityRoot.Mutation.VerifyInvitationOtp == nil {
 			break
@@ -5023,6 +5228,116 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ParticipantPayload.UserErrors(childComplexity), true
 
+	case "PostalAddress.city":
+		if e.ComplexityRoot.PostalAddress.City == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.City(childComplexity), true
+	case "PostalAddress.complement":
+		if e.ComplexityRoot.PostalAddress.Complement == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.Complement(childComplexity), true
+	case "PostalAddress.countryCode":
+		if e.ComplexityRoot.PostalAddress.CountryCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.CountryCode(childComplexity), true
+	case "PostalAddress.district":
+		if e.ComplexityRoot.PostalAddress.District == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.District(childComplexity), true
+	case "PostalAddress.municipalityCode":
+		if e.ComplexityRoot.PostalAddress.MunicipalityCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.MunicipalityCode(childComplexity), true
+	case "PostalAddress.number":
+		if e.ComplexityRoot.PostalAddress.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.Number(childComplexity), true
+	case "PostalAddress.postalCode":
+		if e.ComplexityRoot.PostalAddress.PostalCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.PostalCode(childComplexity), true
+	case "PostalAddress.reference":
+		if e.ComplexityRoot.PostalAddress.Reference == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.Reference(childComplexity), true
+	case "PostalAddress.state":
+		if e.ComplexityRoot.PostalAddress.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.State(childComplexity), true
+	case "PostalAddress.street":
+		if e.ComplexityRoot.PostalAddress.Street == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.Street(childComplexity), true
+	case "PostalAddress.withoutNumber":
+		if e.ComplexityRoot.PostalAddress.WithoutNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddress.WithoutNumber(childComplexity), true
+
+	case "PostalAddressLookup.city":
+		if e.ComplexityRoot.PostalAddressLookup.City == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.City(childComplexity), true
+	case "PostalAddressLookup.district":
+		if e.ComplexityRoot.PostalAddressLookup.District == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.District(childComplexity), true
+	case "PostalAddressLookup.found":
+		if e.ComplexityRoot.PostalAddressLookup.Found == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.Found(childComplexity), true
+	case "PostalAddressLookup.municipalityCode":
+		if e.ComplexityRoot.PostalAddressLookup.MunicipalityCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.MunicipalityCode(childComplexity), true
+	case "PostalAddressLookup.postalCode":
+		if e.ComplexityRoot.PostalAddressLookup.PostalCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.PostalCode(childComplexity), true
+	case "PostalAddressLookup.state":
+		if e.ComplexityRoot.PostalAddressLookup.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.State(childComplexity), true
+	case "PostalAddressLookup.street":
+		if e.ComplexityRoot.PostalAddressLookup.Street == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PostalAddressLookup.Street(childComplexity), true
+
 	case "PresignedPart.expiresAt":
 		if e.ComplexityRoot.PresignedPart.ExpiresAt == nil {
 			break
@@ -5445,7 +5760,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Inspections(childComplexity, args["first"].(*int), args["after"].(*string), args["history"].(*bool)), true
+		return e.ComplexityRoot.Query.Inspections(childComplexity, args["first"].(*int), args["after"].(*string), args["history"].(*bool), args["search"].(*string), args["statusGroup"].(*InspectionStatusGroup)), true
 
 	case "Query.llmUsage":
 		if e.ComplexityRoot.Query.LlmUsage == nil {
@@ -5469,6 +5784,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.LlmUsageTenants(childComplexity, args["search"].(*string), args["first"].(*int), args["after"].(*string)), true
+	case "Query.lookupPostalCode":
+		if e.ComplexityRoot.Query.LookupPostalCode == nil {
+			break
+		}
+
+		args, err := ec.field_Query_lookupPostalCode_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.LookupPostalCode(childComplexity, args["postalCode"].(string)), true
 	case "Query.me":
 		if e.ComplexityRoot.Query.Me == nil {
 			break
@@ -7639,6 +7965,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputAssignRoleScopesInput,
 		ec.unmarshalInputCancelScheduleInput,
 		ec.unmarshalInputCaptureGPSInput,
+		ec.unmarshalInputCompleteInternalUserActivationInput,
 		ec.unmarshalInputCompleteMediaUploadInput,
 		ec.unmarshalInputCompleteOnboardingInput,
 		ec.unmarshalInputCompletedPartInput,
@@ -7667,6 +7994,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputMarkNotificationReadInput,
 		ec.unmarshalInputOnboardingStepInput,
 		ec.unmarshalInputOriginVersionInput,
+		ec.unmarshalInputPostalAddressInput,
 		ec.unmarshalInputPresignMediaPartsInput,
 		ec.unmarshalInputProjectTransitionInput,
 		ec.unmarshalInputPromoteInspectionPhotosInput,
@@ -7678,9 +8006,11 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputRegisterAssetInput,
 		ec.unmarshalInputReopenProjectInput,
 		ec.unmarshalInputRequestAdminActivationOtpInput,
+		ec.unmarshalInputRequestInternalUserActivationOtpInput,
 		ec.unmarshalInputRequestInvitationOtpInput,
 		ec.unmarshalInputRequestOnboardingOtpInput,
 		ec.unmarshalInputRequestRecaptureInput,
+		ec.unmarshalInputResendInternalUserInvitationInput,
 		ec.unmarshalInputRevokeInvitationInput,
 		ec.unmarshalInputSaveCaptureMetadataInput,
 		ec.unmarshalInputScopeAssignmentInput,
@@ -7700,6 +8030,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputUpsertParticipantInput,
 		ec.unmarshalInputVerifyAdminActivationOtpInput,
 		ec.unmarshalInputVerifyContactInput,
+		ec.unmarshalInputVerifyInternalUserActivationOtpInput,
 		ec.unmarshalInputVerifyInvitationOtpInput,
 		ec.unmarshalInputVerifyOnboardingOtpInput,
 	)
@@ -7794,14 +8125,15 @@ type Query {
   segmentDefinitions(search: String, first: Int = 25, after: String): SegmentDefinitionConnection!
   templates(search: String, first: Int = 25, after: String): TemplateConnection!
   templateVersion(id: ID!): TemplateVersion
-  assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
+	assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
+	lookupPostalCode(postalCode: String!): PostalAddressLookup!
   asset(id: ID!): Asset
   originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
   originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
-  inspections(first: Int = 25, after: String, history: Boolean = false): InspectionConnection!
+  inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
   report(inspectionId: ID!, version: Int): Report
   reports(first: Int = 25, after: String, search: String, classification: String): ReportConnection!
@@ -7841,7 +8173,7 @@ type OnboardingStatus { state: String!, requestId: ID, inspectionId: ID, nextAct
 type OnboardingPayload { session: OnboardingSession, sessionLocator: String, request: OnboardingRequest, activation: OnboardingActivation, status: OnboardingStatus, userErrors: [UserError!]!, clientMutationId: String! }
 
 input OnboardingStepInput { step: String!, payload: JSON!, expectedVersion: Int!, clientMutationId: String! }
-input RequestOnboardingOtpInput { name: String!, email: String!, clientMutationId: String! }
+input RequestOnboardingOtpInput { name: String!, email: String!, turnstileToken: String, clientMutationId: String! }
 input VerifyOnboardingOtpInput { sessionLocator: String!, code: String!, clientMutationId: String! }
 input CompleteOnboardingInput { clientMutationId: String! }
 input CorrectOnboardingResponsibleEmailInput { email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
@@ -7858,12 +8190,16 @@ type Mutation {
   requestAdminActivationOtp(input: RequestAdminActivationOtpInput!): OnboardingPayload!
   verifyAdminActivationOtp(input: VerifyAdminActivationOtpInput!): OnboardingPayload!
   setAdminInitialPassword(input: SetAdminInitialPasswordInput!): OnboardingPayload!
+  requestInternalUserActivationOtp(input: RequestInternalUserActivationOtpInput!): InternalUserActivationPayload!
+  verifyInternalUserActivationOtp(input: VerifyInternalUserActivationOtpInput!): InternalUserActivationPayload!
+  completeInternalUserActivation(input: CompleteInternalUserActivationInput!): InternalUserActivationPayload!
   createTenant(input: CreateTenantInput!): CreateTenantPayload!
   updateTenant(input: UpdateTenantInput!): TenantPayload!
   createBusinessUnit(input: CreateBusinessUnitInput!): BusinessUnitPayload!
   upsertBusinessUnit(input: UpsertBusinessUnitInput!): BusinessUnitPayload!
   archiveBusinessUnit(input: ArchiveBusinessUnitInput!): BusinessUnitPayload!
   inviteInternalUser(input: InviteInternalUserInput!): MembershipPayload!
+  resendInternalUserInvitation(input: ResendInternalUserInvitationInput!): MembershipPayload!
   assignRoleScopes(input: AssignRoleScopesInput!): MembershipPayload!
   disableMembership(input: DisableMembershipInput!): MembershipPayload!
   upsertParticipant(input: UpsertParticipantInput!): ParticipantPayload!
@@ -7920,9 +8256,11 @@ type Mutation {
 }
 
 type Scope { kind: String! resourceId: ID! }
-type Membership { id: ID! tenantId: ID! role: String! status: String! version: Int! scopes: [Scope!]! }
+type Membership { id: ID! tenantId: ID! name: String! email: String! role: String! status: String! invitationStatus: String! version: Int! scopes: [Scope!]! }
 type MembershipConnection { nodes: [Membership!]! pageInfo: PageInfo! }
 type MembershipPayload { membership: Membership userErrors: [UserError!]! clientMutationId: String! }
+type InternalUserActivation { membershipId: ID! email: String! name: String! newIdentity: Boolean! status: String! }
+type InternalUserActivationPayload { activation: InternalUserActivation userErrors: [UserError!]! clientMutationId: String! }
 type Me { identityId: ID! tenantId: ID! audience: String! product: String! productEntitlements: [String!]! roles: [String!]! memberships: [Membership!]! effectiveScopes: [Scope!]! canViewLLMCosts: Boolean! }
 type Tenant { id: ID! name: String! language: String! defaultTimezone: String! status: String! version: Int! }
 type TenantConnection { nodes: [Tenant!]! pageInfo: PageInfo! }
@@ -7945,7 +8283,9 @@ type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
 type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
-type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
+type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! addressDetails: PostalAddress addressStatus: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
+type PostalAddress { countryCode: String! postalCode: String! street: String! number: String! withoutNumber: Boolean! complement: String! district: String! city: String! state: String! municipalityCode: String! reference: String! }
+type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
 type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
@@ -7954,7 +8294,8 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! }
+enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -8169,7 +8510,11 @@ input CreateBusinessUnitInput { code: String! name: String! expectedTenantVersio
 input UpsertBusinessUnitInput { businessUnitId: ID code: String! name: String! expectedVersion: Int expectedTenantVersion: Int clientMutationId: String! }
 input ArchiveBusinessUnitInput { businessUnitId: ID! expectedVersion: Int! clientMutationId: String! }
 input ScopeAssignmentInput { kind: String! resourceId: ID! }
-input InviteInternalUserInput { issuer: String! subject: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input InviteInternalUserInput { name: String! email: String! role: String! scopes: [ScopeAssignmentInput!]! clientMutationId: String! }
+input ResendInternalUserInvitationInput { membershipId: ID! clientMutationId: String! }
+input RequestInternalUserActivationOtpInput { invitationToken: String clientMutationId: String! }
+input VerifyInternalUserActivationOtpInput { code: String! clientMutationId: String! }
+input CompleteInternalUserActivationInput { password: String clientMutationId: String! }
 input AssignRoleScopesInput { membershipId: ID! role: String! scopes: [ScopeAssignmentInput!]! expectedVersion: Int clientMutationId: String! }
 input DisableMembershipInput { membershipId: ID! expectedVersion: Int! clientMutationId: String! }
 input ContactInput { channel: String! value: String! }
@@ -8182,7 +8527,8 @@ input PublishTemplateVersionInput { key: String! name: String! definition: JSON!
 input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
 input UpdateAnalysisPromptInput { analysisType: AnalysisType!, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
 input AssetAssignmentInput { participantId: ID! role: String! }
-input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
+input PostalAddressInput { countryCode: String postalCode: String! street: String! number: String withoutNumber: Boolean! complement: String district: String city: String! state: String! municipalityCode: String reference: String }
+input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String addressDetails: PostalAddressInput latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
 input RegisterAssetInput { asset: AssetInput! clientMutationId: String! }
 input UpdateAssetInput { assetId: ID! expectedVersion: Int! asset: AssetInput! clientMutationId: String! }
 input ArchiveAssetInput { assetId: ID! expectedVersion: Int! clientMutationId: String! }
@@ -8312,6 +8658,10 @@ func (ec *executionContext) childFields_Asset(ctx context.Context, field graphql
 		return ec.fieldContext_Asset_externalKey(ctx, field)
 	case "address":
 		return ec.fieldContext_Asset_address(ctx, field)
+	case "addressDetails":
+		return ec.fieldContext_Asset_addressDetails(ctx, field)
+	case "addressStatus":
+		return ec.fieldContext_Asset_addressStatus(ctx, field)
 	case "latitudeE6":
 		return ec.fieldContext_Asset_latitudeE6(ctx, field)
 	case "longitudeE6":
@@ -8810,6 +9160,14 @@ func (ec *executionContext) childFields_Inspection(ctx context.Context, field gr
 		return ec.fieldContext_Inspection_reminderInstants(ctx, field)
 	case "version":
 		return ec.fieldContext_Inspection_version(ctx, field)
+	case "assetName":
+		return ec.fieldContext_Inspection_assetName(ctx, field)
+	case "assetAddress":
+		return ec.fieldContext_Inspection_assetAddress(ctx, field)
+	case "assetExternalKey":
+		return ec.fieldContext_Inspection_assetExternalKey(ctx, field)
+	case "participantName":
+		return ec.fieldContext_Inspection_participantName(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Inspection", field.Name)
 }
@@ -8876,6 +9234,34 @@ func (ec *executionContext) childFields_InspectionPayload(ctx context.Context, f
 		return ec.fieldContext_InspectionPayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InspectionPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_InternalUserActivation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "membershipId":
+		return ec.fieldContext_InternalUserActivation_membershipId(ctx, field)
+	case "email":
+		return ec.fieldContext_InternalUserActivation_email(ctx, field)
+	case "name":
+		return ec.fieldContext_InternalUserActivation_name(ctx, field)
+	case "newIdentity":
+		return ec.fieldContext_InternalUserActivation_newIdentity(ctx, field)
+	case "status":
+		return ec.fieldContext_InternalUserActivation_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InternalUserActivation", field.Name)
+}
+
+func (ec *executionContext) childFields_InternalUserActivationPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "activation":
+		return ec.fieldContext_InternalUserActivationPayload_activation(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_InternalUserActivationPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_InternalUserActivationPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InternalUserActivationPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_InvitationOtpPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -9090,10 +9476,16 @@ func (ec *executionContext) childFields_Membership(ctx context.Context, field gr
 		return ec.fieldContext_Membership_id(ctx, field)
 	case "tenantId":
 		return ec.fieldContext_Membership_tenantId(ctx, field)
+	case "name":
+		return ec.fieldContext_Membership_name(ctx, field)
+	case "email":
+		return ec.fieldContext_Membership_email(ctx, field)
 	case "role":
 		return ec.fieldContext_Membership_role(ctx, field)
 	case "status":
 		return ec.fieldContext_Membership_status(ctx, field)
+	case "invitationStatus":
+		return ec.fieldContext_Membership_invitationStatus(ctx, field)
 	case "version":
 		return ec.fieldContext_Membership_version(ctx, field)
 	case "scopes":
@@ -9598,6 +9990,54 @@ func (ec *executionContext) childFields_ParticipantPayload(ctx context.Context, 
 		return ec.fieldContext_ParticipantPayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ParticipantPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_PostalAddress(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "countryCode":
+		return ec.fieldContext_PostalAddress_countryCode(ctx, field)
+	case "postalCode":
+		return ec.fieldContext_PostalAddress_postalCode(ctx, field)
+	case "street":
+		return ec.fieldContext_PostalAddress_street(ctx, field)
+	case "number":
+		return ec.fieldContext_PostalAddress_number(ctx, field)
+	case "withoutNumber":
+		return ec.fieldContext_PostalAddress_withoutNumber(ctx, field)
+	case "complement":
+		return ec.fieldContext_PostalAddress_complement(ctx, field)
+	case "district":
+		return ec.fieldContext_PostalAddress_district(ctx, field)
+	case "city":
+		return ec.fieldContext_PostalAddress_city(ctx, field)
+	case "state":
+		return ec.fieldContext_PostalAddress_state(ctx, field)
+	case "municipalityCode":
+		return ec.fieldContext_PostalAddress_municipalityCode(ctx, field)
+	case "reference":
+		return ec.fieldContext_PostalAddress_reference(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PostalAddress", field.Name)
+}
+
+func (ec *executionContext) childFields_PostalAddressLookup(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "found":
+		return ec.fieldContext_PostalAddressLookup_found(ctx, field)
+	case "postalCode":
+		return ec.fieldContext_PostalAddressLookup_postalCode(ctx, field)
+	case "street":
+		return ec.fieldContext_PostalAddressLookup_street(ctx, field)
+	case "district":
+		return ec.fieldContext_PostalAddressLookup_district(ctx, field)
+	case "city":
+		return ec.fieldContext_PostalAddressLookup_city(ctx, field)
+	case "state":
+		return ec.fieldContext_PostalAddressLookup_state(ctx, field)
+	case "municipalityCode":
+		return ec.fieldContext_PostalAddressLookup_municipalityCode(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PostalAddressLookup", field.Name)
 }
 
 func (ec *executionContext) childFields_PresignedPart(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10964,6 +11404,20 @@ func (ec *executionContext) field_Mutation_closeProject_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_completeInternalUserActivation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CompleteInternalUserActivationInput, error) {
+			return ec.unmarshalNCompleteInternalUserActivationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteInternalUserActivationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_completeMediaUpload_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11412,6 +11866,20 @@ func (ec *executionContext) field_Mutation_requestAdminActivationOtp_args(ctx co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_requestInternalUserActivationOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RequestInternalUserActivationOtpInput, error) {
+			return ec.unmarshalNRequestInternalUserActivationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestInternalUserActivationOtpInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_requestInvitationOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11446,6 +11914,20 @@ func (ec *executionContext) field_Mutation_requestRecapture_args(ctx context.Con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (RequestRecaptureInput, error) {
 			return ec.unmarshalNRequestRecaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestRecaptureInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_resendInternalUserInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {
+			return ec.unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -11698,6 +12180,20 @@ func (ec *executionContext) field_Mutation_verifyContact_args(ctx context.Contex
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (VerifyContactInput, error) {
 			return ec.unmarshalNVerifyContactInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyContactInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_verifyInternalUserActivationOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (VerifyInternalUserActivationOtpInput, error) {
+			return ec.unmarshalNVerifyInternalUserActivationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyInternalUserActivationOtpInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -12087,6 +12583,22 @@ func (ec *executionContext) field_Query_inspections_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["history"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "search",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "statusGroup",
+		func(ctx context.Context, v any) (*InspectionStatusGroup, error) {
+			return ec.unmarshalOInspectionStatusGroup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionStatusGroup(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["statusGroup"] = arg4
 	return args, nil
 }
 
@@ -12147,6 +12659,20 @@ func (ec *executionContext) field_Query_llmUsage_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_lookupPostalCode_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "postalCode",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["postalCode"] = arg0
 	return args, nil
 }
 
@@ -13186,6 +13712,61 @@ func (ec *executionContext) _Asset_address(ctx context.Context, field graphql.Co
 	)
 }
 func (ec *executionContext) fieldContext_Asset_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Asset", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Asset_addressDetails(ctx context.Context, field graphql.CollectedField, obj *Asset) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Asset_addressDetails(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddressDetails, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PostalAddress) graphql.Marshaler {
+			return ec.marshalOPostalAddress2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddress(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Asset_addressDetails(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Asset",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostalAddress(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Asset_addressStatus(ctx context.Context, field graphql.CollectedField, obj *Asset) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Asset_addressStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddressStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Asset_addressStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Asset", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -17425,6 +18006,98 @@ func (ec *executionContext) fieldContext_Inspection_version(_ context.Context, f
 	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _Inspection_assetName(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inspection_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Inspection_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Inspection_assetAddress(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inspection_assetAddress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetAddress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Inspection_assetAddress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Inspection_assetExternalKey(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inspection_assetExternalKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetExternalKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Inspection_assetExternalKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Inspection_participantName(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inspection_participantName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ParticipantName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Inspection_participantName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _InspectionConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *InspectionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18006,6 +18679,208 @@ func (ec *executionContext) _InspectionPayload_clientMutationId(ctx context.Cont
 }
 func (ec *executionContext) fieldContext_InspectionPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InspectionPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivation_membershipId(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivation_membershipId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MembershipID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivation_membershipId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivation_email(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivation_email(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivation_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivation_name(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivation_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivation_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivation_newIdentity(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivation_newIdentity(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewIdentity, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivation_newIdentity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivation", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivation_status(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivation_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivation_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InternalUserActivationPayload_activation(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivationPayload_activation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Activation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InternalUserActivation) graphql.Marshaler {
+			return ec.marshalOInternalUserActivation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivation(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivationPayload_activation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InternalUserActivationPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InternalUserActivation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InternalUserActivationPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivationPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivationPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InternalUserActivationPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InternalUserActivationPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *InternalUserActivationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InternalUserActivationPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InternalUserActivationPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InternalUserActivationPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _InvitationOtpPayload_status(ctx context.Context, field graphql.CollectedField, obj *InvitationOtpPayload) (ret graphql.Marshaler) {
@@ -19892,6 +20767,52 @@ func (ec *executionContext) fieldContext_Membership_tenantId(_ context.Context, 
 	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _Membership_name(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Membership_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Membership_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Membership_email(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Membership_email(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Membership_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _Membership_role(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19935,6 +20856,29 @@ func (ec *executionContext) _Membership_status(ctx context.Context, field graphq
 	)
 }
 func (ec *executionContext) fieldContext_Membership_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Membership_invitationStatus(ctx context.Context, field graphql.CollectedField, obj *Membership) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Membership_invitationStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InvitationStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Membership_invitationStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Membership", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -20496,6 +21440,138 @@ func (ec *executionContext) fieldContext_Mutation_setAdminInitialPassword(ctx co
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_requestInternalUserActivationOtp(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestInternalUserActivationOtp(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestInternalUserActivationOtp(ctx, fc.Args["input"].(RequestInternalUserActivationOtpInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InternalUserActivationPayload) graphql.Marshaler {
+			return ec.marshalNInternalUserActivationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestInternalUserActivationOtp(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InternalUserActivationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestInternalUserActivationOtp_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_verifyInternalUserActivationOtp(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_verifyInternalUserActivationOtp(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().VerifyInternalUserActivationOtp(ctx, fc.Args["input"].(VerifyInternalUserActivationOtpInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InternalUserActivationPayload) graphql.Marshaler {
+			return ec.marshalNInternalUserActivationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_verifyInternalUserActivationOtp(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InternalUserActivationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_verifyInternalUserActivationOtp_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_completeInternalUserActivation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_completeInternalUserActivation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CompleteInternalUserActivation(ctx, fc.Args["input"].(CompleteInternalUserActivationInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InternalUserActivationPayload) graphql.Marshaler {
+			return ec.marshalNInternalUserActivationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_completeInternalUserActivation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InternalUserActivationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_completeInternalUserActivation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createTenant(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20754,6 +21830,50 @@ func (ec *executionContext) fieldContext_Mutation_inviteInternalUser(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_inviteInternalUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_resendInternalUserInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_resendInternalUserInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResendInternalUserInvitation(ctx, fc.Args["input"].(ResendInternalUserInvitationInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MembershipPayload) graphql.Marshaler {
+			return ec.marshalNMembershipPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMembershipPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_resendInternalUserInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MembershipPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resendInternalUserInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -26835,6 +27955,420 @@ func (ec *executionContext) fieldContext_ParticipantPayload_clientMutationId(_ c
 	return graphql.NewScalarFieldContext("ParticipantPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PostalAddress_countryCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_countryCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CountryCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_countryCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_postalCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_postalCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostalCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_postalCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_street(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_street(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Street, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_street(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_number(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_number(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_withoutNumber(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_withoutNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WithoutNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_withoutNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_complement(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_complement(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Complement, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_complement(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_district(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_district(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.District, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_district(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_city(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_city(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.City, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_state(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_municipalityCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_municipalityCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MunicipalityCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_municipalityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddress_reference(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddress_reference(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reference, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddress_reference(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddress", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_found(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_found(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Found, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_found(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_postalCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_postalCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PostalCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_postalCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_street(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_street(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Street, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_street(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_district(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_district(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.District, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_district(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_city(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_city(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.City, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_city(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_state(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PostalAddressLookup_municipalityCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddressLookup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PostalAddressLookup_municipalityCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MunicipalityCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PostalAddressLookup_municipalityCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PostalAddressLookup", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _PresignedPart_partNumber(ctx context.Context, field graphql.CollectedField, obj *PresignedPart) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28558,6 +30092,50 @@ func (ec *executionContext) fieldContext_Query_assets(ctx context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_lookupPostalCode(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_lookupPostalCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().LookupPostalCode(ctx, fc.Args["postalCode"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PostalAddressLookup) graphql.Marshaler {
+			return ec.marshalNPostalAddressLookup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddressLookup(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_lookupPostalCode(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PostalAddressLookup(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_lookupPostalCode_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_asset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28832,7 +30410,7 @@ func (ec *executionContext) _Query_inspections(ctx context.Context, field graphq
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Inspections(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["history"].(*bool))
+			return ec.Resolvers.Query().Inspections(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["history"].(*bool), fc.Args["search"].(*string), fc.Args["statusGroup"].(*InspectionStatusGroup))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *InspectionConnection) graphql.Marshaler {
@@ -38753,7 +40331,7 @@ func (ec *executionContext) unmarshalInputAssetInput(ctx context.Context, obj an
 		asMap["geofenceMeters"] = 150
 	}
 
-	fieldsInOrder := [...]string{"businessUnitId", "segmentVersionId", "templateId", "name", "externalKey", "address", "latitudeE6", "longitudeE6", "geofenceMeters", "attributes", "policyOverrides", "assignments"}
+	fieldsInOrder := [...]string{"businessUnitId", "segmentVersionId", "templateId", "name", "externalKey", "address", "addressDetails", "latitudeE6", "longitudeE6", "geofenceMeters", "attributes", "policyOverrides", "assignments"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -38797,11 +40375,18 @@ func (ec *executionContext) unmarshalInputAssetInput(ctx context.Context, obj an
 			it.ExternalKey = data
 		case "address":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("address"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Address = data
+		case "addressDetails":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addressDetails"))
+			data, err := ec.unmarshalOPostalAddressInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddressInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AddressDetails = data
 		case "latitudeE6":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("latitudeE6"))
 			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
@@ -39004,6 +40589,43 @@ func (ec *executionContext) unmarshalInputCaptureGPSInput(ctx context.Context, o
 				return it, err
 			}
 			it.WindowStartedAt = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputCompleteInternalUserActivationInput(ctx context.Context, obj any) (CompleteInternalUserActivationInput, error) {
+	var it CompleteInternalUserActivationInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"password", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "password":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Password = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
 		}
 	}
 	return it, nil
@@ -40105,27 +41727,27 @@ func (ec *executionContext) unmarshalInputInviteInternalUserInput(ctx context.Co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"issuer", "subject", "role", "scopes", "clientMutationId"}
+	fieldsInOrder := [...]string{"name", "email", "role", "scopes", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "issuer":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("issuer"))
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Issuer = data
-		case "subject":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("subject"))
+			it.Name = data
+		case "email":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
 			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Subject = data
+			it.Email = data
 		case "role":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("role"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -40503,6 +42125,106 @@ func (ec *executionContext) unmarshalInputOriginVersionInput(ctx context.Context
 				return it, err
 			}
 			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputPostalAddressInput(ctx context.Context, obj any) (PostalAddressInput, error) {
+	var it PostalAddressInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"countryCode", "postalCode", "street", "number", "withoutNumber", "complement", "district", "city", "state", "municipalityCode", "reference"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "countryCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("countryCode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CountryCode = data
+		case "postalCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("postalCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PostalCode = data
+		case "street":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("street"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Street = data
+		case "number":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("number"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Number = data
+		case "withoutNumber":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("withoutNumber"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.WithoutNumber = data
+		case "complement":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("complement"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Complement = data
+		case "district":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("district"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.District = data
+		case "city":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("city"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.City = data
+		case "state":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("state"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.State = data
+		case "municipalityCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("municipalityCode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MunicipalityCode = data
+		case "reference":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reference"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Reference = data
 		}
 	}
 	return it, nil
@@ -41013,6 +42735,43 @@ func (ec *executionContext) unmarshalInputRequestAdminActivationOtpInput(ctx con
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRequestInternalUserActivationOtpInput(ctx context.Context, obj any) (RequestInternalUserActivationOtpInput, error) {
+	var it RequestInternalUserActivationOtpInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"invitationToken", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "invitationToken":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("invitationToken"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InvitationToken = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRequestInvitationOtpInput(ctx context.Context, obj any) (RequestInvitationOtpInput, error) {
 	var it RequestInvitationOtpInput
 	if obj == nil {
@@ -41061,7 +42820,7 @@ func (ec *executionContext) unmarshalInputRequestOnboardingOtpInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "email", "clientMutationId"}
+	fieldsInOrder := [...]string{"name", "email", "turnstileToken", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41082,6 +42841,13 @@ func (ec *executionContext) unmarshalInputRequestOnboardingOtpInput(ctx context.
 				return it, err
 			}
 			it.Email = data
+		case "turnstileToken":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("turnstileToken"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TurnstileToken = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -41133,6 +42899,43 @@ func (ec *executionContext) unmarshalInputRequestRecaptureInput(ctx context.Cont
 				return it, err
 			}
 			it.DeadlineAt = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputResendInternalUserInvitationInput(ctx context.Context, obj any) (ResendInternalUserInvitationInput, error) {
+	var it ResendInternalUserInvitationInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"membershipId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "membershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("membershipId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MembershipID = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -42184,6 +43987,43 @@ func (ec *executionContext) unmarshalInputVerifyContactInput(ctx context.Context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputVerifyInternalUserActivationOtpInput(ctx context.Context, obj any) (VerifyInternalUserActivationOtpInput, error) {
+	var it VerifyInternalUserActivationOtpInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"code", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "code":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Code = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputVerifyInvitationOtpInput(ctx context.Context, obj any) (VerifyInvitationOtpInput, error) {
 	var it VerifyInvitationOtpInput
 	if obj == nil {
@@ -42440,6 +44280,16 @@ func (ec *executionContext) _Asset(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "address":
 			out.Values[i] = ec._Asset_address(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addressDetails":
+			out.Values[i] = ec._Asset_addressDetails(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "addressStatus":
+			out.Values[i] = ec._Asset_addressStatus(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -44138,6 +45988,26 @@ func (ec *executionContext) _Inspection(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "assetName":
+			out.Values[i] = ec._Inspection_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "assetAddress":
+			out.Values[i] = ec._Inspection_assetAddress(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "assetExternalKey":
+			out.Values[i] = ec._Inspection_assetExternalKey(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "participantName":
+			out.Values[i] = ec._Inspection_participantName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -44349,6 +46219,112 @@ func (ec *executionContext) _InspectionPayload(ctx context.Context, sel ast.Sele
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._InspectionPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var internalUserActivationImplementors = []string{"InternalUserActivation"}
+
+func (ec *executionContext) _InternalUserActivation(ctx context.Context, sel ast.SelectionSet, obj *InternalUserActivation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, internalUserActivationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InternalUserActivation")
+		case "membershipId":
+			out.Values[i] = ec._InternalUserActivation_membershipId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._InternalUserActivation_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._InternalUserActivation_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newIdentity":
+			out.Values[i] = ec._InternalUserActivation_newIdentity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._InternalUserActivation_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var internalUserActivationPayloadImplementors = []string{"InternalUserActivationPayload"}
+
+func (ec *executionContext) _InternalUserActivationPayload(ctx context.Context, sel ast.SelectionSet, obj *InternalUserActivationPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, internalUserActivationPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InternalUserActivationPayload")
+		case "activation":
+			out.Values[i] = ec._InternalUserActivationPayload_activation(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._InternalUserActivationPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._InternalUserActivationPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -45072,6 +47048,16 @@ func (ec *executionContext) _Membership(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "name":
+			out.Values[i] = ec._Membership_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._Membership_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "role":
 			out.Values[i] = ec._Membership_role(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -45079,6 +47065,11 @@ func (ec *executionContext) _Membership(ctx context.Context, sel ast.SelectionSe
 			}
 		case "status":
 			out.Values[i] = ec._Membership_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "invitationStatus":
+			out.Values[i] = ec._Membership_invitationStatus(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -45280,6 +47271,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "requestInternalUserActivationOtp":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestInternalUserActivationOtp(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "verifyInternalUserActivationOtp":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_verifyInternalUserActivationOtp(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "completeInternalUserActivation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_completeInternalUserActivation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createTenant":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createTenant(ctx, field)
@@ -45318,6 +47330,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "inviteInternalUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_inviteInternalUser(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resendInternalUserInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resendInternalUserInvitation(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -47426,6 +49445,162 @@ func (ec *executionContext) _ParticipantPayload(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var postalAddressImplementors = []string{"PostalAddress"}
+
+func (ec *executionContext) _PostalAddress(ctx context.Context, sel ast.SelectionSet, obj *PostalAddress) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postalAddressImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostalAddress")
+		case "countryCode":
+			out.Values[i] = ec._PostalAddress_countryCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postalCode":
+			out.Values[i] = ec._PostalAddress_postalCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "street":
+			out.Values[i] = ec._PostalAddress_street(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "number":
+			out.Values[i] = ec._PostalAddress_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "withoutNumber":
+			out.Values[i] = ec._PostalAddress_withoutNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "complement":
+			out.Values[i] = ec._PostalAddress_complement(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "district":
+			out.Values[i] = ec._PostalAddress_district(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "city":
+			out.Values[i] = ec._PostalAddress_city(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._PostalAddress_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "municipalityCode":
+			out.Values[i] = ec._PostalAddress_municipalityCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reference":
+			out.Values[i] = ec._PostalAddress_reference(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var postalAddressLookupImplementors = []string{"PostalAddressLookup"}
+
+func (ec *executionContext) _PostalAddressLookup(ctx context.Context, sel ast.SelectionSet, obj *PostalAddressLookup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, postalAddressLookupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PostalAddressLookup")
+		case "found":
+			out.Values[i] = ec._PostalAddressLookup_found(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postalCode":
+			out.Values[i] = ec._PostalAddressLookup_postalCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "street":
+			out.Values[i] = ec._PostalAddressLookup_street(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "district":
+			out.Values[i] = ec._PostalAddressLookup_district(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "city":
+			out.Values[i] = ec._PostalAddressLookup_city(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._PostalAddressLookup_state(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "municipalityCode":
+			out.Values[i] = ec._PostalAddressLookup_municipalityCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var presignedPartImplementors = []string{"PresignedPart"}
 
 func (ec *executionContext) _PresignedPart(ctx context.Context, sel ast.SelectionSet, obj *PresignedPart) graphql.Marshaler {
@@ -48314,6 +50489,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_assets(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "lookupPostalCode":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_lookupPostalCode(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -53085,6 +55282,11 @@ func (ec *executionContext) marshalNCaptureRequirement2ᚖinspectionᚋservices�
 	return ec._CaptureRequirement(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNCompleteInternalUserActivationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteInternalUserActivationInput(ctx context.Context, v any) (CompleteInternalUserActivationInput, error) {
+	res, err := ec.unmarshalInputCompleteInternalUserActivationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCompleteMediaUploadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCompleteMediaUploadInput(ctx context.Context, v any) (CompleteMediaUploadInput, error) {
 	res, err := ec.unmarshalInputCompleteMediaUploadInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -53537,6 +55739,16 @@ func (ec *executionContext) marshalNInt2ᚕintᚄ(ctx context.Context, sel ast.S
 	}
 
 	return ret
+}
+
+func (ec *executionContext) marshalNInternalUserActivationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivationPayload(ctx context.Context, sel ast.SelectionSet, v *InternalUserActivationPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InternalUserActivationPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNInvalidateInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInvalidateInspectionInput(ctx context.Context, v any) (InvalidateInspectionInput, error) {
@@ -54143,6 +56355,16 @@ func (ec *executionContext) marshalNParticipantPayload2ᚖinspectionᚋservices�
 	return ec._ParticipantPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNPostalAddressLookup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddressLookup(ctx context.Context, sel ast.SelectionSet, v *PostalAddressLookup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PostalAddressLookup(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNPresignMediaPartsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPresignMediaPartsInput(ctx context.Context, v any) (PresignMediaPartsInput, error) {
 	res, err := ec.unmarshalInputPresignMediaPartsInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -54632,6 +56854,11 @@ func (ec *executionContext) unmarshalNRequestAdminActivationOtpInput2inspection�
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNRequestInternalUserActivationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestInternalUserActivationOtpInput(ctx context.Context, v any) (RequestInternalUserActivationOtpInput, error) {
+	res, err := ec.unmarshalInputRequestInternalUserActivationOtpInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRequestInvitationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestInvitationOtpInput(ctx context.Context, v any) (RequestInvitationOtpInput, error) {
 	res, err := ec.unmarshalInputRequestInvitationOtpInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -54644,6 +56871,11 @@ func (ec *executionContext) unmarshalNRequestOnboardingOtpInput2inspectionᚋser
 
 func (ec *executionContext) unmarshalNRequestRecaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestRecaptureInput(ctx context.Context, v any) (RequestRecaptureInput, error) {
 	res, err := ec.unmarshalInputRequestRecaptureInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {
+	res, err := ec.unmarshalInputResendInternalUserInvitationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -55323,6 +57555,11 @@ func (ec *executionContext) unmarshalNVerifyContactInput2inspectionᚋservices�
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNVerifyInternalUserActivationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyInternalUserActivationOtpInput(ctx context.Context, v any) (VerifyInternalUserActivationOtpInput, error) {
+	res, err := ec.unmarshalInputVerifyInternalUserActivationOtpInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNVerifyInvitationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyInvitationOtpInput(ctx context.Context, v any) (VerifyInvitationOtpInput, error) {
 	res, err := ec.unmarshalInputVerifyInvitationOtpInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -55605,6 +57842,22 @@ func (ec *executionContext) marshalOInspection2ᚖinspectionᚋservicesᚋinspec
 	return ec._Inspection(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOInspectionStatusGroup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionStatusGroup(ctx context.Context, v any) (*InspectionStatusGroup, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(InspectionStatusGroup)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInspectionStatusGroup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionStatusGroup(ctx context.Context, sel ast.SelectionSet, v *InspectionStatusGroup) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
 	if v == nil {
 		return nil, nil
@@ -55621,6 +57874,13 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	_ = ctx
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOInternalUserActivation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInternalUserActivation(ctx context.Context, sel ast.SelectionSet, v *InternalUserActivation) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InternalUserActivation(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOJSON2map(ctx context.Context, v any) (map[string]any, error) {
@@ -55779,6 +58039,21 @@ func (ec *executionContext) marshalOParticipantContact2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._ParticipantContact(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOPostalAddress2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddress(ctx context.Context, sel ast.SelectionSet, v *PostalAddress) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._PostalAddress(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOPostalAddressInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddressInput(ctx context.Context, v any) (*PostalAddressInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputPostalAddressInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOProject2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐProject(ctx context.Context, sel ast.SelectionSet, v *Project) graphql.Marshaler {

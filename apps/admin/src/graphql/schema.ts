@@ -76,6 +76,8 @@ export type ArchiveBusinessUnitInput = {
 export type Asset = {
   __typename?: 'Asset';
   address: Scalars['String']['output'];
+  addressDetails: Maybe<PostalAddress>;
+  addressStatus: Scalars['String']['output'];
   assignments: Array<AssetAssignment>;
   attributes: Scalars['JSON']['output'];
   businessUnitId: Scalars['ID']['output'];
@@ -111,7 +113,8 @@ export type AssetConnection = {
 };
 
 export type AssetInput = {
-  address: Scalars['String']['input'];
+  address: InputMaybe<Scalars['String']['input']>;
+  addressDetails: InputMaybe<PostalAddressInput>;
   assignments: Array<AssetAssignmentInput>;
   attributes: Scalars['JSON']['input'];
   businessUnitId: Scalars['ID']['input'];
@@ -233,6 +236,11 @@ export type CaptureRequirement = {
   minimumMedia: Scalars['Int']['output'];
   required: Scalars['Boolean']['output'];
   section: Scalars['String']['output'];
+};
+
+export type CompleteInternalUserActivationInput = {
+  clientMutationId: Scalars['String']['input'];
+  password: InputMaybe<Scalars['String']['input']>;
 };
 
 export type CompleteMediaUploadInput = {
@@ -513,13 +521,17 @@ export type GlobalLlmCallUsage = {
 export type Inspection = {
   __typename?: 'Inspection';
   analysisPromptSnapshotId: Scalars['ID']['output'];
+  assetAddress: Maybe<Scalars['String']['output']>;
+  assetExternalKey: Maybe<Scalars['String']['output']>;
   assetId: Scalars['ID']['output'];
+  assetName: Maybe<Scalars['String']['output']>;
   businessUnitId: Scalars['ID']['output'];
   deadlineAt: Scalars['String']['output'];
   dueAt: Scalars['String']['output'];
   evidenceCount: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
   participantId: Scalars['ID']['output'];
+  participantName: Maybe<Scalars['String']['output']>;
   projectId: Maybe<Scalars['ID']['output']>;
   reminderInstants: Array<Scalars['String']['output']>;
   source: Scalars['String']['output'];
@@ -567,10 +579,32 @@ export type InspectionPayload = {
   userErrors: Array<UserError>;
 };
 
+export type InspectionStatusGroup =
+  | 'CLOSED'
+  | 'COMPLETED'
+  | 'EXECUTION'
+  | 'PLANNING';
+
 export type InspectionTransitionInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: Scalars['Int']['input'];
   inspectionId: Scalars['ID']['input'];
+};
+
+export type InternalUserActivation = {
+  __typename?: 'InternalUserActivation';
+  email: Scalars['String']['output'];
+  membershipId: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  newIdentity: Scalars['Boolean']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type InternalUserActivationPayload = {
+  __typename?: 'InternalUserActivationPayload';
+  activation: Maybe<InternalUserActivation>;
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
 };
 
 export type InvalidateInspectionInput = {
@@ -603,10 +637,10 @@ export type InvitationPayload = {
 
 export type InviteInternalUserInput = {
   clientMutationId: Scalars['String']['input'];
-  issuer: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
   role: Scalars['String']['input'];
   scopes: Array<ScopeAssignmentInput>;
-  subject: Scalars['String']['input'];
 };
 
 export type InviteOriginCaptureInput = {
@@ -757,7 +791,10 @@ export type MediaUploadPayload = {
 
 export type Membership = {
   __typename?: 'Membership';
+  email: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  invitationStatus: Scalars['String']['output'];
+  name: Scalars['String']['output'];
   role: Scalars['String']['output'];
   scopes: Array<Scope>;
   status: Scalars['String']['output'];
@@ -792,6 +829,7 @@ export type Mutation = {
   cancelInspection: InspectionPayload;
   cancelSchedule: SchedulePayload;
   closeProject: ProjectPayload;
+  completeInternalUserActivation: InternalUserActivationPayload;
   completeMediaUpload: MediaPayload;
   completeOnboarding: OnboardingPayload;
   configureMyNotificationPreferences: NotificationPreferencesPayload;
@@ -824,9 +862,11 @@ export type Mutation = {
   releaseLegalHold: RetentionMutationPayload;
   reopenProject: ProjectPayload;
   requestAdminActivationOtp: OnboardingPayload;
+  requestInternalUserActivationOtp: InternalUserActivationPayload;
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
   requestRecapture: RecapturePayload;
+  resendInternalUserInvitation: MembershipPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
   saveOnboardingStep: OnboardingPayload;
@@ -845,6 +885,7 @@ export type Mutation = {
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
   verifyContact: ParticipantContactPayload;
+  verifyInternalUserActivationOtp: InternalUserActivationPayload;
   verifyInvitationOtp: ExternalSessionPayload;
   verifyOnboardingOtp: OnboardingPayload;
 };
@@ -907,6 +948,11 @@ export type MutationCancelScheduleArgs = {
 
 export type MutationCloseProjectArgs = {
   input: ProjectTransitionInput;
+};
+
+
+export type MutationCompleteInternalUserActivationArgs = {
+  input: CompleteInternalUserActivationInput;
 };
 
 
@@ -1070,6 +1116,11 @@ export type MutationRequestAdminActivationOtpArgs = {
 };
 
 
+export type MutationRequestInternalUserActivationOtpArgs = {
+  input: RequestInternalUserActivationOtpInput;
+};
+
+
 export type MutationRequestInvitationOtpArgs = {
   input: RequestInvitationOtpInput;
 };
@@ -1082,6 +1133,11 @@ export type MutationRequestOnboardingOtpArgs = {
 
 export type MutationRequestRecaptureArgs = {
   input: RequestRecaptureInput;
+};
+
+
+export type MutationResendInternalUserInvitationArgs = {
+  input: ResendInternalUserInvitationInput;
 };
 
 
@@ -1172,6 +1228,11 @@ export type MutationVerifyAdminActivationOtpArgs = {
 
 export type MutationVerifyContactArgs = {
   input: VerifyContactInput;
+};
+
+
+export type MutationVerifyInternalUserActivationOtpArgs = {
+  input: VerifyInternalUserActivationOtpInput;
 };
 
 
@@ -1464,6 +1525,46 @@ export type ParticipantPayload = {
   userErrors: Array<UserError>;
 };
 
+export type PostalAddress = {
+  __typename?: 'PostalAddress';
+  city: Scalars['String']['output'];
+  complement: Scalars['String']['output'];
+  countryCode: Scalars['String']['output'];
+  district: Scalars['String']['output'];
+  municipalityCode: Scalars['String']['output'];
+  number: Scalars['String']['output'];
+  postalCode: Scalars['String']['output'];
+  reference: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  street: Scalars['String']['output'];
+  withoutNumber: Scalars['Boolean']['output'];
+};
+
+export type PostalAddressInput = {
+  city: Scalars['String']['input'];
+  complement: InputMaybe<Scalars['String']['input']>;
+  countryCode: InputMaybe<Scalars['String']['input']>;
+  district: InputMaybe<Scalars['String']['input']>;
+  municipalityCode: InputMaybe<Scalars['String']['input']>;
+  number: InputMaybe<Scalars['String']['input']>;
+  postalCode: Scalars['String']['input'];
+  reference: InputMaybe<Scalars['String']['input']>;
+  state: Scalars['String']['input'];
+  street: Scalars['String']['input'];
+  withoutNumber: Scalars['Boolean']['input'];
+};
+
+export type PostalAddressLookup = {
+  __typename?: 'PostalAddressLookup';
+  city: Maybe<Scalars['String']['output']>;
+  district: Maybe<Scalars['String']['output']>;
+  found: Scalars['Boolean']['output'];
+  municipalityCode: Maybe<Scalars['String']['output']>;
+  postalCode: Scalars['String']['output'];
+  state: Maybe<Scalars['String']['output']>;
+  street: Maybe<Scalars['String']['output']>;
+};
+
 export type PresignMediaPartsInput = {
   clientMutationId: Scalars['String']['input'];
   mediaId: Scalars['ID']['input'];
@@ -1606,6 +1707,7 @@ export type Query = {
   inspections: InspectionConnection;
   llmUsage: LlmUsage;
   llmUsageTenants: TenantConnection;
+  lookupPostalCode: PostalAddressLookup;
   me: Me;
   memberships: MembershipConnection;
   myNotifications: RecipientNotificationConnection;
@@ -1720,6 +1822,8 @@ export type QueryInspectionsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   history?: InputMaybe<Scalars['Boolean']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+  statusGroup: InputMaybe<InspectionStatusGroup>;
 };
 
 
@@ -1734,6 +1838,11 @@ export type QueryLlmUsageTenantsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryLookupPostalCodeArgs = {
+  postalCode: Scalars['String']['input'];
 };
 
 
@@ -2114,6 +2223,11 @@ export type RequestAdminActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
 };
 
+export type RequestInternalUserActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  invitationToken: InputMaybe<Scalars['String']['input']>;
+};
+
 export type RequestInvitationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   linkToken: Scalars['String']['input'];
@@ -2130,6 +2244,11 @@ export type RequestRecaptureInput = {
   deadlineAt: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
   items: Array<RecaptureItemInput>;
+};
+
+export type ResendInternalUserInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  membershipId: Scalars['ID']['input'];
 };
 
 export type ResponsibleEmailCorrection = {
@@ -2611,6 +2730,11 @@ export type VerifyContactInput = {
   clientMutationId: Scalars['String']['input'];
   contactId: Scalars['ID']['input'];
   verified: Scalars['Boolean']['input'];
+};
+
+export type VerifyInternalUserActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
 };
 
 export type VerifyInvitationOtpInput = {

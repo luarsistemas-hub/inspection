@@ -9,6 +9,12 @@ test("Cobalto themes preserve the onboarding entry at supported viewport widths"
   const appearance = page.getByRole("combobox", { name: "Aparência" });
   await expect(appearance).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const info = page.getByRole("button", { name: "Informações sobre cadastro e salvamento" });
+  await expect(info).toHaveAttribute("aria-expanded", "false");
+  await info.click();
+  await expect(page.getByText(/Os campos ficam neste navegador/)).toBeVisible();
+  const reducedMotionDuration = await page.locator(".inspection-info-disclosure__panel").evaluate((element) => getComputedStyle(element).transitionDuration);
+  expect(Number.parseFloat(reducedMotionDuration)).toBeLessThan(0.001);
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
 
@@ -24,6 +30,8 @@ test("Cobalto themes preserve the onboarding entry at supported viewport widths"
   await expect.poll(() => page.evaluate(() => localStorage.getItem("inspection.theme"))).toBe("dark");
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Aparência" })).toHaveValue("dark");
+  await page.getByRole("button", { name: "Informações sobre cadastro e salvamento" }).click();
+  await expect(page.getByText(/Os campos ficam neste navegador/)).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.screenshot({ path: testInfo.outputPath("onboarding-dark-360.png"), fullPage: true });
 });

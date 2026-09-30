@@ -54,19 +54,61 @@ func (BusinessUnit) TableName() string { return "tenancy.business_units" }
 
 // Membership maps one OIDC identity to local, immediately revocable access.
 type Membership struct {
-	ID         identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID   identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:1"`
-	IdentityID identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:2"`
-	Issuer     string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:1"`
-	Subject    string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:2"`
-	Role       string      `gorm:"size:32;not null"`
-	Status     string      `gorm:"size:32;not null"`
-	Version    int64       `gorm:"not null;default:1"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID               identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:1;index:idx_memberships_tenant_email,priority:1"`
+	IdentityID       identity.ID `gorm:"type:uuid;not null;index:idx_memberships_tenant_identity,priority:2"`
+	Issuer           string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:1"`
+	Subject          string      `gorm:"size:500;not null;index:idx_memberships_oidc,priority:2"`
+	Name             string      `gorm:"size:200;not null;default:''"`
+	Email            string      `gorm:"size:320;not null;default:'';index:idx_memberships_tenant_email,priority:2"`
+	Role             string      `gorm:"size:32;not null"`
+	Status           string      `gorm:"size:32;not null"`
+	InvitationStatus string      `gorm:"size:24;not null;default:'NONE'"`
+	Version          int64       `gorm:"not null;default:1"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 func (Membership) TableName() string { return "access.memberships" }
+
+// UserInvitation stores only digests for the link, browser session, CSRF proof,
+// and OTP challenge used to accept an access invitation.
+type UserInvitation struct {
+	ID               identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID `gorm:"type:uuid;not null;index"`
+	MembershipID     identity.ID `gorm:"type:uuid;not null;uniqueIndex"`
+	Issuer           string      `gorm:"size:500;not null"`
+	Subject          string      `gorm:"size:500;not null"`
+	Email            string      `gorm:"size:320;not null"`
+	Name             string      `gorm:"size:200;not null"`
+	NewIdentity      bool        `gorm:"not null;default:false"`
+	Status           string      `gorm:"size:32;not null;index"`
+	TokenDigest      []byte      `gorm:"type:bytea;size:32;uniqueIndex"`
+	ExpiresAt        time.Time   `gorm:"not null;index"`
+	ClaimedAt        *time.Time
+	SessionDigest    []byte `gorm:"type:bytea;size:32"`
+	CSRFDigest       []byte `gorm:"type:bytea;size:32"`
+	SessionExpiresAt *time.Time
+	PasswordSetAt    *time.Time
+	AcceptedAt       *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (UserInvitation) TableName() string { return "access.user_invitations" }
+
+type UserInvitationOTP struct {
+	ID           identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID     identity.ID `gorm:"type:uuid;not null;index:idx_user_invitation_otp,priority:1"`
+	InvitationID identity.ID `gorm:"type:uuid;not null;index:idx_user_invitation_otp,priority:2"`
+	CodeHMAC     []byte      `gorm:"type:bytea;size:32;not null"`
+	Attempts     int         `gorm:"not null;default:0"`
+	ExpiresAt    time.Time   `gorm:"not null;index"`
+	VerifiedAt   *time.Time
+	CreatedAt    time.Time
+}
+
+func (UserInvitationOTP) TableName() string { return "access.user_invitation_otp_challenges" }
 
 // ProductEntitlement grants independent access to Admin or Dashboard.
 type ProductEntitlement struct {
@@ -288,6 +330,7 @@ type OnboardingSession struct {
 	SessionLocatorDigest []byte       `gorm:"type:bytea;size:32;not null;uniqueIndex"`
 	State                string       `gorm:"size:32;not null;index"`
 	CurrentStep          string       `gorm:"size:64;not null"`
+	DefinitionVersion    int          `gorm:"not null;default:1"`
 	Version              int64        `gorm:"not null;default:1"`
 	ExpiresAt            time.Time    `gorm:"not null;index"`
 	CSRFDigest           []byte       `gorm:"type:bytea;size:32"`
@@ -377,23 +420,36 @@ type OnboardingActivation struct {
 func (OnboardingActivation) TableName() string { return "onboarding.activation" }
 
 type Asset struct {
-	ID               identity.ID  `gorm:"type:uuid;primaryKey"`
-	TenantID         identity.ID  `gorm:"type:uuid;not null;index:idx_assets_tenant_unit_status,priority:1;uniqueIndex:idx_asset_idempotency,priority:1"`
-	BusinessUnitID   identity.ID  `gorm:"type:uuid;not null;index:idx_assets_tenant_unit_status,priority:2"`
-	SegmentVersionID identity.ID  `gorm:"type:uuid;not null;index"`
-	TemplateID       *identity.ID `gorm:"type:uuid"`
-	Name             string       `gorm:"size:200;not null;index"`
-	ExternalKey      string       `gorm:"size:200;not null"`
-	Address          string       `gorm:"size:2000;not null"`
-	LatitudeE6       *int32
-	LongitudeE6      *int32
-	GeofenceMeters   int             `gorm:"not null;default:150"`
-	PolicyOverrides  json.RawMessage `gorm:"type:jsonb;not null"`
-	Status           string          `gorm:"size:16;not null;index:idx_assets_tenant_unit_status,priority:3"`
-	Version          int64           `gorm:"not null;default:1"`
-	IdempotencyKey   string          `gorm:"size:200;not null;uniqueIndex:idx_asset_idempotency,priority:2"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                      identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID                identity.ID  `gorm:"type:uuid;not null;index:idx_assets_tenant_unit_status,priority:1;uniqueIndex:idx_asset_idempotency,priority:1;index:idx_asset_tenant_postal,priority:1;index:idx_asset_tenant_city_state,priority:1"`
+	BusinessUnitID          identity.ID  `gorm:"type:uuid;not null;index:idx_assets_tenant_unit_status,priority:2"`
+	SegmentVersionID        identity.ID  `gorm:"type:uuid;not null;index"`
+	TemplateID              *identity.ID `gorm:"type:uuid"`
+	Name                    string       `gorm:"size:200;not null;index"`
+	ExternalKey             string       `gorm:"size:200;not null"`
+	Address                 string       `gorm:"size:2000;not null"`
+	AddressCountryCode      string       `gorm:"size:2;not null;default:BR"`
+	AddressPostalCode       string       `gorm:"size:8;not null;default:'';index:idx_asset_tenant_postal,priority:2"`
+	AddressStreet           string       `gorm:"size:200;not null;default:''"`
+	AddressNumber           string       `gorm:"size:30;not null;default:''"`
+	AddressWithoutNumber    bool         `gorm:"not null;default:false"`
+	AddressComplement       string       `gorm:"size:200;not null;default:''"`
+	AddressDistrict         string       `gorm:"size:120;not null;default:''"`
+	AddressCity             string       `gorm:"size:120;not null;default:'';index:idx_asset_tenant_city_state,priority:2"`
+	AddressState            string       `gorm:"size:2;not null;default:'';index:idx_asset_tenant_city_state,priority:3"`
+	AddressMunicipalityCode string       `gorm:"size:7;not null;default:''"`
+	AddressReference        string       `gorm:"size:300;not null;default:''"`
+	AddressStatus           string       `gorm:"size:16;not null;default:LEGACY;index"`
+	LegacyAddress           string       `gorm:"size:2000;not null;default:''"`
+	LatitudeE6              *int32
+	LongitudeE6             *int32
+	GeofenceMeters          int             `gorm:"not null;default:150"`
+	PolicyOverrides         json.RawMessage `gorm:"type:jsonb;not null"`
+	Status                  string          `gorm:"size:16;not null;index:idx_assets_tenant_unit_status,priority:3"`
+	Version                 int64           `gorm:"not null;default:1"`
+	IdempotencyKey          string          `gorm:"size:200;not null;uniqueIndex:idx_asset_idempotency,priority:2"`
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 func (Asset) TableName() string { return "assets.assets" }
@@ -1243,6 +1299,7 @@ func Models() []any {
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},
 		&SegmentDefinition{}, &SegmentDefinitionVersion{}, &Template{}, &TemplateVersion{}, &AnalysisPrompt{}, &AnalysisPromptSnapshot{},
 		&OnboardingSession{}, &OnboardingEmailState{}, &OnboardingOTPChallenge{}, &OnboardingStepRecord{}, &OnboardingRequest{}, &OnboardingActivation{},
+		&UserInvitation{}, &UserInvitationOTP{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
 		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{},

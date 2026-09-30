@@ -26,6 +26,10 @@ type Config struct {
 	AllowedOrigins         []string
 	AdminOrigin            string
 	CaptureOrigin          string
+	OnboardingOrigin       string
+	TurnstileEnabled       bool
+	TurnstileSiteKey       string
+	TurnstileSecret        string
 	MetricsToken           string
 	OIDCIssuer             string
 	OIDCAudience           string
@@ -107,6 +111,7 @@ func Load() (Config, error) {
 	c := Config{
 		Environment: environment, Stage: stage, HTTPAddress: env("INSPECTION_HTTP_ADDR", ":8080"),
 		DatabaseURL: os.Getenv("INSPECTION_DATABASE_URL"), RuntimeDatabaseURL: env("INSPECTION_RUNTIME_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), DispatcherDatabaseURL: os.Getenv("INSPECTION_DISPATCHER_DATABASE_URL"), MigrationDatabaseURL: env("INSPECTION_MIGRATION_DATABASE_URL", os.Getenv("INSPECTION_DATABASE_URL")), AllowedOrigin: os.Getenv("INSPECTION_ALLOWED_ORIGIN"), AllowedOrigins: splitExact(os.Getenv("INSPECTION_ALLOWED_ORIGINS")), AdminOrigin: os.Getenv("INSPECTION_ADMIN_ORIGIN"), CaptureOrigin: os.Getenv("INSPECTION_CAPTURE_ORIGIN"),
+		OnboardingOrigin: os.Getenv("INSPECTION_ONBOARDING_ORIGIN"), TurnstileEnabled: envBool("INSPECTION_TURNSTILE_ENABLED", environment != "local" && environment != "test"), TurnstileSiteKey: os.Getenv("INSPECTION_TURNSTILE_SITE_KEY"), TurnstileSecret: os.Getenv("INSPECTION_TURNSTILE_SECRET"),
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
 		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", migrations.LatestVersion()), ShutdownTimeout: 10 * time.Second,
@@ -376,6 +381,18 @@ func (c Config) Validate() error {
 	if c.CaptureOrigin != "" {
 		if _, ok := seenOrigins[c.CaptureOrigin]; !ok {
 			return fmt.Errorf("configuration: capture origin is not allowed")
+		}
+	}
+	if c.TurnstileEnabled {
+		if strings.TrimSpace(c.TurnstileSiteKey) == "" || strings.TrimSpace(c.TurnstileSecret) == "" || strings.TrimSpace(c.OnboardingOrigin) == "" {
+			return fmt.Errorf("configuration: Turnstile settings are required when enabled")
+		}
+		origin, err := url.Parse(c.OnboardingOrigin)
+		if err != nil || (origin.Scheme != "https" && !(c.Environment == "local" && origin.Scheme == "http")) || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" || origin.User != nil {
+			return fmt.Errorf("configuration: invalid onboarding origin")
+		}
+		if _, ok := seenOrigins[c.OnboardingOrigin]; !ok {
+			return fmt.Errorf("configuration: onboarding origin is not allowed")
 		}
 	}
 	if c.AdminOrigin == "" {

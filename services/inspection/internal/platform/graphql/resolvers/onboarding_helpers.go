@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
@@ -84,7 +85,7 @@ func mapDeliveryStatus(value deliverystatus.Status) *graphql1.OnboardingStatus {
 }
 
 func mapOnboardingSession(value onboardingsession.Session) *graphql1.OnboardingSession {
-	definition, _ := onboardingcatalog.Resolve(onboardingcatalog.Segment)
+	definition, _ := onboardingcatalog.ResolveVersion(onboardingcatalog.Segment, value.DefinitionVersion)
 	completedSteps := make(map[string]any, len(value.CompletedSteps))
 	for step, payload := range value.CompletedSteps {
 		completedSteps[step] = payload
@@ -159,6 +160,23 @@ func clearAdminActivationCookie(ctx context.Context) {
 	http.SetCookie(writer, &http.Cookie{Name: "inspection_admin_activation", Value: "", Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0).UTC()})
 }
 
+func setUserInvitationCookie(ctx context.Context, locator, csrf string) {
+	writer, ok := requestctx.ResponseWriter(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_user_invitation", Value: locator, Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, Expires: time.Now().UTC().Add(onboardingsessionCookieTTL)})
+	writer.Header().Set("X-CSRF-Token", csrf)
+}
+
+func clearUserInvitationCookie(ctx context.Context) {
+	writer, ok := requestctx.ResponseWriter(ctx)
+	if !ok {
+		return
+	}
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_user_invitation", Value: "", Path: "/", HttpOnly: true, Secure: requestctx.SecureCookies(ctx), SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0).UTC()})
+}
+
 const onboardingsessionCookieTTL = 2 * time.Hour
 
 func onboardingPayloadString(payload map[string]any, key string) string {
@@ -182,6 +200,22 @@ func onboardingValidationPayload(err error, mutationID string) (*graphql1.Onboar
 		UserErrors:       []*graphql1.UserError{{Code: string(code), Field: fieldValue, Message: message}},
 		ClientMutationID: mutationID,
 	}, nil
+}
+
+func internalUserActivationPayload(err error, mutationID string) (*graphql1.InternalUserActivationPayload, error) {
+	code, field, message := apperror.Public(err)
+	if code != apperror.InvalidInput && code != apperror.InvalidState && code != apperror.Conflict && code != apperror.RateLimited && code != apperror.SessionExpired && code != apperror.Forbidden {
+		return nil, err
+	}
+	var fieldValue *string
+	if field != "" {
+		fieldValue = &field
+	}
+	return &graphql1.InternalUserActivationPayload{UserErrors: []*graphql1.UserError{{Code: string(code), Field: fieldValue, Message: message}}, ClientMutationID: mutationID}, nil
+}
+
+func mapInternalUserActivation(value activateinternal.Activation) *graphql1.InternalUserActivation {
+	return &graphql1.InternalUserActivation{MembershipID: value.MembershipID.String(), Email: value.Email, Name: value.Name, NewIdentity: value.NewIdentity, Status: value.Status}
 }
 
 func onboardingAgencyProvisioningKey(sessionToken string, expectedVersion int64) string {

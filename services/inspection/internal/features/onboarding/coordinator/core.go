@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"inspection/libs/identity"
+	assetaddress "inspection/services/inspection/internal/features/assets/address"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -54,9 +55,16 @@ type SubmitResult struct {
 
 // ValidateProperty validates the fields owned by the property checkpoint.
 func ValidateProperty(payload StepPayload, now time.Time) error {
-	address := stringValue(payload, "address")
-	if address == "" || utf8.RuneCountInString(address) > catalog.MaxTextCodePoints {
-		return apperror.New(apperror.InvalidInput, "address", "address is required and must be within the text limit")
+	if raw, ok := payload["addressDetails"].(map[string]any); ok {
+		details := assetaddress.Details{PostalCode: mapString(raw, "postalCode"), Street: mapString(raw, "street"), Number: mapString(raw, "number"), WithoutNumber: raw["withoutNumber"] == true, Complement: mapString(raw, "complement"), District: mapString(raw, "district"), City: mapString(raw, "city"), State: mapString(raw, "state"), MunicipalityCode: mapString(raw, "municipalityCode"), Reference: mapString(raw, "reference")}
+		if _, err := assetaddress.Validate(details); err != nil {
+			return apperror.New(apperror.InvalidInput, "addressDetails", err.Error())
+		}
+	} else {
+		legacyAddress := stringValue(payload, "address")
+		if legacyAddress == "" || utf8.RuneCountInString(legacyAddress) > catalog.MaxTextCodePoints {
+			return apperror.New(apperror.InvalidInput, "address", "address is required and must be within the text limit")
+		}
 	}
 	deadline, ok := propertyDeadline(payload)
 	if !ok || !deadline.After(now) {
@@ -69,6 +77,11 @@ func ValidateProperty(payload StepPayload, now time.Time) error {
 		return apperror.New(apperror.InvalidInput, "purpose", "invalid property purpose")
 	}
 	return nil
+}
+
+func mapString(value map[string]any, key string) string {
+	result, _ := value[key].(string)
+	return strings.TrimSpace(result)
 }
 
 // ValidateDelegate enforces participant input before any domain write.

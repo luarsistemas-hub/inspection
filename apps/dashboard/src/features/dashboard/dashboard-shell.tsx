@@ -6,23 +6,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { beginPKCE } from "@/auth/pkce";
 import { clearSession, getMembershipId, getProtectedStateGeneration, selectMembership, setIdentity, type DashboardIdentity } from "@/auth/session";
 import { composeCapabilities, type Capability } from "@/features/dashboard/capabilities";
-import { filterInspections, InspectionViewSelector, InspectionViews, useInspectionView, type InspectionActionHandlers, type InspectionColumnKey } from "@/features/dashboard/inspection-views";
+import { formatInspectionDate, InspectionViewSelector, InspectionViews, useInspectionView, type InspectionActionHandlers, type InspectionColumnKey } from "@/features/dashboard/inspection-views";
 import { SchedulesJourney } from "@/features/dashboard/schedules-journey";
+import { HomeJourney } from "@/features/dashboard/home-journey";
 import { FormDialog } from "@/features/dashboard/form-dialog";
 import { ReportsJourney } from "@/features/dashboard/reports-journey";
 import { TriageJourney } from "@/features/dashboard/triage-journey";
 import { ConfirmationDialog } from "@/features/dashboard/confirmation-dialog";
 import { useNotifications } from "@/features/notifications/use-notifications";
 import { deliveryPresentation } from "@/features/notifications/delivery-status";
-import { AdaptiveNavigation, Combobox, Dialog, Icon, PageHeader, Textarea, ThemeSelector, type AdaptiveNavigationItem, type ComboboxOption } from "@inspection/design-system";
+import { AdaptiveNavigation, Combobox, Dialog, Icon, IconButton, InfoDisclosure, PageHeader, Textarea, ThemeSelector, type AdaptiveNavigationItem, type ComboboxOption } from "@inspection/design-system";
 import {
   AddExceptionalStageDocument, CancelInspectionDocument, CloseProjectDocument, CreateInspectionDocument, CreateProjectDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
-  CustomerTimelineDocument, DashboardFormOptionsDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, OperationalOverviewDocument, OriginPromotionDocument, PromoteInspectionPhotosDocument, ProjectDetailDocument,
-  InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, RequestRecaptureDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument,
-  type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardFormOptionsQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type InspectionsQuery, type OperationalOverviewQuery, type OriginPromotionQuery, type ProjectsQuery, type ReportDownloadQuery,
+  CustomerTimelineDocument, DashboardFormOptionsDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, OriginPromotionDocument, PromoteInspectionPhotosDocument, ProjectDetailDocument,
+  InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, RequestRecaptureDocument, InspectionDetailDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument,
+  type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardFormOptionsQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type InspectionDetailQuery, type InspectionStatusGroup, type InspectionsQuery, type InspectionsQueryVariables, type OriginPromotionQuery, type ProjectsQuery, type ReportDownloadQuery,
 } from "@/graphql/generated";
 import { graphql, type GraphQLFailure } from "@/graphql/client";
-import { presentClassification, presentDashboardStatus, presentNotificationChannel, presentProjectStage, presentReportMode } from "./presentation";
+import { presentClassification, presentDashboardStatus, presentInspectionSource, presentNotificationChannel, presentProjectStage, presentReportMode } from "./presentation";
 import { localDateTimeToInstant } from "./datetime";
 import { CustomerReportVisual, ReportVisual } from "./report-visual";
 
@@ -36,6 +37,7 @@ export function DashboardShell({ section }: { section: Page }) {
   const [memberships, setMemberships] = useState<DashboardMembershipsQuery["me"]["memberships"]>([]);
   const [message, setMessage] = useState("Verificando acesso…");
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
+  const [operationalRefreshKey, setOperationalRefreshKey] = useState(0);
   const gateRequest = useRef(0);
 
   const loadGate = useCallback(async () => {
@@ -111,29 +113,24 @@ export function DashboardShell({ section }: { section: Page }) {
   const secondaryItems = capability.links.filter(([, href]) => !primaryHrefs.includes(href)).map(itemFor);
   if (capability.canUseAdmin) secondaryItems.push({ href: process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000", label: "Abrir Administração", icon: "arrow-up-right" });
   const activeHref = pathname === "/" ? "/tenants/current" : pathname;
-  return <main className="dashboard-shell"><header><strong>Inspection <span>/ Painel</span></strong><div className="dashboard-context">{memberships.length > 1 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}<ThemeSelector /><span className="dashboard-tenant-name">{identity.tenantName}</span><span className="dashboard-role">{capability.audience === "customer" ? "Cliente" : "Operação"}</span><span className="dashboard-avatar" aria-label={`Contexto ${identity.tenantName}`}>{tenantInitials(identity.tenantName)}</span></div></header><AdaptiveNavigation label="Painel" activeHref={activeHref} primaryItems={primaryItems} secondaryItems={secondaryItems} moreBadge={notifications.unreadCount > 0 ? notifications.unreadCount : undefined} renderLink={(item, className, onNavigate) => <Link key={item.href} aria-current={activeHref === item.href ? "page" : undefined} className={className} href={item.href} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} />{item.badge ? <span className="inspection-adaptive-navigation__badge" aria-hidden="true">{item.badge}</span> : null}</span><span>{item.label}</span></Link>} /><section>{section !== "Vistorias" && <PageHeader title={section} emphasis={section === "Início" ? "brand" : "plain"} actions={<button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); if (capability.audience === "internal" && section === "Laudos") setReportsRefreshKey((value) => value + 1); }}>Atualizar</button>} />}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} reportsRefreshKey={reportsRefreshKey} notifications={notifications} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
+  const pageDescription = section === "Início" ? "Acompanhe as vistorias em andamento e os imóveis que exigem atenção." : section === "Laudos" ? "Consulte os laudos gerados das suas vistorias." : undefined;
+  return <main className="dashboard-shell"><header><strong>Inspection <span>/ Painel</span></strong><div className="dashboard-context">{memberships.length > 1 && <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} />}<ThemeSelector /><span className="dashboard-tenant-name">{identity.tenantName}</span><span className="dashboard-role">{capability.audience === "customer" ? "Cliente" : "Operação"}</span><span className="dashboard-avatar" aria-label={`Contexto ${identity.tenantName}`}>{tenantInitials(identity.tenantName)}</span></div></header><AdaptiveNavigation label="Painel" activeHref={activeHref} primaryItems={primaryItems} secondaryItems={secondaryItems} moreBadge={notifications.unreadCount > 0 ? notifications.unreadCount : undefined} renderLink={(item, className, onNavigate) => <Link key={item.href} aria-current={activeHref === item.href ? "page" : undefined} className={className} href={item.href} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} />{item.badge ? <span className="inspection-adaptive-navigation__badge" aria-hidden="true">{item.badge}</span> : null}</span><span>{item.label}</span></Link>} /><section>{section !== "Vistorias" && <PageHeader title={section} description={pageDescription} descriptionMode="disclosure" emphasis={section === "Início" ? "brand" : "plain"} actions={<button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); if (capability.audience === "internal" && section === "Laudos") setReportsRefreshKey((value) => value + 1); if (capability.audience === "internal" && (section === "Início" || section === "Agenda de vistorias")) setOperationalRefreshKey((value) => value + 1); }}>Atualizar</button>} />}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} reportsRefreshKey={reportsRefreshKey} operationalRefreshKey={operationalRefreshKey} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
 }
 
 function MembershipPicker({ memberships, selected, onChange }: { memberships: DashboardMembershipsQuery["me"]["memberships"]; selected?: string; onChange: (id: string) => void }) {
   return <label className="membership">Contexto de acesso<select aria-label="Contexto de acesso" value={selected ?? ""} onChange={(event) => onChange(event.target.value)}><option value="" disabled>Selecione</option>{memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.role === "CUSTOMER_VIEWER" ? "Visualizador cliente" : membership.role === "VIEWER" ? "Visualizador" : membership.role === "MANAGER" ? "Gestor" : "Perfil de acesso"} · {membership.tenantId}</option>)}</select></label>;
 }
 
-function OperationsDashboard({ section, capability, reportsRefreshKey, notifications }: { section: Page; capability: Capability; reportsRefreshKey: number; notifications: ReturnType<typeof useNotifications> }) {
-  const needsFormOptions = capability.canMutate && ["Agenda de vistorias", "Vistorias", "Projetos e etapas"].includes(section);
+function OperationsDashboard({ section, capability, reportsRefreshKey, operationalRefreshKey }: { section: Page; capability: Capability; reportsRefreshKey: number; operationalRefreshKey: number }) {
+  const needsFormOptions = section === "Agenda de vistorias" || capability.canMutate && ["Vistorias", "Projetos e etapas"].includes(section);
   const formOptions = useDashboardFormOptions(needsFormOptions);
-  if (section === "Agenda de vistorias") return <SchedulesJourney canMutate={capability.canMutate} options={formOptions} />;
+  if (section === "Agenda de vistorias") return <SchedulesJourney canMutate={capability.canMutate} options={formOptions} refreshKey={operationalRefreshKey} />;
   if (section === "Vistorias") return <InspectionsJourney canMutate={capability.canMutate} canPromoteOrigin={capability.canPromoteOrigin} options={formOptions} />;
   if (section === "Projetos e etapas") return <ProjectsJourney canMutate={capability.canMutate} options={formOptions} />;
   if (section === "Laudos") return <ReportsJourney canPublish={capability.canPublish} refreshKey={reportsRefreshKey} />;
   if (section === "Triagem") return <TriageJourney capability={capability} />;
   if (section === "Notificações") return null;
-  return <>{section === "Início" && <NotificationSummary notifications={notifications} />}<OverviewJourney /></>;
-}
-
-function NotificationSummary({ notifications }: { notifications: ReturnType<typeof useNotifications> }) {
-  const items = notifications.items.slice(0, 3);
-  if (notifications.unreadCount === 0) return null;
-  return <aside className="notification-summary" aria-label="Notificações importantes"><div><strong>{notifications.unreadCount} notificações não lidas</strong><Link href="/notifications">Abrir central</Link></div>{items.map((item) => <Link key={item.id} href={notificationHref(item.action, item.resourceId) ?? "/notifications"} onClick={() => void notifications.markRead(item.id)}><span>{item.title}</span><small>{item.context.assetName ? String(item.context.assetName) : item.body}</small></Link>)}</aside>;
+  return <HomeJourney refreshKey={operationalRefreshKey} />;
 }
 
 type FormOptionsState = { data?: DashboardFormOptionsQuery; loading: boolean; error?: string };
@@ -171,28 +168,56 @@ function RelationshipField({ label, value, onChange, options, required = false, 
   return <label>{label}<Combobox value={value} options={options} onChange={onChange} required={required} disabled={disabled} aria-label={label} /></label>;
 }
 
-function OverviewJourney() {
-  const [classification, setClassification] = useState(""); const [status, setStatus] = useState(""); const [data, setData] = useState<OperationalOverviewQuery>(); const [message, setMessage] = useState("Carregue o resumo e a fila no contexto autorizado."); const requestRef = useRef(0);
-  async function loadOverview(): Promise<OperationalOverviewQuery> { return graphql<OperationalOverviewQuery, { after: string | null; classification: string | null; status: string | null }>(OperationalOverviewDocument, { after: null, classification: classification || null, status: status || null }); }
-  const load = async () => { const request = ++requestRef.current; try { const next = await loadOverview(); if (request !== requestRef.current) return; setData(next); setMessage(next.triageInspections.nodes.length ? "Resumo e fila atualizados com o mesmo filtro." : "Não há itens para os filtros selecionados."); } catch (error) { if (request === requestRef.current) setMessage(`Dados exibidos podem estar desatualizados. ${(error as Error).message}`); } };
-  const summary = data?.dashboardSummary;
-  const summaryItems = summary ? ([
-    ["total", summary.total], ["normal", summary.normal], ["attention", summary.attention], ["critical", summary.critical], ["pending", summary.pending], ["invalidated", summary.invalidated],
-  ] as const) : [];
-  return <div className="feature"><p>Resumo e triagem usam o mesmo filtro e contexto de servidor. A fila é somente leitura para o perfil Visualizador; a autorização é sempre revalidada no servidor.</p><div className="filters"><label>Classificação<select value={classification} onChange={(event) => setClassification(event.target.value)}><option value="">Todas</option><option value="CRITICAL">Crítica</option><option value="ATTENTION">Atenção</option></select></label><label>Situação<input value={status} onChange={(event) => setStatus(event.target.value)} placeholder="Código da situação, por exemplo PENDING" /></label><button onClick={() => void load()}>Atualizar prioridades</button></div><p role="status">{message}</p>{data && <><div className="cards">{summaryItems.map(([name, value]) => <article className="card" key={name}><strong>{presentClassification(name) === "Situação não reconhecida" ? "Resumo geral" : presentClassification(name)}</strong><div>{value ?? "Indisponível"}</div></article>)}</div><Collection items={data.triageInspections.nodes.map((item) => ({ id: item.inspectionId, href: `/inspections?inspectionId=${encodeURIComponent(item.inspectionId)}`, title: `${presentClassification(item.classification)} · ${presentDashboardStatus(item.status)}`, detail: `Atualizado em ${item.updatedAt}` }))} /></>}</div>;
-}
-
 function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutate: boolean; canPromoteOrigin: boolean; options: FormOptionsState }) {
-  const params = useSearchParams(); const router = useRouter(); const [data, setData] = useState<InspectionsQuery>(); const [message, setMessage] = useState("Carregando vistorias…"); const [query, setQuery] = useState(""); const [statusFilter, setStatusFilter] = useState<InspectionColumnKey | "todas">("todas"); const selected = params.get("inspectionId"); const [view, setView] = useInspectionView(); const [createOpen, setCreateOpen] = useState(false); const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState(""); const [invalidating, setInvalidating] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [recapturing, setRecapturing] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [canceling, setCanceling] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const busyRef = useRef(false);
+  const params = useSearchParams(); const router = useRouter();
+  const [data, setData] = useState<InspectionsQuery>(); const [message, setMessage] = useState("Carregando vistorias…");
+  const [query, setQuery] = useState(""); const [statusFilter, setStatusFilter] = useState<InspectionColumnKey | "todas">("todas");
+  const selected = params.get("inspectionId"); const [view, setView] = useInspectionView();
+  const [createOpen, setCreateOpen] = useState(false); const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState("");
+  const [invalidating, setInvalidating] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [recapturing, setRecapturing] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [canceling, setCanceling] = useState<InspectionsQuery["inspections"]["nodes"][number]>();
+  const busyRef = useRef(false); const listRequest = useRef(0); const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const returnToCollection = () => { const next = new URLSearchParams(params.toString()); next.delete("inspectionId"); const search = next.toString(); router.replace(search ? `/inspections?${search}` : "/inspections", { scroll: false }); };
   const openInspection = (inspection: InspectionsQuery["inspections"]["nodes"][number]) => { const next = new URLSearchParams(params.toString()); next.set("inspectionId", inspection.id); router.replace(`/inspections?${next}`, { scroll: false }); };
-  const load = useCallback(async () => { try { const next = await graphql<InspectionsQuery, { after: string | null; history: boolean }>(InspectionsDocument, { after: null, history: true }); setData(next); setMessage(next.inspections.nodes.length ? "Vistorias atualizadas." : "Nenhuma vistoria encontrada neste escopo."); } catch (error) { setMessage((error as Error).message); } }, []);
-  useEffect(() => { void load(); }, [load]);
+  const statusGroup: InspectionStatusGroup | null = ({ planejamento: "PLANNING", execucao: "EXECUTION", concluidas: "COMPLETED", encerradas: "CLOSED" } as const)[statusFilter as Exclude<typeof statusFilter, "todas">] ?? null;
+  const load = useCallback(async (input: { after?: string | null; append?: boolean; immediate?: boolean; search?: string; group?: InspectionStatusGroup | null } = {}) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const request = ++listRequest.current;
+    const variables: InspectionsQueryVariables = { first: 25, after: input.after ?? null, history: true, search: (input.search ?? query).trim() || null, statusGroup: input.group === undefined ? statusGroup : input.group };
+    setMessage(input.after ? "Carregando mais vistorias…" : "Buscando vistorias…");
+    try {
+      const next = await graphql<InspectionsQuery, InspectionsQueryVariables>(InspectionsDocument, variables);
+      if (request !== listRequest.current) return;
+      setData((current) => input.append && current ? { inspections: { nodes: [...current.inspections.nodes, ...next.inspections.nodes], pageInfo: next.inspections.pageInfo } } : next);
+      setMessage(next.inspections.nodes.length ? "Vistorias atualizadas." : "Nenhuma vistoria encontrada neste escopo.");
+    } catch (error) {
+      if (request === listRequest.current) setMessage((error as Error).message);
+    }
+  }, [query, statusGroup]);
+  const initialLoad = useRef(false);
+  useEffect(() => { if (initialLoad.current) return; initialLoad.current = true; void load({ search: "", group: null }); }, [load]);
+  useEffect(() => {
+    if (!data) return;
+    debounceRef.current = setTimeout(() => void load({ search: query, group: statusGroup }), 250);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, statusGroup, load]);
+  const submitSearch = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); void load({ search: query, group: statusGroup, immediate: true }); };
   const mutate = async (document: typeof CreateInspectionDocument | typeof CancelInspectionDocument | typeof InvalidateInspectionDocument, input: Record<string, unknown>): Promise<string | undefined> => { try { const result = await graphql(document as never, { input } as never); const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> }; if (payload.userErrors?.length) { const error = formatMutationErrors(payload.userErrors); setMessage(error); return error; } setMessage("Vistoria salva. Atualizando dados…"); await load(); return undefined; } catch (error) { const failure = formatFailure(error); setMessage(failure); return failure; } };
   const createInspection = async (input: Record<string, unknown>) => { if (busyRef.current) return; busyRef.current = true; setCreating(true); setCreateError(""); const error = await mutate(CreateInspectionDocument, input); busyRef.current = false; setCreating(false); if (error) setCreateError(error); else setCreateOpen(false); };
   const actions: InspectionActionHandlers | undefined = canMutate ? { onCancel: setCanceling, onInvalidate: setInvalidating, onRecapture: setRecapturing } : undefined;
-  const inspections = data ? filterInspections(data.inspections.nodes, query, statusFilter) : [];
-  return <div className="feature inspection-journey"><div className="inspection-page-heading"><div><p className="inspection-breadcrumb">Operação / Vistorias</p><h1>Vistorias</h1><p>Acompanhe os registros pela lista, pela situação ou pelo prazo.</p></div>{canMutate && <button onClick={() => { setCreateError(""); setCreateOpen(true); }}>Nova vistoria</button>}</div><div className="inspection-view-bar"><div><strong>Visualização</strong><p>A troca preserva os registros e os filtros.</p></div><InspectionViewSelector view={view} onChange={setView} /></div><div className="inspection-toolbar"><label>Buscar vistoria<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID, responsável pela vistoria, origem ou situação" /></label><label className="inspection-status-filter">Situação<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as InspectionColumnKey | "todas")}><option value="todas">Todas</option><option value="planejamento">Planejamento</option><option value="execucao">Em execução</option><option value="concluidas">Concluídas</option><option value="encerradas">Encerradas</option></select></label><button className="secondary" onClick={() => void load()}>Carregar vistorias</button></div><p className="inspection-load-status" role="status">{message}</p><div id="inspection-collection" className="inspection-collection" role="region" aria-label={`Vistorias em ${view}`}>{data ? <InspectionViews inspections={inspections} view={view} actions={actions} onOpen={openInspection} /> : <p className="inspection-empty-state">Carregando os registros deste contexto…</p>}</div><div className="inspection-foot"><span>{inspections.length} vistoria(ões) exibida(s).</span><span>Contexto: dados da API</span></div>{selected && <Dialog isOpen onClose={returnToCollection} title="Detalhe da vistoria" size="wide"><InspectionWorkspace id={selected} canMutate={canMutate} canPromoteOrigin={canPromoteOrigin} options={options.data} /></Dialog>}{canMutate && <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nova vistoria" busy={creating} error={createError}><FormOptionsNotice options={options} />{options.data && <InspectionForm options={options.data} onSubmit={(input) => void createInspection(input)} busy={creating} />}</FormDialog>}
+  const inspections = data?.inspections.nodes ?? [];
+  return <div className="feature inspection-journey"><div className="inspection-page-heading"><div><p className="inspection-breadcrumb">Operação / Vistorias</p><InfoDisclosure label="vistorias" heading={<h1>Vistorias</h1>}>Acompanhe os registros pela lista, pela situação ou pelo prazo.</InfoDisclosure></div>{canMutate && <button onClick={() => { setCreateError(""); setCreateOpen(true); }}>Nova vistoria</button>}</div>
+    <div className="inspection-view-bar"><InfoDisclosure label="visualização da lista" heading={<strong>Visualização</strong>}>A troca preserva os registros e os filtros.</InfoDisclosure><InspectionViewSelector view={view} onChange={setView} /></div>
+    <form className="inspection-toolbar" role="search" aria-label="Buscar vistorias" onSubmit={submitSearch}>
+      <label htmlFor="inspection-search">Buscar vistoria<input id="inspection-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Imóvel, responsável, endereço, código ou ID" /></label>
+      <label className="inspection-status-filter" htmlFor="inspection-status">Situação<select id="inspection-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as InspectionColumnKey | "todas")}><option value="todas">Todas</option><option value="planejamento">Planejamento</option><option value="execucao">Em execução</option><option value="concluidas">Concluídas</option><option value="encerradas">Encerradas</option></select></label>
+      <IconButton label="Buscar vistorias" tooltip="Buscar vistorias" icon="search" onPress={() => void load({ search: query, group: statusGroup, immediate: true })} />
+    </form>
+    <p className="inspection-load-status" role="status">{message}</p>
+    <div id="inspection-collection" className="inspection-collection" role="region" aria-label={`Vistorias em ${view}`}>{data ? <InspectionViews inspections={inspections} view={view} actions={actions} onOpen={openInspection} /> : <p className="inspection-empty-state">Carregando os registros deste contexto…</p>}</div>
+    <div className="inspection-foot"><span>{inspections.length} vistoria(ões) exibida(s).</span><span>Contexto: dados da API</span></div>
+    {data?.inspections.pageInfo.hasNextPage && <button className="secondary inspection-load-more" type="button" onClick={() => void load({ after: data.inspections.pageInfo.endCursor, append: true })}>Carregar mais</button>}
+    {selected && <Dialog isOpen onClose={returnToCollection} title="Detalhe da vistoria" size="default"><InspectionWorkspace id={selected} canPromoteOrigin={canPromoteOrigin} options={options.data} /></Dialog>}
+    {canMutate && <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nova vistoria" busy={creating} error={createError}><FormOptionsNotice options={options} />{options.data && <InspectionForm options={options.data} onSubmit={(input) => void createInspection(input)} busy={creating} />}</FormDialog>}
     <ConfirmationDialog isOpen={Boolean(canceling)} onClose={() => setCanceling(undefined)} title="Cancelar vistoria" target="Vistoria selecionada" scope="Contexto operacional atual" consequence="A vistoria será cancelada e não poderá continuar o fluxo atual." confirmLabel="Cancelar vistoria" onConfirm={async () => { if (!canceling) return; const failure = await mutate(CancelInspectionDocument, { inspectionId: canceling.id, expectedVersion: canceling.version, clientMutationId: mutationId() }); if (failure) throw new Error(failure); }} />
     <ConfirmationDialog isOpen={Boolean(invalidating)} onClose={() => setInvalidating(undefined)} title="Invalidar vistoria" target="Vistoria selecionada" scope="Contexto operacional atual" consequence="A vistoria será invalidada e exigirá revisão antes de qualquer novo uso." confirmLabel="Invalidar vistoria" reasonLabel="Motivo da invalidação" onConfirm={async (reason) => { if (!invalidating) return; const failure = await mutate(InvalidateInspectionDocument, { inspectionId: invalidating.id, expectedVersion: invalidating.version, reason, clientMutationId: mutationId() }); if (failure) throw new Error(failure); }} />
     <RecaptureRequestDialog inspection={recapturing} onClose={() => setRecapturing(undefined)} onSubmit={async (input) => { try { const result = await graphql(RequestRecaptureDocument, { input: input as never }); setMessage(result.requestRecapture.userErrors.length ? formatMutationErrors(result.requestRecapture.userErrors) : "Complemento solicitado; o responsável pela vistoria verá o novo requisito após a atualização."); } catch (error) { setMessage(formatFailure(error)); throw error; } }} />
@@ -201,11 +226,27 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
 
 function InspectionForm({ onSubmit, options, busy }: { onSubmit: (input: Record<string, unknown>) => void; options: DashboardFormOptionsQuery; busy: boolean }) { const [assetId, setAssetId] = useState(""); const [participantId, setParticipantId] = useState(""); const [templateId, setTemplateId] = useState(""); const [dueAt, setDueAt] = useState(""); const [deadlineAt, setDeadlineAt] = useState(""); const participants = entityOptions(options, "participant", assetId); const templates = entityOptions(options, "template", assetId); useEffect(() => { if (participantId && !participants.some((option) => option.value === participantId)) setParticipantId(""); if (templateId && !templates.some((option) => option.value === templateId)) setTemplateId(""); }, [assetId, participantId, participants, templateId, templates]); return <form onSubmit={(event) => { event.preventDefault(); onSubmit({ assetId, participantId, dueAt: localDateTimeToInstant(dueAt), deadlineAt: localDateTimeToInstant(deadlineAt), reason: "Criada pelo Dashboard", templateId: templateId || null, referenceVersionId: null, reminderInstants: [], clientMutationId: mutationId() }); }}><RelationshipField label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={entityOptions(options, "asset")} required /><RelationshipField label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={participants} required disabled={!assetId} /><RelationshipField label="Modelo de vistoria (opcional)" value={templateId} onChange={setTemplateId} options={templates} disabled={!assetId} /><Field label="Vencimento" value={dueAt} onChange={setDueAt} type="datetime-local" required /><Field label="Prazo final" value={deadlineAt} onChange={setDeadlineAt} type="datetime-local" required /><button type="submit" disabled={busy}>Criar vistoria</button></form>; }
 
-function InspectionWorkspace({ id, canMutate, canPromoteOrigin, options }: { id: string; canMutate: boolean; canPromoteOrigin: boolean; options?: DashboardFormOptionsQuery }) {
-  const [message, setMessage] = useState("Carregando estado atual da vistoria…"); const [detail, setDetail] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const detailRequest = useRef(0);
-  async function loadDetail(): Promise<InspectionsQuery> { return graphql<InspectionsQuery, { after: string | null; history: boolean }>(InspectionsDocument, { after: null, history: true }); }
-  useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando estado atual da vistoria…"); void loadDetail().then((data) => { if (request !== detailRequest.current) return; const inspection = data.inspections.nodes.find((item) => item.id === id); setDetail(inspection); setMessage(inspection ? "Estado atual carregado." : "A vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id]);
-  return <section className="inspection-workspace"><p role="status">{message}</p>{detail && <dl><dt>Situação</dt><dd>{presentDashboardStatus(detail.status)}</dd><dt>Evidências</dt><dd>{detail.evidenceCount}</dd><dt>Motivo</dt><dd>{detail.stateReason ?? "—"}</dd><dt>Versão</dt><dd>{detail.version}</dd></dl>}{canPromoteOrigin && detail?.status === "COMPLETED" && <OriginPromotionAction inspection={detail} options={options} />}{canMutate && <p>Cancelamento e invalidação exigem versão atual, identidade de mutação e, na invalidação, motivo. Após interrupção, recarregue este detalhe para confirmar o resultado.</p>}</section>;
+function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; canPromoteOrigin: boolean; options?: DashboardFormOptionsQuery }) {
+  const [message, setMessage] = useState("Carregando detalhes da vistoria…"); const [detail, setDetail] = useState<InspectionDetailQuery["inspection"]>(); const detailRequest = useRef(0);
+  useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id]);
+  if (!detail) return <section className="inspection-workspace"><p role="status">{message}</p></section>;
+  const assetName = detail.assetName?.trim() || "Imóvel indisponível";
+  const participantName = detail.participantName?.trim() || "Responsável indisponível";
+  return <section className="inspection-workspace" aria-labelledby="inspection-detail-title">
+    <header className="inspection-detail-heading"><div><span className="inspection-record-kicker">{presentInspectionSource(detail.source)}</span><h2 id="inspection-detail-title">{assetName}</h2></div><span className="inspection-status">{presentDashboardStatus(detail.status)}</span></header>
+    <dl className="inspection-detail-grid">
+      <div><dt>Responsável</dt><dd>{participantName}</dd></div>
+      <div><dt>Endereço</dt><dd>{detail.assetAddress?.trim() || "Endereço indisponível"}</dd></div>
+      {detail.assetExternalKey && <div><dt>Código do imóvel</dt><dd>{detail.assetExternalKey}</dd></div>}
+      <div><dt>Vencimento</dt><dd>{formatInspectionDate(detail.dueAt)}</dd></div>
+      <div><dt>Prazo final</dt><dd>{formatInspectionDate(detail.deadlineAt)}</dd></div>
+      <div><dt>Evidências</dt><dd>{detail.evidenceCount}</dd></div>
+      {detail.stateReason && <div className="inspection-detail-reason"><dt>Motivo</dt><dd>{detail.stateReason}</dd></div>}
+    </dl>
+    {detail.status === "COMPLETED" && <Link className="inspection-report-cta" href={`/reports?inspectionId=${encodeURIComponent(detail.id)}`}>Abrir laudo <span aria-hidden="true">→</span></Link>}
+    <details className="inspection-technical-details"><summary>Dados do registro</summary><dl><div><dt>ID</dt><dd>{detail.id}</dd></div><div><dt>Versão</dt><dd>{detail.version}</dd></div></dl></details>
+    {canPromoteOrigin && detail.status === "COMPLETED" && <details className="inspection-technical-details"><summary>Fotos de referência do imóvel</summary><OriginPromotionAction inspection={detail} options={options} /></details>}
+  </section>;
 }
 
 function OriginPromotionAction({ inspection, options }: { inspection: InspectionsQuery["inspections"]["nodes"][number]; options?: DashboardFormOptionsQuery }) {

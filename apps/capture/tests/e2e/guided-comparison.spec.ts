@@ -54,6 +54,13 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
 
   await expect(page.getByRole("heading", { name: "Compare cada ambiente" })).toBeVisible();
+  const evidenceInfo = page.getByRole("button", { name: "Informações sobre evidências" });
+  await expect(evidenceInfo).toHaveAttribute("aria-expanded", "false");
+  await evidenceInfo.focus();
+  await evidenceInfo.press("Enter");
+  await expect(page.getByText("Você pode adicionar uma descrição quando ela ajudar a contextualizar a imagem.")).toBeVisible();
+  await evidenceInfo.press("Enter");
+  await expect(page.getByText("Você pode adicionar uma descrição quando ela ajudar a contextualizar a imagem.")).toBeHidden();
   await expect(page.getByText("Foto 1 de 2")).toBeVisible();
   await expect(page.getByRole("img", { name: "Foto de referência: Cozinha" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Requisito" })).toHaveCount(0);

@@ -48,6 +48,27 @@ func TestOTPCodeAcceptanceHonorsStageAndFormat(t *testing.T) {
 	}
 }
 
+func TestInitialPasswordPolicy(t *testing.T) {
+	for _, password := range []string{"", "   "} {
+		if (Service{Stage: "dev"}).passwordAllowed(password) {
+			t.Error("empty password accepted in dev")
+		}
+	}
+	for _, password := range []string{"Abc12!", "Senha1?"} {
+		if !(Service{Stage: "production"}).passwordAllowed(password) {
+			t.Errorf("valid password rejected: %q", password)
+		}
+	}
+	for _, password := range []string{"Abc1!", "abc123!", "Abc1234"} {
+		if (Service{Stage: "production"}).passwordAllowed(password) {
+			t.Errorf("invalid password accepted: %q", password)
+		}
+	}
+	if !(Service{Stage: "dev"}).passwordAllowed("a") {
+		t.Fatal("dev stage should skip password policy")
+	}
+}
+
 func TestActivationSessionStateAcceptsActiveTenantBoundOnboardingStates(t *testing.T) {
 	for _, state := range []string{
 		session.StateVerified,

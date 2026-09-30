@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/gen2brain/h265 v0.2.2
 	github.com/google/uuid v1.6.0
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/minio/minio-go/v7 v7.0.95
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.12.1
@@ -57,7 +58,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
-	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/minio/crc64nvme v1.0.2 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

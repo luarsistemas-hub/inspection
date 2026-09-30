@@ -13,6 +13,9 @@ test("E2E-039 Admin organization stays operable and accessible across supported 
   for (const width of viewportWidths) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("heading", { level: 1, name: "Organização" })).toBeVisible();
+    const info = page.getByRole("button", { name: "Informações sobre Organização" });
+    await expect(info).toBeVisible();
+    await expect(info).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: "Criar unidade" })).toBeVisible();
     if (width === 768) await expect(page.locator("nav.inspection-adaptive-navigation__sidebar")).toBeVisible();
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
@@ -22,6 +25,14 @@ test("E2E-039 Admin organization stays operable and accessible across supported 
     const pageScan = await new AxeBuilder({ page: axePage }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"]).analyze();
     expect(pageScan.violations, `axe violations at ${width}px`).toEqual([]);
   }
+
+  const pageInfo = page.getByRole("button", { name: "Informações sobre Organização" });
+  await pageInfo.focus();
+  await pageInfo.press("Enter");
+  await expect(pageInfo).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("Unidades e estrutura da sua operação.")).toBeVisible();
+  await pageInfo.press("Enter");
+  await expect(page.getByText("Unidades e estrutura da sua operação.")).toBeHidden();
 
   await page.getByRole("button", { name: "Criar unidade" }).click();
   const dialog = page.locator(".inspection-dialog");

@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"inspection/libs/identity"
+	assetaddress "inspection/services/inspection/internal/features/assets/address"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	"inspection/services/inspection/internal/features/onboarding/coordinator"
@@ -158,10 +159,19 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		return Result{}, fmt.Errorf("prepare onboarding participant: %w", err)
 	}
 	property := submission.Steps[onboardingsession.StepProperty]
+	addressText := stepString(property, "address")
+	var addressDetails *assetaddress.Details
+	assetName := addressText
+	if submission.Session.DefinitionVersion >= 5 {
+		value := onboardingAddress(property)
+		addressDetails = &value
+		addressText = assetaddress.Format(value)
+		assetName = value.Street + " " + value.Number
+	}
 	asset, err := (assetcore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}).Register(domainCtx, assetcore.Input{
 		TenantID: tenantID, BusinessUnitID: unit.ID, SegmentVersionID: segment.ID, TemplateID: &template.ID,
-		Name: limitedName(stepString(property, "address")), ExternalKey: "onboarding-" + submission.Session.ID.String(),
-		Address: stepString(property, "address"), GeofenceMeters: templatecatalog.DefaultGeofence,
+		Name: limitedName(assetName), ExternalKey: "onboarding-" + submission.Session.ID.String(),
+		Address: addressText, AddressDetails: addressDetails, GeofenceMeters: templatecatalog.DefaultGeofence,
 		Attributes:     map[string]any{"propertyType": property["propertyType"], "purpose": property["purpose"]},
 		Assignments:    []assetcore.AssignmentInput{{ParticipantID: participant.Participant.ID, Role: "PROPERTY_OWNER"}},
 		IdempotencyKey: "onboarding:asset:" + submission.Session.ID.String(),
@@ -420,6 +430,14 @@ func correlationID(ctx context.Context) string {
 func stepString(payload coordinator.StepPayload, key string) string {
 	value, _ := payload[key].(string)
 	return strings.TrimSpace(value)
+}
+
+func onboardingAddress(payload coordinator.StepPayload) assetaddress.Details {
+	if raw, ok := payload["addressDetails"].(map[string]any); ok {
+		read := func(key string) string { value, _ := raw[key].(string); return strings.TrimSpace(value) }
+		return assetaddress.Details{PostalCode: read("postalCode"), Street: read("street"), Number: read("number"), WithoutNumber: raw["withoutNumber"] == true, Complement: read("complement"), District: read("district"), City: read("city"), State: read("state"), MunicipalityCode: read("municipalityCode"), Reference: read("reference")}
+	}
+	return assetaddress.Details{}
 }
 
 func deadlineAt(payload coordinator.StepPayload) (time.Time, error) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	assetaddress "inspection/services/inspection/internal/features/assets/address"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
@@ -109,7 +110,7 @@ func mapMembership(ctx context.Context, db *gorm.DB, row database.Membership) (*
 	for _, scope := range rows {
 		scopes = append(scopes, &graphql1.Scope{Kind: scope.Kind, ResourceID: scope.ResourceID.String()})
 	}
-	return &graphql1.Membership{ID: row.ID.String(), TenantID: row.TenantID.String(), Role: row.Role, Status: row.Status, Version: int(row.Version), Scopes: scopes}, nil
+	return &graphql1.Membership{ID: row.ID.String(), TenantID: row.TenantID.String(), Name: row.Name, Email: row.Email, Role: row.Role, Status: row.Status, InvitationStatus: row.InvitationStatus, Version: int(row.Version), Scopes: scopes}, nil
 }
 
 func pageInfo(cursor string, more bool) *graphql1.PageInfo {
@@ -275,7 +276,27 @@ func mapAssetInput(tenantID identity.ID, input graphql1.AssetInput, idempotencyK
 			return assetcore.Input{}, graphql1Error("policyOverrides")
 		}
 	}
-	return assetcore.Input{TenantID: tenantID, BusinessUnitID: unitID, SegmentVersionID: segmentID, TemplateID: templateID, Name: input.Name, ExternalKey: input.ExternalKey, Address: input.Address, LatitudeE6: int32Pointer(input.LatitudeE6), LongitudeE6: int32Pointer(input.LongitudeE6), GeofenceMeters: geofence, Attributes: input.Attributes, PolicyOverrides: policy, Assignments: assignments, IdempotencyKey: idempotencyKey}, nil
+	var details *assetaddress.Details
+	if input.AddressDetails != nil {
+		value := assetaddress.Details{PostalCode: input.AddressDetails.PostalCode, Street: input.AddressDetails.Street, WithoutNumber: input.AddressDetails.WithoutNumber, City: input.AddressDetails.City, State: input.AddressDetails.State}
+		if input.AddressDetails.Number != nil {
+			value.Number = *input.AddressDetails.Number
+		}
+		if input.AddressDetails.Complement != nil {
+			value.Complement = *input.AddressDetails.Complement
+		}
+		if input.AddressDetails.District != nil {
+			value.District = *input.AddressDetails.District
+		}
+		if input.AddressDetails.MunicipalityCode != nil {
+			value.MunicipalityCode = *input.AddressDetails.MunicipalityCode
+		}
+		if input.AddressDetails.Reference != nil {
+			value.Reference = *input.AddressDetails.Reference
+		}
+		details = &value
+	}
+	return assetcore.Input{TenantID: tenantID, BusinessUnitID: unitID, SegmentVersionID: segmentID, TemplateID: templateID, Name: input.Name, ExternalKey: input.ExternalKey, Address: stringValue(input.Address), AddressDetails: details, LatitudeE6: int32Pointer(input.LatitudeE6), LongitudeE6: int32Pointer(input.LongitudeE6), GeofenceMeters: geofence, Attributes: input.Attributes, PolicyOverrides: policy, Assignments: assignments, IdempotencyKey: idempotencyKey}, nil
 }
 
 func parseOptionalID(value *string, field string) (*identity.ID, error) {
@@ -370,7 +391,11 @@ func mapAsset(view assetcore.View) *graphql1.Asset {
 		value := int(*view.Asset.LongitudeE6)
 		longitude = &value
 	}
-	return &graphql1.Asset{ID: view.Asset.ID.String(), BusinessUnitID: view.Asset.BusinessUnitID.String(), SegmentVersionID: view.Asset.SegmentVersionID.String(), TemplateID: optionalID(view.Asset.TemplateID), Name: view.Asset.Name, ExternalKey: view.Asset.ExternalKey, Address: view.Asset.Address, LatitudeE6: latitude, LongitudeE6: longitude, GeofenceMeters: view.Asset.GeofenceMeters, Attributes: attributes, PolicyOverrides: policies, Status: view.Asset.Status, Version: int(view.Asset.Version), Assignments: assignments}
+	asset := &graphql1.Asset{ID: view.Asset.ID.String(), BusinessUnitID: view.Asset.BusinessUnitID.String(), SegmentVersionID: view.Asset.SegmentVersionID.String(), TemplateID: optionalID(view.Asset.TemplateID), Name: view.Asset.Name, ExternalKey: view.Asset.ExternalKey, Address: view.Asset.Address, AddressStatus: view.Asset.AddressStatus, LatitudeE6: latitude, LongitudeE6: longitude, GeofenceMeters: view.Asset.GeofenceMeters, Attributes: attributes, PolicyOverrides: policies, Status: view.Asset.Status, Version: int(view.Asset.Version), Assignments: assignments}
+	if view.Asset.AddressStatus == "COMPLETE" {
+		asset.AddressDetails = &graphql1.PostalAddress{CountryCode: "BR", PostalCode: view.Asset.AddressPostalCode, Street: view.Asset.AddressStreet, Number: view.Asset.AddressNumber, WithoutNumber: view.Asset.AddressWithoutNumber, Complement: view.Asset.AddressComplement, District: view.Asset.AddressDistrict, City: view.Asset.AddressCity, State: view.Asset.AddressState, MunicipalityCode: view.Asset.AddressMunicipalityCode, Reference: view.Asset.AddressReference}
+	}
+	return asset
 }
 
 func mapOriginVersion(row database.OriginVersion) *graphql1.OriginVersion {
@@ -422,7 +447,7 @@ func mapInspection(view inspectioncore.View) *graphql1.Inspection {
 	row := view.Inspection
 	var reminders []string
 	_ = json.Unmarshal(row.ReminderInstants, &reminders)
-	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version)}
+	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version), AssetName: view.AssetName, AssetAddress: view.AssetAddress, AssetExternalKey: view.AssetExternalKey, ParticipantName: view.ParticipantName}
 }
 
 func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {

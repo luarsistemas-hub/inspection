@@ -2,10 +2,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearActivationProof, isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
 
 describe("C07 activation constraints", () => {
-  it("UT-047 keeps eleven-character passwords outside the frontend minimum", () => {
-    expect(isInitialPasswordValid("abcdefghijk", "abcdefghijk")).toBe(false);
-    expect(isInitialPasswordValid("abcdefghijkl", "abcdefghijkl")).toBe(true);
-    expect(isInitialPasswordValid("abcdefghijkl", "abcdefghijkL")).toBe(false);
+  it("requires six characters, an uppercase letter, a special character, and confirmation", () => {
+    expect(isInitialPasswordValid("Abc12!", "Abc12!")).toBe(true);
+    expect(isInitialPasswordValid("abc12!", "abc12!")).toBe(false);
+    expect(isInitialPasswordValid("Abc1!", "Abc1!")).toBe(false);
+    expect(isInitialPasswordValid("Abc123", "Abc123")).toBe(false);
+    expect(isInitialPasswordValid("Abc12!", "Abc12?")).toBe(false);
+  });
+
+  it("skips the password policy in dev", () => {
+    vi.stubEnv("NEXT_PUBLIC_STAGE", "dev");
+    expect(isInitialPasswordValid("abc", "abc")).toBe(true);
+    expect(isInitialPasswordValid("", "")).toBe(false);
+    expect(isInitialPasswordValid("   ", "   ")).toBe(false);
+    vi.unstubAllEnvs();
   });
 });
 

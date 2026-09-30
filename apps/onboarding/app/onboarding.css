@@ -1,10 +1,11 @@
 body { background: var(--inspection-bg); }
 .onboarding-shell { min-block-size: 100dvh; padding: var(--inspection-space-4); }
 .onboarding-main { max-inline-size: 44rem; margin-inline: auto; }
-.onboarding-header { display: grid; gap: var(--inspection-space-3); margin-block-end: var(--inspection-space-5); }
+.onboarding-header { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; gap: var(--inspection-space-3); margin-block-end: var(--inspection-space-5); }
 .onboarding-utility-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--inspection-space-3); max-inline-size: 100%; margin-block-end: var(--inspection-space-3); }
 .onboarding-header p, .onboarding-step-description { margin: 0; color: var(--inspection-muted); }
-.onboarding-guidance { max-inline-size: 60ch; font-size: .9rem; }
+.onboarding-title-disclosure { inline-size: 100%; min-inline-size: 0; max-inline-size: 60ch; }
+.onboarding-title-disclosure .inspection-info-disclosure__panel-content { font-size: .9rem; }
 .onboarding-steps-panel { border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); }
 .onboarding-steps-panel > summary { min-block-size: 3rem; padding: .7rem 1rem; color: var(--inspection-ink); font-weight: 700; cursor: pointer; }
 .onboarding-steps-panel > .inspection-steps { padding: 0 1rem 1rem; }
@@ -12,6 +13,8 @@ body { background: var(--inspection-bg); }
 .onboarding-progress li { padding: 0; color: var(--inspection-muted); font-size: .82rem; }
 .onboarding-progress [data-current="true"] { color: var(--inspection-brand-strong); font-weight: 700; }
 .onboarding-form { display: grid; gap: var(--inspection-space-4); }
+.onboarding-turnstile { min-inline-size: 0; overflow-x: auto; }
+.onboarding-turnstile-error { margin: 0; color: var(--inspection-danger); }
 .onboarding-actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); align-items: center; }
 .onboarding-upload-list { display: grid; gap: var(--inspection-space-3); }
 .onboarding-upload { display: grid; gap: var(--inspection-space-2); padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); }
@@ -41,7 +44,7 @@ body { background: var(--inspection-bg); }
   .onboarding-header { gap: .75rem; margin-block-end: 1rem; }
   .onboarding-utility-bar { margin-block-end: .25rem; }
   .onboarding-header h1 { font-size: 1.75rem; }
-  .onboarding-guidance { font-size: .82rem; line-height: 1.4; }
+  .onboarding-title-disclosure .inspection-info-disclosure__panel-content { font-size: .82rem; line-height: 1.4; }
   .onboarding-main > .inspection-card { padding: 1rem; }
   .onboarding-form { gap: 1rem; }
   .onboarding-actions { align-items: stretch; }

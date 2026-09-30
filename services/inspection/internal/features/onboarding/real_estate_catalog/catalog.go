@@ -12,8 +12,9 @@ import (
 
 const (
 	Segment              = "REAL_ESTATE"
-	DefinitionSchema     = 1
-	DefinitionVersion    = 4
+	DefinitionSchema     = 2
+	DefinitionVersion    = 5
+	TemplateSchema       = 1
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = "real-estate-fixed-origin"
 )
@@ -64,7 +65,7 @@ var definition = Definition{
 	Steps: []Step{
 		{Key: "agency", Label: "Imobiliária", Position: 1, Required: true, Fields: []Field{{Key: "name", Label: "Nome da imobiliária", Type: "text", Required: true}}},
 		{Key: "property", Label: "Imóvel", Position: 2, Required: true, Fields: []Field{
-			{Key: "address", Label: "Endereço do imóvel", Type: "textarea", Required: true},
+			{Key: "addressDetails", Label: "Endereço do imóvel", Type: "address", Required: true},
 			{Key: "propertyType", Label: "Tipo de imóvel", Type: "select", Required: true, Options: []string{"APARTMENT", "HOUSE", "COMMERCIAL", "LAND"}, OptionLabels: map[string]string{"APARTMENT": "Apartamento", "HOUSE": "Casa", "COMMERCIAL": "Imóvel comercial", "LAND": "Terreno"}},
 			{Key: "purpose", Label: "Finalidade da vistoria", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}, OptionLabels: map[string]string{"SALE": "Venda", "RENTAL": "Locação", "MAINTENANCE": "Manutenção", "INSURANCE": "Seguro"}},
 			{Key: "deadline", Label: "Prazo para concluir a vistoria", Type: "date", Required: true},
@@ -93,6 +94,32 @@ func Resolve(segment string) (Definition, error) {
 	return clone(definition), nil
 }
 
+// ResolveVersion returns the immutable public onboarding contract associated
+// with a session version. Existing sessions keep the original text field.
+func ResolveVersion(segment string, version int) (Definition, error) {
+	resolved, err := Resolve(segment)
+	if err != nil {
+		return Definition{}, err
+	}
+	if version >= DefinitionVersion {
+		return resolved, nil
+	}
+	resolved.SchemaVersion = 1
+	resolved.Version = 4
+	for i := range resolved.Steps {
+		if resolved.Steps[i].Key != "property" {
+			continue
+		}
+		for j := range resolved.Steps[i].Fields {
+			if resolved.Steps[i].Fields[j].Key == "addressDetails" {
+				resolved.Steps[i].Fields[j].Key = "address"
+				resolved.Steps[i].Fields[j].Type = "textarea"
+			}
+		}
+	}
+	return resolved, nil
+}
+
 // Validate rejects malformed definitions, including future schema versions.
 func Validate(value Definition) error {
 	if value.SchemaVersion != DefinitionSchema {
@@ -119,7 +146,7 @@ func Validate(value Definition) error {
 func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
 	base := func(mode templatecatalog.ComparisonMode) templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
-			SchemaVersion: DefinitionSchema, SegmentVersionID: "real-estate-v1",
+			SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, ComparisonMode: mode,
 			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
 			ReportMode:   "HISTORICAL", AnalysisType: "REAL_ESTATE",
