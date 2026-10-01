@@ -15,13 +15,18 @@ type AddressFormProps = {
   onLookup: (postalCode: string) => Promise<PostalLookup | null>;
   prefix: string;
   disabled?: boolean;
+  autoLookup?: boolean;
+  layout?: "default" | "essential-fields";
 };
 
-export function AddressForm({ value, onChange, onLookup, prefix, disabled = false }: AddressFormProps) {
+export function AddressForm({ value, onChange, onLookup, prefix, disabled = false, autoLookup = false, layout = "default" }: AddressFormProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const generation = useRef(0);
   const latest = useRef({ value, onChange });
+  const lookupAction = useRef<() => Promise<void>>(async () => {});
+  const lookupTimer = useRef<number | undefined>(undefined);
   useEffect(() => { latest.current = { value, onChange }; }, [value, onChange]);
   useEffect(() => () => { generation.current += 1; }, []);
   useEffect(() => {
@@ -86,16 +91,39 @@ export function AddressForm({ value, onChange, onLookup, prefix, disabled = fals
     }
   };
 
+  lookupAction.current = lookup;
+  useEffect(() => {
+    if (!autoLookup || disabled || !/^\d{8}$/.test(value.postalCode.replace(/\D/g, ""))) return;
+    lookupTimer.current = window.setTimeout(() => { lookupTimer.current = undefined; void lookupAction.current(); }, 350);
+    return () => { if (lookupTimer.current !== undefined) window.clearTimeout(lookupTimer.current); };
+  }, [autoLookup, disabled, value.postalCode]);
+
+  const compact = layout === "essential-fields";
+  const detailsId = `${prefix}-additional-fields`;
+  const hasAddressSummary = Boolean(value.street.trim() || value.city.trim() || value.state.trim());
+  const summaryStreet = [value.street.trim(), value.withoutNumber ? "s/n" : value.number.trim(), value.complement.trim()].filter(Boolean).join(", ");
+
   return <fieldset className="inspection-address-form" disabled={disabled}>
     <legend>Endereço do imóvel *</legend>
     <div className="inspection-address-postal-row">
       {input("postalCode", "CEP", true, { inputMode: "numeric", maxLength: 9, pattern: "[0-9]{5}-?[0-9]{3}", title: "Informe um CEP com oito dígitos.", "aria-describedby": `${prefix}-lookup-status` })}
-      <button className="inspection-address-lookup" type="button" onClick={() => void lookup()} disabled={loading} aria-label="Buscar CEP" title={loading ? "Consultando CEP" : "Buscar CEP"} aria-busy={loading}>
+      <button className="inspection-address-lookup" type="button" onClick={() => { if (lookupTimer.current !== undefined) window.clearTimeout(lookupTimer.current); void lookup(); }} disabled={loading} aria-label="Buscar CEP" title={loading ? "Consultando CEP" : "Buscar CEP"} aria-busy={loading}>
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
       </button>
     </div>
-    <p id={`${prefix}-lookup-status`} role="status">{message}</p>
-    {input("street", "Logradouro", true, { maxLength: 200 })}
+    <p id={`${prefix}-lookup-status`} role="status">{message || (compact && autoLookup ? "A busca do endereço começa ao completar o CEP." : "")}</p>
+    {compact && hasAddressSummary ? <div className="inspection-address-summary" aria-live="polite">
+      <div className="inspection-address-summary-copy">
+        <strong>{summaryStreet}</strong>
+        <span>{[value.district.trim(), value.city.trim(), value.state.trim().toUpperCase()].filter(Boolean).join(" · ")}</span>
+      </div>
+      <button className="inspection-address-edit" type="button" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen((open) => !open)}>
+        {detailsOpen ? "Fechar edição" : "Editar endereço"}
+      </button>
+    </div> : compact ? <button className="inspection-address-edit" type="button" aria-expanded={detailsOpen} aria-controls={detailsId} onClick={() => setDetailsOpen((open) => !open)}>
+      {detailsOpen ? "Fechar edição" : "Preencher endereço manualmente"}
+    </button> : null}
+    {!compact ? input("street", "Logradouro", true, { maxLength: 200 }) : null}
     <div className="inspection-address-row inspection-address-number-row">
       <div>
         {input("number", "Número", !value.withoutNumber, { maxLength: 30, disabled: value.withoutNumber })}
@@ -103,12 +131,15 @@ export function AddressForm({ value, onChange, onLookup, prefix, disabled = fals
       </div>
       {input("complement", "Complemento", false, { maxLength: 200 })}
     </div>
-    <div className="inspection-address-row">
-      {input("district", "Bairro / distrito", false, { maxLength: 120 })}
-      {input("city", "Cidade", true, { maxLength: 120 })}
-      {stateSelect}
+    <div id={compact ? detailsId : undefined} className="inspection-address-additional" hidden={compact && !detailsOpen}>
+      {compact ? input("street", "Logradouro", true, { maxLength: 200 }) : null}
+      <div className="inspection-address-row">
+        {input("district", "Bairro / distrito", false, { maxLength: 120 })}
+        {input("city", "Cidade", true, { maxLength: 120 })}
+        {stateSelect}
+      </div>
+      {input("reference", "Ponto de referência", false, { maxLength: 300 })}
     </div>
-    {input("reference", "Ponto de referência", false, { maxLength: 300 })}
   </fieldset>;
 }
 
@@ -133,5 +164,13 @@ export function AddressFieldStyles() {
     .inspection-address-field input:disabled,.inspection-address-field select:disabled{opacity:.6}
     .inspection-address-check{display:flex;align-items:center;gap:.5rem;min-height:48px}
     .inspection-address-check input{flex:none;width:1.25rem;height:1.25rem}
+    .inspection-address-summary{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:.5rem 0;padding:.8rem 1rem;border-radius:.5rem;background:color-mix(in srgb,var(--inspection-brand,#2563eb) 8%,var(--inspection-surface-raised,#fff));}
+    .inspection-address-summary-copy{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}
+    .inspection-address-summary-copy span{font-size:.9em;opacity:.8}
+    .inspection-address-edit{flex:none;min-height:44px;padding:.5rem .75rem;border:0;border-radius:.4rem;background:transparent;color:var(--inspection-brand-strong,#2563eb);font:inherit;font-weight:600;cursor:pointer}
+    .inspection-address-edit:hover{background:color-mix(in srgb,var(--inspection-brand,#2563eb) 10%,transparent)}
+    .inspection-address-edit:focus-visible{outline:var(--inspection-focus-ring,2px solid currentColor);outline-offset:2px}
+    .inspection-address-additional[hidden]{display:none}
+    @media(max-width:480px){.inspection-address-summary{align-items:flex-start;flex-direction:column;gap:.25rem}.inspection-address-edit{padding-left:0}}
   `}</style>;
 }
