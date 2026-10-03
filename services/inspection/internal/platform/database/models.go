@@ -541,7 +541,6 @@ type Origin struct {
 	ID              identity.ID  `gorm:"type:uuid;primaryKey"`
 	TenantID        identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_context,priority:1"`
 	AssetID         identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_context,priority:2"`
-	TemplateID      identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_context,priority:3"`
 	ActiveVersionID *identity.ID `gorm:"type:uuid"`
 	Version         int64        `gorm:"not null;default:1"`
 	CreatedAt       time.Time
@@ -871,6 +870,10 @@ type Schedule struct {
 	ParticipantID      identity.ID     `gorm:"type:uuid;not null"`
 	TemplateID         identity.ID     `gorm:"type:uuid;not null"`
 	ReferenceVersionID *identity.ID    `gorm:"type:uuid"`
+	ProjectID          *identity.ID    `gorm:"type:uuid;index"`
+	StageID            *identity.ID    `gorm:"type:uuid;index"`
+	TemplateVersionID  *identity.ID    `gorm:"type:uuid"`
+	ComparisonMode     string          `gorm:"size:32;not null;default:CHECKLIST_ONLY"`
 	RRule              string          `gorm:"size:2000;not null"`
 	Timezone           string          `gorm:"size:64;not null"`
 	StartsAt           time.Time       `gorm:"not null"`
@@ -977,19 +980,17 @@ type ReferenceSnapshot struct {
 func (ReferenceSnapshot) TableName() string { return "inspections.reference_snapshots" }
 
 type Project struct {
-	ID                identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID          identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_project_idempotency,priority:1;index:idx_projects_cursor,priority:1"`
-	BusinessUnitID    identity.ID `gorm:"type:uuid;not null;index:idx_projects_scope,priority:2"`
-	AssetID           identity.ID `gorm:"type:uuid;not null;index:idx_projects_scope,priority:3"`
-	ParticipantID     identity.ID `gorm:"type:uuid;not null"`
-	TemplateID        identity.ID `gorm:"type:uuid;not null"`
-	TemplateVersionID identity.ID `gorm:"type:uuid;not null"`
-	ReportMode        string      `gorm:"size:16;not null"`
-	Status            string      `gorm:"size:16;not null;index"`
-	Version           int64       `gorm:"not null;default:1"`
-	IdempotencyKey    string      `gorm:"size:200;not null;uniqueIndex:idx_project_idempotency,priority:2"`
-	CreatedAt         time.Time   `gorm:"not null;index:idx_projects_cursor,priority:2"`
-	UpdatedAt         time.Time
+	ID             identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID       identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_project_idempotency,priority:1;index:idx_projects_cursor,priority:1"`
+	BusinessUnitID identity.ID `gorm:"type:uuid;not null;index:idx_projects_scope,priority:2"`
+	AssetID        identity.ID `gorm:"type:uuid;not null;index:idx_projects_scope,priority:3"`
+	Name           string      `gorm:"size:200;not null;default:''"`
+	OrderedStages  bool        `gorm:"not null;default:false"`
+	Status         string      `gorm:"size:16;not null;index"`
+	Version        int64       `gorm:"not null;default:1"`
+	IdempotencyKey string      `gorm:"size:200;not null;uniqueIndex:idx_project_idempotency,priority:2"`
+	CreatedAt      time.Time   `gorm:"not null;index:idx_projects_cursor,priority:2"`
+	UpdatedAt      time.Time
 }
 
 func (Project) TableName() string { return "projects.projects" }
@@ -1007,11 +1008,11 @@ type ProjectStage struct {
 	Requirements       json.RawMessage `gorm:"type:jsonb;not null"`
 	EffectiveReference json.RawMessage `gorm:"type:jsonb;not null"`
 	Reason             string          `gorm:"size:2000"`
-	InspectionID       *identity.ID    `gorm:"type:uuid"`
 	Version            int64           `gorm:"not null;default:1"`
 	IdempotencyKey     string          `gorm:"size:200"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	InspectionIDs      []identity.ID `gorm:"-"`
 }
 
 func (ProjectStage) TableName() string { return "projects.project_stages" }

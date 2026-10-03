@@ -3,11 +3,15 @@ import { expect, type Page } from "@playwright/test";
 export class OnboardingPage {
   constructor(private readonly page: Page) {}
 
-  async open({ autoSolve = true }: { autoSolve?: boolean } = {}) {
-    await this.page.route("https://challenges.cloudflare.com/turnstile/v0/api.js**", (route) => route.fulfill({
-      contentType: "application/javascript",
-      body: `window.turnstile={render:function(container,options){window.turnstileMockSolve=options.callback;window.turnstileMockExpire=options["expired-callback"];if(${autoSolve ? "true" : "false"})setTimeout(function(){options.callback("XXXX.DUMMY.TOKEN.XXXX")},0);return "playwright-widget"},reset:function(){},remove:function(){}};`,
-    }));
+  async open({ autoSolve = true, failFirstLoad = false }: { autoSolve?: boolean; failFirstLoad?: boolean } = {}) {
+    let scriptLoads = 0;
+    await this.page.route("https://challenges.cloudflare.com/turnstile/v0/api.js**", (route) => {
+      if (failFirstLoad && scriptLoads++ === 0) return route.abort();
+      return route.fulfill({
+        contentType: "application/javascript",
+        body: `window.turnstile={render:function(container,options){window.turnstileMockSolve=options.callback;window.turnstileMockExpire=options["expired-callback"];if(${autoSolve ? "true" : "false"})setTimeout(function(){options.callback("XXXX.DUMMY.TOKEN.XXXX")},0);return "playwright-widget"},reset:function(){},remove:function(){}};`,
+      });
+    });
     await this.page.goto("/");
   }
   async start(name: string, email: string) {
@@ -30,9 +34,10 @@ export class OnboardingPage {
   }
 
   async saveProperty(input: { postalCode: string; street: string; number: string; complement?: string; district?: string; city: string; state: string; propertyType: string; purpose: string; deadline: string }) {
-    await this.page.getByLabel("CEP").fill(input.postalCode);
+    await this.page.getByRole("textbox", { name: /^CEP/ }).fill(input.postalCode);
     await this.page.getByRole("button", { name: "Buscar CEP" }).click();
     await expect(this.page.getByLabel("Logradouro")).toHaveValue(input.street);
+    await this.page.getByRole("button", { name: "Editar endereço" }).click();
     await this.page.getByRole("textbox", { name: "Número *" }).fill(input.number);
     if (input.complement) await this.page.getByLabel("Complemento").fill(input.complement);
     if (input.district) await this.page.getByLabel("Bairro / distrito").fill(input.district);

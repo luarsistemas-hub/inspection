@@ -31,6 +31,25 @@ func unauthenticated() error {
 	return apperror.New(apperror.Unauthenticated, "", "authentication required")
 }
 
+func parsePlannedStages(inputs []*graphql1.PlannedProjectStageInput) ([]projectcore.PlannedStageInput, error) {
+	stages := make([]projectcore.PlannedStageInput, 0, len(inputs))
+	for _, input := range inputs {
+		if input == nil {
+			return nil, apperror.New(apperror.InvalidInput, "stages", "stage cannot be empty")
+		}
+		stage := projectcore.PlannedStageInput{Key: input.Key, Label: input.Label}
+		if input.PlannedAt != nil {
+			planned, err := parseInstant(*input.PlannedAt, "stages.plannedAt")
+			if err != nil {
+				return nil, err
+			}
+			stage.PlannedAt = &planned
+		}
+		stages = append(stages, stage)
+	}
+	return stages, nil
+}
+
 func invalidID(field string) error {
 	return apperror.New(apperror.InvalidInput, field, "invalid identifier")
 }
@@ -440,7 +459,11 @@ func (r *queryResolver) publishedSnapshot(ctx context.Context, tenantID identity
 func mapSchedule(row database.Schedule) *graphql1.Schedule {
 	var offsets []int
 	_ = json.Unmarshal(row.ReminderOffsets, &offsets)
-	return &graphql1.Schedule{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), ReferenceVersionID: optionalID(row.ReferenceVersionID), Rrule: row.RRule, Timezone: row.Timezone, StartsAt: row.StartsAt.Format(time.RFC3339Nano), NextDueAt: row.NextDueAt.Format(time.RFC3339Nano), DeadlineMinutes: row.DeadlineMinutes, ReminderOffsetsMinutes: offsets, Status: row.Status, Version: int(row.Version)}
+	templateVersionID := ""
+	if row.TemplateVersionID != nil {
+		templateVersionID = row.TemplateVersionID.String()
+	}
+	return &graphql1.Schedule{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: templateVersionID, ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), ReferenceVersionID: optionalID(row.ReferenceVersionID), Rrule: row.RRule, Timezone: row.Timezone, StartsAt: row.StartsAt.Format(time.RFC3339Nano), NextDueAt: row.NextDueAt.Format(time.RFC3339Nano), DeadlineMinutes: row.DeadlineMinutes, ReminderOffsetsMinutes: offsets, Status: row.Status, Version: int(row.Version)}
 }
 
 func mapInspection(view inspectioncore.View) *graphql1.Inspection {
@@ -468,14 +491,18 @@ func mapProject(view projectcore.View) *graphql1.Project {
 			value := stage.PlannedAt.Format(time.RFC3339Nano)
 			planned = &value
 		}
-		stages = append(stages, &graphql1.ProjectStage{ID: stage.ID.String(), Key: stage.Key, Label: stage.Label, Kind: stage.Kind, Position: stage.Position, Status: stage.Status, PlannedAt: planned, Reason: optionalString(stage.Reason), InspectionID: optionalID(stage.InspectionID), Version: int(stage.Version)})
+		inspectionIDs := make([]string, 0, len(stage.InspectionIDs))
+		for _, id := range stage.InspectionIDs {
+			inspectionIDs = append(inspectionIDs, id.String())
+		}
+		stages = append(stages, &graphql1.ProjectStage{ID: stage.ID.String(), Key: stage.Key, Label: stage.Label, Kind: stage.Kind, Position: stage.Position, Status: stage.Status, PlannedAt: planned, Reason: optionalString(stage.Reason), InspectionIds: inspectionIDs, Version: int(stage.Version)})
 	}
 	transitions := make([]*graphql1.StageTransition, 0, len(view.Transitions))
 	for _, transition := range view.Transitions {
 		transitions = append(transitions, &graphql1.StageTransition{ID: transition.ID.String(), StageID: optionalID(transition.StageID), FromState: optionalString(transition.FromState), ToState: transition.ToState, Reason: optionalString(transition.Reason), OccurredAt: transition.OccurredAt.Format(time.RFC3339Nano)})
 	}
 	row := view.Project
-	return &graphql1.Project{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), ReportMode: row.ReportMode, Status: row.Status, Version: int(row.Version), Stages: stages, Transitions: transitions}
+	return &graphql1.Project{ID: row.ID.String(), Name: row.Name, OrderedStages: row.OrderedStages, BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), Status: row.Status, Version: int(row.Version), Stages: stages, Transitions: transitions}
 }
 
 func mapMedia(row database.MediaObject) *graphql1.Media {

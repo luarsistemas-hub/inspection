@@ -13,8 +13,8 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
-	if got.OriginModes[0].TemplateKey != ChecklistTemplateKey || got.OriginModes[1].TemplateKey != OriginTemplateKey {
-		t.Fatal("origin modes are not pinned to curated templates")
+	if got.OriginModes[0].TemplateKey != got.OriginModes[1].TemplateKey || len(got.Templates) != 1 {
+		t.Fatal("comparison choice must reuse the same inspection model")
 	}
 }
 
@@ -87,12 +87,12 @@ func TestDefinitionMetadataIsExtensible(t *testing.T) {
 	}
 }
 
-func TestCuratedTemplatesPinOriginModeAndProfile(t *testing.T) {
+func TestCuratedTemplateLeavesComparisonChoiceToInspection(t *testing.T) {
 	templates := TemplateDocuments()
-	if templates[ChecklistTemplateKey].ComparisonMode != "CHECKLIST_ONLY" || templates[OriginTemplateKey].ComparisonMode != "FIXED_ORIGIN" {
-		t.Fatal("curated templates have incorrect comparison modes")
+	if len(templates) != 1 || templates[ChecklistTemplateKey].DefaultComparisonMode != "CHECKLIST_ONLY" {
+		t.Fatal("one reusable checklist model is required")
 	}
-	if templates[ChecklistTemplateKey].AnalysisType != "REAL_ESTATE" || templates[OriginTemplateKey].AnalysisType != "REAL_ESTATE" {
+	if templates[ChecklistTemplateKey].AnalysisType != "REAL_ESTATE" {
 		t.Fatal("curated templates do not pin the analysis type")
 	}
 	refs := templateRefs{}

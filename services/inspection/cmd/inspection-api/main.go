@@ -62,6 +62,7 @@ import (
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
+	onboardinglogout "inspection/services/inspection/internal/features/onboarding/logout"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
@@ -435,6 +436,14 @@ func run() error {
 		}
 	}
 	mux := http.NewServeMux()
+	if err := onboardinglogout.Setup(mux, onboardinglogout.Dependencies{
+		Sessions: onboardingService,
+		SecureCookie: func(r *http.Request) bool {
+			return cfg.Environment != "local" || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+		},
+	}); err != nil {
+		return err
+	}
 	if err := onboardingphotos.Setup(mux, onboardingphotos.Dependencies{DB: db, Sessions: onboardingService, Store: mediaStore}); err != nil {
 		return err
 	}

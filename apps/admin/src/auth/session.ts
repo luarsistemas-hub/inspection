@@ -3,13 +3,15 @@
 export type AdminIdentity = { tenantId: string; tenantName: string; entitlements: string[]; roles: string[]; membershipId?: string; scope?: string };
 
 let token: string | undefined;
+let idToken: string | undefined;
 let identity: AdminIdentity | undefined;
 
-export function setSession(nextToken: string, nextIdentity?: AdminIdentity): void { token = nextToken; identity = nextIdentity; }
+export function setSession(nextToken: string, nextIdentity?: AdminIdentity, nextIDToken?: string): void { token = nextToken; idToken = nextIDToken; identity = nextIdentity; }
 export function setIdentity(nextIdentity: AdminIdentity): void { identity = nextIdentity; }
 export function getAccessToken(): string | undefined { return token; }
+export function getIDToken(): string | undefined { return idToken; }
 export function getIdentity(): AdminIdentity | undefined { return identity; }
-export function clearSession(): void { token = undefined; identity = undefined; }
+export function clearSession(): void { token = undefined; idToken = undefined; identity = undefined; }
 const membershipKey = "inspection.admin.membership";
 
 export function setMembershipContext(membershipId: string, scope = "Tenant"): void {
@@ -39,6 +41,7 @@ const adminPageRoles: Record<string, string[]> = {
   "/access": ["TENANT_ADMIN", "ORGANIZATION_ADMIN", "ACCESS_ADMIN"],
   "/catalogs": ["TENANT_ADMIN", "PARTICIPATION_ADMIN"],
   "/assets": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
+  "/templates": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/governance": ["TENANT_ADMIN", "GOVERNANCE_ADMIN"],
   "/prompts": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
 };

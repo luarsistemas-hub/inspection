@@ -153,8 +153,8 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 			}
 		}
 
-		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, ReportMode: "HISTORICAL", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
-		stage := database.ProjectStage{ID: stageID, TenantID: tenant.ID, ProjectID: projectID, Key: "inspection", Label: "Vistoria inicial", Kind: "INSPECTION", Position: 1, Status: "AVAILABLE", Requirements: requirementJSON, EffectiveReference: json.RawMessage(`{}`), InspectionID: &inspectionID, Version: 1, IdempotencyKey: "qa-seed-stage-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
+		project := database.Project{ID: projectID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, Name: "Projeto QA", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-project-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
+		stage := database.ProjectStage{ID: stageID, TenantID: tenant.ID, ProjectID: projectID, Key: "inspection", Label: "Vistoria inicial", Kind: "INSPECTION", Position: 1, Status: "AVAILABLE", Requirements: requirementJSON, EffectiveReference: json.RawMessage(`{}`), Version: 1, IdempotencyKey: "qa-seed-stage-" + scenarioID.String(), CreatedAt: now, UpdatedAt: now}
 		inspection := database.Inspection{ID: inspectionID, TenantID: tenant.ID, BusinessUnitID: unit.ID, AssetID: ids.asset, ParticipantID: ids.participant, TemplateID: ids.template, TemplateVersionID: ids.templateVersion, AnalysisPromptSnapshotID: promptSnapshot.ID, ProjectID: &projectID, StageID: &stageID, Source: "MANUAL", SourceKey: "qa-seed-" + scenarioID.String(), SourceReason: "Browser QA scenario", Status: "INVITED", DueAt: now, DeadlineAt: deadline, ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{"source":"qa-seed"}`), Version: 1, CreatedAt: now, UpdatedAt: now}
 		rows := []any{
 			&project,
@@ -193,16 +193,15 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (str
 func qaTemplateDefinition(segmentVersionID identity.ID) (json.RawMessage, error) {
 	document := catalog.TemplateDocument{
 		SchemaVersion: catalog.SchemaVersion, SegmentVersionID: segmentVersionID.String(),
-		ParticipantRoles: []string{"OWNER"}, ComparisonMode: catalog.ChecklistOnly,
+		ParticipantRoles: []string{"OWNER"}, DefaultComparisonMode: catalog.ChecklistOnly,
 		Requirements: []catalog.CaptureRequirement{{
 			Key: "fachada-geral", Section: "Área externa", Label: "Fachada do imóvel",
 			Instructions: "Registre a fachada inteira, com boa iluminação.", EvidenceKind: "PHOTO",
 			MinimumCount: 1, MaximumCount: 3, Required: true, DescriptionRequired: true,
-			CaptureSourcePolicy: "CAMERA_OR_GALLERY", ComparisonTarget: catalog.ChecklistOnly,
+			CaptureSourcePolicy: "CAMERA_OR_GALLERY",
 		}},
-		MultiStage: true, Stages: []catalog.Stage{{Key: "inspection", Label: "Vistoria inicial", Position: 1}},
-		ReportMode: "HISTORICAL", AnalysisType: analysisprompt.RealEstate,
-		Policy: catalog.Policy{GPSRequired: false, GeofenceMeters: catalog.DefaultGeofence, AllowGallery: true},
+		AnalysisType: analysisprompt.RealEstate,
+		Policy:       catalog.Policy{GPSRequired: false, GeofenceMeters: catalog.DefaultGeofence, AllowGallery: true},
 	}
 	encoded, _, err := catalog.CanonicalJSON(document)
 	return encoded, err

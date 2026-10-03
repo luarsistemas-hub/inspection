@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { loginAsLocalAdmin } from "./support/auth";
 
 test.describe("cross-product customer handoff", () => {
-  test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "real cross-product credentials are required; use the parity gate");
+  test.skip(process.env.INSPECTION_E2E_CROSS_PRODUCT !== "true", "real cross-product credentials are required; use the parity gate");
 
   test("E2E-047 switches to the customer projection before opening shared work", async ({ page }) => {
     await loginAsLocalAdmin(page, "/reports");

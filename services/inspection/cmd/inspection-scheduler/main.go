@@ -12,6 +12,7 @@ import (
 	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
 	reminddeadlines "inspection/services/inspection/internal/features/notifications/remind_deadlines"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
+	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	materializedue "inspection/services/inspection/internal/features/schedules/materialize_due"
@@ -76,6 +77,7 @@ func run() error {
 			return getparticipant.Setup(getparticipant.Dependencies{DB: db, Bus: bus, Authorizer: internalAuthorizer})
 		},
 		func() error { return resolvetemplate.Setup(resolvetemplate.Dependencies{DB: db, Bus: bus}) },
+		func() error { return originresolve.Setup(originresolve.Dependencies{DB: db, Bus: bus}) },
 		func() error {
 			return createoccurrence.Setup(createoccurrence.Dependencies{DB: db, Bus: bus, Authorizer: internalAuthorizer})
 		},
@@ -103,7 +105,7 @@ func runMaterializer(db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(
 	for {
 		now := time.Now().UTC()
 		var tenantIDs []identity.ID
-		if err := db.Raw("SELECT tenant_id FROM schedules.schedules WHERE status='ACTIVE' AND next_due_at<=? UNION SELECT tenant_id FROM schedules.reminder_plans WHERE status='PLANNED' AND remind_at<=? UNION SELECT tenant_id FROM inspections.inspections WHERE status IN ('COMPLETED','CANCELED','INVALIDATED') AND updated_at<=? UNION SELECT tenant_id FROM inspections.inspections WHERE status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND deadline_at<=?", now, now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
+		if err := db.Raw("SELECT pending.tenant_id FROM platform.discover_scheduler_tenants(?, ?, ?) AS pending(tenant_id)", now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
 			log.Printf("scheduler tenant discovery failed: %v", err)
 		} else {
 			for _, tenantID := range tenantIDs {

@@ -18,10 +18,22 @@ export async function beginPKCE(authorizeEndpoint: string, returnTo = "/organiza
   const url = new URL(authorizeEndpoint);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", "inspection-admin");
+  url.searchParams.set("scope", "openid");
   url.searchParams.set("redirect_uri", `${location.origin}/auth/callback`);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("code_challenge", await challenge(verifier));
   url.searchParams.set("state", state);
+  location.assign(url.toString());
+}
+
+export function endAdminSSO(authorizeEndpoint: string, idToken?: string): void {
+  const url = new URL(authorizeEndpoint);
+  url.pathname = url.pathname.replace(/\/auth\/?$/, "/logout");
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("client_id", "inspection-admin");
+  url.searchParams.set("post_logout_redirect_uri", `${location.origin}/overview`);
+  if (idToken) url.searchParams.set("id_token_hint", idToken);
   location.assign(url.toString());
 }
 

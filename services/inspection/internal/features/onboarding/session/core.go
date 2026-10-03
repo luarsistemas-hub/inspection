@@ -445,6 +445,9 @@ func (s Service) ValidateCSRF(ctx context.Context, locator, csrf string) (Sessio
 			return err
 		}
 		if err := tx.Where("session_locator_digest=?", locatorDigest[:]).First(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.SessionExpired, "", "session expired")
+			}
 			return err
 		}
 		if err := s.validateCurrentSession(tx, row, now); err != nil {

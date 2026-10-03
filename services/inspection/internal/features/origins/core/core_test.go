@@ -89,7 +89,7 @@ func newOriginActivationFixture(t *testing.T) originActivationFixture {
 	}
 	now := time.Date(2026, time.September, 5, 12, 0, 0, 0, time.UTC)
 	tenantID, originID, responsibilityID, mediaID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: identity.NewID(), TemplateID: identity.NewID(), Version: 1, CreatedAt: now, UpdatedAt: now}
+	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: identity.NewID(), Version: 1, CreatedAt: now, UpdatedAt: now}
 	version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "DRAFT", IdempotencyKey: "origin-first", CreatedAt: now}
 	draft := database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", TemplateVersionID: identity.NewID(), ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: mustJSONOrigin([]capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 1}}), Status: "SUBMITTED", Version: 2, CreatedAt: now, UpdatedAt: now}
 	media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: "origin/first", ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 10, Status: "READY", RequirementKey: "room", Description: "first view", CaptureSource: "CAMERA", Flags: json.RawMessage(`[]`), CreatedAt: now}

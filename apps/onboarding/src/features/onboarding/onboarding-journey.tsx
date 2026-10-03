@@ -1,10 +1,10 @@
 "use client";
 
-import { Alert, Button, Card, Confirmation, Container, Dialog, Field, InfoDisclosure, Input, ProductIdentity, Select, Stack, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
+import { AccountMenu, Alert, Button, Card, Confirmation, Container, Dialog, Field, InfoDisclosure, Input, Select, Stack, Steps, Textarea, ThemeSelector } from "@inspection/design-system";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AddressFieldStyles, AddressForm, emptyPostalAddress, formatPostalAddress, type PostalAddress, type PostalLookup } from "@inspection/address";
 import { clearOnboardingSession } from "@/auth/onboarding-session";
-import { clientMutationId, graphql, isOnboardingSessionFailure, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
+import { clientMutationId, graphql, isOnboardingSessionFailure, logoutOnboardingSession, mapUserErrors, uploadReferencePhoto, type GraphQLFailure } from "@/graphql/client";
 import { CompleteOnboardingDocument, CorrectOnboardingResponsibleEmailDocument, OnboardingDefinitionDocument, OnboardingLookupPostalCodeDocument, OnboardingSessionDocument, OnboardingStatusDocument, RequestOnboardingOtpDocument, SaveOnboardingStepDocument, VerifyOnboardingOtpDocument, type OnboardingDefinitionQuery, type OnboardingSessionQuery, type OnboardingStatusQuery } from "@/graphql/generated";
 import { isSupportedDefinition, nextConfirmedStep, sortedSteps, validateStep, valuesForParticipantMode, type OnboardingDefinition, type StepValues } from "./definition";
 import { OriginUploadCards, originUploadError, type OriginUpload } from "./origin-upload";
@@ -141,7 +141,16 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
   if (error && !definition) return <PageShell title="Não foi possível abrir o cadastro"><Alert tone="danger">{error}</Alert><Button onClick={() => location.reload()}>Tentar novamente</Button></PageShell>;
   if (!definition) return null;
 
-  return <PageShell title={view === "identity" ? "Comece sua primeira vistoria" : view === "verify" ? "Confirme seu e-mail" : view === "review" ? "Revise os dados" : view === "status" ? "Acompanhe a vistoria" : presentOnboardingLabel(step?.label ?? "Cadastro")} steps={steps} currentStep={activeStep}>
+  const logout = async () => {
+    try {
+      await logoutOnboardingSession();
+      restart();
+    } catch (cause) {
+      setError(failureText(cause));
+    }
+  };
+
+  return <PageShell title={view === "identity" ? "Comece sua primeira vistoria" : view === "verify" ? "Confirme seu e-mail" : view === "review" ? "Revise os dados" : view === "status" ? "Acompanhe a vistoria" : presentOnboardingLabel(step?.label ?? "Cadastro")} steps={steps} currentStep={activeStep} account={session?.owner} onSignOut={logout}>
     {error ? <Alert tone="danger">{error}</Alert> : null}
     {initialView === "status" && !session ? <Alert tone="info">Nenhuma solicitação ativa foi encontrada. Inicie a verificação para começar um cadastro.</Alert> : null}
     {view === "identity" ? <IdentityForm generation={generation.current} onRequested={(nextLocator, nextEmail, requestGeneration) => { if (requestGeneration !== generation.current) return; clearDrafts(); setLocator(nextLocator); setEmail(nextEmail); setError(""); setView("verify"); }} onError={setError} /> : null}
@@ -160,10 +169,10 @@ export function OnboardingJourney({ initialView }: { initialView?: "status" } = 
   </PageShell>;
 }
 
-function PageShell({ title, children, steps = [], currentStep = "" }: { title: string; children: React.ReactNode; steps?: OnboardingDefinition["steps"]; currentStep?: string }) {
+function PageShell({ title, children, steps = [], currentStep = "", account, onSignOut }: { title: string; children: React.ReactNode; steps?: OnboardingDefinition["steps"]; currentStep?: string; account?: { name: string; email: string }; onSignOut?: () => void }) {
   const currentIndex = steps.findIndex((item) => item.key === currentStep);
   const stepItems = steps.map((item, index) => ({ id: item.key, label: presentOnboardingLabel(item.label), state: index < currentIndex ? "complete" as const : item.key === currentStep ? "current" as const : "pending" as const }));
-  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><div className="onboarding-utility-bar"><ProductIdentity product="Onboarding" /><ThemeSelector /></div><InfoDisclosure className="onboarding-title-disclosure" label="cadastro e salvamento" heading={<h1>{title}</h1>}>Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</InfoDisclosure>{currentStep && stepItems.length ? <details className="onboarding-steps-panel"><summary>Etapa {currentIndex + 1} de {steps.length}: {stepItems[currentIndex]?.label}</summary><Steps label="Etapas do cadastro" items={stepItems} /></details> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
+  return <main className="onboarding-shell"><Container className="onboarding-main"><header className="onboarding-header"><div className="onboarding-utility-bar"><ThemeSelector />{account && onSignOut ? <AccountMenu name={account.name} description="Sessão de cadastro" email={account.email} onSignOut={onSignOut} /> : null}</div><InfoDisclosure className="onboarding-title-disclosure" label="cadastro e salvamento" heading={<h1>{title}</h1>}>Os campos ficam neste navegador e as etapas salvas são confirmadas pelo servidor. Fotos ainda não enviadas precisam ser selecionadas novamente após recarregar a página.</InfoDisclosure>{currentStep && stepItems.length ? <details className="onboarding-steps-panel"><summary>Etapa {currentIndex + 1} de {steps.length}: {stepItems[currentIndex]?.label}</summary><Steps label="Etapas do cadastro" items={stepItems} /></details> : null}</header><Card><Stack gap="4">{children}</Stack></Card></Container></main>;
 }
 
 function responseStep(session: Session, steps: OnboardingDefinition["steps"]) {

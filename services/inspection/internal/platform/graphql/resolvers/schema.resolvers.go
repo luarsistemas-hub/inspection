@@ -70,7 +70,9 @@ import (
 	segmentcore "inspection/services/inspection/internal/features/segments/core"
 	segmentlist "inspection/services/inspection/internal/features/segments/list_definitions"
 	segmentpublish "inspection/services/inspection/internal/features/segments/publish_definition"
+	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
 	templateactivate "inspection/services/inspection/internal/features/templates/activate_template"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	templatecore "inspection/services/inspection/internal/features/templates/core"
 	templatelist "inspection/services/inspection/internal/features/templates/list_templates"
 	templatepublish "inspection/services/inspection/internal/features/templates/publish_template"
@@ -941,11 +943,19 @@ func (r *mutationResolver) CreateSchedule(ctx context.Context, input graphql1.Cr
 	if err != nil {
 		return nil, err
 	}
+	projectID, err := parseOptionalID(input.ProjectID, "projectId")
+	if err != nil {
+		return nil, err
+	}
+	stageID, err := parseOptionalID(input.StageID, "stageId")
+	if err != nil {
+		return nil, err
+	}
 	startsAt, err := parseScheduleStart(input.StartsAt, input.Timezone)
 	if err != nil {
 		return nil, err
 	}
-	row, err := r.ScheduleService.Create(ctx, schedulecore.Input{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ReferenceVersionID: referenceID, RRule: input.Rrule, Timezone: input.Timezone, StartsAt: startsAt, DeadlineMinutes: input.DeadlineMinutes, ReminderOffsetsMinutes: input.ReminderOffsetsMinutes, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	row, err := r.ScheduleService.Create(ctx, schedulecore.Input{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, RRule: input.Rrule, Timezone: input.Timezone, StartsAt: startsAt, DeadlineMinutes: input.DeadlineMinutes, ReminderOffsetsMinutes: input.ReminderOffsetsMinutes, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
 		return nil, err
 	}
@@ -1021,6 +1031,14 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 	if err != nil {
 		return nil, err
 	}
+	projectID, err := parseOptionalID(input.ProjectID, "projectId")
+	if err != nil {
+		return nil, err
+	}
+	stageID, err := parseOptionalID(input.StageID, "stageId")
+	if err != nil {
+		return nil, err
+	}
 	dueAt, err := parseInstant(input.DueAt, "dueAt")
 	if err != nil {
 		return nil, err
@@ -1033,11 +1051,118 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 	if err != nil {
 		return nil, err
 	}
-	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ReferenceVersionID: referenceID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
 	if err != nil {
 		return nil, err
 	}
 	return &graphql1.InspectionPayload{Inspection: mapInspection(view), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// PlanInspection is the resolver for the planInspection field.
+func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.PlanInspectionInput) (*graphql1.PlanInspectionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	assetID, err := identity.ParseID(input.AssetID)
+	if err != nil {
+		return nil, invalidID("assetId")
+	}
+	participantID, err := identity.ParseID(input.ParticipantID)
+	if err != nil {
+		return nil, invalidID("participantId")
+	}
+	templateID, err := identity.ParseID(input.TemplateID)
+	if err != nil {
+		return nil, invalidID("templateId")
+	}
+	projectID, err := parseOptionalID(input.ProjectID, "projectId")
+	if err != nil {
+		return nil, err
+	}
+	stageID, err := parseOptionalID(input.StageID, "stageId")
+	if err != nil {
+		return nil, err
+	}
+	if stageID != nil && projectID == nil && (input.CreateProject == nil || !*input.CreateProject) {
+		return nil, apperror.New(apperror.InvalidInput, "stageId", "stage requires a project")
+	}
+	createProject := input.CreateProject != nil && *input.CreateProject
+	if createProject && projectID != nil {
+		return nil, apperror.New(apperror.InvalidInput, "projectId", "choose an existing project or create a new one")
+	}
+	plannedStages, err := parsePlannedStages(input.Stages)
+	if err != nil {
+		return nil, err
+	}
+	key := requestctx.IdempotencyKey(ctx, input.ClientMutationID)
+	var response graphql1.PlanInspectionPayload
+	err = (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		workCtx := tx.Statement.Context
+		if createProject {
+			if input.ProjectName == nil || strings.TrimSpace(*input.ProjectName) == "" {
+				return apperror.New(apperror.InvalidInput, "projectName", "project name is required")
+			}
+			ordered := input.OrderedStages != nil && *input.OrderedStages
+			project, err := r.ProjectService.Create(workCtx, projectcore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, Name: *input.ProjectName, OrderedStages: ordered, Stages: plannedStages, IdempotencyKey: key + "/project"})
+			if err != nil {
+				return err
+			}
+			projectID = &project.Project.ID
+			if stageID == nil && len(project.Stages) > 0 {
+				stageID = &project.Stages[0].ID
+			}
+			mapped := mapProject(project)
+			response.Project = mapped
+		} else if len(plannedStages) != 0 || input.ProjectName != nil || (input.OrderedStages != nil && *input.OrderedStages) {
+			return apperror.New(apperror.InvalidInput, "project", "project settings require createProject")
+		}
+		if input.Rrule != nil && strings.TrimSpace(*input.Rrule) != "" {
+			if input.StartsAt == nil || input.Timezone == nil || input.DeadlineMinutes == nil {
+				return apperror.New(apperror.InvalidInput, "startsAt", "recurring inspections require start, timezone, and deadline")
+			}
+			startsAt, err := parseScheduleStart(*input.StartsAt, *input.Timezone)
+			if err != nil {
+				return err
+			}
+			row, err := r.ScheduleService.Create(workCtx, schedulecore.Input{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: nil, ProjectID: projectID, StageID: stageID, RRule: *input.Rrule, Timezone: *input.Timezone, StartsAt: startsAt, DeadlineMinutes: *input.DeadlineMinutes, ReminderOffsetsMinutes: input.ReminderOffsetsMinutes, IdempotencyKey: key + "/schedule"})
+			if err != nil {
+				return err
+			}
+			response.Schedule = mapSchedule(row)
+			return nil
+		}
+		if input.DueAt == nil || input.DeadlineAt == nil {
+			return apperror.New(apperror.InvalidInput, "dueAt", "one-time inspections require due and deadline times")
+		}
+		dueAt, err := parseInstant(*input.DueAt, "dueAt")
+		if err != nil {
+			return err
+		}
+		deadlineAt, err := parseInstant(*input.DeadlineAt, "deadlineAt")
+		if err != nil {
+			return err
+		}
+		if input.Reason == nil || strings.TrimSpace(*input.Reason) == "" {
+			return apperror.New(apperror.InvalidInput, "reason", "inspection reason is required")
+		}
+		reminders, err := parseInstants(input.ReminderInstants, "reminderInstants")
+		if err != nil {
+			return err
+		}
+		view, err := r.InspectionService.Create(workCtx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: &templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, Source: inspectioncore.SourceManual, SourceKey: key + "/inspection", Reason: *input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+		if err != nil {
+			return err
+		}
+		response.Inspection = mapInspection(view)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	response.UserErrors = []*graphql1.UserError{}
+	response.ClientMutationID = input.ClientMutationID
+	return &response, nil
 }
 
 // CancelInspection is the resolver for the cancelInspection field.
@@ -1084,15 +1209,12 @@ func (r *mutationResolver) CreateProject(ctx context.Context, input graphql1.Cre
 	if err != nil {
 		return nil, invalidID("assetId")
 	}
-	participantID, err := identity.ParseID(input.ParticipantID)
-	if err != nil {
-		return nil, invalidID("participantId")
-	}
-	templateID, err := parseOptionalID(input.TemplateID, "templateId")
+	stages, err := parsePlannedStages(input.Stages)
 	if err != nil {
 		return nil, err
 	}
-	view, err := r.ProjectService.Create(ctx, projectcore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	ordered := input.OrderedStages != nil && *input.OrderedStages
+	view, err := r.ProjectService.Create(ctx, projectcore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, Name: input.Name, OrderedStages: ordered, Stages: stages, IdempotencyKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
 	if err != nil {
 		return nil, err
 	}
@@ -1138,23 +1260,7 @@ func (r *mutationResolver) StartProjectStage(ctx context.Context, input graphql1
 	if err != nil {
 		return nil, invalidID("stageId")
 	}
-	referenceID, err := parseOptionalID(input.ReferenceVersionID, "referenceVersionId")
-	if err != nil {
-		return nil, err
-	}
-	dueAt, err := parseInstant(input.DueAt, "dueAt")
-	if err != nil {
-		return nil, err
-	}
-	deadlineAt, err := parseInstant(input.DeadlineAt, "deadlineAt")
-	if err != nil {
-		return nil, err
-	}
-	reminders, err := parseInstants(input.ReminderInstants, "reminderInstants")
-	if err != nil {
-		return nil, err
-	}
-	view, err := r.ProjectService.StartStage(ctx, projectcore.StartStageInput{TenantID: meta.TenantID, ProjectID: projectID, StageID: stageID, ExpectedProjectVersion: int64(input.ExpectedProjectVersion), ExpectedStageVersion: int64(input.ExpectedStageVersion), ReferenceVersionID: referenceID, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+	view, err := r.ProjectService.StartStage(ctx, projectcore.StartStageInput{TenantID: meta.TenantID, ProjectID: projectID, StageID: stageID, ExpectedProjectVersion: int64(input.ExpectedProjectVersion), ExpectedStageVersion: int64(input.ExpectedStageVersion)})
 	if err != nil {
 		return nil, err
 	}
@@ -2027,6 +2133,26 @@ func (r *queryResolver) SegmentDefinitions(ctx context.Context, search *string, 
 	return &graphql1.SegmentDefinitionConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
 
+// SegmentDefinitionVersion returns the published schema used to capture asset attributes.
+func (r *queryResolver) SegmentDefinitionVersion(ctx context.Context, id string) (*graphql1.SegmentDefinitionVersion, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false); err != nil {
+		return nil, err
+	}
+	versionID, err := identity.ParseID(id)
+	if err != nil {
+		return nil, invalidID("id")
+	}
+	raw, err := r.Bus.Ask(ctx, segmentresolve.Query{TenantID: meta.TenantID, VersionID: versionID})
+	if err != nil {
+		return nil, err
+	}
+	return mapSegmentVersion(raw.(segmentresolve.Result).Version), nil
+}
+
 // Templates is the resolver for the templates field.
 func (r *queryResolver) Templates(ctx context.Context, search *string, first *int, after *string) (*graphql1.TemplateConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2402,6 +2528,7 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 		return nil, err
 	}
 	var row database.ReportArtifact
+	status := ""
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		if isCustomer {
 			var publication database.ReportPublication
@@ -2409,9 +2536,25 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 				return err
 			}
 		}
-		return tx.Where("snapshot_id=? AND kind=?", id, value).First(&row).Error
+		if err := tx.Where("snapshot_id=? AND kind=?", id, value).First(&row).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			var fallback database.ReportArtifact
+			if fallbackErr := tx.Where("snapshot_id=? AND kind='HTML'", id).First(&fallback).Error; fallbackErr == nil {
+				status = "FAILED"
+			} else if !errors.Is(fallbackErr, gorm.ErrRecordNotFound) {
+				return fallbackErr
+			} else {
+				status = "PENDING"
+			}
+		}
+		return nil
 	}); err != nil {
 		return nil, err
+	}
+	if status != "" {
+		return &graphql1.ReportDownload{SnapshotID: id.String(), Kind: "PDF", ObjectKey: "", Status: status, URL: ""}, nil
 	}
 	url := ""
 	if r.Store.Client != nil {
@@ -2565,12 +2708,17 @@ func (r *queryResolver) ProjectTimeline(ctx context.Context, projectID string) (
 	}
 	entries := make([]*graphql1.ProjectTimelineEntry, 0, len(rows))
 	for _, row := range rows {
-		var inspection *string
-		if row.InspectionID != nil {
-			value := row.InspectionID.String()
-			inspection = &value
+		inspectionIDs := make([]string, 0, len(row.InspectionIDs))
+		var inspections []database.Inspection
+		if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+			return tx.Select("id").Where("tenant_id=? AND stage_id=?", meta.TenantID, row.ID).Order("created_at ASC, id ASC").Find(&inspections).Error
+		}); err != nil {
+			return nil, err
 		}
-		entries = append(entries, &graphql1.ProjectTimelineEntry{StageID: row.ID.String(), Label: row.Label, Status: row.Status, InspectionID: inspection})
+		for _, inspection := range inspections {
+			inspectionIDs = append(inspectionIDs, inspection.ID.String())
+		}
+		entries = append(entries, &graphql1.ProjectTimelineEntry{StageID: row.ID.String(), Label: row.Label, Status: row.Status, InspectionIds: inspectionIDs})
 	}
 	return &graphql1.ProjectTimeline{ProjectID: id.String(), Entries: entries}, nil
 }

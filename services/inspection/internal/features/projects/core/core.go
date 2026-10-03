@@ -12,12 +12,7 @@ import (
 	"inspection/libs/identity"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
-	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
-	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
-	participantcore "inspection/services/inspection/internal/features/participants/core"
-	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	"inspection/services/inspection/internal/features/templates/catalog"
-	templateresolve "inspection/services/inspection/internal/features/templates/resolve_template"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -42,10 +37,17 @@ const (
 	StageInvalidated = "INVALIDATED"
 )
 
+type PlannedStageInput struct {
+	Key, Label string
+	PlannedAt  *time.Time
+}
+
 type CreateInput struct {
-	TenantID, AssetID, ParticipantID identity.ID
-	TemplateID                       *identity.ID
-	IdempotencyKey                   string
+	TenantID, AssetID identity.ID
+	Name              string
+	OrderedStages     bool
+	Stages            []PlannedStageInput
+	IdempotencyKey    string
 }
 
 type ExceptionalStageInput struct {
@@ -91,18 +93,65 @@ type Service struct {
 	Now        func() time.Time
 }
 
-func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
-	if in.TenantID == (identity.ID{}) || in.AssetID == (identity.ID{}) || in.ParticipantID == (identity.ID{}) || strings.TrimSpace(in.IdempotencyKey) == "" {
-		return View{}, apperror.New(apperror.InvalidInput, "input", "project prerequisites are required")
+// ValidateAssociation ensures an inspection or schedule belongs to the chosen
+// active project and optional stage without imposing a project-wide template.
+func ValidateAssociation(tx *gorm.DB, tenantID, assetID identity.ID, projectID, stageID *identity.ID) error {
+	if stageID != nil && projectID == nil {
+		return apperror.New(apperror.InvalidInput, "stageId", "stage requires a project")
 	}
-	asset, participant, template, document, err := s.prerequisites(ctx, in)
+	if projectID == nil {
+		return nil
+	}
+	var project database.Project
+	if err := tx.Where("tenant_id=? AND id=?", tenantID, *projectID).First(&project).Error; err != nil {
+		return apperror.New(apperror.NotFound, "projectId", "project not found")
+	}
+	if project.AssetID != assetID || project.Status != ProjectActive {
+		return apperror.New(apperror.InvalidState, "projectId", "project must be active and belong to the selected asset")
+	}
+	if stageID == nil {
+		return nil
+	}
+	var stage database.ProjectStage
+	if err := tx.Where("tenant_id=? AND project_id=? AND id=?", tenantID, *projectID, *stageID).First(&stage).Error; err != nil {
+		return apperror.New(apperror.NotFound, "stageId", "stage not found in project")
+	}
+	if terminalStage(stage.Status) {
+		return apperror.New(apperror.InvalidState, "stageId", "stage is already closed")
+	}
+	return nil
+}
+
+func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
+	if in.TenantID == (identity.ID{}) || in.AssetID == (identity.ID{}) || !catalog.ValidName(strings.TrimSpace(in.Name)) || strings.TrimSpace(in.IdempotencyKey) == "" {
+		return View{}, apperror.New(apperror.InvalidInput, "input", "project name, asset, and idempotency key are required")
+	}
+	if len(in.Stages) > catalog.MaxStages {
+		return View{}, apperror.New(apperror.InvalidInput, "stages", "stage capacity reached")
+	}
+	for i, stage := range in.Stages {
+		if !catalog.ValidName(strings.TrimSpace(stage.Key)) || !catalog.ValidName(strings.TrimSpace(stage.Label)) {
+			return View{}, apperror.New(apperror.InvalidInput, "stages", "every stage requires a valid key and label")
+		}
+		for j := 0; j < i; j++ {
+			if strings.EqualFold(in.Stages[j].Key, stage.Key) {
+				return View{}, apperror.New(apperror.InvalidInput, "stages", "stage keys must be unique")
+			}
+		}
+	}
+	if s.Bus == nil {
+		return View{}, fmt.Errorf("project: missing mediator")
+	}
+	assetRaw, err := s.Bus.Ask(ctx, assetget.Query{TenantID: in.TenantID, AssetID: in.AssetID})
 	if err != nil {
 		return View{}, err
 	}
-	if !document.MultiStage || len(document.Stages) == 0 {
-		return View{}, apperror.New(apperror.InvalidState, "templateId", "multi-stage template requires planned stages")
+	asset := assetRaw.(assetcore.View)
+	if asset.Asset.Status != "ACTIVE" {
+		return View{}, apperror.New(apperror.InvalidState, "assetId", "asset is not active")
 	}
-	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
+	roles := []string{auth.TenantAdmin, auth.Manager}
+	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
 		return View{}, err
 	}
 	now := s.now()
@@ -113,22 +162,16 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
-		project := database.Project{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: participant.Participant.ID, TemplateID: template.Template.ID, TemplateVersionID: template.Version.ID, ReportMode: document.ReportMode, Status: ProjectActive, Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
+		project := database.Project{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, Name: strings.TrimSpace(in.Name), OrderedStages: in.OrderedStages, Status: ProjectActive, Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
 		if err := tx.Create(&project).Error; err != nil {
 			return err
 		}
-		requirements, _ := json.Marshal(document.Requirements)
-		for index, planned := range document.Stages {
-			kind := "INSPECTION"
-			if index == 0 && strings.EqualFold(planned.Key, "origin") {
-				kind = "ORIGIN"
-			}
-			reference, _ := json.Marshal(map[string]any{"comparisonMode": document.ComparisonMode, "templateVersionId": template.Version.ID})
-			stage := database.ProjectStage{ID: identity.NewID(), TenantID: in.TenantID, ProjectID: project.ID, Key: planned.Key, Label: planned.Label, Kind: kind, Position: planned.Position, Status: map[bool]string{true: StageAvailable, false: StagePlanned}[index == 0], Requirements: requirements, EffectiveReference: reference, Version: 1, CreatedAt: now, UpdatedAt: now}
+		for index, planned := range in.Stages {
+			stage := database.ProjectStage{ID: identity.NewID(), TenantID: in.TenantID, ProjectID: project.ID, Key: strings.TrimSpace(planned.Key), Label: strings.TrimSpace(planned.Label), Kind: "INSPECTION", Position: index + 1, Status: map[bool]string{true: StageAvailable, false: StagePlanned}[index == 0], PlannedAt: planned.PlannedAt, Requirements: json.RawMessage(`[]`), EffectiveReference: json.RawMessage(`{}`), Version: 1, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&stage).Error; err != nil {
 				return err
 			}
-			if err := s.recordTransition(ctx, tx, project, &stage, "", stage.Status, "", now); err != nil {
+			if err := s.recordTransition(tx.Statement.Context, tx, project, &stage, "", stage.Status, "", now); err != nil {
 				return err
 			}
 		}
@@ -217,14 +260,14 @@ func (s Service) StartStage(ctx context.Context, in StartStageInput) (View, erro
 			selected = stage
 			continue
 		}
-		if selected == nil && !terminalStage(stage.Status) {
+		if current.Project.OrderedStages && selected == nil && !terminalStage(stage.Status) {
 			return View{}, apperror.New(apperror.InvalidState, "stageId", "a prior stage requires a terminal decision")
 		}
 	}
 	if selected == nil {
 		return View{}, apperror.New(apperror.NotFound, "stageId", "stage not found")
 	}
-	if selected.Status == StageInProgress && selected.InspectionID != nil {
+	if selected.Status == StageInProgress {
 		return current, nil
 	}
 	if selected.Status != StageAvailable && selected.Status != StagePlanned {
@@ -233,11 +276,6 @@ func (s Service) StartStage(ctx context.Context, in StartStageInput) (View, erro
 	if selected.Version != in.ExpectedStageVersion {
 		return View{}, apperror.New(apperror.Conflict, "version", "stale stage version")
 	}
-	raw, err := s.Bus.Send(ctx, createoccurrence.Command{TenantID: in.TenantID, AssetID: current.Project.AssetID, ParticipantID: current.Project.ParticipantID, TemplateID: &current.Project.TemplateID, ReferenceVersionID: in.ReferenceVersionID, ProjectID: &current.Project.ID, StageID: &selected.ID, Source: inspectioncore.SourceMilestone, SourceKey: selected.ID.String(), DueAt: in.DueAt, DeadlineAt: in.DeadlineAt, ReminderInstants: in.ReminderInstants})
-	if err != nil {
-		return View{}, err
-	}
-	inspection := raw.(inspectioncore.View)
 	now := s.now()
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		projectUpdate := tx.Model(&database.Project{}).Where("tenant_id=? AND id=? AND version=? AND status=?", in.TenantID, in.ProjectID, in.ExpectedProjectVersion, ProjectActive).Updates(map[string]any{"version": in.ExpectedProjectVersion + 1, "updated_at": now})
@@ -247,14 +285,14 @@ func (s Service) StartStage(ctx context.Context, in StartStageInput) (View, erro
 		if projectUpdate.RowsAffected != 1 {
 			return apperror.New(apperror.Conflict, "version", "stale project version")
 		}
-		r := tx.Model(&database.ProjectStage{}).Where("tenant_id=? AND id=? AND version=? AND status IN ?", in.TenantID, in.StageID, in.ExpectedStageVersion, []string{StageAvailable, StagePlanned}).Updates(map[string]any{"status": StageInProgress, "inspection_id": inspection.Inspection.ID, "effective_reference": inspection.Reference.Payload, "version": in.ExpectedStageVersion + 1, "updated_at": now})
+		r := tx.Model(&database.ProjectStage{}).Where("tenant_id=? AND id=? AND version=? AND status IN ?", in.TenantID, in.StageID, in.ExpectedStageVersion, []string{StageAvailable, StagePlanned}).Updates(map[string]any{"status": StageInProgress, "version": in.ExpectedStageVersion + 1, "updated_at": now})
 		if r.Error != nil {
 			return r.Error
 		}
 		if r.RowsAffected != 1 {
 			return apperror.New(apperror.Conflict, "version", "stale stage version")
 		}
-		return s.recordTransition(ctx, tx, current.Project, selected, selected.Status, StageInProgress, "", now)
+		return s.recordTransition(tx.Statement.Context, tx, current.Project, selected, selected.Status, StageInProgress, "", now)
 	})
 	if err != nil {
 		return View{}, err
@@ -394,6 +432,11 @@ func (s Service) changeStage(ctx context.Context, in TransitionInput, target str
 		if r.RowsAffected != 1 {
 			return apperror.New(apperror.Conflict, "version", "stale stage version")
 		}
+		if target == StageSkipped {
+			if err := tx.Model(&database.Schedule{}).Where("tenant_id=? AND stage_id=? AND status='ACTIVE'", in.TenantID, stage.ID).Updates(map[string]any{"status": "CANCELED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
+				return err
+			}
+		}
 		return s.recordTransition(ctx, tx, current.Project, &stage, stage.Status, target, in.Reason, now)
 	})
 	if err != nil {
@@ -415,58 +458,17 @@ func (s Service) changeProject(ctx context.Context, current View, in TransitionI
 		if r.RowsAffected != 1 {
 			return apperror.New(apperror.Conflict, "version", "stale project version")
 		}
+		if target == ProjectClosed {
+			if err := tx.Model(&database.Schedule{}).Where("tenant_id=? AND project_id=? AND status='ACTIVE'", in.TenantID, in.ProjectID).Updates(map[string]any{"status": "CANCELED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
+				return err
+			}
+		}
 		return s.recordTransition(ctx, tx, current.Project, nil, current.Project.Status, target, in.Reason, now)
 	})
 	if err != nil {
 		return View{}, err
 	}
 	return s.Get(ctx, in.TenantID, in.ProjectID)
-}
-
-func (s Service) prerequisites(ctx context.Context, in CreateInput) (assetcore.View, participantcore.ParticipantView, templateresolve.Result, catalog.TemplateDocument, error) {
-	if s.Bus == nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, fmt.Errorf("project: missing mediator")
-	}
-	assetRaw, err := s.Bus.Ask(ctx, assetget.Query{TenantID: in.TenantID, AssetID: in.AssetID})
-	if err != nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, err
-	}
-	asset := assetRaw.(assetcore.View)
-	if asset.Asset.Status != "ACTIVE" {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, apperror.New(apperror.InvalidState, "assetId", "asset is not active")
-	}
-	participantRaw, err := s.Bus.Ask(ctx, participantget.Query{TenantID: in.TenantID, ParticipantID: in.ParticipantID})
-	if err != nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, err
-	}
-	participant := participantRaw.(participantcore.ParticipantView)
-	if participant.Participant.Status != "ACTIVE" || len(participant.Selected) == 0 {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, apperror.New(apperror.InvalidState, "participantId", "participant requires an active verified delivery channel")
-	}
-	assigned := false
-	for _, assignment := range asset.Assignments {
-		assigned = assigned || (assignment.Active && assignment.ParticipantID == in.ParticipantID)
-	}
-	if !assigned {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, apperror.New(apperror.InvalidInput, "participantId", "participant is not assigned to the asset")
-	}
-	templateID := in.TemplateID
-	if templateID == nil {
-		templateID = asset.Asset.TemplateID
-	}
-	if templateID == nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, apperror.New(apperror.InvalidState, "templateId", "active template is required")
-	}
-	templateRaw, err := s.Bus.Ask(ctx, templateresolve.Query{TenantID: in.TenantID, TemplateID: *templateID})
-	if err != nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, err
-	}
-	template := templateRaw.(templateresolve.Result)
-	var document catalog.TemplateDocument
-	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
-		return assetcore.View{}, participantcore.ParticipantView{}, templateresolve.Result{}, catalog.TemplateDocument{}, fmt.Errorf("decode project template: %w", err)
-	}
-	return asset, participant, template, document, nil
 }
 
 func (s Service) authorize(ctx context.Context, project database.Project, mutate bool) (requestctx.Principal, error) {
@@ -480,6 +482,24 @@ func (s Service) authorize(ctx context.Context, project database.Project, mutate
 func (s Service) load(tx *gorm.DB, out *View) error {
 	if err := tx.Where("tenant_id=? AND project_id=?", out.Project.TenantID, out.Project.ID).Order("position ASC, id ASC").Find(&out.Stages).Error; err != nil {
 		return err
+	}
+	if len(out.Stages) > 0 {
+		stageIDs := make([]identity.ID, len(out.Stages))
+		stageIndex := make(map[identity.ID]int, len(out.Stages))
+		for index := range out.Stages {
+			stageIDs[index] = out.Stages[index].ID
+			stageIndex[out.Stages[index].ID] = index
+		}
+		var inspections []database.Inspection
+		if err := tx.Select("id", "stage_id").Where("tenant_id=? AND stage_id IN ?", out.Project.TenantID, stageIDs).Order("created_at ASC, id ASC").Find(&inspections).Error; err != nil {
+			return err
+		}
+		for _, inspection := range inspections {
+			if inspection.StageID != nil {
+				index := stageIndex[*inspection.StageID]
+				out.Stages[index].InspectionIDs = append(out.Stages[index].InspectionIDs, inspection.ID)
+			}
+		}
 	}
 	return tx.Where("tenant_id=? AND project_id=?", out.Project.TenantID, out.Project.ID).Order("occurred_at ASC, id ASC").Find(&out.Transitions).Error
 }

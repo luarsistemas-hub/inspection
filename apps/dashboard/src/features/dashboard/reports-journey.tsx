@@ -145,10 +145,20 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
     const request = detailRequest.current;
     const requestedInspection = inspectionId;
     try {
-      const data = await graphql<ReportDownloadQuery, { snapshotId: string }>(ReportDownloadDocument, { snapshotId: report.id });
-      if (request !== detailRequest.current || requestedInspection !== inspectionIdRef.current) return;
-      setDownload(data.reportDownload);
-      setDetailMessage(data.reportDownload ? `PDF: ${presentReportPDFStatus(data.reportDownload.status)}.` : "O PDF ainda não está disponível.");
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const data = await graphql<ReportDownloadQuery, { snapshotId: string }>(ReportDownloadDocument, { snapshotId: report.id });
+        if (request !== detailRequest.current || requestedInspection !== inspectionIdRef.current) return;
+        const result = data.reportDownload;
+        setDownload(result);
+        if (result) setReport((current) => current ? { ...current, pdfStatus: result.status } : current);
+        if (!result || !["PENDING", "REQUESTED", "PROCESSING"].includes(result.status)) {
+          setDetailMessage(result ? `PDF: ${presentReportPDFStatus(result.status)}.` : "O PDF ainda não está disponível.");
+          return;
+        }
+        setDetailMessage(`PDF: ${presentReportPDFStatus(result.status)}. Aguardando a geração…`);
+        if (attempt < 9) await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+      setDetailMessage("O PDF continua em preparação. Você pode tentar novamente em instantes.");
     } catch (error) { setDetailMessage((error as Error).message); }
   };
 

@@ -2,7 +2,7 @@ body { background: var(--inspection-bg); }
 .onboarding-shell { min-block-size: 100dvh; padding: var(--inspection-space-4); }
 .onboarding-main { max-inline-size: 44rem; margin-inline: auto; }
 .onboarding-header { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; gap: var(--inspection-space-3); margin-block-end: var(--inspection-space-5); }
-.onboarding-utility-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--inspection-space-3); max-inline-size: 100%; margin-block-end: var(--inspection-space-3); }
+.onboarding-utility-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--inspection-space-3); max-inline-size: 100%; margin-block-end: var(--inspection-space-3); }
 .onboarding-header p, .onboarding-step-description { margin: 0; color: var(--inspection-muted); }
 .onboarding-title-disclosure { inline-size: 100%; min-inline-size: 0; max-inline-size: 60ch; }
 .onboarding-title-disclosure .inspection-info-disclosure__panel-content { font-size: .9rem; }

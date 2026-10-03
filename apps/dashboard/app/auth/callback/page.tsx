@@ -17,11 +17,11 @@ export default function CallbackPage() {
     if (!endpoint) { setMessage("A autenticação não está configurada neste ambiente."); return; }
     void fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: attempt.verifier, redirect_uri: `${location.origin}/auth/callback`, client_id: "inspection-dashboard" }) })
       .then(async (response) => {
-        if (response.ok) return response.json() as Promise<{ access_token: string }>;
+        if (response.ok) return response.json() as Promise<{ access_token: string; id_token?: string }>;
         console.error("OIDC token exchange failed", response.status, await response.text());
         throw new Error("OIDC token exchange failed");
       })
-      .then(({ access_token }) => { setSession(access_token); router.replace(attempt.returnTo); })
+      .then(({ access_token, id_token }) => { setSession(access_token, undefined, id_token); router.replace(attempt.returnTo); })
       .catch((error: unknown) => { console.error("Dashboard authentication failed", error); setMessage("Não foi possível concluir a autenticação. Tente novamente."); });
   }, [router]);
   return <main className="denial"><h1>Autenticação do Painel</h1><p role="status">{message}</p></main>;

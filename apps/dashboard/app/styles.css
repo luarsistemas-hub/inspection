@@ -11,8 +11,6 @@ main > header { grid-column: 1 / -1; display: flex; align-items: center; justify
 main > header strong { font-family: var(--inspection-font-display); font-size: 1.25rem; }
 main > header strong span { font-weight: 400; }
 .dashboard-context { display: flex; align-items: center; justify-content: flex-end; gap: var(--inspection-space-3); font-size: .82rem; }
-.dashboard-role { padding: var(--inspection-space-1) var(--inspection-space-2); border: 1px solid var(--inspection-border); border-radius: 999px; color: var(--inspection-muted); }
-.dashboard-avatar { display: grid; place-items: center; inline-size: 2rem; block-size: 2rem; border-radius: 50%; background: var(--inspection-ink); color: var(--inspection-surface-raised); font-size: .72rem; }
 main > nav { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; align-items: stretch; gap: var(--inspection-space-1); padding: var(--inspection-space-4) var(--inspection-space-3); border-inline-end: 1px solid var(--inspection-border); background: var(--inspection-surface-container); }
 main > nav a, .dashboard-nav-context { min-block-size: 2.75rem; padding: var(--inspection-space-2) var(--inspection-space-3); color: var(--inspection-ink); border-radius: 999px; font-size: .9rem; text-decoration: none; }
 main > nav a:hover { background: var(--inspection-surface-container-high); color: var(--inspection-ink); }
@@ -189,9 +187,8 @@ main > section > .actions h1 { margin: 0; }
 }
 @media (max-width: 40rem) {
   main > header { gap: var(--inspection-space-2); padding: var(--inspection-space-3) var(--inspection-space-4); }
-  .dashboard-context { inline-size: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .dashboard-context { inline-size: 100%; justify-content: flex-end; flex-wrap: nowrap; }
   .dashboard-context .membership { flex: 1 1 100%; max-inline-size: none; }
-  .dashboard-tenant-name { display: none; }
 }
 
 /* Adaptive console shell: expanded navigation, rail, then bottom bar. */
@@ -341,6 +338,8 @@ fieldset { padding: var(--inspection-space-4); border: 1px solid var(--inspectio
 legend { padding-inline: var(--inspection-space-2); font-weight: 700; }
 .warning { margin: 0; padding: var(--inspection-space-3); border-inline-start: 0.25rem solid var(--inspection-warning); background: color-mix(in oklch, var(--inspection-warning) 10%, var(--inspection-surface-raised)); color: var(--inspection-warning); }
 .denial { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; place-content: center; gap: var(--inspection-space-4); min-block-size: 100dvh; max-inline-size: 42rem; margin-inline: auto; padding: var(--inspection-space-5); }
+.denial-heading { display: flex; align-items: center; justify-content: center; gap: var(--inspection-space-3); }
+.denial-heading h1 { margin: 0; }
 .denial > button { justify-self: start; }
 :focus-visible { outline: var(--inspection-focus-ring); outline-offset: 3px; }
 @media (max-width: 56rem) { main { grid-template-columns: 1fr; } main > nav { display: none; } main > section { grid-column: 1; grid-row: 3; } .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

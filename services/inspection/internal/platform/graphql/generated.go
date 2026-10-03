@@ -524,6 +524,7 @@ type ComplexityRoot struct {
 		InviteInternalUser                     func(childComplexity int, input InviteInternalUserInput) int
 		InviteOriginCapture                    func(childComplexity int, input InviteOriginCaptureInput) int
 		MarkNotificationRead                   func(childComplexity int, input MarkNotificationReadInput) int
+		PlanInspection                         func(childComplexity int, input PlanInspectionInput) int
 		PresignMediaParts                      func(childComplexity int, input PresignMediaPartsInput) int
 		PromoteInspectionPhotos                func(childComplexity int, input PromoteInspectionPhotosInput) int
 		PublishReport                          func(childComplexity int, input PublishReportInput) int
@@ -800,6 +801,14 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	PlanInspectionPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Inspection       func(childComplexity int) int
+		Project          func(childComplexity int) int
+		Schedule         func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	PostalAddress struct {
 		City             func(childComplexity int) int
 		Complement       func(childComplexity int) int
@@ -837,17 +846,15 @@ type ComplexityRoot struct {
 	}
 
 	Project struct {
-		AssetID           func(childComplexity int) int
-		BusinessUnitID    func(childComplexity int) int
-		ID                func(childComplexity int) int
-		ParticipantID     func(childComplexity int) int
-		ReportMode        func(childComplexity int) int
-		Stages            func(childComplexity int) int
-		Status            func(childComplexity int) int
-		TemplateID        func(childComplexity int) int
-		TemplateVersionID func(childComplexity int) int
-		Transitions       func(childComplexity int) int
-		Version           func(childComplexity int) int
+		AssetID        func(childComplexity int) int
+		BusinessUnitID func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Name           func(childComplexity int) int
+		OrderedStages  func(childComplexity int) int
+		Stages         func(childComplexity int) int
+		Status         func(childComplexity int) int
+		Transitions    func(childComplexity int) int
+		Version        func(childComplexity int) int
 	}
 
 	ProjectConnection struct {
@@ -862,16 +869,16 @@ type ComplexityRoot struct {
 	}
 
 	ProjectStage struct {
-		ID           func(childComplexity int) int
-		InspectionID func(childComplexity int) int
-		Key          func(childComplexity int) int
-		Kind         func(childComplexity int) int
-		Label        func(childComplexity int) int
-		PlannedAt    func(childComplexity int) int
-		Position     func(childComplexity int) int
-		Reason       func(childComplexity int) int
-		Status       func(childComplexity int) int
-		Version      func(childComplexity int) int
+		ID            func(childComplexity int) int
+		InspectionIds func(childComplexity int) int
+		Key           func(childComplexity int) int
+		Kind          func(childComplexity int) int
+		Label         func(childComplexity int) int
+		PlannedAt     func(childComplexity int) int
+		Position      func(childComplexity int) int
+		Reason        func(childComplexity int) int
+		Status        func(childComplexity int) int
+		Version       func(childComplexity int) int
 	}
 
 	ProjectTimeline struct {
@@ -880,11 +887,11 @@ type ComplexityRoot struct {
 	}
 
 	ProjectTimelineEntry struct {
-		InspectionID func(childComplexity int) int
-		Label        func(childComplexity int) int
-		OccurredAt   func(childComplexity int) int
-		StageID      func(childComplexity int) int
-		Status       func(childComplexity int) int
+		InspectionIds func(childComplexity int) int
+		Label         func(childComplexity int) int
+		OccurredAt    func(childComplexity int) int
+		StageID       func(childComplexity int) int
+		Status        func(childComplexity int) int
 	}
 
 	PublicationPolicy struct {
@@ -899,52 +906,53 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		AnalysisPrompt         func(childComplexity int, typeArg AnalysisType) int
-		Asset                  func(childComplexity int, id string) int
-		Assets                 func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
-		AuditEvents            func(childComplexity int, first *int, after *string) int
-		BusinessUnits          func(childComplexity int, first *int, after *string) int
-		CustomerEvidence       func(childComplexity int, inspectionID string, mode *EvidenceMode, first *int, after *string) int
-		CustomerPortfolio      func(childComplexity int, filter *CustomerPortfolioFilter, first *int, after *string) int
-		CustomerReport         func(childComplexity int, inspectionID string, version *int) int
-		CustomerTimeline       func(childComplexity int, assetID *string, projectID *string, first *int, after *string) int
-		DashboardSummary       func(childComplexity int, projectID *string, businessUnitID *string) int
-		ExternalCapture        func(childComplexity int) int
-		Inspection             func(childComplexity int, id string) int
-		InspectionLLMUsage     func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
-		Inspections            func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
-		LlmUsage               func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
-		LlmUsageTenants        func(childComplexity int, search *string, first *int, after *string) int
-		LookupPostalCode       func(childComplexity int, postalCode string) int
-		Me                     func(childComplexity int) int
-		Memberships            func(childComplexity int, first *int, after *string) int
-		MyNotifications        func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
-		NotificationDeliveries func(childComplexity int, first *int, after *string) int
-		OnboardingDefinition   func(childComplexity int, segment string) int
-		OnboardingSession      func(childComplexity int) int
-		OnboardingStatus       func(childComplexity int) int
-		OriginPromotion        func(childComplexity int, inspectionID string) int
-		OriginVersions         func(childComplexity int, assetID string, first *int, after *string) int
-		Participant            func(childComplexity int, id string) int
-		Participants           func(childComplexity int, search *string, first *int, after *string) int
-		Project                func(childComplexity int, id string) int
-		ProjectTimeline        func(childComplexity int, projectID string) int
-		Projects               func(childComplexity int, first *int, after *string) int
-		PublicationPolicy      func(childComplexity int) int
-		Report                 func(childComplexity int, inspectionID string, version *int) int
-		ReportDownload         func(childComplexity int, snapshotID string, kind *string) int
-		Reports                func(childComplexity int, first *int, after *string, search *string, classification *string) int
-		RetentionPolicies      func(childComplexity int) int
-		Schedules              func(childComplexity int, first *int, after *string) int
-		SegmentDefinitions     func(childComplexity int, search *string, first *int, after *string) int
-		TemplateVersion        func(childComplexity int, id string) int
-		Templates              func(childComplexity int, search *string, first *int, after *string) int
-		Tenant                 func(childComplexity int) int
-		TriageAssignees        func(childComplexity int, inspectionID string) int
-		TriageCase             func(childComplexity int, inspectionID string) int
-		TriageInspections      func(childComplexity int, first *int, after *string, classification *string, status *string) int
-		TriageWorkspace        func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
-		UsageSummary           func(childComplexity int, from *string, to *string) int
+		AnalysisPrompt           func(childComplexity int, typeArg AnalysisType) int
+		Asset                    func(childComplexity int, id string) int
+		Assets                   func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
+		AuditEvents              func(childComplexity int, first *int, after *string) int
+		BusinessUnits            func(childComplexity int, first *int, after *string) int
+		CustomerEvidence         func(childComplexity int, inspectionID string, mode *EvidenceMode, first *int, after *string) int
+		CustomerPortfolio        func(childComplexity int, filter *CustomerPortfolioFilter, first *int, after *string) int
+		CustomerReport           func(childComplexity int, inspectionID string, version *int) int
+		CustomerTimeline         func(childComplexity int, assetID *string, projectID *string, first *int, after *string) int
+		DashboardSummary         func(childComplexity int, projectID *string, businessUnitID *string) int
+		ExternalCapture          func(childComplexity int) int
+		Inspection               func(childComplexity int, id string) int
+		InspectionLLMUsage       func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
+		Inspections              func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
+		LlmUsage                 func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
+		LlmUsageTenants          func(childComplexity int, search *string, first *int, after *string) int
+		LookupPostalCode         func(childComplexity int, postalCode string) int
+		Me                       func(childComplexity int) int
+		Memberships              func(childComplexity int, first *int, after *string) int
+		MyNotifications          func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
+		NotificationDeliveries   func(childComplexity int, first *int, after *string) int
+		OnboardingDefinition     func(childComplexity int, segment string) int
+		OnboardingSession        func(childComplexity int) int
+		OnboardingStatus         func(childComplexity int) int
+		OriginPromotion          func(childComplexity int, inspectionID string) int
+		OriginVersions           func(childComplexity int, assetID string, first *int, after *string) int
+		Participant              func(childComplexity int, id string) int
+		Participants             func(childComplexity int, search *string, first *int, after *string) int
+		Project                  func(childComplexity int, id string) int
+		ProjectTimeline          func(childComplexity int, projectID string) int
+		Projects                 func(childComplexity int, first *int, after *string) int
+		PublicationPolicy        func(childComplexity int) int
+		Report                   func(childComplexity int, inspectionID string, version *int) int
+		ReportDownload           func(childComplexity int, snapshotID string, kind *string) int
+		Reports                  func(childComplexity int, first *int, after *string, search *string, classification *string) int
+		RetentionPolicies        func(childComplexity int) int
+		Schedules                func(childComplexity int, first *int, after *string) int
+		SegmentDefinitionVersion func(childComplexity int, id string) int
+		SegmentDefinitions       func(childComplexity int, search *string, first *int, after *string) int
+		TemplateVersion          func(childComplexity int, id string) int
+		Templates                func(childComplexity int, search *string, first *int, after *string) int
+		Tenant                   func(childComplexity int) int
+		TriageAssignees          func(childComplexity int, inspectionID string) int
+		TriageCase               func(childComplexity int, inspectionID string) int
+		TriageInspections        func(childComplexity int, first *int, after *string, classification *string, status *string) int
+		TriageWorkspace          func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
+		UsageSummary             func(childComplexity int, from *string, to *string) int
 	}
 
 	Recapture struct {
@@ -1183,12 +1191,15 @@ type ComplexityRoot struct {
 		ID                     func(childComplexity int) int
 		NextDueAt              func(childComplexity int) int
 		ParticipantID          func(childComplexity int) int
+		ProjectID              func(childComplexity int) int
 		ReferenceVersionID     func(childComplexity int) int
 		ReminderOffsetsMinutes func(childComplexity int) int
 		Rrule                  func(childComplexity int) int
+		StageID                func(childComplexity int) int
 		StartsAt               func(childComplexity int) int
 		Status                 func(childComplexity int) int
 		TemplateID             func(childComplexity int) int
+		TemplateVersionID      func(childComplexity int) int
 		Timezone               func(childComplexity int) int
 		Version                func(childComplexity int) int
 	}
@@ -1462,6 +1473,7 @@ type MutationResolver interface {
 	UpdateSchedule(ctx context.Context, input UpdateScheduleInput) (*SchedulePayload, error)
 	CancelSchedule(ctx context.Context, input CancelScheduleInput) (*SchedulePayload, error)
 	CreateInspection(ctx context.Context, input CreateInspectionInput) (*InspectionPayload, error)
+	PlanInspection(ctx context.Context, input PlanInspectionInput) (*PlanInspectionPayload, error)
 	CancelInspection(ctx context.Context, input InspectionTransitionInput) (*InspectionPayload, error)
 	InvalidateInspection(ctx context.Context, input InvalidateInspectionInput) (*InspectionPayload, error)
 	CreateProject(ctx context.Context, input CreateProjectInput) (*ProjectPayload, error)
@@ -1504,6 +1516,7 @@ type QueryResolver interface {
 	Participants(ctx context.Context, search *string, first *int, after *string) (*ParticipantConnection, error)
 	Participant(ctx context.Context, id string) (*Participant, error)
 	SegmentDefinitions(ctx context.Context, search *string, first *int, after *string) (*SegmentDefinitionConnection, error)
+	SegmentDefinitionVersion(ctx context.Context, id string) (*SegmentDefinitionVersion, error)
 	Templates(ctx context.Context, search *string, first *int, after *string) (*TemplateConnection, error)
 	TemplateVersion(ctx context.Context, id string) (*TemplateVersion, error)
 	Assets(ctx context.Context, businessUnitID *string, search *string, first *int, after *string) (*AssetConnection, error)
@@ -3896,6 +3909,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.MarkNotificationRead(childComplexity, args["input"].(MarkNotificationReadInput)), true
+	case "Mutation.planInspection":
+		if e.ComplexityRoot.Mutation.PlanInspection == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_planInspection_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PlanInspection(childComplexity, args["input"].(PlanInspectionInput)), true
 	case "Mutation.presignMediaParts":
 		if e.ComplexityRoot.Mutation.PresignMediaParts == nil {
 			break
@@ -5228,6 +5252,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ParticipantPayload.UserErrors(childComplexity), true
 
+	case "PlanInspectionPayload.clientMutationId":
+		if e.ComplexityRoot.PlanInspectionPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlanInspectionPayload.ClientMutationID(childComplexity), true
+	case "PlanInspectionPayload.inspection":
+		if e.ComplexityRoot.PlanInspectionPayload.Inspection == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlanInspectionPayload.Inspection(childComplexity), true
+	case "PlanInspectionPayload.project":
+		if e.ComplexityRoot.PlanInspectionPayload.Project == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlanInspectionPayload.Project(childComplexity), true
+	case "PlanInspectionPayload.schedule":
+		if e.ComplexityRoot.PlanInspectionPayload.Schedule == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlanInspectionPayload.Schedule(childComplexity), true
+	case "PlanInspectionPayload.userErrors":
+		if e.ComplexityRoot.PlanInspectionPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PlanInspectionPayload.UserErrors(childComplexity), true
+
 	case "PostalAddress.city":
 		if e.ComplexityRoot.PostalAddress.City == nil {
 			break
@@ -5394,18 +5449,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Project.ID(childComplexity), true
-	case "Project.participantId":
-		if e.ComplexityRoot.Project.ParticipantID == nil {
+	case "Project.name":
+		if e.ComplexityRoot.Project.Name == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Project.ParticipantID(childComplexity), true
-	case "Project.reportMode":
-		if e.ComplexityRoot.Project.ReportMode == nil {
+		return e.ComplexityRoot.Project.Name(childComplexity), true
+	case "Project.orderedStages":
+		if e.ComplexityRoot.Project.OrderedStages == nil {
 			break
 		}
 
-		return e.ComplexityRoot.Project.ReportMode(childComplexity), true
+		return e.ComplexityRoot.Project.OrderedStages(childComplexity), true
 	case "Project.stages":
 		if e.ComplexityRoot.Project.Stages == nil {
 			break
@@ -5418,18 +5473,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Project.Status(childComplexity), true
-	case "Project.templateId":
-		if e.ComplexityRoot.Project.TemplateID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Project.TemplateID(childComplexity), true
-	case "Project.templateVersionId":
-		if e.ComplexityRoot.Project.TemplateVersionID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Project.TemplateVersionID(childComplexity), true
 	case "Project.transitions":
 		if e.ComplexityRoot.Project.Transitions == nil {
 			break
@@ -5481,12 +5524,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ProjectStage.ID(childComplexity), true
-	case "ProjectStage.inspectionId":
-		if e.ComplexityRoot.ProjectStage.InspectionID == nil {
+	case "ProjectStage.inspectionIds":
+		if e.ComplexityRoot.ProjectStage.InspectionIds == nil {
 			break
 		}
 
-		return e.ComplexityRoot.ProjectStage.InspectionID(childComplexity), true
+		return e.ComplexityRoot.ProjectStage.InspectionIds(childComplexity), true
 	case "ProjectStage.key":
 		if e.ComplexityRoot.ProjectStage.Key == nil {
 			break
@@ -5549,12 +5592,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ProjectTimeline.ProjectID(childComplexity), true
 
-	case "ProjectTimelineEntry.inspectionId":
-		if e.ComplexityRoot.ProjectTimelineEntry.InspectionID == nil {
+	case "ProjectTimelineEntry.inspectionIds":
+		if e.ComplexityRoot.ProjectTimelineEntry.InspectionIds == nil {
 			break
 		}
 
-		return e.ComplexityRoot.ProjectTimelineEntry.InspectionID(childComplexity), true
+		return e.ComplexityRoot.ProjectTimelineEntry.InspectionIds(childComplexity), true
 	case "ProjectTimelineEntry.label":
 		if e.ComplexityRoot.ProjectTimelineEntry.Label == nil {
 			break
@@ -5990,6 +6033,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Schedules(childComplexity, args["first"].(*int), args["after"].(*string)), true
+	case "Query.segmentDefinitionVersion":
+		if e.ComplexityRoot.Query.SegmentDefinitionVersion == nil {
+			break
+		}
+
+		args, err := ec.field_Query_segmentDefinitionVersion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SegmentDefinitionVersion(childComplexity, args["id"].(string)), true
 	case "Query.segmentDefinitions":
 		if e.ComplexityRoot.Query.SegmentDefinitions == nil {
 			break
@@ -7053,6 +7107,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Schedule.ParticipantID(childComplexity), true
+	case "Schedule.projectId":
+		if e.ComplexityRoot.Schedule.ProjectID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Schedule.ProjectID(childComplexity), true
 	case "Schedule.referenceVersionId":
 		if e.ComplexityRoot.Schedule.ReferenceVersionID == nil {
 			break
@@ -7071,6 +7131,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Schedule.Rrule(childComplexity), true
+	case "Schedule.stageId":
+		if e.ComplexityRoot.Schedule.StageID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Schedule.StageID(childComplexity), true
 	case "Schedule.startsAt":
 		if e.ComplexityRoot.Schedule.StartsAt == nil {
 			break
@@ -7089,6 +7155,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Schedule.TemplateID(childComplexity), true
+	case "Schedule.templateVersionId":
+		if e.ComplexityRoot.Schedule.TemplateVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Schedule.TemplateVersionID(childComplexity), true
 	case "Schedule.timezone":
 		if e.ComplexityRoot.Schedule.Timezone == nil {
 			break
@@ -7994,6 +8066,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputMarkNotificationReadInput,
 		ec.unmarshalInputOnboardingStepInput,
 		ec.unmarshalInputOriginVersionInput,
+		ec.unmarshalInputPlanInspectionInput,
+		ec.unmarshalInputPlannedProjectStageInput,
 		ec.unmarshalInputPostalAddressInput,
 		ec.unmarshalInputPresignMediaPartsInput,
 		ec.unmarshalInputProjectTransitionInput,
@@ -8123,6 +8197,7 @@ type Query {
   participants(search: String, first: Int = 25, after: String): ParticipantConnection!
   participant(id: ID!): Participant
   segmentDefinitions(search: String, first: Int = 25, after: String): SegmentDefinitionConnection!
+  segmentDefinitionVersion(id: ID!): SegmentDefinitionVersion
   templates(search: String, first: Int = 25, after: String): TemplateConnection!
   templateVersion(id: ID!): TemplateVersion
 	assets(businessUnitId: ID, search: String, first: Int = 25, after: String): AssetConnection!
@@ -8225,6 +8300,7 @@ type Mutation {
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
   cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
   createInspection(input: CreateInspectionInput!): InspectionPayload!
+	planInspection(input: PlanInspectionInput!): PlanInspectionPayload!
   cancelInspection(input: InspectionTransitionInput!): InspectionPayload!
   invalidateInspection(input: InvalidateInspectionInput!): InspectionPayload!
   createProject(input: CreateProjectInput!): ProjectPayload!
@@ -8282,6 +8358,7 @@ type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeV
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
+enum CaptureComparisonMode { CHECKLIST_ONLY FIXED_ORIGIN }
 type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
 type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! addressDetails: PostalAddress addressStatus: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
 type PostalAddress { countryCode: String! postalCode: String! street: String! number: String! withoutNumber: Boolean! complement: String! district: String! city: String! state: String! municipalityCode: String! reference: String! }
@@ -8292,14 +8369,14 @@ type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! s
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
 type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
-type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
+type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
 type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
-type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionId: ID version: Int! }
+type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
-type Project { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! reportMode: String! status: String! version: Int! stages: [ProjectStage!]! transitions: [StageTransition!]! }
+type Project { id: ID! name: String! orderedStages: Boolean! businessUnitId: ID! assetId: ID! status: String! version: Int! stages: [ProjectStage!]! transitions: [StageTransition!]! }
 type ProjectConnection { nodes: [Project!]! pageInfo: PageInfo! }
 type CaptureRequirement {
   key: String!
@@ -8365,7 +8442,7 @@ type TriageCase { inspectionId: ID! assetId: ID! assetName: String! address: Str
 type TriageCaseEvent { id: ID! actorId: ID! kind: String! body: String! createdAt: String! }
 type TriageAssignee { id: ID! role: String! current: Boolean! }
 type TriageCasePayload { triageCase: TriageCase! userErrors: [UserError!]! clientMutationId: String! }
-type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionId: ID occurredAt: String }
+type ProjectTimelineEntry { stageId: ID! label: String! status: String! inspectionIds: [ID!]! occurredAt: String }
 type ProjectTimeline { projectId: ID! entries: [ProjectTimelineEntry!]! }
 type NotificationDelivery {
   id: ID!
@@ -8538,15 +8615,17 @@ input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
 input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
 input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
-input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! referenceVersionId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
+input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
-input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID referenceVersionId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
+input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
 input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
-input CreateProjectInput { assetId: ID! participantId: ID! templateId: ID clientMutationId: String! }
+input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
+input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
+input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
 input AddExceptionalStageInput { projectId: ID! expectedVersion: Int! key: String! label: String! reason: String! plannedAt: String clientMutationId: String! }
-input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! referenceVersionId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! clientMutationId: String! }
+input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! clientMutationId: String! }
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
@@ -8594,6 +8673,7 @@ input CorrectInspectionResponsibleEmailInput { inspectionId: ID!, email: String!
 type ResponsibleEmailCorrection { inspectionId: ID!, responsibilityId: ID!, invitationId: ID!, deliveryId: ID, deliveryStatus: String!, responsibilityStatus: String!, responsibilityVersion: Int!, recipientMasked: String!, canCorrectResponsibleEmail: Boolean! }
 type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection, userErrors: [UserError!]!, clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
+type PlanInspectionPayload { inspection: Inspection schedule: Schedule project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }
 type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! clientMutationId: String! }
@@ -9992,6 +10072,22 @@ func (ec *executionContext) childFields_ParticipantPayload(ctx context.Context, 
 	return nil, fmt.Errorf("no field named %q was found under type ParticipantPayload", field.Name)
 }
 
+func (ec *executionContext) childFields_PlanInspectionPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspection":
+		return ec.fieldContext_PlanInspectionPayload_inspection(ctx, field)
+	case "schedule":
+		return ec.fieldContext_PlanInspectionPayload_schedule(ctx, field)
+	case "project":
+		return ec.fieldContext_PlanInspectionPayload_project(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_PlanInspectionPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_PlanInspectionPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PlanInspectionPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_PostalAddress(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "countryCode":
@@ -10068,18 +10164,14 @@ func (ec *executionContext) childFields_Project(ctx context.Context, field graph
 	switch field.Name {
 	case "id":
 		return ec.fieldContext_Project_id(ctx, field)
+	case "name":
+		return ec.fieldContext_Project_name(ctx, field)
+	case "orderedStages":
+		return ec.fieldContext_Project_orderedStages(ctx, field)
 	case "businessUnitId":
 		return ec.fieldContext_Project_businessUnitId(ctx, field)
 	case "assetId":
 		return ec.fieldContext_Project_assetId(ctx, field)
-	case "participantId":
-		return ec.fieldContext_Project_participantId(ctx, field)
-	case "templateId":
-		return ec.fieldContext_Project_templateId(ctx, field)
-	case "templateVersionId":
-		return ec.fieldContext_Project_templateVersionId(ctx, field)
-	case "reportMode":
-		return ec.fieldContext_Project_reportMode(ctx, field)
 	case "status":
 		return ec.fieldContext_Project_status(ctx, field)
 	case "version":
@@ -10132,8 +10224,8 @@ func (ec *executionContext) childFields_ProjectStage(ctx context.Context, field 
 		return ec.fieldContext_ProjectStage_plannedAt(ctx, field)
 	case "reason":
 		return ec.fieldContext_ProjectStage_reason(ctx, field)
-	case "inspectionId":
-		return ec.fieldContext_ProjectStage_inspectionId(ctx, field)
+	case "inspectionIds":
+		return ec.fieldContext_ProjectStage_inspectionIds(ctx, field)
 	case "version":
 		return ec.fieldContext_ProjectStage_version(ctx, field)
 	}
@@ -10158,8 +10250,8 @@ func (ec *executionContext) childFields_ProjectTimelineEntry(ctx context.Context
 		return ec.fieldContext_ProjectTimelineEntry_label(ctx, field)
 	case "status":
 		return ec.fieldContext_ProjectTimelineEntry_status(ctx, field)
-	case "inspectionId":
-		return ec.fieldContext_ProjectTimelineEntry_inspectionId(ctx, field)
+	case "inspectionIds":
+		return ec.fieldContext_ProjectTimelineEntry_inspectionIds(ctx, field)
 	case "occurredAt":
 		return ec.fieldContext_ProjectTimelineEntry_occurredAt(ctx, field)
 	}
@@ -10658,8 +10750,14 @@ func (ec *executionContext) childFields_Schedule(ctx context.Context, field grap
 		return ec.fieldContext_Schedule_participantId(ctx, field)
 	case "templateId":
 		return ec.fieldContext_Schedule_templateId(ctx, field)
+	case "templateVersionId":
+		return ec.fieldContext_Schedule_templateVersionId(ctx, field)
 	case "referenceVersionId":
 		return ec.fieldContext_Schedule_referenceVersionId(ctx, field)
+	case "projectId":
+		return ec.fieldContext_Schedule_projectId(ctx, field)
+	case "stageId":
+		return ec.fieldContext_Schedule_stageId(ctx, field)
 	case "rrule":
 		return ec.fieldContext_Schedule_rrule(ctx, field)
 	case "timezone":
@@ -11718,6 +11816,20 @@ func (ec *executionContext) field_Mutation_markNotificationRead_args(ctx context
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (MarkNotificationReadInput, error) {
 			return ec.unmarshalNMarkNotificationReadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMarkNotificationReadInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_planInspection_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (PlanInspectionInput, error) {
+			return ec.unmarshalNPlanInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlanInspectionInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13019,6 +13131,20 @@ func (ec *executionContext) field_Query_schedules_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["after"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_segmentDefinitionVersion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -22980,6 +23106,50 @@ func (ec *executionContext) fieldContext_Mutation_createInspection(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_planInspection(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_planInspection(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PlanInspection(ctx, fc.Args["input"].(PlanInspectionInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PlanInspectionPayload) graphql.Marshaler {
+			return ec.marshalNPlanInspectionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlanInspectionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_planInspection(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PlanInspectionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_planInspection_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_cancelInspection(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27955,6 +28125,157 @@ func (ec *executionContext) fieldContext_ParticipantPayload_clientMutationId(_ c
 	return graphql.NewScalarFieldContext("ParticipantPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PlanInspectionPayload_inspection(ctx context.Context, field graphql.CollectedField, obj *PlanInspectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlanInspectionPayload_inspection(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Inspection, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Inspection) graphql.Marshaler {
+			return ec.marshalOInspection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspection(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PlanInspectionPayload_inspection(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlanInspectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Inspection(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlanInspectionPayload_schedule(ctx context.Context, field graphql.CollectedField, obj *PlanInspectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlanInspectionPayload_schedule(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Schedule, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Schedule) graphql.Marshaler {
+			return ec.marshalOSchedule2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSchedule(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PlanInspectionPayload_schedule(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlanInspectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Schedule(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlanInspectionPayload_project(ctx context.Context, field graphql.CollectedField, obj *PlanInspectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlanInspectionPayload_project(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Project, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Project) graphql.Marshaler {
+			return ec.marshalOProject2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐProject(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PlanInspectionPayload_project(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlanInspectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Project(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlanInspectionPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *PlanInspectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlanInspectionPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlanInspectionPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PlanInspectionPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PlanInspectionPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *PlanInspectionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PlanInspectionPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PlanInspectionPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PlanInspectionPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _PostalAddress_countryCode(ctx context.Context, field graphql.CollectedField, obj *PostalAddress) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28548,6 +28869,52 @@ func (ec *executionContext) fieldContext_Project_id(_ context.Context, field gra
 	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _Project_name(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Project_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Project_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Project_orderedStages(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Project_orderedStages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OrderedStages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Project_orderedStages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Project_businessUnitId(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28592,98 +28959,6 @@ func (ec *executionContext) _Project_assetId(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_Project_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _Project_participantId(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Project_participantId(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ParticipantID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Project_participantId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _Project_templateId(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Project_templateId(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.TemplateID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Project_templateId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _Project_templateVersionId(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Project_templateVersionId(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.TemplateVersionID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNID2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Project_templateVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type ID does not have child fields"))
-}
-
-func (ec *executionContext) _Project_reportMode(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Project_reportMode(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ReportMode, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Project_reportMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Project", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Project_status(ctx context.Context, field graphql.CollectedField, obj *Project) (ret graphql.Marshaler) {
@@ -29131,26 +29406,26 @@ func (ec *executionContext) fieldContext_ProjectStage_reason(_ context.Context, 
 	return graphql.NewScalarFieldContext("ProjectStage", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _ProjectStage_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ProjectStage) (ret graphql.Marshaler) {
+func (ec *executionContext) _ProjectStage_inspectionIds(ctx context.Context, field graphql.CollectedField, obj *ProjectStage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_ProjectStage_inspectionId(ctx, field)
+			return ec.fieldContext_ProjectStage_inspectionIds(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.InspectionID, nil
+			return obj.InspectionIds, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNID2ᚕstringᚄ(ctx, selections, v)
 		},
 		true,
-		false,
+		true,
 	)
 }
-func (ec *executionContext) fieldContext_ProjectStage_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ProjectStage_inspectionIds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ProjectStage", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
@@ -29301,26 +29576,26 @@ func (ec *executionContext) fieldContext_ProjectTimelineEntry_status(_ context.C
 	return graphql.NewScalarFieldContext("ProjectTimelineEntry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _ProjectTimelineEntry_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ProjectTimelineEntry) (ret graphql.Marshaler) {
+func (ec *executionContext) _ProjectTimelineEntry_inspectionIds(ctx context.Context, field graphql.CollectedField, obj *ProjectTimelineEntry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
 		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_ProjectTimelineEntry_inspectionId(ctx, field)
+			return ec.fieldContext_ProjectTimelineEntry_inspectionIds(ctx, field)
 		},
 		func(ctx context.Context) (any, error) {
-			return obj.InspectionID, nil
+			return obj.InspectionIds, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNID2ᚕstringᚄ(ctx, selections, v)
 		},
 		true,
-		false,
+		true,
 	)
 }
-func (ec *executionContext) fieldContext_ProjectTimelineEntry_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ProjectTimelineEntry_inspectionIds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ProjectTimelineEntry", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
@@ -29954,6 +30229,50 @@ func (ec *executionContext) fieldContext_Query_segmentDefinitions(ctx context.Co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_segmentDefinitions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_segmentDefinitionVersion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_segmentDefinitionVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SegmentDefinitionVersion(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *SegmentDefinitionVersion) graphql.Marshaler {
+			return ec.marshalOSegmentDefinitionVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSegmentDefinitionVersion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_segmentDefinitionVersion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SegmentDefinitionVersion(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_segmentDefinitionVersion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -35318,6 +35637,29 @@ func (ec *executionContext) fieldContext_Schedule_templateId(_ context.Context, 
 	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _Schedule_templateVersionId(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Schedule_templateVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TemplateVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Schedule_templateVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
 func (ec *executionContext) _Schedule_referenceVersionId(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -35338,6 +35680,52 @@ func (ec *executionContext) _Schedule_referenceVersionId(ctx context.Context, fi
 	)
 }
 func (ec *executionContext) fieldContext_Schedule_referenceVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Schedule_projectId(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Schedule_projectId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProjectID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Schedule_projectId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Schedule_stageId(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Schedule_stageId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StageID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Schedule_stageId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
@@ -41089,7 +41477,7 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "referenceVersionId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "projectId", "stageId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41117,6 +41505,13 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 				return it, err
 			}
 			it.TemplateID = data
+		case "comparisonMode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("comparisonMode"))
+			data, err := ec.unmarshalNCaptureComparisonMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureComparisonMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ComparisonMode = data
 		case "referenceVersionId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("referenceVersionId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -41124,6 +41519,20 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectID = data
+		case "stageId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stageId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StageID = data
 		case "dueAt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueAt"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -41226,7 +41635,11 @@ func (ec *executionContext) unmarshalInputCreateProjectInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "clientMutationId"}
+	if _, present := asMap["orderedStages"]; !present {
+		asMap["orderedStages"] = false
+	}
+
+	fieldsInOrder := [...]string{"assetId", "name", "orderedStages", "stages", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41240,20 +41653,27 @@ func (ec *executionContext) unmarshalInputCreateProjectInput(ctx context.Context
 				return it, err
 			}
 			it.AssetID = data
-		case "participantId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("participantId"))
-			data, err := ec.unmarshalNID2string(ctx, v)
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.ParticipantID = data
-		case "templateId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("templateId"))
-			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			it.Name = data
+		case "orderedStages":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("orderedStages"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.TemplateID = data
+			it.OrderedStages = data
+		case "stages":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stages"))
+			data, err := ec.unmarshalNPlannedProjectStageInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Stages = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -41277,7 +41697,7 @@ func (ec *executionContext) unmarshalInputCreateScheduleInput(ctx context.Contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "referenceVersionId", "rrule", "timezone", "startsAt", "deadlineMinutes", "reminderOffsetsMinutes", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "projectId", "stageId", "rrule", "timezone", "startsAt", "deadlineMinutes", "reminderOffsetsMinutes", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41305,6 +41725,13 @@ func (ec *executionContext) unmarshalInputCreateScheduleInput(ctx context.Contex
 				return it, err
 			}
 			it.TemplateID = data
+		case "comparisonMode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("comparisonMode"))
+			data, err := ec.unmarshalNCaptureComparisonMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureComparisonMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ComparisonMode = data
 		case "referenceVersionId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("referenceVersionId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -41312,6 +41739,20 @@ func (ec *executionContext) unmarshalInputCreateScheduleInput(ctx context.Contex
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectID = data
+		case "stageId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stageId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StageID = data
 		case "rrule":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rrule"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -42125,6 +42566,220 @@ func (ec *executionContext) unmarshalInputOriginVersionInput(ctx context.Context
 				return it, err
 			}
 			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputPlanInspectionInput(ctx context.Context, obj any) (PlanInspectionInput, error) {
+	var it PlanInspectionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["createProject"]; !present {
+		asMap["createProject"] = false
+	}
+	if _, present := asMap["orderedStages"]; !present {
+		asMap["orderedStages"] = false
+	}
+
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "dueAt", "startsAt", "timezone", "rrule", "deadlineAt", "deadlineMinutes", "reminderInstants", "reminderOffsetsMinutes", "reason", "projectId", "projectName", "createProject", "orderedStages", "stages", "stageId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "assetId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assetId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AssetID = data
+		case "participantId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("participantId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ParticipantID = data
+		case "templateId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("templateId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TemplateID = data
+		case "comparisonMode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("comparisonMode"))
+			data, err := ec.unmarshalNCaptureComparisonMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureComparisonMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ComparisonMode = data
+		case "dueAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueAt"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DueAt = data
+		case "startsAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("startsAt"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StartsAt = data
+		case "timezone":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("timezone"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Timezone = data
+		case "rrule":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("rrule"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Rrule = data
+		case "deadlineAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deadlineAt"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeadlineAt = data
+		case "deadlineMinutes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deadlineMinutes"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeadlineMinutes = data
+		case "reminderInstants":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reminderInstants"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReminderInstants = data
+		case "reminderOffsetsMinutes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reminderOffsetsMinutes"))
+			data, err := ec.unmarshalOInt2ᚕintᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReminderOffsetsMinutes = data
+		case "reason":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Reason = data
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectID = data
+		case "projectName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectName"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectName = data
+		case "createProject":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("createProject"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CreateProject = data
+		case "orderedStages":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("orderedStages"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OrderedStages = data
+		case "stages":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stages"))
+			data, err := ec.unmarshalOPlannedProjectStageInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Stages = data
+		case "stageId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("stageId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StageID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputPlannedProjectStageInput(ctx context.Context, obj any) (PlannedProjectStageInput, error) {
+	var it PlannedProjectStageInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"key", "label", "plannedAt"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "label":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("label"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Label = data
+		case "plannedAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("plannedAt"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PlannedAt = data
 		}
 	}
 	return it, nil
@@ -43302,7 +43957,7 @@ func (ec *executionContext) unmarshalInputStartProjectStageInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"projectId", "stageId", "expectedProjectVersion", "expectedStageVersion", "referenceVersionId", "dueAt", "deadlineAt", "reminderInstants", "clientMutationId"}
+	fieldsInOrder := [...]string{"projectId", "stageId", "expectedProjectVersion", "expectedStageVersion", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -43337,34 +43992,6 @@ func (ec *executionContext) unmarshalInputStartProjectStageInput(ctx context.Con
 				return it, err
 			}
 			it.ExpectedStageVersion = data
-		case "referenceVersionId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("referenceVersionId"))
-			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ReferenceVersionID = data
-		case "dueAt":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueAt"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.DueAt = data
-		case "deadlineAt":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deadlineAt"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.DeadlineAt = data
-		case "reminderInstants":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reminderInstants"))
-			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ReminderInstants = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -47516,6 +48143,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "planInspection":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_planInspection(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "cancelInspection":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_cancelInspection(ctx, field)
@@ -49445,6 +50079,64 @@ func (ec *executionContext) _ParticipantPayload(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var planInspectionPayloadImplementors = []string{"PlanInspectionPayload"}
+
+func (ec *executionContext) _PlanInspectionPayload(ctx context.Context, sel ast.SelectionSet, obj *PlanInspectionPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, planInspectionPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PlanInspectionPayload")
+		case "inspection":
+			out.Values[i] = ec._PlanInspectionPayload_inspection(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "schedule":
+			out.Values[i] = ec._PlanInspectionPayload_schedule(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "project":
+			out.Values[i] = ec._PlanInspectionPayload_project(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._PlanInspectionPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._PlanInspectionPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var postalAddressImplementors = []string{"PostalAddress"}
 
 func (ec *executionContext) _PostalAddress(ctx context.Context, sel ast.SelectionSet, obj *PostalAddress) graphql.Marshaler {
@@ -49714,6 +50406,16 @@ func (ec *executionContext) _Project(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "name":
+			out.Values[i] = ec._Project_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "orderedStages":
+			out.Values[i] = ec._Project_orderedStages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "businessUnitId":
 			out.Values[i] = ec._Project_businessUnitId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -49721,26 +50423,6 @@ func (ec *executionContext) _Project(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "assetId":
 			out.Values[i] = ec._Project_assetId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "participantId":
-			out.Values[i] = ec._Project_participantId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "templateId":
-			out.Values[i] = ec._Project_templateId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "templateVersionId":
-			out.Values[i] = ec._Project_templateVersionId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "reportMode":
-			out.Values[i] = ec._Project_reportMode(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -49928,9 +50610,9 @@ func (ec *executionContext) _ProjectStage(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
-		case "inspectionId":
-			out.Values[i] = ec._ProjectStage_inspectionId(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
+		case "inspectionIds":
+			out.Values[i] = ec._ProjectStage_inspectionIds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "version":
@@ -50029,9 +50711,9 @@ func (ec *executionContext) _ProjectTimelineEntry(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "inspectionId":
-			out.Values[i] = ec._ProjectTimelineEntry_inspectionId(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
+		case "inspectionIds":
+			out.Values[i] = ec._ProjectTimelineEntry_inspectionIds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "occurredAt":
@@ -50424,6 +51106,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_segmentDefinitions(ctx, field)
 				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "segmentDefinitionVersion":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_segmentDefinitionVersion(ctx, field)
+				if res == graphql.RequiredNull {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -52868,8 +53572,23 @@ func (ec *executionContext) _Schedule(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "templateVersionId":
+			out.Values[i] = ec._Schedule_templateVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "referenceVersionId":
 			out.Values[i] = ec._Schedule_referenceVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "projectId":
+			out.Values[i] = ec._Schedule_projectId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "stageId":
+			out.Values[i] = ec._Schedule_stageId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -55220,6 +55939,16 @@ func (ec *executionContext) marshalNCaptureAnswer2ᚖinspectionᚋservicesᚋins
 	return ec._CaptureAnswer(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNCaptureComparisonMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureComparisonMode(ctx context.Context, v any) (CaptureComparisonMode, error) {
+	var res CaptureComparisonMode
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCaptureComparisonMode2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureComparisonMode(ctx context.Context, sel ast.SelectionSet, v CaptureComparisonMode) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCapturePayload(ctx context.Context, sel ast.SelectionSet, v *CapturePayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -56353,6 +57082,40 @@ func (ec *executionContext) marshalNParticipantPayload2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._ParticipantPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPlanInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlanInspectionInput(ctx context.Context, v any) (PlanInspectionInput, error) {
+	res, err := ec.unmarshalInputPlanInspectionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPlanInspectionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlanInspectionPayload(ctx context.Context, sel ast.SelectionSet, v *PlanInspectionPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PlanInspectionPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPlannedProjectStageInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInputᚄ(ctx context.Context, v any) ([]*PlannedProjectStageInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*PlannedProjectStageInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNPlannedProjectStageInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNPlannedProjectStageInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInput(ctx context.Context, v any) (*PlannedProjectStageInput, error) {
+	res, err := ec.unmarshalInputPlannedProjectStageInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNPostalAddressLookup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddressLookup(ctx context.Context, sel ast.SelectionSet, v *PostalAddressLookup) graphql.Marshaler {
@@ -57858,6 +58621,41 @@ func (ec *executionContext) marshalOInspectionStatusGroup2ᚖinspectionᚋservic
 	return v
 }
 
+func (ec *executionContext) unmarshalOInt2ᚕintᚄ(ctx context.Context, v any) ([]int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]int, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInt2int(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOInt2ᚕintᚄ(ctx context.Context, sel ast.SelectionSet, v []int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNInt2int(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
 	if v == nil {
 		return nil, nil
@@ -58041,6 +58839,23 @@ func (ec *executionContext) marshalOParticipantContact2ᚖinspectionᚋservices�
 	return ec._ParticipantContact(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOPlannedProjectStageInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInputᚄ(ctx context.Context, v any) ([]*PlannedProjectStageInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*PlannedProjectStageInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNPlannedProjectStageInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPlannedProjectStageInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func (ec *executionContext) marshalOPostalAddress2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPostalAddress(ctx context.Context, sel ast.SelectionSet, v *PostalAddress) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -58138,6 +58953,41 @@ func (ec *executionContext) marshalOSegmentDefinitionVersion2ᚖinspectionᚋser
 		return graphql.Null
 	}
 	return ec._SegmentDefinitionVersion(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {

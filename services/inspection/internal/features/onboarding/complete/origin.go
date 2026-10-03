@@ -44,7 +44,7 @@ func (s Service) originMediaStatus(ctx context.Context, tenantID, sessionID iden
 
 // ensureOrigin attaches the already screened photos to the first asset. The
 // session ID identifies both the provisional media responsibility and retry.
-func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID, templateID, templateVersionID identity.ID, ids []identity.ID) (identity.ID, error) {
+func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID, templateVersionID identity.ID, ids []identity.ID) (identity.ID, error) {
 	var versionID identity.ID
 	now := s.now()
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -66,7 +66,7 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 		if len(media) != len(ids) {
 			return apperror.New(apperror.InvalidState, "referencePhotos", "reference photos are not ready")
 		}
-		origin := database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: assetID, TemplateID: templateID, Version: 1, CreatedAt: now, UpdatedAt: now}
+		origin := database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: assetID, Version: 1, CreatedAt: now, UpdatedAt: now}
 		version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: origin.ID, VersionNumber: 1, ResponsibilityID: sessionID, Status: "ACTIVE", IdempotencyKey: key, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 		if err := tx.Create(&origin).Error; err != nil {
 			return err

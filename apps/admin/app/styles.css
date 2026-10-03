@@ -17,7 +17,7 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 .skip-link { position: fixed; inset-block-start: -5rem; inset-inline-start: 1rem; z-index: 10; padding: .7rem; background: var(--admin-surface); color: var(--admin-fg); }
 .skip-link:focus { inset-block-start: 1rem; }
 .admin-shell { min-block-size: 100dvh; }
-.admin-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-block-size: 4.5rem; padding: .75rem clamp(1rem, 3vw, 2rem); border-block-end: 1px solid var(--admin-border); background: var(--admin-surface); }
+.admin-header { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; min-block-size: 4.5rem; padding: .75rem clamp(1rem, 3vw, 2rem); border-block-end: 1px solid var(--admin-border); background: var(--admin-surface); }
 .admin-header > strong { font: 700 1.25rem var(--admin-display); }
 .admin-header > strong span { font-weight: 400; }
 .admin-header-context { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; font-size: .8rem; }
@@ -81,10 +81,23 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 .admin-collection-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; margin-block-start: 1rem; color: var(--admin-muted); font: .68rem/1.4 var(--admin-mono); }
 
 .admin-denial { display: grid; gap: 1rem; max-inline-size: 42rem; margin: 8vh auto; padding: 2rem; border: 1px solid var(--admin-border); border-radius: .5rem; background: var(--admin-surface); }
+.admin-denial-heading { display: flex; align-items: center; gap: 1rem; }
+.admin-denial-heading h2 { margin: 0; }
 
-.admin-form { display: grid; gap: 1rem; inline-size: 100%; max-block-size: min(70vh, 44rem); overflow: auto; }
+.admin-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; inline-size: 100%; max-block-size: min(70vh, 44rem); overflow: auto; }
+.admin-form > * { min-inline-size: 0; }
 .admin-form h2 { margin: 0; font: 700 1.6rem var(--admin-display); }
 .admin-form p { margin: 0; color: var(--admin-muted); }
+.admin-template-editor { display: grid; gap: 1rem; max-inline-size: 58rem; }
+.admin-template-editor > p { color: var(--admin-muted); }
+.template-editor-toolbar { display: flex; align-items: flex-end; gap: 1rem; }
+.template-editor-toolbar label { flex: 1; display: grid; gap: .4rem; }
+.template-editor-toolbar select { min-block-size: 2.75rem; padding-inline: .75rem; border: 1px solid var(--admin-border); border-radius: .6rem; background: var(--admin-surface); color: inherit; }
+.template-requirements, .template-policy, .template-requirement { display: grid; gap: .8rem; border: 1px solid var(--admin-border); border-radius: .75rem; padding: 1rem; }
+.template-requirements > p { color: var(--admin-muted); }
+.template-count-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.template-policy { align-items: start; }
+.admin-template-editor .collection li { grid-template-columns: 1fr auto auto; }
 .detail-panel { display: grid; gap: 1rem; max-block-size: 75vh; overflow: auto; }
 .detail-panel dl { display: grid; gap: .65rem; }
 .detail-panel dl div { padding-block-end: .65rem; border-block-end: 1px solid var(--admin-border); }
@@ -102,8 +115,8 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 }
 
 @media (max-width: 40rem) {
-  .admin-header { align-items: flex-start; flex-wrap: wrap; }
-  .admin-header-context { inline-size: 100%; justify-content: flex-start; }
+  .admin-header { align-items: center; flex-wrap: nowrap; }
+  .admin-header-context { inline-size: auto; justify-content: flex-end; }
   .admin-content { padding: 1.25rem 1rem; }
   .page-heading { align-items: flex-start; flex-wrap: wrap; }
   .page-heading button { inline-size: 100%; }
@@ -142,8 +155,8 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 @media (max-width: 37.5rem) {
   .admin-layout { display: block; min-block-size: auto; }
   .admin-content { padding: 1rem 1rem calc(5.25rem + env(safe-area-inset-bottom)); }
-  .admin-header { align-items: flex-start; flex-wrap: wrap; }
-  .admin-header-context { inline-size: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .admin-header { align-items: center; flex-wrap: nowrap; }
+  .admin-header-context { inline-size: auto; justify-content: flex-end; flex-wrap: nowrap; }
   .admin-header-context .inspection-field { flex: 1 1 100%; max-inline-size: none; }
   .page-heading { align-items: flex-start; flex-wrap: wrap; }
   .page-heading h1 { font-size: 1.75rem; }

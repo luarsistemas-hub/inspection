@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"strings"
 	"time"
 
 	"inspection/services/inspection/internal/contracts/events"
@@ -51,6 +53,16 @@ func NewWorkerObserver(metrics *Metrics, logger LLMLogger) WorkerObserver {
 }
 
 func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.RawEnvelope, observation TransactionObservation) {
+	if envelope.Type == "report.snapshot_created.v1" && observation.Err != nil {
+		slog.ErrorContext(ctx, "report snapshot processing failed",
+			"eventId", envelope.ID.String(),
+			"correlationId", envelope.CorrelationID,
+			"attempt", CorrelationFromContext(ctx).Attempt,
+			"transactionPhase", observation.Phase,
+			"durationMs", observation.Duration.Milliseconds(),
+			"error", boundedError(observation.Err),
+		)
+	}
 	if envelope.Type != "analysis.comparison_requested.v1" || !hasJobID(envelope.Payload) {
 		return
 	}
@@ -81,6 +93,20 @@ func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.Ra
 }
 
 func (o WorkerObserver) AfterDelivery(ctx context.Context, observation DeliveryObservation) {
+	if observation.Queue == "report-snapshot-created" && (observation.Action == "retry" || observation.Action == "dlq") {
+		level := slog.LevelWarn
+		if observation.Action == "dlq" || observation.Result == "publish_failed" {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(ctx, level, "report snapshot delivery deferred",
+			slog.String("queue", observation.Queue),
+			slog.String("correlationId", observation.CorrelationID),
+			slog.String("action", observation.Action),
+			slog.String("result", observation.Result),
+			slog.Int("attempt", observation.Attempt),
+			slog.Int64("durationMs", observation.Duration.Milliseconds()),
+		)
+	}
 	if observation.Queue != "analysis-comparison-requested" {
 		return
 	}
@@ -100,6 +126,17 @@ func (o WorkerObserver) AfterDelivery(ctx context.Context, observation DeliveryO
 	event.Attempt = observation.Attempt
 	event.DurationMS = observation.Duration.Milliseconds()
 	o.Logger.LogLLM(ctx, event)
+}
+
+func boundedError(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := strings.TrimSpace(err.Error())
+	if len(message) > 512 {
+		message = message[:512]
+	}
+	return message
 }
 
 func hasJobID(payload []byte) bool {

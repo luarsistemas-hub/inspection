@@ -18,7 +18,7 @@ const options = { data: {
 } };
 
 const inspection = (status = "COMPLETED") => ({ id: "inspection-a", assetId: "asset-a", participantId: "participant-a", projectId: "project-a", stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt: "2030-05-10T12:00:00Z", deadlineAt: "2030-05-11T12:00:00Z", reminderInstants: [], version: 1, assetName: "Apartamento 101", assetAddress: "Rua QA, 10", assetExternalKey: "APT101", participantName: "Elvio QA" });
-const project = (status = "IN_PROGRESS") => ({ id: "project-a", assetId: "asset-a", participantId: "participant-a", templateId: "template-a", reportMode: "SIMPLE", status, version: 1, stages: [{ id: "stage-a", key: "INITIAL", label: "Inicial", kind: "REQUIRED", position: 1, status: "PLANNED", plannedAt: "2030-05-10T12:00:00Z", reason: null, inspectionId: "inspection-a", version: 1 }] });
+const project = (status = "IN_PROGRESS") => ({ id: "project-a", assetId: "asset-a", name: "Projeto QA", orderedStages: false, status, version: 1, stages: [{ id: "stage-a", key: "INITIAL", label: "Inicial", kind: "REQUIRED", position: 1, status: "PLANNED", plannedAt: "2030-05-10T12:00:00Z", reason: null, inspectionIds: ["inspection-a"], version: 1 }] });
 const report = (published = true) => ({ id: "report-a", inspectionId: "inspection-a", projectId: "project-a", version: 1, mode: "SIMPLE", classification: "NORMAL", jsonDigest: "digest", htmlDigest: "html", html: "<p>Resultado</p>", createdAt: "2030-05-10T12:00:00Z", advisory: "Revisão recomendada", pdfStatus: "READY", context: { asset: { id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua QA" }, participant: { id: "participant-a", name: "Ana QA" }, template: { id: "template-a", name: "Padrão", version: 1 }, inspection: { projectId: "project-a", stageId: null, stageLabel: "Inicial", dueAt: "2030-05-10T12:00:00Z", submittedAt: "2030-05-10T12:00:00Z", generatedAt: "2030-05-10T12:00:00Z" } }, requirements: [], evidence: [], findings: [], timeline: [], publication: published ? { id: "publication-a", status: "PUBLISHED", version: 1 } : null });
 
 function defaultReply(operation: string, role: string): Reply {
@@ -50,6 +50,7 @@ function defaultReply(operation: string, role: string): Reply {
     case "UpdateSchedule": return emptyMutation("updateSchedule");
     case "CancelSchedule": return emptyMutation("cancelSchedule");
     case "CreateInspection": return { data: { createInspection: { inspection: { id: "inspection-created", status: "PLANNED", version: 1 }, userErrors: [], clientMutationId: "migration-fixture" } } };
+    case "PlanInspection": return { data: { planInspection: { inspection: { id: "inspection-created", status: "PLANNED", version: 1, projectId: null, stageId: null }, userErrors: [], clientMutationId: "migration-fixture" } } };
     case "CancelInspection": return { data: { cancelInspection: { inspection: { id: "inspection-a", status: "CANCELED", version: 2 }, userErrors: [], clientMutationId: "migration-fixture" } } };
     case "InvalidateInspection": return { data: { invalidateInspection: { inspection: { id: "inspection-a", status: "INVALIDATED", version: 2 }, userErrors: [], clientMutationId: "migration-fixture" } } };
     case "PromoteInspectionPhotos": return { data: { promoteInspectionPhotos: { promotion: { inspectionId: "inspection-a", status: "ACCEPTED", failureReason: null, originVersionId: "origin-a", eligibleMedia: [] }, userErrors: [], clientMutationId: "migration-fixture" } } };
@@ -268,10 +269,10 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     await page.getByRole("button", { name: "Nova vistoria" }).click();
     const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
     const asset = dialog.getByRole("combobox", { name: "Imóvel" });
-    await dialog.getByRole("button", { name: "Criar vistoria" }).click();
+    await dialog.getByRole("button", { name: "Planejar vistoria" }).click();
     await expect(asset).toHaveAttribute("aria-invalid", "true");
     expect(await asset.evaluate((element) => (element as HTMLInputElement).validity.valid)).toBe(false);
-    expect(mocks.calls.some(({ operation }) => operation === "CreateInspection")).toBe(false);
+    expect(mocks.calls.some(({ operation }) => operation === "PlanInspection")).toBe(false);
   });
 
   test("IT-007 keeps the primary action reachable at large text and narrow viewport", async ({ page }) => {
@@ -281,7 +282,7 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
     await expect(page.getByRole("button", { name: "Nova vistoria" })).toBeVisible();
     await page.getByRole("button", { name: "Nova vistoria" }).click();
-    await expect(page.getByRole("dialog", { name: "Nova vistoria" }).getByRole("button", { name: "Criar vistoria" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Nova vistoria" }).getByRole("button", { name: "Planejar vistoria" })).toBeVisible();
   });
 
   test("E2E-064 keeps compact navigation links separated and operable at 412px and 320px", async ({ page }) => {

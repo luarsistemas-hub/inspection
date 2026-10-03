@@ -18,7 +18,8 @@ type ChannelNotifier struct {
 func (n ChannelNotifier) SendOTP(ctx context.Context, tenantID, invitationID identity.ID, code string, destinations []DeliveryIntent) error {
 	intents := make(map[notifications.Channel]notifications.Intent, len(destinations))
 	for _, destination := range destinations {
-		if isNonProductionStage(n.Stage) && strings.EqualFold(strings.TrimSpace(destination.Channel), string(notifications.Email)) {
+		localQAEmail := strings.EqualFold(strings.TrimSpace(destination.Destination), "qa.inspection@example.test")
+		if isNonProductionStage(n.Stage) && strings.EqualFold(strings.TrimSpace(destination.Channel), string(notifications.Email)) && !localQAEmail {
 			continue
 		}
 		channel := notifications.Channel(destination.Channel)

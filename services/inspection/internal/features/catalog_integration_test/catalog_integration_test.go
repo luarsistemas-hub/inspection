@@ -166,7 +166,7 @@ func TestCatalogSlicesIT021ToIT070(t *testing.T) {
 	if _, err := bus.Send(ctx, segmentactivate.Command{TenantID: tenantID, VersionID: segment.Version.ID, ExpectedVersion: 1}); err != nil {
 		t.Fatal(err)
 	}
-	document := catalog.TemplateDocument{SchemaVersion: 1, SegmentVersionID: segment.Version.ID.String(), ParticipantRoles: []string{"TENANT_PARTICIPANT"}, ComparisonMode: catalog.ChecklistOnly, Requirements: []catalog.CaptureRequirement{{Key: "overview", Section: "general", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: catalog.ChecklistOnly}}, ReportMode: "HISTORICAL", AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
+	document := catalog.TemplateDocument{SchemaVersion: 1, SegmentVersionID: segment.Version.ID.String(), ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: catalog.ChecklistOnly, Requirements: []catalog.CaptureRequirement{{Key: "overview", Section: "general", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}}, AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
 	definitionJSON, _ := json.Marshal(document)
 	templateRaw, err := bus.Send(ctx, templatepublish.Command{TenantID: tenantID, Key: "periodic", Name: "Periodic", IdempotencyKey: "template-" + tenantID.String(), DefinitionJSON: definitionJSON})
 	if err != nil {

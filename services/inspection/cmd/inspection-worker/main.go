@@ -266,15 +266,11 @@ func run() error {
 		if referenceVersion != nil {
 			referenceVersionID = referenceVersion.String()
 		}
+		// Reports are always scoped to the inspection that produced them. Project
+		// membership only adds stage context to the snapshot.
 		mode := "HISTORICAL"
 		var timeline []reportcore.TimelineEntry
 		if inspection.ProjectID != nil {
-			var project database.Project
-			if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, *inspection.ProjectID).First(&project).Error; err == nil {
-				if project.ReportMode == "CONSOLIDATED" {
-					mode = "CONSOLIDATED"
-				}
-			}
 			var stages []database.ProjectStage
 			if err := tx.Where("tenant_id=? AND project_id=?", envelope.TenantID, *inspection.ProjectID).Order("position ASC").Find(&stages).Error; err == nil {
 				for _, stage := range stages {
@@ -378,6 +374,9 @@ func run() error {
 			return err
 		}
 		now := time.Now().UTC()
+		if err := upsertTriageReviewCase(ctx, tx, envelope.TenantID, payload.InspectionID, class, result.Version, now); err != nil {
+			return err
+		}
 		eventID := identity.NewID()
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "report.snapshot_created.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"snapshotId": result.SnapshotID, "inspectionId": payload.InspectionID, "version": result.Version}})
 	}
@@ -400,37 +399,12 @@ func run() error {
 		if err := upsertDashboardInspection(tx.WithContext(ctx), row); err != nil {
 			return err
 		}
-		var triage database.TriageCase
-		triageErr := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).First(&triage).Error
-		if triageErr != nil && triageErr != gorm.ErrRecordNotFound {
-			return triageErr
-		}
 		var snapshot database.ReportSnapshot
 		snapshotErr := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("version_number DESC").First(&snapshot).Error
 		if snapshotErr != nil && snapshotErr != gorm.ErrRecordNotFound {
 			return snapshotErr
 		}
-		if triageErr == gorm.ErrRecordNotFound && class.Classification != "CRITICAL" && class.Classification != "ATTENTION" {
-			return nil
-		}
-		if triageErr == nil && triage.Status == "ARCHIVED" {
-			return nil
-		}
-		now := time.Now().UTC()
-		if triageErr == gorm.ErrRecordNotFound {
-			triage = database.TriageCase{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Status: "NEW", Classification: class.Classification, ReasonCodes: class.ReasonCodes, ReportVersion: snapshot.VersionNumber, Version: 1, CreatedAt: now, UpdatedAt: now}
-			if err := tx.WithContext(ctx).Create(&triage).Error; err != nil {
-				return err
-			}
-			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "RESULT_READY", Body: fmt.Sprintf("Resultado %s · laudo v%d", class.Classification, snapshot.VersionNumber), CreatedAt: now}).Error
-		}
-		if snapshot.VersionNumber <= triage.ReportVersion {
-			return nil
-		}
-		if err := tx.WithContext(ctx).Model(&triage).Updates(map[string]any{"status": "IN_REVIEW", "classification": class.Classification, "reason_codes": class.ReasonCodes, "report_version": snapshot.VersionNumber, "version": triage.Version + 1, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "RESULT_READY", Body: fmt.Sprintf("Novo resultado %s · laudo v%d; revisão retomada.", class.Classification, snapshot.VersionNumber), CreatedAt: now}).Error
+		return upsertTriageReviewCase(ctx, tx, envelope.TenantID, payload.InspectionID, class, snapshot.VersionNumber, time.Now().UTC())
 	}
 	retentionHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {

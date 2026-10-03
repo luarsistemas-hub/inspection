@@ -184,7 +184,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		if template.ActiveVersionID == nil {
 			return Result{}, errors.New("onboarding origin template has no active version")
 		}
-		versionID, err := s.ensureOrigin(ctx, tenantID, submission.Session.ID, asset.Asset.ID, template.ID, *template.ActiveVersionID, originMediaIDs)
+		versionID, err := s.ensureOrigin(ctx, tenantID, submission.Session.ID, asset.Asset.ID, *template.ActiveVersionID, originMediaIDs)
 		if err != nil {
 			return Result{}, fmt.Errorf("prepare onboarding origin: %w", err)
 		}
@@ -195,7 +195,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		return Result{}, err
 	}
 	inspection, err := (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectioncore.CreateInput{
-		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ReferenceVersionID: referenceVersionID,
+		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: templateMode, ReferenceVersionID: referenceVersionID,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
 		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
 	})
@@ -315,9 +315,6 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
 		templateName := "Primeira vistoria do imóvel"
-		if key == onboardingcatalog.OriginTemplateKey {
-			templateName = "Vistoria comparativa do imóvel"
-		}
 		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v3", payload)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
@@ -329,11 +326,8 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		templatesByKey[key] = templateView.Template
 	}
 	_ = actorID
-	key := onboardingcatalog.ChecklistTemplateKey
-	if mode == templatecatalog.FixedOrigin {
-		key = onboardingcatalog.OriginTemplateKey
-	}
-	return segmentView.Version, "REAL_ESTATE", templatesByKey[key], nil
+	_ = mode
+	return segmentView.Version, "REAL_ESTATE", templatesByKey[onboardingcatalog.ChecklistTemplateKey], nil
 }
 
 func (s Service) ensureParticipant(ctx context.Context, tenantID, unitID identity.ID, submission onboardingsession.Submission) (participantcore.ParticipantView, error) {

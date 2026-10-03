@@ -286,15 +286,18 @@ type CreateBusinessUnitInput struct {
 }
 
 type CreateInspectionInput struct {
-	AssetID            string   `json:"assetId"`
-	ParticipantID      string   `json:"participantId"`
-	TemplateID         *string  `json:"templateId,omitempty"`
-	ReferenceVersionID *string  `json:"referenceVersionId,omitempty"`
-	DueAt              string   `json:"dueAt"`
-	DeadlineAt         string   `json:"deadlineAt"`
-	ReminderInstants   []string `json:"reminderInstants"`
-	Reason             string   `json:"reason"`
-	ClientMutationID   string   `json:"clientMutationId"`
+	AssetID            string                `json:"assetId"`
+	ParticipantID      string                `json:"participantId"`
+	TemplateID         *string               `json:"templateId,omitempty"`
+	ComparisonMode     CaptureComparisonMode `json:"comparisonMode"`
+	ReferenceVersionID *string               `json:"referenceVersionId,omitempty"`
+	ProjectID          *string               `json:"projectId,omitempty"`
+	StageID            *string               `json:"stageId,omitempty"`
+	DueAt              string                `json:"dueAt"`
+	DeadlineAt         string                `json:"deadlineAt"`
+	ReminderInstants   []string              `json:"reminderInstants"`
+	Reason             string                `json:"reason"`
+	ClientMutationID   string                `json:"clientMutationId"`
 }
 
 type CreateMediaUploadInput struct {
@@ -305,23 +308,27 @@ type CreateMediaUploadInput struct {
 }
 
 type CreateProjectInput struct {
-	AssetID          string  `json:"assetId"`
-	ParticipantID    string  `json:"participantId"`
-	TemplateID       *string `json:"templateId,omitempty"`
-	ClientMutationID string  `json:"clientMutationId"`
+	AssetID          string                      `json:"assetId"`
+	Name             string                      `json:"name"`
+	OrderedStages    *bool                       `json:"orderedStages,omitempty"`
+	Stages           []*PlannedProjectStageInput `json:"stages"`
+	ClientMutationID string                      `json:"clientMutationId"`
 }
 
 type CreateScheduleInput struct {
-	AssetID                string  `json:"assetId"`
-	ParticipantID          string  `json:"participantId"`
-	TemplateID             string  `json:"templateId"`
-	ReferenceVersionID     *string `json:"referenceVersionId,omitempty"`
-	Rrule                  string  `json:"rrule"`
-	Timezone               string  `json:"timezone"`
-	StartsAt               string  `json:"startsAt"`
-	DeadlineMinutes        int     `json:"deadlineMinutes"`
-	ReminderOffsetsMinutes []int   `json:"reminderOffsetsMinutes"`
-	ClientMutationID       string  `json:"clientMutationId"`
+	AssetID                string                `json:"assetId"`
+	ParticipantID          string                `json:"participantId"`
+	TemplateID             string                `json:"templateId"`
+	ComparisonMode         CaptureComparisonMode `json:"comparisonMode"`
+	ReferenceVersionID     *string               `json:"referenceVersionId,omitempty"`
+	ProjectID              *string               `json:"projectId,omitempty"`
+	StageID                *string               `json:"stageId,omitempty"`
+	Rrule                  string                `json:"rrule"`
+	Timezone               string                `json:"timezone"`
+	StartsAt               string                `json:"startsAt"`
+	DeadlineMinutes        int                   `json:"deadlineMinutes"`
+	ReminderOffsetsMinutes []int                 `json:"reminderOffsetsMinutes"`
+	ClientMutationID       string                `json:"clientMutationId"`
 }
 
 type CreateTenantInput struct {
@@ -997,6 +1004,43 @@ type ParticipantPayload struct {
 	ClientMutationID string       `json:"clientMutationId"`
 }
 
+type PlanInspectionInput struct {
+	AssetID                string                      `json:"assetId"`
+	ParticipantID          string                      `json:"participantId"`
+	TemplateID             string                      `json:"templateId"`
+	ComparisonMode         CaptureComparisonMode       `json:"comparisonMode"`
+	DueAt                  *string                     `json:"dueAt,omitempty"`
+	StartsAt               *string                     `json:"startsAt,omitempty"`
+	Timezone               *string                     `json:"timezone,omitempty"`
+	Rrule                  *string                     `json:"rrule,omitempty"`
+	DeadlineAt             *string                     `json:"deadlineAt,omitempty"`
+	DeadlineMinutes        *int                        `json:"deadlineMinutes,omitempty"`
+	ReminderInstants       []string                    `json:"reminderInstants,omitempty"`
+	ReminderOffsetsMinutes []int                       `json:"reminderOffsetsMinutes,omitempty"`
+	Reason                 *string                     `json:"reason,omitempty"`
+	ProjectID              *string                     `json:"projectId,omitempty"`
+	ProjectName            *string                     `json:"projectName,omitempty"`
+	CreateProject          *bool                       `json:"createProject,omitempty"`
+	OrderedStages          *bool                       `json:"orderedStages,omitempty"`
+	Stages                 []*PlannedProjectStageInput `json:"stages,omitempty"`
+	StageID                *string                     `json:"stageId,omitempty"`
+	ClientMutationID       string                      `json:"clientMutationId"`
+}
+
+type PlanInspectionPayload struct {
+	Inspection       *Inspection  `json:"inspection,omitempty"`
+	Schedule         *Schedule    `json:"schedule,omitempty"`
+	Project          *Project     `json:"project,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type PlannedProjectStageInput struct {
+	Key       string  `json:"key"`
+	Label     string  `json:"label"`
+	PlannedAt *string `json:"plannedAt,omitempty"`
+}
+
 type PostalAddress struct {
 	CountryCode      string `json:"countryCode"`
 	PostalCode       string `json:"postalCode"`
@@ -1054,17 +1098,15 @@ type PresignedPartsPayload struct {
 }
 
 type Project struct {
-	ID                string             `json:"id"`
-	BusinessUnitID    string             `json:"businessUnitId"`
-	AssetID           string             `json:"assetId"`
-	ParticipantID     string             `json:"participantId"`
-	TemplateID        string             `json:"templateId"`
-	TemplateVersionID string             `json:"templateVersionId"`
-	ReportMode        string             `json:"reportMode"`
-	Status            string             `json:"status"`
-	Version           int                `json:"version"`
-	Stages            []*ProjectStage    `json:"stages"`
-	Transitions       []*StageTransition `json:"transitions"`
+	ID             string             `json:"id"`
+	Name           string             `json:"name"`
+	OrderedStages  bool               `json:"orderedStages"`
+	BusinessUnitID string             `json:"businessUnitId"`
+	AssetID        string             `json:"assetId"`
+	Status         string             `json:"status"`
+	Version        int                `json:"version"`
+	Stages         []*ProjectStage    `json:"stages"`
+	Transitions    []*StageTransition `json:"transitions"`
 }
 
 type ProjectConnection struct {
@@ -1079,16 +1121,16 @@ type ProjectPayload struct {
 }
 
 type ProjectStage struct {
-	ID           string  `json:"id"`
-	Key          string  `json:"key"`
-	Label        string  `json:"label"`
-	Kind         string  `json:"kind"`
-	Position     int     `json:"position"`
-	Status       string  `json:"status"`
-	PlannedAt    *string `json:"plannedAt,omitempty"`
-	Reason       *string `json:"reason,omitempty"`
-	InspectionID *string `json:"inspectionId,omitempty"`
-	Version      int     `json:"version"`
+	ID            string   `json:"id"`
+	Key           string   `json:"key"`
+	Label         string   `json:"label"`
+	Kind          string   `json:"kind"`
+	Position      int      `json:"position"`
+	Status        string   `json:"status"`
+	PlannedAt     *string  `json:"plannedAt,omitempty"`
+	Reason        *string  `json:"reason,omitempty"`
+	InspectionIds []string `json:"inspectionIds"`
+	Version       int      `json:"version"`
 }
 
 type ProjectTimeline struct {
@@ -1097,11 +1139,11 @@ type ProjectTimeline struct {
 }
 
 type ProjectTimelineEntry struct {
-	StageID      string  `json:"stageId"`
-	Label        string  `json:"label"`
-	Status       string  `json:"status"`
-	InspectionID *string `json:"inspectionId,omitempty"`
-	OccurredAt   *string `json:"occurredAt,omitempty"`
+	StageID       string   `json:"stageId"`
+	Label         string   `json:"label"`
+	Status        string   `json:"status"`
+	InspectionIds []string `json:"inspectionIds"`
+	OccurredAt    *string  `json:"occurredAt,omitempty"`
 }
 
 type ProjectTransitionInput struct {
@@ -1461,7 +1503,10 @@ type Schedule struct {
 	AssetID                string  `json:"assetId"`
 	ParticipantID          string  `json:"participantId"`
 	TemplateID             string  `json:"templateId"`
+	TemplateVersionID      string  `json:"templateVersionId"`
 	ReferenceVersionID     *string `json:"referenceVersionId,omitempty"`
+	ProjectID              *string `json:"projectId,omitempty"`
+	StageID                *string `json:"stageId,omitempty"`
 	Rrule                  string  `json:"rrule"`
 	Timezone               string  `json:"timezone"`
 	StartsAt               string  `json:"startsAt"`
@@ -1561,15 +1606,11 @@ type StageTransition struct {
 }
 
 type StartProjectStageInput struct {
-	ProjectID              string   `json:"projectId"`
-	StageID                string   `json:"stageId"`
-	ExpectedProjectVersion int      `json:"expectedProjectVersion"`
-	ExpectedStageVersion   int      `json:"expectedStageVersion"`
-	ReferenceVersionID     *string  `json:"referenceVersionId,omitempty"`
-	DueAt                  string   `json:"dueAt"`
-	DeadlineAt             string   `json:"deadlineAt"`
-	ReminderInstants       []string `json:"reminderInstants"`
-	ClientMutationID       string   `json:"clientMutationId"`
+	ProjectID              string `json:"projectId"`
+	StageID                string `json:"stageId"`
+	ExpectedProjectVersion int    `json:"expectedProjectVersion"`
+	ExpectedStageVersion   int    `json:"expectedStageVersion"`
+	ClientMutationID       string `json:"clientMutationId"`
 }
 
 type Submission struct {
@@ -1884,6 +1925,61 @@ func (e *AnalysisType) UnmarshalJSON(b []byte) error {
 }
 
 func (e AnalysisType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CaptureComparisonMode string
+
+const (
+	CaptureComparisonModeChecklistOnly CaptureComparisonMode = "CHECKLIST_ONLY"
+	CaptureComparisonModeFixedOrigin   CaptureComparisonMode = "FIXED_ORIGIN"
+)
+
+var AllCaptureComparisonMode = []CaptureComparisonMode{
+	CaptureComparisonModeChecklistOnly,
+	CaptureComparisonModeFixedOrigin,
+}
+
+func (e CaptureComparisonMode) IsValid() bool {
+	switch e {
+	case CaptureComparisonModeChecklistOnly, CaptureComparisonModeFixedOrigin:
+		return true
+	}
+	return false
+}
+
+func (e CaptureComparisonMode) String() string {
+	return string(e)
+}
+
+func (e *CaptureComparisonMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CaptureComparisonMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CaptureComparisonMode", str)
+	}
+	return nil
+}
+
+func (e CaptureComparisonMode) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CaptureComparisonMode) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CaptureComparisonMode) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

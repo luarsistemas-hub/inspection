@@ -159,6 +159,7 @@ export function AddressFieldStyles() {
     .inspection-address-lookup:focus-visible{outline:var(--inspection-focus-ring,2px solid currentColor);outline-offset:3px}
     .inspection-address-lookup:disabled{opacity:.55;cursor:not-allowed}
     .inspection-address-field{display:flex;flex-direction:column;gap:.35rem;margin:.6rem 0;min-width:0}
+    .inspection-address-row>.inspection-address-field{flex:1 1 min(100%,10rem);min-width:min(100%,10rem)}
     .inspection-address-field input,.inspection-address-field select{box-sizing:border-box;width:100%;min-height:48px;padding:.65rem .75rem;border:1px solid var(--inspection-outline,#7b879d);border-radius:.5rem;font:inherit;color:inherit;background:var(--inspection-surface-raised,transparent)}
     .inspection-address-field input:focus-visible,.inspection-address-field select:focus-visible{outline:var(--inspection-focus-ring,2px solid currentColor);outline-offset:2px}
     .inspection-address-field input:disabled,.inspection-address-field select:disabled{opacity:.6}

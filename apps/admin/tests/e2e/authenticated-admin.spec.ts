@@ -68,9 +68,14 @@ test.describe("authenticated Admin against the local stack", () => {
       const template = page.getByLabel("Modelo de vistoria");
       await expect(template.locator("option").nth(1)).toBeAttached();
       await template.selectOption({ index: 1 });
+      await page.getByLabel("Tipo do imóvel").fill("APARTMENT");
       await page.getByLabel("Nome do imóvel").fill("Apartamento 101");
       await page.getByLabel("Código do imóvel").fill("APT101");
-      await page.getByLabel("Endereço do imóvel").fill("Rua de Teste, 101");
+      await page.getByRole("textbox", { name: /^CEP/ }).fill("01001-000");
+      const lookupResponse = page.waitForResponse((response) => response.url().endsWith("/graphql") && response.request().postData()?.includes("AdminLookupPostalCode") === true);
+      await page.getByRole("button", { name: "Buscar CEP" }).click();
+      await lookupResponse;
+      await page.getByRole("textbox", { name: "Número *" }).fill("101");
       await page.getByRole("button", { name: "Salvar operação" }).click();
     }
     await expect(collectionRows(page).filter({ hasText: "APT101" })).toBeVisible();

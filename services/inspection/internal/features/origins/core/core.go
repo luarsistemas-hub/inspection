@@ -27,12 +27,12 @@ type Service struct {
 	Within func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 type InviteInput struct {
-	TenantID, AssetID, TemplateID, TemplateVersionID identity.ID
-	Delivery                                         []invitationcore.DeliveryIntent
-	Requirements                                     []capturecore.Requirement
-	Policy, Reference                                json.RawMessage
-	ExpiresAt                                        time.Time
-	IdempotencyKey                                   string
+	TenantID, AssetID, TemplateVersionID identity.ID
+	Delivery                             []invitationcore.DeliveryIntent
+	Requirements                         []capturecore.Requirement
+	Policy, Reference                    json.RawMessage
+	ExpiresAt                            time.Time
+	IdempotencyKey                       string
 }
 type Invitation struct {
 	OriginID, VersionID, ResponsibilityID, InvitationID identity.ID
@@ -40,7 +40,7 @@ type Invitation struct {
 }
 
 func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error) {
-	if in.TenantID == (identity.ID{}) || in.AssetID == (identity.ID{}) || in.TemplateID == (identity.ID{}) || in.TemplateVersionID == (identity.ID{}) || len(in.Delivery) == 0 || len(in.Requirements) == 0 || len(in.Requirements) > capturecore.MaxActivePhotos || !in.ExpiresAt.After(s.now()) || strings.TrimSpace(in.IdempotencyKey) == "" {
+	if in.TenantID == (identity.ID{}) || in.AssetID == (identity.ID{}) || in.TemplateVersionID == (identity.ID{}) || len(in.Delivery) == 0 || len(in.Requirements) == 0 || len(in.Requirements) > capturecore.MaxActivePhotos || !in.ExpiresAt.After(s.now()) || strings.TrimSpace(in.IdempotencyKey) == "" {
 		return Invitation{}, apperror.New(apperror.InvalidInput, "input", "valid origin context, requirements, channels, and expiry are required")
 	}
 	seen := make(map[string]struct{}, len(in.Requirements))
@@ -77,9 +77,9 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 			return err
 		}
 		var origin database.Origin
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND asset_id=? AND template_id=?", in.TenantID, in.AssetID, in.TemplateID).First(&origin).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND asset_id=?", in.TenantID, in.AssetID).First(&origin).Error
 		if err == gorm.ErrRecordNotFound {
-			origin = database.Origin{ID: identity.NewID(), TenantID: in.TenantID, AssetID: in.AssetID, TemplateID: in.TemplateID, Version: 1, CreatedAt: now, UpdatedAt: now}
+			origin = database.Origin{ID: identity.NewID(), TenantID: in.TenantID, AssetID: in.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}
 			if err = tx.Create(&origin).Error; err != nil {
 				return err
 			}

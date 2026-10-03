@@ -7,6 +7,9 @@ import { presentDashboardStatus, presentInspectionSource } from "./presentation"
 
 export type InspectionView = "lista" | "quadro" | "agenda";
 export type InspectionRecord = InspectionsQuery["inspections"]["nodes"][number];
+export function canRequestInspectionRecapture(inspection: Pick<InspectionRecord, "evidenceCount" | "status">): boolean {
+  return inspection.evidenceCount > 0 && (inspection.status === "SUBMITTED" || inspection.status === "COMPLETED");
+}
 const defaultInspectionView: InspectionView = "lista";
 export type InspectionActionHandlers = {
   onCancel: (inspection: InspectionRecord) => void;
@@ -168,7 +171,7 @@ function InspectionStatus({ status }: { status: string }) {
 
 function InspectionActions({ inspection, actions }: { inspection: InspectionRecord; actions?: InspectionActionHandlers }) {
   if (!actions) return null;
-  return <details className="inspection-action-menu"><summary>Ações</summary><div><button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button><button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar complemento</button></div></details>;
+  return <details className="inspection-action-menu"><summary>Ações</summary><div><button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button>{canRequestInspectionRecapture(inspection) && <button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar complemento</button>}</div></details>;
 }
 
 function EmptyInspections() {

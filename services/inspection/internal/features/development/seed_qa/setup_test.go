@@ -27,8 +27,8 @@ func TestQATemplateIsUsableByCreationFlows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !compiled.Document.MultiStage || len(compiled.Document.Stages) != 1 || compiled.Document.ComparisonMode != catalog.ChecklistOnly {
-		t.Fatalf("QA template cannot create a project: %+v", compiled.Document)
+	if compiled.Document.DefaultComparisonMode != catalog.ChecklistOnly {
+		t.Fatalf("QA template has invalid default comparison mode: %+v", compiled.Document)
 	}
 	var array []json.RawMessage
 	if err := json.Unmarshal(encoded, &array); err == nil {

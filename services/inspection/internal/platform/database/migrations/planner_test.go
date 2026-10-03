@@ -60,8 +60,8 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 49 {
-		t.Fatalf("latest version=%d, want 49", got)
+	if got := LatestVersion(); got != 52 {
+		t.Fatalf("latest version=%d, want 52", got)
 	}
 }
 
@@ -77,6 +77,23 @@ func TestTriageCaseMigrationEnablesTenantIsolationAndBackfillsCurrentRisks(t *te
 		}
 	}
 	t.Fatal("triage review migration missing")
+}
+
+func TestTriageCaseRecoveryMigrationBackfillsMissingCasesIdempotently(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 52 {
+			if step.Name != "backfill_triage_cases_from_classifications" {
+				t.Fatalf("unexpected triage recovery migration: %+v", step)
+			}
+			for _, required := range []string{"analysis.classification_runs", "reports.report_snapshots", "c.classification IN ('CRITICAL','ATTENTION')", "ON CONFLICT (tenant_id,inspection_id) DO NOTHING"} {
+				if !strings.Contains(step.SQL, required) {
+					t.Fatalf("triage recovery migration does not contain %q", required)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("triage recovery migration missing")
 }
 
 func TestOriginAttentionItemsMigrationUsesJSONArrays(t *testing.T) {
@@ -140,8 +157,8 @@ func TestUsageDailySummaryIndexMigrationScopesUniquenessByTenantAndDay(t *testin
 		if step.Name != "usage_daily_summary_tenant_day_index" || !strings.Contains(step.SQL, "DROP INDEX IF EXISTS usage.idx_usage_daily") || !strings.Contains(step.SQL, "CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day)") {
 			t.Fatalf("unexpected usage summary migration: %+v", step)
 		}
-		if got := LatestVersion(); got != 49 {
-			t.Fatalf("latest version=%d, want 49", got)
+		if got := LatestVersion(); got != 52 {
+			t.Fatalf("latest version=%d, want 52", got)
 		}
 		return
 	}

@@ -41,11 +41,11 @@ func TestTask5IT071ToIT100IT141ToIT200IT221ToIT240IT311ToIT320(t *testing.T) {
 	requirements := []capturecore.Requirement{{Key: "overview", Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: 2, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}}
 	origins := origincore.Service{DB: db, Within: within, Now: func() time.Time { return now }}
 
-	invited, err := origins.Invite(context.Background(), origincore.InviteInput{TenantID: tenantID, AssetID: assetID, TemplateID: templateID, TemplateVersionID: templateVersionID, Delivery: delivery, Requirements: requirements, Policy: json.RawMessage(`{"gpsRequired":false,"allowGallery":true}`), ExpiresAt: now.Add(time.Hour), IdempotencyKey: "origin-1"})
+	invited, err := origins.Invite(context.Background(), origincore.InviteInput{TenantID: tenantID, AssetID: assetID, TemplateVersionID: templateVersionID, Delivery: delivery, Requirements: requirements, Policy: json.RawMessage(`{"gpsRequired":false,"allowGallery":true}`), ExpiresAt: now.Add(time.Hour), IdempotencyKey: "origin-1"})
 	if err != nil || invited.LinkToken == "" {
 		t.Fatalf("origin invitation failed: %+v %v", invited, err)
 	}
-	replayed, err := origins.Invite(context.Background(), origincore.InviteInput{TenantID: tenantID, AssetID: assetID, TemplateID: templateID, TemplateVersionID: templateVersionID, Delivery: delivery, Requirements: requirements, ExpiresAt: now.Add(time.Hour), IdempotencyKey: "origin-1"})
+	replayed, err := origins.Invite(context.Background(), origincore.InviteInput{TenantID: tenantID, AssetID: assetID, TemplateVersionID: templateVersionID, Delivery: delivery, Requirements: requirements, ExpiresAt: now.Add(time.Hour), IdempotencyKey: "origin-1"})
 	if err != nil || replayed.VersionID != invited.VersionID || replayed.LinkToken != "" {
 		t.Fatalf("origin replay was not idempotent: %+v %v", replayed, err)
 	}

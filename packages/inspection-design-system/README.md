@@ -15,7 +15,7 @@ import { Alert, Button, Container, PageHeader, ProductIdentity, Stack, ThemeProv
 import "@inspection/design-system/styles.css";
 ```
 
-Each app wraps its tree in `ThemeProvider` and runs `ThemeScript` in the document head before paint. `ThemeSelector` offers Sistema, Claro and Escuro; `useTheme()` exposes the saved preference and resolved theme. The shared key is `inspection.theme`. System changes and same-origin storage events are followed automatically.
+Each app wraps its tree in `ThemeProvider` and runs `ThemeScript` in the document head before paint. `ThemeSelector` shows a moon in light mode and a sun in dark mode; activating it switches between the two. The theme follows the operating system by default until the user makes an explicit choice. `useTheme()` exposes the saved preference and resolved theme. The shared key is `inspection.theme`. System changes and same-origin storage events are followed automatically.
 
 Use the semantic light and dark tokens instead of page-local color values. `brand` is for primary actions and selection, `on-brand` is its foreground, surface roles distinguish the canvas from cards and navigation, and success, warning and danger remain separate state roles. The branded page header retains cobalt and white text in both themes. Literata, Source Sans 3 and IBM Plex Mono are bundled with their font licenses.
 

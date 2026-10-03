@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { IconButton } from "./icon-button.js";
 
 /** Theme preference supported by all Inspection products. */
 export type ThemePreference = "system" | "light" | "dark";
@@ -67,8 +68,10 @@ export function ThemeScript() {
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
-/** Compact accessible selector that follows the operating system by default. */
+/** Compact accessible theme toggle that follows the operating system by default. */
 export function ThemeSelector({ className = "" }: { className?: string }) {
-  const { preference, setPreference } = useTheme();
-  return <label className={`inspection-theme-selector ${className}`.trim()}><span>Aparência</span><select aria-label="Aparência" value={preference} onChange={(event) => setPreference(event.target.value as ThemePreference)}><option value="system">Sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select></label>;
+  const { resolvedTheme, setPreference } = useTheme();
+  const nextTheme = resolvedTheme === "light" ? "dark" : "light";
+  const label = nextTheme === "dark" ? "Ativar tema escuro" : "Ativar tema claro";
+  return <IconButton className={`inspection-theme-toggle ${className}`.trim()} label={label} tooltip={label} icon={resolvedTheme === "light" ? "moon" : "sun"} onPress={() => setPreference(nextTheme)} />;
 }

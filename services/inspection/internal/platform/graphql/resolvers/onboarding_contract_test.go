@@ -131,7 +131,7 @@ func TestMapOnboardingSessionIncludesVersionedDefinition(t *testing.T) {
 	if value.Definition["segment"] != "REAL_ESTATE" || value.Definition["segmentVersion"] != "real-estate-v1" {
 		t.Fatalf("session definition segment: %#v", value.Definition)
 	}
-	if len(value.Definition["steps"].([]real_estate_catalog.Step)) == 0 || len(value.Definition["templates"].([]string)) != 2 {
+	if len(value.Definition["steps"].([]real_estate_catalog.Step)) == 0 || len(value.Definition["templates"].([]string)) != 1 {
 		t.Fatalf("session definition content: %#v", value.Definition)
 	}
 	if value.Owner == nil || value.Owner.Name != "Ana" || value.Owner.Email != "ana@example.test" {

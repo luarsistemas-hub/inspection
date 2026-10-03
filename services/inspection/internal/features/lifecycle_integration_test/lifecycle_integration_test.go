@@ -119,11 +119,11 @@ func TestLifecycleIT101ToIT140IT201ToIT220IT380ToIT382(t *testing.T) {
 		t.Fatalf("invalidation without evidence accepted: %v", err)
 	}
 
-	project, err := projects.Create(ctx, projectcore.CreateInput{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: &fixture.templateID, IdempotencyKey: "project"})
+	project, err := projects.Create(ctx, projectcore.CreateInput{TenantID: fixture.tenantID, AssetID: fixture.assetID, Name: "Lifecycle project", OrderedStages: false, Stages: []projectcore.PlannedStageInput{{Key: "first", Label: "First stage"}, {Key: "second", Label: "Second stage"}}, IdempotencyKey: "project"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if project.Project.ReportMode != "CONSOLIDATED" || len(project.Stages) != 2 || project.Stages[0].Kind != "ORIGIN" {
+	if project.Project.Name != "Lifecycle project" || len(project.Stages) != 2 || project.Stages[0].Kind != "INSPECTION" {
 		t.Fatalf("project snapshot mismatch: %#v", project)
 	}
 	project, err = projects.SkipStage(ctx, projectcore.TransitionInput{TenantID: fixture.tenantID, ProjectID: project.Project.ID, StageID: &project.Stages[0].ID, ExpectedVersion: project.Project.Version, Reason: "not required"})
@@ -153,7 +153,7 @@ func seedLifecycle(t *testing.T, db *gorm.DB) lifecycleFixture {
 	t.Helper()
 	f := lifecycleFixture{tenantID: identity.NewID(), unitID: identity.NewID(), identityID: identity.NewID(), membershipID: identity.NewID(), participantID: identity.NewID(), templateID: identity.NewID(), assetID: identity.NewID(), now: time.Now().UTC().Truncate(time.Second)}
 	contactID, templateVersionID, segmentVersionID := identity.NewID(), identity.NewID(), identity.NewID()
-	document := catalog.TemplateDocument{SchemaVersion: 1, SegmentVersionID: segmentVersionID.String(), ParticipantRoles: []string{"RESPONSIBLE"}, ComparisonMode: catalog.ChecklistOnly, Requirements: []catalog.CaptureRequirement{{Key: "overview", Section: "general", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: catalog.ChecklistOnly}}, MultiStage: true, Stages: []catalog.Stage{{Key: "origin", Label: "Origin", Position: 1}, {Key: "inspection", Label: "Inspection", Position: 2}}, ReportMode: "CONSOLIDATED", AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
+	document := catalog.TemplateDocument{SchemaVersion: 1, SegmentVersionID: segmentVersionID.String(), ParticipantRoles: []string{"RESPONSIBLE"}, DefaultComparisonMode: catalog.ChecklistOnly, Requirements: []catalog.CaptureRequirement{{Key: "overview", Section: "general", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}}, AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
 	definition, _ := json.Marshal(document)
 	rows := []any{
 		&database.Tenant{ID: f.tenantID, TenantID: f.tenantID, Name: "Lifecycle", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: f.now, UpdatedAt: f.now},

@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useEffect, useState, type ReactNode } from "react";
+import React, { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { Confirmation, Dialog } from "@inspection/design-system";
 
 /** Hosts a create or edit form without moving the page content below it. */
-export function FormDialog({ isOpen, onClose, title, busy, error, children }: {
+export function FormDialog({ isOpen, onClose, title, busy, error, children, restoreFocusRef }: {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   busy: boolean;
   error?: string;
   children: ReactNode;
+  restoreFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const [dirty, setDirty] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -22,7 +23,7 @@ export function FormDialog({ isOpen, onClose, title, busy, error, children }: {
     onClose();
   };
 
-  return <Dialog isOpen={isOpen} isDismissable={!busy && !confirmDiscard} onClose={requestClose} size="fullscreen" title={title}>
+  return <Dialog isOpen={isOpen} isDismissable={!busy && !confirmDiscard} onClose={requestClose} restoreFocusRef={restoreFocusRef} size="fullscreen" title={title}>
     <div className="form-dialog-body" onChangeCapture={() => setDirty(true)} onInputCapture={() => setDirty(true)} onClickCapture={(event) => {
       if (!(event.target instanceof Element)) return;
       if (event.target.closest('[role="option"]')) setDirty(true);
@@ -38,7 +39,7 @@ export function FormDialog({ isOpen, onClose, title, busy, error, children }: {
         <button type="button" className="secondary" onClick={requestClose} disabled={busy}>Cancelar</button>
       </div>
       <Dialog isOpen={confirmDiscard} isDismissable={!busy} onClose={() => setConfirmDiscard(false)} title="Descartar alterações?">
-        <Confirmation target={title} scope="Formulário em edição" consequence="As alterações não salvas serão perdidas." onCancel={() => setConfirmDiscard(false)} onConfirm={() => { setConfirmDiscard(false); onClose(); }} confirmLabel="Descartar alterações" />
+        <Confirmation target={title} scope="Formulário em edição" consequence="As alterações não salvas serão perdidas." onCancel={() => setConfirmDiscard(false)} onConfirm={() => { setConfirmDiscard(false); window.setTimeout(onClose, 0); }} confirmLabel="Descartar alterações" />
       </Dialog>
     </div>
   </Dialog>;

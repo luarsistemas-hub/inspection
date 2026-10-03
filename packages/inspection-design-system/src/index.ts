@@ -2,6 +2,8 @@ export { Button } from "./primitives/button.js";
 export type { ButtonProps } from "./primitives/button.js";
 export { IconButton } from "./primitives/icon-button.js";
 export type { IconButtonProps } from "./primitives/icon-button.js";
+export { AccountMenu } from "./primitives/account-menu.js";
+export type { AccountMenuProps } from "./primitives/account-menu.js";
 export { InfoDisclosure } from "./primitives/info-disclosure.js";
 export type { InfoDisclosureProps } from "./primitives/info-disclosure.js";
 export { Card, Container, Inline, Stack } from "./primitives/layout.js";

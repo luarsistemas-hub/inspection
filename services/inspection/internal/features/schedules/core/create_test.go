@@ -24,6 +24,8 @@ import (
 
 type fixedOriginFixture struct {
 	input      Input
+	assetUnit  identity.ID
+	personUnit identity.ID
 	originAsks int
 	originErr  error
 	lastQuery  originresolve.Query
@@ -31,8 +33,8 @@ type fixedOriginFixture struct {
 
 func newFixedOriginFixture(t *testing.T) (*fixedOriginFixture, *mediator.Bus) {
 	t.Helper()
-	fixture := &fixedOriginFixture{input: Input{TenantID: identity.NewID(), AssetID: identity.NewID(), ParticipantID: identity.NewID(), TemplateID: identity.NewID(), RRule: "FREQ=MONTHLY", Timezone: "UTC", StartsAt: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), DeadlineMinutes: 60, IdempotencyKey: "schedule-fixed-origin"}}
-	definition, err := json.Marshal(catalog.TemplateDocument{ComparisonMode: catalog.FixedOrigin})
+	fixture := &fixedOriginFixture{input: Input{TenantID: identity.NewID(), AssetID: identity.NewID(), ParticipantID: identity.NewID(), TemplateID: identity.NewID(), ComparisonMode: catalog.FixedOrigin, RRule: "FREQ=MONTHLY", Timezone: "UTC", StartsAt: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), DeadlineMinutes: 60, IdempotencyKey: "schedule-fixed-origin"}, assetUnit: identity.NewID(), personUnit: identity.NewID()}
+	definition, err := json.Marshal(catalog.TemplateDocument{DefaultComparisonMode: catalog.ChecklistOnly})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,10 +44,10 @@ func newFixedOriginFixture(t *testing.T) (*fixedOriginFixture, *mediator.Bus) {
 		handler func(context.Context, any) (any, error)
 	}{
 		{assetget.Query{}, func(context.Context, any) (any, error) {
-			return assetcore.View{Asset: database.Asset{ID: fixture.input.AssetID, BusinessUnitID: identity.NewID(), Status: "ACTIVE"}, Assignments: []database.AssetAssignment{{ParticipantID: fixture.input.ParticipantID, Active: true}}}, nil
+			return assetcore.View{Asset: database.Asset{ID: fixture.input.AssetID, BusinessUnitID: fixture.assetUnit, Status: "ACTIVE"}}, nil
 		}},
 		{participantget.Query{}, func(context.Context, any) (any, error) {
-			return participantcore.ParticipantView{Participant: database.Participant{Status: "ACTIVE"}, Selected: []identity.ID{identity.NewID()}}, nil
+			return participantcore.ParticipantView{Participant: database.Participant{BusinessUnitID: fixture.personUnit, Status: "ACTIVE"}, Selected: []identity.ID{identity.NewID()}}, nil
 		}},
 		{templateresolve.Query{}, func(context.Context, any) (any, error) {
 			return templateresolve.Result{Version: database.TemplateVersion{DefinitionJSON: definition}}, nil
@@ -87,7 +89,21 @@ func TestCreateFixedOriginRequiresActiveOriginWithoutPinningIt(t *testing.T) {
 	if !errors.Is(err, fixture.originErr) {
 		t.Fatalf("Create error = %v, want %v", err, fixture.originErr)
 	}
-	if fixture.originAsks != 1 || fixture.lastQuery.VersionID != nil || fixture.lastQuery.TemplateID != fixture.input.TemplateID {
+	if fixture.originAsks != 1 || fixture.lastQuery.VersionID != nil || fixture.lastQuery.AssetID != fixture.input.AssetID {
 		t.Fatalf("origin query = %+v after %d asks", fixture.lastQuery, fixture.originAsks)
+	}
+}
+
+func TestCreateRejectsParticipantOutsideAuthorizedUnits(t *testing.T) {
+	fixture, bus := newFixedOriginFixture(t)
+	principal := requestctx.Principal{IdentityID: identity.NewID(), TenantID: fixture.input.TenantID, Roles: []string{auth.Manager}, Scopes: []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: fixture.assetUnit}}}
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.input.TenantID, Principal: principal})
+	_, err := (Service{Bus: bus, Authorizer: auth.Authorizer{}}).Create(ctx, fixture.input)
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.Forbidden {
+		t.Fatalf("Create error = %v, want forbidden for a participant from an inaccessible unit", err)
+	}
+	if fixture.originAsks != 0 {
+		t.Fatal("origin was resolved before rejecting the participant's unit scope")
 	}
 }

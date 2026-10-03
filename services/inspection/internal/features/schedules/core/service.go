@@ -18,6 +18,7 @@ import (
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
+	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	templateresolve "inspection/services/inspection/internal/features/templates/resolve_template"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -35,6 +36,8 @@ import (
 
 type Input struct {
 	TenantID, AssetID, ParticipantID, TemplateID identity.ID
+	ProjectID, StageID                           *identity.ID
+	ComparisonMode                               catalog.ComparisonMode
 	ReferenceVersionID                           *identity.ID
 	RRule, Timezone, IdempotencyKey              string
 	StartsAt                                     time.Time
@@ -97,17 +100,24 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
 		return database.Schedule{}, fmt.Errorf("decode schedule template: %w", err)
 	}
-	if (document.ComparisonMode == catalog.PlannedStage || document.ComparisonMode == catalog.BeforeAfter) && in.ReferenceVersionID == nil {
-		return database.Schedule{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
+	mode := in.ComparisonMode
+	if mode == "" {
+		mode = document.DefaultComparisonMode
+	}
+	if mode == "" {
+		mode = catalog.ChecklistOnly
+	}
+	if mode != catalog.ChecklistOnly && mode != catalog.FixedOrigin {
+		return database.Schedule{}, apperror.New(apperror.InvalidInput, "comparisonMode", "unsupported comparison mode")
 	}
 	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 		return database.Schedule{}, err
 	}
-	if document.ComparisonMode == catalog.FixedOrigin {
+	if mode == catalog.FixedOrigin {
 		// Validate that an active origin exists without pinning it: each
 		// occurrence resolves the origin active at its own creation, so a later
 		// promotion does not break the remaining recurrences.
-		if _, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, TemplateID: in.TemplateID, VersionID: in.ReferenceVersionID}); err != nil {
+		if _, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID}); err != nil {
 			return database.Schedule{}, err
 		}
 	}
@@ -117,13 +127,17 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	}
 	offsets, _ := json.Marshal(in.ReminderOffsetsMinutes)
 	now := s.now()
-	row := database.Schedule{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: in.TemplateID, ReferenceVersionID: in.ReferenceVersionID, RRule: strings.TrimSpace(in.RRule), Timezone: strings.TrimSpace(in.Timezone), StartsAt: in.StartsAt.UTC(), NextDueAt: next.UTC(), DeadlineMinutes: in.DeadlineMinutes, ReminderOffsets: offsets, Status: "ACTIVE", Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
+	templateVersionID := template.Version.ID
+	row := database.Schedule{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: in.TemplateID, TemplateVersionID: &templateVersionID, ComparisonMode: string(mode), ProjectID: in.ProjectID, StageID: in.StageID, ReferenceVersionID: in.ReferenceVersionID, RRule: strings.TrimSpace(in.RRule), Timezone: strings.TrimSpace(in.Timezone), StartsAt: in.StartsAt.UTC(), NextDueAt: next.UTC(), DeadlineMinutes: in.DeadlineMinutes, ReminderOffsets: offsets, Status: "ACTIVE", Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
 	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		var existing database.Schedule
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", in.TenantID, in.IdempotencyKey).First(&existing).Error; err == nil {
 			row = existing
 			return nil
 		} else if err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err
 		}
 		return tx.Create(&row).Error
@@ -211,7 +225,8 @@ func (s Service) List(ctx context.Context, tenantID identity.ID, first int, afte
 	}
 	var rows []database.Schedule
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
-		q := tx.Where("tenant_id=?", tenantID).Order("created_at ASC, id ASC").Limit(first + 1)
+		// The cursor is the schedule ID, so keep the query order aligned with it.
+		q := tx.Where("tenant_id=?", tenantID).Order("id ASC").Limit(first + 1)
 		if after != "" {
 			q = q.Where("id::text > ?", after)
 		}
@@ -251,7 +266,7 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 		for _, offset := range offsets {
 			reminders = append(reminders, dueAt.Add(time.Duration(offset)*time.Minute))
 		}
-		raw, err := s.Bus.Send(ctx, createoccurrence.Command{TenantID: tenantID, AssetID: schedule.AssetID, ParticipantID: schedule.ParticipantID, TemplateID: &schedule.TemplateID, ReferenceVersionID: schedule.ReferenceVersionID, Source: inspectioncore.SourceScheduled, SourceKey: schedule.ID.String() + "/" + dueAt.Format(time.RFC3339Nano), DueAt: dueAt, DeadlineAt: deadline, ReminderInstants: reminders})
+		raw, err := s.Bus.Send(ctx, createoccurrence.Command{TenantID: tenantID, AssetID: schedule.AssetID, ParticipantID: schedule.ParticipantID, TemplateID: &schedule.TemplateID, TemplateVersionID: schedule.TemplateVersionID, ComparisonMode: catalog.ComparisonMode(schedule.ComparisonMode), ReferenceVersionID: schedule.ReferenceVersionID, ProjectID: schedule.ProjectID, StageID: schedule.StageID, Source: inspectioncore.SourceScheduled, SourceKey: schedule.ID.String() + "/" + dueAt.Format(time.RFC3339Nano), DueAt: dueAt, DeadlineAt: deadline, ReminderInstants: reminders})
 		if err != nil {
 			return results, err
 		}
@@ -375,12 +390,8 @@ func (s Service) prerequisites(ctx context.Context, tenantID, assetID, participa
 	if participant.Participant.Status != "ACTIVE" || len(participant.Selected) == 0 {
 		return database.Asset{}, templateresolve.Result{}, apperror.New(apperror.InvalidState, "participantId", "participant requires an active verified delivery channel")
 	}
-	assigned := false
-	for _, assignment := range asset.Assignments {
-		assigned = assigned || (assignment.Active && assignment.ParticipantID == participantID)
-	}
-	if !assigned {
-		return database.Asset{}, templateresolve.Result{}, apperror.New(apperror.InvalidInput, "participantId", "participant is not assigned to the asset")
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
+		return database.Asset{}, templateresolve.Result{}, err
 	}
 	templateRaw, err := s.Bus.Ask(ctx, templateresolve.Query{TenantID: tenantID, TemplateID: templateID})
 	if err != nil {

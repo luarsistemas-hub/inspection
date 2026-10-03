@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe("shared theme preference", () => {
-  it("defaults to system, persists an explicit choice, and resolves its color scheme", async () => {
+  it("defaults to system, shows the opposite theme icon, and persists each toggle", async () => {
     window.matchMedia = (() => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined })) as typeof window.matchMedia;
     const container = document.createElement("div");
     document.body.append(container);
@@ -43,16 +43,21 @@ describe("shared theme preference", () => {
     }
 
     await act(async () => root.render(<ThemeProvider><ThemeProbe /></ThemeProvider>));
-    expect(container.querySelector("select")?.value).toBe("system");
+    const button = container.querySelector("button")!;
+    expect(button.getAttribute("aria-label")).toBe("Ativar tema escuro");
+    expect(button.querySelector("svg path")?.getAttribute("d")).toBe("M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z");
     expect(resolved).toBe("light");
     await act(async () => {
-      const selector = container.querySelector("select")!;
-      selector.value = "dark";
-      selector.dispatchEvent(new Event("change", { bubbles: true }));
+      button.click();
     });
     expect(window.localStorage.getItem(themeStorageKey)).toBe("dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(resolved).toBe("dark");
+    expect(button.getAttribute("aria-label")).toBe("Ativar tema claro");
+    expect(button.querySelector("svg path")?.getAttribute("d")).toBe("M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z");
+    await act(async () => button.click());
+    expect(window.localStorage.getItem(themeStorageKey)).toBe("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
 
     await act(async () => root.unmount());
     container.remove();
@@ -65,7 +70,7 @@ describe("shared theme preference", () => {
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => root.render(<ThemeProvider><ThemeSelector /></ThemeProvider>));
-    expect(container.querySelector("select")?.value).toBe("system");
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe("Ativar tema claro");
     expect(document.documentElement.dataset.theme).toBe("dark");
     await act(async () => root.unmount());
     container.remove();
@@ -84,14 +89,18 @@ describe("shared theme preference", () => {
     const root = createRoot(container);
     await act(async () => root.render(<ThemeProvider><ThemeSelector /></ThemeProvider>));
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe("Ativar tema escuro");
 
     systemIsDark = true;
     await act(async () => listeners.forEach((listener) => listener({ matches: true } as MediaQueryListEvent)));
     expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe("Ativar tema claro");
+    expect(container.querySelector("button svg path")?.getAttribute("d")).toBe("M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z");
 
     storedValues.set(themeStorageKey, "light");
     await act(async () => window.dispatchEvent(new StorageEvent("storage", { key: themeStorageKey })));
-    expect(container.querySelector("select")?.value).toBe("light");
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe("Ativar tema escuro");
+    expect(container.querySelector("button svg path")?.getAttribute("d")).toBe("M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z");
     expect(document.documentElement.dataset.theme).toBe("light");
     await act(async () => root.unmount());
     container.remove();
@@ -108,13 +117,12 @@ describe("shared theme preference", () => {
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => root.render(<ThemeProvider><ThemeSelector /></ThemeProvider>));
-    const selector = container.querySelector("select")!;
+    const button = container.querySelector("button")!;
     await act(async () => {
-      selector.value = "dark";
-      selector.dispatchEvent(new Event("change", { bubbles: true }));
+      button.click();
     });
     expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(selector.value).toBe("dark");
+    expect(button.getAttribute("aria-label")).toBe("Ativar tema claro");
     await act(async () => root.unmount());
     container.remove();
   });

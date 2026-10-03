@@ -51,6 +51,29 @@ test("requires a fresh Turnstile token before requesting an onboarding code", as
   expect(submittedTokens).toEqual(["token-1", "token-2"]);
 });
 
+test("reloads the Turnstile script after its first network failure", async ({ page }) => {
+  let loads = 0;
+  await page.route("**/graphql", async (route) => {
+    const query = (route.request().postDataJSON() as { query?: string }).query ?? "";
+    if (query.includes("OnboardingDefinition")) {
+      await route.fulfill({ json: { data: { onboardingDefinition: { schemaVersion: 1, version: 1, segment: "REAL_ESTATE", segmentVersion: "1", steps: [{ key: "agency", label: "Imobiliária", position: 1, required: true, fields: [] }], purposes: [], originModes: [], templates: [], analysisType: "PHOTOS" } } } });
+      return;
+    }
+    await route.fulfill({ json: { data: { onboardingSession: null } } });
+  });
+  page.on("request", (request) => {
+    if (request.url().startsWith("https://challenges.cloudflare.com/turnstile/v0/api.js")) loads++;
+  });
+  await new OnboardingPage(page).open({ autoSolve: false, failFirstLoad: true });
+  await expect(page.locator(".onboarding-turnstile-error")).toContainText("Não foi possível carregar a verificação de segurança");
+  const requestButton = page.getByRole("button", { name: "Enviar código" });
+  await expect(requestButton).toBeDisabled();
+  await page.getByRole("button", { name: "Tentar novamente" }).click();
+  await expect.poll(() => loads).toBe(2);
+  await page.evaluate(() => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.("retry-token"));
+  await expect(requestButton).toBeEnabled();
+});
+
 test("completes the real onboarding flow and creates the first vistoria", async ({ page }, testInfo) => {
   const onboarding = new OnboardingPage(page);
   const suffix = `${Date.now()}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "-")}`;
@@ -68,7 +91,7 @@ test("completes the real onboarding flow and creates the first vistoria", async 
   await onboarding.open();
   await page.getByLabel("Seu nome").fill("Ana E2E");
   await page.getByLabel("Seu e-mail").fill(`ana.${suffix}@example.test`);
-  await page.getByRole("combobox", { name: "Aparência" }).selectOption("dark");
+  await page.getByRole("button", { name: "Ativar tema escuro" }).click();
   await expect(page.getByLabel("Seu nome")).toHaveValue("Ana E2E");
   await expect(page.getByRole("button", { name: "Enviar código" })).toBeEnabled();
   await page.getByRole("button", { name: "Enviar código" }).click();

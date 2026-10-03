@@ -3,16 +3,15 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Combobox, type ComboboxOption } from "@inspection/design-system";
 import { FormDialog } from "./form-dialog";
 import { ConfirmationDialog } from "./confirmation-dialog";
+import { EntityRelationshipField, type FormOptionsState } from "./form-options";
 import {
   CancelScheduleDocument,
   CreateScheduleDocument,
   InspectionsDocument,
   SchedulesDocument,
   UpdateScheduleDocument,
-  type DashboardFormOptionsQuery,
   type InspectionsQuery,
   type SchedulesQuery,
 } from "@/graphql/generated";
@@ -37,7 +36,7 @@ export function SchedulesJourney({
   refreshKey,
 }: {
   canMutate: boolean;
-  options: { data?: DashboardFormOptionsQuery; loading: boolean; error?: string };
+  options: FormOptionsState;
   refreshKey: number;
 }) {
   const [data, setData] = useState<SchedulesQuery>();
@@ -108,7 +107,10 @@ export function SchedulesJourney({
         return formatMutationErrors(payload.userErrors);
       }
       setMessage("Agenda salva. Atualizando dados…");
-      await load();
+      const createdScheduleId = document === CreateScheduleDocument
+        ? (payload as { schedule?: { id?: string } | null }).schedule?.id
+        : undefined;
+      await load(createdScheduleId);
       await loadInspections();
       return undefined;
     } catch (error) {
@@ -207,7 +209,7 @@ export function SchedulesJourney({
       <FormDialog isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Nova agenda" busy={creating} error={createError}>
         {options.loading && <p role="status">Carregando imóveis, responsáveis pela vistoria e modelos de vistoria…</p>}
         {options.error && <p className="warning" role="alert">Não foi possível carregar as opções do cadastro. {options.error}</p>}
-        {options.data && <CreateScheduleForm options={options.data} onSubmit={(input) => void create(input)} busy={creating} />}
+        {options.data && <CreateScheduleForm options={options} onSubmit={(input) => void create(input)} busy={creating} />}
       </FormDialog>
       <FormDialog isOpen={Boolean(editItem)} onClose={() => setEditItem(undefined)} title="Editar agenda" busy={editing} error={editError}>
         {editItem && <EditScheduleForm key={`${editItem.id}:${editItem.version}`} item={editItem} onSubmit={(input) => void update(editItem, input)} busy={editing} />}
@@ -268,22 +270,17 @@ function FormOptionsNotice({ options }: { options: { loading: boolean; error?: s
   return null;
 }
 
-function CreateScheduleForm({ options, onSubmit, busy }: { options: DashboardFormOptionsQuery; onSubmit: (input: Record<string, unknown>) => void; busy: boolean }) {
+function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsState; onSubmit: (input: Record<string, unknown>) => void; busy: boolean }) {
   const [assetId, setAssetId] = useState("");
   const [participantId, setParticipantId] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [comparisonMode, setComparisonMode] = useState("CHECKLIST_ONLY");
   const [frequency, setFrequency] = useState("MONTHLY");
   const [startsAt, setStartsAt] = useState("");
   const [deadlineMinutes, setDeadlineMinutes] = useState("60");
   const [reminders, setReminders] = useState(["30"]);
   const [validationError, setValidationError] = useState("");
-  const participants = scheduleEntityOptions(options, "participant", assetId);
-  const templates = scheduleEntityOptions(options, "template", assetId);
-
-  useEffect(() => {
-    if (participantId && !participants.some((option) => option.value === participantId)) setParticipantId("");
-    if (templateId && !templates.some((option) => option.value === templateId)) setTemplateId("");
-  }, [assetId, participantId, participants, templateId, templates]);
+  const asset = options.data?.assets.nodes.find((item) => item.id === assetId);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -294,6 +291,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: DashboardFor
       assetId,
       participantId,
       templateId,
+      comparisonMode,
       rrule: `FREQ=${frequency}`,
       startsAt,
       timezone: scheduleTimezone,
@@ -307,9 +305,10 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: DashboardFor
   return <form className="schedule-form" onSubmit={submit}>
     <fieldset className="schedule-form-section">
       <legend>Dados da vistoria</legend>
-      <RelationshipField label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={scheduleEntityOptions(options, "asset")} required />
-      <RelationshipField label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={participants} required disabled={!assetId} />
-      <RelationshipField label="Modelo de vistoria" value={templateId} onChange={setTemplateId} options={templates} required disabled={!assetId} />
+      <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={options} required />
+      <EntityRelationshipField kind="participant" label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={options} required disabled={!assetId} />
+      <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={setTemplateId} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
+      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => setComparisonMode(event.target.value)}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com fotos de referência do imóvel</option></select></label>
     </fieldset>
     <fieldset className="schedule-form-section">
       <legend>Quando acontece</legend>
@@ -388,21 +387,6 @@ function ScheduleNotices({
     </fieldset>
     {validationError && <p className="schedule-validation-error" role="alert">{validationError}</p>}
   </fieldset>;
-}
-
-function RelationshipField({ label, value, onChange, options, required = false, disabled = false }: { label: string; value: string; onChange: (value: string) => void; options: ComboboxOption[]; required?: boolean; disabled?: boolean }) {
-  return <label>{label}<Combobox value={value} options={options} onChange={onChange} required={required} disabled={disabled} aria-label={label} /></label>;
-}
-
-function scheduleEntityOptions(options: DashboardFormOptionsQuery, kind: "asset" | "participant" | "template", assetId?: string): ComboboxOption[] {
-  if (kind === "asset") return options.assets.nodes.filter((item) => item.status === "ACTIVE").map((item) => ({ value: item.id, label: item.name, description: item.externalKey }));
-  if (kind === "participant") {
-    const asset = options.assets.nodes.find((item) => item.id === assetId);
-    const assigned = new Set(asset?.assignments.filter((assignment) => assignment.active).map((assignment) => assignment.participantId));
-    return options.participants.nodes.filter((item) => item.status === "ACTIVE" && (!asset || assigned.has(item.id))).map((item) => ({ value: item.id, label: item.name }));
-  }
-  const asset = options.assets.nodes.find((item) => item.id === assetId);
-  return options.templates.nodes.filter((item) => item.activeVersionId && (!asset || item.segmentVersionId === asset.segmentVersionId)).map((item) => ({ value: item.id, label: item.name, description: item.key }));
 }
 
 export function scheduleFrequencyValue(rrule: string): string | null {

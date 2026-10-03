@@ -48,6 +48,10 @@ export function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string
     if (window.turnstile) render();
     else {
       let script = document.getElementById(scriptID) as HTMLScriptElement | null;
+      if (script?.dataset.loadFailed === "true") {
+        script.remove();
+        script = null;
+      }
       if (!script) {
         script = document.createElement("script");
         script.id = scriptID;
@@ -56,9 +60,17 @@ export function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string
         script.defer = true;
         document.head.appendChild(script);
       }
-      script.addEventListener("load", render, { once: true });
-      script.addEventListener("error", () => { if (!disposed) setError("Não foi possível carregar a verificação de segurança. Tente novamente."); }, { once: true });
+      const activeScript = script;
+      const onLoad = () => { activeScript.dataset.loaded = "true"; render(); };
+      const onError = () => {
+        activeScript.dataset.loadFailed = "true";
+        activeScript.remove();
+        if (!disposed) setError("Não foi possível carregar a verificação de segurança. Tente novamente.");
+      };
+      activeScript.addEventListener("load", onLoad, { once: true });
+      activeScript.addEventListener("error", onError, { once: true });
       if (window.turnstile) render();
+      else if (activeScript.dataset.loaded === "true") render();
     }
     return () => {
       disposed = true;
@@ -67,7 +79,7 @@ export function TurnstileWidget({ onToken, resetKey }: { onToken: (token: string
     };
   }, [attempt, onToken, resetKey]);
 
-  return <div className="onboarding-turnstile" aria-label="Verificação de segurança">
+  return <div className="onboarding-turnstile" role="group" aria-label="Verificação de segurança">
     <div ref={container} />
     {error ? <><p role="alert" className="onboarding-turnstile-error">{error}</p>{siteKey ? <button type="button" onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</button> : null}</> : null}
   </div>;

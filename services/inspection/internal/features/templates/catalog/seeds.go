@@ -9,19 +9,15 @@ type Seed struct {
 }
 
 func CuratedSeeds(analysisType, propertySegment, constructionSegment, cleaningSegment string) []Seed {
-	base := func(segment string, mode ComparisonMode, multi bool, report string, roles []string) TemplateDocument {
-		return TemplateDocument{SchemaVersion: SchemaVersion, SegmentVersionID: segment, ParticipantRoles: roles, ComparisonMode: mode,
-			Requirements: []CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: false, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
-			MultiStage:   multi, ReportMode: report, AnalysisType: analysisType, Policy: Policy{GPSRequired: true, GeofenceMeters: DefaultGeofence, AllowGallery: true}}
+	base := func(segment string, roles []string) TemplateDocument {
+		return TemplateDocument{SchemaVersion: SchemaVersion, SegmentVersionID: segment, ParticipantRoles: roles, DefaultComparisonMode: ChecklistOnly,
+			Requirements: []CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: false, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+			AnalysisType: analysisType, Policy: Policy{GPSRequired: true, GeofenceMeters: DefaultGeofence, AllowGallery: true}}
 	}
-	construction := base(constructionSegment, PlannedStage, true, "CONSOLIDATED", []string{"CONSTRUCTION_RESPONSIBLE", "CONTRACTOR"})
-	construction.Stages = []Stage{{Key: "planned", Label: "Etapa planejada", Position: 1}}
-	cleaning := base(cleaningSegment, BeforeAfter, true, "HISTORICAL", []string{"CLEANING_EXECUTOR", "CLEANING_SUPERVISOR"})
-	cleaning.Stages = []Stage{{Key: "origin", Label: "Origem", Position: 1}, {Key: "after", Label: "Após", Position: 2}}
 	return []Seed{
-		{SegmentKey: "property", TemplateKey: "property-periodic", Document: base(propertySegment, FixedOrigin, false, "HISTORICAL", []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"})},
-		{SegmentKey: "construction", TemplateKey: "construction-progress", Document: construction},
-		{SegmentKey: "cleaning", TemplateKey: "cleaning-quality", Document: cleaning},
+		{SegmentKey: "property", TemplateKey: "property-periodic", Document: base(propertySegment, []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"})},
+		{SegmentKey: "construction", TemplateKey: "construction-progress", Document: base(constructionSegment, []string{"CONSTRUCTION_RESPONSIBLE", "CONTRACTOR"})},
+		{SegmentKey: "cleaning", TemplateKey: "cleaning-quality", Document: base(cleaningSegment, []string{"CLEANING_EXECUTOR", "CLEANING_SUPERVISOR"})},
 	}
 }
 

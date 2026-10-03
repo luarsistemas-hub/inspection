@@ -173,5 +173,6 @@ test("E2E keeps the unsent reference photo reload warning next to its file picke
   await page.getByLabel("Base de comparação").selectOption("FIXED_ORIGIN");
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
   await page.getByLabel("Fotos de referência").setInputFiles({ name: "referencia.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64") });
-  await expect(page.getByRole("status")).toContainText("Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada.");
+  await expect(page.getByText("Cada foto precisa de uma descrição antes de ser enviada.")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada." })).toBeVisible();
 });

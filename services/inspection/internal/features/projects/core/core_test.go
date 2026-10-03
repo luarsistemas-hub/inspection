@@ -7,7 +7,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 )
 
-func TestUT064UT065ProjectReportModeAndLifecycleRules(t *testing.T) {
+func TestProjectPlanAndLifecycleRules(t *testing.T) {
 	for _, status := range []string{StageCompleted, StageSkipped, StageCanceled, StageInvalidated} {
 		if !terminalStage(status) {
 			t.Fatalf("terminal stage rejected: %s", status)
@@ -24,11 +24,9 @@ func TestUT064UT065ProjectReportModeAndLifecycleRules(t *testing.T) {
 	if !validReason("audited reason") {
 		t.Fatal("valid reason rejected")
 	}
-	for _, mode := range []string{"CONSOLIDATED", "HISTORICAL"} {
-		project := database.Project{ReportMode: mode}
-		if project.ReportMode != mode {
-			t.Fatalf("report mode mutated: %s", mode)
-		}
+	project := database.Project{Name: "Renovação", OrderedStages: true}
+	if project.Name != "Renovação" || !project.OrderedStages {
+		t.Fatal("project planning configuration was not retained")
 	}
 }
 

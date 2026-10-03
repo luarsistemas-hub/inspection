@@ -41,24 +41,17 @@ const (
 )
 
 type CaptureRequirement struct {
-	Key                 string         `json:"key"`
-	Section             string         `json:"section"`
-	Label               string         `json:"label"`
-	Instructions        string         `json:"instructions,omitempty"`
-	EvidenceKind        string         `json:"evidenceKind"`
-	MinimumCount        int            `json:"minimumCount"`
-	MaximumCount        int            `json:"maximumCount"`
-	Required            bool           `json:"required"`
-	DescriptionRequired bool           `json:"descriptionRequired"`
-	CaptureSourcePolicy string         `json:"captureSourcePolicy"`
-	ComparisonTarget    ComparisonMode `json:"comparisonTarget"`
-	Applicability       string         `json:"applicability,omitempty"`
-}
-
-type Stage struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Position int    `json:"position"`
+	Key                 string `json:"key"`
+	Section             string `json:"section"`
+	Label               string `json:"label"`
+	Instructions        string `json:"instructions,omitempty"`
+	EvidenceKind        string `json:"evidenceKind"`
+	MinimumCount        int    `json:"minimumCount"`
+	MaximumCount        int    `json:"maximumCount"`
+	Required            bool   `json:"required"`
+	DescriptionRequired bool   `json:"descriptionRequired"`
+	CaptureSourcePolicy string `json:"captureSourcePolicy"`
+	Applicability       string `json:"applicability,omitempty"`
 }
 
 type Policy struct {
@@ -68,16 +61,13 @@ type Policy struct {
 }
 
 type TemplateDocument struct {
-	SchemaVersion    int                  `json:"schemaVersion"`
-	SegmentVersionID string               `json:"segmentVersionId"`
-	ParticipantRoles []string             `json:"participantRoles"`
-	ComparisonMode   ComparisonMode       `json:"comparisonMode"`
-	Requirements     []CaptureRequirement `json:"requirements"`
-	MultiStage       bool                 `json:"multiStage"`
-	Stages           []Stage              `json:"stages,omitempty"`
-	ReportMode       string               `json:"reportMode"`
-	AnalysisType     string               `json:"analysisType"`
-	Policy           Policy               `json:"policy"`
+	SchemaVersion         int                  `json:"schemaVersion"`
+	SegmentVersionID      string               `json:"segmentVersionId"`
+	ParticipantRoles      []string             `json:"participantRoles"`
+	DefaultComparisonMode ComparisonMode       `json:"defaultComparisonMode"`
+	Requirements          []CaptureRequirement `json:"requirements"`
+	AnalysisType          string               `json:"analysisType"`
+	Policy                Policy               `json:"policy"`
 }
 
 type References interface {
@@ -158,22 +148,7 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	if len(doc.ParticipantRoles) == 0 {
 		return Compiled{}, fmt.Errorf("at least one participant role is required")
 	}
-	if len(doc.Stages) > MaxStages || (!doc.MultiStage && len(doc.Stages) != 0) {
-		return Compiled{}, fmt.Errorf("incompatible stage configuration")
-	}
-	if doc.MultiStage && len(doc.Stages) == 0 {
-		return Compiled{}, fmt.Errorf("multi-stage template requires stages")
-	}
-	if (doc.ComparisonMode == PlannedStage || doc.ComparisonMode == BeforeAfter) && !doc.MultiStage {
-		return Compiled{}, fmt.Errorf("comparison mode requires multi-stage behavior")
-	}
-	if doc.ReportMode == "CONSOLIDATED" && !doc.MultiStage {
-		return Compiled{}, fmt.Errorf("consolidated reports require multi-stage behavior")
-	}
-	if doc.ReportMode != "CONSOLIDATED" && doc.ReportMode != "HISTORICAL" {
-		return Compiled{}, fmt.Errorf("invalid report mode")
-	}
-	if !validMode(doc.ComparisonMode) {
+	if !validMode(doc.DefaultComparisonMode) {
 		return Compiled{}, fmt.Errorf("invalid comparison mode")
 	}
 	if doc.Policy.GeofenceMeters == 0 {
@@ -183,18 +158,8 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 		return Compiled{}, fmt.Errorf("geofence out of range")
 	}
 	seen, sections := map[string]struct{}{}, map[string]struct{}{}
-	stageKeys := map[string]struct{}{}
-	for i, stage := range doc.Stages {
-		if strings.TrimSpace(stage.Key) == "" || !ValidName(stage.Label) || stage.Position != i+1 {
-			return Compiled{}, fmt.Errorf("invalid stage order")
-		}
-		if _, exists := stageKeys[stage.Key]; exists {
-			return Compiled{}, fmt.Errorf("duplicate stage key")
-		}
-		stageKeys[stage.Key] = struct{}{}
-	}
 	for _, requirement := range doc.Requirements {
-		if err := validateRequirement(requirement, doc.ComparisonMode); err != nil {
+		if err := validateRequirement(requirement); err != nil {
 			return Compiled{}, err
 		}
 		if _, exists := seen[requirement.Key]; exists {
@@ -214,7 +179,7 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	return Compiled{Canonical: canonical, Digest: hex.EncodeToString(sum[:]), Document: doc}, nil
 }
 
-func validateRequirement(r CaptureRequirement, mode ComparisonMode) error {
+func validateRequirement(r CaptureRequirement) error {
 	if strings.TrimSpace(r.Key) == "" || strings.TrimSpace(r.Section) == "" || strings.TrimSpace(r.Label) == "" {
 		return fmt.Errorf("requirement key, section, and label are required")
 	}
@@ -223,9 +188,6 @@ func validateRequirement(r CaptureRequirement, mode ComparisonMode) error {
 	}
 	if r.MinimumCount < 0 || r.MaximumCount < 1 || r.MaximumCount > MaxActivePhotos || r.MinimumCount > r.MaximumCount {
 		return fmt.Errorf("requirement count out of range")
-	}
-	if r.ComparisonTarget != mode {
-		return fmt.Errorf("incompatible comparison mode")
 	}
 	if _, err := CompileExpression(r.Applicability); err != nil {
 		return err

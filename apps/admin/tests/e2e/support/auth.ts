@@ -39,7 +39,11 @@ export async function mockAdminOidc(page: Page): Promise<void> {
     const destination = new URL(callback);
     destination.searchParams.set("code", "admin-e2e-code");
     destination.searchParams.set("state", state);
-    await route.fulfill({ status: 302, headers: { location: destination.toString() }, body: "" });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><script>window.location.replace(${JSON.stringify(destination.toString())})</script>`,
+    });
   });
   await page.route(/\/protocol\/openid-connect\/token(?:\?|$)/, (route) =>
     route.fulfill({ json: { access_token: "admin-e2e-access-token", token_type: "Bearer" } }));

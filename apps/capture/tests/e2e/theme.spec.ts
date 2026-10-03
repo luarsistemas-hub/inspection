@@ -6,7 +6,7 @@ test("Cobalto themes stay readable and within the viewport on Capture", async ({
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.goto("/capture/theme-visual-check");
 
-  const appearance = page.getByRole("combobox", { name: "Aparência" });
+  const appearance = page.getByRole("button", { name: "Ativar tema escuro" });
   await expect(appearance).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
@@ -18,12 +18,12 @@ test("Cobalto themes stay readable and within the viewport on Capture", async ({
     if (width === 360 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`capture-light-${width}.png`), fullPage: true });
   }
 
-  await appearance.selectOption("dark");
+  await appearance.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("dark");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("inspection.theme"))).toBe("dark");
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "Aparência" })).toHaveValue("dark");
+  await expect(page.getByRole("button", { name: "Ativar tema claro" })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.screenshot({ path: testInfo.outputPath("capture-dark-360.png"), fullPage: true });
 });

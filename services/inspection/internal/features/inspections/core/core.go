@@ -19,6 +19,7 @@ import (
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
+	projectcore "inspection/services/inspection/internal/features/projects/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	templateresolve "inspection/services/inspection/internal/features/templates/resolve_template"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -42,6 +43,8 @@ const (
 type CreateInput struct {
 	TenantID, AssetID, ParticipantID identity.ID
 	TemplateID                       *identity.ID
+	TemplateVersionID                *identity.ID
+	ComparisonMode                   catalog.ComparisonMode
 	ReferenceVersionID               *identity.ID
 	ProjectID, StageID               *identity.ID
 	Source, SourceKey, Reason        string
@@ -122,15 +125,6 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if participant.Participant.Status != "ACTIVE" || len(participant.Selected) == 0 {
 		return View{}, apperror.New(apperror.InvalidState, "participantId", "participant requires an active verified delivery channel")
 	}
-	assigned := false
-	for _, assignment := range asset.Assignments {
-		if assignment.Active && assignment.ParticipantID == in.ParticipantID {
-			assigned = true
-		}
-	}
-	if !assigned {
-		return View{}, apperror.New(apperror.InvalidInput, "participantId", "participant is not assigned to the asset")
-	}
 	templateID := in.TemplateID
 	if templateID == nil {
 		templateID = asset.Asset.TemplateID
@@ -138,7 +132,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if templateID == nil {
 		return View{}, apperror.New(apperror.InvalidState, "templateId", "active template is required")
 	}
-	templateRaw, err := s.Bus.Ask(ctx, templateresolve.Query{TenantID: in.TenantID, TemplateID: *templateID})
+	templateRaw, err := s.Bus.Ask(ctx, templateresolve.Query{TenantID: in.TenantID, TemplateID: *templateID, VersionID: in.TemplateVersionID})
 	if err != nil {
 		return View{}, err
 	}
@@ -147,9 +141,16 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
 		return View{}, fmt.Errorf("decode template snapshot: %w", err)
 	}
+	comparisonMode := document.DefaultComparisonMode
+	if in.ComparisonMode != "" {
+		comparisonMode = in.ComparisonMode
+	}
+	if comparisonMode != catalog.ChecklistOnly && comparisonMode != catalog.FixedOrigin {
+		return View{}, apperror.New(apperror.InvalidInput, "comparisonMode", "unsupported comparison mode")
+	}
 	var originReference *originresolve.Result
-	if document.ComparisonMode == catalog.FixedOrigin {
-		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, TemplateID: *templateID, VersionID: in.ReferenceVersionID})
+	if comparisonMode == catalog.FixedOrigin {
+		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID})
 		if err != nil {
 			return View{}, err
 		}
@@ -157,18 +158,22 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		originReference = &resolved
 		referenceID := resolved.Version.ID
 		in.ReferenceVersionID = &referenceID
-	} else if requiresReference(document.ComparisonMode) && in.ReferenceVersionID == nil {
+	} else if requiresReference(comparisonMode) && in.ReferenceVersionID == nil {
 		return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
 	}
 	if !strings.EqualFold(document.AnalysisType, "REAL_ESTATE") {
 		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 	}
 	if in.Source != SourceScheduled {
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
+		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
+		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
+			return View{}, err
+		}
+		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
 			return View{}, err
 		}
 	}
-	policyPayload, policyDigest, err := snapshotPolicy(document, asset, in.ReferenceVersionID)
+	policyPayload, policyDigest, err := snapshotPolicy(document, asset, comparisonMode, in.ReferenceVersionID)
 	if err != nil {
 		return View{}, err
 	}
@@ -180,6 +185,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			out.EventID = createdEventID(out.Inspection.ID)
 			return s.load(tx, &out)
 		} else if err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err
 		}
 		var count int64
@@ -203,13 +211,13 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ParticipantID: in.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		policy := database.PolicySnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, SchemaVersion: 1, Payload: policyPayload, CanonicalDigest: policyDigest, CreatedAt: now}
-		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": document.ComparisonMode}
+		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": comparisonMode}
 		if originReference != nil {
 			referenceDocument["originVersionId"] = originReference.Version.ID
 			referenceDocument["items"] = originReference.Evidence
 		}
 		referencePayload, _ := json.Marshal(referenceDocument)
-		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(document.ComparisonMode), Payload: referencePayload, CreatedAt: now}
+		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(comparisonMode), Payload: referencePayload, CreatedAt: now}
 		requirements := make([]capturecore.Requirement, 0, len(document.Requirements))
 		if originReference != nil {
 			requirements = append(requirements, originReference.Requirements...)
@@ -222,7 +230,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 					MinimumMedia: requirement.MinimumCount, MaximumMedia: requirement.MaximumCount,
 					DescriptionRequired: requirement.DescriptionRequired,
 					CaptureSourcePolicy: requirement.CaptureSourcePolicy,
-					ComparisonTarget:    string(requirement.ComparisonTarget),
+					ComparisonTarget:    string(comparisonMode),
 				})
 			}
 		}
@@ -545,7 +553,7 @@ func requiresReference(mode catalog.ComparisonMode) bool {
 	return mode == catalog.FixedOrigin || mode == catalog.PlannedStage || mode == catalog.BeforeAfter
 }
 
-func snapshotPolicy(document catalog.TemplateDocument, asset assetcore.View, referenceID *identity.ID) ([]byte, string, error) {
+func snapshotPolicy(document catalog.TemplateDocument, asset assetcore.View, mode catalog.ComparisonMode, referenceID *identity.ID) ([]byte, string, error) {
 	var overrides catalog.PolicyOverride
 	if len(asset.Asset.PolicyOverrides) != 0 {
 		if err := json.Unmarshal(asset.Asset.PolicyOverrides, &overrides); err != nil {
@@ -556,14 +564,14 @@ func snapshotPolicy(document catalog.TemplateDocument, asset assetcore.View, ref
 	if referenceID != nil {
 		reference = referenceID.String()
 	}
-	effective, err := catalog.ResolvePolicy(document.Policy, overrides, document.ComparisonMode, reference)
+	effective, err := catalog.ResolvePolicy(document.Policy, overrides, mode, reference)
 	if err != nil {
 		return nil, "", apperror.New(apperror.InvalidState, "policy", "effective capture policy is invalid")
 	}
 	payload, err := json.Marshal(map[string]any{
 		"gpsRequired": effective.GPSRequired, "geofenceMeters": effective.GeofenceMeters,
 		"allowGallery": effective.AllowGallery, "comparisonMode": effective.ComparisonMode,
-		"referenceId": effective.ReferenceID, "reportMode": document.ReportMode,
+		"referenceId":     effective.ReferenceID,
 		"assetLatitudeE6": asset.Asset.LatitudeE6, "assetLongitudeE6": asset.Asset.LongitudeE6,
 	})
 	if err != nil {

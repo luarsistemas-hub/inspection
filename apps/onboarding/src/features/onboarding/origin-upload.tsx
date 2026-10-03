@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Field, Input, Status } from "@inspection/design-system";
+import { Alert, Button, Field, Icon, Input, Status } from "@inspection/design-system";
 import Image from "next/image";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
@@ -36,11 +36,11 @@ export function OriginUploadCards({ uploads, onChange, onRetry }: { uploads: Ori
     setFileError(selected.length === files.length ? "" : "Selecione arquivos de imagem compatíveis (JPG, PNG, WebP ou HEIC).");
     onChange((current) => [...current, ...selected.map((file) => ({ id: crypto.randomUUID(), file, description: "", attentionItems: [], sending: false, failed: false }))]);
   };
+  const hasUnsentUploads = uploads.some((upload) => !upload.mediaId);
   return <div className="onboarding-upload-list">
-    <Field label="Fotos de referência" hint="Cada foto precisa de uma descrição antes de ser enviada.">
+    <Field label="Fotos de referência" hint={<>Cada foto precisa de uma descrição antes de ser enviada.{hasUnsentUploads ? <> <Icon name="warning" size={18} title="Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada." style={{ color: "var(--inspection-warning)", verticalAlign: "text-bottom" }} /></> : null}</>}>
       <Input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
     </Field>
-    {uploads.some((upload) => !upload.mediaId) ? <Alert tone="warning">Fotos ainda não enviadas precisarão ser selecionadas novamente se a página for recarregada.</Alert> : null}
     {fileError ? <Alert tone="danger">{fileError}</Alert> : null}
     {uploads.map((upload) => <UploadCard key={upload.id} upload={upload} onChange={(next) => onChange((current) => current.map((item) => item.id === next.id ? next : item))} onRemove={() => onChange((current) => current.filter((item) => item.id !== upload.id))} onRetry={() => onRetry(upload.id)} />)}
   </div>;

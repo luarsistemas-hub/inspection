@@ -94,12 +94,13 @@ Every row must end in one of these verified outcomes:
 | 29 | `createInspection` | Dashboard | Missing UI | Create scoped manual inspection with source reason, due/deadline/reminders, and references. |
 | 30 | `cancelInspection` | Dashboard | Used partially | Contextual version-safe transition with downstream impact. |
 | 31 | `invalidateInspection` | Dashboard | Missing UI | Reasoned invalidation with report/publication consequences and audit. |
-| 32 | `createProject` | Dashboard | Missing UI | Project creation with asset, participant, template, report mode, and generated stages. |
+| 32 | `createProject` | Dashboard | Used | Create an optional named project for one asset, without coupling it to a participant or inspection template. |
 | 33 | `addExceptionalStage` | Dashboard | Missing UI | Add a reasoned exceptional stage at an understandable position/time. |
 | 34 | `startProjectStage` | Dashboard | Missing UI | Start eligible stage, optionally create/link inspection, and enforce project/stage versions. |
 | 35 | `skipProjectStage` | Dashboard | Missing UI | Reasoned skip only where the stage lifecycle permits it. |
 | 36 | `closeProject` | Dashboard | Missing UI | Close an eligible project after impact/prerequisite review. |
 | 37 | `reopenProject` | Dashboard | Missing UI | Reopen a closed project with reason and complete transition history. |
+| 64 | `planInspection` | Dashboard | Used | Plan one-time or recurring inspections with optional project/stage, template version, and comparison mode in one atomic operation. |
 | 38 | `acceptProcessing` | Capture | Used | Consent step bound to exact disclosure version and explicit processing choices. |
 | 39 | `createMediaUpload` | Capture | Used | Internal upload step with type, size, digest, expiry, and resumable identity. |
 | 40 | `presignMediaParts` | Capture | Used | Internal step that requests only needed parts for the current scoped media. |

@@ -12,7 +12,7 @@ func (testRefs) SegmentExists(value string) bool      { return value == "segment
 func (testRefs) AnalysisTypeExists(value string) bool { return value == "REAL_ESTATE" }
 
 func validDocument() TemplateDocument {
-	return TemplateDocument{SchemaVersion: 1, SegmentVersionID: "segment-v1", ParticipantRoles: []string{"TENANT_PARTICIPANT"}, ComparisonMode: FixedOrigin, Requirements: []CaptureRequirement{{Key: "front", Section: "outside", Label: "Front", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: FixedOrigin, Applicability: `asset.kind == "house"`}}, ReportMode: "HISTORICAL", AnalysisType: "REAL_ESTATE", Policy: Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
+	return TemplateDocument{SchemaVersion: 1, SegmentVersionID: "segment-v1", ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: ChecklistOnly, Requirements: []CaptureRequirement{{Key: "front", Section: "outside", Label: "Front", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", Applicability: `asset.kind == "house"`}}, AnalysisType: "REAL_ESTATE", Policy: Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
 }
 func encode(t *testing.T, v any) []byte {
 	t.Helper()
@@ -39,7 +39,7 @@ func TestTemplateCompilerUT024(t *testing.T) {
 }
 
 func TestTemplateCompilerUT025(t *testing.T) {
-	cases := map[string]func(*TemplateDocument){"no requirements": func(v *TemplateDocument) { v.Requirements = nil }, "unsafe expression": func(v *TemplateDocument) { v.Requirements[0].Applicability = "system.exec{}" }, "unknown segment": func(v *TemplateDocument) { v.SegmentVersionID = "unknown" }, "incompatible mode": func(v *TemplateDocument) { v.Requirements[0].ComparisonTarget = ChecklistOnly }, "requirement limit": func(v *TemplateDocument) { v.Requirements = make([]CaptureRequirement, MaxRequirements+1) }}
+	cases := map[string]func(*TemplateDocument){"no requirements": func(v *TemplateDocument) { v.Requirements = nil }, "unsafe expression": func(v *TemplateDocument) { v.Requirements[0].Applicability = "system.exec{}" }, "unknown segment": func(v *TemplateDocument) { v.SegmentVersionID = "unknown" }, "invalid default comparison mode": func(v *TemplateDocument) { v.DefaultComparisonMode = ComparisonMode("UNKNOWN") }, "requirement limit": func(v *TemplateDocument) { v.Requirements = make([]CaptureRequirement, MaxRequirements+1) }}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			doc := validDocument()
@@ -120,10 +120,9 @@ func TestCuratedSeedsPropertyConstructionCleaning(t *testing.T) {
 	if err := ValidateSeeds(seeds, testRefs{}); err != nil {
 		t.Fatal(err)
 	}
-	if seeds[0].Document.MultiStage || !seeds[1].Document.MultiStage || !seeds[2].Document.MultiStage {
-		t.Fatal("multi-stage flags are not independent")
-	}
-	if seeds[1].Document.ReportMode == seeds[2].Document.ReportMode {
-		t.Fatal("report mode seeds must demonstrate both modes")
+	for _, seed := range seeds {
+		if seed.Document.DefaultComparisonMode != ChecklistOnly {
+			t.Fatal("workflow defaults should not vary with checklist content")
+		}
 	}
 }

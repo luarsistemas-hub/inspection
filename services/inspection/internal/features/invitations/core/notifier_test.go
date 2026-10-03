@@ -27,18 +27,33 @@ func TestChannelNotifierSkipsOnlyEmailOutsideProduction(t *testing.T) {
 	}
 
 	notifier := ChannelNotifier{Registry: registry, Stage: "dev"}
-	if err := notifier.SendOTP(context.Background(), identity.NewID(), identity.NewID(), "123456", []DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.test"}}); err != nil {
+	if err := notifier.SendOTP(context.Background(), identity.NewID(), identity.NewID(), "123456", []DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.com"}}); err != nil {
 		t.Fatalf("email-only delivery failed: %v", err)
 	}
 	if email.calls != 0 {
 		t.Fatalf("email sender called %d times in dev", email.calls)
 	}
 
-	if err := notifier.SendOTP(context.Background(), identity.NewID(), identity.NewID(), "123456", []DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.test"}, {Channel: "SMS", Destination: "+5511999999999"}}); err != nil {
+	if err := notifier.SendOTP(context.Background(), identity.NewID(), identity.NewID(), "123456", []DeliveryIntent{{Channel: "EMAIL", Destination: "owner@example.com"}, {Channel: "SMS", Destination: "+5511999999999"}}); err != nil {
 		t.Fatalf("mixed delivery failed: %v", err)
 	}
 	if email.calls != 0 || sms.calls != 1 {
 		t.Fatalf("unexpected sender calls: email=%d sms=%d", email.calls, sms.calls)
+	}
+}
+
+func TestChannelNotifierSendsLocalQAOtpToMailpit(t *testing.T) {
+	email := &recordingOTPSender{}
+	registry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{notifications.Email: email})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := (ChannelNotifier{Registry: registry, Stage: "local"}).SendOTP(context.Background(), identity.NewID(), identity.NewID(), "123456", []DeliveryIntent{{Channel: "EMAIL", Destination: "qa.inspection@example.test"}}); err != nil {
+		t.Fatalf("local QA email delivery failed: %v", err)
+	}
+	if email.calls != 1 {
+		t.Fatalf("email sender called %d times for local QA OTP", email.calls)
 	}
 }
 

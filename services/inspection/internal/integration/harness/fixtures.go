@@ -30,15 +30,11 @@ type Task06Fixture struct {
 }
 
 type Task06FixtureOptions struct {
-	ReportMode       string
 	InspectionStatus string
 	RequirementKey   string
 }
 
 func (o Task06FixtureOptions) normalized() Task06FixtureOptions {
-	if o.ReportMode == "" {
-		o.ReportMode = "HISTORICAL"
-	}
 	if o.InspectionStatus == "" {
 		o.InspectionStatus = "SUBMITTED"
 	}
@@ -133,16 +129,13 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.AssetAssignment{ID: identity.NewID(), TenantID: f.TenantID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, Role: "OWNER", Active: true, CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.Project{ID: f.ProjectID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, ReportMode: options.ReportMode, Status: "ACTIVE", Version: 1, IdempotencyKey: "task06-project", CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.Project{ID: f.ProjectID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, Name: "Fixture project", Status: "ACTIVE", Version: 1, IdempotencyKey: "task06-project", CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.ProjectStage{ID: f.StageID, TenantID: f.TenantID, ProjectID: f.ProjectID, Key: "stage-1", Label: "Fixture stage", Kind: "INSPECTION", Position: 1, Status: "COMPLETED", Requirements: templateJSON, EffectiveReference: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Inspection{ID: f.InspectionID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, AnalysisPromptSnapshotID: f.PromptSnapshotID, ProjectID: &f.ProjectID, StageID: &f.StageID, Source: "MANUAL", SourceKey: "task06-inspection", SourceReason: "integration fixture", Status: options.InspectionStatus, EvidenceCount: 1, DueAt: createdAt, DeadlineAt: createdAt.Add(24 * time.Hour), ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&database.ProjectStage{}).Where("tenant_id=? AND id=?", f.TenantID, f.StageID).Update("inspection_id", f.InspectionID).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Responsibility{ID: f.ResponsibilityID, TenantID: f.TenantID, InspectionID: f.InspectionID, ParticipantID: f.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {

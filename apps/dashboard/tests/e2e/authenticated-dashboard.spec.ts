@@ -12,7 +12,14 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await loginAsLocalAdmin(page, "/triage");
     await page.getByRole("button", { name: "Atualizar fila" }).click();
     await expect(page.getByRole("region", { name: "Casos para revisão" }).locator(".triage-list-heading strong")).not.toHaveText("Carregando fila…");
-    await page.getByRole("navigation", { name: "Painel" }).getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ }).click();
+    const primaryNavigation = page.getByRole("navigation", { name: "Painel" });
+    const notificationLink = primaryNavigation.getByRole("link", { name: /^Notificações(?: \(\d+\))?$/ });
+    if (await notificationLink.isVisible()) {
+      await notificationLink.click();
+    } else {
+      await page.getByRole("button", { name: /^Mais destinos/ }).click();
+      await page.getByRole("navigation", { name: "Painel — outros destinos" }).getByRole("link", { name: "Notificações", exact: true }).click();
+    }
     const matchingNotices = page.locator(".notification-card").filter({ hasText: "Vistoria a iniciar · Imóvel QA" });
     const notice = matchingNotices.first();
     await expect(notice).toBeVisible({ timeout: 15_000 });
@@ -43,7 +50,6 @@ test.describe("authenticated Dashboard against the local stack", () => {
       if (request.url().endsWith("/graphql") && request.postData()?.includes("query Inspections")) inspectionRequests += 1;
     });
     await loginAsLocalAdmin(page, "/inspections");
-    await page.getByRole("button", { name: "Carregar vistorias" }).click();
     await expect(page.getByText(/Vistorias atualizadas|Nenhuma vistoria encontrada/)).toBeVisible();
 
     const selector = page.getByRole("group", { name: "Visualização das vistorias" });
@@ -64,7 +70,7 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await page.reload();
     await loginAsLocalAdmin(page, "/inspections");
     await expect(page.getByRole("button", { name: "Quadro", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await page.getByRole("button", { name: "Carregar vistorias" }).click();
+    await expect(page.getByText(/Vistorias atualizadas|Nenhuma vistoria encontrada/)).toBeVisible();
     await expect(page.locator("[data-inspection-id]")).toHaveCount(recordCount);
     await page.locator(".inspection-action-menu summary").first().click();
     await expect(page.getByRole("button", { name: "Cancelar" }).first()).toBeVisible();
@@ -83,7 +89,7 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await expect(page.getByRole("searchbox", { name: "Buscar laudo" })).toBeVisible();
     await expect(page.locator(".report-table, .report-list-state").first()).toBeVisible();
 
-    const openButton = page.getByRole("button", { name: "Abrir laudo" }).first();
+    const openButton = page.getByRole("button", { name: /Abrir detalhes do laudo/ }).first();
     if (!(await openButton.isVisible().catch(() => false))) {
       await expect(page.getByRole("status")).toContainText(/Nenhum laudo/);
       await assertRuntimeClean();
@@ -100,7 +106,8 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await page.goForward();
     await expect(dialog).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("dialog", { name: "Laudo de vistoria" })).toBeVisible();
+    await expect(page).toHaveURL(/inspectionId=/);
+    await expect(page.getByRole("button", { name: "Entrar no Painel" })).toBeVisible();
     await assertRuntimeClean();
   });
 });

@@ -18,8 +18,8 @@ import (
 )
 
 type Query struct {
-	TenantID, AssetID, TemplateID identity.ID
-	VersionID                     *identity.ID
+	TenantID, AssetID identity.ID
+	VersionID         *identity.ID
 }
 
 type Result struct {
@@ -60,7 +60,7 @@ func Setup(d Dependencies) error {
 func resolve(tx *gorm.DB, query Query) (Result, error) {
 	var result Result
 	var origin database.Origin
-	if err := tx.Where("tenant_id=? AND asset_id=? AND template_id=?", query.TenantID, query.AssetID, query.TemplateID).First(&origin).Error; err != nil || origin.ActiveVersionID == nil {
+	if err := tx.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).First(&origin).Error; err != nil || origin.ActiveVersionID == nil {
 		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "active origin is required")
 	}
 	if query.VersionID != nil && *query.VersionID != *origin.ActiveVersionID {

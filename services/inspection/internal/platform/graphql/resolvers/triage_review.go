@@ -95,71 +95,79 @@ func (r *queryResolver) triageWorkspace(ctx context.Context, first *int, after *
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
-	base := triageScopeQuery(r.DB.WithContext(ctx), meta)
-	if classification != nil && *classification != "" {
-		base = base.Where("dashboard.triage_cases.classification=?", *classification)
-	}
-	if search != nil && strings.TrimSpace(*search) != "" {
-		term := "%" + strings.TrimSpace(*search) + "%"
-		base = base.Where("(a.name ILIKE ? OR a.address ILIKE ? OR i.id::text ILIKE ?)", term, term, term)
-	}
-	if assigneeID != nil && *assigneeID != "" {
-		if *assigneeID == "UNASSIGNED" {
-			base = base.Where("dashboard.triage_cases.assignee_id IS NULL")
-		} else if *assigneeID == "ME" {
-			base = base.Where("dashboard.triage_cases.assignee_id=?", meta.Principal.IdentityID)
-		} else {
-			id, err := identity.ParseID(*assigneeID)
-			if err != nil {
-				return nil, invalidID("assigneeId")
-			}
-			base = base.Where("dashboard.triage_cases.assignee_id=?", id)
+	if assigneeID != nil && *assigneeID != "" && *assigneeID != "UNASSIGNED" && *assigneeID != "ME" {
+		if _, err := identity.ParseID(*assigneeID); err != nil {
+			return nil, invalidID("assigneeId")
 		}
-	}
-	if reason != nil && *reason != "" {
-		base = base.Where("dashboard.triage_cases.reason_codes::text LIKE ?", "%\""+strings.TrimSpace(*reason)+"\"%")
-	}
-	countQuery := base.Session(&gorm.Session{}).Where("i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'")
-	var groups []struct {
-		Status         string
-		Classification string
-		Count          int
-	}
-	if err := countQuery.Select("dashboard.triage_cases.status, dashboard.triage_cases.classification, count(*) AS count").Group("dashboard.triage_cases.status, dashboard.triage_cases.classification").Find(&groups).Error; err != nil {
-		return nil, err
-	}
-	counts := &graphql1.TriageCounts{}
-	for _, row := range groups {
-		switch row.Status {
-		case triagecore.New:
-			counts.New += row.Count
-		case triagecore.InReview:
-			counts.InReview += row.Count
-		case triagecore.AwaitingEvidence:
-			counts.AwaitingEvidence += row.Count
-		}
-		if row.Classification == "CRITICAL" && row.Status != triagecore.Reviewed && row.Status != triagecore.Archived {
-			counts.CriticalOpen += row.Count
-		}
-	}
-	query := base.Session(&gorm.Session{})
-	if status != nil {
-		query = query.Where("dashboard.triage_cases.status=?", string(*status))
-		if *status != graphql1.TriageReviewStatusArchived {
-			query = query.Where("i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'")
-		}
-	} else {
-		query = query.Where("dashboard.triage_cases.status IN ? AND i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'", []string{triagecore.New, triagecore.InReview, triagecore.AwaitingEvidence})
 	}
 	if after != nil && *after != "" {
-		offset, err := decodeTriageOffset(*after)
-		if err != nil {
+		if _, err := decodeTriageOffset(*after); err != nil {
 			return nil, graphql1Error("after")
 		}
-		query = query.Offset(offset)
 	}
+	var counts *graphql1.TriageCounts
 	var rows []triageQueueRow
-	err := query.Select(triageSelect()).Order("CASE dashboard.triage_cases.classification WHEN 'CRITICAL' THEN 0 WHEN 'ATTENTION' THEN 1 ELSE 2 END ASC, dashboard.triage_cases.created_at ASC, dashboard.triage_cases.inspection_id ASC").Limit(limit + 1).Scan(&rows).Error
+	err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		base := triageScopeQuery(tx, meta)
+		if classification != nil && *classification != "" {
+			base = base.Where("dashboard.triage_cases.classification=?", *classification)
+		}
+		if search != nil && strings.TrimSpace(*search) != "" {
+			term := "%" + strings.TrimSpace(*search) + "%"
+			base = base.Where("(a.name ILIKE ? OR a.address ILIKE ? OR i.id::text ILIKE ?)", term, term, term)
+		}
+		if assigneeID != nil && *assigneeID != "" {
+			switch *assigneeID {
+			case "UNASSIGNED":
+				base = base.Where("dashboard.triage_cases.assignee_id IS NULL")
+			case "ME":
+				base = base.Where("dashboard.triage_cases.assignee_id=?", meta.Principal.IdentityID)
+			default:
+				id, _ := identity.ParseID(*assigneeID)
+				base = base.Where("dashboard.triage_cases.assignee_id=?", id)
+			}
+		}
+		if reason != nil && *reason != "" {
+			base = base.Where("dashboard.triage_cases.reason_codes::text LIKE ?", "%\""+strings.TrimSpace(*reason)+"\"%")
+		}
+		countQuery := base.Session(&gorm.Session{}).Where("i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'")
+		var groups []struct {
+			Status         string
+			Classification string
+			Count          int
+		}
+		if err := countQuery.Select("dashboard.triage_cases.status, dashboard.triage_cases.classification, count(*) AS count").Group("dashboard.triage_cases.status, dashboard.triage_cases.classification").Find(&groups).Error; err != nil {
+			return err
+		}
+		counts = &graphql1.TriageCounts{}
+		for _, row := range groups {
+			switch row.Status {
+			case triagecore.New:
+				counts.New += row.Count
+			case triagecore.InReview:
+				counts.InReview += row.Count
+			case triagecore.AwaitingEvidence:
+				counts.AwaitingEvidence += row.Count
+			}
+			if row.Classification == "CRITICAL" && row.Status != triagecore.Reviewed && row.Status != triagecore.Archived {
+				counts.CriticalOpen += row.Count
+			}
+		}
+		query := base.Session(&gorm.Session{})
+		if status != nil {
+			query = query.Where("dashboard.triage_cases.status=?", string(*status))
+			if *status != graphql1.TriageReviewStatusArchived {
+				query = query.Where("i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'")
+			}
+		} else {
+			query = query.Where("dashboard.triage_cases.status IN ? AND i.status <> 'INVALIDATED' AND i.status <> 'CANCELED'", []string{triagecore.New, triagecore.InReview, triagecore.AwaitingEvidence})
+		}
+		if after != nil && *after != "" {
+			offset, _ := decodeTriageOffset(*after)
+			query = query.Offset(offset)
+		}
+		return query.Select(triageSelect()).Order("CASE dashboard.triage_cases.classification WHEN 'CRITICAL' THEN 0 WHEN 'ATTENTION' THEN 1 ELSE 2 END ASC, dashboard.triage_cases.created_at ASC, dashboard.triage_cases.inspection_id ASC").Limit(limit + 1).Scan(&rows).Error
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +203,9 @@ func (r *queryResolver) triageCase(ctx context.Context, inspectionID string) (*g
 		return nil, invalidID("inspectionId")
 	}
 	var row triageQueueRow
-	err = triageScopeQuery(r.DB.WithContext(ctx), meta).Where("dashboard.triage_cases.inspection_id=?", id).Select(triageSelect()).Take(&row).Error
+	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		return triageScopeQuery(tx, meta).Where("dashboard.triage_cases.inspection_id=?", id).Select(triageSelect()).Take(&row).Error
+	})
 	if err != nil {
 		return nil, err
 	}

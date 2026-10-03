@@ -62,7 +62,9 @@ test("E2E-065 Admin secondary navigation and prompt metadata fit a 320px viewpor
   await page.getByRole("button", { name: "Fechar" }).click();
 
   for (const theme of ["light", "dark"]) {
-    await page.getByLabel("Aparência").selectOption(theme);
+    const currentTheme = await page.locator("html").getAttribute("data-theme");
+    if (currentTheme !== theme) await page.getByRole("button", { name: currentTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     const overflowingMetadata = await page.locator(".prompt-editor-meta > span").evaluateAll((items) => items.filter((item) => item.scrollWidth > item.clientWidth).map((item) => item.textContent));
     expect(overflowingMetadata).toEqual([]);

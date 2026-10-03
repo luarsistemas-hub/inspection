@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"inspection/libs/identity"
-	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
-	templatecatalog "inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/tenanttx"
@@ -120,15 +118,11 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 		if asset.Version != promotion.ExpectedAssetVersion {
 			return pendingTx(tx, tenantID, promotion, "asset changed; review the promotion before activation")
 		}
-		template, err := comparativeTemplate(tx, tenantID, inspection, promotion.RequestedBy)
-		if err != nil {
-			return failTx(tx, tenantID, promotion, "comparative template unavailable")
-		}
 		var origin database.Origin
-		err = tx.Where("tenant_id=? AND asset_id=? AND template_id=?", tenantID, asset.ID, template.ID).First(&origin).Error
+		err := tx.Where("tenant_id=? AND asset_id=?", tenantID, asset.ID).First(&origin).Error
 		now := time.Now().UTC()
 		if err == gorm.ErrRecordNotFound {
-			origin = database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: asset.ID, TemplateID: template.ID, Version: 1, CreatedAt: now, UpdatedAt: now}
+			origin = database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: asset.ID, Version: 1, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&origin).Error; err != nil {
 				return err
 			}
@@ -170,58 +164,11 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 		if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": versionID, "version": origin.Version + 1, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&asset).Where("version=?", promotion.ExpectedAssetVersion).Updates(map[string]any{"template_id": template.ID, "version": promotion.ExpectedAssetVersion + 1, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&promotion).Updates(map[string]any{"template_id": template.ID, "origin_version_id": versionID, "status": StatusActive, "completed_at": now, "updated_at": now, "failure_reason": ""}).Error; err != nil {
+		if err := tx.Model(&promotion).Updates(map[string]any{"template_id": inspection.TemplateID, "origin_version_id": versionID, "status": StatusActive, "completed_at": now, "updated_at": now, "failure_reason": ""}).Error; err != nil {
 			return err
 		}
 		return audit(tx, tenantID, promotion.RequestedBy, "origin.promotion_activated", promotion.ID, "SUCCESS", "")
 	})
-}
-
-func comparativeTemplate(tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, actor identity.ID) (database.Template, error) {
-	var fixed database.Template
-	if err := tx.Where("tenant_id=? AND key=?", tenantID, onboardingcatalog.OriginTemplateKey).First(&fixed).Error; err == nil && fixed.ActiveVersionID != nil {
-		return fixed, nil
-	}
-	var sourceVersion database.TemplateVersion
-	if err := tx.Where("tenant_id=? AND id=?", tenantID, inspection.TemplateVersionID).First(&sourceVersion).Error; err != nil {
-		return database.Template{}, err
-	}
-	var document templatecatalog.TemplateDocument
-	if err := json.Unmarshal(sourceVersion.DefinitionJSON, &document); err != nil {
-		return database.Template{}, err
-	}
-	document.ComparisonMode = templatecatalog.FixedOrigin
-	for index := range document.Requirements {
-		document.Requirements[index].ComparisonTarget = templatecatalog.FixedOrigin
-	}
-	payload, digest, err := templatecatalog.CanonicalJSON(document)
-	if err != nil {
-		return database.Template{}, err
-	}
-	now := time.Now().UTC()
-	if fixed.ID == (identity.ID{}) {
-		fixed = database.Template{ID: identity.NewID(), TenantID: tenantID, Key: onboardingcatalog.OriginTemplateKey, Name: "Vistoria comparativa do imóvel", SegmentVersionID: inspection.TemplateVersionID, Version: 1, CreatedAt: now, UpdatedAt: now}
-		var source database.Template
-		if err := tx.Where("tenant_id=? AND id=?", tenantID, inspection.TemplateID).First(&source).Error; err != nil {
-			return database.Template{}, err
-		}
-		fixed.SegmentVersionID = source.SegmentVersionID
-		if err := tx.Create(&fixed).Error; err != nil {
-			return database.Template{}, err
-		}
-	}
-	version := database.TemplateVersion{ID: identity.NewID(), TenantID: tenantID, TemplateID: fixed.ID, VersionNumber: 1, SchemaVersion: document.SchemaVersion, DefinitionJSON: payload, CanonicalDigest: digest, Status: "ACTIVE", IdempotencyKey: "origin-promotion-template:" + fixed.ID.String(), PublishedAt: now, CreatedBy: actor}
-	if err := tx.Create(&version).Error; err != nil {
-		return database.Template{}, err
-	}
-	if err := tx.Model(&fixed).Updates(map[string]any{"active_version_id": version.ID, "updated_at": now}).Error; err != nil {
-		return database.Template{}, err
-	}
-	fixed.ActiveVersionID = &version.ID
-	return fixed, nil
 }
 
 func fail(ctx context.Context, db *gorm.DB, tenantID identity.ID, promotion database.OriginPromotion, reason string) error {

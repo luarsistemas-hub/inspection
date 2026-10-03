@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentDashboardStatus, presentInspectionSource, presentReportMode, presentReportPDFStatus } from "@/features/dashboard/presentation";
+import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentDashboardStatus, presentInspectionSource, presentReportPDFStatus } from "@/features/dashboard/presentation";
+import { canRequestInspectionRecapture } from "@/features/dashboard/inspection-views";
 
 describe("dashboard presenters", () => {
   it("presents known codes and hides unknown values", () => {
@@ -9,7 +10,6 @@ describe("dashboard presenters", () => {
     expect(presentDashboardStatus("INVITED")).toBe("Convite enviado");
     expect(presentDashboardStatus("FUTURE")).toBe("Situação não reconhecida");
     expect(presentInspectionSource("MANUAL")).toBe("Manual");
-    expect(presentReportMode("HISTORICAL")).toBe("Histórico");
     expect(presentAnalysisMode("CURRENT_ONLY")).toBe("Análise atual");
     expect(presentAnalysisStatus("FAILED")).toBe("Falha técnica");
     expect(presentFindingCategory("OBSTRUCTION")).toBe("Obstrução");
@@ -22,5 +22,14 @@ describe("dashboard presenters", () => {
     expect(presentReportPDFStatus("PENDING")).toBe("Em preparação");
     expect(presentReportPDFStatus("PROCESSING")).toBe("Em geração");
     expect(presentReportPDFStatus("READY")).toBe("Disponível");
+  });
+});
+
+describe("inspection recapture eligibility", () => {
+  it("requires submitted evidence or a completed inspection with evidence", () => {
+    expect(canRequestInspectionRecapture({ status: "INVITED", evidenceCount: 0 })).toBe(false);
+    expect(canRequestInspectionRecapture({ status: "SUBMITTED", evidenceCount: 0 })).toBe(false);
+    expect(canRequestInspectionRecapture({ status: "SUBMITTED", evidenceCount: 1 })).toBe(true);
+    expect(canRequestInspectionRecapture({ status: "COMPLETED", evidenceCount: 1 })).toBe(true);
   });
 });

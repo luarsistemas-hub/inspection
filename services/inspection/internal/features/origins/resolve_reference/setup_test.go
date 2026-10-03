@@ -80,9 +80,9 @@ func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.I
 			t.Fatal(err)
 		}
 	}
-	tenantID, assetID, templateID, originID, versionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	tenantID, assetID, originID, versionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Date(2026, time.September, 5, 12, 0, 0, 0, time.UTC)
-	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, TemplateID: templateID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
+	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
 	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", IdempotencyKey: "origin", CreatedAt: now, ActivatedAt: &now}
 	if err := db.Create(&origin).Error; err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.I
 			t.Fatal(err)
 		}
 	}
-	return db, Query{TenantID: tenantID, AssetID: assetID, TemplateID: templateID}, versionID
+	return db, Query{TenantID: tenantID, AssetID: assetID}, versionID
 }
 
 func code(err error) apperror.Code {

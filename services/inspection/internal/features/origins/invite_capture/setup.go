@@ -57,18 +57,14 @@ func Setup(d Dependencies) error {
 		if asset.Asset.Status != "ACTIVE" || asset.Asset.TemplateID == nil {
 			return nil, apperror.New(apperror.InvalidState, "assetId", "active configured asset is required")
 		}
-		assigned := false
-		for _, assignment := range asset.Assignments {
-			assigned = assigned || (assignment.Active && assignment.ParticipantID == command.ParticipantID)
-		}
-		if !assigned {
-			return nil, apperror.New(apperror.InvalidInput, "participantId", "participant is not assigned to the asset")
-		}
 		participantRaw, err := d.Bus.Ask(ctx, participantget.Query{TenantID: command.TenantID, ParticipantID: command.ParticipantID})
 		if err != nil {
 			return nil, err
 		}
 		participant := participantRaw.(participantcore.ParticipantView)
+		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
+			return nil, err
+		}
 		delivery := selectedDeliveries(participant)
 		if len(delivery) == 0 {
 			return nil, apperror.New(apperror.InvalidState, "participantId", "a selected verified delivery channel is required")
@@ -98,10 +94,10 @@ func Setup(d Dependencies) error {
 				MinimumMedia: requirement.MinimumCount, MaximumMedia: requirement.MaximumCount,
 				DescriptionRequired: requirement.DescriptionRequired,
 				CaptureSourcePolicy: requirement.CaptureSourcePolicy,
-				ComparisonTarget:    string(requirement.ComparisonTarget),
+				ComparisonTarget:    string(catalog.ChecklistOnly),
 			})
 		}
-		created, err := d.Service.Invite(ctx, origincore.InviteInput{TenantID: command.TenantID, AssetID: command.AssetID, TemplateID: *asset.Asset.TemplateID, TemplateVersionID: template.Version.ID, Delivery: delivery, Requirements: requirements, Policy: policyJSON, ExpiresAt: command.ExpiresAt, IdempotencyKey: command.IdempotencyKey})
+		created, err := d.Service.Invite(ctx, origincore.InviteInput{TenantID: command.TenantID, AssetID: command.AssetID, TemplateVersionID: template.Version.ID, Delivery: delivery, Requirements: requirements, Policy: policyJSON, ExpiresAt: command.ExpiresAt, IdempotencyKey: command.IdempotencyKey})
 		if err != nil {
 			return nil, err
 		}

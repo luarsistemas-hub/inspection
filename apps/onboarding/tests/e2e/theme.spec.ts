@@ -6,7 +6,7 @@ test("Cobalto themes preserve the onboarding entry at supported viewport widths"
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.goto("/");
 
-  const appearance = page.getByRole("combobox", { name: "Aparência" });
+  const appearance = page.getByRole("button", { name: "Ativar tema escuro" });
   await expect(appearance).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   const info = page.getByRole("button", { name: "Informações sobre cadastro e salvamento" });
@@ -24,12 +24,12 @@ test("Cobalto themes preserve the onboarding entry at supported viewport widths"
     if (width === 360 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`onboarding-light-${width}.png`), fullPage: true });
   }
 
-  await appearance.selectOption("dark");
+  await appearance.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("dark");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("inspection.theme"))).toBe("dark");
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "Aparência" })).toHaveValue("dark");
+  await expect(page.getByRole("button", { name: "Ativar tema claro" })).toBeVisible();
   await page.getByRole("button", { name: "Informações sobre cadastro e salvamento" }).click();
   await expect(page.getByText(/Os campos ficam neste navegador/)).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });

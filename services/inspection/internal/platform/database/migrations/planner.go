@@ -1413,6 +1413,100 @@ DROP POLICY IF EXISTS tenant_isolation ON access.user_invitation_otp_challenges;
 CREATE POLICY tenant_isolation ON access.user_invitation_otp_challenges USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 GRANT SELECT, INSERT, UPDATE, DELETE ON access.user_invitations, access.user_invitation_otp_challenges TO inspection_runtime;
 `},
+		{Version: 50, Name: "unified_inspection_planning", Compatible: true, SQL: `
+ALTER TABLE projects.projects ADD COLUMN IF NOT EXISTS name varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE projects.projects ADD COLUMN IF NOT EXISTS ordered_stages boolean NOT NULL DEFAULT false;
+ALTER TABLE projects.projects DROP COLUMN IF EXISTS participant_id;
+ALTER TABLE projects.projects DROP COLUMN IF EXISTS template_id;
+ALTER TABLE projects.projects DROP COLUMN IF EXISTS template_version_id;
+ALTER TABLE projects.projects DROP COLUMN IF EXISTS report_mode;
+ALTER TABLE projects.project_stages DROP COLUMN IF EXISTS inspection_id;
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS project_id uuid;
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS stage_id uuid;
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS comparison_mode varchar(32) NOT NULL DEFAULT 'CHECKLIST_ONLY';
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS template_version_id uuid;
+UPDATE schedules.schedules s SET template_version_id=t.active_version_id FROM templates.templates t WHERE s.tenant_id=t.tenant_id AND s.template_id=t.id AND s.template_version_id IS NULL AND t.active_version_id IS NOT NULL;
+UPDATE schedules.schedules s SET template_version_id=(
+  SELECT v.id FROM templates.template_versions v WHERE v.tenant_id=s.tenant_id AND v.template_id=s.template_id ORDER BY v.version_number DESC LIMIT 1
+) WHERE s.template_version_id IS NULL;
+UPDATE schedules.schedules s SET comparison_mode=v.definition_json->>'defaultComparisonMode'
+FROM templates.template_versions v
+WHERE v.tenant_id=s.tenant_id AND v.id=s.template_version_id
+  AND v.definition_json->>'defaultComparisonMode' IN ('CHECKLIST_ONLY','FIXED_ORIGIN');
+-- Schedules whose template never had a version cannot run and cannot satisfy NOT NULL.
+DELETE FROM schedules.schedules WHERE template_version_id IS NULL;
+ALTER TABLE schedules.schedules ALTER COLUMN template_version_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_schedules_project_id ON schedules.schedules(project_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_stage_id ON schedules.schedules(stage_id);
+DROP INDEX IF EXISTS origins.idx_origin_context;
+DROP TABLE IF EXISTS pg_temp.origin_merge;
+CREATE TEMP TABLE origin_merge AS
+SELECT o.id AS dup_id, first_value(o.id) OVER (
+  PARTITION BY o.tenant_id, o.asset_id
+  ORDER BY EXISTS(SELECT 1 FROM origins.origin_versions v WHERE v.tenant_id=o.tenant_id AND v.origin_id=o.id AND v.status='ACTIVE') DESC, o.created_at, o.id
+) AS keep_id
+FROM origins.origins o;
+DELETE FROM origin_merge WHERE dup_id=keep_id;
+UPDATE origins.origin_versions v SET origin_id=r.keep_id, version_number=r.base+r.rn,
+  status=CASE WHEN v.status='ACTIVE' THEN 'SUPERSEDED' ELSE v.status END
+FROM (
+  SELECT ov.id, m.keep_id,
+    row_number() OVER (PARTITION BY m.keep_id ORDER BY ov.created_at, ov.id) AS rn,
+    (SELECT coalesce(max(k.version_number),0) FROM origins.origin_versions k WHERE k.tenant_id=ov.tenant_id AND k.origin_id=m.keep_id) AS base
+  FROM origins.origin_versions ov JOIN origin_merge m ON m.dup_id=ov.origin_id
+) r WHERE v.id=r.id;
+DELETE FROM origins.origins o USING origin_merge m WHERE o.id=m.dup_id;
+DROP TABLE origin_merge;
+ALTER TABLE origins.origins DROP COLUMN IF EXISTS template_id;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_origin_asset ON origins.origins(tenant_id, asset_id);
+`},
+		{Version: 51, Name: "scheduler_tenant_discovery", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz,
+  p_terminal_updated_before timestamptz,
+  p_deadline_before timestamptz
+) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT s.tenant_id FROM schedules.schedules s
+  WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION
+  SELECT r.tenant_id FROM schedules.reminder_plans r
+  WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
+`},
+		{Version: 52, Name: "backfill_triage_cases_from_classifications", Compatible: true, SQL: `
+INSERT INTO dashboard.triage_cases(id,tenant_id,inspection_id,status,classification,reason_codes,report_version,version,created_at,updated_at)
+SELECT gen_random_uuid(), i.tenant_id, i.id, 'NEW', c.classification, c.reason_codes,
+       coalesce(r.version_number, 0), 1, now(), now()
+FROM inspections.inspections i
+JOIN LATERAL (
+  SELECT classification, reason_codes
+  FROM analysis.classification_runs c
+  WHERE c.tenant_id=i.tenant_id AND c.inspection_id=i.id
+  ORDER BY c.created_at DESC
+  LIMIT 1
+) c ON true
+LEFT JOIN LATERAL (
+  SELECT version_number
+  FROM reports.report_snapshots r
+  WHERE r.tenant_id=i.tenant_id AND r.inspection_id=i.id
+  ORDER BY r.version_number DESC
+  LIMIT 1
+) r ON true
+WHERE i.status NOT IN ('INVALIDATED','CANCELED')
+  AND c.classification IN ('CRITICAL','ATTENTION')
+ON CONFLICT (tenant_id,inspection_id) DO NOTHING;
+`},
 	}
 }
 

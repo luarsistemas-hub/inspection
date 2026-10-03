@@ -32,7 +32,9 @@ test.describe("Dashboard creation forms against the local stack", () => {
     test("sends the local start time in São Paulo for every available frequency", async ({ page }) => {
       const assertRuntimeClean = installRuntimeGuards(page);
       await loginAsLocalAdmin(page, "/schedules");
-      const start = `${new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10)}T23:32`;
+      const startDate = new Date(Date.now() + 2 * 86_400_000);
+      const uniqueMinute = String(Math.floor(Date.now() / 60_000) % 60).padStart(2, "0");
+      const start = `${startDate.toISOString().slice(0, 10)}T23:${uniqueMinute}`;
       for (const [frequency, label] of [["DAILY", "Diariamente"], ["WEEKLY", "Semanalmente"], ["MONTHLY", "Mensalmente"], ["YEARLY", "Anualmente"]]) {
         await page.getByRole("button", { name: "Nova agenda" }).click();
         const dialog = page.getByRole("dialog", { name: "Nova agenda" });
@@ -54,9 +56,10 @@ test.describe("Dashboard creation forms against the local stack", () => {
 
       const localStart = new Date(`${start}:00-03:00`);
       const startLabel = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(localStart);
-      const firstSchedule = page.locator(".schedules-collection > li").filter({ hasText: `Próxima vistoria: ${startLabel}` }).first();
+      await page.getByRole("button", { name: "Recorrências", exact: true }).click();
+      const firstSchedule = page.locator(".schedules-collection > li").filter({ hasText: `Próxima ocorrência prevista · ${startLabel}` }).first();
       await expect(firstSchedule).toBeVisible();
-      await firstSchedule.getByRole("button", { name: "Editar agenda" }).click();
+      await firstSchedule.getByRole("button", { name: "Editar recorrência" }).click();
       const editDialog = page.getByRole("dialog", { name: "Editar agenda" });
       await expect(editDialog).toBeVisible();
       await editDialog.getByLabel("Repetir").selectOption("WEEKLY");
@@ -81,11 +84,34 @@ test.describe("Dashboard creation forms against the local stack", () => {
     const nextDay = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
     await form.getByLabel("Vencimento").fill(`${tomorrow}T23:34`);
     await form.getByLabel("Prazo final").fill(`${nextDay}T23:34`);
-    const { request, body } = await mutationResponse(page, "CreateInspection", form.getByRole("button", { name: "Criar vistoria" }));
+    await chooseFirst(page, form, "Modelo de vistoria");
+    const { request, body } = await mutationResponse(page, "PlanInspection", form.getByRole("button", { name: "Planejar vistoria" }));
     expect(request.variables.input.dueAt).toMatch(/Z$/);
     expect(request.variables.input.deadlineAt).toMatch(/Z$/);
     expect(body.errors).toBeUndefined();
-    expect(body.data?.createInspection?.userErrors).toEqual([]);
+    expect(body.data?.planInspection?.userErrors).toEqual([]);
+    await expect(dialog).toBeHidden();
+    await assertRuntimeClean();
+  });
+
+  test("Nova vistoria plans recurring inspections with one optional project", async ({ page }) => {
+    const assertRuntimeClean = installRuntimeGuards(page);
+    await loginAsLocalAdmin(page, "/inspections");
+    await page.getByRole("button", { name: "Nova vistoria" }).click();
+    const dialog = page.getByRole("dialog", { name: "Nova vistoria" });
+    const form = dialog.locator("form");
+    await chooseFirst(page, form, "Imóvel");
+    await chooseFirst(page, form, "Responsável pela vistoria");
+    await chooseFirst(page, form, "Modelo de vistoria");
+    await form.getByLabel("Repetir vistoria").check();
+    await form.getByLabel("Primeira vistoria").fill("2030-05-10T12:00");
+    await form.getByLabel("Frequência").selectOption("MONTHLY");
+    await form.getByLabel("Projeto").selectOption("new");
+    await form.getByLabel("Nome do projeto").fill("Inspeção recorrente QA");
+    const { request, body } = await mutationResponse(page, "PlanInspection", form.getByRole("button", { name: "Planejar vistoria" }));
+    expect(request.variables.input).toMatchObject({ rrule: "FREQ=MONTHLY", timezone: "America/Sao_Paulo", createProject: true, projectName: "Inspeção recorrente QA" });
+    expect(body.errors).toBeUndefined();
+    expect(body.data?.planInspection?.userErrors).toEqual([]);
     await expect(dialog).toBeHidden();
     await assertRuntimeClean();
   });
@@ -97,7 +123,8 @@ test.describe("Dashboard creation forms against the local stack", () => {
     const dialog = page.getByRole("dialog", { name: "Novo projeto" });
     const form = dialog.locator("form");
     await expect(form).toBeVisible();
-    await chooseEligibleDependencies(page, form);
+    await chooseFirst(page, form, "Imóvel");
+    await form.getByLabel("Nome do projeto").fill("Projeto de referência QA");
     const { body } = await mutationResponse(page, "CreateProject", form.getByRole("button", { name: "Criar projeto" }));
     expect(body.errors).toBeUndefined();
     expect(body.data?.createProject?.userErrors).toEqual([]);

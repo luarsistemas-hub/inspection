@@ -17,6 +17,7 @@ export type ComboboxProps = ControlAccessibilityProps & {
   value: string;
   options: ComboboxOption[];
   onChange: (value: string) => void;
+  onInputChange?: (value: string) => void;
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
@@ -69,10 +70,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
 });
 
 /** Renders an accessible searchable listbox for selecting a known value. */
-export function Combobox({ value, options, onChange, placeholder = "Pesquisar…", required = false, disabled = false, inputRef, ...accessibility }: ComboboxProps) {
+export function Combobox({ value, options, onChange, onInputChange, placeholder = "Pesquisar…", required = false, disabled = false, inputRef, ...accessibility }: ComboboxProps) {
   const selectedKey = options.some((option) => option.value === value) ? value : null;
   const accessibleLabel = accessibility["aria-label"];
-  return <AriaComboBox allowsEmptyCollection aria-label={accessibleLabel} aria-labelledby={accessibility["aria-labelledby"]} className="inspection-combobox" isDisabled={disabled} isRequired={required} menuTrigger="focus" onSelectionChange={(key) => onChange(typeof key === "string" ? key : "")} selectedKey={selectedKey}>
+  return <AriaComboBox allowsEmptyCollection aria-label={accessibleLabel} aria-labelledby={accessibility["aria-labelledby"]} className="inspection-combobox" isDisabled={disabled} isRequired={required} menuTrigger="focus" onInputChange={onInputChange} onSelectionChange={(key) => onChange(typeof key === "string" ? key : "")} selectedKey={selectedKey}>
     <AriaInput {...accessibility} className="inspection-input" placeholder={placeholder} ref={inputRef} />
     <Popover className="inspection-combobox-popover"><ListBox aria-label={accessibleLabel ?? "Opções"} className="inspection-combobox-options" renderEmptyState={() => <span className="inspection-combobox-empty">Nenhuma opção encontrada.</span>}>{options.map((option) => <ListBoxItem id={option.value} key={option.value} textValue={option.label}><strong>{option.label}</strong>{option.description ? <span>{option.description}</span> : null}</ListBoxItem>)}</ListBox></Popover>
   </AriaComboBox>;

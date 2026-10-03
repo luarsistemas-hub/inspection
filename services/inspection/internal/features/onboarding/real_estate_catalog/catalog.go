@@ -16,7 +16,7 @@ const (
 	DefinitionVersion    = 5
 	TemplateSchema       = 1
 	ChecklistTemplateKey = "real-estate-checklist"
-	OriginTemplateKey    = "real-estate-fixed-origin"
+	OriginTemplateKey    = ChecklistTemplateKey
 )
 
 var ErrUnsupportedSchemaVersion = errors.New("unsupported schema version")
@@ -61,7 +61,7 @@ type Definition struct {
 var definition = Definition{
 	SchemaVersion: DefinitionSchema, Version: DefinitionVersion, Segment: Segment,
 	SegmentVersion: "real-estate-v1", Purposes: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"},
-	Templates: []string{ChecklistTemplateKey, OriginTemplateKey}, AnalysisType: "REAL_ESTATE",
+	Templates: []string{ChecklistTemplateKey}, AnalysisType: "REAL_ESTATE",
 	Steps: []Step{
 		{Key: "agency", Label: "Imobiliária", Position: 1, Required: true, Fields: []Field{{Key: "name", Label: "Nome da imobiliária", Type: "text", Required: true}}},
 		{Key: "property", Label: "Imóvel", Position: 2, Required: true, Fields: []Field{
@@ -141,19 +141,18 @@ func Validate(value Definition) error {
 	return nil
 }
 
-// TemplateDocuments returns the two immutable template contracts selected by
-// the real-estate origin modes. Both use the REAL_ESTATE analysis type.
+// TemplateDocuments returns the reusable real-estate checklist contract.
 func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
-	base := func(mode templatecatalog.ComparisonMode) templatecatalog.TemplateDocument {
+	base := func() templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
 			SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
-			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, ComparisonMode: mode,
-			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: mode}},
-			ReportMode:   "HISTORICAL", AnalysisType: "REAL_ESTATE",
-			Policy: templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: true},
+			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
+			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+			AnalysisType: "REAL_ESTATE",
+			Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: true},
 		}
 	}
-	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: base(templatecatalog.ChecklistOnly), OriginTemplateKey: base(templatecatalog.FixedOrigin)}
+	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: base()}
 }
 
 // ValidateTemplates compiles both curated documents against the supplied

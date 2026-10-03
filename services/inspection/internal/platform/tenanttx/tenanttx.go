@@ -10,6 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
+type transactionContextKey struct{}
+
+type transactionContext struct {
+	tenantID identity.ID
+	tx       *gorm.DB
+}
+
 // Runner establishes transaction-local tenant state before any tenant I/O.
 type Runner struct {
 	DB *gorm.DB
@@ -22,6 +29,15 @@ func (r Runner) Within(ctx context.Context, tenantID identity.ID, fn func(*gorm.
 	}
 	if tenantID == uuid.Nil {
 		return fmt.Errorf("tenant transaction: empty tenant")
+	}
+	if active, ok := ctx.Value(transactionContextKey{}).(transactionContext); ok {
+		if active.tenantID != tenantID {
+			return fmt.Errorf("tenant transaction: nested tenant mismatch")
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return fn(active.tx.WithContext(ctx))
 	}
 	return r.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var bypass bool
@@ -38,6 +54,7 @@ func (r Runner) Within(ctx context.Context, tenantID identity.ID, fn func(*gorm.
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return fn(tx.WithContext(ctx))
+		txCtx := context.WithValue(ctx, transactionContextKey{}, transactionContext{tenantID: tenantID, tx: tx})
+		return fn(tx.WithContext(txCtx))
 	})
 }

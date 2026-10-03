@@ -7,6 +7,7 @@ describe("admin presenters", () => {
     expect(presentAdminRole("TENANT_ADMIN")).toBe("Administrador da imobiliária");
     expect(presentAdminScope("ASSET")).toBe("Imóvel");
     expect(presentAdminStatus("ACTIVE")).toBe("Ativa");
+    expect(presentAdminStatus("INVITED")).toBe("Aguardando ativação");
     expect(presentAdminStatus("Nenhuma regra configurada")).toBe("Nenhuma regra configurada");
     expect(presentAdminStatus("Indisponível")).toBe("Indisponível");
     expect(presentAdminStatus("FUTURE")).toBe("Situação não reconhecida");

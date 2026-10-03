@@ -44,6 +44,18 @@ export function clientMutationId() {
   return globalThis.crypto?.randomUUID?.() ?? `onboarding-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+export async function logoutOnboardingSession(): Promise<void> {
+  const response = await fetch(new URL("/onboarding/logout", endpoint), {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRF-Token": getOnboardingCsrfToken() ?? "" },
+  });
+  if (!response.ok) {
+    throw { message: "Não foi possível encerrar sua sessão. Tente novamente." } satisfies GraphQLFailure;
+  }
+  clearOnboardingSession();
+}
+
 export function mapUserErrors(errors: ReadonlyArray<{ message: string; field?: string | null; code?: string | null }>) {
   return errors.reduce<Record<string, string>>((result, error) => {
     if (error.field) result[error.field] = error.message;

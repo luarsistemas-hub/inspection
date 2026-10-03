@@ -5,7 +5,6 @@ const projectStages: Record<string, string> = { inspection: "Vistoria", "initial
 export function presentClassification(value: string | null | undefined) { return classifications[value ?? ""] ?? "Situação não reconhecida"; }
 export function presentDashboardStatus(value: string | null | undefined) { return statuses[value ?? ""] ?? "Situação não reconhecida"; }
 export function presentInspectionSource(value: string | null | undefined) { return sources[value ?? ""] ?? "Origem não reconhecida"; }
-export function presentReportMode(value: string | null | undefined) { return statuses[value ?? ""] ?? "Modalidade não reconhecida"; }
 export function presentReportPDFStatus(value: string | null | undefined) { return ({ PENDING: "Em preparação", REQUESTED: "Em preparação", PROCESSING: "Em geração", READY: "Disponível", COMPLETED: "Disponível", FAILED: "Falha na geração" } as Record<string, string>)[value ?? ""] ?? "Situação do PDF não reconhecida"; }
 const analysisModes: Record<string, string> = { CURRENT_ONLY: "Análise atual", COMPARE_ORIGIN_CURRENT: "Comparação com referência" };
 const analysisStatuses: Record<string, string> = { PENDING: "Pendente", COMPLETED: "Concluída", INCONCLUSIVE: "Inconclusiva", FAILED: "Falha técnica" };
