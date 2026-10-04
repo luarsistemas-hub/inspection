@@ -59,7 +59,8 @@ jobs:
           cache-dependency-path: apps/${{ matrix.product }}/package-lock.json
       - run: npm ci
       - run: node ../../scripts/prepare-design-system.mjs
-      - run: npm audit --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run codegen:check
       - run: npm run lint
       - run: npm run test

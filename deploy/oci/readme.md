@@ -56,14 +56,40 @@ Use a tabela abaixo como inventário completo de entradas. Não há valores padr
 | GitHub `OCI_ADMIN_ORIGIN`, `OCI_DASHBOARD_ORIGIN`, `OCI_CAPTURE_ORIGIN`, `OCI_ONBOARDING_ORIGIN`, `OCI_API_ORIGIN`, `OCI_AUTH_ORIGIN`, `OCI_STORAGE_ORIGIN`, `OCI_TURNSTILE_SITE_KEY` | Required before manual workflow; no defaults | Same public HTTPS URLs/key | GitHub repository Variables |
 | `POSTGRES_ADMIN_PASSWORD`, `INSPECTION_RUNTIME_PASSWORD`, `INSPECTION_WORKER_PASSWORD`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_BOOTSTRAP_USERNAME`, `KEYCLOAK_BOOTSTRAP_PASSWORD`, `KEYCLOAK_PROVISIONING_SECRET` | Required; no defaults | Generate unique random hex passwords; username such as `bootstrap-admin` | Individual OCI Vault secrets named in `secrets.map` |
 | `RABBITMQ_PASSWORD`, `DRAGONFLY_PASSWORD`, `TURNSTILE_SECRET`, `SUPER_ADMIN_PASSWORD`, `INSPECTION_METRICS_TOKEN`, `INSPECTION_OTP_PEPPER`, `NOTIFICATION_ACTIVE_PAYLOAD_KEY`, `NOTIFICATION_PAYLOAD_KEYS` | Required; no defaults | Key ID and JSON/base64 key ring as described above | Individual OCI Vault secrets |
-
-Segredos no Vault devem ter uma única linha e não podem conter aspas simples (`'`); o `secrets-refresh` rejeita esses valores. Senhas usadas em DSNs e na URL do RabbitMQ são codificadas (URL-encoding) automaticamente.
 | `OCI_S3_ACCESS_KEY`, `OCI_S3_SECRET_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `GHCR_USERNAME`, `GHCR_READ_TOKEN` | Required; no defaults | OCI Customer Secret Key, OCI SMTP credentials, GHCR read-only PAT | Individual OCI Vault secrets |
 | `API_IMAGE`, `KEYCLOAK_IMAGE`, `ADMIN_IMAGE`, `DASHBOARD_IMAGE`, `CAPTURE_IMAGE`, `ONBOARDING_IMAGE`, `POSTGRES_IMAGE`, `DRAGONFLY_IMAGE`, `RABBITMQ_IMAGE`, `CADDY_IMAGE`, `RELEASE_SHA` | Required for deploy; no defaults | Registry `@sha256:<64-hex>` references and commit SHA | Generated release manifest from GitHub Actions artifact |
+
+Segredos no Vault devem ter uma única linha e não podem conter aspas simples (`'`); o `secrets-refresh` rejeita esses valores. Senhas usadas em DSNs e na URL do RabbitMQ são codificadas (URL-encoding) automaticamente.
 
 Gere cada senha como uma longa sequência hexadecimal aleatória para que possa compor uma URL de conexão PostgreSQL com segurança. Gere `INSPECTION_OTP_PEPPER` com ao menos 32 bytes aleatórios representados em hexadecimal. Crie `NOTIFICATION_PAYLOAD_KEYS` como um mapa JSON de IDs de versão para chaves AES de 32 bytes codificadas em base64, e defina `NOTIFICATION_ACTIVE_PAYLOAD_KEY` como um desses IDs. Mantenha IDs antigos enquanto existirem entregas criptografadas que os referenciem. Em `secrets.map`, registre somente os OCIDs dos segredos no OCI Vault, seguindo [secrets.map.example](secrets.map.example). Defina proprietário root e modo `0600`.
 
 O usuário OCI S3 é criado pelo Terraform, mas sua Customer Secret Key deve ser criada separadamente em OCI Console → Identity & Security → Users. Copie a chave uma única vez para o Vault; a OCI não a exibirá novamente. Crie credenciais SMTP em Email Delivery, aprove o remetente e publique os registros SPF/DKIM do domínio. Confirme a inscrição de e-mail criada para o tópico de alertas.
+
+### Enviar os 21 segredos ao Vault
+
+O script [vault_secrets.py](vault_secrets.py) usa os nomes de [secrets.map.example](secrets.map.example). Ele cria somente os segredos ausentes no Vault `inspection-vault`, usando a chave `inspection-secrets-key` gerada pela foundation. Se um segredo já existir, ele confere o valor e a chave; uma divergência interrompe a execução para revisão manual, sem trocar o valor. Após um Apply completo, gera `secrets.map` e `secret_ocids.json` contendo somente nomes e OCIDs. Uma execução interrompida pode ser repetida com o mesmo arquivo de valores.
+
+O login no navegador não autentica o script local. Configure previamente `~/.oci/config` com uma API signing key de um usuário autorizado a ler o Vault/chave e a ler/criar segredos no compartment. Consulte a [configuração do SDK da OCI](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm). A partir da raiz do repositório:
+
+```sh
+install -d -m 700 "$HOME/.inspection-oci"
+python3 -m venv "$HOME/.inspection-oci/venv"
+"$HOME/.inspection-oci/venv/bin/python" -m pip install -r deploy/oci/requirements-vault.txt
+"$HOME/.inspection-oci/venv/bin/python" deploy/oci/vault_secrets.py template --output "$HOME/.inspection-oci/vault-values.env"
+```
+
+Edite `~/.inspection-oci/vault-values.env` em um editor local. Cada linha tem o formato `NOME=valor`, sem `export` ou aspas externas. Preencha todos os 21 nomes. Para senhas e tokens gerados por você, use valores distintos e aleatórios; `openssl rand -hex 32` gera 32 bytes em hexadecimal. `INSPECTION_OTP_PEPPER` requer pelo menos esse tamanho. Para `NOTIFICATION_PAYLOAD_KEYS`, gere uma chave com `openssl rand -base64 32` e use um objeto JSON em uma única linha, como `{"v1":"<chave-base64-de-32-bytes>"}`; defina `NOTIFICATION_ACTIVE_PAYLOAD_KEY=v1`. A Customer Secret Key S3, as credenciais SMTP, o segredo Turnstile e o token GHCR vêm das respectivas contas; não invente esses valores. Mantenha o arquivo somente no computador do operador, com permissão `0600`, fora do Git. Não coloque valores em argumentos de comando, Terraform, Resource Manager ou mensagens.
+
+```sh
+"$HOME/.inspection-oci/venv/bin/python" deploy/oci/vault_secrets.py check --values "$HOME/.inspection-oci/vault-values.env"
+"$HOME/.inspection-oci/venv/bin/python" deploy/oci/vault_secrets.py upload \
+  --values "$HOME/.inspection-oci/vault-values.env" \
+  --compartment-id '<compartment_ocid da foundation>' \
+  --vault-id '<vault_ocid da foundation>' \
+  --output-dir "$HOME/.inspection-oci/output"
+```
+
+O segundo comando consulta a OCI e mostra apenas os nomes que serão criados. Confira a lista e então execute o mesmo comando com `--apply` no final. A saída ficará em `$HOME/.inspection-oci/output/`: use `secret_ocids.json` como mapa `secret_ocids` da stack runtime e instale `secrets.map` como `/etc/inspection/secrets.map` na VM após o provisionamento. O script exige um arquivo de valores pertencente ao usuário e com modo `0600`; o diretório de saída deve pertencer ao usuário e ter modo `0700`. Não imprima nem compartilhe o arquivo de valores. Guarde uma cópia segura dos valores no seu gerenciador de senhas antes de apagá-lo do disco.
 
 ## Empacotar, provisionar e configurar DNS
 

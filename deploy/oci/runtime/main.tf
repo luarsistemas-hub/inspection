@@ -181,7 +181,7 @@ resource "oci_monitoring_alarm" "object_storage" {
   query                 = "StoredBytes[1h]{resourceDisplayName = \"${var.bucket_name}\"}.mean() > 17179869184"
   severity              = "WARNING"
   pending_duration      = "PT1H"
-  resolution            = "1h"
+  resolution            = "1m"
   body                  = "Inspection Object Storage bucket has exceeded 16 GiB."
 }
 
@@ -195,7 +195,7 @@ resource "oci_monitoring_alarm" "object_storage_critical" {
   query                 = "StoredBytes[1h]{resourceDisplayName = \"${var.bucket_name}\"}.mean() > 19327352832"
   severity              = "CRITICAL"
   pending_duration      = "PT1H"
-  resolution            = "1h"
+  resolution            = "1m"
   body                  = "Inspection Object Storage bucket has exceeded 18 GiB; stop growth and review eligible objects."
 }
 
