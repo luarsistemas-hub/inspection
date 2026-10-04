@@ -98,9 +98,21 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 					return err
 				}
 			}
+			var pendingKeys []string
+			if err := tx.Model(&database.ReportPDFJob{}).Where("tenant_id=? AND pending_object_key<>'' AND snapshot_id IN (SELECT id FROM reports.report_snapshots WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID).Pluck("pending_object_key", &pendingKeys).Error; err != nil {
+				return err
+			}
+			for _, key := range pendingKeys {
+				if err := deleteObject(ctx, store, key); err != nil {
+					return err
+				}
+			}
 		}
 		deleteWhere := func(model any, query string, args ...any) error {
 			return tx.Where(query, args...).Delete(model).Error
+		}
+		if err := deleteWhere(&database.ReportPDFJob{}, "tenant_id=? AND snapshot_id IN (SELECT id FROM reports.report_snapshots WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID); err != nil {
+			return err
 		}
 		if err := deleteWhere(&database.ReportArtifact{}, "tenant_id=? AND snapshot_id IN (SELECT id FROM reports.report_snapshots WHERE tenant_id=? AND inspection_id=?)", tenantID, tenantID, inspectionID); err != nil {
 			return err

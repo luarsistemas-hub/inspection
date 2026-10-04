@@ -115,7 +115,7 @@ func (h *Harness) ResetProviderStubs(ctx context.Context) error {
 	if h == nil || h.HTTP == nil {
 		return errors.New("integration harness: HTTP client unavailable")
 	}
-	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Gotenberg": h.GotenbergURL, "Twilio simulator": h.TwilioURL, "Meta simulator": h.MetaURL} {
+	for name, baseURL := range map[string]string{"LiteLLM": h.LiteLLMURL, "Twilio simulator": h.TwilioURL, "Meta simulator": h.MetaURL} {
 		endpoint := strings.TrimRight(baseURL, "/") + "/__admin/mappings/reset"
 		request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 		if err != nil {

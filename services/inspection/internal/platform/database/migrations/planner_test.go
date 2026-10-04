@@ -60,9 +60,26 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 52 {
-		t.Fatalf("latest version=%d, want 52", got)
+	if got := LatestVersion(); got != 53 {
+		t.Fatalf("latest version=%d, want 53", got)
 	}
+}
+
+func TestReportPDFJobsMigrationAddsTenantScopedDurableJobs(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version == 53 {
+			if step.Name != "durable_report_pdf_jobs" {
+				t.Fatalf("unexpected report PDF migration: %+v", step)
+			}
+			for _, required := range []string{"reports.report_pdf_jobs", "uq_report_pdf_job", "ENABLE ROW LEVEL SECURITY", "FORCE ROW LEVEL SECURITY", "inspection_runtime"} {
+				if !strings.Contains(step.SQL, required) {
+					t.Fatalf("report PDF migration does not contain %q", required)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("durable report PDF migration missing")
 }
 
 func TestTriageCaseMigrationEnablesTenantIsolationAndBackfillsCurrentRisks(t *testing.T) {
@@ -157,8 +174,8 @@ func TestUsageDailySummaryIndexMigrationScopesUniquenessByTenantAndDay(t *testin
 		if step.Name != "usage_daily_summary_tenant_day_index" || !strings.Contains(step.SQL, "DROP INDEX IF EXISTS usage.idx_usage_daily") || !strings.Contains(step.SQL, "CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day)") {
 			t.Fatalf("unexpected usage summary migration: %+v", step)
 		}
-		if got := LatestVersion(); got != 52 {
-			t.Fatalf("latest version=%d, want 52", got)
+		if got := LatestVersion(); got != 53 {
+			t.Fatalf("latest version=%d, want 53", got)
 		}
 		return
 	}

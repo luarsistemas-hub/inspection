@@ -2428,6 +2428,11 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 		view.PDFStatus = artifact.Status
 	} else if err != gorm.ErrRecordNotFound {
 		return nil, err
+	} else if row.PDFRenderVersion == 1 {
+		view.PDFStatus, err = reportPDFJobStatus(ctx, r.DB, meta.TenantID, row.ID, "PDF")
+		if err != nil {
+			return nil, err
+		}
 	}
 	return view, nil
 }
@@ -2517,6 +2522,8 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 		value = "PDF_CUSTOMER"
 	} else if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
 		return nil, err
+	} else if value != "PDF" && value != "PDF_CUSTOMER" && value != "HTML" {
+		return nil, graphql1Error("kind")
 	}
 	var snapshot database.ReportSnapshot
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
@@ -2529,6 +2536,10 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	}
 	var row database.ReportArtifact
 	status := ""
+	kindOut := value
+	if isCustomer {
+		kindOut = "PDF" // customers always request the published PDF by its public kind
+	}
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		if isCustomer {
 			var publication database.ReportPublication
@@ -2540,13 +2551,20 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			var fallback database.ReportArtifact
-			if fallbackErr := tx.Where("snapshot_id=? AND kind='HTML'", id).First(&fallback).Error; fallbackErr == nil {
-				status = "FAILED"
-			} else if !errors.Is(fallbackErr, gorm.ErrRecordNotFound) {
-				return fallbackErr
+			if snapshot.PDFRenderVersion == 1 && (value == "PDF" || value == "PDF_CUSTOMER") {
+				status, err = reportPDFJobStatusTx(tx, meta.TenantID, id, value)
+				if err != nil {
+					return err
+				}
 			} else {
-				status = "PENDING"
+				var fallback database.ReportArtifact
+				if fallbackErr := tx.Where("snapshot_id=? AND kind='HTML'", id).First(&fallback).Error; fallbackErr == nil {
+					status = "FAILED"
+				} else if !errors.Is(fallbackErr, gorm.ErrRecordNotFound) {
+					return fallbackErr
+				} else {
+					status = "PENDING"
+				}
 			}
 		}
 		return nil
@@ -2554,7 +2572,7 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 		return nil, err
 	}
 	if status != "" {
-		return &graphql1.ReportDownload{SnapshotID: id.String(), Kind: "PDF", ObjectKey: "", Status: status, URL: ""}, nil
+		return &graphql1.ReportDownload{SnapshotID: id.String(), Kind: kindOut, ObjectKey: "", Status: status, URL: ""}, nil
 	}
 	url := ""
 	if r.Store.Client != nil {
@@ -2562,7 +2580,37 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 			url = signed
 		}
 	}
-	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: "PDF", ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
+	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: kindOut, ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
+}
+
+func reportPDFJobStatus(ctx context.Context, db *gorm.DB, tenantID, snapshotID identity.ID, audience string) (string, error) {
+	status := "PENDING"
+	err := withTask06Tenant(ctx, db, tenantID, func(tx *gorm.DB) error {
+		var err error
+		status, err = reportPDFJobStatusTx(tx, tenantID, snapshotID, audience)
+		return err
+	})
+	return status, err
+}
+
+func reportPDFJobStatusTx(tx *gorm.DB, tenantID, snapshotID identity.ID, audience string) (string, error) {
+	var job database.ReportPDFJob
+	if err := tx.Where("tenant_id=? AND snapshot_id=? AND audience=?", tenantID, snapshotID, audience).First(&job).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "PENDING", nil
+		}
+		return "", err
+	}
+	switch job.Status {
+	case "READY":
+		return "READY", nil
+	case "PROCESSING":
+		return "PROCESSING", nil
+	case "FAILED", "CANCELED":
+		return "FAILED", nil
+	default:
+		return "PENDING", nil
+	}
 }
 
 // DashboardSummary is the resolver for the dashboardSummary field.

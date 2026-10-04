@@ -1507,6 +1507,39 @@ WHERE i.status NOT IN ('INVALIDATED','CANCELED')
   AND c.classification IN ('CRITICAL','ATTENTION')
 ON CONFLICT (tenant_id,inspection_id) DO NOTHING;
 `},
+		{Version: 53, Name: "durable_report_pdf_jobs", Compatible: true, SQL: `
+ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS pdf_render_version integer NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS reports.report_pdf_jobs (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  snapshot_id uuid NOT NULL,
+  audience varchar(32) NOT NULL,
+  renderer_version integer NOT NULL,
+  status varchar(16) NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  artifact_id uuid,
+  pending_object_key varchar(1000) NOT NULL DEFAULT '',
+  last_error varchar(200) NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_report_pdf_job UNIQUE (tenant_id,snapshot_id,audience),
+  CONSTRAINT chk_report_pdf_job_audience CHECK (audience IN ('PDF','PDF_CUSTOMER')),
+  CONSTRAINT chk_report_pdf_job_status CHECK (status IN ('QUEUED','PROCESSING','READY','FAILED','CANCELED')),
+  CONSTRAINT chk_report_pdf_job_attempts CHECK (attempts >= 0 AND attempts <= 20)
+);
+CREATE INDEX IF NOT EXISTS idx_report_pdf_ready ON reports.report_pdf_jobs(status,next_attempt_at,created_at);
+ALTER TABLE reports.report_pdf_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports.report_pdf_jobs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON reports.report_pdf_jobs;
+CREATE POLICY tenant_isolation ON reports.report_pdf_jobs
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT USAGE ON SCHEMA reports TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON reports.report_pdf_jobs TO inspection_runtime;
+`},
 	}
 }
 

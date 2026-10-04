@@ -25,7 +25,6 @@ Abra <http://localhost:3000>. Configure as credenciais de bootstrap do Keycloak 
 | Dragonfly | `localhost:6380` |
 | MinIO | API `9002`, console `9003` |
 | Mailpit | <http://localhost:8026> |
-| Gotenberg | <http://localhost:3001> |
 
 ## Primeiro acesso
 

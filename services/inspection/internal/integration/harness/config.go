@@ -20,7 +20,6 @@ type Config struct {
 	RabbitMQURL             string
 	APIURL                  string
 	LiteLLMURL              string
-	GotenbergURL            string
 	TwilioURL               string
 	MetaURL                 string
 	MailpitURL              string
@@ -74,7 +73,6 @@ func ConfigFromEnv() Config {
 		RabbitMQURL:             firstEnv("INSPECTION_TEST_RABBITMQ_URL", "INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
 		APIURL:                  firstEnv("INSPECTION_TEST_API_URL", "INSPECTION_API_URL", "http://localhost:8080"),
 		LiteLLMURL:              firstEnv("INSPECTION_TEST_LITELLM_URL", "INSPECTION_LITELLM_URL", "http://localhost:18080"),
-		GotenbergURL:            firstEnv("INSPECTION_TEST_GOTENBERG_URL", "INSPECTION_GOTENBERG_URL", "http://localhost:18081"),
 		TwilioURL:               firstEnv("INSPECTION_TEST_TWILIO_URL", "INSPECTION_TWILIO_BASE_URL", "http://localhost:1081"),
 		MetaURL:                 firstEnv("INSPECTION_TEST_META_URL", "META_BASE_URL", "http://localhost:1082"),
 		MailpitURL:              firstEnv("INSPECTION_TEST_MAILPIT_URL", "http://localhost:8026"),
@@ -106,9 +104,7 @@ func ConfigFromEnv() Config {
 	if cfg.LiteLLMURL == "" {
 		cfg.LiteLLMURL = "http://localhost:18080"
 	}
-	if cfg.GotenbergURL == "" {
-		cfg.GotenbergURL = "http://localhost:18081"
-	}
+
 	if cfg.TwilioURL == "" {
 		cfg.TwilioURL = "http://localhost:1081"
 	}

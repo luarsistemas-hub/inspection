@@ -37,4 +37,11 @@ func TestCreateKeepsSnapshotsImmutableAndIdempotent(t *testing.T) {
 	if first.SnapshotID != repeated.SnapshotID || first.Version != 1 {
 		t.Fatalf("unexpected versions: %#v %#v", first, repeated)
 	}
+	var persisted database.ReportSnapshot
+	if err := db.First(&persisted, "id=?", first.SnapshotID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if persisted.PDFRenderVersion != 1 {
+		t.Fatalf("new snapshot renderer version=%d, want 1", persisted.PDFRenderVersion)
+	}
 }

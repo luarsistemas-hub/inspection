@@ -72,9 +72,17 @@ type Config struct {
 	LiteLLMURL             string
 	LLMMode                string
 	LiteLLMAPIKey          string
-	GotenbergURL           string
 	ProviderTimeout        time.Duration
+	ReportPDF              ReportPDFConfig
 	Notification           NotificationConfig
+}
+
+// ReportPDFConfig bounds worker-side Maroto rendering work.
+type ReportPDFConfig struct {
+	Timeout, LeaseDuration, PollInterval time.Duration
+	MaxAttempts, MaxEvidence, MaxPages   int
+	MaxImageBytes, MaxPDFBytes           int64
+	RetryDelays                          []time.Duration
 }
 
 // NotificationConfig contains operational delivery settings. Authentication
@@ -102,6 +110,10 @@ type NotificationConfig struct {
 func Load() (Config, error) {
 	environment := env("INSPECTION_ENV", "local")
 	stage := stageFromEnvironment()
+	pdfRetryDelays, err := reportPDFRetryDelays()
+	if err != nil {
+		return Config{}, err
+	}
 	keycloakClientID := os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID")
 	keycloakClientSecret := os.Getenv("INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET")
 	if environment == "local" {
@@ -123,7 +135,8 @@ func Load() (Config, error) {
 		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
 		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: keycloakClientID, KeycloakClientSecret: keycloakClientSecret,
-		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LLMMode: strings.ToLower(strings.TrimSpace(env("INSPECTION_LLM_MODE", "mock"))), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMAPIKey: os.Getenv("INSPECTION_LITELLM_API_KEY"), GotenbergURL: env("INSPECTION_GOTENBERG_URL", "http://localhost:18081"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
+		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LLMMode: strings.ToLower(strings.TrimSpace(env("INSPECTION_LLM_MODE", "mock"))), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMAPIKey: os.Getenv("INSPECTION_LITELLM_API_KEY"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
+		ReportPDF: ReportPDFConfig{Timeout: envDuration("INSPECTION_REPORT_PDF_TIMEOUT", 60*time.Second), LeaseDuration: envDuration("INSPECTION_REPORT_PDF_LEASE", 120*time.Second), PollInterval: envDuration("INSPECTION_REPORT_PDF_POLL", time.Second), MaxAttempts: envInt("INSPECTION_REPORT_PDF_MAX_ATTEMPTS", 4), MaxEvidence: envInt("INSPECTION_REPORT_PDF_MAX_EVIDENCE", 200), MaxPages: envInt("INSPECTION_REPORT_PDF_MAX_PAGES", 200), MaxImageBytes: int64(envInt("INSPECTION_REPORT_PDF_MAX_IMAGE_BYTES", 128<<20)), MaxPDFBytes: int64(envInt("INSPECTION_REPORT_PDF_MAX_BYTES", 64<<20)), RetryDelays: pdfRetryDelays},
 	}
 	notification, err := loadNotification(c.Environment)
 	if err != nil {
@@ -312,6 +325,22 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	return value
 }
 
+func reportPDFRetryDelays() ([]time.Duration, error) {
+	value, ok := os.LookupEnv("INSPECTION_REPORT_PDF_RETRY_DELAYS")
+	if !ok || strings.TrimSpace(value) == "" {
+		return []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, nil
+	}
+	delays := make([]time.Duration, 0, 4)
+	for _, item := range strings.Split(value, ",") {
+		delay, err := time.ParseDuration(strings.TrimSpace(item))
+		if err != nil || delay <= 0 {
+			return nil, fmt.Errorf("configuration: invalid INSPECTION_REPORT_PDF_RETRY_DELAYS")
+		}
+		delays = append(delays, delay)
+	}
+	return delays, nil
+}
+
 func env(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -437,7 +466,7 @@ func (c Config) Validate() error {
 	if mode == "live" && (c.LiteLLMURL == "" || c.LiteLLMAPIKey == "") {
 		return fmt.Errorf("configuration: missing live LLM gateway configuration")
 	}
-	for name, endpoint := range map[string]string{"LiteLLM": c.LiteLLMURL, "Gotenberg": c.GotenbergURL} {
+	for name, endpoint := range map[string]string{"LiteLLM": c.LiteLLMURL} {
 		if endpoint == "" {
 			continue
 		}
@@ -448,6 +477,16 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderTimeout < 0 {
 		return fmt.Errorf("configuration: invalid provider timeout")
+	}
+	if c.ReportPDF.Timeout != 0 || c.ReportPDF.LeaseDuration != 0 || c.ReportPDF.PollInterval != 0 || c.ReportPDF.MaxAttempts != 0 || c.ReportPDF.MaxEvidence != 0 || c.ReportPDF.MaxPages != 0 || c.ReportPDF.MaxImageBytes != 0 || c.ReportPDF.MaxPDFBytes != 0 || len(c.ReportPDF.RetryDelays) != 0 {
+		if c.ReportPDF.Timeout <= 0 || c.ReportPDF.LeaseDuration <= c.ReportPDF.Timeout || c.ReportPDF.PollInterval <= 0 || c.ReportPDF.MaxAttempts < 1 || c.ReportPDF.MaxAttempts > 20 || c.ReportPDF.MaxAttempts != len(c.ReportPDF.RetryDelays)+1 || c.ReportPDF.MaxEvidence <= 0 || c.ReportPDF.MaxPages <= 0 || c.ReportPDF.MaxImageBytes <= 0 || c.ReportPDF.MaxPDFBytes <= 0 {
+			return fmt.Errorf("configuration: invalid report PDF worker limits")
+		}
+		for _, delay := range c.ReportPDF.RetryDelays {
+			if delay <= 0 {
+				return fmt.Errorf("configuration: invalid report PDF retry delay")
+			}
+		}
 	}
 	if c.Environment != "local" && c.MetricsToken == "" {
 		return fmt.Errorf("configuration: missing metrics secret")

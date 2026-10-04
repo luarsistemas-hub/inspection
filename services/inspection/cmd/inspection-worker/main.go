@@ -44,7 +44,6 @@ import (
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
-	"inspection/services/inspection/internal/platform/pdf"
 	process "inspection/services/inspection/internal/platform/runtime"
 	"inspection/services/inspection/internal/platform/sensitivecontent"
 
@@ -73,7 +72,6 @@ func run() error {
 	metrics := observability.NewMetrics()
 	llmLogger := observability.NewJSONLLMLogger(os.Stdout, "inspection-worker", cfg.Environment, cfg.LLMMode)
 	llmTransport := llm.HTTPGateway{BaseURL: cfg.LiteLLMURL, APIKey: llmAPIKey, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
-	pdfRenderer := pdf.Gotenberg{BaseURL: cfg.GotenbergURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}
 	operationalGateway, err := operationalNotificationGateway(cfg)
 	if err != nil {
 		return err
@@ -197,7 +195,21 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	render, err := renderpdf.Setup(renderpdf.Dependencies{Renderer: pdfRenderer, Store: privateStore, Now: time.Now})
+	render, err := renderpdf.Setup(renderpdf.Dependencies{Now: time.Now})
+	if err != nil {
+		return err
+	}
+	pdfLimits := renderpdf.DefaultLimits()
+	pdfLimits.Timeout = cfg.ReportPDF.Timeout
+	pdfLimits.LeaseDuration = cfg.ReportPDF.LeaseDuration
+	pdfLimits.PollInterval = cfg.ReportPDF.PollInterval
+	pdfLimits.MaxAttempts = cfg.ReportPDF.MaxAttempts
+	pdfLimits.MaxEvidence = cfg.ReportPDF.MaxEvidence
+	pdfLimits.MaxPages = cfg.ReportPDF.MaxPages
+	pdfLimits.MaxImageBytes = cfg.ReportPDF.MaxImageBytes
+	pdfLimits.MaxPDFBytes = cfg.ReportPDF.MaxPDFBytes
+	pdfLimits.RetryDelays = cfg.ReportPDF.RetryDelays
+	pdfExecutor, err := renderpdf.SetupExecutor(db, privateStore, pdfLimits, time.Now, metrics)
 	if err != nil {
 		return err
 	}
@@ -522,7 +534,7 @@ func run() error {
 		return err
 	}
 	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {
-		errCh := make(chan error, 3)
+		errCh := make(chan error, 4)
 		go func() { errCh <- dispatch(ctx) }()
 		go func() { errCh <- consume(ctx) }()
 		go func() {
@@ -532,6 +544,25 @@ func run() error {
 				if _, err := deliveryExecutor.RunDue(ctx); err != nil {
 					errCh <- err
 					return
+				}
+				select {
+				case <-ctx.Done():
+					errCh <- nil
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+		go func() {
+			ticker := time.NewTicker(cfg.ReportPDF.PollInterval)
+			defer ticker.Stop()
+			for {
+				worked, err := pdfExecutor.RunDue(ctx)
+				if err != nil && ctx.Err() == nil {
+					// Database hiccups must not take down unrelated consumers.
+					log.Printf("report PDF executor: %v", err)
+				} else if worked && ctx.Err() == nil {
+					continue
 				}
 				select {
 				case <-ctx.Done():

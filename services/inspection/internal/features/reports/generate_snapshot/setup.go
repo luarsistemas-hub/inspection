@@ -94,7 +94,7 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 	if latest.ID != (identity.ID{}) && latest.JSONDigest == jsonDigest {
 		return Result{SnapshotID: latest.ID, Version: latest.VersionNumber, JSONDigest: latest.JSONDigest, HTMLDigest: latest.HTMLDigest}, nil
 	}
-	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, VersionNumber: version, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
+	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, VersionNumber: version, PDFRenderVersion: 1, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
 	if err := db.WithContext(ctx).Create(&row).Error; err != nil {
 		return Result{}, err
 	}

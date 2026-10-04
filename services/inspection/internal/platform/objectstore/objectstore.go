@@ -286,13 +286,19 @@ func (s Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (s
 	return presigner.PresignGet(ctx, s.Bucket, key, ttl)
 }
 
+// DerivativeKey returns the deterministic object key and SHA-256 that
+// PutDerivative will use, so callers can record intent before uploading.
+func DerivativeKey(tenantID, mediaID identity.ID, kind string, data []byte) (string, string) {
+	digest := sha256.Sum256(data)
+	hash := hex.EncodeToString(digest[:])
+	return fmt.Sprintf("tenant/%s/derivative/%s/%s-%s", tenantID.String(), mediaID.String(), strings.ToLower(kind), hash), hash
+}
+
 func (s Store) PutDerivative(ctx context.Context, tenantID, mediaID identity.ID, kind, contentType string, data []byte) (string, string, error) {
 	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || strings.TrimSpace(kind) == "" || len(data) == 0 {
 		return "", "", ErrInvalid
 	}
-	digest := sha256.Sum256(data)
-	hash := hex.EncodeToString(digest[:])
-	key := fmt.Sprintf("tenant/%s/derivative/%s/%s-%s", tenantID.String(), mediaID.String(), strings.ToLower(kind), hash)
+	key, hash := DerivativeKey(tenantID, mediaID, kind, data)
 	if err := s.Client.Put(ctx, s.Bucket, key, bytes.NewReader(data), int64(len(data)), contentType); err != nil {
 		return "", "", mapError(err)
 	}

@@ -13,7 +13,6 @@ flowchart LR
  W --> R[RabbitMQ]
  W --> S[(MinIO privado)]
  W --> L[LiteLLM]
- W --> P[Gotenberg]
  T[inspection-scheduler] --> D
  T --> M
 ```

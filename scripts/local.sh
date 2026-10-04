@@ -147,7 +147,7 @@ case "${1:-help}" in
       check_port "${INSPECTION_CAPTURE_PORT:-3003}" "Capture"
       check_port "${INSPECTION_ONBOARDING_PORT:-3004}" "Onboarding"
     fi
-    compose up -d --build
+    compose up -d --build --remove-orphans
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API"
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/readyz" "API pronta"
     wait_http "http://localhost:${INSPECTION_ADMIN_PORT:-3000}/" "Admin"
@@ -157,7 +157,7 @@ case "${1:-help}" in
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env; validate_llm_mode
-    compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake "$(llm_service)" gotenberg gotenberg-stub keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap inspection-prompt-seed keycloak-super-admin-bootstrap
+    compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake "$(llm_service)" keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap inspection-prompt-seed keycloak-super-admin-bootstrap
     wait_service_completion inspection-bootstrap
     wait_service_completion inspection-migrate
     wait_service_completion inspection-runtime-bootstrap

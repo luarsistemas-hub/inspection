@@ -1085,6 +1085,7 @@ type ReportSnapshot struct {
 	ProjectID                                    *identity.ID    `gorm:"type:uuid"`
 	Mode, Classification, JSONDigest, HTMLDigest string          `gorm:"size:64;not null"`
 	VersionNumber                                int             `gorm:"not null"`
+	PDFRenderVersion                             int             `gorm:"not null;default:0"`
 	PublicationPolicyVersion                     int64           `gorm:"not null;default:0"`
 	CanonicalJSON, HTML                          json.RawMessage `gorm:"type:jsonb;not null"`
 	CreatedAt                                    time.Time
@@ -1099,6 +1100,25 @@ type ReportArtifact struct {
 }
 
 func (ReportArtifact) TableName() string { return "reports.report_artifacts" }
+
+// ReportPDFJob is durable per-audience work for one immutable report snapshot.
+type ReportPDFJob struct {
+	ID, TenantID, SnapshotID identity.ID  `gorm:"type:uuid;primaryKey"`
+	Audience                 string       `gorm:"size:32;not null"`
+	RendererVersion          int          `gorm:"not null"`
+	Status                   string       `gorm:"size:16;not null;index:idx_report_pdf_ready,priority:1"`
+	Attempts                 int          `gorm:"not null;default:0"`
+	NextAttemptAt            time.Time    `gorm:"not null;index:idx_report_pdf_ready,priority:2"`
+	LeaseToken               *identity.ID `gorm:"type:uuid"`
+	LeaseExpiresAt           *time.Time   `gorm:"index"`
+	ArtifactID               *identity.ID `gorm:"type:uuid"`
+	PendingObjectKey         string       `gorm:"size:1000;not null;default:''"`
+	LastError                string       `gorm:"size:200"`
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+func (ReportPDFJob) TableName() string { return "reports.report_pdf_jobs" }
 
 // PublicationPolicy stores the current tenant publication preference. A
 // missing row is intentionally equivalent to MANUAL version zero.
@@ -1294,7 +1314,9 @@ type PurgeRun struct {
 
 func (PurgeRun) TableName() string { return "retention.purge_runs" }
 
-// Models is the explicit additive migration allowlist.
+// Models is the explicit additive migration allowlist. ReportPDFJob is created
+// by the versioned planner migration so its uniqueness and status constraints
+// cannot be skipped by AutoMigrate's preflight table creation.
 func Models() []any {
 	return []any{&BootstrapRequest{}, &Tenant{}, &BusinessUnit{}, &Membership{}, &ProductEntitlement{}, &ResourceScope{}, &AuditEvent{}, &OutboxIntent{}, &InboxReceipt{},
 		&Participant{}, &ParticipantContact{}, &ContactVerification{}, &ChannelSelection{},

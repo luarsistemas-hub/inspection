@@ -12,7 +12,7 @@ use cases ou repositories.
 Estado atual relevante:
 
 - A API é GraphQL em `services/inspection/schema.graphqls`.
-- PostgreSQL, RabbitMQ, Dragonfly, MinIO, Keycloak, Mailpit, LiteLLM e Gotenberg são compostos em `deploy/docker-compose.yml`.
+- PostgreSQL, RabbitMQ, Dragonfly, MinIO, Keycloak, Mailpit e LiteLLM são compostos em `deploy/docker-compose.yml`.
 - O legado Contract Service foi removido do estado atual; não adicione código a ele.
 
 ## Estrutura

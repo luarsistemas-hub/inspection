@@ -22,6 +22,7 @@ describe("dashboard presenters", () => {
     expect(presentReportPDFStatus("PENDING")).toBe("Em preparação");
     expect(presentReportPDFStatus("PROCESSING")).toBe("Em geração");
     expect(presentReportPDFStatus("READY")).toBe("Disponível");
+    expect(presentReportPDFStatus("FAILED")).toBe("Falha na geração");
   });
 });
 

@@ -1,6 +1,6 @@
 # Documentação
 
-Documentos baseados no código atual do Inspection. Stubs WireMock, Mailpit e Gotenberg são contratos locais determinísticos, não integrações de produção.
+Documentos baseados no código atual do Inspection. Stubs WireMock e Mailpit são contratos locais determinísticos, não integrações de produção.
 
 - [Arquitetura](architecture.md): processos, slices, mediator e integrações.
 - [Funcionalidades](features.md): domínios e operações.

@@ -9,7 +9,7 @@ import (
 
 func TestConfigFromEnvHasSafeDefaults(t *testing.T) {
 	cfg := ConfigFromEnv()
-	if cfg.DatabaseURL == "" || cfg.RabbitMQURL == "" || cfg.LiteLLMURL == "" || cfg.GotenbergURL == "" || cfg.TwilioURL == "" || cfg.MetaURL == "" || cfg.MailpitURL == "" {
+	if cfg.DatabaseURL == "" || cfg.RabbitMQURL == "" || cfg.LiteLLMURL == "" || cfg.TwilioURL == "" || cfg.MetaURL == "" || cfg.MailpitURL == "" {
 		t.Fatalf("incomplete defaults: %+v", cfg)
 	}
 	if cfg.RequestTimeout <= 0 || cfg.PollInterval <= 0 {

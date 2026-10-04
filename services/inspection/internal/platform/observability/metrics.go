@@ -72,23 +72,70 @@ func NewMetrics() *Metrics {
 		hist:       make(map[string]histogram),
 		histograms: make(map[string]map[string]labeledHistogram),
 		metricMeta: map[string]metricMetadata{
-			"inspection_llm_calls_total":                 {typeName: "counter", help: "LLM gateway calls delivered to the configured transport."},
-			"inspection_llm_call_duration_seconds":       {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
-			"inspection_llm_inflight":                    {typeName: "gauge", help: "LLM gateway calls currently in flight."},
-			"inspection_llm_tokens_total":                {typeName: "counter", help: "Provider reported LLM tokens."},
-			"inspection_llm_cached_input_tokens_total":   {typeName: "counter", help: "Provider reported input tokens served from cache."},
-			"inspection_llm_cache_hit_calls_total":       {typeName: "counter", help: "LLM calls with at least one provider reported cached input token."},
-			"inspection_llm_cache_usage_missing_total":   {typeName: "counter", help: "Delivered LLM calls without cached input token metadata."},
-			"inspection_llm_images_total":                {typeName: "counter", help: "Images sent to the LLM gateway."},
-			"inspection_llm_request_body_bytes_total":    {typeName: "counter", help: "Serialized request body bytes sent to the LLM gateway."},
-			"inspection_llm_usage_missing_total":         {typeName: "counter", help: "LLM calls without provider usage metadata."},
-			"inspection_llm_ledger_writes_total":         {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
-			"inspection_analysis_validation_total":       {typeName: "counter", help: "Structured analysis validation outcomes."},
-			"inspection_analysis_stage_duration_seconds": {typeName: "histogram", help: "Analysis stage duration in seconds."},
-			"inspection_analysis_processing_total":       {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
-			"inspection_analysis_delivery_actions_total": {typeName: "counter", help: "RabbitMQ retry and dead letter delivery actions."},
+			"inspection_llm_calls_total":                   {typeName: "counter", help: "LLM gateway calls delivered to the configured transport."},
+			"inspection_llm_call_duration_seconds":         {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
+			"inspection_llm_inflight":                      {typeName: "gauge", help: "LLM gateway calls currently in flight."},
+			"inspection_llm_tokens_total":                  {typeName: "counter", help: "Provider reported LLM tokens."},
+			"inspection_llm_cached_input_tokens_total":     {typeName: "counter", help: "Provider reported input tokens served from cache."},
+			"inspection_llm_cache_hit_calls_total":         {typeName: "counter", help: "LLM calls with at least one provider reported cached input token."},
+			"inspection_llm_cache_usage_missing_total":     {typeName: "counter", help: "Delivered LLM calls without cached input token metadata."},
+			"inspection_llm_images_total":                  {typeName: "counter", help: "Images sent to the LLM gateway."},
+			"inspection_llm_request_body_bytes_total":      {typeName: "counter", help: "Serialized request body bytes sent to the LLM gateway."},
+			"inspection_llm_usage_missing_total":           {typeName: "counter", help: "LLM calls without provider usage metadata."},
+			"inspection_llm_ledger_writes_total":           {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
+			"inspection_analysis_validation_total":         {typeName: "counter", help: "Structured analysis validation outcomes."},
+			"inspection_analysis_stage_duration_seconds":   {typeName: "histogram", help: "Analysis stage duration in seconds."},
+			"inspection_analysis_processing_total":         {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
+			"inspection_analysis_delivery_actions_total":   {typeName: "counter", help: "RabbitMQ retry and dead letter delivery actions."},
+			"inspection_report_pdf_jobs_total":             {typeName: "counter", help: "Report PDF job outcomes."},
+			"inspection_report_pdf_active":                 {typeName: "gauge", help: "Report PDF jobs currently processing in this worker."},
+			"inspection_report_pdf_pending":                {typeName: "gauge", help: "Report PDF jobs waiting for processing or retry."},
+			"inspection_report_pdf_stage_duration_seconds": {typeName: "histogram", help: "Report PDF processing time by stage."},
+			"inspection_report_pdf_pages":                  {typeName: "histogram", help: "Pages in completed report PDFs."},
+			"inspection_report_pdf_bytes":                  {typeName: "histogram", help: "Bytes in completed report PDFs."},
+			"inspection_report_pdf_expired_leases_total":   {typeName: "counter", help: "Report PDF reservations recovered after lease expiry."},
 		},
 	}
+}
+
+// ReportPDFAcquire adjusts the in-process renderer concurrency gauge.
+func (m *Metrics) ReportPDFAcquire(delta int) {
+	m.gaugeDelta("inspection_report_pdf_active", nil, float64(delta))
+}
+
+// ReportPDFQueue records database-wide work still awaiting completion.
+func (m *Metrics) ReportPDFQueue(pending int64) {
+	m.gauge("inspection_report_pdf_pending", nil, float64(pending))
+}
+
+// ReportPDFStage records bounded internal stage names only.
+func (m *Metrics) ReportPDFStage(stage string, duration time.Duration) {
+	allowed := map[string]bool{"images": true, "render": true, "upload": true, "commit": true}
+	if !allowed[stage] {
+		stage = "other"
+	}
+	m.observeHistogram("inspection_report_pdf_stage_duration_seconds", map[string]string{"stage": stage}, duration.Seconds(), []float64{.1, .5, 1, 2, 5, 10, 30, 60, 120})
+}
+
+// ReportPDFOutcome records retry and terminal outcomes without tenant labels.
+func (m *Metrics) ReportPDFOutcome(audience, outcome string, pages int, byteCount int64) {
+	if audience != "PDF" && audience != "PDF_CUSTOMER" {
+		audience = "other"
+	}
+	if outcome != "READY" && outcome != "RETRY" && outcome != "FAILED" && outcome != "CANCELED" {
+		outcome = "other"
+	}
+	labels := map[string]string{"audience": strings.ToLower(audience), "outcome": strings.ToLower(outcome)}
+	m.counter("inspection_report_pdf_jobs_total", labels, 1)
+	if outcome == "READY" {
+		m.observeHistogram("inspection_report_pdf_pages", map[string]string{"audience": strings.ToLower(audience)}, float64(pages), []float64{1, 2, 5, 10, 20, 50, 100, 200})
+		m.observeHistogram("inspection_report_pdf_bytes", map[string]string{"audience": strings.ToLower(audience)}, float64(byteCount), []float64{1 << 20, 5 << 20, 10 << 20, 20 << 20, 40 << 20, 64 << 20})
+	}
+}
+
+// ReportPDFLeaseExpired records a recovered reservation.
+func (m *Metrics) ReportPDFLeaseExpired() {
+	m.counter("inspection_report_pdf_expired_leases_total", nil, 1)
 }
 
 func (m *Metrics) counter(name string, labels map[string]string, value float64) {
@@ -160,6 +207,9 @@ func (m *Metrics) observeHistogram(name string, labels map[string]string, second
 	value.Count++
 	value.Sum += seconds
 	for _, bound := range buckets {
+		if _, ok := value.Buckets[bound]; !ok {
+			value.Buckets[bound] = 0
+		}
 		if seconds <= bound {
 			value.Buckets[bound]++
 		}
@@ -362,10 +412,12 @@ func (m *Metrics) Prometheus() string {
 	for _, name := range sortedLabeledHistogramKeys(m.histograms) {
 		for _, labels := range sortedLabeledHistogramLabelKeys(m.histograms[name]) {
 			value := m.histograms[name][labels]
-			for _, bound := range append(append([]float64{}, llmDurationBuckets...), 0) {
-				if bound == 0 {
-					continue
-				}
+			bounds := make([]float64, 0, len(value.Buckets))
+			for bound := range value.Buckets {
+				bounds = append(bounds, bound)
+			}
+			sort.Float64s(bounds)
+			for _, bound := range bounds {
 				writeSample(&b, name+"_bucket", withEncodedLabel(labels, "le", strconv.FormatFloat(bound, 'f', -1, 64)), value.Buckets[bound])
 			}
 			writeSample(&b, name+"_bucket", withEncodedLabel(labels, "le", "+Inf"), value.Count)

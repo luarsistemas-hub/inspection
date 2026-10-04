@@ -51,9 +51,7 @@ docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-Os testes dependem de PostgreSQL, RabbitMQ, MinIO, LiteLLM stub e Gotenberg
-stub. Os stubs são determinísticos e não exigem credenciais de provedores
-externos.
+Os testes dependem de PostgreSQL, RabbitMQ, MinIO e LiteLLM stub. Os stubs são determinísticos e não exigem credenciais de provedores externos; PDFs são renderizados no worker com Maroto.
 
 ## 3. Configurar o banco de teste
 
@@ -97,7 +95,6 @@ efêmero, sobrescreva apenas o que mudar:
 ```sh
 export INSPECTION_TEST_RABBITMQ_URL='amqp://inspection:inspection@localhost:5672/'
 export INSPECTION_TEST_LITELLM_URL='http://localhost:18080'
-export INSPECTION_TEST_GOTENBERG_URL='http://localhost:18081'
 export INSPECTION_TEST_MINIO_ENDPOINT='localhost:9000'
 export INSPECTION_TEST_MINIO_ACCESS_KEY='contract'
 export INSPECTION_TEST_MINIO_SECRET_KEY='contract'
@@ -144,7 +141,7 @@ O runner deve usar os recursos do harness:
 - `Task06AuthHeaders` para GraphQL;
 - `PublishPayload` para eventos canônicos;
 - `WaitOutbox`, `WaitInbox` e `WaitQueue` para eventual consistency;
-- `ResetProviderStubs` entre cenários LiteLLM/Gotenberg.
+- `ResetProviderStubs` entre cenários LiteLLM.
 
 ## 8. Critérios de aceite
 
@@ -153,7 +150,7 @@ A Task 06 só pode ser marcada como concluída quando:
 - os 148 IDs forem descobertos e executados;
 - nenhum caso estiver ausente, ignorado ou marcado como placeholder;
 - todos os testes passarem com exit code `0`;
-- Postgres/RLS, RabbitMQ, MinIO, LiteLLM e Gotenberg tiverem sido usados no
+- Postgres/RLS, RabbitMQ, MinIO e LiteLLM tiverem sido usados no
   ambiente de integração;
 - os logs da execução forem preservados como evidência;
 - `go test ./...`, `go vet ./...` e `go build ./...` continuarem passando.

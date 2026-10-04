@@ -26,7 +26,7 @@ O ambiente de produção deverá conter os componentes reais necessários à sol
 
 - PostgreSQL, Dragonfly e RabbitMQ;
 - OCI Object Storage como storage de objetos da aplicação, substituindo o MinIO;
-- Keycloak, Gotenberg e LiteLLM;
+- Keycloak e LiteLLM;
 - Inspection API, worker, scheduler e migrador;
 - Admin, Dashboard, Capture e Onboarding;
 - proxy HTTPS, que encaminha tráfego público para os serviços correspondentes.
@@ -54,7 +54,7 @@ Não incluir senhas, tokens, chaves de API, chave SSH privada nem arquivos `.env
 Criar um Compose de produção ou configuração equivalente, separado dos valores locais. Configurar o adapter S3 existente para usar o endpoint compatível OCI, o namespace, a região e as credenciais Customer Secret Key. Revisar o uso do MinIO Go SDK para selecionar o estilo de URL aceito pela OCI e assegurar que as URLs pré-assinadas geradas apontem para o endpoint correto. Configurar CORS no bucket para os domínios exatos dos frontends, métodos necessários aos uploads multipart e leitura, e exposição do cabeçalho `ETag`. Validar multipart, assinatura, expiração e acesso privado antes de migrar dados de usuários. A implantação não deve iniciar:
 
 - Mailpit;
-- `twilio-fake`, `meta-fake`, `litellm-stub` ou `gotenberg-stub`;
+- `twilio-fake`, `meta-fake` ou `litellm-stub`;
 - `inspection-seed` e outros seeds/fixtures de QA;
 - WireMock ou qualquer configuração de `INSPECTION_LLM_MODE=mock`.
 
@@ -80,7 +80,7 @@ LiteLLM e WhatsApp ficam configurados para integração real, mas desativados no
 4. **Validação:** verificar HTTPS, login OIDC, GraphQL, os quatro apps, upload multipart e download privados via URL assinada no OCI Object Storage, CORS, geração de PDF, persistência de filas e comunicação SMTP; confirmar que serviços fake/teste não iniciaram e que LLM/WhatsApp estão indisponíveis enquanto sem credenciais.
 5. **Acompanhamento:** validar alarmes de capacidade e monitorar consumo nas primeiras semanas.
 
-`/readyz` verifica apenas parte das dependências. A validação deverá checar separadamente PostgreSQL, RabbitMQ, Dragonfly, OCI Object Storage, Keycloak, Gotenberg e LiteLLM conforme o estado habilitado de cada integração.
+`/readyz` verifica apenas parte das dependências. A validação deverá checar separadamente PostgreSQL, RabbitMQ, Dragonfly, OCI Object Storage, Keycloak e LiteLLM conforme o estado habilitado de cada integração.
 
 O plano passa para implantação quando todos os recursos previstos estiverem dentro das quotas gratuitas, o Plan Terraform não contiver recursos pagos inesperados, as imagens ARM64 estiverem acessíveis, as credenciais S3 compatíveis estiverem protegidas, os serviços reais essenciais iniciarem com segurança e uploads multipart e URLs pré-assinadas tiverem sido validados.
 

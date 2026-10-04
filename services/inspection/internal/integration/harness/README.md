@@ -5,7 +5,7 @@ O harness fica dentro do serviço para reutilizar contratos de eventos, transaç
 Suba as dependências locais primeiro:
 
 ```sh
-docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq minio minio-setup mailpit twilio-fake meta-fake litellm-stub gotenberg-stub
+docker compose -f deploy/docker-compose.yml up -d postgres rabbitmq minio minio-setup mailpit twilio-fake meta-fake litellm-stub
 ```
 
 Execute o gate com banco que já possui o schema:
