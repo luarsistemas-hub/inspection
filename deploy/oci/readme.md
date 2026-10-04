@@ -39,7 +39,7 @@ Use a tabela abaixo como inventário completo de entradas. Não há valores padr
 |---|---|---|---|
 | `tenancy_ocid`, `region` | Required; no default | `ocid1.tenancy...`, `us-ashburn-1` | Both Resource Manager stacks |
 | `compartment_name`, `bucket_name` | `inspection`, `inspection-private` | `inspection-private` | Foundation stack |
-| `alert_email` | Required; no default | `ops@example.com` | Foundation stack; confirm topic subscription |
+| `alert_email` | Required; no default | `ops@example.com` | Foundation stack; primary email for the S3 service user and alert subscription; confirm topic subscription |
 | `email_sender_address` | Required; no default | `no-reply@example.com` | Foundation stack; confirm sender approval and domain SPF/DKIM |
 | `compartment_ocid`, `availability_domain`, `image_ocid`, `namespace`, `alert_topic_ocid` | Required; no default | OCI output values | Runtime stack, from foundation/OCI Console |
 | `admin_cidr`, `ssh_public_key` | Required; no default | `198.51.100.24/32` | Runtime stack |

@@ -5,7 +5,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 runtime_host="${INSPECTION_RUNTIME_HOST:-}"
 package_dir="${INSPECTION_PACKAGE_DIR:-/tmp/inspection-oci-packages}"
 require_host() { [[ -n "$runtime_host" ]] || { echo "Set INSPECTION_RUNTIME_HOST to the VM public IP or hostname." >&2; exit 2; }; }
-ssh_host() { require_host; ssh -o StrictHostKeyChecking=yes "$runtime_host" "$@"; }
+ssh_target() { require_host; if [[ "$runtime_host" == *@* ]]; then printf '%s' "$runtime_host"; else printf 'ubuntu@%s' "$runtime_host"; fi; }
+ssh_host() { ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "$@"; }
 safe_release() { [[ "${1:-}" =~ ^[a-f0-9]{40}$ ]] || { echo "Release must be a 40-character commit SHA." >&2; exit 2; }; }
 usage() { echo "Usage: $0 {validate|package|preflight|bootstrap|secrets refresh|deploy RELEASE|rollback RELEASE|status|logs SERVICE|restart SERVICE|smoke|stop}"; }
 
@@ -48,7 +49,7 @@ case "${1:-}" in
     : "${INSPECTION_DOMAIN:?Set the project domain}"
     command -v ssh >/dev/null
     command -v python3 >/dev/null
-    python3 - "$INSPECTION_DOMAIN" "$INSPECTION_RUNTIME_HOST" <<'PY'
+    python3 - "$INSPECTION_DOMAIN" "${INSPECTION_RUNTIME_HOST##*@}" <<'PY'
 import ipaddress
 import socket
 import sys
@@ -78,7 +79,7 @@ PY
     [[ "$format_empty_volume" == yes || "$format_empty_volume" == no ]] || { echo "INSPECTION_FORMAT_EMPTY_DATA_VOLUME must be yes or omitted." >&2; exit 2; }
     bundle="$package_dir/runtime-bundle.tgz"
     test -s "$bundle" || { echo "Run ops.sh package first." >&2; exit 1; }
-    scp -o StrictHostKeyChecking=yes "$bundle" "$runtime_host:/tmp/inspection-runtime-bundle.tgz"
+    scp -o StrictHostKeyChecking=yes "$bundle" "$(ssh_target):/tmp/inspection-runtime-bundle.tgz"
     ssh_host "sudo mkdir -p /opt/inspection/releases/bootstrap /etc/inspection/releases && sudo tar -xzf /tmp/inspection-runtime-bundle.tgz -C /opt/inspection/releases/bootstrap && sudo ln -sfn /opt/inspection/releases/bootstrap/deploy/oci /opt/inspection/current && sudo env OCI_CLI_VERSION=3.94.1 INSPECTION_FORMAT_EMPTY_DATA_VOLUME='$format_empty_volume' INSPECTION_BUNDLE_DIR=/opt/inspection/releases/bootstrap bash /opt/inspection/releases/bootstrap/deploy/oci/host/install-host.sh"
     ;;
   secrets)
@@ -97,8 +98,8 @@ PY
     manifest="$root/releases/$release.env"
     test -s "$bundle" && test -s "$manifest" || { echo "Expected release bundle and manifest under deploy/oci/releases/." >&2; exit 1; }
     grep -qx "RELEASE_SHA=$release" "$manifest" || { echo "Manifest does not match the requested release." >&2; exit 1; }
-    scp -o StrictHostKeyChecking=yes "$bundle" "$runtime_host:/tmp/$release-bundle.tgz"
-    scp -o StrictHostKeyChecking=yes "$manifest" "$runtime_host:/tmp/$release.env"
+    scp -o StrictHostKeyChecking=yes "$bundle" "$(ssh_target):/tmp/$release-bundle.tgz"
+    scp -o StrictHostKeyChecking=yes "$manifest" "$(ssh_target):/tmp/$release.env"
     mode_flag=""
     [[ "$1" == rollback ]] && mode_flag=--rollback
     ssh_host "sudo mkdir -p /opt/inspection/releases/$release /etc/inspection/releases && sudo tar -xzf /tmp/$release-bundle.tgz -C /opt/inspection/releases/$release && sudo install -m 0600 /tmp/$release.env /etc/inspection/releases/$release.env && sudo /usr/local/sbin/inspection-deploy $release $mode_flag"

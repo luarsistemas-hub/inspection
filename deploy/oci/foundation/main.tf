@@ -44,6 +44,7 @@ resource "oci_objectstorage_bucket" "application" {
 resource "oci_identity_user" "s3" {
   compartment_id = var.tenancy_ocid
   description    = "Scoped S3-compatible access for Inspection"
+  email          = var.alert_email
   name           = "inspection-objectstore"
 }
 
