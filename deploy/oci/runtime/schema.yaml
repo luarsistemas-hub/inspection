@@ -19,7 +19,15 @@ variables:
   namespace: { type: string, title: Object Storage namespace, required: true }
   bucket_name: { type: string, title: Private bucket name, default: inspection-private }
   alert_topic_ocid: { type: string, title: Operations topic OCID, required: true }
-  secret_ocids: { type: map, title: Secret name to OCI Vault secret OCID, required: true }
+  secret_ocids:
+    type: map
+    valueType: secret_ocid
+    title: Secret name to OCI Vault secret OCID
+    description: Map each environment variable name to its OCI Vault secret OCID. Enter OCIDs only; never enter secret values here.
+    required: true
+  secret_ocid:
+    type: string
+    visible: false
   admin_cidr: { type: string, title: Administrative IPv4 CIDR, required: true }
   ssh_public_key: { type: string, title: Public SSH key, required: true }
   instance_name: { type: string, title: Instance name, default: inspection-runtime }
