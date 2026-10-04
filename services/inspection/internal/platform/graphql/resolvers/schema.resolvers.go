@@ -2583,36 +2583,6 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: kindOut, ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
 }
 
-func reportPDFJobStatus(ctx context.Context, db *gorm.DB, tenantID, snapshotID identity.ID, audience string) (string, error) {
-	status := "PENDING"
-	err := withTask06Tenant(ctx, db, tenantID, func(tx *gorm.DB) error {
-		var err error
-		status, err = reportPDFJobStatusTx(tx, tenantID, snapshotID, audience)
-		return err
-	})
-	return status, err
-}
-
-func reportPDFJobStatusTx(tx *gorm.DB, tenantID, snapshotID identity.ID, audience string) (string, error) {
-	var job database.ReportPDFJob
-	if err := tx.Where("tenant_id=? AND snapshot_id=? AND audience=?", tenantID, snapshotID, audience).First(&job).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "PENDING", nil
-		}
-		return "", err
-	}
-	switch job.Status {
-	case "READY":
-		return "READY", nil
-	case "PROCESSING":
-		return "PROCESSING", nil
-	case "FAILED", "CANCELED":
-		return "FAILED", nil
-	default:
-		return "PENDING", nil
-	}
-}
-
 // DashboardSummary is the resolver for the dashboardSummary field.
 func (r *queryResolver) DashboardSummary(ctx context.Context, projectID *string, businessUnitID *string) (*graphql1.DashboardSummary, error) {
 	meta, ok := requestctx.FromContext(ctx)
