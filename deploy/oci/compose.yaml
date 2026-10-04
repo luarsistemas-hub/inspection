@@ -89,7 +89,7 @@ services:
     image: ${DRAGONFLY_IMAGE:?immutable Dragonfly image digest required}
     logging: *default-logging
     restart: unless-stopped
-    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags", "--proactor_threads=2", "--maxmemory=512mb", "--dir=/data", "--dbfilename=dragonfly.rdb", "--snapshot_cron=*/5 * * * *"]
+    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags", "--proactor_threads=2", "--maxmemory=512mb", "--dir=/data", "--dbfilename=dragonfly", "--snapshot_cron=*/5 * * * *"]
     environment:
       DRAGONFLY_PASSWORD: ${DRAGONFLY_PASSWORD:?Dragonfly password required}
       DFLY_requirepass: ${DRAGONFLY_PASSWORD:?Dragonfly password required}
