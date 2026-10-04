@@ -158,7 +158,9 @@ func Validate(snapshot Snapshot) error {
 		if strings.TrimSpace(finding.Category) == "" || strings.TrimSpace(finding.Title) == "" || strings.TrimSpace(finding.Description) == "" || strings.TrimSpace(finding.Quality) == "" || strings.TrimSpace(finding.RecommendedAction) == "" || len(finding.EvidenceIDs) == 0 || finding.Confidence < 0 || finding.Confidence > 1 {
 			return fmt.Errorf("report finding is invalid")
 		}
-		if finding.Category != "CONSERVATION" && finding.Category != "INVENTORY" && finding.Category != "CLEANLINESS" && finding.Category != "OBSTRUCTION" && finding.Category != "EVIDENCE_QUALITY" { return fmt.Errorf("report finding category is invalid") }
+		if finding.Category != "CONSERVATION" && finding.Category != "INVENTORY" && finding.Category != "CLEANLINESS" && finding.Category != "OBSTRUCTION" && finding.Category != "EVIDENCE_QUALITY" {
+			return fmt.Errorf("report finding category is invalid")
+		}
 		for _, evidenceID := range finding.EvidenceIDs {
 			if strings.TrimSpace(evidenceID) == "" {
 				return fmt.Errorf("report finding evidence is required")
