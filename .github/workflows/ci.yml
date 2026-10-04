@@ -29,7 +29,13 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./...
-      - run: docker compose -f deploy/docker-compose.yml config --quiet
+      - name: Validate local compose configuration
+        run: |
+          export KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=ci
+          export KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=ci
+          export INSPECTION_SUPER_ADMIN_USERNAME=ci
+          export INSPECTION_SUPER_ADMIN_PASSWORD=ci
+          docker compose --env-file .env.example -f deploy/docker-compose.yml config --quiet
       - run: ./scripts/validate-compozy-tasks.sh
       - run: node --test scripts/lib/parity-tools.test.mjs scripts/lib/design-system-migration.test.mjs
       - run: node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
@@ -190,7 +196,7 @@ jobs:
           test -f scripts/lib/legacy-inventory.mjs
       - name: Validate compose and task contracts
         run: |
-          docker compose -f deploy/docker-compose.yml config --quiet
+          docker compose --env-file .env.inspection -f deploy/docker-compose.yml config --quiet
           ./scripts/validate-compozy-tasks.sh
       - name: Start and seed isolated cross-product stack
         run: |
