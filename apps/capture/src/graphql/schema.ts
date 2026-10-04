@@ -197,6 +197,10 @@ export type CaptureAnswer = {
   version: Scalars['Int']['output'];
 };
 
+export type CaptureComparisonMode =
+  | 'CHECKLIST_ONLY'
+  | 'FIXED_ORIGIN';
+
 export type CaptureGpsInput = {
   accuracyMeters: Scalars['Float']['input'];
   capturedAt: Scalars['String']['input'];
@@ -236,6 +240,11 @@ export type CaptureRequirement = {
   minimumMedia: Scalars['Int']['output'];
   required: Scalars['Boolean']['output'];
   section: Scalars['String']['output'];
+};
+
+export type CompleteInternalUserActivationInput = {
+  clientMutationId: Scalars['String']['input'];
+  password: InputMaybe<Scalars['String']['input']>;
 };
 
 export type CompleteMediaUploadInput = {
@@ -302,12 +311,15 @@ export type CreateBusinessUnitInput = {
 export type CreateInspectionInput = {
   assetId: Scalars['ID']['input'];
   clientMutationId: Scalars['String']['input'];
+  comparisonMode: CaptureComparisonMode;
   deadlineAt: Scalars['String']['input'];
   dueAt: Scalars['String']['input'];
   participantId: Scalars['ID']['input'];
+  projectId: InputMaybe<Scalars['ID']['input']>;
   reason: Scalars['String']['input'];
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: Array<Scalars['String']['input']>;
+  stageId: InputMaybe<Scalars['ID']['input']>;
   templateId: InputMaybe<Scalars['ID']['input']>;
 };
 
@@ -321,18 +333,22 @@ export type CreateMediaUploadInput = {
 export type CreateProjectInput = {
   assetId: Scalars['ID']['input'];
   clientMutationId: Scalars['String']['input'];
-  participantId: Scalars['ID']['input'];
-  templateId: InputMaybe<Scalars['ID']['input']>;
+  name: Scalars['String']['input'];
+  orderedStages: InputMaybe<Scalars['Boolean']['input']>;
+  stages: Array<PlannedProjectStageInput>;
 };
 
 export type CreateScheduleInput = {
   assetId: Scalars['ID']['input'];
   clientMutationId: Scalars['String']['input'];
+  comparisonMode: CaptureComparisonMode;
   deadlineMinutes: Scalars['Int']['input'];
   participantId: Scalars['ID']['input'];
+  projectId: InputMaybe<Scalars['ID']['input']>;
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderOffsetsMinutes: Array<Scalars['Int']['input']>;
   rrule: Scalars['String']['input'];
+  stageId: InputMaybe<Scalars['ID']['input']>;
   startsAt: Scalars['String']['input'];
   templateId: Scalars['ID']['input'];
   timezone: Scalars['String']['input'];
@@ -516,13 +532,17 @@ export type GlobalLlmCallUsage = {
 export type Inspection = {
   __typename?: 'Inspection';
   analysisPromptSnapshotId: Scalars['ID']['output'];
+  assetAddress: Maybe<Scalars['String']['output']>;
+  assetExternalKey: Maybe<Scalars['String']['output']>;
   assetId: Scalars['ID']['output'];
+  assetName: Maybe<Scalars['String']['output']>;
   businessUnitId: Scalars['ID']['output'];
   deadlineAt: Scalars['String']['output'];
   dueAt: Scalars['String']['output'];
   evidenceCount: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
   participantId: Scalars['ID']['output'];
+  participantName: Maybe<Scalars['String']['output']>;
   projectId: Maybe<Scalars['ID']['output']>;
   reminderInstants: Array<Scalars['String']['output']>;
   source: Scalars['String']['output'];
@@ -570,10 +590,32 @@ export type InspectionPayload = {
   userErrors: Array<UserError>;
 };
 
+export type InspectionStatusGroup =
+  | 'CLOSED'
+  | 'COMPLETED'
+  | 'EXECUTION'
+  | 'PLANNING';
+
 export type InspectionTransitionInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: Scalars['Int']['input'];
   inspectionId: Scalars['ID']['input'];
+};
+
+export type InternalUserActivation = {
+  __typename?: 'InternalUserActivation';
+  email: Scalars['String']['output'];
+  membershipId: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  newIdentity: Scalars['Boolean']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type InternalUserActivationPayload = {
+  __typename?: 'InternalUserActivationPayload';
+  activation: Maybe<InternalUserActivation>;
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
 };
 
 export type InvalidateInspectionInput = {
@@ -606,10 +648,10 @@ export type InvitationPayload = {
 
 export type InviteInternalUserInput = {
   clientMutationId: Scalars['String']['input'];
-  issuer: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
   role: Scalars['String']['input'];
   scopes: Array<ScopeAssignmentInput>;
-  subject: Scalars['String']['input'];
 };
 
 export type InviteOriginCaptureInput = {
@@ -760,7 +802,10 @@ export type MediaUploadPayload = {
 
 export type Membership = {
   __typename?: 'Membership';
+  email: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  invitationStatus: Scalars['String']['output'];
+  name: Scalars['String']['output'];
   role: Scalars['String']['output'];
   scopes: Array<Scope>;
   status: Scalars['String']['output'];
@@ -795,6 +840,7 @@ export type Mutation = {
   cancelInspection: InspectionPayload;
   cancelSchedule: SchedulePayload;
   closeProject: ProjectPayload;
+  completeInternalUserActivation: InternalUserActivationPayload;
   completeMediaUpload: MediaPayload;
   completeOnboarding: OnboardingPayload;
   configureMyNotificationPreferences: NotificationPreferencesPayload;
@@ -817,6 +863,7 @@ export type Mutation = {
   inviteInternalUser: MembershipPayload;
   inviteOriginCapture: OriginInvitationPayload;
   markNotificationRead: RecipientNotificationPayload;
+  planInspection: PlanInspectionPayload;
   presignMediaParts: PresignedPartsPayload;
   promoteInspectionPhotos: OriginPromotionPayload;
   publishReport: ReportPublicationPayload;
@@ -827,9 +874,11 @@ export type Mutation = {
   releaseLegalHold: RetentionMutationPayload;
   reopenProject: ProjectPayload;
   requestAdminActivationOtp: OnboardingPayload;
+  requestInternalUserActivationOtp: InternalUserActivationPayload;
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
   requestRecapture: RecapturePayload;
+  resendInternalUserInvitation: MembershipPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
   saveOnboardingStep: OnboardingPayload;
@@ -848,6 +897,7 @@ export type Mutation = {
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
   verifyContact: ParticipantContactPayload;
+  verifyInternalUserActivationOtp: InternalUserActivationPayload;
   verifyInvitationOtp: ExternalSessionPayload;
   verifyOnboardingOtp: OnboardingPayload;
 };
@@ -910,6 +960,11 @@ export type MutationCancelScheduleArgs = {
 
 export type MutationCloseProjectArgs = {
   input: ProjectTransitionInput;
+};
+
+
+export type MutationCompleteInternalUserActivationArgs = {
+  input: CompleteInternalUserActivationInput;
 };
 
 
@@ -1023,6 +1078,11 @@ export type MutationMarkNotificationReadArgs = {
 };
 
 
+export type MutationPlanInspectionArgs = {
+  input: PlanInspectionInput;
+};
+
+
 export type MutationPresignMediaPartsArgs = {
   input: PresignMediaPartsInput;
 };
@@ -1073,6 +1133,11 @@ export type MutationRequestAdminActivationOtpArgs = {
 };
 
 
+export type MutationRequestInternalUserActivationOtpArgs = {
+  input: RequestInternalUserActivationOtpInput;
+};
+
+
 export type MutationRequestInvitationOtpArgs = {
   input: RequestInvitationOtpInput;
 };
@@ -1085,6 +1150,11 @@ export type MutationRequestOnboardingOtpArgs = {
 
 export type MutationRequestRecaptureArgs = {
   input: RequestRecaptureInput;
+};
+
+
+export type MutationResendInternalUserInvitationArgs = {
+  input: ResendInternalUserInvitationInput;
 };
 
 
@@ -1175,6 +1245,11 @@ export type MutationVerifyAdminActivationOtpArgs = {
 
 export type MutationVerifyContactArgs = {
   input: VerifyContactInput;
+};
+
+
+export type MutationVerifyInternalUserActivationOtpArgs = {
+  input: VerifyInternalUserActivationOtpInput;
 };
 
 
@@ -1467,6 +1542,44 @@ export type ParticipantPayload = {
   userErrors: Array<UserError>;
 };
 
+export type PlanInspectionInput = {
+  assetId: Scalars['ID']['input'];
+  clientMutationId: Scalars['String']['input'];
+  comparisonMode: CaptureComparisonMode;
+  createProject: InputMaybe<Scalars['Boolean']['input']>;
+  deadlineAt: InputMaybe<Scalars['String']['input']>;
+  deadlineMinutes: InputMaybe<Scalars['Int']['input']>;
+  dueAt: InputMaybe<Scalars['String']['input']>;
+  orderedStages: InputMaybe<Scalars['Boolean']['input']>;
+  participantId: Scalars['ID']['input'];
+  projectId: InputMaybe<Scalars['ID']['input']>;
+  projectName: InputMaybe<Scalars['String']['input']>;
+  reason: InputMaybe<Scalars['String']['input']>;
+  reminderInstants: InputMaybe<Array<Scalars['String']['input']>>;
+  reminderOffsetsMinutes: InputMaybe<Array<Scalars['Int']['input']>>;
+  rrule: InputMaybe<Scalars['String']['input']>;
+  stageId: InputMaybe<Scalars['ID']['input']>;
+  stages: InputMaybe<Array<PlannedProjectStageInput>>;
+  startsAt: InputMaybe<Scalars['String']['input']>;
+  templateId: Scalars['ID']['input'];
+  timezone: InputMaybe<Scalars['String']['input']>;
+};
+
+export type PlanInspectionPayload = {
+  __typename?: 'PlanInspectionPayload';
+  clientMutationId: Scalars['String']['output'];
+  inspection: Maybe<Inspection>;
+  project: Maybe<Project>;
+  schedule: Maybe<Schedule>;
+  userErrors: Array<UserError>;
+};
+
+export type PlannedProjectStageInput = {
+  key: Scalars['String']['input'];
+  label: Scalars['String']['input'];
+  plannedAt: InputMaybe<Scalars['String']['input']>;
+};
+
 export type PostalAddress = {
   __typename?: 'PostalAddress';
   city: Scalars['String']['output'];
@@ -1532,12 +1645,10 @@ export type Project = {
   assetId: Scalars['ID']['output'];
   businessUnitId: Scalars['ID']['output'];
   id: Scalars['ID']['output'];
-  participantId: Scalars['ID']['output'];
-  reportMode: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  orderedStages: Scalars['Boolean']['output'];
   stages: Array<ProjectStage>;
   status: Scalars['String']['output'];
-  templateId: Scalars['ID']['output'];
-  templateVersionId: Scalars['ID']['output'];
   transitions: Array<StageTransition>;
   version: Scalars['Int']['output'];
 };
@@ -1558,7 +1669,7 @@ export type ProjectPayload = {
 export type ProjectStage = {
   __typename?: 'ProjectStage';
   id: Scalars['ID']['output'];
-  inspectionId: Maybe<Scalars['ID']['output']>;
+  inspectionIds: Array<Scalars['ID']['output']>;
   key: Scalars['String']['output'];
   kind: Scalars['String']['output'];
   label: Scalars['String']['output'];
@@ -1577,7 +1688,7 @@ export type ProjectTimeline = {
 
 export type ProjectTimelineEntry = {
   __typename?: 'ProjectTimelineEntry';
-  inspectionId: Maybe<Scalars['ID']['output']>;
+  inspectionIds: Array<Scalars['ID']['output']>;
   label: Scalars['String']['output'];
   occurredAt: Maybe<Scalars['String']['output']>;
   stageId: Scalars['ID']['output'];
@@ -1670,6 +1781,7 @@ export type Query = {
   reports: ReportConnection;
   retentionPolicies: RetentionPolicyConnection;
   schedules: ScheduleConnection;
+  segmentDefinitionVersion: Maybe<SegmentDefinitionVersion>;
   segmentDefinitions: SegmentDefinitionConnection;
   templateVersion: Maybe<TemplateVersion>;
   templates: TemplateConnection;
@@ -1764,6 +1876,8 @@ export type QueryInspectionsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   history?: InputMaybe<Scalars['Boolean']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+  statusGroup: InputMaybe<InspectionStatusGroup>;
 };
 
 
@@ -1875,6 +1989,11 @@ export type QueryReportsArgs = {
 export type QuerySchedulesArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QuerySegmentDefinitionVersionArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -2163,6 +2282,11 @@ export type RequestAdminActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
 };
 
+export type RequestInternalUserActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  invitationToken: InputMaybe<Scalars['String']['input']>;
+};
+
 export type RequestInvitationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   linkToken: Scalars['String']['input'];
@@ -2172,6 +2296,7 @@ export type RequestOnboardingOtpInput = {
   clientMutationId: Scalars['String']['input'];
   email: Scalars['String']['input'];
   name: Scalars['String']['input'];
+  turnstileToken: InputMaybe<Scalars['String']['input']>;
 };
 
 export type RequestRecaptureInput = {
@@ -2179,6 +2304,11 @@ export type RequestRecaptureInput = {
   deadlineAt: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
   items: Array<RecaptureItemInput>;
+};
+
+export type ResendInternalUserInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  membershipId: Scalars['ID']['input'];
 };
 
 export type ResponsibleEmailCorrection = {
@@ -2257,12 +2387,15 @@ export type Schedule = {
   id: Scalars['ID']['output'];
   nextDueAt: Scalars['String']['output'];
   participantId: Scalars['ID']['output'];
+  projectId: Maybe<Scalars['ID']['output']>;
   referenceVersionId: Maybe<Scalars['ID']['output']>;
   reminderOffsetsMinutes: Array<Scalars['Int']['output']>;
   rrule: Scalars['String']['output'];
+  stageId: Maybe<Scalars['ID']['output']>;
   startsAt: Scalars['String']['output'];
   status: Scalars['String']['output'];
   templateId: Scalars['ID']['output'];
+  templateVersionId: Scalars['ID']['output'];
   timezone: Scalars['String']['output'];
   version: Scalars['Int']['output'];
 };
@@ -2365,13 +2498,9 @@ export type StageTransition = {
 
 export type StartProjectStageInput = {
   clientMutationId: Scalars['String']['input'];
-  deadlineAt: Scalars['String']['input'];
-  dueAt: Scalars['String']['input'];
   expectedProjectVersion: Scalars['Int']['input'];
   expectedStageVersion: Scalars['Int']['input'];
   projectId: Scalars['ID']['input'];
-  referenceVersionId: InputMaybe<Scalars['ID']['input']>;
-  reminderInstants: Array<Scalars['String']['input']>;
   stageId: Scalars['ID']['input'];
 };
 
@@ -2660,6 +2789,11 @@ export type VerifyContactInput = {
   clientMutationId: Scalars['String']['input'];
   contactId: Scalars['ID']['input'];
   verified: Scalars['Boolean']['input'];
+};
+
+export type VerifyInternalUserActivationOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
 };
 
 export type VerifyInvitationOtpInput = {

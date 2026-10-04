@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"inspection/services/inspection/internal/platform/apperror"
 	"strings"
 	"time"
 
@@ -103,6 +104,10 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 				CorrelationID: envelope.CorrelationID, IdempotencyKey: deliveryIdempotencyKey(invitation.ID, target),
 				Execution: &core.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "captureUrl", BaseURL: d.CaptureBaseURL, ExpiresAt: invitation.ExpiresAt.Unix()},
 			})
+			if apperror.Is(err, apperror.IntegrationDisabled) {
+				// Disabled channels are skipped so enabled channels still deliver.
+				continue
+			}
 			if err != nil {
 				return err
 			}

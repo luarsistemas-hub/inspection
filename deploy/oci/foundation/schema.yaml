@@ -1,0 +1,39 @@
+title: Inspection OCI foundation
+description: Compartment, private Object Storage bucket, Vault, and runtime identities.
+schemaVersion: 1.1.0
+version: "1.0.0"
+locale: en
+variableGroups:
+  - title: OCI tenancy
+    variables: [tenancy_ocid, region]
+  - title: Inspection foundation
+    variables: [compartment_name, bucket_name, alert_email, email_sender_address, tags]
+variables:
+  tenancy_ocid:
+    type: string
+    title: Tenancy OCID
+    required: true
+  region:
+    type: string
+    title: Home region
+    required: true
+  compartment_name:
+    type: string
+    title: Compartment name
+    default: inspection
+  bucket_name:
+    type: string
+    title: Private object bucket name
+    default: inspection-private
+  alert_email:
+    type: string
+    title: Alert subscription email
+    required: true
+  email_sender_address:
+    type: string
+    title: OCI Email Delivery sender address
+    required: true
+  tags:
+    type: map
+    title: Freeform tags
+    default: { project: inspection, managed-by: terraform }

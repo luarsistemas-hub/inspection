@@ -104,7 +104,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics})
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, EnabledChannels: cfg.Notification.EnabledChannels})
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	minioClient, err := objectstore.NewMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
+	minioClient, err := objectstore.NewMinIOWithRegion(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure, cfg.MinIORegion)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	deliveryExecutor, err := executedelivery.Setup(executedelivery.Dependencies{DB: db, Gateway: operationalGateway, MaxAttempts: cfg.Notification.MaxAttempts, RetryDelays: cfg.Notification.RetryDelays, LeaseDuration: cfg.ProviderTimeout + 5*time.Second, CallbackURL: cfg.TwilioCallbackURL, ProviderAccounts: map[notifications.Provider]string{notifications.ProviderTwilio: cfg.TwilioAccountSID, notifications.ProviderMeta: cfg.Notification.MetaPhoneNumberID}, Payloads: payloadCipher, Metrics: metrics})
+	deliveryExecutor, err := executedelivery.Setup(executedelivery.Dependencies{DB: db, Gateway: operationalGateway, MaxAttempts: cfg.Notification.MaxAttempts, RetryDelays: cfg.Notification.RetryDelays, LeaseDuration: cfg.ProviderTimeout + 5*time.Second, CallbackURL: cfg.TwilioCallbackURL, ProviderAccounts: map[notifications.Provider]string{notifications.ProviderTwilio: cfg.TwilioAccountSID, notifications.ProviderMeta: cfg.Notification.MetaPhoneNumberID}, Payloads: payloadCipher, Metrics: metrics, EnabledChannels: cfg.Notification.EnabledChannels})
 	if err != nil {
 		return err
 	}
@@ -593,18 +593,23 @@ func inspectionCreatedHandler(inApp func(context.Context, *gorm.DB, events.RawEn
 // operationalNotificationGateway composes operational providers in the worker
 // only. Legacy OTP registries remain independent by design.
 func operationalNotificationGateway(cfg config.Config) (*notifications.Gateway, error) {
-	return notifications.NewGateway(map[notifications.Channel]map[notifications.Provider]notifications.Adapter{
+	adapters := map[notifications.Channel]map[notifications.Provider]notifications.Adapter{
 		notifications.Email: {
 			notifications.ProviderSMTP: notifications.SMTPAdapter(notifications.SMTPSender{Address: cfg.SMTPAddress, From: cfg.SMTPFrom, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, ReplyTo: cfg.SMTPReplyTo, TLSMode: cfg.Notification.SMTPTLSMode, Timeout: cfg.ProviderTimeout}),
 		},
-		notifications.SMS: {
+	}
+	if cfg.Notification.EnabledChannels["SMS"] {
+		adapters[notifications.SMS] = map[notifications.Provider]notifications.Adapter{
 			notifications.ProviderTwilio: notifications.TwilioSMSSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.Notification.TwilioSMSFrom, StatusCallback: cfg.TwilioCallbackURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}},
-		},
-		notifications.WhatsApp: {
+		}
+	}
+	if cfg.Notification.EnabledChannels["WHATSAPP"] {
+		adapters[notifications.WhatsApp] = map[notifications.Provider]notifications.Adapter{
 			notifications.ProviderTwilio: notifications.TwilioWhatsAppSender{TwilioSMSSender: notifications.TwilioSMSSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.Notification.TwilioWhatsAppFrom, StatusCallback: cfg.TwilioCallbackURL, Client: &http.Client{Timeout: cfg.ProviderTimeout}}, ContentSIDs: cfg.Notification.TwilioTemplates},
 			notifications.ProviderMeta:   notifications.MetaWhatsAppSender{BaseURL: cfg.Notification.MetaBaseURL, APIVersion: cfg.Notification.MetaAPIVersion, PhoneNumberID: cfg.Notification.MetaPhoneNumberID, AccessToken: cfg.Notification.MetaAccessToken, Templates: cfg.Notification.MetaTemplates, Client: &http.Client{Timeout: cfg.ProviderTimeout}},
-		},
-	})
+		}
+	}
+	return notifications.NewGateway(adapters)
 }
 
 func mustPayload(_ []byte, jobID identity.ID) []byte {

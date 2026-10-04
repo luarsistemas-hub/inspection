@@ -1,0 +1,53 @@
+{$ADMIN_HOST} {
+	reverse_proxy admin:3000
+}
+
+{$DASHBOARD_HOST} {
+	reverse_proxy dashboard:3002
+}
+
+{$CAPTURE_HOST} {
+	reverse_proxy capture:3003
+}
+
+{$ONBOARDING_HOST} {
+	reverse_proxy onboarding:3004
+}
+
+{$API_HOST} {
+	reverse_proxy inspection-api:8080
+}
+
+{$AUTH_HOST} {
+	@admin path /admin* /realms/master* /metrics /health*
+	respond @admin 404
+	reverse_proxy keycloak:8080
+}
+
+{$STORAGE_HOST} {
+	map {http.request.header.Origin} {cors_origin} {
+		"{$ADMIN_ORIGIN}" "{$ADMIN_ORIGIN}"
+		"{$DASHBOARD_ORIGIN}" "{$DASHBOARD_ORIGIN}"
+		"{$CAPTURE_ORIGIN}" "{$CAPTURE_ORIGIN}"
+		"{$ONBOARDING_ORIGIN}" "{$ONBOARDING_ORIGIN}"
+	}
+	@preflight method OPTIONS
+	@wrong_bucket not path /{$OCI_BUCKET}/*
+	respond @wrong_bucket 404
+	@wrong_method not method PUT GET HEAD OPTIONS
+	header @wrong_method Allow "PUT, GET, HEAD, OPTIONS"
+	respond @wrong_method 405
+	header Access-Control-Allow-Origin {cors_origin}
+	header @preflight Access-Control-Allow-Methods "PUT, GET, HEAD, OPTIONS"
+	header @preflight Access-Control-Allow-Headers "content-type, content-md5, x-amz-*"
+	header @preflight Access-Control-Max-Age "600"
+	respond @preflight "" 204
+	header Access-Control-Expose-Headers "ETag"
+	header Vary Origin
+	reverse_proxy https://{$OCI_S3_HOST} {
+		header_up Host {$OCI_S3_HOST}
+		transport http {
+			tls_server_name {$OCI_S3_HOST}
+		}
+	}
+}

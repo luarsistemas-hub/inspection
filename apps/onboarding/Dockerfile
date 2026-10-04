@@ -10,7 +10,9 @@ RUN npm prune --omit=dev
 
 FROM node:22-alpine AS build
 WORKDIR /workspace/apps/onboarding
+ARG NEXT_PUBLIC_INSPECTION_API_URL
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_INSPECTION_API_URL=$NEXT_PUBLIC_INSPECTION_API_URL
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 COPY apps/onboarding/package.json apps/onboarding/package-lock.json ./
 COPY --from=design-system /workspace/packages/inspection-design-system /workspace/packages/inspection-design-system

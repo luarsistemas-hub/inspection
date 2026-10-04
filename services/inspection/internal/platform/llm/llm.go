@@ -93,15 +93,16 @@ var errMissingGateway = errors.New("missing gateway")
 type ErrorCode string
 
 const (
-	CodeInvalidInput      ErrorCode = "invalid_input"
-	CodeTimeout           ErrorCode = "timeout"
-	CodeCancelled         ErrorCode = "cancelled"
-	CodeTransport         ErrorCode = "transport"
-	CodeAuthentication    ErrorCode = "authentication"
-	CodeRateLimit         ErrorCode = "rate_limit"
-	CodeProviderHTTP      ErrorCode = "provider_http"
-	CodeMalformedResponse ErrorCode = "malformed_response"
-	CodeLedgerPersistence ErrorCode = "ledger_persistence"
+	CodeInvalidInput        ErrorCode = "invalid_input"
+	CodeTimeout             ErrorCode = "timeout"
+	CodeCancelled           ErrorCode = "cancelled"
+	CodeTransport           ErrorCode = "transport"
+	CodeAuthentication      ErrorCode = "authentication"
+	CodeRateLimit           ErrorCode = "rate_limit"
+	CodeProviderHTTP        ErrorCode = "provider_http"
+	CodeMalformedResponse   ErrorCode = "malformed_response"
+	CodeLedgerPersistence   ErrorCode = "ledger_persistence"
+	CodeIntegrationDisabled ErrorCode = "integration_disabled"
 )
 
 type Error struct {

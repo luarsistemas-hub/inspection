@@ -11,6 +11,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/features/notifications/core"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	platformnotifications "inspection/services/inspection/internal/platform/notifications"
@@ -23,13 +24,14 @@ import (
 
 // Dependencies are infrastructure dependencies for the request slice.
 type Dependencies struct {
-	DB        *gorm.DB
-	Catalog   core.Catalog
-	Providers *platformnotifications.ProviderResolver
-	Payloads  *platformnotifications.PayloadCipher
-	Metrics   *observability.Metrics
-	Now       func() time.Time
-	Within    func(context.Context, identity.ID, func(*gorm.DB) error) error
+	DB              *gorm.DB
+	Catalog         core.Catalog
+	Providers       *platformnotifications.ProviderResolver
+	Payloads        *platformnotifications.PayloadCipher
+	Metrics         *observability.Metrics
+	EnabledChannels map[string]bool
+	Now             func() time.Time
+	Within          func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 // Setup constructs the provider-neutral notification service. Catalog may be
@@ -55,17 +57,18 @@ func Setup(dependencies Dependencies) (core.NotificationService, error) {
 	if within == nil {
 		within = (tenanttx.Runner{DB: dependencies.DB}).Within
 	}
-	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now, within: within}, nil
+	return service{db: dependencies.DB, catalog: dependencies.Catalog, providers: dependencies.Providers, payloads: dependencies.Payloads, metrics: dependencies.Metrics, now: dependencies.Now, within: within, enabledChannels: dependencies.EnabledChannels}, nil
 }
 
 type service struct {
-	db        *gorm.DB
-	catalog   core.Catalog
-	providers *platformnotifications.ProviderResolver
-	payloads  *platformnotifications.PayloadCipher
-	metrics   *observability.Metrics
-	now       func() time.Time
-	within    func(context.Context, identity.ID, func(*gorm.DB) error) error
+	db              *gorm.DB
+	catalog         core.Catalog
+	providers       *platformnotifications.ProviderResolver
+	payloads        *platformnotifications.PayloadCipher
+	metrics         *observability.Metrics
+	now             func() time.Time
+	within          func(context.Context, identity.ID, func(*gorm.DB) error) error
+	enabledChannels map[string]bool
 }
 
 type transactionKey struct{}
@@ -78,6 +81,9 @@ func InTransaction(ctx context.Context, tx *gorm.DB) context.Context {
 }
 
 func (s service) Send(ctx context.Context, notification core.Notification) (core.NotificationResult, error) {
+	if s.enabledChannels != nil && !s.enabledChannels[string(notification.Channel)] {
+		return core.NotificationResult{}, apperror.New(apperror.IntegrationDisabled, "channel", "This notification channel is temporarily unavailable")
+	}
 	if err := core.Validate(notification, s.catalog); err != nil {
 		return core.NotificationResult{}, err
 	}

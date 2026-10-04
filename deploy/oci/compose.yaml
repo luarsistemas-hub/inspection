@@ -1,0 +1,318 @@
+name: inspection
+
+x-runtime-env: &runtime-env
+  INSPECTION_ENV: production
+  INSPECTION_STAGE: production
+  INSPECTION_RUNTIME_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
+  INSPECTION_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
+  INSPECTION_DISPATCHER_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}
+  INSPECTION_MIGRATION_DATABASE_URL: ${INSPECTION_MIGRATION_DATABASE_URL:?secret migrator DSN required}
+  INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
+  INSPECTION_HTTP_ADDR: :8080
+  INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:?public origins required}
+  INSPECTION_ADMIN_ORIGIN: ${ADMIN_ORIGIN:?admin origin required}
+  INSPECTION_CAPTURE_ORIGIN: ${CAPTURE_ORIGIN:?capture origin required}
+  INSPECTION_ONBOARDING_ORIGIN: ${ONBOARDING_ORIGIN:?onboarding origin required}
+  INSPECTION_TURNSTILE_ENABLED: "true"
+  INSPECTION_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Turnstile site key required}
+  INSPECTION_TURNSTILE_SECRET: ${TURNSTILE_SECRET:?Turnstile secret required}
+  INSPECTION_OIDC_ISSUER: ${OIDC_ISSUER:?OIDC issuer required}
+  INSPECTION_OIDC_JWKS_URL: ${OIDC_JWKS_URL:?OIDC JWKS URL required}
+  INSPECTION_OIDC_AUDIENCES: inspection-admin,inspection-dashboard
+  INSPECTION_SUPER_ADMIN_ISSUER: ${OIDC_ISSUER:?OIDC issuer required}
+  INSPECTION_SUPER_ADMIN_SUBJECT: ${SUPER_ADMIN_SUBJECT:?bootstrap admin subject required}
+  INSPECTION_SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?bootstrap admin password required}
+  INSPECTION_METRICS_TOKEN: ${INSPECTION_METRICS_TOKEN:?metrics token required}
+  INSPECTION_OTP_PEPPER: ${INSPECTION_OTP_PEPPER:?OTP pepper required}
+  INSPECTION_KEYCLOAK_ADMIN_URL: http://keycloak:8080
+  INSPECTION_KEYCLOAK_REALM: inspection
+  INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_ID: inspection-provisioning
+  INSPECTION_KEYCLOAK_PROVISIONING_CLIENT_SECRET: ${KEYCLOAK_PROVISIONING_SECRET:?provisioning secret required}
+  INSPECTION_RABBITMQ_URL: amqp://${RABBITMQ_URL_USER:?URL-encoded RabbitMQ user required}:${RABBITMQ_URL_PASSWORD:?URL-encoded RabbitMQ password required}@rabbitmq:5672/
+  INSPECTION_DRAGONFLY_ADDRESS: dragonfly:6379
+  INSPECTION_DRAGONFLY_PASSWORD: ${DRAGONFLY_PASSWORD:?Dragonfly password required}
+  INSPECTION_S3_ENDPOINT: ${OCI_S3_ENDPOINT:?OCI S3 endpoint required}
+  INSPECTION_MINIO_ACCESS_KEY: ${OCI_S3_ACCESS_KEY:?OCI S3 access key required}
+  INSPECTION_MINIO_SECRET_KEY: ${OCI_S3_SECRET_KEY:?OCI S3 secret key required}
+  INSPECTION_MINIO_BUCKET: ${OCI_S3_BUCKET:?OCI bucket required}
+  INSPECTION_MINIO_SECURE: "true"
+  INSPECTION_S3_REGION: ${OCI_REGION:?OCI region required}
+  INSPECTION_S3_PUBLIC_BASE_URL: ${STORAGE_ORIGIN:?storage origin required}
+  INSPECTION_STORAGE_PUBLIC: "false"
+  INSPECTION_SMTP_ADDRESS: ${SMTP_ADDRESS:?SMTP endpoint required}
+  INSPECTION_SMTP_FROM: ${SMTP_FROM:?approved SMTP sender required}
+  INSPECTION_SMTP_USERNAME: ${SMTP_USERNAME:?SMTP username required}
+  INSPECTION_SMTP_PASSWORD: ${SMTP_PASSWORD:?SMTP password required}
+  SMTP_TLS_MODE: starttls
+  INSPECTION_LLM_MODE: disabled
+  INSPECTION_NOTIFICATION_ENABLED_CHANNELS: EMAIL
+  NOTIFICATION_ACTIVE_PAYLOAD_KEY: ${NOTIFICATION_ACTIVE_PAYLOAD_KEY:?active notification key ID required}
+  NOTIFICATION_PAYLOAD_KEYS: ${NOTIFICATION_PAYLOAD_KEYS:?notification key ring required}
+  INSPECTION_LITELLM_URL: http://litellm:4000
+  INSPECTION_PROVIDER_TIMEOUT: 30s
+  INSPECTION_IMAGE_VALIDATION_ENABLED: "true"
+
+x-app-image: &app-image ${API_IMAGE:?immutable API image digest required}
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?immutable PostgreSQL image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?database admin password required}
+      POSTGRES_DB: inspection
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Keycloak database password required}
+      INSPECTION_RUNTIME_PASSWORD: ${INSPECTION_RUNTIME_PASSWORD:?runtime role password required}
+      INSPECTION_WORKER_PASSWORD: ${INSPECTION_WORKER_PASSWORD:?worker role password required}
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - /srv/inspection/postgres:/var/lib/postgresql
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-keycloak.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d inspection"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 2g
+    mem_reservation: 1g
+    networks: [data]
+
+  dragonfly:
+    image: ${DRAGONFLY_IMAGE:?immutable Dragonfly image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    command: ["dragonfly", "--cluster_mode=emulated", "--lock_on_hashtags", "--proactor_threads=2", "--maxmemory=512mb", "--dir=/data", "--dbfilename=dragonfly.rdb", "--snapshot_cron=*/5 * * * *"]
+    environment:
+      DRAGONFLY_PASSWORD: ${DRAGONFLY_PASSWORD:?Dragonfly password required}
+      DFLY_requirepass: ${DRAGONFLY_PASSWORD:?Dragonfly password required}
+    volumes: [/srv/inspection/dragonfly:/data]
+    healthcheck:
+      test: [CMD-SHELL, "redis-cli -a \"$$DRAGONFLY_PASSWORD\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 768m
+    mem_reservation: 384m
+    networks: [data]
+
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE:?immutable RabbitMQ image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RabbitMQ user required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RabbitMQ password required}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes: [/srv/inspection/rabbitmq:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    mem_limit: 768m
+    mem_reservation: 512m
+    networks: [data]
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:?immutable Keycloak image digest required}
+    logging: *default-logging
+    command:
+      - start
+      - --optimized
+      - --http-enabled=true
+      - --health-enabled=true
+      - --proxy-headers=xforwarded
+      - --hostname=${AUTH_ORIGIN:?auth origin required}
+      - --import-realm
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Keycloak database password required}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_USERNAME:?Keycloak bootstrap username required}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_PASSWORD:?Keycloak bootstrap password required}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: ${AUTH_ORIGIN:?auth origin required}
+    volumes:
+      - ../keycloak/themes/inspection:/opt/keycloak/themes/inspection:ro
+      - /etc/inspection/inspection-realm.json:/opt/keycloak/data/import/inspection-realm.json:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: [CMD-SHELL, "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1536m
+    mem_reservation: 1g
+    networks: [data, app]
+
+  inspection-migrate:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-migrate]
+    environment: *runtime-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [operations]
+    networks: [data, app]
+
+  inspection-prompt-seed:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-prompt-seed]
+    environment: *runtime-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [operations]
+    networks: [data, app]
+
+  inspection-api:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-api]
+    restart: unless-stopped
+    environment: *runtime-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      dragonfly: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    expose: ["8080"]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    mem_limit: 1g
+    mem_reservation: 640m
+    networks: [data, app]
+
+  inspection-worker:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-worker]
+    restart: unless-stopped
+    environment: *runtime-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      dragonfly: { condition: service_healthy }
+    mem_limit: 2g
+    mem_reservation: 1280m
+    networks: [data, app]
+
+  inspection-scheduler:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-scheduler]
+    restart: unless-stopped
+    environment: *runtime-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    mem_limit: 512m
+    mem_reservation: 256m
+    networks: [data, app]
+
+  admin:
+    image: ${ADMIN_IMAGE:?immutable Admin image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${API_ORIGIN:?API origin required}/graphql
+      NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${AUTH_ORIGIN:?auth origin required}/realms/inspection/protocol/openid-connect/auth
+      NEXT_PUBLIC_OIDC_TOKEN_URL: ${AUTH_ORIGIN:?auth origin required}/realms/inspection/protocol/openid-connect/token
+      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-admin
+      NEXT_PUBLIC_DASHBOARD_URL: ${DASHBOARD_ORIGIN:?dashboard origin required}
+      NEXT_PUBLIC_CAPTURE_URL: ${CAPTURE_ORIGIN:?capture origin required}
+    expose: ["3000"]
+    mem_limit: 512m
+    mem_reservation: 256m
+    networks: [app]
+
+  dashboard:
+    image: ${DASHBOARD_IMAGE:?immutable Dashboard image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${API_ORIGIN:?API origin required}/graphql
+      NEXT_PUBLIC_OIDC_AUTHORIZE_URL: ${AUTH_ORIGIN:?auth origin required}/realms/inspection/protocol/openid-connect/auth
+      NEXT_PUBLIC_OIDC_TOKEN_URL: ${AUTH_ORIGIN:?auth origin required}/realms/inspection/protocol/openid-connect/token
+      NEXT_PUBLIC_OIDC_CLIENT_ID: inspection-dashboard
+      NEXT_PUBLIC_ADMIN_URL: ${ADMIN_ORIGIN:?admin origin required}
+      NEXT_PUBLIC_STORAGE_URL: ${STORAGE_ORIGIN:?storage origin required}
+    expose: ["3002"]
+    mem_limit: 512m
+    mem_reservation: 256m
+    networks: [app]
+
+  capture:
+    image: ${CAPTURE_IMAGE:?immutable Capture image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${API_ORIGIN:?API origin required}/graphql
+      NEXT_PUBLIC_STORAGE_URL: ${STORAGE_ORIGIN:?storage origin required}
+      NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION: "false"
+    expose: ["3003"]
+    mem_limit: 512m
+    mem_reservation: 256m
+    networks: [app]
+
+  onboarding:
+    image: ${ONBOARDING_IMAGE:?immutable Onboarding image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_INSPECTION_API_URL: ${API_ORIGIN:?API origin required}/graphql
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Turnstile site key required}
+    expose: ["3004"]
+    mem_limit: 512m
+    networks: [app]
+
+  caddy:
+    image: ${CADDY_IMAGE:?immutable Caddy image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    ports: ["443:443/tcp"]
+    environment:
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:?admin origin required}
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:?dashboard origin required}
+      CAPTURE_ORIGIN: ${CAPTURE_ORIGIN:?capture origin required}
+      ONBOARDING_ORIGIN: ${ONBOARDING_ORIGIN:?onboarding origin required}
+      API_ORIGIN: ${API_ORIGIN:?API origin required}
+      AUTH_ORIGIN: ${AUTH_ORIGIN:?auth origin required}
+      STORAGE_ORIGIN: ${STORAGE_ORIGIN:?storage origin required}
+      OCI_S3_HOST: ${OCI_S3_HOST:?OCI objectstorage host required}
+      ADMIN_HOST: ${ADMIN_HOST:?admin host required}
+      DASHBOARD_HOST: ${DASHBOARD_HOST:?dashboard host required}
+      CAPTURE_HOST: ${CAPTURE_HOST:?capture host required}
+      ONBOARDING_HOST: ${ONBOARDING_HOST:?onboarding host required}
+      API_HOST: ${API_HOST:?API host required}
+      AUTH_HOST: ${AUTH_HOST:?auth host required}
+      STORAGE_HOST: ${STORAGE_HOST:?storage host required}
+      APP_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:?public origins required}
+      OCI_BUCKET: ${OCI_S3_BUCKET:?OCI bucket required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/inspection/caddy:/data
+      - /srv/inspection/caddy-config:/config
+    depends_on: [admin, dashboard, capture, onboarding, inspection-api, keycloak]
+    mem_limit: 256m
+    mem_reservation: 128m
+    networks: [app]
+
+networks:
+  data: { internal: true }
+  app: {}

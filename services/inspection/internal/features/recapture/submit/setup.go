@@ -21,9 +21,10 @@ type Command struct {
 }
 
 type Dependencies struct {
-	DB      *gorm.DB
-	Bus     *mediator.Bus
-	Capture capturecore.Service
+	DB               *gorm.DB
+	Bus              *mediator.Bus
+	Capture          capturecore.Service
+	AnalysisDisabled bool
 }
 
 func Setup(deps Dependencies) error {
@@ -31,6 +32,9 @@ func Setup(deps Dependencies) error {
 		return fmt.Errorf("slice recapture/submit: missing dependency")
 	}
 	return deps.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
+		if deps.AnalysisDisabled {
+			return nil, apperror.New(apperror.IntegrationDisabled, "", "Analysis is temporarily unavailable")
+		}
 		command := raw.(Command)
 		var request database.RecaptureRequest
 		err := (tenanttx.Runner{DB: deps.DB}).Within(ctx, command.TenantID, func(tx *gorm.DB) error {

@@ -90,6 +90,10 @@ func deliverRecapture(ctx context.Context, db *gorm.DB, service notificationcore
 	}
 	for _, target := range delivery {
 		_, err := service.Send(ctx, notificationcore.Notification{TenantID: tenantID, Recipient: notificationcore.Recipient{Destination: target.Destination}, Channel: notificationcore.Channel(target.Channel), Template: notificationcore.TemplateRef{Name: "recapture-link", Version: "v1"}, Variables: map[string]string{"recipientName": recipientName}, CorrelationID: "recapture-" + requestID.String(), IdempotencyKey: notificationcore.RecipientIdempotencyKey(requestID, notificationcore.Channel(target.Channel), target.Destination), Execution: &notificationcore.ExecutionPayload{InvitationID: invitation.ID, Token: token, URLVariable: "recaptureUrl", BaseURL: baseURL, ExpiresAt: invitation.ExpiresAt.Unix()}})
+		if apperror.Is(err, apperror.IntegrationDisabled) {
+			// Disabled channels are skipped so enabled channels still deliver.
+			continue
+		}
 		if err != nil {
 			return err
 		}

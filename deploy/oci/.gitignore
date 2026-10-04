@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.zip
+*.tfvars
+*.tfvars.json
+*.plan
+*.env
+secrets.map
+!*.env.example

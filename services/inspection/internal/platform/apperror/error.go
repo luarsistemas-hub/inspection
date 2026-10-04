@@ -15,6 +15,7 @@ const (
 	RateLimited              Code = "RATE_LIMITED"
 	SessionExpired           Code = "SESSION_EXPIRED"
 	DependencyUnavailable    Code = "DEPENDENCY_UNAVAILABLE"
+	IntegrationDisabled      Code = "INTEGRATION_DISABLED"
 	UnsupportedSchemaVersion Code = "UNSUPPORTED_SCHEMA_VERSION"
 	Internal                 Code = "INTERNAL"
 )
@@ -49,4 +50,10 @@ func Public(err error) (Code, string, string) {
 		return appErr.Code, appErr.Field, appErr.Safe
 	}
 	return Internal, "", "internal error"
+}
+
+// Is reports whether err carries the given public code.
+func Is(err error, code Code) bool {
+	var appErr *Error
+	return errors.As(err, &appErr) && appErr.Code == code
 }

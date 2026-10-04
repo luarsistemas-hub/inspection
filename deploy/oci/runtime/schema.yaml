@@ -1,0 +1,32 @@
+title: Inspection OCI runtime
+description: Single ARM64 runtime host and network for Inspection.
+schemaVersion: 1.1.0
+version: "1.0.0"
+locale: en
+variableGroups:
+  - title: OCI and foundation outputs
+    variables: [tenancy_ocid, region, compartment_ocid, availability_domain, image_ocid, namespace, bucket_name, alert_topic_ocid]
+  - title: Network and administration
+    variables: [admin_cidr, ssh_public_key, instance_name]
+  - title: Approved Vault secrets
+    variables: [secret_ocids]
+variables:
+  tenancy_ocid: { type: string, title: Tenancy OCID, required: true }
+  region: { type: string, title: Home region, required: true }
+  compartment_ocid: { type: string, title: Foundation compartment OCID, required: true }
+  availability_domain: { type: string, title: Availability domain, required: true }
+  image_ocid: { type: string, title: Ubuntu 24.04 ARM64 image OCID, required: true }
+  namespace: { type: string, title: Object Storage namespace, required: true }
+  bucket_name: { type: string, title: Private bucket name, default: inspection-private }
+  alert_topic_ocid: { type: string, title: Operations topic OCID, required: true }
+  secret_ocids: { type: map, title: Secret name to OCI Vault secret OCID, required: true }
+  admin_cidr: { type: string, title: Administrative IPv4 CIDR, required: true }
+  ssh_public_key: { type: string, title: Public SSH key, required: true }
+  instance_name: { type: string, title: Instance name, default: inspection-runtime }
+  vcn_cidr: { type: string, title: VCN CIDR, default: 10.20.0.0/16 }
+  subnet_cidr: { type: string, title: Public subnet CIDR, default: 10.20.1.0/24 }
+  shape_ocpus: { type: number, title: ARM A1 OCPUs, default: 2 }
+  shape_memory_gb: { type: number, title: ARM A1 memory GB, default: 12 }
+  boot_volume_gb: { type: number, title: Boot volume GB, default: 50 }
+  data_volume_gb: { type: number, title: Persistent volume GB, default: 150 }
+  tags: { type: map, title: Freeform tags, default: { project: inspection, managed-by: terraform } }

@@ -162,7 +162,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics})
+	notificationService, err := notificationrequest.Setup(notificationrequest.Dependencies{DB: db, Providers: providerResolver, Payloads: payloadCipher, Metrics: metrics, EnabledChannels: cfg.Notification.EnabledChannels})
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func run() error {
 	authenticator := auth.Authenticator{Verifier: verifier, Resolver: membershipStore, Audience: cfg.OIDCAudience, Audiences: cfg.OIDCAudiences}
 	bus := mediator.New()
 	authorizer := auth.Authorizer{Store: membershipStore, Scopes: auth.GORMScopeResolver{DB: db}}
-	channelRegistry, err := notifications.NewRegistry(map[notifications.Channel]notifications.Sender{
+	channelSenders := map[notifications.Channel]notifications.Sender{
 		notifications.Email: notifications.SMTPSender{
 			Address:  cfg.SMTPAddress,
 			Username: cfg.SMTPUsername,
@@ -184,9 +184,15 @@ func run() error {
 			TLSMode:  cfg.Notification.SMTPTLSMode,
 			Timeout:  cfg.ProviderTimeout,
 		},
-		notifications.WhatsApp: notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp},
-		notifications.SMS:      notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.SMS},
-	})
+	}
+	// Disabled channels are left out of the registry so no provider is ever called for them.
+	if cfg.Notification.EnabledChannels["WHATSAPP"] {
+		channelSenders[notifications.WhatsApp] = notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.WhatsApp}
+	}
+	if cfg.Notification.EnabledChannels["SMS"] {
+		channelSenders[notifications.SMS] = notifications.TwilioSender{BaseURL: cfg.TwilioBaseURL, AccountSID: cfg.TwilioAccountSID, AuthToken: cfg.TwilioAuthToken, From: cfg.TwilioFrom, Channel: notifications.SMS}
+	}
+	channelRegistry, err := notifications.NewRegistry(channelSenders)
 	if err != nil {
 		return err
 	}
@@ -200,13 +206,18 @@ func run() error {
 	keycloakClient := keycloak.ProvisioningClient{BaseURL: cfg.KeycloakAdminURL, Realm: cfg.KeycloakRealm, ClientID: cfg.KeycloakClientID, ClientSecret: cfg.KeycloakClientSecret, Timeout: cfg.ProviderTimeout, Stage: cfg.Stage}
 	activationService := adminactivation.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.ActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}
 	bootstrapService := onboardingbootstrap.Service{DB: db}
-	minioClient, err := objectstore.NewMinIO(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure)
+	minioClient, err := objectstore.NewMinIOWithRegion(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure, cfg.MinIORegion)
 	if err != nil {
 		return err
 	}
 	publicMinioClient := minioClient
-	if cfg.MinIOPublicEndpoint != cfg.MinIOEndpoint || cfg.MinIOPublicSecure != cfg.MinIOSecure {
+	if cfg.MinIOPublicEndpoint != "" && (cfg.MinIOPublicEndpoint != cfg.MinIOEndpoint || cfg.MinIOPublicSecure != cfg.MinIOSecure) {
 		publicMinioClient, err = objectstore.NewMinIOWithRegion(cfg.MinIOPublicEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOPublicSecure, "us-east-1")
+		if err != nil {
+			return err
+		}
+	} else if cfg.StoragePublicBaseURL != "" {
+		publicMinioClient, err = objectstore.NewMinIOWithPublicBase(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure, cfg.MinIORegion, cfg.StoragePublicBaseURL)
 		if err != nil {
 			return err
 		}
@@ -409,7 +420,7 @@ func run() error {
 			return capturedeclare.Setup(capturedeclare.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error {
-			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService})
+			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})
 		},
 		func() error { return mediacreate.Setup(mediacreate.Dependencies{Bus: bus, Service: mediaService}) },
 		func() error { return mediapresign.Setup(mediapresign.Dependencies{Bus: bus, Service: mediaService}) },
@@ -427,7 +438,7 @@ func run() error {
 			return recaptureexpire.Setup(recaptureexpire.Dependencies{Bus: bus, Service: recaptureService})
 		},
 		func() error {
-			return recapturesubmit.Setup(recapturesubmit.Dependencies{DB: db, Bus: bus, Capture: captureService})
+			return recapturesubmit.Setup(recapturesubmit.Dependencies{DB: db, Bus: bus, Capture: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})
 		},
 	}
 	for _, setup := range setups {
@@ -447,8 +458,10 @@ func run() error {
 	if err := onboardingphotos.Setup(mux, onboardingphotos.Dependencies{DB: db, Sessions: onboardingService, Store: mediaStore}); err != nil {
 		return err
 	}
-	if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL, AccountID: cfg.TwilioAccountSID, Metrics: metrics}); err != nil {
-		return err
+	if cfg.Notification.EnabledChannels["SMS"] || cfg.Notification.EnabledChannels["WHATSAPP"] {
+		if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL, AccountID: cfg.TwilioAccountSID, Metrics: metrics}); err != nil {
+			return err
+		}
 	}
 	if cfg.Notification.WhatsAppProvider == "meta" {
 		if err := receivemetastatus.Setup(mux, receivemetastatus.Dependencies{DB: db, VerifyToken: cfg.Notification.MetaVerifyToken, AppSecret: cfg.Notification.MetaAppSecret, AccountID: cfg.Notification.MetaPhoneNumberID, Metrics: metrics}); err != nil {

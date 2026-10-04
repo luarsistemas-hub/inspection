@@ -35,6 +35,7 @@ type Dependencies struct {
 	ProviderAccounts map[notifications.Provider]string
 	Payloads         *notifications.PayloadCipher
 	Metrics          *observability.Metrics
+	EnabledChannels  map[string]bool
 }
 
 // Executor executes due work one item at a time. Call RunDue from a worker
@@ -51,6 +52,7 @@ type Executor struct {
 	providerAccounts map[notifications.Provider]string
 	payloads         *notifications.PayloadCipher
 	metrics          *observability.Metrics
+	enabledChannels  map[string]bool
 }
 
 // Setup validates dependencies and returns a durable executor.
@@ -83,7 +85,11 @@ func Setup(deps Dependencies) (*Executor, error) {
 	for provider, account := range deps.ProviderAccounts {
 		accounts[provider] = account
 	}
-	return &Executor{db: deps.DB, gateway: deps.Gateway, catalog: deps.Catalog, now: deps.Now, leaseDuration: deps.LeaseDuration, maxAttempts: deps.MaxAttempts, retryDelays: append([]time.Duration(nil), deps.RetryDelays...), callbackURL: deps.CallbackURL, providerAccounts: accounts, payloads: deps.Payloads, metrics: deps.Metrics}, nil
+	channels := make(map[string]bool, len(deps.EnabledChannels))
+	for channel, enabled := range deps.EnabledChannels {
+		channels[channel] = enabled
+	}
+	return &Executor{db: deps.DB, gateway: deps.Gateway, catalog: deps.Catalog, now: deps.Now, leaseDuration: deps.LeaseDuration, maxAttempts: deps.MaxAttempts, retryDelays: append([]time.Duration(nil), deps.RetryDelays...), callbackURL: deps.CallbackURL, providerAccounts: accounts, payloads: deps.Payloads, metrics: deps.Metrics, enabledChannels: channels}, nil
 }
 
 type reservation struct {
@@ -103,6 +109,9 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 	reserved, err := e.reserve(ctx)
 	if err != nil || reserved == nil {
 		return reserved != nil, err
+	}
+	if e.enabledChannels != nil && !e.enabledChannels[reserved.work.Channel] {
+		return true, e.cancelDisabled(ctx, *reserved)
 	}
 	intent, err := e.intent(ctx, reserved.delivery, reserved.work)
 	if err != nil {
@@ -290,6 +299,22 @@ func (e *Executor) cancel(ctx context.Context, reserved reservation) error {
 			return err
 		}
 		if err := tx.Model(&database.NotificationAttempt{}).Where("tenant_id=? AND id=?", reserved.work.TenantID, reserved.history.ID).Updates(map[string]any{"status": string(core.StateCanceled), "error_code": "link_unavailable", "finished_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", reserved.work.TenantID, reserved.work.DeliveryID).Delete(&database.NotificationPayload{}).Error; err != nil {
+			return err
+		}
+		return callbacks.UpdateDelivery(ctx, tx, reserved.work.TenantID, reserved.work.DeliveryID, now)
+	})
+}
+
+func (e *Executor) cancelDisabled(ctx context.Context, reserved reservation) error {
+	now := e.now().UTC()
+	return e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&database.ChannelAttempt{}).Where("tenant_id=? AND id=? AND status=?", reserved.work.TenantID, reserved.work.ID, string(core.StateProcessing)).Updates(map[string]any{"status": string(core.StateCanceled), "lease_expires_at": nil, "last_error": "integration_disabled", "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.NotificationAttempt{}).Where("tenant_id=? AND id=?", reserved.work.TenantID, reserved.history.ID).Updates(map[string]any{"status": string(core.StateCanceled), "error_code": "integration_disabled", "finished_at": now}).Error; err != nil {
 			return err
 		}
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND delivery_id=?", reserved.work.TenantID, reserved.work.DeliveryID).Delete(&database.NotificationPayload{}).Error; err != nil {

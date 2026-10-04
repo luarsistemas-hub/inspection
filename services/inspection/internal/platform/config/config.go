@@ -54,6 +54,8 @@ type Config struct {
 	MinIOBucket            string
 	MinIOSecure            bool
 	MinIOPublicSecure      bool
+	MinIORegion            string
+	StoragePublicBaseURL   string
 	OTPPepper              string
 	KeycloakAdminURL       string
 	KeycloakRealm          string
@@ -90,6 +92,7 @@ type ReportPDFConfig struct {
 type NotificationConfig struct {
 	MaxAttempts        int
 	RetryDelays        []time.Duration
+	EnabledChannels    map[string]bool
 	SMTPTLSMode        string
 	TwilioSMSFrom      string
 	TwilioWhatsAppFrom string
@@ -132,7 +135,7 @@ func Load() (Config, error) {
 		ImageValidationEnabled: envBool("INSPECTION_IMAGE_VALIDATION_ENABLED", true),
 		RabbitMQURL:            env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
 		DragonflyAddress:       env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
-		MinIOEndpoint: env("INSPECTION_MINIO_ENDPOINT", "localhost:9000"), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_MINIO_ACCESS_KEY", "inspection"), MinIOSecretKey: env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"), MinIOBucket: env("INSPECTION_MINIO_BUCKET", "inspection-private"), MinIOSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true"), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"),
+		MinIOEndpoint: env("INSPECTION_S3_ENDPOINT", env("INSPECTION_MINIO_ENDPOINT", "localhost:9000")), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_S3_ACCESS_KEY", env("INSPECTION_MINIO_ACCESS_KEY", "inspection")), MinIOSecretKey: env("INSPECTION_S3_SECRET_KEY", env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret")), MinIOBucket: env("INSPECTION_S3_BUCKET", env("INSPECTION_MINIO_BUCKET", "inspection-private")), MinIOSecure: envBool("INSPECTION_S3_SECURE", strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true")), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"), MinIORegion: env("INSPECTION_S3_REGION", "us-east-1"), StoragePublicBaseURL: os.Getenv("INSPECTION_S3_PUBLIC_BASE_URL"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
 		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: keycloakClientID, KeycloakClientSecret: keycloakClientSecret,
 		TwilioBaseURL: env("INSPECTION_TWILIO_BASE_URL", "http://localhost:1080"), TwilioAccountSID: env("INSPECTION_TWILIO_ACCOUNT_SID", "AC-local"), TwilioAuthToken: env("INSPECTION_TWILIO_AUTH_TOKEN", "local-token"), TwilioFrom: env("INSPECTION_TWILIO_FROM", "+15550000000"), TwilioCallbackURL: env("INSPECTION_TWILIO_CALLBACK_URL", "http://localhost:8080/webhooks/twilio/status"), LLMMode: strings.ToLower(strings.TrimSpace(env("INSPECTION_LLM_MODE", "mock"))), LiteLLMURL: env("INSPECTION_LITELLM_URL", "http://localhost:18080"), LiteLLMAPIKey: os.Getenv("INSPECTION_LITELLM_API_KEY"), ProviderTimeout: envDuration("INSPECTION_PROVIDER_TIMEOUT", 30*time.Second),
@@ -172,7 +175,17 @@ func notificationEnv(key string) (string, bool) {
 }
 
 func loadNotification(environment string) (NotificationConfig, error) {
-	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", TwilioTemplates: map[string]string{}, MetaTemplates: map[string]string{}, PayloadKeys: map[string]string{}}
+	c := NotificationConfig{MaxAttempts: 4, RetryDelays: []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute}, SMTPTLSMode: "starttls", WhatsAppProvider: "twilio", EnabledChannels: map[string]bool{"EMAIL": true, "SMS": true, "WHATSAPP": true}, TwilioTemplates: map[string]string{}, MetaTemplates: map[string]string{}, PayloadKeys: map[string]string{}}
+	if raw, ok := notificationEnv("NOTIFICATION_ENABLED_CHANNELS"); ok {
+		c.EnabledChannels = map[string]bool{}
+		for _, channel := range splitExact(raw) {
+			channel = strings.ToUpper(channel)
+			if channel != "EMAIL" && channel != "SMS" && channel != "WHATSAPP" {
+				return NotificationConfig{}, fmt.Errorf("configuration: invalid NOTIFICATION_ENABLED_CHANNELS")
+			}
+			c.EnabledChannels[channel] = true
+		}
+	}
 	if raw, ok := notificationEnv("NOTIFICATION_MAX_ATTEMPTS"); ok {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value <= 0 {
@@ -251,6 +264,9 @@ func loadNotification(environment string) (NotificationConfig, error) {
 
 // Validate fails closed only for settings that were explicitly selected.
 func (c NotificationConfig) Validate(environment string) error {
+	if !c.EnabledChannels["EMAIL"] && environment != "local" && environment != "test" {
+		return fmt.Errorf("configuration: EMAIL must remain enabled")
+	}
 	if c.MaxAttempts <= 0 {
 		return fmt.Errorf("configuration: invalid NOTIFICATION_MAX_ATTEMPTS")
 	}
@@ -443,6 +459,15 @@ func (c Config) Validate() error {
 	if c.StoragePublic {
 		return fmt.Errorf("configuration: public storage is forbidden")
 	}
+	if c.Environment != "local" && c.Environment != "test" {
+		if c.MinIOEndpoint == "" || c.MinIOBucket == "" || c.MinIOAccessKey == "" || c.MinIOSecretKey == "" || c.MinIORegion == "" || c.StoragePublicBaseURL == "" {
+			return fmt.Errorf("configuration: missing production S3 storage settings")
+		}
+		publicURL, parseErr := url.Parse(c.StoragePublicBaseURL)
+		if parseErr != nil || publicURL.Scheme != "https" || publicURL.Host == "" || publicURL.Path != "" || publicURL.RawQuery != "" || publicURL.Fragment != "" {
+			return fmt.Errorf("configuration: invalid production storage public URL")
+		}
+	}
 	if c.OIDCJWKSURL != "" {
 		parsed, parseErr := url.Parse(c.OIDCJWKSURL)
 		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
@@ -460,7 +485,7 @@ func (c Config) Validate() error {
 	if mode == "" {
 		mode = "mock"
 	}
-	if mode != "mock" && mode != "live" {
+	if mode != "mock" && mode != "live" && !(mode == "disabled" && c.Environment != "local" && c.Environment != "test") {
 		return fmt.Errorf("configuration: invalid INSPECTION_LLM_MODE")
 	}
 	if mode == "live" && (c.LiteLLMURL == "" || c.LiteLLMAPIKey == "") {

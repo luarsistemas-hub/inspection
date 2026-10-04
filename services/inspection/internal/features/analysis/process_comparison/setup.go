@@ -61,6 +61,9 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, []byte, identity.
 			}
 			return nil
 		}
+		if deps.Mode == "disabled" {
+			return persistTechnicalFailure(ctx, tx, tenantID, job, deps.Now().UTC(), llm.NewError(llm.CodeIntegrationDisabled, 0, nil))
+		}
 		ctx = observability.EnsureExecutionID(ctx, func() string { return identity.NewID().String() })
 		correlation := observability.CorrelationFromContext(ctx)
 		correlation.JobID = job.ID.String()

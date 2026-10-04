@@ -1,16 +1,18 @@
 FROM golang:1.26.5-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /workspace
 COPY go.mod go.sum go.work go.work.sum ./
 RUN go mod download
 COPY libs ./libs
 COPY services/inspection ./services/inspection
-RUN CGO_ENABLED=0 go build -trimpath -o /out/inspection-api ./services/inspection/cmd/inspection-api && \
-    CGO_ENABLED=0 go build -trimpath -o /out/inspection-migrate ./services/inspection/cmd/inspection-migrate && \
-    CGO_ENABLED=0 go build -trimpath -o /out/inspection-prompt-seed ./services/inspection/cmd/inspection-prompt-seed && \
-    CGO_ENABLED=0 go build -trimpath -o /out/inspection-seed ./services/inspection/cmd/inspection-seed && \
-    CGO_ENABLED=0 go build -trimpath -o /out/inspection-worker ./services/inspection/cmd/inspection-worker && \
-    CGO_ENABLED=0 go build -trimpath -o /out/inspection-scheduler ./services/inspection/cmd/inspection-scheduler
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-api ./services/inspection/cmd/inspection-api && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-migrate ./services/inspection/cmd/inspection-migrate && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-prompt-seed ./services/inspection/cmd/inspection-prompt-seed && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-seed ./services/inspection/cmd/inspection-seed && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-worker ./services/inspection/cmd/inspection-worker && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-scheduler ./services/inspection/cmd/inspection-scheduler
 
 FROM alpine:3.22
 # tzdata is required for server-side validation of tenant IANA timezones; CA

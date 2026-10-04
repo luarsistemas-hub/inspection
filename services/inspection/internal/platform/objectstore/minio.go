@@ -14,8 +14,9 @@ import (
 )
 
 type MinIOClient struct {
-	Client *minio.Client
-	Core   *minio.Core
+	Client        *minio.Client
+	Core          *minio.Core
+	PublicBaseURL string
 }
 
 func NewMinIO(endpoint, accessKey, secretKey string, secure bool) (*MinIOClient, error) {
@@ -30,6 +31,24 @@ func NewMinIOWithRegion(endpoint, accessKey, secretKey string, secure bool, regi
 	return &MinIOClient{Client: client, Core: &minio.Core{Client: client}}, nil
 }
 
+// NewMinIOWithPublicBase signs requests against the private S3 endpoint, then
+// changes only the URL authority returned to a browser-facing HTTPS proxy.
+// The proxy must restore the signed OCI Host header before forwarding.
+func NewMinIOWithPublicBase(endpoint, accessKey, secretKey string, secure bool, region, publicBaseURL string) (*MinIOClient, error) {
+	client, err := NewMinIOWithRegion(endpoint, accessKey, secretKey, secure, region)
+	if err != nil {
+		return nil, err
+	}
+	if publicBaseURL != "" {
+		base, parseErr := url.Parse(publicBaseURL)
+		if parseErr != nil || base.Scheme != "https" || base.Host == "" || base.Path != "" || base.RawQuery != "" || base.Fragment != "" || base.User != nil {
+			return nil, errors.New("object store: invalid public base URL")
+		}
+		client.PublicBaseURL = base.Scheme + "://" + base.Host
+	}
+	return client, nil
+}
+
 func (m *MinIOClient) CreateMultipart(ctx context.Context, bucket, key, contentType string) (string, error) {
 	return m.Core.NewMultipartUpload(ctx, bucket, key, minio.PutObjectOptions{ContentType: contentType})
 }
@@ -41,7 +60,7 @@ func (m *MinIOClient) PresignPart(ctx context.Context, bucket, key, uploadID str
 	if err != nil {
 		return "", mapMinIOError(err)
 	}
-	return signed.String(), nil
+	return m.publicURL(signed), nil
 }
 func (m *MinIOClient) CompleteMultipart(ctx context.Context, bucket, key, uploadID string, parts []Part) error {
 	completed := make([]minio.CompletePart, len(parts))
@@ -105,7 +124,19 @@ func (m *MinIOClient) PresignGet(ctx context.Context, bucket, key string, ttl ti
 	if err != nil {
 		return "", mapMinIOError(err)
 	}
-	return signed.String(), nil
+	return m.publicURL(signed), nil
+}
+
+func (m *MinIOClient) publicURL(signed *url.URL) string {
+	if m == nil || m.PublicBaseURL == "" {
+		return signed.String()
+	}
+	base, err := url.Parse(m.PublicBaseURL)
+	if err != nil {
+		return signed.String()
+	}
+	signed.Scheme, signed.Host = base.Scheme, base.Host
+	return signed.String()
 }
 
 func mapMinIOError(err error) error {

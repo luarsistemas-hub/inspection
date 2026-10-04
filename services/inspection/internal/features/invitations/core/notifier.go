@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/notifications"
 )
 
@@ -17,15 +18,23 @@ type ChannelNotifier struct {
 
 func (n ChannelNotifier) SendOTP(ctx context.Context, tenantID, invitationID identity.ID, code string, destinations []DeliveryIntent) error {
 	intents := make(map[notifications.Channel]notifications.Intent, len(destinations))
+	disabled := false
 	for _, destination := range destinations {
 		localQAEmail := strings.EqualFold(strings.TrimSpace(destination.Destination), "qa.inspection@example.test")
 		if isNonProductionStage(n.Stage) && strings.EqualFold(strings.TrimSpace(destination.Channel), string(notifications.Email)) && !localQAEmail {
 			continue
 		}
 		channel := notifications.Channel(destination.Channel)
+		if _, err := n.Registry.Sender(channel); err != nil {
+			disabled = true
+			continue
+		}
 		intents[channel] = notifications.Intent{ID: invitationID.String() + ":" + destination.Channel, Destination: destination.Destination, Template: "Seu código de acesso", Parameters: map[string]string{"body": "Código: " + code, "tenantId": tenantID.String(), "callbackUrl": n.CallbackURL}}
 	}
 	if len(intents) == 0 {
+		if disabled {
+			return apperror.New(apperror.IntegrationDisabled, "channel", "This notification channel is temporarily unavailable")
+		}
 		return nil
 	}
 	result := notifications.Deliver(ctx, n.Registry, intents)

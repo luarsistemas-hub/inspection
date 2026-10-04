@@ -9,12 +9,28 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
 )
+
+func TestPublicSignedURLChangesOnlyOrigin(t *testing.T) {
+	signed, err := url.Parse("https://namespace.compat.objectstorage.us-ashburn-1.oraclecloud.com/inspection-private/a%2Fb?X-Amz-Signature=abc&uploadId=opaque")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &MinIOClient{PublicBaseURL: "https://storage.example.com"}
+	got, err := url.Parse(client.publicURL(signed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scheme != "https" || got.Host != "storage.example.com" || got.EscapedPath() != "/inspection-private/a%2Fb" || got.RawQuery != "X-Amz-Signature=abc&uploadId=opaque" {
+		t.Fatalf("rewritten signed URL lost signed request details: %s", got)
+	}
+}
 
 type clientStub struct {
 	key, upload, content string

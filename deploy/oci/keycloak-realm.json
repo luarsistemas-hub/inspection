@@ -1,0 +1,46 @@
+{
+  "realm": "inspection",
+  "displayName": "Inspection",
+  "enabled": true,
+  "loginTheme": "inspection",
+  "internationalizationEnabled": true,
+  "defaultLocale": "pt-BR",
+  "supportedLocales": ["pt-BR", "en"],
+  "clients": [
+    {
+      "clientId": "inspection-admin",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["https://admin.example.com/auth/callback"],
+      "webOrigins": ["https://admin.example.com"],
+      "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "https://admin.example.com/overview"},
+      "protocolMappers": [{"name":"inspection-admin audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","config":{"included.client.audience":"inspection-admin","access.token.claim":"true","id.token.claim":"true","introspection.token.claim":"true"}}]
+    },
+    {
+      "clientId": "inspection-dashboard",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["https://dashboard.example.com/auth/callback"],
+      "webOrigins": ["https://dashboard.example.com"],
+      "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "https://dashboard.example.com/"},
+      "protocolMappers": [{"name":"inspection-dashboard audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","config":{"included.client.audience":"inspection-dashboard","access.token.claim":"true","id.token.claim":"true","introspection.token.claim":"true"}}]
+    },
+    {
+      "clientId": "inspection-provisioning",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "REPLACED_DURING_BOOTSTRAP"
+    }
+  ],
+  "users": [
+    {"id":"6ec9a740-a3dd-5ae5-ae50-9c29d189531b","username":"inspection-super-admin","enabled":true,"emailVerified":true,"requiredActions":[],"credentials":[{"type":"password","value":"REPLACED_DURING_BOOTSTRAP","temporary":false}]},
+    {"username":"service-account-inspection-provisioning","serviceAccountClientId":"inspection-provisioning","enabled":true,"clientRoles":{"realm-management":["view-users","query-users","manage-users"]}}
+  ]
+}

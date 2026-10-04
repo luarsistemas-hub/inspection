@@ -11,6 +11,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	"inspection/services/inspection/internal/features/notifications/core"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/observability"
 
@@ -128,6 +129,22 @@ func TestServiceUsesAmbientTransaction(t *testing.T) {
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatal("unexpected persistence error")
+	}
+}
+
+func TestDisabledChannelReturnsStableErrorBeforePersistence(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := Setup(Dependencies{DB: db, EnabledChannels: map[string]bool{"EMAIL": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Send(context.Background(), core.Notification{Channel: core.ChannelSMS})
+	var appError *apperror.Error
+	if !errors.As(err, &appError) || appError.Code != apperror.IntegrationDisabled {
+		t.Fatalf("disabled channel error = %#v, want INTEGRATION_DISABLED", err)
 	}
 }
 
