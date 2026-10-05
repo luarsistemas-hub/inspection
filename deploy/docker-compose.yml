@@ -8,6 +8,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: inspection
+      # Keep the existing named volume at this path with PostgreSQL 18.
+      PGDATA: /var/lib/postgresql/data
     ports:
       - "${INSPECTION_POSTGRES_PORT:-5433}:5432"
     volumes:
@@ -68,9 +70,10 @@ services:
       AWS_SECRET_ACCESS_KEY: inspection-local-secret
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: ["/bin/sh", "-ec"]
-    command: >-
-      aws s3api head-bucket --bucket inspection-private --endpoint-url http://minio:9000
-      || aws s3api create-bucket --bucket inspection-private --endpoint-url http://minio:9000
+    command:
+      - >-
+        aws s3api head-bucket --bucket inspection-private --endpoint-url http://minio:9000
+        || aws s3api create-bucket --bucket inspection-private --endpoint-url http://minio:9000
 
   inspection-bootstrap:
     image: postgres:18-alpine
