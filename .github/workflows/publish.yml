@@ -225,7 +225,8 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > known_hosts
           chmod 0600 deploy_key known_hosts
-          tar -czf package.tar.gz -C package plan.json source-bundle.tgz
+          cp package/source-bundle.tgz package/bundle.tgz
+          tar -czf package.tar.gz -C package plan.json bundle.tgz
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
           accepted=0
           printf -v apply_command 'apply-plan %q %q' "$DEPLOYMENT_ID" "$PLAN_SHA"
