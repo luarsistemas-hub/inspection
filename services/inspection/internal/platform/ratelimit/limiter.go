@@ -40,7 +40,7 @@ func (l Limiter) Take(ctx context.Context, key string, limit int, window time.Du
 type OTPPolicy struct{ Limiter Limiter }
 
 func (p OTPPolicy) AllowSend(ctx context.Context, invitation string) (Result, error) {
-	return p.Limiter.Take(ctx, "otp:send:"+invitation, 5, time.Hour)
+	return p.Limiter.Take(ctx, "otp:send:"+invitation, 20, 10*time.Minute)
 }
 func (p OTPPolicy) AllowResend(ctx context.Context, invitation string) (Result, error) {
 	return p.Limiter.Take(ctx, "otp:resend:"+invitation, 1, 60*time.Second)
