@@ -25,7 +25,11 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db, err := database.Open(cfg.MigrationDatabaseURL)
+	databaseURL, err := cfg.RequireMigrationDatabaseURL()
+	if err != nil {
+		return err
+	}
+	db, err := database.Open(databaseURL)
 	if err != nil {
 		return err
 	}

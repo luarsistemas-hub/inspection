@@ -8,7 +8,47 @@ require_host() { [[ -n "$runtime_host" ]] || { echo "Set INSPECTION_RUNTIME_HOST
 ssh_target() { require_host; if [[ "$runtime_host" == *@* ]]; then printf '%s' "$runtime_host"; else printf 'ubuntu@%s' "$runtime_host"; fi; }
 ssh_host() { ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "$@"; }
 safe_release() { [[ "${1:-}" =~ ^[a-f0-9]{40}$ ]] || { echo "Release must be a 40-character commit SHA." >&2; exit 2; }; }
-usage() { echo "Usage: $0 {validate|package|preflight|bootstrap|secrets refresh|deploy RELEASE|rollback RELEASE|status|logs SERVICE|restart SERVICE|smoke|stop}"; }
+usage() { echo "Usage: $0 {validate|package|preflight|bootstrap|secrets refresh|host-tools RELEASE|deploy RELEASE|rollback RELEASE|status|cleanup-images|logs SERVICE|restart SERVICE|smoke|stop}"; }
+verify_release() {
+  local release="$1" bundle="$2" manifest="$3" checksum="$4"
+  python3 "$root/verify-release.py" --release "$release" --bundle "$bundle" --manifest "$manifest" --checksum "$checksum"
+}
+transfer_release() {
+  local release="$1" bundle="$2" manifest="$3" checksum="$4"
+  scp -o StrictHostKeyChecking=yes "$bundle" "$manifest" "$checksum" "$(ssh_target):/tmp/"
+  ssh_host "set -euo pipefail
+    release='$release'
+    bundle='/tmp/$release-bundle.tgz'
+    manifest='/tmp/$release.env'
+    checksum='/tmp/$release-bundle.sha256'
+    cd /tmp
+    sha256sum --check '$release-bundle.sha256'
+    grep -qx \"RELEASE_SHA=$release\" \"\$manifest\"
+    grep -qx \"BUNDLE_SHA256=\$(awk 'NR==1 {print \$1}' \"\$checksum\")\" \"\$manifest\"
+    for key in API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE; do
+      value=\$(grep -m1 \"^\$key=\" \"\$manifest\" | cut -d= -f2-)
+      [[ \"\$value\" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo \"Invalid digest-pinned image reference: \$key\" >&2; exit 1; }
+      [[ \$(grep -c \"^\$key=\" \"\$manifest\") == 1 ]] || { echo \"Duplicate or missing image reference: \$key\" >&2; exit 1; }
+    done
+    root='/opt/inspection/releases'
+    sudo mkdir -p \"\$root\" /etc/inspection/releases
+    staging=\$(sudo mktemp -d \"\$root/.staging-$release.XXXXXX\")
+    trap 'sudo rm -rf \"\$staging\"' EXIT
+    if [[ -e \"\$root/$release\" ]]; then
+      sudo test -s \"\$root/$release/bundle.sha256\" || { echo 'Existing release has no verified bundle checksum' >&2; exit 1; }
+      sudo cmp -s \"\$checksum\" \"\$root/$release/bundle.sha256\" || { echo 'Refusing to overwrite an existing release with a different bundle' >&2; exit 1; }
+      sudo cmp -s \"\$manifest\" /etc/inspection/releases/$release.env || { echo 'Refusing to overwrite an immutable release manifest' >&2; exit 1; }
+      sudo tar -xzf \"\$bundle\" -C \"\$staging\"
+      sudo diff -qr \"\$staging/deploy\" \"\$root/$release/deploy\" || { echo 'Existing release files differ from the verified bundle' >&2; exit 1; }
+    else
+      sudo tar -xzf \"\$bundle\" -C \"\$staging\"
+      sudo install -m 0600 \"\$checksum\" \"\$staging/bundle.sha256\"
+      sudo mv \"\$staging\" \"\$root/$release\"
+      sudo install -m 0600 \"\$manifest\" /etc/inspection/releases/.$release.env.new
+      sudo mv -f /etc/inspection/releases/.$release.env.new /etc/inspection/releases/$release.env
+    fi
+    rm -f \"\$bundle\" \"\$manifest\" \"\$checksum\""
+}
 
 case "${1:-}" in
   validate)
@@ -21,6 +61,7 @@ case "${1:-}" in
       (cd "$root/$stack" && terraform fmt -check -recursive && terraform init -backend=false -input=false && terraform validate)
     done
     bash -n "$root/ops.sh" "$root"/host/*.sh
+    python3 -m py_compile "$root/verify-release.py"
     docker compose --env-file "$root/compose.env.example" -f "$root/compose.yaml" config --quiet
     ;;
   package)
@@ -35,7 +76,7 @@ case "${1:-}" in
     trap 'rm -rf "$staging"' EXIT
     mkdir -p "$staging/deploy"
     cp -R "$root" "$staging/deploy/oci"
-    rm -rf "$staging/deploy/oci/foundation/.terraform" "$staging/deploy/oci/runtime/.terraform" "$staging/deploy/oci/releases"
+    rm -rf "$staging/deploy/oci/foundation/.terraform" "$staging/deploy/oci/runtime/.terraform" "$staging/deploy/oci/releases" "$staging/deploy/oci/.build"
     cp -R "$root/../../deploy/keycloak" "$staging/deploy/keycloak"
     find "$staging" -type d -name __pycache__ -prune -exec rm -rf {} +
     find "$staging" -type f -name '*.pyc' -delete
@@ -86,7 +127,7 @@ PY
     [[ "${2:-}" == refresh ]] || { usage; exit 2; }
     ssh_host 'sudo systemctl start inspection-secrets-refresh.service && sudo systemctl --no-pager --full status inspection-secrets-refresh.service'
     ;;
-  deploy|rollback)
+  host-tools|deploy|rollback)
     release="${2:-}"
     safe_release "$release"
     if [[ "$1" == rollback && "${INSPECTION_ROLLBACK_SCHEMA_APPROVED:-}" != yes ]]; then
@@ -96,17 +137,53 @@ PY
     require_host
     bundle="$root/releases/$release-bundle.tgz"
     manifest="$root/releases/$release.env"
-    test -s "$bundle" && test -s "$manifest" || { echo "Expected release bundle and manifest under deploy/oci/releases/." >&2; exit 1; }
-    grep -qx "RELEASE_SHA=$release" "$manifest" || { echo "Manifest does not match the requested release." >&2; exit 1; }
-    scp -o StrictHostKeyChecking=yes "$bundle" "$(ssh_target):/tmp/$release-bundle.tgz"
-    scp -o StrictHostKeyChecking=yes "$manifest" "$(ssh_target):/tmp/$release.env"
-    mode_flag=""
-    [[ "$1" == rollback ]] && mode_flag=--rollback
-    ssh_host "sudo mkdir -p /opt/inspection/releases/$release /etc/inspection/releases && sudo tar -xzf /tmp/$release-bundle.tgz -C /opt/inspection/releases/$release && sudo install -m 0600 /tmp/$release.env /etc/inspection/releases/$release.env && sudo /usr/local/sbin/inspection-deploy $release $mode_flag"
+    checksum="$root/releases/$release-bundle.sha256"
+    test -s "$bundle" && test -s "$manifest" && test -s "$checksum" || { echo "Expected verified bundle, checksum and manifest under deploy/oci/releases/." >&2; exit 1; }
+    verify_release "$release" "$bundle" "$manifest" "$checksum"
+    require_host
+    transfer_release "$release" "$bundle" "$manifest" "$checksum"
+    if [[ "$1" == host-tools ]]; then
+      ssh_host "sudo /usr/local/sbin/inspection-install-host-tools '$release' '/opt/inspection/releases/$release/deploy/oci/host'"
+    elif [[ "$1" == deploy ]]; then
+      ssh_host "sudo /usr/local/sbin/inspection-install-host-tools '$release' '/opt/inspection/releases/$release/deploy/oci/host' && sudo /usr/local/sbin/inspection-deploy '$release'"
+    else
+      ssh_host "sudo /usr/local/sbin/inspection-deploy '$release' --rollback"
+    fi
     ;;
-  status) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml ps; sudo systemctl --no-pager status inspection-secrets-refresh.service' ;;
+  status) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml ps; sudo df -h / /srv/inspection; sudo docker system df; sudo test ! -e /etc/inspection/deployment-blocked || sudo cat /etc/inspection/deployment-blocked; sudo systemctl --no-pager status inspection-secrets-refresh.service' ;;
+  cleanup-images) ssh_host 'sudo bash -s' <<'REMOTE'
+set -euo pipefail
+declare -A keep=()
+image_keys=(API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE)
+for manifest in /etc/inspection/releases/current.env /etc/inspection/releases/previous.env; do
+  [[ -s "$manifest" ]] || continue
+  declare -A seen=()
+  while IFS='=' read -r key reference; do
+    case "$key" in API_IMAGE|KEYCLOAK_IMAGE|ADMIN_IMAGE|DASHBOARD_IMAGE|CAPTURE_IMAGE|ONBOARDING_IMAGE|POSTGRES_IMAGE|DRAGONFLY_IMAGE|RABBITMQ_IMAGE|CADDY_IMAGE) ;;
+      *) continue ;;
+    esac
+    [[ "$reference" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo "Invalid image reference in $manifest: $key" >&2; exit 1; }
+    [[ -z "${seen[$key]:-}" ]] || { echo "Duplicate image reference in $manifest: $key" >&2; exit 1; }
+    seen["$key"]=1
+    image_id="$(docker image inspect --format '{{.Id}}' "$reference")" || { echo "Required current/previous image is missing: $reference" >&2; exit 1; }
+    keep["$image_id"]=1
+  done < "$manifest"
+  for key in "${image_keys[@]}"; do
+    [[ -n "${seen[$key]:-}" ]] || { echo "Missing image reference in $manifest: $key" >&2; exit 1; }
+  done
+  unset seen
+done
+[[ "${#keep[@]}" -gt 0 ]] || { echo 'No current release manifest found; refusing image cleanup.' >&2; exit 1; }
+mapfile -t image_ids < <(docker image ls --no-trunc --quiet | sort -u)
+for image_id in "${image_ids[@]}"; do
+  [[ -n "${keep[$image_id]:-}" ]] && continue
+  if [[ -n "$(docker ps --all --quiet --filter "ancestor=$image_id")" ]]; then continue; fi
+  docker image rm "$image_id"
+done
+REMOTE
+    ;;
   logs) service="${2:-}"; [[ "$service" =~ ^[a-z0-9_-]+$ ]] || { usage; exit 2; }; ssh_host "sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml logs --tail=200 $service" ;;
-  restart) service="${2:-}"; [[ "$service" =~ ^(caddy|inspection-api|inspection-worker|inspection-scheduler|admin|dashboard|capture|onboarding|keycloak|postgres|rabbitmq|dragonfly)$ ]] || { usage; exit 2; }; ssh_host "sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service" ;;
+  restart) service="${2:-}"; [[ "$service" =~ ^(caddy|inspection-api|inspection-worker|inspection-scheduler|admin|dashboard|capture|onboarding|keycloak|postgres|rabbitmq|dragonfly)$ ]] || { usage; exit 2; }; ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service" ;;
   smoke) ssh_host 'sudo /usr/local/sbin/inspection-smoke' ;;
   stop) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml stop' ;;
   *) usage; exit 2 ;;

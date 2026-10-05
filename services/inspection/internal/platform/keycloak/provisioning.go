@@ -59,6 +59,49 @@ type ProvisioningClient struct {
 	Timeout                                time.Duration
 }
 
+// VerifyUserID checks that an existing Keycloak username resolves to the expected subject.
+func (c ProvisioningClient) VerifyUserID(ctx context.Context, username, expectedID string) error {
+	if strings.TrimSpace(username) == "" || strings.TrimSpace(expectedID) == "" {
+		return ErrInvalid
+	}
+	token, err := c.bearer(ctx)
+	if err != nil {
+		return err
+	}
+	httpClient, err := c.client()
+	if err != nil {
+		return err
+	}
+	endpoint := strings.TrimRight(c.BaseURL, "/") + "/admin/realms/" + url.PathEscape(c.Realm) + "/users?exact=true&username=" + url.QueryEscape(username)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: user verification: %v", ErrUnavailable, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return classify(resp.StatusCode, "user verification")
+	}
+	var users []struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		return fmt.Errorf("%w: malformed user verification response", ErrUnavailable)
+	}
+	if len(users) != 1 || users[0].Username != username {
+		return ErrConflict
+	}
+	if users[0].ID != expectedID {
+		return fmt.Errorf("%w: configured super administrator subject does not match Keycloak", ErrConflict)
+	}
+	return nil
+}
+
 func (c ProvisioningClient) client() (*http.Client, error) {
 	if c.BaseURL == "" || c.Realm == "" || c.ClientID == "" || c.ClientSecret == "" {
 		return nil, errors.New("keycloak provisioning: incomplete configuration")

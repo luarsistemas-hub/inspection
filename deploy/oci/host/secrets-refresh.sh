@@ -71,8 +71,8 @@ mv -f "$compose_env" "$config_dir/compose.env"
 
 keycloak_secret="$(cat "$config_dir/secrets.d/KEYCLOAK_PROVISIONING_SECRET")"
 super_admin_password="$(cat "$config_dir/secrets.d/SUPER_ADMIN_PASSWORD")"
-jq --arg admin "$ADMIN_ORIGIN" --arg dashboard "$DASHBOARD_ORIGIN" --arg secret "$keycloak_secret" --arg admin_password "$super_admin_password" \
-  '.clients[0].redirectUris=[$admin+"/auth/callback"] | .clients[0].webOrigins=[$admin] | .clients[0].attributes["post.logout.redirect.uris"]=$admin+"/overview" | .clients[1].redirectUris=[$dashboard+"/auth/callback"] | .clients[1].webOrigins=[$dashboard] | .clients[1].attributes["post.logout.redirect.uris"]=$dashboard+"/" | .clients[2].secret=$secret | .users[0].credentials[0].value=$admin_password' \
+jq --arg admin "$ADMIN_ORIGIN" --arg dashboard "$DASHBOARD_ORIGIN" --arg subject "$SUPER_ADMIN_SUBJECT" --arg secret "$keycloak_secret" --arg admin_password "$super_admin_password" \
+  '.clients[0].redirectUris=[$admin+"/auth/callback"] | .clients[0].webOrigins=[$admin] | .clients[0].attributes["post.logout.redirect.uris"]=$admin+"/overview" | .clients[1].redirectUris=[$dashboard+"/auth/callback"] | .clients[1].webOrigins=[$dashboard] | .clients[1].attributes["post.logout.redirect.uris"]=$dashboard+"/" | .clients[2].secret=$secret | .users[0].id=$subject | .users[0].credentials[0].value=$admin_password' \
   "$bundle_dir/keycloak-realm.json" > "$config_dir/.inspection-realm.json.$$"
 unset keycloak_secret super_admin_password admin_password
 # The Keycloak container runs as uid 1000 and must read the bind-mounted realm import.

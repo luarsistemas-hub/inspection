@@ -3,22 +3,23 @@ WORKDIR /workspace/packages/inspection-design-system
 COPY packages/inspection-design-system/package.json packages/inspection-design-system/package-lock.json ./
 RUN npm ci
 COPY packages/inspection-design-system ./
-RUN npm run build
+COPY scripts/prepare-design-system.mjs /workspace/scripts/prepare-design-system.mjs
+RUN node ../../scripts/prepare-design-system.mjs
 
 FROM design-system AS design-system-runtime
 RUN npm prune --omit=dev
 
 FROM node:22-alpine AS build
 WORKDIR /workspace/apps/capture
+COPY apps/capture/package.json apps/capture/package-lock.json ./
+COPY --from=design-system /workspace/packages/inspection-design-system /workspace/packages/inspection-design-system
+RUN npm ci
 ARG NEXT_PUBLIC_INSPECTION_API_URL
 ARG NEXT_PUBLIC_STORAGE_URL
 ARG NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=false
 ENV NEXT_PUBLIC_INSPECTION_API_URL=$NEXT_PUBLIC_INSPECTION_API_URL
 ENV NEXT_PUBLIC_STORAGE_URL=$NEXT_PUBLIC_STORAGE_URL
 ENV NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=$NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION
-COPY apps/capture/package.json apps/capture/package-lock.json ./
-COPY --from=design-system /workspace/packages/inspection-design-system /workspace/packages/inspection-design-system
-RUN npm ci
 COPY apps/capture ./
 COPY services/inspection/schema.graphqls ../../services/inspection/schema.graphqls
 COPY scripts/prepare-design-system.mjs ../../scripts/prepare-design-system.mjs

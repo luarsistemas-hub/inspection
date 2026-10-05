@@ -1,8 +1,31 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
-import "time"
+func TestMigrationDatabaseURLIsOnlyRequiredByMigrationCommands(t *testing.T) {
+	permanent := Config{
+		Environment: "production", DatabaseURL: "postgres://runtime@db/inspection",
+		AllowedOrigin: "https://app.example", AdminOrigin: "https://app.example",
+		MetricsToken: "metrics", OIDCIssuer: "https://id.example", OIDCAudience: "inspection",
+		SuperAdminIssuer: "https://id.example", SuperAdminSubject: "subject", SuperAdminPassword: "password",
+		SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime",
+		MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key",
+		MinIOSecretKey: "secret", MinIORegion: "region", StoragePublicBaseURL: "https://storage.example",
+	}
+	if err := permanent.Validate(); err != nil {
+		t.Fatalf("permanent process config should not require privileged DSN: %v", err)
+	}
+	if _, err := permanent.RequireMigrationDatabaseURL(); err == nil {
+		t.Fatal("migration command accepted a missing privileged DSN")
+	}
+	permanent.MigrationDatabaseURL = "postgres://postgres@db/inspection"
+	if got, err := permanent.RequireMigrationDatabaseURL(); err != nil || got != permanent.MigrationDatabaseURL {
+		t.Fatalf("migration DSN = %q, %v", got, err)
+	}
+}
 
 func TestStageFromEnvironmentDefaultsToProduction(t *testing.T) {
 	t.Setenv("STAGE", "")
@@ -41,7 +64,7 @@ func TestEnvBoolUsesSafeFallback(t *testing.T) {
 }
 
 func TestConfigContractsUT058UT059(t *testing.T) {
-	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", MigrationDatabaseURL: "postgres://migrator@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
+	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}

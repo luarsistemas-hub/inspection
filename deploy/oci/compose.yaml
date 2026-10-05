@@ -6,7 +6,6 @@ x-runtime-env: &runtime-env
   INSPECTION_RUNTIME_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
   INSPECTION_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
   INSPECTION_DISPATCHER_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}
-  INSPECTION_MIGRATION_DATABASE_URL: ${INSPECTION_MIGRATION_DATABASE_URL:?secret migrator DSN required}
   INSPECTION_RUNTIME_DB_ROLE: inspection_runtime
   INSPECTION_HTTP_ADDR: :8080
   INSPECTION_ALLOWED_ORIGINS: ${INSPECTION_ALLOWED_ORIGINS:?public origins required}
@@ -51,6 +50,10 @@ x-runtime-env: &runtime-env
   INSPECTION_LITELLM_URL: http://litellm:4000
   INSPECTION_PROVIDER_TIMEOUT: 30s
   INSPECTION_IMAGE_VALIDATION_ENABLED: "true"
+
+x-migration-env: &migration-env
+  <<: *runtime-env
+  INSPECTION_MIGRATION_DATABASE_URL: ${INSPECTION_MIGRATION_DATABASE_URL:?secret migrator DSN required}
 
 x-app-image: &app-image ${API_IMAGE:?immutable API image digest required}
 x-logging: &default-logging
@@ -160,7 +163,7 @@ services:
     image: *app-image
     logging: *default-logging
     command: [inspection-migrate]
-    environment: *runtime-env
+    environment: *migration-env
     depends_on:
       postgres: { condition: service_healthy }
     profiles: [operations]
@@ -170,9 +173,29 @@ services:
     image: *app-image
     logging: *default-logging
     command: [inspection-prompt-seed]
+    environment: *migration-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [operations]
+    networks: [data, app]
+
+  inspection-schema-check:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-schema-check]
     environment: *runtime-env
     depends_on:
       postgres: { condition: service_healthy }
+    profiles: [operations]
+    networks: [data]
+
+  inspection-keycloak-check:
+    image: *app-image
+    logging: *default-logging
+    command: [inspection-keycloak-check]
+    environment: *runtime-env
+    depends_on:
+      keycloak: { condition: service_healthy }
     profiles: [operations]
     networks: [data, app]
 
@@ -207,6 +230,11 @@ services:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       dragonfly: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 2g
     mem_reservation: 1280m
     networks: [data, app]
@@ -220,6 +248,11 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 512m
     mem_reservation: 256m
     networks: [data, app]
@@ -236,6 +269,11 @@ services:
       NEXT_PUBLIC_DASHBOARD_URL: ${DASHBOARD_ORIGIN:?dashboard origin required}
       NEXT_PUBLIC_CAPTURE_URL: ${CAPTURE_ORIGIN:?capture origin required}
     expose: ["3000"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 512m
     mem_reservation: 256m
     networks: [app]
@@ -252,6 +290,11 @@ services:
       NEXT_PUBLIC_ADMIN_URL: ${ADMIN_ORIGIN:?admin origin required}
       NEXT_PUBLIC_STORAGE_URL: ${STORAGE_ORIGIN:?storage origin required}
     expose: ["3002"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3002/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 512m
     mem_reservation: 256m
     networks: [app]
@@ -265,6 +308,11 @@ services:
       NEXT_PUBLIC_STORAGE_URL: ${STORAGE_ORIGIN:?storage origin required}
       NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION: "false"
     expose: ["3003"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3003/healthz').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 512m
     mem_reservation: 256m
     networks: [app]
@@ -277,6 +325,11 @@ services:
       NEXT_PUBLIC_INSPECTION_API_URL: ${API_ORIGIN:?API origin required}/graphql
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Turnstile site key required}
     expose: ["3004"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3004/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
     mem_limit: 512m
     networks: [app]
 

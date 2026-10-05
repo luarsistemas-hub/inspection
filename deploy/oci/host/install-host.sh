@@ -34,9 +34,8 @@ python3 -m venv /opt/inspection/oci-cli
 install -d -m 0700 /etc/inspection /etc/inspection/secrets.d /etc/inspection/releases
 install -d -m 0755 /opt/inspection/releases
 install -m 0755 "$host_dir/prepare-host.sh" /usr/local/sbin/inspection-prepare-host
-install -m 0755 "$host_dir/secrets-refresh.sh" /usr/local/sbin/inspection-secrets-refresh
-install -m 0755 "$host_dir/deploy-release.sh" /usr/local/sbin/inspection-deploy
-install -m 0755 "$host_dir/smoke.sh" /usr/local/sbin/inspection-smoke
+install -m 0755 "$host_dir/install-host-tools.sh" /usr/local/sbin/inspection-install-host-tools
+/usr/local/sbin/inspection-install-host-tools bootstrap "$host_dir"
 install -m 0755 "$host_dir/publish-metrics.py" /usr/local/sbin/inspection-publish-metrics
 install -m 0755 "$host_dir/assert-data-mount.sh" /usr/local/sbin/inspection-assert-data-mount
 install -m 0755 "$host_dir/remove-bootstrap-admin.sh" /usr/local/sbin/inspection-remove-bootstrap-admin

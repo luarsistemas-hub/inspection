@@ -11,6 +11,7 @@ const dashboardOrigin = originOf(process.env.NEXT_PUBLIC_DASHBOARD_URL, "http://
 const captureOrigin = originOf(process.env.NEXT_PUBLIC_CAPTURE_URL, "http://localhost:3003");
 
 const config: NextConfig = {
+  output: "standalone",
   transpilePackages: ["@inspection/address"],
   env: { NEXT_PUBLIC_STAGE: process.env.STAGE ?? "production" },
   poweredByHeader: false,

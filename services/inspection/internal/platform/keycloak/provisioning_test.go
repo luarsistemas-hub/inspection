@@ -3,6 +3,7 @@ package keycloak
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,6 +43,30 @@ func TestProvisioningClientSetsPasswordThroughAdminBoundary(t *testing.T) {
 	}
 	if err := client.SetInitialPassword(context.Background(), Owner{ID: "user-1"}, "short"); err != nil {
 		t.Fatalf("dev password should skip policy: %v", err)
+	}
+}
+
+func TestVerifyUserIDRequiresExactExistingSubject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/protocol/openid-connect/token"):
+			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "token"})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/users"):
+			if r.URL.Query().Get("username") != "inspection-super-admin" || r.URL.Query().Get("exact") != "true" {
+				t.Errorf("unexpected user query: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"id": "expected-id", "username": "inspection-super-admin"}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client := ProvisioningClient{BaseURL: server.URL, Realm: "inspection", ClientID: "client", ClientSecret: "secret"}
+	if err := client.VerifyUserID(context.Background(), "inspection-super-admin", "expected-id"); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.VerifyUserID(context.Background(), "inspection-super-admin", "different-id"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("mismatched subject error = %v, want ErrConflict", err)
 	}
 }
 

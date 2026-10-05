@@ -13,41 +13,179 @@ permissions:
   packages: write
 
 jobs:
-  validate:
+  validate-inputs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.release }}
-      - name: Require a commit SHA
+      - name: Validate release SHA and public settings
+        shell: bash
         env:
           RELEASE: ${{ inputs.release }}
-        run: '[[ "$RELEASE" =~ ^[a-f0-9]{40}$ ]]'
+          ADMIN_ORIGIN: ${{ vars.OCI_ADMIN_ORIGIN }}
+          DASHBOARD_ORIGIN: ${{ vars.OCI_DASHBOARD_ORIGIN }}
+          CAPTURE_ORIGIN: ${{ vars.OCI_CAPTURE_ORIGIN }}
+          ONBOARDING_ORIGIN: ${{ vars.OCI_ONBOARDING_ORIGIN }}
+          API_ORIGIN: ${{ vars.OCI_API_ORIGIN }}
+          AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
+          STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RELEASE" == "$(git rev-parse HEAD)" ]]
+          for name in ADMIN_ORIGIN DASHBOARD_ORIGIN CAPTURE_ORIGIN ONBOARDING_ORIGIN API_ORIGIN AUTH_ORIGIN STORAGE_ORIGIN; do
+            value="${!name}"
+            [[ "$value" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || { echo "$name must be an HTTPS origin without a path" >&2; exit 1; }
+          done
+          [[ -n "$TURNSTILE_SITE_KEY" ]]
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+          terraform_wrapper: false
+      - name: Validate deployment configuration
+        run: |
+          set -euo pipefail
+          bash -n deploy/oci/ops.sh deploy/oci/host/*.sh
+          python3 -m unittest discover -s deploy/oci/tests -v
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/oci-images.yml
+          for stack in foundation runtime; do
+            terraform -chdir="deploy/oci/$stack" fmt -check -recursive
+            terraform -chdir="deploy/oci/$stack" init -backend=false -input=false
+            terraform -chdir="deploy/oci/$stack" validate
+          done
+          docker compose --env-file deploy/oci/compose.env.example -f deploy/oci/compose.yaml config --quiet
+
+  validate-go:
+    needs: [validate-inputs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release }}
       - uses: actions/setup-go@v5
         with:
           go-version: 1.26.5
+          cache: true
       - run: test -z "$(gofmt -l services/inspection libs)"
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./...
-      - name: Validate local compose configuration
-        run: |
-          export KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=ci
-          export KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=ci
-          export INSPECTION_SUPER_ADMIN_USERNAME=ci
-          export INSPECTION_SUPER_ADMIN_PASSWORD=ci
-          docker compose --env-file .env.example -f deploy/docker-compose.yml config --quiet
-      - run: docker compose --env-file deploy/oci/compose.env.example -f deploy/oci/compose.yaml config --quiet
 
-  frontend-validation:
-    runs-on: ubuntu-latest
+  publish-api:
+    needs: [validate-inputs]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.5
+          cache: true
+      - name: Build ARM64 service binaries
+        run: |
+          set -euo pipefail
+          mkdir -p .build/oci-bin
+          for product in api migrate prompt-seed seed worker scheduler schema-check keycloak-check; do
+            GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o ".build/oci-bin/inspection-$product" "./services/inspection/cmd/inspection-$product"
+          done
+      - name: Set release metadata
+        id: meta
+        env:
+          OWNER_INPUT: ${{ github.repository_owner }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "owner=$(printf '%s' "$OWNER_INPUT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish API image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/inspection/Dockerfile
+          target: prebuilt
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/inspection-api:${{ steps.meta.outputs.sha }}
+          cache-from: type=gha,scope=oci-api
+          cache-to: type=gha,mode=max,scope=oci-api,ignore-error=true
+      - name: Save image digest
+        env:
+          IMAGE: api
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p digests
+          printf '%s\n' "$DIGEST" > "digests/${IMAGE}.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oci-image-digest-api
+          path: digests/api.digest
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-keycloak:
+    needs: [validate-inputs]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release }}
+      - name: Set release metadata
+        id: meta
+        env:
+          OWNER_INPUT: ${{ github.repository_owner }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "owner=$(printf '%s' "$OWNER_INPUT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish Keycloak image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/oci/Dockerfile.keycloak
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/inspection-keycloak:${{ steps.meta.outputs.sha }}
+          cache-from: type=gha,scope=oci-keycloak
+          cache-to: type=gha,mode=max,scope=oci-keycloak,ignore-error=true
+      - name: Save image digest
+        env:
+          IMAGE: keycloak
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p digests
+          printf '%s\n' "$DIGEST" > "digests/${IMAGE}.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oci-image-digest-keycloak
+          path: digests/keycloak.digest
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-frontend:
+    needs: [validate-inputs]
+    runs-on: ubuntu-24.04-arm
     strategy:
       fail-fast: false
       matrix:
         product: [admin, dashboard, capture, onboarding]
-    defaults:
-      run:
-        working-directory: apps/${{ matrix.product }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,17 +195,116 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/${{ matrix.product }}/package-lock.json
-      - run: npm ci
-      - run: node ../../scripts/prepare-design-system.mjs
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
-      - run: npm run codegen:check
-      - run: npm run lint
-      - run: npm run test
-      - run: npm run build
+      - name: Install and validate frontend
+        working-directory: apps/${{ matrix.product }}
+        run: |
+          set -euo pipefail
+          npm ci
+          node ../../scripts/prepare-design-system.mjs
+          npm audit --omit=dev --audit-level=high
+          npm run codegen:check
+          npm run lint
+          npm run test
+          npm run build
+      - name: Set release metadata
+        id: meta
+        env:
+          OWNER_INPUT: ${{ github.repository_owner }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "owner=$(printf '%s' "$OWNER_INPUT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - name: Prepare frontend build arguments
+        id: args
+        shell: bash
+        env:
+          ADMIN_ORIGIN: ${{ vars.OCI_ADMIN_ORIGIN }}
+          DASHBOARD_ORIGIN: ${{ vars.OCI_DASHBOARD_ORIGIN }}
+          CAPTURE_ORIGIN: ${{ vars.OCI_CAPTURE_ORIGIN }}
+          API_ORIGIN: ${{ vars.OCI_API_ORIGIN }}
+          AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
+          STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
+          PRODUCT: ${{ matrix.product }}
+        run: |
+          set -euo pipefail
+          case "$PRODUCT" in
+            admin)
+              build_args=$(cat <<EOF
+          NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql
+          NEXT_PUBLIC_OIDC_AUTHORIZE_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/auth
+          NEXT_PUBLIC_OIDC_TOKEN_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/token
+          NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-admin
+          NEXT_PUBLIC_DASHBOARD_URL=${DASHBOARD_ORIGIN}
+          NEXT_PUBLIC_CAPTURE_URL=${CAPTURE_ORIGIN}
+          STAGE=production
+          EOF
+          ) ;;
+            dashboard)
+              build_args=$(cat <<EOF
+          NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql
+          NEXT_PUBLIC_OIDC_AUTHORIZE_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/auth
+          NEXT_PUBLIC_OIDC_TOKEN_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/token
+          NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-dashboard
+          NEXT_PUBLIC_ADMIN_URL=${ADMIN_ORIGIN}
+          NEXT_PUBLIC_STORAGE_URL=${STORAGE_ORIGIN}
+          EOF
+          ) ;;
+            capture)
+              build_args=$(cat <<EOF
+          NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql
+          NEXT_PUBLIC_STORAGE_URL=${STORAGE_ORIGIN}
+          NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=false
+          EOF
+          ) ;;
+            onboarding)
+              build_args=$(cat <<EOF
+          NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY}
+          EOF
+          ) ;;
+            *) echo "Unknown frontend product: $PRODUCT" >&2; exit 1 ;;
+          esac
+          {
+            echo 'build_args<<BUILD_ARGS_EOF'
+            printf '%s\n' "$build_args"
+            echo 'BUILD_ARGS_EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish frontend image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.product }}/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/inspection-${{ matrix.product }}:${{ steps.meta.outputs.sha }}
+          build-args: ${{ steps.args.outputs.build_args }}
+          cache-from: type=gha,scope=oci-${{ matrix.product }}
+          cache-to: type=gha,mode=max,scope=oci-${{ matrix.product }},ignore-error=true
+      - name: Save image digest
+        env:
+          IMAGE: ${{ matrix.product }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          mkdir -p digests
+          printf '%s\n' "$DIGEST" > "digests/${IMAGE}.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oci-image-digest-${{ matrix.product }}
+          path: digests/${{ matrix.product }}.digest
+          if-no-files-found: error
+          retention-days: 30
 
-  publish:
-    needs: [validate, frontend-validation]
+  release-artifact:
+    needs: [validate-go, publish-api, publish-keycloak, publish-frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,38 +312,47 @@ jobs:
           ref: ${{ inputs.release }}
       - name: Set release metadata
         id: meta
-        shell: bash
+        env:
+          OWNER_INPUT: ${{ github.repository_owner }}
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "owner=$(printf '%s' "$OWNER_INPUT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: oci-image-digest-*
+          path: digests
+          merge-multiple: true
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Inspection service
-        id: api
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: services/inspection/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ghcr.io/${{ steps.meta.outputs.owner }}/inspection-api:${{ steps.meta.outputs.sha }}
-          cache-from: type=gha,scope=oci-api
-          cache-to: type=gha,mode=max,scope=oci-api
-      - name: Publish Keycloak
-        id: keycloak
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deploy/oci/Dockerfile.keycloak
-          platforms: linux/arm64
-          push: true
-          tags: ghcr.io/${{ steps.meta.outputs.owner }}/inspection-keycloak:${{ steps.meta.outputs.sha }}
-      - name: Publish frontends
+      - name: Verify image digests and ARM64 manifests
+        shell: bash
+        env:
+          OWNER: ${{ steps.meta.outputs.owner }}
+        run: |
+          set -euo pipefail
+          expected_products=(api keycloak admin dashboard capture onboarding)
+          digest_files=(digests/*.digest)
+          [[ -e "${digest_files[0]}" ]]
+          [[ "${#digest_files[@]}" -eq "${#expected_products[@]}" ]]
+          declare -A image_digests
+          for product in "${expected_products[@]}"; do
+            digest="$(cat "digests/${product}.digest")"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+            image_digests[$product]="$digest"
+          done
+          registry="ghcr.io/${OWNER}"
+          for product in "${expected_products[@]}"; do
+            manifest="$(docker buildx imagetools inspect --raw "${registry}/inspection-${product}@${image_digests[$product]}")"
+            printf '%s' "$manifest" | jq -e '([.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length) > 0 or (.os == "linux" and .architecture == "arm64")' >/dev/null || {
+              echo "Image has no linux/arm64 manifest: $product" >&2
+              exit 1
+            }
+          done
+      - name: Build immutable deployment release
         shell: bash
         env:
           RELEASE: ${{ steps.meta.outputs.sha }}
@@ -119,66 +365,38 @@ jobs:
           AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
           STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
           TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
-          OWNER: ${{ steps.meta.outputs.owner }}
-          API_DIGEST: ${{ steps.api.outputs.digest }}
-          KEYCLOAK_DIGEST: ${{ steps.keycloak.outputs.digest }}
         run: |
           set -euo pipefail
-          for value in "$ADMIN_ORIGIN" "$DASHBOARD_ORIGIN" "$CAPTURE_ORIGIN" "$ONBOARDING_ORIGIN" "$API_ORIGIN" "$AUTH_ORIGIN" "$STORAGE_ORIGIN" "$TURNSTILE_SITE_KEY"; do
-            test -n "$value"
-          done
-          owner="$OWNER"
-          IMAGE_REGISTRY="ghcr.io/${owner}"
           declare -A image_digests
-          assert_arm64() {
-            local reference="$1" manifest
-            manifest="$(docker buildx imagetools inspect --raw "$reference")"
-            printf '%s' "$manifest" | jq -e '([.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length) > 0 or (.os == "linux" and .architecture == "arm64")' >/dev/null || {
-              echo "Image has no linux/arm64 manifest: $reference" >&2
-              return 1
-            }
-          }
-          assert_arm64 "${IMAGE_REGISTRY}/inspection-api@${API_DIGEST}"
-          assert_arm64 "${IMAGE_REGISTRY}/inspection-keycloak@${KEYCLOAK_DIGEST}"
-          for product in admin dashboard capture onboarding; do
-            args=(--file "apps/${product}/Dockerfile" --tag "${IMAGE_REGISTRY}/inspection-${product}:${RELEASE}" --push --platform linux/arm64)
-            case "$product" in
-              admin) args+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql" --build-arg "NEXT_PUBLIC_OIDC_AUTHORIZE_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/auth" --build-arg "NEXT_PUBLIC_OIDC_TOKEN_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/token" --build-arg NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-admin --build-arg "NEXT_PUBLIC_DASHBOARD_URL=${DASHBOARD_ORIGIN}" --build-arg "NEXT_PUBLIC_CAPTURE_URL=${CAPTURE_ORIGIN}" --build-arg STAGE=production) ;;
-              dashboard) args+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql" --build-arg "NEXT_PUBLIC_OIDC_AUTHORIZE_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/auth" --build-arg "NEXT_PUBLIC_OIDC_TOKEN_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/token" --build-arg NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-dashboard --build-arg "NEXT_PUBLIC_ADMIN_URL=${ADMIN_ORIGIN}" --build-arg "NEXT_PUBLIC_STORAGE_URL=${STORAGE_ORIGIN}") ;;
-              capture) args+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql" --build-arg "NEXT_PUBLIC_STORAGE_URL=${STORAGE_ORIGIN}" --build-arg NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=false) ;;
-              onboarding) args+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql" --build-arg "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY}") ;;
-            esac
-            metadata="/tmp/${product}-metadata.json"
-            docker buildx build "${args[@]}" --metadata-file "$metadata" .
-            image_digests[$product]="$(jq -er '.["containerimage.digest"]' "$metadata")"
-            assert_arm64 "${IMAGE_REGISTRY}/inspection-${product}@${image_digests[$product]}"
+          for product in api keycloak admin dashboard capture onboarding; do
+            image_digests[$product]="$(cat "digests/${product}.digest")"
           done
           registry_images=("postgres:18-alpine" "docker.dragonflydb.io/dragonflydb/dragonfly:v1.34.2" "rabbitmq:4.1.3-management-alpine" "caddy:2.10-alpine")
           upstream_names=(POSTGRES DRAGONFLY RABBITMQ CADDY)
+          declare -A upstream_digests
           for index in "${!registry_images[@]}"; do
             manifest="$(docker buildx imagetools inspect --raw "${registry_images[$index]}")"
             printf '%s' "$manifest" | jq -e '([.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length) > 0 or (.os == "linux" and .architecture == "arm64")' >/dev/null || {
               echo "Upstream image has no linux/arm64 manifest: ${registry_images[$index]}" >&2
               exit 1
             }
-            digest="sha256:$(printf '%s' "$manifest" | sha256sum | awk '{print $1}')"
-            image_digests[${upstream_names[$index]}]="$digest"
+            upstream_digests[${upstream_names[$index]}]="sha256:$(printf '%s' "$manifest" | sha256sum | awk '{print $1}')"
           done
-          owner="${owner}"
+          owner="${IMAGE_REGISTRY#ghcr.io/}"
           mkdir -p deploy/oci/releases
           release_file="deploy/oci/releases/${RELEASE}.env"
           cat > "$release_file" <<EOF
           RELEASE_SHA=${RELEASE}
-          API_IMAGE=ghcr.io/${owner}/inspection-api@${API_DIGEST}
-          KEYCLOAK_IMAGE=ghcr.io/${owner}/inspection-keycloak@${KEYCLOAK_DIGEST}
+          API_IMAGE=ghcr.io/${owner}/inspection-api@${image_digests[api]}
+          KEYCLOAK_IMAGE=ghcr.io/${owner}/inspection-keycloak@${image_digests[keycloak]}
           ADMIN_IMAGE=ghcr.io/${owner}/inspection-admin@${image_digests[admin]}
           DASHBOARD_IMAGE=ghcr.io/${owner}/inspection-dashboard@${image_digests[dashboard]}
           CAPTURE_IMAGE=ghcr.io/${owner}/inspection-capture@${image_digests[capture]}
           ONBOARDING_IMAGE=ghcr.io/${owner}/inspection-onboarding@${image_digests[onboarding]}
-          POSTGRES_IMAGE=docker.io/library/postgres@${image_digests[POSTGRES]}
-          DRAGONFLY_IMAGE=docker.dragonflydb.io/dragonflydb/dragonfly@${image_digests[DRAGONFLY]}
-          RABBITMQ_IMAGE=docker.io/library/rabbitmq@${image_digests[RABBITMQ]}
-          CADDY_IMAGE=docker.io/library/caddy@${image_digests[CADDY]}
+          POSTGRES_IMAGE=docker.io/library/postgres@${upstream_digests[POSTGRES]}
+          DRAGONFLY_IMAGE=docker.dragonflydb.io/dragonflydb/dragonfly@${upstream_digests[DRAGONFLY]}
+          RABBITMQ_IMAGE=docker.io/library/rabbitmq@${upstream_digests[RABBITMQ]}
+          CADDY_IMAGE=docker.io/library/caddy@${upstream_digests[CADDY]}
           NEXT_PUBLIC_INSPECTION_API_URL=${API_ORIGIN}/graphql
           NEXT_PUBLIC_OIDC_AUTHORIZE_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/auth
           NEXT_PUBLIC_OIDC_TOKEN_URL=${AUTH_ORIGIN}/realms/inspection/protocol/openid-connect/token
@@ -193,12 +411,15 @@ jobs:
           trap 'rm -rf "$staging"' EXIT
           mkdir -p "$staging/deploy"
           cp -R deploy/oci "$staging/deploy/oci"
-          rm -rf "$staging/deploy/oci/releases" "$staging/deploy/oci/foundation/.terraform" "$staging/deploy/oci/runtime/.terraform"
+          rm -rf "$staging/deploy/oci/releases" "$staging/deploy/oci/foundation/.terraform" "$staging/deploy/oci/runtime/.terraform" "$staging/deploy/oci/.build"
           find "$staging" -type d -name __pycache__ -prune -exec rm -rf {} +
           find "$staging" -type f -name '*.pyc' -delete
           find "$staging/deploy/oci" -type f \( -name '*.tfstate' -o -name '*.tfstate.*' -o -name '*.tfvars' -o -name '*.tfvars.json' -o -name '*.plan' -o -name '*.env' -o -name '.env' -o -name 'secrets.map' \) -delete
           cp -R deploy/keycloak "$staging/deploy/keycloak"
           tar -czf "deploy/oci/releases/${RELEASE}-bundle.tgz" -C "$staging" deploy
+          digest="$(sha256sum "deploy/oci/releases/${RELEASE}-bundle.tgz" | awk '{print $1}')"
+          printf '%s  %s-bundle.tgz\n' "$digest" "$RELEASE" > "deploy/oci/releases/${RELEASE}-bundle.sha256"
+          printf 'BUNDLE_SHA256=%s\n' "$digest" >> "$release_file"
       - name: Upload immutable deployment release
         uses: actions/upload-artifact@v4
         with:
@@ -206,4 +427,6 @@ jobs:
           path: |
             deploy/oci/releases/${{ steps.meta.outputs.sha }}.env
             deploy/oci/releases/${{ steps.meta.outputs.sha }}-bundle.tgz
+            deploy/oci/releases/${{ steps.meta.outputs.sha }}-bundle.sha256
           if-no-files-found: error
+          retention-days: 90

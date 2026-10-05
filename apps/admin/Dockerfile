@@ -3,7 +3,8 @@ WORKDIR /workspace/packages/inspection-design-system
 COPY packages/inspection-design-system/package.json packages/inspection-design-system/package-lock.json ./
 RUN npm ci
 COPY packages/inspection-design-system ./
-RUN npm run build
+COPY scripts/prepare-design-system.mjs /workspace/scripts/prepare-design-system.mjs
+RUN node ../../scripts/prepare-design-system.mjs
 
 FROM design-system AS design-system-runtime
 RUN npm prune --omit=dev
@@ -37,12 +38,12 @@ RUN npm run build && npm prune --omit=dev && rm -rf node_modules/@inspection/des
 
 FROM node:22-alpine
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=build /workspace/apps/admin/package.json ./
-COPY --from=build /workspace/apps/admin/node_modules ./node_modules
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
+COPY --from=build /workspace/apps/admin/.next/standalone ./
+COPY --from=build /workspace/apps/admin/.next/static ./.next/static
+COPY --from=build /workspace/apps/admin/node_modules/@inspection/design-system ./node_modules/@inspection/design-system
 COPY --from=build /workspace/packages/inspection-address ./node_modules/@inspection/address
 COPY --from=design-system-runtime /workspace/packages/inspection-design-system/node_modules ./node_modules
-COPY --from=build /workspace/apps/admin/.next ./.next
 COPY --from=build /workspace/apps/admin/public ./public
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+CMD ["node", "server.js"]
