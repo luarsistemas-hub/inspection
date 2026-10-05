@@ -76,6 +76,6 @@ job_dir="$job_root/$deployment_id"
 install -d -o root -g root -m 0700 "$job_dir"
 install -o root -g root -m 0600 "$stage/plan.json" "$job_dir/plan.json"
 /usr/local/sbin/inspection-install-host-tools "$source_sha" "$release_target/deploy/oci/host"
-systemd-run --quiet --unit="inspection-deployment-$deployment_id" --property=Type=oneshot --property=RemainAfterExit=yes \
+systemd-run --quiet --no-block --unit="inspection-deployment-$deployment_id" --property=Type=oneshot --property=RemainAfterExit=yes \
   /usr/local/sbin/inspection-run-deployment "$deployment_id" "$source_sha" "$approved_plan_sha"
 echo "Deployment $deployment_id accepted for supervised execution."
