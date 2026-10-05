@@ -97,19 +97,20 @@ jobs:
           OPERATION: ${{ inputs.operation }}
         run: |
           set -euo pipefail
-          mkdir -p inputs
+          inputs_dir="$RUNNER_TEMP/inspection-publish-inputs"
+          mkdir -p "$inputs_dir"
           if [[ "$ACTIVE_TAG" != none ]]; then
-            gh release download "$ACTIVE_TAG" --repo "$REPOSITORY" --pattern active.env --dir inputs
-            mv inputs/active.env inputs/current.env
+            gh release download "$ACTIVE_TAG" --repo "$REPOSITORY" --pattern active.env --dir "$inputs_dir"
+            mv "$inputs_dir/active.env" "$inputs_dir/current.env"
           else
-            : > inputs/current.env
+            : > "$inputs_dir/current.env"
           fi
           if [[ "$OPERATION" == deploy ]]; then
-            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern candidate.json --dir inputs
-            source_sha="$(jq -er '.sourceSha' inputs/candidate.json)"
+            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern candidate.json --dir "$inputs_dir"
+            source_sha="$(jq -er '.sourceSha' "$inputs_dir/candidate.json")"
           else
-            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern active.env --dir inputs
-            mv inputs/active.env inputs/rollback.env
+            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern active.env --dir "$inputs_dir"
+            mv "$inputs_dir/active.env" "$inputs_dir/rollback.env"
             source_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
           fi
           [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]
@@ -137,14 +138,14 @@ jobs:
           bundle_sha="$(sha256sum upload/source-bundle.tgz | awk '{print $1}')"
           if [[ "$OPERATION" == deploy ]]; then
             case "$SCOPE" in
-              changed) targets="$(jq -r '.suggestedTargets | join(",")' inputs/candidate.json)" ;;
+              changed) targets="$(jq -r '.suggestedTargets | join(",")' "$RUNNER_TEMP/inspection-publish-inputs/candidate.json")" ;;
               all) targets=api,worker,scheduler,operations,admin,dashboard,capture,onboarding,keycloak ;;
               selected) targets="$TARGETS_INPUT" ;;
             esac
-            python3 deploy/oci/planner.py --active inputs/current.env --candidate inputs/candidate.json --targets "$targets" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json
+            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --candidate "$RUNNER_TEMP/inspection-publish-inputs/candidate.json" --targets "$targets" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json
           else
             [[ -n "$TARGETS_INPUT" ]] || { echo 'Rollback requires explicit targets.' >&2; exit 2; }
-            python3 deploy/oci/planner.py --active inputs/current.env --rollback-from inputs/rollback.env --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --bundle-sha256 "$bundle_sha" --output plan.json
+            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --rollback-from "$RUNNER_TEMP/inspection-publish-inputs/rollback.env" --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --bundle-sha256 "$bundle_sha" --output plan.json
           fi
           jq -r '.deploymentId, .planSha256, (.targets | join(",")), .sourceSha' plan.json > plan-fields.txt
           deployment_id="$(sed -n '1p' plan-fields.txt)"
