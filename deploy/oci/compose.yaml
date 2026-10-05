@@ -128,7 +128,6 @@ services:
       - start
       - --optimized
       - --http-enabled=true
-      - --health-enabled=true
       - --proxy-headers=xforwarded
       - --hostname=${AUTH_ORIGIN:?auth origin required}
       - --import-realm

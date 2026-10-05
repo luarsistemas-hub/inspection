@@ -5,4 +5,4 @@ RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 FROM quay.io/keycloak/keycloak:26.2.5
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
-CMD ["start", "--optimized", "--http-enabled=true", "--health-enabled=true", "--proxy-headers=xforwarded"]
+CMD ["start", "--optimized", "--http-enabled=true", "--proxy-headers=xforwarded"]
