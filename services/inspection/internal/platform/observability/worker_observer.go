@@ -53,6 +53,22 @@ func NewWorkerObserver(metrics *Metrics, logger LLMLogger) WorkerObserver {
 }
 
 func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.RawEnvelope, observation TransactionObservation) {
+	if isInvitationPipelineEvent(envelope.Type) {
+		level := slog.LevelInfo
+		if observation.Err != nil {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(ctx, level, "messaging event processed",
+			slog.String("eventType", envelope.Type),
+			slog.String("eventId", envelope.ID.String()),
+			slog.String("correlationId", envelope.CorrelationID),
+			slog.String("outcome", observation.Outcome),
+			slog.String("transactionPhase", observation.Phase),
+			slog.Bool("processed", observation.Processed),
+			slog.String("errorCode", errorCode(observation.Err)),
+			slog.Int64("durationMs", observation.Duration.Milliseconds()),
+		)
+	}
 	if envelope.Type == "report.snapshot_created.v1" && observation.Err != nil {
 		slog.ErrorContext(ctx, "report snapshot processing failed",
 			"eventId", envelope.ID.String(),
@@ -93,6 +109,22 @@ func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.Ra
 }
 
 func (o WorkerObserver) AfterDelivery(ctx context.Context, observation DeliveryObservation) {
+	if isInvitationPipelineQueue(observation.Queue) {
+		level := slog.LevelWarn
+		if observation.Action == "dlq" || observation.Result == "publish_failed" {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(ctx, level, "messaging delivery deferred",
+			slog.String("queue", observation.Queue),
+			slog.String("correlationId", observation.CorrelationID),
+			slog.String("action", observation.Action),
+			slog.String("result", observation.Result),
+			slog.String("reason", observation.Reason),
+			slog.String("errorCode", errorCode(observation.Err)),
+			slog.Int("attempt", observation.Attempt),
+			slog.Int64("durationMs", observation.Duration.Milliseconds()),
+		)
+	}
 	if observation.Queue == "report-snapshot-created" && (observation.Action == "retry" || observation.Action == "dlq") {
 		level := slog.LevelWarn
 		if observation.Action == "dlq" || observation.Result == "publish_failed" {
@@ -126,6 +158,24 @@ func (o WorkerObserver) AfterDelivery(ctx context.Context, observation DeliveryO
 	event.Attempt = observation.Attempt
 	event.DurationMS = observation.Duration.Milliseconds()
 	o.Logger.LogLLM(ctx, event)
+}
+
+func isInvitationPipelineEvent(eventType string) bool {
+	switch eventType {
+	case "inspection.created.v1", "origin.invitation_requested.v1", "notification.delivery_requested.v2", "notification.delivery_terminal.v1":
+		return true
+	default:
+		return false
+	}
+}
+
+func isInvitationPipelineQueue(queue string) bool {
+	switch queue {
+	case "inspection-created", "origin-invitation", "notification-delivery-v2", "notification-delivery-terminal":
+		return true
+	default:
+		return false
+	}
 }
 
 func boundedError(err error) string {

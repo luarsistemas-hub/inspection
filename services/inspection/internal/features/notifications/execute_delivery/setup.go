@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -107,22 +108,89 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 		return false, errors.New("notifications/execute_delivery: unavailable")
 	}
 	reserved, err := e.reserve(ctx)
-	if err != nil || reserved == nil {
+	if err != nil {
+		slog.ErrorContext(ctx, "notification delivery reservation failed", "failureCode", "reservation_failed")
+		return reserved != nil, err
+	}
+	if reserved == nil {
 		return reserved != nil, err
 	}
 	if e.enabledChannels != nil && !e.enabledChannels[reserved.work.Channel] {
-		return true, e.cancelDisabled(ctx, *reserved)
+		err := e.cancelDisabled(ctx, *reserved)
+		logCanceled(ctx, *reserved, "integration_disabled", err)
+		return true, err
 	}
 	intent, err := e.intent(ctx, reserved.delivery, reserved.work)
 	if err != nil {
 		if errors.Is(err, errLinkUnavailable) {
-			return true, e.cancel(ctx, *reserved)
+			cancelErr := e.cancel(ctx, *reserved)
+			logCanceled(ctx, *reserved, "link_unavailable", cancelErr)
+			return true, cancelErr
 		}
-		return true, e.persist(ctx, *reserved, notifications.Receipt{}, &notifications.DeliveryError{Kind: notifications.ErrorPermanent, Code: "template_invalid", PreSend: true})
+		sendErr := &notifications.DeliveryError{Kind: notifications.ErrorPermanent, Code: "template_invalid", PreSend: true}
+		result, persistErr := e.persist(ctx, *reserved, notifications.Receipt{}, sendErr)
+		logAttemptFinished(ctx, *reserved, result, sendErr, persistErr)
+		return true, persistErr
 	}
 	receipt, sendErr := e.gateway.Send(ctx, notifications.Channel(reserved.work.Channel), notifications.Provider(reserved.work.Provider), intent)
 	e.metrics.ObserveProviderLatency(time.Since(reserved.startedAt))
-	return true, e.persist(ctx, *reserved, receipt, sendErr)
+	result, persistErr := e.persist(ctx, *reserved, receipt, sendErr)
+	logAttemptFinished(ctx, *reserved, result, sendErr, persistErr)
+	return true, persistErr
+}
+
+// persistResult describes the state actually written by persist. applied is
+// false when another worker already moved the attempt out of PROCESSING.
+type persistResult struct {
+	applied bool
+	attempt int
+	state   core.State
+	code    string
+}
+
+func logAttemptFinished(ctx context.Context, reserved reservation, result persistResult, sendErr, persistErr error) {
+	if persistErr != nil {
+		slog.ErrorContext(ctx, "notification delivery state persistence failed",
+			"deliveryId", reserved.delivery.ID.String(), "channelAttemptId", reserved.work.ID.String(),
+			"channel", reserved.work.Channel, "provider", reserved.work.Provider,
+			"attempt", reserved.work.Attempts, "failureCode", "state_persist_failed")
+		return
+	}
+	if !result.applied {
+		return
+	}
+	state, code := result.state, result.code
+	level := slog.LevelInfo
+	if state == core.StateFailed || state == core.StateUnknown {
+		level = slog.LevelError
+	} else if state == core.StateQueued {
+		level = slog.LevelWarn
+	}
+	slog.LogAttrs(ctx, level, "notification delivery attempt finished",
+		slog.String("deliveryId", reserved.delivery.ID.String()),
+		slog.String("channelAttemptId", reserved.work.ID.String()),
+		slog.String("channel", reserved.work.Channel),
+		slog.String("provider", reserved.work.Provider),
+		slog.Int("attempt", reserved.work.Attempts),
+		slog.String("state", string(state)),
+		slog.String("failureCode", code),
+		slog.Bool("providerAccepted", sendErr == nil),
+	)
+}
+
+func logCanceled(ctx context.Context, reserved reservation, code string, err error) {
+	level := slog.LevelWarn
+	if err != nil {
+		level = slog.LevelError
+	}
+	slog.LogAttrs(ctx, level, "notification delivery canceled",
+		slog.String("deliveryId", reserved.delivery.ID.String()),
+		slog.String("channelAttemptId", reserved.work.ID.String()),
+		slog.String("channel", reserved.work.Channel),
+		slog.String("provider", reserved.work.Provider),
+		slog.Int("attempt", reserved.work.Attempts),
+		slog.String("failureCode", code),
+	)
 }
 
 func (e *Executor) reserve(ctx context.Context) (*reservation, error) {
@@ -243,9 +311,10 @@ func (e *Executor) hydrateSensitiveLink(ctx context.Context, delivery database.D
 	return nil
 }
 
-func (e *Executor) persist(ctx context.Context, reserved reservation, receipt notifications.Receipt, sendErr error) error {
+func (e *Executor) persist(ctx context.Context, reserved reservation, receipt notifications.Receipt, sendErr error) (persistResult, error) {
 	now := e.now().UTC()
-	return e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var result persistResult
+	err := e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var current database.ChannelAttempt
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", reserved.work.TenantID, reserved.work.ID).First(&current).Error; err != nil {
 			return err
@@ -254,6 +323,7 @@ func (e *Executor) persist(ctx context.Context, reserved reservation, receipt no
 			return nil
 		}
 		state, nextAt, code := e.outcome(current.Attempts, sendErr, now)
+		result = persistResult{applied: true, attempt: current.Attempts, state: state, code: code}
 		e.metrics.ObserveProcessingLatency(now.Sub(reserved.startedAt))
 		if sendErr != nil {
 			e.metrics.Failure(current.Channel, current.Provider, code)
@@ -290,6 +360,10 @@ func (e *Executor) persist(ctx context.Context, reserved reservation, receipt no
 		}
 		return callbacks.UpdateDelivery(ctx, tx, current.TenantID, current.DeliveryID, now)
 	})
+	if err != nil {
+		return persistResult{}, err
+	}
+	return result, nil
 }
 
 func (e *Executor) cancel(ctx context.Context, reserved reservation) error {

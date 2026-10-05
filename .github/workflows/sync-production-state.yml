@@ -1,0 +1,66 @@
+name: Synchronize production state
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Connect to the production WireGuard peer
+        env:
+          WIREGUARD_CONFIG: ${{ secrets.OCI_WIREGUARD_CLIENT_CONF }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIREGUARD_CONFIG" ]]
+          sudo apt-get update -qq
+          sudo apt-get install -y wireguard-tools
+          umask 077
+          printf '%s\n' "$WIREGUARD_CONFIG" | sudo tee /etc/wireguard/inspection.conf >/dev/null
+          sudo chmod 0600 /etc/wireguard/inspection.conf
+          sudo wg-quick up inspection
+      - name: Read sanitized host receipt through the restricted account
+        id: receipt
+        env:
+          DEPLOY_HOST: ${{ secrets.OCI_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.OCI_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.OCI_DEPLOY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OCI_DEPLOY_SSH_KNOWN_HOSTS }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_KEY" && -n "$KNOWN_HOSTS" ]]
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > known_hosts
+          chmod 0600 deploy_key known_hosts
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key" "$DEPLOY_USER@$DEPLOY_HOST" 'export-state current' > active.env
+          grep -q '^API_IMAGE=ghcr.io/[^@]*@sha256:[a-f0-9]\{64\}$' active.env
+          test "$(grep -c '_IMAGE=' active.env)" -eq 13
+          deployment_id="$(sed -n 's/^DEPLOYMENT_ID=//p' active.env | head -n1)"
+          if [[ -z "$deployment_id" ]]; then
+            deployment_id="import-$RUN_ID-$RUN_ATTEMPT"
+            printf 'DEPLOYMENT_ID=%s\n' "$deployment_id" >> active.env
+          fi
+          [[ "$deployment_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]]
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+      - name: Publish unique synchronized-state snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          DEPLOYMENT_ID: ${{ steps.receipt.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          tag="state-$DEPLOYMENT_ID"
+          gh release create "$tag" active.env --target "$GITHUB_SHA" --title "$tag" --notes 'Sanitized image receipt read from the OCI production host under the protected production environment.'

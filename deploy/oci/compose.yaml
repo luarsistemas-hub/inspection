@@ -55,7 +55,6 @@ x-migration-env: &migration-env
   <<: *runtime-env
   INSPECTION_MIGRATION_DATABASE_URL: ${INSPECTION_MIGRATION_DATABASE_URL:?secret migrator DSN required}
 
-x-app-image: &app-image ${API_IMAGE:?immutable API image digest required}
 x-logging: &default-logging
   driver: json-file
   options:
@@ -146,7 +145,6 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: ${AUTH_ORIGIN:?auth origin required}
     volumes:
-      - ../keycloak/themes/inspection:/opt/keycloak/themes/inspection:ro
       - /etc/inspection/inspection-realm.json:/opt/keycloak/data/import/inspection-realm.json:ro
     depends_on:
       postgres: { condition: service_healthy }
@@ -160,7 +158,7 @@ services:
     networks: [data, app]
 
   inspection-migrate:
-    image: *app-image
+    image: ${OPERATIONS_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-migrate]
     environment: *migration-env
@@ -170,7 +168,7 @@ services:
     networks: [data, app]
 
   inspection-prompt-seed:
-    image: *app-image
+    image: ${OPERATIONS_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-prompt-seed]
     environment: *migration-env
@@ -180,7 +178,7 @@ services:
     networks: [data, app]
 
   inspection-schema-check:
-    image: *app-image
+    image: ${OPERATIONS_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-schema-check]
     environment: *runtime-env
@@ -190,7 +188,7 @@ services:
     networks: [data]
 
   inspection-keycloak-check:
-    image: *app-image
+    image: ${OPERATIONS_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-keycloak-check]
     environment: *runtime-env
@@ -200,7 +198,7 @@ services:
     networks: [data, app]
 
   inspection-api:
-    image: *app-image
+    image: ${API_IMAGE:?immutable API image digest required}
     logging: *default-logging
     command: [inspection-api]
     restart: unless-stopped
@@ -221,7 +219,7 @@ services:
     networks: [data, app]
 
   inspection-worker:
-    image: *app-image
+    image: ${WORKER_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-worker]
     restart: unless-stopped
@@ -240,7 +238,7 @@ services:
     networks: [data, app]
 
   inspection-scheduler:
-    image: *app-image
+    image: ${SCHEDULER_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging
     command: [inspection-scheduler]
     restart: unless-stopped

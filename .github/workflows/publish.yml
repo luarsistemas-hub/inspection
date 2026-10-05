@@ -1,0 +1,248 @@
+name: Publish to production
+
+on:
+  workflow_call:
+    inputs:
+      operation: { required: true, type: string }
+      candidate_id: { required: false, type: string }
+      scope: { required: false, type: string, default: changed }
+      targets: { required: false, type: string }
+      deployment_id: { required: false, type: string }
+      dry_run: { required: true, type: boolean }
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Deploy a candidate or restore a prior deployment
+        required: true
+        default: deploy
+        type: choice
+        options: [deploy, rollback]
+      candidate_id:
+        description: Candidate release tag produced by Build OCI candidates
+        required: false
+        type: string
+      scope:
+        description: Components to deploy from the candidate
+        required: true
+        default: changed
+        type: choice
+        options: [changed, selected, all]
+      targets:
+        description: Comma-separated targets for selected scope or rollback
+        required: false
+        type: string
+      deployment_id:
+        description: Prior state deployment ID to restore when operation is rollback
+        required: false
+        type: string
+      dry_run:
+        description: Create and display the plan without applying it
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      plan_sha: ${{ steps.plan.outputs.plan_sha }}
+      deployment_id: ${{ steps.plan.outputs.deployment_id }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      targets: ${{ steps.plan.outputs.targets }}
+    steps:
+      - name: Validate request and resolve current state
+        id: state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          OPERATION: ${{ inputs.operation }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          SCOPE: ${{ inputs.scope }}
+          TARGETS: ${{ inputs.targets }}
+          ROLLBACK_TO: ${{ inputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          states=$(gh release list --repo "$REPOSITORY" --limit 100 --json tagName,createdAt | jq -r '[.[] | select(.tagName | startswith("state-"))] | sort_by(.createdAt) | reverse | .[].tagName')
+          active_tag="$(head -n1 <<< "$states" || true)"
+          [[ -n "$active_tag" ]] || active_tag=none
+          if [[ "$OPERATION" == deploy ]]; then
+            [[ "$CANDIDATE_ID" =~ ^candidate-[0-9]+-[0-9]+$ ]] || { echo 'candidate_id must identify a registered candidate release.' >&2; exit 2; }
+            [[ -n "$TARGETS" || "$SCOPE" != selected ]] || { echo 'scope=selected requires targets.' >&2; exit 2; }
+            source_tag="$CANDIDATE_ID"
+          else
+            [[ "$ROLLBACK_TO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]] || { echo 'deployment_id must identify the state to restore.' >&2; exit 2; }
+            [[ "$active_tag" != "state-$ROLLBACK_TO" ]] || { echo 'The requested deployment is already active.' >&2; exit 2; }
+            gh release view "state-$ROLLBACK_TO" --repo "$REPOSITORY" >/dev/null
+            source_tag="state-$ROLLBACK_TO"
+          fi
+          {
+            echo "active_tag=$active_tag"
+            echo "source_tag=$source_tag"
+          } >> "$GITHUB_OUTPUT"
+      - name: Download state, candidate, and executor sources
+        id: sources
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          ACTIVE_TAG: ${{ steps.state.outputs.active_tag }}
+          SOURCE_TAG: ${{ steps.state.outputs.source_tag }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs
+          if [[ "$ACTIVE_TAG" != none ]]; then
+            gh release download "$ACTIVE_TAG" --repo "$REPOSITORY" --pattern active.env --dir inputs
+            mv inputs/active.env inputs/current.env
+          else
+            : > inputs/current.env
+          fi
+          if [[ "$OPERATION" == deploy ]]; then
+            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern candidate.json --dir inputs
+            source_sha="$(jq -er '.sourceSha' inputs/candidate.json)"
+          else
+            gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern active.env --dir inputs
+            mv inputs/active.env inputs/rollback.env
+            source_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          fi
+          [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.sources.outputs.source_sha }}
+          fetch-depth: 0
+      - name: Build immutable source bundle and deployment plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          OPERATION: ${{ inputs.operation }}
+          SCOPE: ${{ inputs.scope }}
+          TARGETS_INPUT: ${{ inputs.targets }}
+          ACTIVE_TAG: ${{ steps.state.outputs.active_tag }}
+          SOURCE_SHA: ${{ steps.sources.outputs.source_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          git archive --format=tar.gz --output=upload/source-bundle.tgz "$SOURCE_SHA" deploy/oci deploy/keycloak
+          bundle_sha="$(sha256sum upload/source-bundle.tgz | awk '{print $1}')"
+          if [[ "$OPERATION" == deploy ]]; then
+            case "$SCOPE" in
+              changed) targets="$(jq -r '.suggestedTargets | join(",")' inputs/candidate.json)" ;;
+              all) targets=api,worker,scheduler,operations,admin,dashboard,capture,onboarding,keycloak ;;
+              selected) targets="$TARGETS_INPUT" ;;
+            esac
+            python3 deploy/oci/planner.py --active inputs/current.env --candidate inputs/candidate.json --targets "$targets" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json
+          else
+            [[ -n "$TARGETS_INPUT" ]] || { echo 'Rollback requires explicit targets.' >&2; exit 2; }
+            python3 deploy/oci/planner.py --active inputs/current.env --rollback-from inputs/rollback.env --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --bundle-sha256 "$bundle_sha" --output plan.json
+          fi
+          jq -r '.deploymentId, .planSha256, (.targets | join(",")), .sourceSha' plan.json > plan-fields.txt
+          deployment_id="$(sed -n '1p' plan-fields.txt)"
+          plan_sha="$(sed -n '2p' plan-fields.txt)"
+          targets="$(sed -n '3p' plan-fields.txt)"
+          source_sha="$(sed -n '4p' plan-fields.txt)"
+          cp plan.json upload/plan.json
+          {
+            echo "deployment_id=$deployment_id"
+            echo "plan_sha=$plan_sha"
+            echo "targets=$targets"
+            echo "source_sha=$source_sha"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '### Production plan'
+            echo
+            echo "- Operation: $OPERATION"
+            echo "- Deployment ID: `$deployment_id`"
+            echo "- Plan SHA-256: `$plan_sha`"
+            echo "- Expected active state: `$(jq -r '.expectedActiveStateSha256' plan.json)`"
+            echo "- Selected components: $targets"
+            echo "- Database migration: `$(jq -r '.operations.runMigration' plan.json)`"
+            echo "- Contract assessment: `$(jq -r '.compatibility.contractChange' plan.json)`"
+            echo"
+            echo '```json'
+            jq '{desiredImages, publicProfiles, operations, compatibility}' plan.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-plan-${{ steps.plan.outputs.deployment_id }}
+          path: upload/
+          if-no-files-found: error
+          retention-days: 180
+
+  apply:
+    needs: plan
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: production-plan-${{ needs.plan.outputs.deployment_id }}
+          path: package
+      - name: Connect to the production WireGuard peer
+        env:
+          WIREGUARD_CONFIG: ${{ secrets.OCI_WIREGUARD_CLIENT_CONF }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIREGUARD_CONFIG" ]] || { echo 'Set OCI_WIREGUARD_CLIENT_CONF in the production environment.' >&2; exit 2; }
+          sudo apt-get update -qq
+          sudo apt-get install -y wireguard-tools
+          umask 077
+          printf '%s\n' "$WIREGUARD_CONFIG" | sudo tee /etc/wireguard/inspection.conf >/dev/null
+          sudo chmod 0600 /etc/wireguard/inspection.conf
+          sudo wg-quick up inspection
+      - name: Apply the reviewed plan through the restricted deployment account
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_HOST: ${{ secrets.OCI_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.OCI_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.OCI_DEPLOY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OCI_DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOYMENT_ID: ${{ needs.plan.outputs.deployment_id }}
+          PLAN_SHA: ${{ needs.plan.outputs.plan_sha }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_KEY" && -n "$KNOWN_HOSTS" ]]
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > known_hosts
+          chmod 0600 deploy_key known_hosts
+          tar -czf package.tar.gz -C package plan.json source-bundle.tgz
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
+          accepted=0
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "apply-plan $DEPLOYMENT_ID $PLAN_SHA" < package.tar.gz || accepted=$?
+          unknown_count=0
+          for attempt in $(seq 1 360); do
+            status_json="$(ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "deployment-status $DEPLOYMENT_ID" 2>/dev/null || true)"
+            status="$(jq -r '.status // "unknown"' <<< "$status_json" 2>/dev/null || echo unknown)"
+            case "$status" in
+              succeeded) break ;;
+              failed) echo "Supervised deployment failed: $status_json" >&2; exit 1 ;;
+              unknown)
+                if [[ "$accepted" -ne 0 && "$attempt" -ge 3 ]]; then echo 'Remote executor did not accept the deployment bundle.' >&2; exit 1; fi
+                unknown_count=$((unknown_count + 1))
+                [[ "$unknown_count" -lt 7 ]] || { echo 'Remote executor did not report this deployment; inspect host state before retrying.' >&2; exit 1; }
+                ;;
+            esac
+            [[ "$attempt" -lt 360 ]] || { echo 'Timed out waiting for the supervised deployment; inspect deployment-status before retrying.' >&2; exit 1; }
+            sleep 10
+          done
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" 'export-state current' > active.env
+          grep -qx "DEPLOYMENT_ID=$DEPLOYMENT_ID" active.env
+          grep -qx "PLAN_SHA256=$PLAN_SHA" active.env
+          test "$(grep -c '_IMAGE=' active.env)" -eq 13
+          gh release create "state-$DEPLOYMENT_ID" active.env --repo "${GITHUB_REPOSITORY}" --target "${{ needs.plan.outputs.source_sha }}" --title "state-$DEPLOYMENT_ID" --notes "Host-verified active composition after applying plan $PLAN_SHA."

@@ -3,6 +3,10 @@ on:
   pull_request:
   push:
     branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   go:
     runs-on: ubuntu-latest
@@ -17,8 +21,8 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: 1.26.5
           cache: true
@@ -37,16 +41,38 @@ jobs:
           export INSPECTION_SUPER_ADMIN_PASSWORD=ci
           docker compose --env-file .env.example -f deploy/docker-compose.yml config --quiet
       - run: ./scripts/validate-compozy-tasks.sh
+      - name: Validate OCI deployment code
+        run: |
+          set -euo pipefail
+          bash -n deploy/oci/ops.sh deploy/oci/host/*.sh
+          python3 -m unittest discover -s deploy/oci/tests -v
+          docker compose --env-file deploy/oci/compose.env.example -f deploy/oci/compose.yaml config --quiet
+          python3 -m py_compile deploy/oci/affected.py deploy/oci/planner.py deploy/oci/verify-release.py
+      - name: Validate GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.5.7
+          terraform_wrapper: false
+      - name: Validate OCI Terraform
+        run: |
+          set -euo pipefail
+          for stack in foundation runtime; do
+            terraform -chdir="deploy/oci/$stack" fmt -check -recursive
+            terraform -chdir="deploy/oci/$stack" init -backend=false -input=false
+            terraform -chdir="deploy/oci/$stack" validate
+          done
       - run: node --test scripts/lib/parity-tools.test.mjs scripts/lib/design-system-migration.test.mjs
-      - run: node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
+      - name: Validate design-system migration inventory
+        run: node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json
   design-system:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: packages/inspection-design-system
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -68,8 +94,8 @@ jobs:
       run:
         working-directory: apps/${{ matrix.product }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -83,7 +109,7 @@ jobs:
       - run: npm run test
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: playwright-artifacts-${{ matrix.product }}
@@ -105,12 +131,12 @@ jobs:
       INSPECTION_SUPER_ADMIN_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
       INSPECTION_SUPER_ADMIN_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: 1.26.5
           cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
       - name: Configure isolated test environment
@@ -135,7 +161,7 @@ jobs:
           exit "$status"
       - name: Upload parity browser artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: authenticated-e2e-parity-artifacts
           if-no-files-found: warn
@@ -153,7 +179,7 @@ jobs:
         run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml logs --no-color > e2e-parity-compose.log || true
       - name: Upload stack logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: authenticated-e2e-parity-stack-logs
           path: e2e-parity-compose.log
@@ -176,8 +202,8 @@ jobs:
       INSPECTION_SUPER_ADMIN_USERNAME: ${{ secrets.INSPECTION_E2E_USERNAME }}
       INSPECTION_SUPER_ADMIN_PASSWORD: ${{ secrets.INSPECTION_E2E_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
       - name: Validate cross-product gate inputs
@@ -192,16 +218,17 @@ jobs:
           test -f apps/admin/tests/e2e/activation.spec.ts
           test -f apps/dashboard/tests/e2e/design-system-cross-product.spec.ts
           node scripts/lib/design-system-migration.mjs prerequisites --repository .
-          node scripts/lib/design-system-migration.mjs validate --repository . --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
+          node scripts/lib/design-system-migration.mjs validate --repository . --inventory docs/design-system/migration-inventory.json
           test -f scripts/lib/parity-evidence.mjs
           test -f scripts/lib/legacy-inventory.mjs
+      - name: Configure isolated test environment
+        run: cp .env.example .env.inspection
       - name: Validate compose and task contracts
         run: |
           docker compose --env-file .env.inspection -f deploy/docker-compose.yml config --quiet
           ./scripts/validate-compozy-tasks.sh
       - name: Start and seed isolated cross-product stack
         run: |
-          cp .env.example .env.inspection
           ./scripts/local.sh up
           ./scripts/local.sh seed
       - name: Install cross-product browser dependencies
@@ -232,7 +259,7 @@ jobs:
             --fail-on-drift
       - name: Upload cross-product evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: cross-product-evidence
           if-no-files-found: warn
@@ -245,3 +272,21 @@ jobs:
       - name: Tear down isolated cross-product stack
         if: always()
         run: docker compose --env-file .env.inspection -f deploy/docker-compose.yml down --volumes --remove-orphans
+
+  ci-required:
+    if: always()
+    needs: [go, design-system, frontend, e2e-parity, cross-product]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI validation
+        env:
+          GO_RESULT: ${{ needs.go.result }}
+          DESIGN_SYSTEM_RESULT: ${{ needs.design-system.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          E2E_RESULT: ${{ needs.e2e-parity.result }}
+          CROSS_PRODUCT_RESULT: ${{ needs.cross-product.result }}
+        run: |
+          set -euo pipefail
+          for result in "$GO_RESULT" "$DESIGN_SYSTEM_RESULT" "$FRONTEND_RESULT" "$E2E_RESULT" "$CROSS_PRODUCT_RESULT"; do
+            [[ "$result" == success ]] || { echo "Required validation did not succeed: $result" >&2; exit 1; }
+          done

@@ -91,44 +91,67 @@ func run() error {
 			return err
 		}
 	}
-	go runMaterializer(db, bus, deadlineNotifications)
 	mux := http.NewServeMux()
 	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
 	}
-	return process.Serve(cfg.HTTPAddress, mux, cfg.ShutdownTimeout)
+	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			runMaterializer(ctx, db, bus, deadlineNotifications)
+		}()
+		<-ctx.Done()
+		select {
+		case <-done:
+		case <-time.After(cfg.ShutdownTimeout):
+			return fmt.Errorf("scheduler background work did not stop within %s", cfg.ShutdownTimeout)
+		}
+		return nil
+	})
 }
 
-func runMaterializer(db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(context.Context, identity.ID, time.Time) error) {
+func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(context.Context, identity.ID, time.Time) error) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		now := time.Now().UTC()
 		var tenantIDs []identity.ID
-		if err := db.Raw("SELECT pending.tenant_id FROM platform.discover_scheduler_tenants(?, ?, ?) AS pending(tenant_id)", now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
+		if err := db.WithContext(ctx).Raw("SELECT pending.tenant_id FROM platform.discover_scheduler_tenants(?, ?, ?) AS pending(tenant_id)", now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
 			log.Printf("scheduler tenant discovery failed: %v", err)
 		} else {
 			for _, tenantID := range tenantIDs {
-				ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: tenantID, TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "scheduler-" + now.Format(time.RFC3339Nano), StartedAt: now})
-				if _, err := bus.Send(ctx, materializedue.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				tenantCtx := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: tenantID, TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "scheduler-" + now.Format(time.RFC3339Nano), StartedAt: now})
+				if _, err := bus.Send(tenantCtx, materializedue.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
 					log.Printf("scheduler materialization failed: %v", err)
 				}
-				if _, err := bus.Send(ctx, schedulereminders.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
+				if _, err := bus.Send(tenantCtx, schedulereminders.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
 					log.Printf("scheduler reminder dispatch failed: %v", err)
 				}
-				if err := emitRetentionDue(db, tenantID, now); err != nil {
+				if err := emitRetentionDue(ctx, db, tenantID, now); err != nil {
 					log.Printf("scheduler retention discovery failed: %v", err)
 				}
-				if err := deadlineNotifications(ctx, tenantID, now); err != nil {
+				if err := deadlineNotifications(tenantCtx, tenantID, now); err != nil {
 					log.Printf("scheduler deadline notification failed: %v", err)
 				}
 			}
 		}
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
-func emitRetentionDue(db *gorm.DB, tenantID identity.ID, now time.Time) error {
+func emitRetentionDue(ctx context.Context, db *gorm.DB, tenantID identity.ID, now time.Time) error {
+	db = db.WithContext(ctx)
 	policy := retentioncore.DefaultPolicy()
 	var configured database.RetentionPolicy
 	if err := db.Where("tenant_id=?", tenantID).Order("version DESC").First(&configured).Error; err == nil {

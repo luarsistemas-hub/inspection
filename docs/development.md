@@ -8,9 +8,10 @@ go vet ./...
 go build ./...
 (cd services/inspection && go run github.com/99designs/gqlgen@v0.17.95 generate)
 for product in admin dashboard capture onboarding; do (cd "apps/$product" && npm run codegen:check && npm run lint && npm run test && npm run build); done
-node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json --evidence docs/design-system/accessibility-evidence.json
-./scripts/verify.sh
+node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json
 ```
+
+O CI valida o inventário, as orientações de uso e as exceções do design system. A evidência manual de acessibilidade permanece pendente e é exigida pelos gates completos `./scripts/verify.sh` e `./scripts/parity-gate.sh`; esses comandos falham até que os resultados reais sejam registrados em `docs/design-system/accessibility-evidence.json`.
 
 Testes PostgreSQL exigem `INSPECTION_TEST_DATABASE_URL`; testes com tag `integration` usam Postgres, RabbitMQ e providers locais. O harness em `services/inspection/internal/integration/harness` oferece fixtures, test auth e esperas de outbox/inbox. Playwright exige navegadores (`npx playwright install chromium webkit`). A CI executa codegen, gofmt, vet, builds, auditoria npm, Vitest, Playwright, Compose e validação Compozy.
 

@@ -1,0 +1,312 @@
+name: Build OCI candidates
+
+on:
+  workflow_run:
+    workflows: [ci]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full commit SHA already present in main
+        required: true
+        type: string
+      scope:
+        description: Select changed, selected, or all components
+        required: true
+        default: changed
+        type: choice
+        options: [changed, selected, all]
+      targets:
+        description: Comma-separated components for selected scope
+        required: false
+        type: string
+      base_sha:
+        description: Optional comparison base; defaults to the latest registered candidate
+        required: false
+        type: string
+
+concurrency:
+  group: oci-image-build
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.selection.outputs.sha }}
+      targets: ${{ steps.selection.outputs.targets }}
+      candidate: ${{ steps.selection.outputs.candidate }}
+      base: ${{ steps.selection.outputs.base }}
+      scope: ${{ steps.selection.outputs.scope }}
+      previous: ${{ steps.selection.outputs.previous }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.source_sha }}
+          fetch-depth: 0
+      - id: selection
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SHA: ${{ inputs.source_sha }}
+          INPUT_SCOPE: ${{ inputs.scope }}
+          INPUT_TARGETS: ${{ inputs.targets }}
+          INPUT_BASE_SHA: ${{ inputs.base_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ADMIN_ORIGIN: ${{ vars.OCI_ADMIN_ORIGIN }}
+          DASHBOARD_ORIGIN: ${{ vars.OCI_DASHBOARD_ORIGIN }}
+          CAPTURE_ORIGIN: ${{ vars.OCI_CAPTURE_ORIGIN }}
+          ONBOARDING_ORIGIN: ${{ vars.OCI_ONBOARDING_ORIGIN }}
+          API_ORIGIN: ${{ vars.OCI_API_ORIGIN }}
+          AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
+          STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
+        run: |
+          set -euo pipefail
+          previous_candidate="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt | jq -r '[.[] | select(.tagName | startswith("candidate-"))] | sort_by(.createdAt) | reverse | .[0].tagName // empty')"
+          previous_sha=''
+          if [[ -n "$previous_candidate" ]]; then
+            mkdir -p previous-candidate
+            gh release download "$previous_candidate" --repo "$GITHUB_REPOSITORY" --pattern candidate.json --dir previous-candidate
+            previous_sha="$(jq -er '.sourceSha' previous-candidate/candidate.json)"
+          fi
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            source_sha='${{ github.event.workflow_run.head_sha }}'
+            scope=changed
+            targets=''
+            base_sha="$INPUT_BASE_SHA"
+            [[ -n "$base_sha" ]] || base_sha="$previous_sha"
+          else
+            source_sha="$INPUT_SHA"
+            scope="$INPUT_SCOPE"
+            targets="$INPUT_TARGETS"
+            base_sha="$INPUT_BASE_SHA"
+            [[ -n "$base_sha" ]] || base_sha="$previous_sha"
+          fi
+          [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$source_sha" origin/main || { echo 'source_sha must be reachable from main' >&2; exit 1; }
+          if [[ "$scope" == changed && -z "$base_sha" ]]; then scope=all; fi
+          if [[ -n "$base_sha" ]]; then
+            git merge-base --is-ancestor "$base_sha" origin/main || { echo 'base_sha must be reachable from main' >&2; exit 1; }
+            git merge-base --is-ancestor "$base_sha" "$source_sha" || { echo 'base_sha must be an ancestor of source_sha' >&2; exit 1; }
+          fi
+          args=(--head "$source_sha" --scope "$scope" --targets "$targets")
+          [[ -z "$base_sha" ]] || args+=(--base "$base_sha")
+          selection=$(python3 deploy/oci/affected.py "${args[@]}")
+          target_json=$(jq -c '.targets' <<< "$selection")
+          [[ "$scope" != selected || -n "$targets" ]] || { echo 'selected scope requires targets' >&2; exit 2; }
+          if [[ "$target_json" == *admin* || "$target_json" == *dashboard* || "$target_json" == *capture* || "$target_json" == *onboarding* ]]; then
+            for name in ADMIN_ORIGIN DASHBOARD_ORIGIN CAPTURE_ORIGIN ONBOARDING_ORIGIN API_ORIGIN AUTH_ORIGIN STORAGE_ORIGIN; do
+              value="${!name}"
+              [[ "$value" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || { echo "$name must be a valid HTTPS origin" >&2; exit 1; }
+            done
+            [[ -n "$TURNSTILE_SITE_KEY" ]]
+          fi
+          candidate="candidate-${RUN_ID}-${RUN_ATTEMPT}"
+          {
+            echo "sha=$source_sha"
+            echo "targets=$target_json"
+            echo "candidate=$candidate"
+            echo "base=$base_sha"
+            echo "scope=$scope"
+            echo "previous=$previous_candidate"
+          } >> "$GITHUB_OUTPUT"
+          echo "Components selected: $target_json"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.targets != '[]'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJSON(needs.resolve.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_USER" --password-stdin
+      - name: Build and publish component image
+        id: image
+        shell: bash
+        env:
+          COMPONENT: ${{ matrix.component }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          CANDIDATE: ${{ needs.resolve.outputs.candidate }}
+          OWNER: ${{ github.repository_owner }}
+          ADMIN_ORIGIN: ${{ vars.OCI_ADMIN_ORIGIN }}
+          DASHBOARD_ORIGIN: ${{ vars.OCI_DASHBOARD_ORIGIN }}
+          CAPTURE_ORIGIN: ${{ vars.OCI_CAPTURE_ORIGIN }}
+          ONBOARDING_ORIGIN: ${{ vars.OCI_ONBOARDING_ORIGIN }}
+          API_ORIGIN: ${{ vars.OCI_API_ORIGIN }}
+          AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
+          STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          repository="ghcr.io/$owner/inspection-$COMPONENT"
+          tag="$repository:$SOURCE_SHA-${{ github.run_id }}-${{ github.run_attempt }}"
+          go_image="$(jq -er '.images.go' deploy/oci/base-images.lock)"
+          alpine_image="$(jq -er '.images.alpine' deploy/oci/base-images.lock)"
+          node_image="$(jq -er '.images.node' deploy/oci/base-images.lock)"
+          keycloak_image="$(jq -er '.images.keycloak' deploy/oci/base-images.lock)"
+          build=(docker buildx build --platform linux/arm64 --push --provenance=mode=max --sbom=true --cache-from "type=gha,scope=oci-$COMPONENT" --cache-to "type=gha,mode=max,scope=oci-$COMPONENT" --tag "$tag")
+          case "$COMPONENT" in
+            api|worker|scheduler|operations)
+              build+=(--file deploy/oci/Go.Dockerfile --build-arg "GO_IMAGE=$go_image" --build-arg "RUNTIME_IMAGE=$alpine_image" --build-arg "COMPONENT=$COMPONENT" .)
+              ;;
+            keycloak) build+=(--file deploy/oci/Dockerfile.keycloak --build-arg "KEYCLOAK_IMAGE=$keycloak_image" .) ;;
+            admin|dashboard|capture|onboarding)
+              build+=(--file "apps/$COMPONENT/Dockerfile" --build-arg "NODE_IMAGE=$node_image")
+              case "$COMPONENT" in
+                admin)
+                  build+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=$API_ORIGIN/graphql" --build-arg "NEXT_PUBLIC_OIDC_AUTHORIZE_URL=$AUTH_ORIGIN/realms/inspection/protocol/openid-connect/auth" --build-arg "NEXT_PUBLIC_OIDC_TOKEN_URL=$AUTH_ORIGIN/realms/inspection/protocol/openid-connect/token" --build-arg NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-admin --build-arg "NEXT_PUBLIC_DASHBOARD_URL=$DASHBOARD_ORIGIN" --build-arg "NEXT_PUBLIC_CAPTURE_URL=$CAPTURE_ORIGIN" --build-arg STAGE=production)
+                  ;;
+                dashboard)
+                  build+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=$API_ORIGIN/graphql" --build-arg "NEXT_PUBLIC_OIDC_AUTHORIZE_URL=$AUTH_ORIGIN/realms/inspection/protocol/openid-connect/auth" --build-arg "NEXT_PUBLIC_OIDC_TOKEN_URL=$AUTH_ORIGIN/realms/inspection/protocol/openid-connect/token" --build-arg NEXT_PUBLIC_OIDC_CLIENT_ID=inspection-dashboard --build-arg "NEXT_PUBLIC_ADMIN_URL=$ADMIN_ORIGIN" --build-arg "NEXT_PUBLIC_STORAGE_URL=$STORAGE_ORIGIN")
+                  ;;
+                capture)
+                  build+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=$API_ORIGIN/graphql" --build-arg "NEXT_PUBLIC_STORAGE_URL=$STORAGE_ORIGIN" --build-arg NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION=false)
+                  ;;
+                onboarding)
+                  build+=(--build-arg "NEXT_PUBLIC_INSPECTION_API_URL=$API_ORIGIN/graphql" --build-arg "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$TURNSTILE_SITE_KEY")
+                  ;;
+              esac
+              build+=(.)
+              ;;
+            *) echo "Unknown component: $COMPONENT" >&2; exit 2 ;;
+          esac
+          "${build[@]}"
+          digest="$(docker buildx imagetools inspect --raw "$tag" | jq -r 'if .manifests then [.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length else (if .os == "linux" and .architecture == "arm64" then 1 else 0 end) end')"
+          [[ "$digest" =~ ^[1-9][0-9]*$ ]] || { echo 'Pushed image has no linux/arm64 manifest.' >&2; exit 1; }
+          image_digest="$(docker buildx imagetools inspect "$tag" | awk '/Digest:/ {print $2; exit}')"
+          [[ "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          image="$repository@$image_digest"
+          metadata="$(python3 - "$COMPONENT" <<'PY'
+          import importlib.util, json, sys
+          from pathlib import Path
+          p=Path('deploy/oci/affected.py')
+          spec=importlib.util.spec_from_file_location('affected',p); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          profile={k:v for k,v in __import__('os').environ.items() if k in {'ADMIN_ORIGIN','DASHBOARD_ORIGIN','CAPTURE_ORIGIN','ONBOARDING_ORIGIN','API_ORIGIN','AUTH_ORIGIN','STORAGE_ORIGIN','TURNSTILE_SITE_KEY'}}
+          keys={'admin':{'API_ORIGIN','AUTH_ORIGIN','DASHBOARD_ORIGIN','CAPTURE_ORIGIN'},'dashboard':{'API_ORIGIN','AUTH_ORIGIN','ADMIN_ORIGIN','STORAGE_ORIGIN'},'capture':{'API_ORIGIN','STORAGE_ORIGIN'},'onboarding':{'API_ORIGIN','TURNSTILE_SITE_KEY'}}
+          selected={k:profile[k] for k in keys.get(sys.argv[1],set())}
+          print(json.dumps({'fingerprint':mod.fingerprint(sys.argv[1],profile=profile),'publicProfile':selected},sort_keys=True))
+          PY
+          )"
+          fingerprint="$(jq -r '.fingerprint' <<< "$metadata")"
+          public_profile="$(jq -c '.publicProfile' <<< "$metadata")"
+          mkdir -p image-record
+          jq -n --arg name "$COMPONENT" --arg image "$image" --arg sha "$SOURCE_SHA" --arg fingerprint "$fingerprint" --argjson publicProfile "$public_profile" '{component:$name,image:$image,sourceSha:$sha,fingerprint:$fingerprint,publicProfile:$publicProfile,platform:"linux/arm64"}' > "image-record/$COMPONENT.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-${{ matrix.component }}
+          path: image-record/${{ matrix.component }}.json
+          if-no-files-found: error
+          retention-days: 180
+
+  register-candidate:
+    needs: [resolve, build]
+    if: needs.resolve.outputs.targets != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: image-*
+          path: candidate/components
+          merge-multiple: false
+      - name: Assemble candidate catalog
+        env:
+          CANDIDATE: ${{ needs.resolve.outputs.candidate }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+          BASE_SHA: ${{ needs.resolve.outputs.base }}
+          PREVIOUS: ${{ needs.resolve.outputs.previous }}
+          BUILD_TARGETS: ${{ needs.resolve.outputs.targets }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ADMIN_ORIGIN: ${{ vars.OCI_ADMIN_ORIGIN }}
+          DASHBOARD_ORIGIN: ${{ vars.OCI_DASHBOARD_ORIGIN }}
+          CAPTURE_ORIGIN: ${{ vars.OCI_CAPTURE_ORIGIN }}
+          ONBOARDING_ORIGIN: ${{ vars.OCI_ONBOARDING_ORIGIN }}
+          API_ORIGIN: ${{ vars.OCI_API_ORIGIN }}
+          AUTH_ORIGIN: ${{ vars.OCI_AUTH_ORIGIN }}
+          STORAGE_ORIGIN: ${{ vars.OCI_STORAGE_ORIGIN }}
+          TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PREVIOUS" ]]; then
+            mkdir -p previous-candidate
+            gh release download "$PREVIOUS" --repo "$GITHUB_REPOSITORY" --pattern candidate.json --dir previous-candidate
+          fi
+          python3 - "$CANDIDATE" "$SOURCE_SHA" candidate/components candidate.json "$BASE_SHA" "$PREVIOUS" "$BUILD_TARGETS" <<'PY'
+          import importlib.util, json, os, pathlib, subprocess, sys
+          candidate_id, sha, root, output, base, previous_tag, build_targets = sys.argv[1:]
+          records = {}
+          for path in sorted(pathlib.Path(root).glob("image-*/*.json")):
+              record = json.loads(path.read_text())
+              records[record["component"]] = {k: v for k, v in record.items() if k != "component"}
+          spec = importlib.util.spec_from_file_location("affected", "deploy/oci/affected.py")
+          affected = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(affected)
+          catalog = json.loads(pathlib.Path("deploy/oci/components.json").read_text())
+          profile = {key: value for key, value in os.environ.items() if key in {"ADMIN_ORIGIN", "DASHBOARD_ORIGIN", "CAPTURE_ORIGIN", "ONBOARDING_ORIGIN", "API_ORIGIN", "AUTH_ORIGIN", "STORAGE_ORIGIN", "TURNSTILE_SITE_KEY"}}
+          prior = {}
+          if previous_tag:
+              prior = json.loads(pathlib.Path("previous-candidate/candidate.json").read_text()).get("components", {})
+          computed = {}
+          for component in catalog["components"]:
+              fingerprint = affected.fingerprint(component, catalog, profile)
+              if component in records:
+                  if records[component]["fingerprint"] != fingerprint:
+                      raise SystemExit(f"build record fingerprint mismatch for {component}")
+                  computed[component] = records[component]
+              elif component in prior and prior[component].get("fingerprint") == fingerprint:
+                  computed[component] = {**prior[component], "reusedFromCandidate": previous_tag}
+              else:
+                  continue
+          if not computed:
+              raise SystemExit("candidate has no built or reusable image records")
+          paths = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", f"{base}...{sha}"] if base else ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha], text=True).splitlines()
+          db_prefixes = ("services/inspection/internal/platform/database/", "services/inspection/internal/features/analysis/seed_prompt/", "services/inspection/internal/features/templates/catalog/seeds", "services/inspection/cmd/inspection-seed/", "services/inspection/cmd/inspection-prompt-seed/")
+          database = "required" if any(path.startswith(db_prefixes) for path in paths) else ("none" if base else "unknown")
+          contracts = "unknown" if any(path == "services/inspection/schema.graphqls" or path.startswith("services/inspection/internal/contracts/events/") for path in paths) else ("compatible" if base else "unknown")
+          lock = json.loads(pathlib.Path("deploy/oci/base-images.lock").read_text())
+          infrastructure = {"POSTGRES_IMAGE": "postgres", "DRAGONFLY_IMAGE": "dragonfly", "RABBITMQ_IMAGE": "rabbitmq", "CADDY_IMAGE": "caddy"}
+          doc = {"schemaVersion": 1, "candidateId": candidate_id, "sourceSha": sha, "baseSha": base or None, "buildTargets": json.loads(build_targets), "suggestedTargets": json.loads(build_targets), "components": computed, "infrastructure": {key: lock["images"][name] for key, name in infrastructure.items()}, "compatibility": {"databaseChange": database, "contractChange": contracts}}
+          pathlib.Path(output).write_text(json.dumps(doc, sort_keys=True, indent=2) + "\n")
+          PY
+          jq -e '.schemaVersion == 1 and (.components | length > 0) and (.suggestedTargets | type == "array")' candidate.json >/dev/null
+      - name: Publish immutable candidate release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE: ${{ needs.resolve.outputs.candidate }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+        run: gh release create "$CANDIDATE" candidate.json --target "$SOURCE_SHA" --title "$CANDIDATE" --notes "Digest-pinned component candidate for $SOURCE_SHA. This candidate is unique to workflow run ${{ github.run_id }} / attempt ${{ github.run_attempt }}."

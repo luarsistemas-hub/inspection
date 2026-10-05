@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"inspection/services/inspection/internal/platform/apperror"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -16,6 +16,7 @@ import (
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	"inspection/services/inspection/internal/features/notifications/core"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/security"
@@ -79,6 +80,10 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			if err != nil {
 				return err
 			}
+			slog.WarnContext(ctx, "inspection invitation has no eligible delivery channel",
+				"eventId", envelope.ID.String(), "correlationId", envelope.CorrelationID,
+				"inspectionId", payload.InspectionID.String(), "responsibilityId", payload.ResponsibilityID.String(),
+				"failureCode", "no_eligible_channel")
 			return messaging.ErrPermanent
 		}
 		token, err := security.NewScopedToken(envelope.TenantID)
@@ -98,7 +103,7 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 				template = core.TemplateRef{Name: "capture-link", Version: "v1"}
 				variables = map[string]string{"recipientName": participant.Name}
 			}
-			_, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
+			result, err := d.Notifications.Send(notificationrequest.InTransaction(ctx, tx), core.Notification{
 				TenantID: envelope.TenantID, InspectionID: &payload.InspectionID, InvitationID: &invitation.ID, Recipient: core.Recipient{Destination: target.Destination}, Channel: core.Channel(target.Channel),
 				Template: template, Variables: variables,
 				CorrelationID: envelope.CorrelationID, IdempotencyKey: deliveryIdempotencyKey(invitation.ID, target),
@@ -106,11 +111,19 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			})
 			if apperror.Is(err, apperror.IntegrationDisabled) {
 				// Disabled channels are skipped so enabled channels still deliver.
+				slog.WarnContext(ctx, "inspection invitation channel skipped",
+					"eventId", envelope.ID.String(), "correlationId", envelope.CorrelationID,
+					"inspectionId", payload.InspectionID.String(), "responsibilityId", payload.ResponsibilityID.String(),
+					"channel", target.Channel, "failureCode", "integration_disabled")
 				continue
 			}
 			if err != nil {
 				return err
 			}
+			slog.InfoContext(ctx, "inspection invitation notification queued",
+				"eventId", envelope.ID.String(), "correlationId", envelope.CorrelationID,
+				"inspectionId", payload.InspectionID.String(), "responsibilityId", payload.ResponsibilityID.String(),
+				"notificationId", result.ID.String(), "channel", target.Channel, "state", string(result.State), "reused", result.Reused)
 		}
 		return markInvited(tx, &inspection, now)
 	}, nil

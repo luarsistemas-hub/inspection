@@ -19,10 +19,17 @@ func ServeWithBackground(address string, handler http.Handler, timeout time.Dura
 	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	errCh := make(chan error, 1)
+	// Buffered for both writers so neither goroutine blocks after shutdown.
+	errCh := make(chan error, 2)
 	go func() { errCh <- server.ListenAndServe() }()
+	var backgroundDone <-chan struct{}
 	if background != nil {
-		go func() { errCh <- background(ctx) }()
+		done := make(chan struct{})
+		backgroundDone = done
+		go func() {
+			defer close(done)
+			errCh <- background(ctx)
+		}()
 	}
 	select {
 	case err := <-errCh:
@@ -38,6 +45,13 @@ func ServeWithBackground(address string, handler http.Handler, timeout time.Dura
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown: %w", err)
+		}
+		if backgroundDone != nil {
+			select {
+			case <-backgroundDone:
+			case <-shutdownCtx.Done():
+				return fmt.Errorf("background shutdown: %w", shutdownCtx.Err())
+			}
 		}
 		return nil
 	}

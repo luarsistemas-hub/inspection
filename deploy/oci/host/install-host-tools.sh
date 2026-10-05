@@ -13,12 +13,12 @@ target="$root/$version"
 install -d -o root -g root -m 0750 "$root"
 rm -rf "$staging"
 install -d -o root -g root -m 0750 "$staging"
-for name in deploy-release.sh secrets-refresh.sh smoke.sh; do
+for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh; do
   install -o root -g root -m 0755 "$source_dir/$name" "$staging/$name"
   bash -n "$staging/$name"
 done
 if [[ -e "$target" ]]; then
-  for name in deploy-release.sh secrets-refresh.sh smoke.sh; do
+  for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh; do
     cmp -s "$staging/$name" "$target/$name" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
   done
   rm -rf "$staging"
@@ -28,6 +28,11 @@ fi
 
 for pair in \
   "inspection-deploy deploy-release.sh" \
+  "inspection-apply-plan apply-plan.sh" \
+  "inspection-stage-and-apply stage-and-apply.sh" \
+  "inspection-run-deployment run-deployment.sh" \
+  "inspection-export-state export-state.sh" \
+  "inspection-deployment-status deployment-status.sh" \
   "inspection-secrets-refresh secrets-refresh.sh" \
   "inspection-smoke smoke.sh"; do
   read -r launcher script <<< "$pair"

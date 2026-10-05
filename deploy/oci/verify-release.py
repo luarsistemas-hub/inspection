@@ -16,6 +16,7 @@ IMAGE_KEYS = {
     "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "POSTGRES_IMAGE",
     "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE",
 }
+OPTIONAL_IMAGE_KEYS = {"WORKER_IMAGE", "SCHEDULER_IMAGE", "OPERATIONS_IMAGE"}
 PUBLIC_KEYS = {
     "NEXT_PUBLIC_INSPECTION_API_URL", "NEXT_PUBLIC_OIDC_AUTHORIZE_URL",
     "NEXT_PUBLIC_OIDC_TOKEN_URL", "NEXT_PUBLIC_DASHBOARD_URL",
@@ -43,13 +44,15 @@ def verify(bundle: str, manifest: str, checksum_file: str, release: str) -> None
         if not sep or key in values:
             raise ValueError("release manifest has an invalid or duplicate assignment")
         values[key] = value
-    allowed_keys = IMAGE_KEYS | PUBLIC_KEYS | {"RELEASE_SHA", "BUNDLE_SHA256"}
+    allowed_keys = IMAGE_KEYS | OPTIONAL_IMAGE_KEYS | PUBLIC_KEYS | {"RELEASE_SHA", "BUNDLE_SHA256"}
     if set(values) - allowed_keys:
         raise ValueError("release manifest contains unexpected keys")
     if values.get("RELEASE_SHA") != release or values.get("BUNDLE_SHA256") != digest:
         raise ValueError("release manifest SHA or bundle checksum does not match")
     if not IMAGE_KEYS.issubset(values) or any(not IMAGE.fullmatch(values[key]) for key in IMAGE_KEYS):
         raise ValueError("every release image must be pinned by sha256 digest")
+    if any(key in values and not IMAGE.fullmatch(values[key]) for key in OPTIONAL_IMAGE_KEYS):
+        raise ValueError("optional process images must be pinned by sha256 digest")
 
     tracked = subprocess.check_output(
         ["git", "ls-tree", "-r", "--name-only", release, "--", "deploy/oci", "deploy/keycloak"],

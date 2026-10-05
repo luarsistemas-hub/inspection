@@ -1,4 +1,5 @@
-FROM node:22-alpine AS design-system
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS design-system
 WORKDIR /workspace/packages/inspection-design-system
 COPY packages/inspection-design-system/package.json packages/inspection-design-system/package-lock.json ./
 RUN npm ci
@@ -9,7 +10,7 @@ RUN node ../../scripts/prepare-design-system.mjs
 FROM design-system AS design-system-runtime
 RUN npm prune --omit=dev
 
-FROM node:22-alpine AS build
+FROM ${NODE_IMAGE} AS build
 WORKDIR /workspace/apps/capture
 COPY apps/capture/package.json apps/capture/package-lock.json ./
 COPY --from=design-system /workspace/packages/inspection-design-system /workspace/packages/inspection-design-system
@@ -25,7 +26,7 @@ COPY services/inspection/schema.graphqls ../../services/inspection/schema.graphq
 COPY scripts/prepare-design-system.mjs ../../scripts/prepare-design-system.mjs
 RUN npm run build && npm prune --omit=dev && rm -rf node_modules/@inspection/design-system && mkdir -p node_modules/@inspection/design-system && cp /workspace/packages/inspection-design-system/package.json node_modules/@inspection/design-system/ && cp -R /workspace/packages/inspection-design-system/dist node_modules/@inspection/design-system/
 
-FROM node:22-alpine
+FROM ${NODE_IMAGE}
 WORKDIR /app
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3003
 COPY --from=build /workspace/apps/capture/.next/standalone ./

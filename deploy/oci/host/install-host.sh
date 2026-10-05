@@ -39,6 +39,9 @@ install -m 0755 "$host_dir/install-host-tools.sh" /usr/local/sbin/inspection-ins
 install -m 0755 "$host_dir/publish-metrics.py" /usr/local/sbin/inspection-publish-metrics
 install -m 0755 "$host_dir/assert-data-mount.sh" /usr/local/sbin/inspection-assert-data-mount
 install -m 0755 "$host_dir/remove-bootstrap-admin.sh" /usr/local/sbin/inspection-remove-bootstrap-admin
+install -m 0755 "$host_dir/setup-wireguard.sh" /usr/local/sbin/inspection-setup-wireguard
+install -m 0755 "$host_dir/ssh-command.sh" /usr/local/sbin/inspection-ssh-command
+install -m 0755 "$host_dir/setup-deploy-user.sh" /usr/local/sbin/inspection-setup-deploy-user
 INSPECTION_DATA_DEVICE="${INSPECTION_DATA_DEVICE:-/dev/oracleoci/oraclevdb}" INSPECTION_FORMAT_EMPTY_DATA_VOLUME="${INSPECTION_FORMAT_EMPTY_DATA_VOLUME:-}" /usr/local/sbin/inspection-prepare-host
 
 cat > /etc/systemd/system/inspection-secrets-refresh.service <<'UNIT'

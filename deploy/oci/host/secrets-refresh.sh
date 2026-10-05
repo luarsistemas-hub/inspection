@@ -4,6 +4,8 @@ set -euo pipefail
 config_dir=/etc/inspection
 release_env="${INSPECTION_RELEASE_ENV:-$config_dir/releases/current.env}"
 bundle_dir="${INSPECTION_BUNDLE_DIR:-/opt/inspection/current}"
+exec 9>/run/lock/inspection-deploy.lock
+flock -w 1800 9 || { echo 'Timed out waiting for the deployment lock.' >&2; exit 1; }
 set -a
 source "$config_dir/public.env"
 set +a

@@ -67,6 +67,20 @@ resource "oci_core_network_security_group_security_rule" "ssh" {
   }
 }
 
+resource "oci_core_network_security_group_security_rule" "wireguard" {
+  network_security_group_id = oci_core_network_security_group.runtime.id
+  direction                 = "INGRESS"
+  protocol                  = "17"
+  source                    = "0.0.0.0/0"
+  source_type               = "CIDR_BLOCK"
+  udp_options {
+    destination_port_range {
+      min = var.wireguard_port
+      max = var.wireguard_port
+    }
+  }
+}
+
 resource "oci_core_network_security_group_security_rule" "egress" {
   network_security_group_id = oci_core_network_security_group.runtime.id
   direction                 = "EGRESS"

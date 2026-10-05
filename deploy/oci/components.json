@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "api": {"kind": "go", "command": "inspection-api", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "worker": {"kind": "go", "command": "inspection-worker", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "scheduler": {"kind": "go", "command": "inspection-scheduler", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "operations": {"kind": "go-tools", "commands": ["inspection-migrate", "inspection-prompt-seed", "inspection-seed", "inspection-schema-check", "inspection-keycloak-check"], "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "admin": {"kind": "frontend", "paths": ["apps/admin/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
+    "dashboard": {"kind": "frontend", "paths": ["apps/dashboard/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
+    "capture": {"kind": "frontend", "paths": ["apps/capture/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
+    "onboarding": {"kind": "frontend", "paths": ["apps/onboarding/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
+    "keycloak": {"kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/oci/Dockerfile.keycloak"]}
+  },
+  "sharedRules": [
+    {"paths": ["services/inspection/schema.graphqls", "services/inspection/internal/graphql/"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding"]},
+    {"paths": [".dockerignore", "deploy/oci/compose.yaml", "deploy/oci/components.json", "deploy/oci/affected.py", "deploy/oci/Go.Dockerfile", "deploy/oci/base-images.lock", ".github/workflows/build-images.yml"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak"]}
+  ],
+  "ignoredPaths": ["docs/", ".compozy/", ".github/", "deploy/oci/runtime/", "deploy/oci/foundation/", "deploy/oci/host/", "deploy/oci/tests/", "deploy/oci/ops.sh", "deploy/oci/verify-release.py", "deploy/oci/affected.py", "deploy/oci/planner.py", "README.md", "LICENSE", ".gitignore"]
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"inspection/libs/identity"
@@ -78,11 +79,17 @@ func (d Dispatcher) Dispatch(ctx context.Context) (int, error) {
 	for _, row := range rows {
 		if err := d.Publisher.PublishConfirmed(ctx, Publication{RoutingKey: row.Type, Body: row.Payload, Mandatory: true, CorrelationID: row.CorrelationID, CausationID: row.CausationID}); err != nil {
 			d.DB.WithContext(ctx).Model(&database.OutboxIntent{}).Where("id = ? AND status = ?", row.ID, "CLAIMED").Updates(map[string]any{"status": "PENDING", "claimed_at": nil, "attempts": gorm.Expr("attempts + 1"), "next_attempt_at": claimedAt, "last_error": safeReason(err)})
+			if isInvitationPipelineEvent(row.Type) {
+				slog.ErrorContext(ctx, "outbox event publish failed", "eventType", row.Type, "eventId", row.ID.String(), "correlationId", row.CorrelationID, "attempt", row.Attempts+1, "failureCode", safeReason(err))
+			}
 			continue
 		}
 		result := d.DB.WithContext(ctx).Model(&database.OutboxIntent{}).Where("id = ? AND status = ?", row.ID, "CLAIMED").Updates(map[string]any{"status": "PUBLISHED", "claimed_at": nil, "published_at": now(), "last_error": ""})
 		if result.Error != nil {
 			return published, result.Error
+		}
+		if isInvitationPipelineEvent(row.Type) {
+			slog.InfoContext(ctx, "outbox event published", "eventType", row.Type, "eventId", row.ID.String(), "correlationId", row.CorrelationID, "attempt", row.Attempts+1, "outcome", "published")
 		}
 		// The outbox envelope intentionally does not contain recipient data. Keep
 		// the dispatch metric useful and bounded by using the safe fallback rather
@@ -96,6 +103,15 @@ func (d Dispatcher) Dispatch(ctx context.Context) (int, error) {
 	// backlog even when the current dispatch batch is empty.
 	d.observeNotificationQueueDepth(ctx)
 	return published, nil
+}
+
+func isInvitationPipelineEvent(eventType string) bool {
+	switch eventType {
+	case "inspection.created.v1", "origin.invitation_requested.v1", "notification.delivery_requested.v2", "notification.delivery_terminal.v1":
+		return true
+	default:
+		return false
+	}
 }
 
 func (d Dispatcher) observeNotificationQueueDepth(ctx context.Context) {

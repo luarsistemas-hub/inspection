@@ -3,6 +3,15 @@ variable "tenancy_ocid" { type = string }
 variable "compartment_ocid" { type = string }
 variable "ssh_public_key" { type = string }
 variable "admin_cidr" { type = string }
+variable "wireguard_port" {
+  description = "UDP listener for the authenticated GitHub Actions WireGuard peer."
+  type        = number
+  default     = 51820
+  validation {
+    condition     = var.wireguard_port >= 1024 && var.wireguard_port <= 65535
+    error_message = "WireGuard must use an unprivileged UDP port."
+  }
+}
 variable "image_ocid" { type = string }
 variable "availability_domain" { type = string }
 variable "instance_name" {
