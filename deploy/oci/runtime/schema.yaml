@@ -37,4 +37,4 @@ variables:
   shape_memory_gb: { type: number, title: ARM A1 memory GB, default: 12 }
   boot_volume_gb: { type: number, title: Boot volume GB, default: 50 }
   data_volume_gb: { type: number, title: Persistent volume GB, default: 150 }
-  tags: { type: map, title: Freeform tags, default: { project: inspection, managed-by: terraform } }
+  # tags stays at its Terraform default; omit the map from OCI's edit form.
