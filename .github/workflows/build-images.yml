@@ -163,8 +163,8 @@ jobs:
           TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
         run: |
           set -euo pipefail
-          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
-          repository="ghcr.io/$owner/inspection-$COMPONENT"
+          owner_lower="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          repository="ghcr.io/$owner_lower/inspection-$COMPONENT"
           tag="$repository:$SOURCE_SHA-${{ github.run_id }}-${{ github.run_attempt }}"
           go_image="$(jq -er '.images.go' deploy/oci/base-images.lock)"
           alpine_image="$(jq -er '.images.alpine' deploy/oci/base-images.lock)"

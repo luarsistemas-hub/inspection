@@ -168,7 +168,7 @@ jobs:
             echo "- Selected components: $targets"
             echo "- Database migration: `$(jq -r '.operations.runMigration' plan.json)`"
             echo "- Contract assessment: `$(jq -r '.compatibility.contractChange' plan.json)`"
-            echo"
+            echo
             echo '```json'
             jq '{desiredImages, publicProfiles, operations, compatibility}' plan.json
             echo '```'
@@ -224,10 +224,12 @@ jobs:
           tar -czf package.tar.gz -C package plan.json source-bundle.tgz
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
           accepted=0
-          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "apply-plan $DEPLOYMENT_ID $PLAN_SHA" < package.tar.gz || accepted=$?
+          printf -v apply_command 'apply-plan %q %q' "$DEPLOYMENT_ID" "$PLAN_SHA"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$apply_command" < package.tar.gz || accepted=$?
           unknown_count=0
+          printf -v status_command 'deployment-status %q' "$DEPLOYMENT_ID"
           for attempt in $(seq 1 360); do
-            status_json="$(ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "deployment-status $DEPLOYMENT_ID" 2>/dev/null || true)"
+            status_json="$(ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$status_command" 2>/dev/null || true)"
             status="$(jq -r '.status // "unknown"' <<< "$status_json" 2>/dev/null || echo unknown)"
             case "$status" in
               succeeded) break ;;
