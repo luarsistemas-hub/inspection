@@ -150,24 +150,27 @@ jobs:
           deployment_id="$(sed -n '1p' plan-fields.txt)"
           plan_sha="$(sed -n '2p' plan-fields.txt)"
           targets="$(sed -n '3p' plan-fields.txt)"
-          source_sha="$(sed -n '4p' plan-fields.txt)"
+          plan_source_sha="$(sed -n '4p' plan-fields.txt)"
           cp plan.json upload/plan.json
           {
             echo "deployment_id=$deployment_id"
             echo "plan_sha=$plan_sha"
             echo "targets=$targets"
-            echo "source_sha=$source_sha"
+            echo "source_sha=$plan_source_sha"
           } >> "$GITHUB_OUTPUT"
           {
             echo '### Production plan'
             echo
             echo "- Operation: $OPERATION"
-            echo "- Deployment ID: `$deployment_id`"
-            echo "- Plan SHA-256: `$plan_sha`"
-            echo "- Expected active state: `$(jq -r '.expectedActiveStateSha256' plan.json)`"
+            expected_active_state="$(jq -r '.expectedActiveStateSha256' plan.json)"
+            migration_required="$(jq -r '.operations.runMigration' plan.json)"
+            contract_change="$(jq -r '.compatibility.contractChange' plan.json)"
+            echo "- Deployment ID: $deployment_id"
+            echo "- Plan SHA-256: $plan_sha"
+            echo "- Expected active state: $expected_active_state"
             echo "- Selected components: $targets"
-            echo "- Database migration: `$(jq -r '.operations.runMigration' plan.json)`"
-            echo "- Contract assessment: `$(jq -r '.compatibility.contractChange' plan.json)`"
+            echo "- Database migration: $migration_required"
+            echo "- Contract assessment: $contract_change"
             echo
             echo '```json'
             jq '{desiredImages, publicProfiles, operations, compatibility}' plan.json
@@ -225,10 +228,14 @@ jobs:
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
           accepted=0
           printf -v apply_command 'apply-plan %q %q' "$DEPLOYMENT_ID" "$PLAN_SHA"
+          # The validated plan identifiers are intentionally expanded locally before SSH sends the command.
+          # shellcheck disable=SC2029
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$apply_command" < package.tar.gz || accepted=$?
           unknown_count=0
           printf -v status_command 'deployment-status %q' "$DEPLOYMENT_ID"
           for attempt in $(seq 1 360); do
+            # The validated deployment ID is intentionally expanded locally before SSH sends the command.
+            # shellcheck disable=SC2029
             status_json="$(ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$status_command" 2>/dev/null || true)"
             status="$(jq -r '.status // "unknown"' <<< "$status_json" 2>/dev/null || echo unknown)"
             case "$status" in
