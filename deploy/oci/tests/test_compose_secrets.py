@@ -10,6 +10,18 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 class ComposeSecretsTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
+    def test_worker_uses_worker_database_connection(self):
+        rendered = subprocess.check_output([
+            "docker", "compose", "--env-file", "deploy/oci/compose.env.example",
+            "-f", "deploy/oci/compose.yaml", "config", "--format", "json",
+        ], cwd=ROOT, text=True)
+        services = json.loads(rendered)["services"]
+        worker = services["inspection-worker"]["environment"]
+        runtime = services["inspection-api"]["environment"]
+        self.assertEqual(worker["INSPECTION_DATABASE_URL"], worker["INSPECTION_DISPATCHER_DATABASE_URL"])
+        self.assertNotEqual(worker["INSPECTION_DATABASE_URL"], runtime["INSPECTION_DATABASE_URL"])
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
     def test_privileged_database_url_is_only_in_migration_operations(self):
         rendered = subprocess.check_output([
             "docker", "compose", "--env-file", "deploy/oci/compose.env.example",

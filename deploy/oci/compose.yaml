@@ -223,7 +223,9 @@ services:
     logging: *default-logging
     command: [inspection-worker]
     restart: unless-stopped
-    environment: *runtime-env
+    environment:
+      <<: *runtime-env
+      INSPECTION_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
