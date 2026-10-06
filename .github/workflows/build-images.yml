@@ -171,7 +171,11 @@ jobs:
           alpine_image="$(jq -er '.images.alpine' deploy/oci/base-images.lock)"
           node_image="$(jq -er '.images.node' deploy/oci/base-images.lock)"
           keycloak_image="$(jq -er '.images.keycloak' deploy/oci/base-images.lock)"
-          build=(docker buildx build --platform linux/arm64 --push --provenance=mode=max --sbom=true --cache-from "type=gha,scope=oci-$COMPONENT" --cache-to "type=gha,mode=max,scope=oci-$COMPONENT,ignore-error=true" --tag "$tag")
+          case "$COMPONENT" in
+            api|worker|scheduler|operations) cache_ref="ghcr.io/$owner_lower/inspection-cache:go" ;;
+            *) cache_ref="ghcr.io/$owner_lower/inspection-cache:$COMPONENT" ;;
+          esac
+          build=(docker buildx build --platform linux/arm64 --push --provenance=mode=max --sbom=true --cache-from "type=registry,ref=$cache_ref" --cache-to "type=registry,ref=$cache_ref,mode=max,ignore-error=true" --tag "$tag")
           case "$COMPONENT" in
             api|worker|scheduler|operations)
               build+=(--file deploy/oci/Go.Dockerfile --build-arg "GO_IMAGE=$go_image" --build-arg "RUNTIME_IMAGE=$alpine_image" --build-arg "COMPONENT=$COMPONENT" .)
@@ -198,9 +202,9 @@ jobs:
             *) echo "Unknown component: $COMPONENT" >&2; exit 2 ;;
           esac
           "${build[@]}"
-          digest="$(docker buildx imagetools inspect --raw "$tag" | jq -r 'if .manifests then [.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length else (if .os == "linux" and .architecture == "arm64" then 1 else 0 end) end')"
-          [[ "$digest" =~ ^[1-9][0-9]*$ ]] || { echo 'Pushed image has no linux/arm64 manifest.' >&2; exit 1; }
-          image_digest="$(docker buildx imagetools inspect "$tag" | awk '/Digest:/ {print $2; exit}')"
+          arm64_count="$(docker buildx imagetools inspect --raw "$tag" | jq -r 'if .manifests then [.manifests[]?.platform? | select(.os == "linux" and .architecture == "arm64")] | length else (if .os == "linux" and .architecture == "arm64" then 1 else 0 end) end')"
+          [[ "$arm64_count" =~ ^[1-9][0-9]*$ ]] || { echo 'Pushed image has no linux/arm64 manifest.' >&2; exit 1; }
+          image_digest="$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -r '.digest')"
           [[ "$image_digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           image="$repository@$image_digest"
           metadata="$(python3 - "$COMPONENT" <<'PY'
