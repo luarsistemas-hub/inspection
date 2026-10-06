@@ -250,7 +250,7 @@ if [[ "${#compose_services[@]}" -gt 0 ]]; then
     "${dc[@]}" run --rm --no-deps inspection-keycloak-check
   fi
   phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" /usr/local/sbin/inspection-smoke
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" /usr/local/sbin/inspection-smoke
 fi
 
 phase=promoting

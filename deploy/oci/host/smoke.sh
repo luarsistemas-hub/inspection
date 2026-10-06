@@ -3,7 +3,8 @@ set -euo pipefail
 source /etc/inspection/public.env
 
 compose_file="${INSPECTION_COMPOSE_FILE:-/opt/inspection/current/compose.yaml}"
-compose=(docker compose --env-file /etc/inspection/compose.env -f "$compose_file")
+compose_env="${INSPECTION_COMPOSE_ENV:-/etc/inspection/compose.env}"
+compose=(docker compose --env-file "$compose_env" -f "$compose_file")
 deadline=$((SECONDS + 300))
 
 retry_http() {
