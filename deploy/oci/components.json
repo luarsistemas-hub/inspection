@@ -13,8 +13,9 @@
   },
   "sharedRules": [
     {"paths": ["deploy/oci/Caddyfile"], "components": ["capture"]},
+    {"paths": ["deploy/oci/litellm-config.yaml"], "components": ["worker"]},
     {"paths": ["services/inspection/schema.graphqls", "services/inspection/internal/graphql/"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding"]},
     {"paths": [".dockerignore", "deploy/oci/compose.yaml", "deploy/oci/components.json", "deploy/oci/affected.py", "deploy/oci/Go.Dockerfile", "deploy/oci/base-images.lock", ".github/workflows/build-images.yml"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak"]}
   ],
-  "ignoredPaths": ["docs/", ".compozy/", ".github/", "deploy/oci/runtime/", "deploy/oci/foundation/", "deploy/oci/host/", "deploy/oci/tests/", "deploy/oci/ops.sh", "deploy/oci/verify-release.py", "deploy/oci/affected.py", "deploy/oci/planner.py", "README.md", "LICENSE", ".gitignore"]
+  "ignoredPaths": ["docs/", ".compozy/", ".github/", "deploy/oci/runtime/", "deploy/oci/foundation/", "deploy/oci/host/", "deploy/oci/tests/", "deploy/oci/ops.sh", "deploy/oci/verify-release.py", "deploy/oci/vault_secrets.py", "deploy/oci/affected.py", "deploy/oci/planner.py", "deploy/oci/compose.env.example", "deploy/oci/readme.md", "deploy/oci/secrets.map.example", "README.md", "LICENSE", ".gitignore"]
 }
