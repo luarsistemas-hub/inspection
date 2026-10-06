@@ -25,8 +25,8 @@ transfer_release() {
     sha256sum --check '$release-bundle.sha256'
     grep -qx \"RELEASE_SHA=$release\" \"\$manifest\"
     grep -qx \"BUNDLE_SHA256=\$(awk 'NR==1 {print \$1}' \"\$checksum\")\" \"\$manifest\"
-    for key in API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE; do
-      if [[ "\$key" == WORKER_IMAGE || "\$key" == SCHEDULER_IMAGE || "\$key" == OPERATIONS_IMAGE ]] && ! grep -q "^\$key=" "\$manifest"; then continue; fi
+    for key in API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE LITELLM_IMAGE; do
+      if [[ "\$key" == WORKER_IMAGE || "\$key" == SCHEDULER_IMAGE || "\$key" == OPERATIONS_IMAGE || "\$key" == LITELLM_IMAGE ]] && ! grep -q "^\$key=" "\$manifest"; then continue; fi
       value=\$(grep -m1 \"^\$key=\" \"\$manifest\" | cut -d= -f2-)
       [[ \"\$value\" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo \"Invalid digest-pinned image reference: \$key\" >&2; exit 1; }
       [[ \$(grep -c \"^\$key=\" \"\$manifest\") == 1 ]] || { echo \"Duplicate or missing image reference: \$key\" >&2; exit 1; }
@@ -220,12 +220,12 @@ PY
   cleanup-images) ssh_host 'sudo bash -s' <<'REMOTE'
 set -euo pipefail
 declare -A keep=()
-image_keys=(API_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE)
+image_keys=(API_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE LITELLM_IMAGE)
 for manifest in /etc/inspection/releases/current.env /etc/inspection/releases/previous.env; do
   [[ -s "$manifest" ]] || continue
   declare -A seen=()
   while IFS='=' read -r key reference; do
-    case "$key" in API_IMAGE|WORKER_IMAGE|SCHEDULER_IMAGE|OPERATIONS_IMAGE|KEYCLOAK_IMAGE|ADMIN_IMAGE|DASHBOARD_IMAGE|CAPTURE_IMAGE|ONBOARDING_IMAGE|POSTGRES_IMAGE|DRAGONFLY_IMAGE|RABBITMQ_IMAGE|CADDY_IMAGE) ;;
+    case "$key" in API_IMAGE|WORKER_IMAGE|SCHEDULER_IMAGE|OPERATIONS_IMAGE|KEYCLOAK_IMAGE|ADMIN_IMAGE|DASHBOARD_IMAGE|CAPTURE_IMAGE|ONBOARDING_IMAGE|POSTGRES_IMAGE|DRAGONFLY_IMAGE|RABBITMQ_IMAGE|CADDY_IMAGE|LITELLM_IMAGE) ;;
       *) continue ;;
     esac
     [[ "$reference" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo "Invalid image reference in $manifest: $key" >&2; exit 1; }
@@ -235,7 +235,8 @@ for manifest in /etc/inspection/releases/current.env /etc/inspection/releases/pr
     keep["$image_id"]=1
   done < "$manifest"
   for key in "${image_keys[@]}"; do
-    [[ "$key" == WORKER_IMAGE || "$key" == SCHEDULER_IMAGE || "$key" == OPERATIONS_IMAGE ]] && [[ -z "${seen[$key]:-}" ]] && continue
+    [[ "$key" == WORKER_IMAGE || "$key" == SCHEDULER_IMAGE || "$key" == OPERATIONS_IMAGE || "$key" == LITELLM_IMAGE ]] && [[ -z "${seen[$key]:-}" ]] && continue
+    [[ "$key" == LITELLM_IMAGE && -z "${seen[$key]:-}" ]] && continue
     [[ -n "${seen[$key]:-}" ]] || { echo "Missing image reference in $manifest: $key" >&2; exit 1; }
   done
   for key in "${image_keys[@]}"; do

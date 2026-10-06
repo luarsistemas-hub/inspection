@@ -30,8 +30,8 @@ def expected_names():
     for line in NAMES_FILE.read_text(encoding="utf-8").splitlines():
         if line and not line.startswith("#"):
             names.append(line.split()[0])
-    if len(names) != 21 or len(set(names)) != len(names):
-        raise VaultInputError("secrets.map.example must contain 21 unique names")
+    if len(names) != 23 or len(set(names)) != len(names):
+        raise VaultInputError("secrets.map.example must contain 23 unique names")
     return names
 
 
@@ -150,7 +150,7 @@ def oci_clients(args):
     return oci, vault_client, secrets_client, key.id
 
 
-def existing_secrets(oci, vault_client, secrets_client, args, names, values, key_id):
+def existing_secrets(oci, vault_client, secrets_client, args, names, values, key_id, verify_names):
     summaries = oci.pagination.list_call_get_all_results(
         vault_client.list_secrets, args.compartment_id, vault_id=args.vault_id
     ).data
@@ -165,10 +165,11 @@ def existing_secrets(oci, vault_client, secrets_client, args, names, values, key
             raise VaultInputError(f"{name} is not ACTIVE in OCI")
         if summary.key_id != key_id:
             raise VaultInputError(f"{name} uses a different encryption key in OCI")
-        bundle = secrets_client.get_secret_bundle(summary.id).data
-        current = base64.b64decode(bundle.secret_bundle_content.content, validate=True)
-        if not hmac.compare_digest(current, values[name].encode("utf-8")):
-            raise VaultInputError(f"{name} exists in OCI with a different value; review it manually")
+        if name in verify_names:
+            bundle = secrets_client.get_secret_bundle(summary.id).data
+            current = base64.b64decode(bundle.secret_bundle_content.content, validate=True)
+            if not hmac.compare_digest(current, values[name].encode("utf-8")):
+                raise VaultInputError(f"{name} exists in OCI with a different value; review it manually")
     return by_name
 
 
@@ -186,14 +187,20 @@ def write_private(path, content):
 
 def upload(args, names, values):
     output_dir = outside_repository(Path(args.output_dir))
+    verify_names = set(args.only) if args.only else set(names)
+    if not verify_names.issubset(names) or len(args.only) != len(set(args.only)):
+        raise VaultInputError("--only must name distinct secrets from secrets.map.example")
     oci, vault_client, secrets_client, key_id = oci_clients(args)
-    existing = existing_secrets(oci, vault_client, secrets_client, args, names, values, key_id)
+    existing = existing_secrets(oci, vault_client, secrets_client, args, names, values, key_id, verify_names)
     missing = [name for name in names if name not in existing]
-    print(f"Vault {VAULT_NAME}: {len(existing)} matching secrets, {len(missing)} to create")
+    unselected_missing = sorted(set(missing) - verify_names)
+    if unselected_missing:
+        raise VaultInputError("unselected secrets are missing in OCI: " + ", ".join(unselected_missing))
+    print(f"Vault {VAULT_NAME}: {len(existing)} active mapped secrets, {len(verify_names)} selected for value checks, {len(missing)} to create")
     for name in missing:
         print(f"  create {name}")
     if not args.apply:
-        print("Preview only. Rerun with --apply to create the missing secrets.")
+        print("Preview only. Rerun with --apply to create the missing secrets." if missing else "All selected secrets already exist with matching values.")
         return
 
     private_directory(output_dir)
@@ -244,6 +251,7 @@ def main():
     upload_command.add_argument("--config-file", default=str(Path.home() / ".oci" / "config"))
     upload_command.add_argument("--profile", default="DEFAULT")
     upload_command.add_argument("--output-dir", required=True)
+    upload_command.add_argument("--only", action="append", default=[], help="verify/create one selected secret; repeat as needed")
     upload_command.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     names = expected_names()

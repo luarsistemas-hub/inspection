@@ -10,6 +10,27 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 class ComposeSecretsTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
+    def test_live_llm_uses_private_healthy_gateway_and_vault_key(self):
+        rendered = subprocess.check_output([
+            "docker", "compose", "--env-file", "deploy/oci/compose.env.example",
+            "-f", "deploy/oci/compose.yaml", "--profile", "operations", "config", "--format", "json",
+        ], cwd=ROOT, text=True)
+        services = json.loads(rendered)["services"]
+        gateway = services["litellm"]
+        self.assertEqual(gateway["image"], json.loads((ROOT / "deploy/oci/base-images.lock").read_text())["images"]["litellm"])
+        self.assertNotIn("ports", gateway)
+        self.assertEqual(gateway["environment"]["LITELLM_MASTER_KEY"], "example")
+        self.assertEqual(gateway["environment"]["LLM_API_KEY"], "example")
+        self.assertEqual(services["inspection-worker"]["depends_on"]["litellm"]["condition"], "service_healthy")
+        for name, service in services.items():
+            environment = service.get("environment", {})
+            if "INSPECTION_LLM_MODE" in environment:
+                with self.subTest(service=name):
+                    self.assertEqual(environment["INSPECTION_LLM_MODE"], "live")
+                    self.assertEqual(environment["INSPECTION_LITELLM_URL"], "http://litellm:4000")
+                    self.assertEqual(environment["INSPECTION_LITELLM_API_KEY"], gateway["environment"]["LITELLM_MASTER_KEY"])
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
     def test_worker_uses_worker_database_connection(self):
         rendered = subprocess.check_output([
             "docker", "compose", "--env-file", "deploy/oci/compose.env.example",

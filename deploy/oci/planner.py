@@ -13,8 +13,9 @@ from pathlib import Path
 
 COMPONENTS = ("api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak")
 IMAGE_KEYS = {name: name.upper() + "_IMAGE" for name in COMPONENTS}
-INFRA_KEYS = ("POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE")
+INFRA_KEYS = ("POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE")
 COMPOSITION_KEYS = set(IMAGE_KEYS.values()) | set(INFRA_KEYS)
+PREVIOUS_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE"}
 IMAGE_REF = re.compile(r"[^\s@]+@sha256:[a-f0-9]{64}\Z")
 GO_COMPONENTS = {"api", "worker", "scheduler", "operations"}
 PUBLIC_PROFILE_KEYS = {
@@ -79,27 +80,30 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str], dep
         raise ValueError("candidate does not contain selected component(s): " + ", ".join(absent))
     # Import the existing monolithic Go digest as the initial image for each
     # independent process while the initial production receipt is migrated.
-    legacy_keys = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", *INFRA_KEYS}
+    legacy_keys = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", *(set(INFRA_KEYS) - {"LITELLM_IMAGE"})}
     if set(active) == legacy_keys:
         legacy = active["API_IMAGE"]
         active = {**active, **{IMAGE_KEYS[name]: legacy for name in GO_COMPONENTS}}
-    if set(active) and set(active) != COMPOSITION_KEYS:
+    if set(active) and set(active) not in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS):
         missing = sorted(COMPOSITION_KEYS - set(active))
         raise ValueError("active state is incomplete: " + ", ".join(missing))
     if any(not IMAGE_REF.fullmatch(value) for value in active.values()):
         raise ValueError("active state contains a mutable or invalid image reference")
     if not active and set(targets) != set(COMPONENTS):
         raise ValueError("first deployment must select all nine components")
+    if active and "LITELLM_IMAGE" not in active and "worker" not in targets:
+        raise ValueError("introducing the LiteLLM gateway requires selecting worker")
 
     desired = dict(active)
+    infrastructure = candidate.get("infrastructure")
+    if not isinstance(infrastructure, dict) or set(infrastructure) != set(INFRA_KEYS):
+        raise ValueError("candidate requires all five approved infrastructure image digests")
+    if any(not isinstance(value, str) or not IMAGE_REF.fullmatch(value) for value in infrastructure.values()):
+        raise ValueError("infrastructure images must be digest pinned")
     if not active:
-        infrastructure = candidate.get("infrastructure")
-        if not isinstance(infrastructure, dict) or set(infrastructure) != set(INFRA_KEYS):
-            raise ValueError("first deployment requires all four approved infrastructure image digests")
-        for key, value in infrastructure.items():
-            if not isinstance(value, str) or not IMAGE_REF.fullmatch(value):
-                raise ValueError(f"{key} must be digest pinned")
-            desired[key] = value
+        desired.update(infrastructure)
+    elif "LITELLM_IMAGE" not in desired or "worker" in targets:
+        desired["LITELLM_IMAGE"] = infrastructure["LITELLM_IMAGE"]
     for component, item in candidate_components.items():
         if component in targets:
             desired[IMAGE_KEYS[component]] = item["image"]
@@ -147,13 +151,15 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str], dep
 
 
 def create_rollback_plan(active: dict[str, str], previous: dict[str, str], targets: list[str], deployment_id: str | None = None, source_sha: str = "") -> dict:
-    if set(active) != COMPOSITION_KEYS or set(previous) != COMPOSITION_KEYS:
+    if set(active) != COMPOSITION_KEYS or set(previous) not in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS):
         raise ValueError("rollback requires complete current and previous image receipts")
     if not targets or set(targets) - set(COMPONENTS) or len(set(targets)) != len(targets):
         raise ValueError("rollback targets must be unique known components")
     if any(not IMAGE_REF.fullmatch(value) for value in previous.values()):
         raise ValueError("previous composition contains a non-digest image")
     desired = dict(active)
+    if "LITELLM_IMAGE" not in previous:
+        previous = {**previous, "LITELLM_IMAGE": active["LITELLM_IMAGE"]}
     for component in targets:
         desired[IMAGE_KEYS[component]] = previous[IMAGE_KEYS[component]]
     plan = {

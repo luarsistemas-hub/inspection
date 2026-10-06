@@ -6,6 +6,16 @@ variable "tenancy_ocid" {
   type = string
 }
 
+variable "additional_runtime_instance_ocid" {
+  description = "Optional existing runtime instance to include until it is moved into the dedicated compartment."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.additional_runtime_instance_ocid == "" || startswith(var.additional_runtime_instance_ocid, "ocid1.instance.")
+    error_message = "Provide an OCI compute instance OCID or leave this value empty."
+  }
+}
+
 variable "compartment_name" {
   type    = string
   default = "inspection"

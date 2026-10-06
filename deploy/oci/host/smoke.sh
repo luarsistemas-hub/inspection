@@ -43,7 +43,10 @@ retry_storage_cors() {
   return 1
 }
 
-for service in postgres dragonfly rabbitmq keycloak inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding; do
+services=(postgres dragonfly rabbitmq keycloak)
+if grep -q '^  litellm:' "$compose_file"; then services+=(litellm); fi
+services+=(inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding)
+for service in "${services[@]}"; do
   id="$("${compose[@]}" ps -q "$service")"
   [[ -n "$id" ]] || { echo "Compose service has no container: $service" >&2; exit 1; }
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id")"

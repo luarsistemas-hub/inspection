@@ -7,7 +7,7 @@ Este é o ponto de entrada operacional. Use-o para provisionar, publicar versõe
 ```text
 Browser ── HTTPS/443 ── Caddy ── Admin, Dashboard, Capture, Onboarding, API, Keycloak
                              └── storage proxy ── OCI regional S3-compatible endpoint
-Private Docker network: PostgreSQL, RabbitMQ, Dragonfly, API, worker, scheduler, Keycloak
+Private Docker network: PostgreSQL, RabbitMQ, Dragonfly, LiteLLM, API, worker, scheduler, Keycloak
 Persistent OCI block volume: database, queues, cache, Keycloak database, certificates
 OCI: Resource Manager, Vault, private Object Storage bucket, Email Delivery, Monitoring/Notifications
 ```
@@ -57,6 +57,7 @@ Use a tabela abaixo como inventário completo de entradas. Não há valores padr
 | `POSTGRES_ADMIN_PASSWORD`, `INSPECTION_RUNTIME_PASSWORD`, `INSPECTION_WORKER_PASSWORD`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_BOOTSTRAP_USERNAME`, `KEYCLOAK_BOOTSTRAP_PASSWORD`, `KEYCLOAK_PROVISIONING_SECRET` | Required; no defaults | Generate unique random hex passwords; username such as `bootstrap-admin` | Individual OCI Vault secrets named in `secrets.map` |
 | `RABBITMQ_PASSWORD`, `DRAGONFLY_PASSWORD`, `TURNSTILE_SECRET`, `SUPER_ADMIN_PASSWORD`, `INSPECTION_METRICS_TOKEN`, `INSPECTION_OTP_PEPPER`, `NOTIFICATION_ACTIVE_PAYLOAD_KEY`, `NOTIFICATION_PAYLOAD_KEYS` | Required; no defaults | Key ID and JSON/base64 key ring as described above | Individual OCI Vault secrets |
 | `OCI_S3_ACCESS_KEY`, `OCI_S3_SECRET_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `GHCR_USERNAME`, `GHCR_READ_TOKEN` | Required; no defaults | OCI Customer Secret Key, OCI SMTP credentials, GHCR read-only PAT | Individual OCI Vault secrets |
+| `LITELLM_MASTER_KEY`, `LLM_API_KEY` | Required for live LLM | Gateway access key and Gemini provider key | Individual OCI Vault secrets; never in `public.env` |
 | `API_IMAGE`, `KEYCLOAK_IMAGE`, `ADMIN_IMAGE`, `DASHBOARD_IMAGE`, `CAPTURE_IMAGE`, `ONBOARDING_IMAGE`, `POSTGRES_IMAGE`, `DRAGONFLY_IMAGE`, `RABBITMQ_IMAGE`, `CADDY_IMAGE`, `RELEASE_SHA` | Required for deploy; no defaults | Registry `@sha256:<64-hex>` references and commit SHA | Generated release manifest from GitHub Actions artifact |
 
 Segredos no Vault devem ter uma única linha e não podem conter aspas simples (`'`); o `secrets-refresh` rejeita esses valores. Senhas usadas em DSNs e na URL do RabbitMQ são codificadas (URL-encoding) automaticamente.
@@ -65,7 +66,7 @@ Gere cada senha como uma longa sequência hexadecimal aleatória para que possa 
 
 O usuário OCI S3 é criado pelo Terraform, mas sua Customer Secret Key deve ser criada separadamente em OCI Console → Identity & Security → Users. Copie a chave uma única vez para o Vault; a OCI não a exibirá novamente. Crie credenciais SMTP em Email Delivery, aprove o remetente e publique os registros SPF/DKIM do domínio. Confirme a inscrição de e-mail criada para o tópico de alertas.
 
-### Enviar os 21 segredos ao Vault
+### Enviar os 23 segredos ao Vault
 
 O script [vault_secrets.py](vault_secrets.py) usa os nomes de [secrets.map.example](secrets.map.example). Ele cria somente os segredos ausentes no Vault `inspection-vault`, usando a chave `inspection-secrets-key` gerada pela foundation. Se um segredo já existir, ele confere o valor e a chave; uma divergência interrompe a execução para revisão manual, sem trocar o valor. Após um Apply completo, gera `secrets.map` e `secret_ocids.json` contendo somente nomes e OCIDs. Uma execução interrompida pode ser repetida com o mesmo arquivo de valores.
 
@@ -78,7 +79,7 @@ python3 -m venv "$HOME/.inspection-oci/venv"
 "$HOME/.inspection-oci/venv/bin/python" deploy/oci/vault_secrets.py template --output "$HOME/.inspection-oci/vault-values.env"
 ```
 
-Edite `~/.inspection-oci/vault-values.env` em um editor local. Cada linha tem o formato `NOME=valor`, sem `export` ou aspas externas. Preencha todos os 21 nomes. Para senhas e tokens gerados por você, use valores distintos e aleatórios; `openssl rand -hex 32` gera 32 bytes em hexadecimal. `INSPECTION_OTP_PEPPER` requer pelo menos esse tamanho. Para `NOTIFICATION_PAYLOAD_KEYS`, gere uma chave com `openssl rand -base64 32` e use um objeto JSON em uma única linha, como `{"v1":"<chave-base64-de-32-bytes>"}`; defina `NOTIFICATION_ACTIVE_PAYLOAD_KEY=v1`. A Customer Secret Key S3, as credenciais SMTP, o segredo Turnstile e o token GHCR vêm das respectivas contas; não invente esses valores. Mantenha o arquivo somente no computador do operador, com permissão `0600`, fora do Git. Não coloque valores em argumentos de comando, Terraform, Resource Manager ou mensagens.
+Edite `~/.inspection-oci/vault-values.env` em um editor local. Cada linha tem o formato `NOME=valor`, sem `export` ou aspas externas. Preencha todos os 23 nomes. Para senhas e tokens gerados por você, use valores distintos e aleatórios; `openssl rand -hex 32` gera 32 bytes em hexadecimal. `INSPECTION_OTP_PEPPER` requer pelo menos esse tamanho. Para `NOTIFICATION_PAYLOAD_KEYS`, gere uma chave com `openssl rand -base64 32` e use um objeto JSON em uma única linha, como `{"v1":"<chave-base64-de-32-bytes>"}`; defina `NOTIFICATION_ACTIVE_PAYLOAD_KEY=v1`. A Customer Secret Key S3, as credenciais SMTP, o segredo Turnstile e o token GHCR vêm das respectivas contas; não invente esses valores. Mantenha o arquivo somente no computador do operador, com permissão `0600`, fora do Git. Não coloque valores em argumentos de comando, Terraform, Resource Manager ou mensagens.
 
 ```sh
 "$HOME/.inspection-oci/venv/bin/python" deploy/oci/vault_secrets.py check --values "$HOME/.inspection-oci/vault-values.env"
@@ -98,6 +99,8 @@ Na raiz do repositório, execute `deploy/oci/ops.sh validate` e `deploy/oci/ops.
 Antes de criar as stacks, confira disponibilidade A1, quotas Always Free regionais, franquia combinada de 200 GB para boot/volume de bloco, franquia de armazenamento, controle do domínio e acesso aos pacotes do GitHub. Crie `foundation` no OCI Resource Manager usando seu ZIP e Terraform 1.5.7. Revise o Plan; confirme que cria apenas o compartment do projeto, Vault/chave, bucket privado, IAM restrito, tópico e inscrição de e-mail; então execute Apply. Registre os outputs não secretos.
 
 Após concluir `foundation`, confirme a inscrição de alertas e a aprovação do remetente. Publique os registros SPF/DKIM do domínio conforme as instruções do OCI Email Delivery. Crie fora do Terraform os segredos listados no Vault e copie somente os OCIDs. Crie `runtime` a partir do ZIP, na mesma região. Informe outputs de foundation, OCID exato da imagem Ubuntu 24.04 ARM64 e AD, chave SSH pública, um CIDR administrativo confiável e um mapa `secret_ocids` com cada nome/OCID de `secrets.map.example`. A política IAM concede à instância acesso somente aos segredos listados. Antes de Apply, revise no Plan listeners públicos, recursos pagos inesperados, substituições destrutivas e tamanho do volume. Os outputs de runtime fornecem o IP. Não aplique se o CIDR estiver mais amplo que o pretendido ou se qualquer recurso exceder as quotas revisadas.
+
+Se a VM existente ainda estiver no compartimento raiz da tenancy, preencha `additional_runtime_instance_ocid` na stack `foundation` com o OCID somente dessa VM. A regra do Dynamic Group inclui esse OCID além das instâncias no compartimento dedicado. Depois de mover ou substituir a VM para o compartimento `inspection`, limpe a variável e aplique o Plan para remover a exceção.
 
 Crie registros A de `admin`, `dashboard`, `capture`, `onboarding`, `api`, `auth` e `storage` apontando ao IP público de runtime. Publique registros SPF/DKIM do OCI Email Delivery conforme documentado pelo serviço. Verifique cada registro de fora da tenancy. Caddy obtém e renova certificados automaticamente por TLS-ALPN na porta 443; requer DNS publicado e volume de dados gravável na VM. [Requisitos de certificados do Caddy](https://caddyserver.com/docs/automatic-https).
 
@@ -141,6 +144,20 @@ O candidato registra os componentes construídos e os digests anteriores reutili
 O workflow legado **OCI ARM64 images** continua durante a migração e só entende o manifesto monolítico. Não use esse fluxo para a nova promoção independente. Quando a produção estiver no formato novo e o rollback seletivo estiver ensaiado, remova esse workflow e bloqueie os comandos legados que podem substituir o estado sem registro. O host deve manter acesso GHCR de leitura no Vault; Actions não recebe os segredos da aplicação.
 
 Para planejar/aplicar localmente, use `deploy/oci/ops.sh plan ACTIVE.env CANDIDATE.json admin /tmp/plan.json`; isso também grava `/tmp/plan.source-bundle.tgz`. Revise o hash apresentado e execute `INSPECTION_RUNTIME_HOST=10.77.0.1 INSPECTION_APPROVED_PLAN_SHA256=<plan-sha256> deploy/oci/ops.sh apply /tmp/plan.json /tmp/plan.source-bundle.tgz`. Para rollback, gere o plano com `ops.sh rollback-plan ACTIVE.env PREVIOUS.env admin /tmp/rollback-plan.json` e aplique com o bundle adjacente `/tmp/rollback-plan.source-bundle.tgz`. `deployment-status [ID]` consulta o executor supervisionado; `sync-state current` lê o recibo do host. Não aplique um plano cujo `expectedActiveStateSha256` deixou de coincidir com o host.
+
+### Falhas do executor supervisionado
+
+O Compose de produção provisiona LiteLLM como serviço privado na rede `app`. A URL `INSPECTION_LITELLM_URL=http://litellm:4000` é resolvida pelos containers; a porta 4000 não é publicada na VM. A imagem ARM64 está fixada por digest em `base-images.lock` e participa do recibo de composição como `LITELLM_IMAGE`. O worker aguarda o health check do gateway antes de iniciar.
+
+Para ativar esse serviço em uma instalação existente, acrescente `LITELLM_MASTER_KEY` e `LLM_API_KEY` ao arquivo privado `~/.inspection-oci/vault-values.env`. O primeiro autentica o Inspection perante o gateway; o segundo autentica o gateway perante o provedor Gemini. Rode `vault_secrets.py check` e o preview de `upload` descritos acima com `--only LITELLM_MASTER_KEY --only LLM_API_KEY`; isso compara somente os dois valores selecionados e mantém os OCIDs dos demais segredos. Depois execute o mesmo comando com `--apply` para criar os dois segredos. Atualize a variável `secret_ocids` da stack runtime com os dois OCIDs novos e aplique o Plan revisado para autorizar a Instance Principal a lê-los. Instale o `secrets.map` atualizado em `/etc/inspection/secrets.map` com `root:root` e modo `0600`; então execute `deploy/oci/ops.sh secrets refresh`. Esse comando monta `/etc/inspection/compose.env` com as chaves, sem copiá-las ao GitHub. Confirme apenas a presença das variáveis, sem imprimir seus valores.
+
+O novo plano de publicação precisa selecionar `worker` ao introduzir `LITELLM_IMAGE`. O executor puxa a imagem por digest, inicia o gateway e espera sua saúde antes de atualizar o worker. O recibo anterior, com 13 imagens, continua aceito como base; o novo recibo contém 14. Gere novo candidato e novo plano após o commit da configuração. Reaplicar o bundle antigo mantém a configuração que falhou.
+
+Consulte `sudo journalctl -u inspection-deployment-<ID>.service --no-pager` na VM para identificar a falha. O executor guarda o estado dos containers e até 100 linhas de log por serviço selecionado em `/var/lib/inspection-deploy/jobs/<ID>/diagnostics/` antes da recuperação, pois recriar containers apaga os logs anteriores. Esses arquivos são acessíveis somente por root e podem conter dados sensíveis; inspecione e remova esses dados antes de compartilhar.
+
+Quando há falha antes de uma migração ou da promoção dos recibos, o executor tenta restaurar os serviços selecionados com a composição anterior e aguarda os health checks. Se a recuperação funcionar, ele restaura o bloqueio que já existia ou remove o marcador criado pela tentativa. A operação continua com status `failed`. Falhas após o início da migração, durante a promoção ou na própria recuperação mantêm o bloqueio para investigação. Uma unidade systemd ainda em `activating` é uma operação em andamento, mesmo que `Result=success` e `ExecMainStatus=0` ainda tenham seus valores iniciais.
+
+Para publicar uma correção, gere um candidato a partir do novo commit em `main` e revise um novo plano. Reexecutar apenas `apply` de um plano antigo reutiliza seu bundle e seu ID. Se um executor antigo deixou um marcador após recuperar os serviços, confira os digests e a saúde dos containers contra `current.env` e confirme no journal que não houve migração. Um novo plano pode aplicar a correção sobre esse recibo; o executor remove o bloqueio após concluir os checks e promover a nova versão. Não é necessário apagar o marcador previamente para aplicar o plano.
 
 ## Operação diária
 

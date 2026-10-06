@@ -117,7 +117,7 @@ else
   fi
   phase=dependencies
   write_block
-  "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak
+  "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
   "${dc[@]}" run --rm --no-deps inspection-keycloak-check
   phase=migration
   write_block

@@ -62,7 +62,7 @@ resource "oci_identity_user_group_membership" "s3" {
 resource "oci_identity_dynamic_group" "runtime" {
   compartment_id = var.tenancy_ocid
   description    = "Inspection runtime instances in the dedicated compartment"
-  matching_rule  = "All {instance.compartment.id = '${oci_identity_compartment.inspection.id}'}"
+  matching_rule  = "Any {${join(", ", concat(["instance.compartment.id = '${oci_identity_compartment.inspection.id}'"], var.additional_runtime_instance_ocid == "" ? [] : ["instance.id = '${var.additional_runtime_instance_ocid}'"]))}}"
   name           = "inspection-runtime"
 }
 

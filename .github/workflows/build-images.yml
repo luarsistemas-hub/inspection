@@ -300,7 +300,7 @@ jobs:
           database = "required" if any(path.startswith(db_prefixes) for path in paths) else ("none" if base else "unknown")
           contracts = "unknown" if any(path == "services/inspection/schema.graphqls" or path.startswith("services/inspection/internal/contracts/events/") for path in paths) else ("compatible" if base else "unknown")
           lock = json.loads(pathlib.Path("deploy/oci/base-images.lock").read_text())
-          infrastructure = {"POSTGRES_IMAGE": "postgres", "DRAGONFLY_IMAGE": "dragonfly", "RABBITMQ_IMAGE": "rabbitmq", "CADDY_IMAGE": "caddy"}
+          infrastructure = {"POSTGRES_IMAGE": "postgres", "DRAGONFLY_IMAGE": "dragonfly", "RABBITMQ_IMAGE": "rabbitmq", "CADDY_IMAGE": "caddy", "LITELLM_IMAGE": "litellm"}
           doc = {"schemaVersion": 1, "candidateId": candidate_id, "sourceSha": sha, "baseSha": base or None, "buildTargets": json.loads(build_targets), "suggestedTargets": json.loads(build_targets), "components": computed, "infrastructure": {key: lock["images"][name] for key, name in infrastructure.items()}, "compatibility": {"databaseChange": database, "contractChange": contracts}}
           pathlib.Path(output).write_text(json.dumps(doc, sort_keys=True, indent=2) + "\n")
           PY

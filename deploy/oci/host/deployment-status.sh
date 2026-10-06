@@ -5,12 +5,20 @@ if [[ -n "${1:-}" ]]; then
   deployment_id="$1"
   [[ "$deployment_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]] || { echo 'Invalid deployment ID.' >&2; exit 2; }
   unit="inspection-deployment-$deployment_id.service"
-  properties="$(systemctl show "$unit" --no-pager -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p ExecMainStartTimestamp 2>/dev/null || true)"
+  properties="$(systemctl show "$unit" --no-pager -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p ExecMainStartTimestamp -p ExecMainExitTimestamp 2>/dev/null || true)"
   [[ -n "$properties" ]] || { echo '{"status":"unknown"}'; exit 0; }
   python3 - "$deployment_id" "$properties" <<'PY'
 import json, sys
 values=dict(line.split("=",1) for line in sys.argv[2].splitlines() if "=" in line)
-status="running" if values.get("ActiveState")=="active" and values.get("SubState")=="running" else "succeeded" if values.get("Result")=="success" and values.get("ExecMainStatus")=="0" else "failed" if values.get("ActiveState")=="failed" or values.get("Result") not in (None,"success","") else "unknown"
+status="unknown"
+if values.get("LoadState")=="loaded":
+    active, sub = values.get("ActiveState"), values.get("SubState")
+    if active in ("activating", "deactivating") or (active=="active" and sub=="running"):
+        status="running"
+    elif active=="failed" or values.get("Result") not in (None,"success",""):
+        status="failed"
+    elif active=="active" and sub=="exited" and values.get("Result")=="success" and values.get("ExecMainStatus")=="0" and values.get("ExecMainExitTimestamp"):
+        status="succeeded"
 print(json.dumps({"deploymentId":sys.argv[1],"status":status,"result":values.get("Result"),"exitCode":values.get("ExecMainStatus"),"startedAt":values.get("ExecMainStartTimestamp")},sort_keys=True))
 PY
   exit 0

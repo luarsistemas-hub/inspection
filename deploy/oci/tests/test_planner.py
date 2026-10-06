@@ -26,6 +26,8 @@ class PlannerTests(unittest.TestCase):
     def setUp(self):
         self.candidate = {"candidateId": "build-17", "sourceSha": "b" * 40,
                           "components": {name: component(name) for name in planner.COMPONENTS},
+                          "infrastructure": {key: f"docker.io/example/{key.lower()}@sha256:" + "e" * 64
+                                             for key in planner.INFRA_KEYS},
                           "compatibility": {"databaseChange": "none", "contractChange": "compatible"}}
         self.active = {key: f"ghcr.io/example/inspection-{name}@sha256:" + "d" * 64
                        for name, key in planner.IMAGE_KEYS.items()}
@@ -72,6 +74,21 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(plan["desiredImages"]["WORKER_IMAGE"], previous["WORKER_IMAGE"])
         self.assertEqual(plan["desiredImages"]["API_IMAGE"], self.active["API_IMAGE"])
         self.assertFalse(plan["operations"]["runMigration"])
+
+    def test_first_gateway_deployment_requires_worker_and_tracks_image(self):
+        old_active = {key: value for key, value in self.active.items() if key != "LITELLM_IMAGE"}
+        with self.assertRaisesRegex(ValueError, "requires selecting worker"):
+            planner.create_plan(old_active, self.candidate, ["admin"])
+        plan = planner.create_plan(old_active, self.candidate, ["worker"])
+        self.assertEqual(plan["expectedActiveStateSha256"], planner.canonical_hash(old_active))
+        self.assertEqual(plan["desiredImages"]["LITELLM_IMAGE"], self.candidate["infrastructure"]["LITELLM_IMAGE"])
+
+    def test_gateway_image_upgrade_requires_worker_selection(self):
+        self.candidate["infrastructure"]["LITELLM_IMAGE"] = "docker.io/example/litellm@sha256:" + "f" * 64
+        admin = planner.create_plan(self.active, self.candidate, ["admin"])
+        worker = planner.create_plan(self.active, self.candidate, ["worker"])
+        self.assertEqual(admin["desiredImages"]["LITELLM_IMAGE"], self.active["LITELLM_IMAGE"])
+        self.assertEqual(worker["desiredImages"]["LITELLM_IMAGE"], self.candidate["infrastructure"]["LITELLM_IMAGE"])
 
 
 if __name__ == "__main__":

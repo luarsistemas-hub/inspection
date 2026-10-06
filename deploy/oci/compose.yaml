@@ -50,6 +50,7 @@ x-runtime-env: &runtime-env
   INSPECTION_LITELLM_URL: http://litellm:4000
   INSPECTION_PROVIDER_TIMEOUT: 30s
   INSPECTION_IMAGE_VALIDATION_ENABLED: "true"
+  INSPECTION_LITELLM_API_KEY: ${LITELLM_MASTER_KEY:?LiteLLM master key required}
 
 x-migration-env: &migration-env
   <<: *runtime-env
@@ -122,6 +123,26 @@ services:
     mem_limit: 768m
     mem_reservation: 512m
     networks: [data]
+
+  litellm:
+    image: ${LITELLM_IMAGE:?immutable LiteLLM image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LiteLLM master key required}
+      LLM_API_KEY: ${LLM_API_KEY:?LLM provider key required}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    expose: ["4000"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+    mem_reservation: 512m
+    networks: [app]
 
   keycloak:
     image: ${KEYCLOAK_IMAGE:?immutable Keycloak image digest required}
@@ -230,6 +251,7 @@ services:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       dragonfly: { condition: service_healthy }
+      litellm: { condition: service_healthy }
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
       interval: 15s

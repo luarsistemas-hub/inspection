@@ -26,7 +26,9 @@ desired_file="$(mktemp /run/inspection-images.XXXXXX)"
 stage_env="$(mktemp /etc/inspection/.compose.env.plan.XXXXXX)"
 old_env="$(mktemp /run/inspection-compose-env.XXXXXX)"
 old_receipt="$(mktemp /run/inspection-active-state.XXXXXX)"
-trap 'rm -f "$targets_file" "$desired_file" "$stage_env" "$old_env" "$old_receipt"' EXIT
+old_block="$(mktemp /run/inspection-block.XXXXXX)"
+cleanup() { rm -f "$targets_file" "$desired_file" "$stage_env" "$old_env" "$old_receipt" "$old_block"; }
+trap cleanup EXIT
 
 python3 - "$plan_path" "$targets_file" "$desired_file" <<'PY'
 import json, re, sys
@@ -39,7 +41,7 @@ if set(targets) - set(names) - {"operations"}:
     raise SystemExit("Unknown deployment target")
 images = plan.get("desiredImages")
 keys = {name.upper() + "_IMAGE" for name in ("api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak")}
-keys.update({"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE"})
+keys.update({"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"})
 if not isinstance(images, dict) or set(images) != keys:
     raise SystemExit("Desired composition is incomplete")
 for key, value in images.items():
@@ -70,7 +72,7 @@ for line in open(sys.argv[1], encoding="utf-8"):
 legacy = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE"}
 if set(values) == legacy:
     for key in ("WORKER_IMAGE", "SCHEDULER_IMAGE", "OPERATIONS_IMAGE"): values[key] = values["API_IMAGE"]
-if values and len(values) != 13: raise SystemExit("active image receipt is incomplete; synchronize state")
+if values and len(values) not in (13, 14): raise SystemExit("active image receipt is incomplete; synchronize state")
 print(hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
 PY
 )"
@@ -79,6 +81,7 @@ expected_base="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))
 
 export PATH="/opt/inspection/oci-cli/bin:$PATH"
 set -a
+# shellcheck source=/dev/null
 source /etc/inspection/public.env
 set +a
 python3 - "$plan_path" <<'PY'
@@ -114,12 +117,19 @@ os.chmod(path, 0o600)
 PY
 
 block_path=/etc/inspection/deployment-blocked
+had_block=0
+if [[ -e "$block_path" ]]; then
+  install -m 0600 "$block_path" "$old_block"
+  had_block=1
+fi
 phase=preflight
 migration_started=0
 services_stopped=0
 dc=(docker compose --env-file "$stage_env" -f "$release_dir/deploy/oci/compose.yaml")
 compose_services=()
 while IFS= read -r service; do [[ -n "$service" ]] && compose_services+=("$service"); done < "$targets_file"
+gateway_selected=0
+if grep -qx inspection-worker "$targets_file"; then gateway_selected=1; fi
 changed_images=()
 while IFS= read -r component; do
   [[ -n "$component" ]] || continue
@@ -130,6 +140,11 @@ done < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]
 if [[ "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["operations"]["runMigration"]).lower())' "$plan_path")" == true ]]; then
   changed_images+=("$(sed -n 's/^OPERATIONS_IMAGE=//p' "$desired_file")")
 fi
+if [[ "$gateway_selected" == 1 ]]; then
+  gateway_image="$(sed -n 's/^LITELLM_IMAGE=//p' "$desired_file")"
+  old_gateway_image="$(sed -n 's/^LITELLM_IMAGE=//p' "$old_env")"
+  [[ "$gateway_image" == "$old_gateway_image" ]] || changed_images+=("$gateway_image")
+fi
 block() {
   local reason="$1"
   printf 'DEPLOYMENT_ID=%s\nPLAN_SHA256=%s\nPHASE=%s\nREASON=%s\n' "$deployment_id" "$plan_hash" "$phase" "$reason" > "$block_path"
@@ -137,14 +152,56 @@ block() {
 }
 on_exit() {
   result=$?
+  trap - EXIT
+  set +e
   docker logout ghcr.io >/dev/null 2>&1 || true
   if [[ "$result" -ne 0 && "$phase" != preflight ]]; then
+    # Recovery recreates containers, deleting their logs. Retain them privately first.
+    diagnostics="/var/lib/inspection-deploy/jobs/$deployment_id/diagnostics"
+    if install -d -o root -g root -m 0700 "$diagnostics"; then
+      (
+        umask 077
+        "${dc[@]}" ps -a --format json > "$diagnostics/containers.jsonl"
+        if [[ "${#compose_services[@]}" -gt 0 ]]; then
+          if [[ "$gateway_selected" == 1 ]]; then
+            "${dc[@]}" logs --no-color --tail 100 litellm "${compose_services[@]}" > "$diagnostics/containers.log" 2>&1
+          else
+            "${dc[@]}" logs --no-color --tail 100 "${compose_services[@]}" > "$diagnostics/containers.log" 2>&1
+          fi
+        fi
+      )
+      echo "Deployment diagnostics: $diagnostics (root only)." >&2
+    fi
     if [[ "$migration_started" == 1 ]]; then
       block "Deployment failed after database migration started; inspect before recovery."
+    elif [[ "$phase" == promoting ]]; then
+      block 'Deployment failed while promoting state; reconcile receipts and services before recovery.'
     elif [[ -s "$old_env" && "${#compose_services[@]}" -gt 0 ]]; then
-      docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}" >/dev/null 2>&1 || block 'Failed to recover selected services after deployment failure.'
+      gateway_recovered=1
+      if [[ "$gateway_selected" == 1 ]]; then
+        if [[ -n "$old_gateway_image" ]]; then
+          docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 litellm >/dev/null 2>&1 || gateway_recovered=0
+        else
+          "${dc[@]}" stop litellm >/dev/null 2>&1 || true
+        fi
+      fi
+      services_recovered=1
+      docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}" >/dev/null 2>&1 || services_recovered=0
+      if [[ "$gateway_recovered" == 1 && "$services_recovered" == 1 ]]; then
+        if [[ "$had_block" == 1 ]]; then
+          install -o root -g root -m 0600 "$old_block" "$block_path" || block 'Failed to restore the previous deployment block.'
+        else
+          rm -f "$block_path"
+        fi
+        echo 'Previous services recovered; this deployment still failed.' >&2
+      else
+        block 'Failed to recover selected services after deployment failure.'
+      fi
+    else
+      block 'Deployment failed without a previous composition to recover.'
     fi
   fi
+  cleanup
   exit "$result"
 }
 trap on_exit EXIT
@@ -158,6 +215,12 @@ ghcr_token="$(cat /etc/inspection/secrets.d/GHCR_READ_TOKEN)"
 printf '%s' "$ghcr_token" | docker login ghcr.io --username "$ghcr_user" --password-stdin >/dev/null
 unset ghcr_token
 for image in "${changed_images[@]}"; do docker pull "$image"; done
+
+if [[ "$gateway_selected" == 1 ]]; then
+  phase=services
+  block 'LiteLLM gateway is updating.'
+  "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 litellm
+fi
 
 migration="$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["operations"]["runMigration"]).lower())' "$plan_path")"
 if [[ "$migration" == true ]]; then
