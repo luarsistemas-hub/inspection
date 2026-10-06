@@ -171,7 +171,7 @@ jobs:
           alpine_image="$(jq -er '.images.alpine' deploy/oci/base-images.lock)"
           node_image="$(jq -er '.images.node' deploy/oci/base-images.lock)"
           keycloak_image="$(jq -er '.images.keycloak' deploy/oci/base-images.lock)"
-          build=(docker buildx build --platform linux/arm64 --push --provenance=mode=max --sbom=true --cache-from "type=gha,scope=oci-$COMPONENT" --cache-to "type=gha,mode=max,scope=oci-$COMPONENT" --tag "$tag")
+          build=(docker buildx build --platform linux/arm64 --push --provenance=mode=max --sbom=true --cache-from "type=gha,scope=oci-$COMPONENT" --cache-to "type=gha,mode=max,scope=oci-$COMPONENT,ignore-error=true" --tag "$tag")
           case "$COMPONENT" in
             api|worker|scheduler|operations)
               build+=(--file deploy/oci/Go.Dockerfile --build-arg "GO_IMAGE=$go_image" --build-arg "RUNTIME_IMAGE=$alpine_image" --build-arg "COMPONENT=$COMPONENT" .)
