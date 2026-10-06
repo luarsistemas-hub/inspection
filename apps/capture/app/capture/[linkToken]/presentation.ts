@@ -1,3 +1,5 @@
+import { CAPTURE_LOCATION_TIMEOUT_MS, MAX_GPS_ACCURACY_METERS, type CaptureLocationFailure } from "@/pwa/capture-location";
+
 const statuses: Record<string, string> = { OPEN: "Aberta", ACCEPTANCE_REQUIRED: "Aguardando aceite", CONFIRMED: "Confirmada", PENDING: "Pendente", IN_PROGRESS: "Em andamento", SUBMITTED: "Enviada", EXPIRED: "Expirada", REVOKED: "Revogada", INVALIDATED: "Invalidada" };
 const sections: Record<string, string> = { property: "Imóvel", agency: "Imobiliária", participant: "Responsável pela vistoria" };
 const labels: Record<string, string> = { "Property overview": "Visão geral do imóvel", Overview: "Visão geral do imóvel", property: "Imóvel" };
@@ -64,8 +66,22 @@ export function presentSubmissionBlock(input: { online: boolean; pending: number
 export function presentUploadFailure(error: unknown): string {
   const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message?: unknown }).message ?? "") : error instanceof Error ? error.message : String(error ?? "");
   if (/media verification and screening are pending|media processing pending/i.test(message)) return "A foto foi recebida, mas a verificação ainda não terminou. Aguarde alguns segundos e toque em “Retomar envio”.";
+  if (/required GPS must be accurate within the guided window/i.test(message)) return "O servidor recusou a localização desta foto por falta de precisão ou por estar fora do prazo de captura. Substitua a foto e confirme novamente com a localização atual.";
   if (/network|fetch/i.test(message)) return "Não foi possível concluir agora por causa da conexão. Verifique sua internet e toque em “Retomar envio”.";
   return message || "Não foi possível concluir o envio. Toque em “Retomar envio” para tentar novamente.";
+}
+
+export function presentCaptureLocationFailure(failure: CaptureLocationFailure): string {
+  const retry = "A foto continua na prévia. Tente confirmá-la novamente.";
+  if (failure === "insecure") return "A localização exige uma conexão segura. Abra o link HTTPS do convite e confirme a foto novamente.";
+  if (failure === "unsupported") return "Este navegador não oferece acesso à localização. Abra o convite em outro navegador ou dispositivo.";
+  if (failure === "denied") return `O acesso à localização foi negado. Confira a permissão deste site e os Serviços de Localização do dispositivo. ${retry}`;
+  if (failure === "timeout") return `A localização demorou mais de ${CAPTURE_LOCATION_TIMEOUT_MS / 1000} segundos. Confira o sinal de localização e a conexão Wi-Fi ou móvel. ${retry}`;
+  return `O dispositivo não conseguiu determinar sua localização. Confira os Serviços de Localização e a conexão Wi-Fi ou móvel. ${retry}`;
+}
+
+export function presentCaptureLocationAccuracy(accuracyMeters: number): string {
+  return `A localização foi encontrada, mas a precisão é de aproximadamente ${Math.ceil(accuracyMeters)} m. Este requisito exige até ${MAX_GPS_ACCURACY_METERS} m. Ative a localização precisa, aguarde o sinal melhorar e confirme a foto novamente; ela continua na prévia.`;
 }
 
 export function presentDraftPersistenceFailure(error: unknown): string {

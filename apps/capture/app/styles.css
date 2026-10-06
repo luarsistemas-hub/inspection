@@ -74,8 +74,7 @@ button.capture-photo-trigger:hover:not(:disabled) { border-color: var(--inspecti
 .capture-camera-input { display: none; }
 .capture-preview-actions, .capture-guide-navigation { display: flex; gap: .6rem; }
 .capture-preview-actions > button, .capture-guide-navigation > button { flex: 1; }
-.capture-preview-actions > button:first-child { border: 1px solid var(--inspection-border); background: var(--inspection-surface-raised); color: var(--inspection-ink); }
-.capture-preview-actions:has(.capture-photo-confirm) > button:first-child { border-color: var(--inspection-brand); background: var(--inspection-brand); color: var(--inspection-on-brand); }
+.capture-preview-actions > button:first-child:not(.capture-photo-confirm) { border: 1px solid var(--inspection-border); background: var(--inspection-surface-raised); color: var(--inspection-ink); }
 .capture-guide-navigation { justify-content: space-between; }
 .capture-image-overlay { display: grid; align-content: center; justify-items: center; gap: .75rem; min-block-size: 100%; padding: 1rem; background: color-mix(in oklch, var(--inspection-ink) 88%, transparent); color: white; }
 .capture-image-overlay img { max-inline-size: min(100%, 70rem); max-block-size: 78dvh; object-fit: contain; }
