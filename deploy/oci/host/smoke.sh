@@ -29,6 +29,20 @@ retry_private_storage() {
   return 1
 }
 
+retry_storage_cors() {
+  local url="${STORAGE_ORIGIN}/${OCI_S3_BUCKET}/inspection-cors-smoke-missing-object" headers origins
+  while (( SECONDS < deadline )); do
+    headers="$(curl --silent --show-error --dump-header - --output /dev/null --max-time 10 --header "Origin: ${CAPTURE_ORIGIN}" "$url" || true)"
+    origins="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1) == "access-control-allow-origin:" {print $2}')"
+    if [[ "$origins" == "$CAPTURE_ORIGIN" ]] && printf '%s\n' "$headers" | tr -d '\r' | grep -Eiq '^access-control-expose-headers:.*etag'; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "Storage CORS smoke check timed out; expected one Capture origin and exposed ETag." >&2
+  return 1
+}
+
 for service in postgres dragonfly rabbitmq keycloak inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding; do
   id="$("${compose[@]}" ps -q "$service")"
   [[ -n "$id" ]] || { echo "Compose service has no container: $service" >&2; exit 1; }
@@ -45,4 +59,5 @@ retry_http Onboarding "${ONBOARDING_ORIGIN}/"
 retry_http API "${API_ORIGIN}/readyz"
 retry_http OIDC "${OIDC_ISSUER}/.well-known/openid-configuration"
 retry_private_storage
-echo "Compose health, public HTTPS, API readiness, OIDC discovery and private storage passed."
+retry_storage_cors
+echo "Compose health, public HTTPS, API readiness, OIDC discovery and private storage CORS passed."

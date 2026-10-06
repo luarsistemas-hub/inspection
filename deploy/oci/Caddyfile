@@ -25,6 +25,16 @@
 }
 
 {$STORAGE_HOST} {
+	log {
+		format filter {
+			request>uri delete
+			request>headers delete
+			request>remote_ip delete
+			request>client_ip delete
+			request>remote_port delete
+			resp_headers delete
+		}
+	}
 	map {http.request.header.Origin} {cors_origin} {
 		"{$ADMIN_ORIGIN}" "{$ADMIN_ORIGIN}"
 		"{$DASHBOARD_ORIGIN}" "{$DASHBOARD_ORIGIN}"
@@ -44,8 +54,14 @@
 	respond @preflight "" 204
 	header Access-Control-Expose-Headers "ETag"
 	header Vary Origin
+	log_append cors_origin {cors_origin}
 	reverse_proxy https://{$OCI_S3_HOST} {
 		header_up Host {$OCI_S3_HOST}
+		header_down -Access-Control-Allow-Origin
+		header_down -Access-Control-Allow-Credentials
+		header_down -Access-Control-Allow-Methods
+		header_down -Access-Control-Allow-Headers
+		header_down -Access-Control-Expose-Headers
 		transport http {
 			tls_server_name {$OCI_S3_HOST}
 		}

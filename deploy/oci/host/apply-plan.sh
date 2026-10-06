@@ -51,6 +51,12 @@ with open(sys.argv[3], "w", encoding="ascii") as out:
     for key in sorted(keys): out.write(f"{key}={images[key]}\n")
 PY
 
+# Caddy bind-mounts the Caddyfile from its release directory. Recreate it when
+# the candidate changes that file so the new configuration actually takes effect.
+if ! cmp -s /opt/inspection/current/Caddyfile "$release_dir/deploy/oci/Caddyfile"; then
+  printf 'caddy\n' >> "$targets_file"
+fi
+
 if [[ -s /etc/inspection/compose.env ]]; then install -m 0600 /etc/inspection/compose.env "$old_env"; else : > "$old_env"; fi
 if [[ -s /etc/inspection/releases/current.env ]]; then install -m 0600 /etc/inspection/releases/current.env "$old_receipt"; else : > "$old_receipt"; fi
 actual_base="$(python3 - "$old_receipt" <<'PY'
@@ -144,6 +150,9 @@ on_exit() {
 trap on_exit EXIT
 
 "${dc[@]}" config --quiet
+if grep -qx caddy "$targets_file"; then
+  "${dc[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+fi
 ghcr_user="$(cat /etc/inspection/secrets.d/GHCR_USERNAME)"
 ghcr_token="$(cat /etc/inspection/secrets.d/GHCR_READ_TOKEN)"
 printf '%s' "$ghcr_token" | docker login ghcr.io --username "$ghcr_user" --password-stdin >/dev/null

@@ -4,6 +4,43 @@ import { uploadDraft, type UploadProgress } from "@/pwa/uploads";
 import { loadDraft, type CaptureDraft } from "@/pwa/drafts";
 
 describe("multipart reconciliation", () => {
+  it("logs a failed storage request without exposing the signed URL", async () => {
+    const signedURL = "https://storage.test/inspection-private/object?X-Amz-Signature=sensitive";
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const infoLog = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetch = vi.fn().mockImplementation((input: string, init?: RequestInit) => {
+      if (init?.method === "PUT") throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify({ data: { presignMediaParts: { parts: [{ partNumber: 1, url: signedURL, expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await expect(uploadDraft({ id: "storage-network-error", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: false }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } })).rejects.toThrow("Failed to fetch");
+      expect(errorLog).toHaveBeenCalledWith("[CaptureUpload] part request failed", { partNumber: 1, totalParts: 1 });
+      expect(infoLog).toHaveBeenCalledWith("[CaptureUpload] sending part", { partNumber: 1, totalParts: 1 });
+      expect(JSON.stringify([...errorLog.mock.calls, ...infoLog.mock.calls])).not.toContain(signedURL);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("logs the storage status when a part response has no ETag", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const infoLog = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetch = vi.fn().mockImplementation((_input: string, init?: RequestInit) => init?.method === "PUT"
+      ? new Response(null, { status: 200 })
+      : new Response(JSON.stringify({ data: { presignMediaParts: { parts: [{ partNumber: 1, url: "https://storage.test/object", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await expect(uploadDraft({ id: "storage-missing-etag", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: false }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } })).rejects.toThrow("Não foi possível enviar uma parte da foto.");
+      expect(errorLog).toHaveBeenCalledWith("[CaptureUpload] part response rejected", { partNumber: 1, totalParts: 1, status: 200, etagPresent: false });
+      expect(infoLog).toHaveBeenCalledWith("[CaptureUpload] sending part", { partNumber: 1, totalParts: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
   it("presigns only missing parts and keeps completion idempotent", async () => {
     const draft: CaptureDraft = { id: "d", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } };
     const fetch = vi.fn().mockImplementation(() => new Response(JSON.stringify({ data: { presignMediaParts: { parts: [], userErrors: [] }, completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] } } }), { status: 200 }));

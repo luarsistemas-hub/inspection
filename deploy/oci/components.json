@@ -12,6 +12,7 @@
     "keycloak": {"kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/oci/Dockerfile.keycloak"]}
   },
   "sharedRules": [
+    {"paths": ["deploy/oci/Caddyfile"], "components": ["capture"]},
     {"paths": ["services/inspection/schema.graphqls", "services/inspection/internal/graphql/"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding"]},
     {"paths": [".dockerignore", "deploy/oci/compose.yaml", "deploy/oci/components.json", "deploy/oci/affected.py", "deploy/oci/Go.Dockerfile", "deploy/oci/base-images.lock", ".github/workflows/build-images.yml"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak"]}
   ],

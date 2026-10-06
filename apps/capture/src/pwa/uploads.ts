@@ -137,9 +137,21 @@ export function uploadDraft(draft: CaptureDraft, onProgress?: UploadProgressCall
       const partSize = current.partSizeBytes || defaultPartSize;
       for (const [index, part] of signed.presignMediaParts.parts.entries()) {
         if (Date.parse(part.expiresAt) <= Date.now()) throw new Error("O acesso temporário desta parte expirou. Retome o envio para solicitar um novo acesso.");
-        const response = await fetch(part.url, { method: "PUT", body: current.blob.slice((part.partNumber - 1) * partSize, part.partNumber * partSize), headers: { "Content-Type": current.blob.type } });
+        const partContext = { partNumber: part.partNumber, totalParts: currentTotalParts };
+        console.info("[CaptureUpload] sending part", partContext);
+        let response: Response;
+        try {
+          response = await fetch(part.url, { method: "PUT", body: current.blob.slice((part.partNumber - 1) * partSize, part.partNumber * partSize), headers: { "Content-Type": current.blob.type } });
+        } catch (error) {
+          console.error("[CaptureUpload] part request failed", partContext);
+          throw error;
+        }
         const etag = response.headers.get("etag");
-        if (!response.ok || !etag) throw new Error("Não foi possível enviar uma parte da foto.");
+        if (!response.ok || !etag) {
+          console.error("[CaptureUpload] part response rejected", { ...partContext, status: response.status, etagPresent: Boolean(etag) });
+          throw new Error("Não foi possível enviar uma parte da foto.");
+        }
+        console.info("[CaptureUpload] part accepted", { ...partContext, status: response.status });
         current = { ...current, parts: current.parts.map((saved) => saved.number === part.partNumber ? { ...saved, complete: true, etag } : saved) };
         await saveDraft(current);
         reportProgress(onProgress, { phase: "uploading", percent: 10 + (current.parts.filter((saved) => saved.complete).length / currentTotalParts) * 60, completedParts: current.parts.filter((saved) => saved.complete).length, totalParts: currentTotalParts });
