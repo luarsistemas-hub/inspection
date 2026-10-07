@@ -115,6 +115,35 @@ with open(path, "w", encoding="utf-8") as out:
     for key in sorted(values): out.write(f"{key}={values[key]}\n")
 os.chmod(path, 0o600)
 PY
+if ! grep -q '^KEYCLOAK_SMTP_SERVER_JSON=' "$stage_env"; then
+  [[ -n "${SMTP_ADDRESS:-}" && -n "${SMTP_FROM:-}" && -s /etc/inspection/secrets.d/SMTP_USERNAME && -s /etc/inspection/secrets.d/SMTP_PASSWORD ]] || {
+    echo 'Existing SMTP settings are required to configure Keycloak.' >&2
+    exit 1
+  }
+  keycloak_smtp_server="$(python3 - "$SMTP_ADDRESS" "$SMTP_FROM" /etc/inspection/secrets.d/SMTP_USERNAME /etc/inspection/secrets.d/SMTP_PASSWORD <<'PY'
+import json
+import pathlib
+import sys
+
+address, sender, username_path, password_path = sys.argv[1:]
+host, separator, port = address.rpartition(":")
+if not separator or not host or not port:
+    raise SystemExit("SMTP_ADDRESS must include a host and port")
+print(json.dumps({
+    "host": host,
+    "port": port,
+    "from": sender,
+    "auth": "true",
+    "user": pathlib.Path(username_path).read_text(),
+    "password": pathlib.Path(password_path).read_text(),
+    "ssl": "false",
+    "starttls": "true",
+}, separators=(",", ":")))
+PY
+)"
+  printf "KEYCLOAK_SMTP_SERVER_JSON='%s'\n" "$keycloak_smtp_server" >> "$stage_env"
+  unset keycloak_smtp_server
+fi
 
 block_path=/etc/inspection/deployment-blocked
 had_block=0

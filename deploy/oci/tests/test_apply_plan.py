@@ -43,6 +43,10 @@ class ApplyPlanTests(unittest.TestCase):
             block.write_text(prior_block)
         for name in ("GHCR_USERNAME", "GHCR_READ_TOKEN"):
             (root / f"etc/inspection/secrets.d/{name}").write_text("fixture\n")
+        (root / "etc/inspection/public.env").write_text(
+            "SMTP_ADDRESS=smtp.example.test:587\nSMTP_FROM=inspection@example.test\n")
+        (root / "etc/inspection/secrets.d/SMTP_USERNAME").write_text("smtp-user")
+        (root / "etc/inspection/secrets.d/SMTP_PASSWORD").write_text("smtp-password")
         plan = {"deploymentId": "deploy-test-1", "sourceSha": RELEASE,
                 "targets": ["worker"], "desiredImages": images,
                 "expectedActiveStateSha256": digest(old_images), "operations": {"runMigration": migration}}
@@ -164,6 +168,13 @@ exit 0
         self.assertFalse(block.exists())
         self.assertIn("DEPLOYMENT_ID=deploy-test-1", (root / "etc/inspection/releases/current.env").read_text())
         self.assertIn(RELEASE, str((root / "opt/inspection/current").resolve()))
+        env = (root / "etc/inspection/compose.env").read_text()
+        smtp = next(line for line in env.splitlines() if line.startswith("KEYCLOAK_SMTP_SERVER_JSON="))
+        self.assertEqual(json.loads(smtp.split("=", 1)[1].strip("'")), {
+            "host": "smtp.example.test", "port": "587", "from": "inspection@example.test",
+            "auth": "true", "user": "smtp-user", "password": "smtp-password",
+            "ssl": "false", "starttls": "true",
+        })
 
 
 if __name__ == "__main__":
