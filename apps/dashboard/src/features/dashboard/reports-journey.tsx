@@ -200,7 +200,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       {currentReport && <>
         <ReportVisual report={currentReport} onDownload={() => void prepareDownload()} onMediaError={refreshMedia} />
         <p className="report-detail-status" role="status">{detailMessage}{download?.url && <> <a href={download.url} target="_blank" rel="noreferrer">Baixar PDF</a></>}</p>
-        {canPublish && <div className="actions"><button onClick={() => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() })}>Publicar laudo</button><button className="secondary" onClick={() => setInvalidating(true)}>Invalidar publicação</button></div>}
+        {canPublish && <details className="report-publication-menu"><summary>Ações de publicação</summary><div><button onClick={() => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() })}>Publicar laudo</button><button className="secondary" onClick={() => setInvalidating(true)}>Invalidar publicação</button></div></details>}
         <details><summary>Informações técnicas</summary><p>Digest canônico: {currentReport.jsonDigest}</p><p>Digest renderizado: {currentReport.htmlDigest}</p>{download?.sha256 && <p>Digest do PDF: {download.sha256}</p>}<pre>{JSON.stringify(currentReport.canonicalJSON, null, 2)}</pre></details>
       </>}
     </Dialog>

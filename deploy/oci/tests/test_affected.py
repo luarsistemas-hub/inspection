@@ -29,6 +29,11 @@ class AffectedTests(unittest.TestCase):
         for component in ("dashboard", "capture"):
             self.assertNotIn("packages/inspection-address/", catalog["components"][component]["paths"])
 
+    def test_local_compose_is_ignored_and_not_a_keycloak_build_input(self):
+        catalog = json.loads(affected.CATALOG.read_text())
+        self.assertFalse(affected.matches("deploy/docker-compose.yml", catalog["components"]["keycloak"]["paths"]))
+        self.assertTrue(affected.matches("deploy/docker-compose.yml", catalog["ignoredPaths"]))
+
     def test_go_dependency_walk_finds_api_command(self):
         files = affected.go_inputs("api", "inspection-api")
         self.assertIn("services/inspection/cmd/inspection-api/main.go", files)

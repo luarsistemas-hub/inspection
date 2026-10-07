@@ -18,5 +18,6 @@ test.describe("cross-product customer handoff", () => {
 
     await expect(page.getByRole("link", { name: "Abrir Administração" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Publicar|Invalidar|Solicitar complemento|Promover/ })).toHaveCount(0);
+    await expect(page.getByText("Ações de publicação")).toHaveCount(0);
   });
 });
