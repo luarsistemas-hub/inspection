@@ -70,9 +70,7 @@ jobs:
           ROLLBACK_TO: ${{ inputs.deployment_id }}
         run: |
           set -euo pipefail
-          states=$(gh release list --repo "$REPOSITORY" --limit 100 --json tagName,createdAt | jq -r '[.[] | select(.tagName | startswith("state-"))] | sort_by(.createdAt) | reverse | .[].tagName')
-          active_tag="$(head -n1 <<< "$states" || true)"
-          [[ -n "$active_tag" ]] || active_tag=none
+          active_tag="$(gh release list --repo "$REPOSITORY" --limit 100 --json tagName,publishedAt | jq -r '[.[] | select(.tagName | startswith("state-"))] | max_by(.publishedAt) | .tagName // "none"')"
           if [[ "$OPERATION" == deploy ]]; then
             [[ "$CANDIDATE_ID" =~ ^candidate-[0-9]+-[0-9]+$ ]] || { echo 'candidate_id must identify a registered candidate release.' >&2; exit 2; }
             [[ -n "$TARGETS" || "$SCOPE" != selected ]] || { echo 'scope=selected requires targets.' >&2; exit 2; }

@@ -74,7 +74,7 @@ jobs:
           TURNSTILE_SITE_KEY: ${{ vars.OCI_TURNSTILE_SITE_KEY }}
         run: |
           set -euo pipefail
-          previous_candidate="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt | jq -r '[.[] | select(.tagName | startswith("candidate-"))] | sort_by(.createdAt) | reverse | .[0].tagName // empty')"
+          previous_candidate="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,publishedAt | jq -r '[.[] | select(.tagName | startswith("candidate-"))] | max_by(.publishedAt) | .tagName // empty')"
           previous_sha=''
           if [[ -n "$previous_candidate" ]]; then
             mkdir -p previous-candidate
