@@ -10,6 +10,45 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 class ComposeSecretsTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
+    def test_keycloak_password_recovery_is_configured_with_existing_smtp(self):
+        rendered = subprocess.check_output([
+            "docker", "compose", "--env-file", "deploy/oci/compose.env.example",
+            "-f", "deploy/oci/compose.yaml", "--profile", "operations", "config", "--format", "json",
+        ], cwd=ROOT, text=True)
+        services = json.loads(rendered)["services"]
+        configure = services["inspection-keycloak-configure"]
+        smtp_server = json.loads(configure["environment"]["KEYCLOAK_SMTP_SERVER_JSON"])
+        self.assertEqual(smtp_server["host"], "smtp.email.us-ashburn-1.oci.oraclecloud.com")
+        self.assertEqual(smtp_server["starttls"], "true")
+        self.assertIn("configure-inspection-realm.sh", configure["entrypoint"][0])
+
+        realm = json.loads((ROOT / "deploy/oci/keycloak-realm.json").read_text())
+        self.assertTrue(realm["resetPasswordAllowed"])
+        update_password = next(action for action in realm["requiredActions"] if action["alias"] == "UPDATE_PASSWORD")
+        self.assertTrue(update_password["enabled"])
+        configure_script = (ROOT / "deploy/keycloak/configure-realm.sh").read_text()
+        self.assertIn("authentication/register-required-action", configure_script)
+        self.assertIn("authentication/required-actions/UPDATE_PASSWORD", configure_script)
+
+    def test_local_realm_supports_password_recovery_through_mailpit(self):
+        realm = json.loads((ROOT / "deploy/keycloak/inspection-realm.json").read_text())
+        self.assertTrue(realm["resetPasswordAllowed"])
+        self.assertEqual(realm["smtpServer"]["host"], "mailpit")
+        self.assertEqual(realm["smtpServer"]["port"], "1025")
+        update_password = next(action for action in realm["requiredActions"] if action["alias"] == "UPDATE_PASSWORD")
+        self.assertTrue(update_password["enabled"])
+
+        bootstrap = (ROOT / "deploy/docker-compose.yml").read_text()
+        self.assertIn("configure-inspection-realm.sh", bootstrap)
+        self.assertIn("smtpServer=$KEYCLOAK_SMTP_SERVER_JSON", (ROOT / "deploy/keycloak/configure-realm.sh").read_text())
+
+    def test_password_recovery_link_has_translations(self):
+        portuguese = (ROOT / "deploy/keycloak/themes/inspection/login/messages/messages_pt_BR.properties").read_text()
+        english = (ROOT / "deploy/keycloak/themes/inspection/login/messages/messages_en.properties").read_text()
+        self.assertIn("doForgotPassword=Esqueceu sua senha?", portuguese)
+        self.assertIn("doForgotPassword=Forgot password?", english)
+
+    @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is unavailable")
     def test_live_llm_uses_private_healthy_gateway_and_vault_key(self):
         rendered = subprocess.check_output([
             "docker", "compose", "--env-file", "deploy/oci/compose.env.example",

@@ -5,11 +5,21 @@
   "internationalizationEnabled": true,
   "defaultLocale": "pt-BR",
   "supportedLocales": ["pt-BR", "en"],
+  "resetPasswordAllowed": true,
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "inspection@localhost",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  },
   "enabled": true,
   "requiredActions": [
     {"alias": "VERIFY_EMAIL", "enabled": false, "defaultAction": false, "priority": 10},
     {"alias": "UPDATE_PROFILE", "enabled": false, "defaultAction": false, "priority": 20},
     {"alias": "CONFIGURE_TOTP", "enabled": false, "defaultAction": false, "priority": 30},
+    {"alias": "UPDATE_PASSWORD", "enabled": true, "defaultAction": false, "priority": 40},
     {"alias": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 50}
   ],
   "users": [

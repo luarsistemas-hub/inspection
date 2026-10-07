@@ -67,6 +67,31 @@ rabbitmq_password="$(urlencode < "$temporary/RABBITMQ_PASSWORD")"
   printf "RABBITMQ_URL_USER='%s'\nRABBITMQ_URL_PASSWORD='%s'\n" "$rabbitmq_user" "$rabbitmq_password"
 } >> "$compose_env"
 unset runtime_password worker_password admin_password rabbitmq_user rabbitmq_password
+keycloak_smtp_server="$(python3 - "$SMTP_ADDRESS" "$SMTP_FROM" "$temporary/SMTP_USERNAME" "$temporary/SMTP_PASSWORD" <<'PY'
+import json
+import pathlib
+import sys
+
+address, sender, username_path, password_path = sys.argv[1:]
+host, separator, port = address.rpartition(":")
+if not separator or not host or not port:
+    raise SystemExit("SMTP_ADDRESS must include a host and port")
+server = {
+    "host": host,
+    "port": port,
+    "from": sender,
+    "auth": "true",
+    "user": pathlib.Path(username_path).read_text(),
+    "password": pathlib.Path(password_path).read_text(),
+    "ssl": "false",
+    "starttls": "true",
+}
+print(json.dumps(server, separators=(",", ":")))
+PY
+)"
+KEYCLOAK_SMTP_SERVER_JSON="$keycloak_smtp_server"
+printf "KEYCLOAK_SMTP_SERVER_JSON='%s'\n" "$KEYCLOAK_SMTP_SERVER_JSON" >> "$compose_env"
+unset keycloak_smtp_server
 chmod 0600 "$compose_env"
 chown root:root "$compose_env"
 chmod 0600 "$compose_env"
@@ -75,9 +100,10 @@ mv -f "$compose_env" "$config_dir/compose.env"
 keycloak_secret="$(cat "$config_dir/secrets.d/KEYCLOAK_PROVISIONING_SECRET")"
 super_admin_password="$(cat "$config_dir/secrets.d/SUPER_ADMIN_PASSWORD")"
 jq --arg admin "$ADMIN_ORIGIN" --arg dashboard "$DASHBOARD_ORIGIN" --arg subject "$SUPER_ADMIN_SUBJECT" --arg secret "$keycloak_secret" --arg admin_password "$super_admin_password" \
-  '.clients[0].redirectUris=[$admin+"/auth/callback"] | .clients[0].webOrigins=[$admin] | .clients[0].attributes["post.logout.redirect.uris"]=$admin+"/overview" | .clients[1].redirectUris=[$dashboard+"/auth/callback"] | .clients[1].webOrigins=[$dashboard] | .clients[1].attributes["post.logout.redirect.uris"]=$dashboard+"/" | .clients[2].secret=$secret | .users[0].id=$subject | .users[0].credentials[0].value=$admin_password' \
+  --argjson smtp_server "$KEYCLOAK_SMTP_SERVER_JSON" \
+  '.clients[0].redirectUris=[$admin+"/auth/callback"] | .clients[0].webOrigins=[$admin] | .clients[0].attributes["post.logout.redirect.uris"]=$admin+"/overview" | .clients[1].redirectUris=[$dashboard+"/auth/callback"] | .clients[1].webOrigins=[$dashboard] | .clients[1].attributes["post.logout.redirect.uris"]=$dashboard+"/" | .clients[2].secret=$secret | .users[0].id=$subject | .users[0].credentials[0].value=$admin_password | .smtpServer=$smtp_server | .resetPasswordAllowed=true' \
   "$bundle_dir/keycloak-realm.json" > "$config_dir/.inspection-realm.json.$$"
-unset keycloak_secret super_admin_password admin_password
+unset keycloak_secret super_admin_password admin_password KEYCLOAK_SMTP_SERVER_JSON
 # The Keycloak container runs as uid 1000 and must read the bind-mounted realm import.
 chown 1000:1000 "$config_dir/.inspection-realm.json.$$"
 chmod 0400 "$config_dir/.inspection-realm.json.$$"

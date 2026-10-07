@@ -248,6 +248,7 @@ if [[ "${#compose_services[@]}" -gt 0 ]]; then
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}"
   if [[ "$(python3 -c 'import json,sys; print("keycloak" in json.load(open(sys.argv[1]))["targets"])' "$plan_path")" == True ]]; then
     "${dc[@]}" run --rm --no-deps inspection-keycloak-check
+    "${dc[@]}" run --rm --no-deps inspection-keycloak-configure
   fi
   phase=smoke
   INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" /usr/local/sbin/inspection-smoke

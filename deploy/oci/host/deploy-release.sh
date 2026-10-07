@@ -119,6 +119,7 @@ else
   write_block
   "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
   "${dc[@]}" run --rm --no-deps inspection-keycloak-check
+  "${dc[@]}" run --rm --no-deps inspection-keycloak-configure
   phase=migration
   write_block
   "${dc[@]}" run --rm inspection-migrate

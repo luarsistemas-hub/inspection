@@ -178,6 +178,20 @@ services:
     mem_reservation: 1g
     networks: [data, app]
 
+  inspection-keycloak-configure:
+    image: ${KEYCLOAK_IMAGE:?immutable Keycloak image digest required}
+    logging: *default-logging
+    entrypoint: [/opt/keycloak/bin/configure-inspection-realm.sh]
+    environment:
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_BOOTSTRAP_USERNAME: ${KEYCLOAK_BOOTSTRAP_USERNAME:?Keycloak bootstrap username required}
+      KEYCLOAK_BOOTSTRAP_PASSWORD: ${KEYCLOAK_BOOTSTRAP_PASSWORD:?Keycloak bootstrap password required}
+      KEYCLOAK_SMTP_SERVER_JSON: ${KEYCLOAK_SMTP_SERVER_JSON:?Keycloak SMTP settings required}
+    depends_on:
+      keycloak: { condition: service_healthy }
+    profiles: [operations]
+    networks: [app]
+
   inspection-migrate:
     image: ${OPERATIONS_IMAGE:-${API_IMAGE:?immutable API image digest required}}
     logging: *default-logging

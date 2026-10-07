@@ -9,7 +9,7 @@
     "dashboard": {"kind": "frontend", "paths": ["apps/dashboard/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
     "capture": {"kind": "frontend", "paths": ["apps/capture/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
     "onboarding": {"kind": "frontend", "paths": ["apps/onboarding/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
-    "keycloak": {"kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/oci/Dockerfile.keycloak"]}
+    "keycloak": {"kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/keycloak/configure-realm.sh", "deploy/keycloak/inspection-realm.json", "deploy/oci/keycloak-realm.json", "deploy/oci/Dockerfile.keycloak"]}
   },
   "sharedRules": [
     {"paths": ["deploy/oci/Caddyfile"], "components": ["capture"]},

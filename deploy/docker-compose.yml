@@ -119,6 +119,7 @@ services:
       INSPECTION_SUPER_ADMIN_USERNAME: ${INSPECTION_SUPER_ADMIN_USERNAME:?set in .env.inspection}
       INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
       INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
+      KEYCLOAK_SMTP_SERVER_JSON: '{"host":"mailpit","port":"1025","from":"inspection@localhost","auth":"false","ssl":"false","starttls":"false"}'
     entrypoint:
       - /bin/sh
       - -ec
@@ -158,6 +159,9 @@ services:
         fi
         /opt/keycloak/bin/kcadm.sh add-roles -r inspection --uid "$${provisioning_user_id}" --cclientid realm-management --rolename view-users --rolename query-users --rolename manage-users
         /opt/keycloak/bin/kcadm.sh update realms/inspection -s loginTheme=inspection -s internationalizationEnabled=true -s defaultLocale=pt-BR -s 'supportedLocales=["pt-BR","en"]'
+        KEYCLOAK_BOOTSTRAP_USERNAME="$${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}" KEYCLOAK_BOOTSTRAP_PASSWORD="$${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}" KEYCLOAK_ADMIN_URL=http://keycloak:8080 /opt/keycloak/bin/configure-inspection-realm.sh
+    volumes:
+      - ./keycloak/configure-realm.sh:/opt/keycloak/bin/configure-inspection-realm.sh:ro
 
   inspection-migrate:
     build:

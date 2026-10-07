@@ -1,7 +1,8 @@
 ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.2.5
 FROM ${KEYCLOAK_IMAGE} AS builder
 COPY deploy/keycloak/themes/inspection /opt/keycloak/themes/inspection
-RUN /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
+COPY deploy/keycloak/configure-realm.sh /opt/keycloak/bin/configure-inspection-realm.sh
+RUN chmod +x /opt/keycloak/bin/configure-inspection-realm.sh && /opt/keycloak/bin/kc.sh build --db=postgres --health-enabled=true
 
 FROM ${KEYCLOAK_IMAGE}
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
