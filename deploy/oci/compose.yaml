@@ -2,7 +2,7 @@ name: inspection
 
 x-runtime-env: &runtime-env
   INSPECTION_ENV: production
-  INSPECTION_STAGE: production
+  STAGE: production
   INSPECTION_RUNTIME_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
   INSPECTION_DATABASE_URL: ${INSPECTION_RUNTIME_DATABASE_URL:?secret runtime DSN required}
   INSPECTION_DISPATCHER_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}

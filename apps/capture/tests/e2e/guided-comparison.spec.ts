@@ -53,19 +53,14 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await page.getByLabel("Localização quando necessária").check();
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
 
-  await expect(page.getByRole("heading", { name: "Compare cada ambiente" })).toBeVisible();
-  const evidenceInfo = page.getByRole("button", { name: "Informações sobre evidências" });
-  await expect(evidenceInfo).toHaveAttribute("aria-expanded", "false");
-  await evidenceInfo.focus();
-  await evidenceInfo.press("Enter");
-  await expect(page.getByText("Você pode adicionar uma descrição quando ela ajudar a contextualizar a imagem.")).toBeVisible();
-  await evidenceInfo.press("Enter");
-  await expect(page.getByText("Você pode adicionar uma descrição quando ela ajudar a contextualizar a imagem.")).toBeHidden();
-  await expect(page.getByText("Foto 1 de 2")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cozinha", exact: true })).toBeVisible();
+  await expect(page.getByText("Fotografe o mesmo local usando a imagem como guia.")).toBeVisible();
+  await expect(page.getByText("Evidências · Foto 1 de 2")).toBeVisible();
   await expect(page.getByRole("img", { name: "Foto de referência: Cozinha" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Requisito" })).toHaveCount(0);
   const photoPanel = page.locator(".capture-photo-panel");
   await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" })).toBeVisible();
+  await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" })).toBeInViewport();
   await expect(photoPanel.getByRole("button", { name: "Tirar foto", exact: true })).toHaveCount(0);
   await expect(page.locator(".capture-camera-action")).toHaveCount(0);
 
@@ -73,6 +68,7 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" }).click();
   await (await primaryChooser).setFiles({ name: "cozinha.png", mimeType: "image/png", buffer: photo });
   await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Confira sua foto" })).toBeVisible();
   expect(createdUploads).toBe(0);
   const canceledChooser = page.waitForEvent("filechooser");
   await photoPanel.getByRole("button", { name: "Tocar ou clicar na foto para substituí-la" }).click();
@@ -80,6 +76,7 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
   expect(createdUploads).toBe(0);
   const confirmPhoto = photoPanel.getByRole("button", { name: "Confirmar foto" });
+  await expect(confirmPhoto).toBeInViewport();
   await expect(confirmPhoto).toHaveAttribute("data-tooltip", "Confirmar foto");
   const confirmBounds = await confirmPhoto.boundingBox();
   expect(confirmBounds?.width).toBeGreaterThanOrEqual(44);
@@ -120,6 +117,6 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await expect(page.getByRole("img", { name: "Sua foto: Cozinha" })).toBeVisible();
   await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar na foto para substituí-la" })).toBeVisible();
   await page.getByRole("button", { name: "Revisar vistoria" }).click();
-  await expect(page.getByRole("heading", { name: "Comparações" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Evidências" })).toBeVisible();
   await expect(page.getByText("Concluída", { exact: true })).toHaveCount(2);
 });

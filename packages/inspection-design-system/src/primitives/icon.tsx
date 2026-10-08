@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-export type IconName = "check" | "info" | "warning" | "error" | "menu" | "close" | "more-horizontal" | "calendar" | "arrow-right" | "camera" | "layout-dashboard" | "building-2" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "log-out" | "moon" | "sun" | "monitor" | "eye";
+export type IconName = "check" | "info" | "warning" | "error" | "menu" | "close" | "more-horizontal" | "calendar" | "arrow-right" | "chevron-down" | "camera" | "map-pin" | "layout-dashboard" | "building-2" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "log-out" | "moon" | "sun" | "monitor" | "eye";
 export type IconProps = SVGProps<SVGSVGElement> & { name: IconName; title?: string; size?: number };
 
 const paths: Record<IconName, string> = {
@@ -13,7 +13,9 @@ const paths: Record<IconName, string> = {
   "more-horizontal": "M5 12h.01M12 12h.01M19 12h.01",
   calendar: "M8 2v4m8-4v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z",
   "arrow-right": "M5 12h14m-5-5 5 5-5 5",
+  "chevron-down": "m6 9 6 6 6-6",
   camera: "M4 7h4l1.5-2h5L16 7h4v12H4V7Zm8 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",
+  "map-pin": "M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0ZM12 10h.01",
   "layout-dashboard": "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
   "building-2": "M6 22V3h12v19M3 22h18M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1M10 22v-3h4v3",
   users: "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m12-11a4 4 0 0 1 0 8m4 3v-2a4 4 0 0 0-3-3.87M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",

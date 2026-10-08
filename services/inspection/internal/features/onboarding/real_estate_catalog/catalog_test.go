@@ -88,7 +88,7 @@ func TestDefinitionMetadataIsExtensible(t *testing.T) {
 }
 
 func TestCuratedTemplateLeavesComparisonChoiceToInspection(t *testing.T) {
-	templates := TemplateDocuments()
+	templates := TemplateDocuments("development")
 	if len(templates) != 1 || templates[ChecklistTemplateKey].DefaultComparisonMode != "CHECKLIST_ONLY" {
 		t.Fatal("one reusable checklist model is required")
 	}

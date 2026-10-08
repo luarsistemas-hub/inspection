@@ -21,9 +21,11 @@ class ComposeSecretsTests(unittest.TestCase):
         self.assertEqual(smtp_server["host"], "smtp.email.us-ashburn-1.oci.oraclecloud.com")
         self.assertEqual(smtp_server["starttls"], "true")
         self.assertIn("configure-inspection-realm.sh", configure["entrypoint"][0])
+        self.assertNotIn("KEYCLOAK_REPAIR_REQUIRED_ACTIONS", configure["environment"])
 
         realm = json.loads((ROOT / "deploy/oci/keycloak-realm.json").read_text())
         self.assertTrue(realm["resetPasswordAllowed"])
+        self.assertTrue(all(action["providerId"] == action["alias"] for action in realm["requiredActions"]))
         update_password = next(action for action in realm["requiredActions"] if action["alias"] == "UPDATE_PASSWORD")
         self.assertTrue(update_password["enabled"])
         configure_script = (ROOT / "deploy/keycloak/configure-realm.sh").read_text()
@@ -33,6 +35,7 @@ class ComposeSecretsTests(unittest.TestCase):
     def test_local_realm_supports_password_recovery_through_mailpit(self):
         realm = json.loads((ROOT / "deploy/keycloak/inspection-realm.json").read_text())
         self.assertTrue(realm["resetPasswordAllowed"])
+        self.assertTrue(all(action["providerId"] == action["alias"] for action in realm["requiredActions"]))
         self.assertEqual(realm["smtpServer"]["host"], "mailpit")
         self.assertEqual(realm["smtpServer"]["port"], "1025")
         update_password = next(action for action in realm["requiredActions"] if action["alias"] == "UPDATE_PASSWORD")
@@ -40,6 +43,7 @@ class ComposeSecretsTests(unittest.TestCase):
 
         bootstrap = (ROOT / "deploy/docker-compose.yml").read_text()
         self.assertIn("configure-inspection-realm.sh", bootstrap)
+        self.assertIn('KEYCLOAK_REPAIR_REQUIRED_ACTIONS: "true"', bootstrap)
         self.assertIn("smtpServer=$KEYCLOAK_SMTP_SERVER_JSON", (ROOT / "deploy/keycloak/configure-realm.sh").read_text())
 
     def test_password_recovery_link_has_translations(self):

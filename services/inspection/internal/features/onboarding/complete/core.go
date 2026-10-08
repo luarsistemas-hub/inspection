@@ -69,6 +69,7 @@ type Service struct {
 	ActivationNotifier ActivationInvitationNotifier
 	AdminOrigin        string
 	OwnerIssuer        string
+	Stage              string
 	Now                func() time.Time
 	Within             func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
@@ -171,7 +172,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	asset, err := (assetcore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}).Register(domainCtx, assetcore.Input{
 		TenantID: tenantID, BusinessUnitID: unit.ID, SegmentVersionID: segment.ID, TemplateID: &template.ID,
 		Name: limitedName(assetName), ExternalKey: "onboarding-" + submission.Session.ID.String(),
-		Address: addressText, AddressDetails: addressDetails, GeofenceMeters: templatecatalog.DefaultGeofence,
+		Address: addressText, AddressDetails: addressDetails, ReuseExistingAddress: true, GeofenceMeters: templatecatalog.DefaultGeofence,
 		Attributes:     map[string]any{"propertyType": property["propertyType"], "purpose": property["purpose"]},
 		Assignments:    []assetcore.AssignmentInput{{ParticipantID: participant.Participant.ID, Role: "PROPERTY_OWNER"}},
 		IdempotencyKey: "onboarding:asset:" + submission.Session.ID.String(),
@@ -306,7 +307,7 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 	}
 	templates := templatecore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}
-	documents := onboardingcatalog.TemplateDocuments()
+	documents := onboardingcatalog.TemplateDocuments(s.Stage)
 	templatesByKey := make(map[string]database.Template, len(documents))
 	for key, document := range documents {
 		document.SegmentVersionID = segmentView.Version.ID.String()
@@ -315,7 +316,7 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
 		templateName := "Primeira vistoria do imóvel"
-		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v3", payload)
+		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v4", payload)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}

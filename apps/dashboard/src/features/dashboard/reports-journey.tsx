@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dialog, IconButton } from "@inspection/design-system";
 import { graphql } from "@/graphql/client";
@@ -191,7 +192,7 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
       </tr>)}</tbody></table></div>
       {hasMore && <button className="secondary report-load-more" onClick={() => void loadList(false)} disabled={listLoading}>{listLoading ? "Carregando…" : "Carregar mais"}</button>}
       {listLoading && <p role="status">Atualizando laudos…</p>}
-    </> : <p className="report-list-state" role="status">{listLoading ? "Carregando laudos…" : search || classification ? "Nenhum laudo corresponde aos filtros." : "Nenhum laudo gerado neste contexto."}</p>}
+    </> : <div className="report-list-state report-focus-empty" role="status">{listLoading ? <p>Carregando laudos…</p> : <><span className="report-focus-empty-icon" aria-hidden="true">▧</span><h2>{search || classification ? "Nenhum laudo encontrado" : "Nenhum laudo disponível"}</h2><p>{search || classification ? "Ajuste a busca ou a classificação para consultar outros laudos." : "Os laudos gerados neste contexto ficarão reunidos aqui."}</p><Link href="/inspections">Ver vistorias →</Link></>}</div>}
 
     <Dialog isOpen={Boolean(inspectionId)} onClose={closeDialog} title="Laudo de vistoria" size="wide">
       <div className="report-dialog-heading"><span>{currentReport ? `${currentReport.context.asset.name} · v${currentReport.version}` : "Consulta do laudo"}</span><button type="button" className="secondary" onClick={closeDialog} aria-label="Fechar laudo">Fechar</button></div>

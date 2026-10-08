@@ -142,14 +142,15 @@ func Validate(value Definition) error {
 }
 
 // TemplateDocuments returns the reusable real-estate checklist contract.
-func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
+func TemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument {
+	allowGallery := stage != "" && !strings.EqualFold(strings.TrimSpace(stage), "production")
 	base := func() templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
 			SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
 			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
 			AnalysisType: "REAL_ESTATE",
-			Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: true},
+			Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: allowGallery},
 		}
 	}
 	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: base()}
@@ -158,7 +159,7 @@ func TemplateDocuments() map[string]templatecatalog.TemplateDocument {
 // ValidateTemplates compiles both curated documents against the supplied
 // segment and analysis-type references before they are published.
 func ValidateTemplates(refs templatecatalog.References) error {
-	for key, document := range TemplateDocuments() {
+	for key, document := range TemplateDocuments("production") {
 		payload, _, err := templatecatalog.CanonicalJSON(document)
 		if err != nil {
 			return fmt.Errorf("template %s: canonicalize: %w", key, err)

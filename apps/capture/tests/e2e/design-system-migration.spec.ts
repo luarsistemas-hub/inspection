@@ -220,10 +220,15 @@ test("IT-141 requires every separate purpose before consent advances", async ({ 
   await enterConsent(page);
   await page.getByLabel("Processamento das fotos").check();
   await page.getByLabel("Análise por inteligência artificial").check();
-  await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await expect(page.getByText("Confirme todas as opções da divulgação para continuar.")).toBeVisible();
+  const accept = page.getByRole("button", { name: "Aceitar e continuar" });
+  await expect(accept).toBeDisabled();
   expect(calls.acceptCalls).toBe(0);
   await expect(page.getByRole("heading", { name: "Uso dos seus dados" })).toBeVisible();
+  await page.getByLabel("Localização quando necessária").check();
+  await expect(accept).toBeEnabled();
+  await accept.click();
+  await expect(page.getByRole("heading", { name: "Adicione as evidências" })).toBeVisible();
+  expect(calls.acceptCalls).toBe(1);
 });
 
 test("IT-143 an invitation that expires during consent stays unavailable", async ({ page }) => {

@@ -3,6 +3,7 @@ package complete
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"inspection/libs/identity"
@@ -51,7 +52,9 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 		var existing database.OriginVersion
 		key := "onboarding:origin:" + sessionID.String()
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", tenantID, key).First(&existing).Error; err == nil {
-			if existing.Status != "ACTIVE" || existing.ResponsibilityID != sessionID {
+			// A retry of an older session may find its version already superseded
+			// by a newer onboarding for the same asset; it still belongs to that session.
+			if (existing.Status != "ACTIVE" && existing.Status != "SUPERSEDED") || existing.ResponsibilityID != sessionID {
 				return apperror.New(apperror.InvalidState, "referencePhotos", "origin is unavailable")
 			}
 			versionID = existing.ID
@@ -66,15 +69,40 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 		if len(media) != len(ids) {
 			return apperror.New(apperror.InvalidState, "referencePhotos", "reference photos are not ready")
 		}
-		origin := database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: assetID, Version: 1, CreatedAt: now, UpdatedAt: now}
-		version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: origin.ID, VersionNumber: 1, ResponsibilityID: sessionID, Status: "ACTIVE", IdempotencyKey: key, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
-		if err := tx.Create(&origin).Error; err != nil {
+		// An asset has at most one origin. When a new onboarding reuses an asset
+		// that already has one, its photos become a new version of that origin.
+		if err := lockOriginAsset(tx, tenantID, assetID); err != nil {
 			return err
 		}
+		var origin database.Origin
+		err := tx.Where("tenant_id=? AND asset_id=?", tenantID, assetID).First(&origin).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			origin = database.Origin{ID: identity.NewID(), TenantID: tenantID, AssetID: assetID, Version: 1, CreatedAt: now, UpdatedAt: now}
+			if err := tx.Create(&origin).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		var supersedes *identity.ID
+		if origin.ActiveVersionID != nil {
+			supersedes = origin.ActiveVersionID
+			if err := tx.Model(&database.OriginVersion{}).
+				Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *origin.ActiveVersionID).
+				Updates(map[string]any{"status": "SUPERSEDED"}).Error; err != nil {
+				return err
+			}
+		}
+		var lastVersion int
+		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND origin_id=?", tenantID, origin.ID).
+			Select("COALESCE(MAX(version_number), 0)").Scan(&lastVersion).Error; err != nil {
+			return err
+		}
+		version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: origin.ID, VersionNumber: lastVersion + 1, ResponsibilityID: sessionID, SupersedesID: supersedes, Status: "ACTIVE", IdempotencyKey: key, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": version.ID, "version": 2, "updated_at": now}).Error; err != nil {
+		if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": version.ID, "version": origin.Version + 1, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: sessionID, Kind: "ORIGIN", TemplateVersionID: templateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}
@@ -91,4 +119,13 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 		return nil
 	})
 	return versionID, err
+}
+
+// lockOriginAsset serializes origin changes for one asset across API instances,
+// so concurrent onboardings for the same address cannot both activate a version.
+func lockOriginAsset(tx *gorm.DB, tenantID, assetID identity.ID) error {
+	if tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "origin:"+tenantID.String()+":"+assetID.String()).Error
 }

@@ -17,6 +17,7 @@ import {
 } from "@/graphql/generated";
 import { graphql, type GraphQLFailure } from "@/graphql/client";
 import { presentDashboardStatus } from "./presentation";
+import { FocusDetail } from "./focus-detail";
 
 const scheduleTimezone = "America/Sao_Paulo";
 const frequencies = [
@@ -47,6 +48,7 @@ export function SchedulesJourney({
   const [selectedDate, setSelectedDate] = useState(() => dateKeyInTimezone(new Date()));
   const [participantFilter, setParticipantFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [focusedInspectionId, setFocusedInspectionId] = useState<string>();
   const [createOpen, setCreateOpen] = useState(false);
   const [editItem, setEditItem] = useState<Schedule>();
   const [creating, setCreating] = useState(false);
@@ -160,6 +162,7 @@ export function SchedulesJourney({
       && (!participantFilter || item.participantId === participantFilter)
       && (!statusFilter || item.status === statusFilter);
   }).sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+  const focusedInspection = visibleInspections.find((item) => item.id === focusedInspectionId) ?? visibleInspections[0];
   const weekDays = Array.from({ length: 7 }, (_, index) => shiftDateKey(startOfWeek(selectedDate), index));
   const assetNames = new Map(options.data?.assets.nodes.map((item) => [item.id, item.name]) ?? []);
   const participantNames = new Map(options.data?.participants.nodes.map((item) => [item.id, item.name]) ?? []);
@@ -183,10 +186,11 @@ export function SchedulesJourney({
         <label>Situação<select aria-label="Filtrar por situação" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todas</option>{[...new Set(inspections.map((item) => item.status))].map((status) => <option key={status} value={status}>{presentDashboardStatus(status)}</option>)}</select></label>
         {activeSchedules.length > 0 && <span>{activeSchedules.length} recorrência(s) ativa(s) · <button className="schedule-inline-link" type="button" onClick={() => setView("rules")}>Ver recorrências</button></span>}
       </div>
-      {view === "day" && <InspectionList items={visibleInspections} />}
-      {view === "week" && <div className="schedules-week-grid">{weekDays.map((day) => <section className="schedules-week-day" key={day}><h3>{weekdayDate(day)}</h3><InspectionList items={visibleInspections.filter((item) => dateKeyInTimezone(new Date(item.dueAt)) === day)} compact /></section>)}</div>}
+      {view === "day" && <div className="dashboard-focus-workspace"><div className="dashboard-focus-list"><InspectionList items={visibleInspections} focusedId={focusedInspection?.id} onFocus={setFocusedInspectionId} /></div>{focusedInspection && <FocusDetail title={focusedInspection.assetName?.trim() || "Imóvel indisponível"} eyebrow="Vistoria selecionada" details={[["Horário", new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: scheduleTimezone }).format(new Date(focusedInspection.dueAt))], ["Responsável", focusedInspection.participantName?.trim() || "Indisponível"], ["Situação", presentDashboardStatus(focusedInspection.status)]]} href={`/inspections?inspectionId=${encodeURIComponent(focusedInspection.id)}`} actionLabel="Abrir vistoria" />}</div>}
+      {view === "week" && <><div className="schedules-week-grid">{weekDays.map((day) => <section className="schedules-week-day" key={day}><h3>{weekdayDate(day)}</h3><InspectionList items={visibleInspections.filter((item) => dateKeyInTimezone(new Date(item.dueAt)) === day)} compact /></section>)}</div><div className="schedules-week-mobile"><div className="schedules-week-picker" role="group" aria-label="Escolher dia da semana">{weekDays.map((day) => { const date = new Date(`${day}T12:00:00Z`); return <button key={day} type="button" aria-label={weekdayDate(day)} aria-pressed={selectedDate === day} onClick={() => setSelectedDate(day)}><span>{new Intl.DateTimeFormat("pt-BR", { weekday: "narrow", timeZone: "UTC" }).format(date)}</span><strong>{new Intl.DateTimeFormat("pt-BR", { day: "numeric", timeZone: "UTC" }).format(date)}</strong></button>; })}</div><InspectionList items={visibleInspections.filter((item) => dateKeyInTimezone(new Date(item.dueAt)) === selectedDate)} focusedId={focusedInspection?.id} onFocus={setFocusedInspectionId} /></div></>}
     </section>}
 
+    {view === "rules" && <p className="schedule-focus-notice">As próximas vistorias aparecem na agenda após a confirmação.</p>}
     {view === "rules" && <section className="schedules-list" aria-labelledby="schedules-list-title">
       <div className="schedules-list-heading"><div><h2 id="schedules-list-title">Recorrências cadastradas</h2><p>Estas são próximas datas previstas; a vistoria aparece na agenda quando estiver confirmada.</p></div><button className="secondary" onClick={() => { void load(); void loadInspections(); }}>Atualizar agenda</button></div>
       <p role="status" aria-live="polite">{message}</p>
@@ -219,12 +223,12 @@ export function SchedulesJourney({
   </div>;
 }
 
-function InspectionList({ items, compact = false }: { items: Inspection[]; compact?: boolean }) {
+function InspectionList({ items, compact = false, focusedId, onFocus }: { items: Inspection[]; compact?: boolean; focusedId?: string; onFocus?: (id: string) => void }) {
   if (!items.length) return <p className="schedules-calendar-empty">Nenhuma vistoria confirmada neste período.</p>;
   return <ul className={`schedules-calendar-events${compact ? " schedules-calendar-events--compact" : ""}`}>
-    {items.map((item) => <li className="schedules-calendar-event" key={item.id}>
+    {items.map((item) => <li className="schedules-calendar-event" data-focused={focusedId === item.id} key={item.id}>
       <time dateTime={item.dueAt}>{new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: scheduleTimezone }).format(new Date(item.dueAt))}</time>
-      <div><strong>{item.assetName?.trim() || "Imóvel indisponível"}</strong>{item.assetAddress && <span>{item.assetAddress}</span>}<span>Responsável · {item.participantName?.trim() || "Indisponível"}</span></div>
+      <div>{onFocus ? <strong><button className="schedule-focus-select" type="button" aria-pressed={focusedId === item.id} onClick={() => onFocus(item.id)}>{item.assetName?.trim() || "Imóvel indisponível"}</button><Link className="schedule-focus-mobile-link" href={`/inspections?inspectionId=${encodeURIComponent(item.id)}`}>{item.assetName?.trim() || "Imóvel indisponível"}</Link></strong> : <strong>{item.assetName?.trim() || "Imóvel indisponível"}</strong>}{item.assetAddress && <span>{item.assetAddress}</span>}<span>Responsável · {item.participantName?.trim() || "Indisponível"}</span></div>
       <div className="schedules-calendar-event-side"><span className="home-status">{presentDashboardStatus(item.status)}</span><Link href={`/inspections?inspectionId=${encodeURIComponent(item.id)}`}>Abrir vistoria →</Link></div>
     </li>)}
   </ul>;

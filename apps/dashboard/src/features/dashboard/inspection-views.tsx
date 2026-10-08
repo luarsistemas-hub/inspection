@@ -132,34 +132,46 @@ export function InspectionViewSelector({ view, onChange }: { view: InspectionVie
   </div>;
 }
 
-export function InspectionViews({ inspections, view, actions, onOpen }: { inspections: InspectionRecord[]; view: InspectionView; actions?: InspectionActionHandlers; onOpen: (inspection: InspectionRecord) => void }) {
+export function InspectionViews({ inspections, view, actions, onOpen, focusedId, onFocus }: { inspections: InspectionRecord[]; view: InspectionView; actions?: InspectionActionHandlers; onOpen: (inspection: InspectionRecord) => void; focusedId?: string; onFocus?: (id: string) => void }) {
   if (view === "quadro") return <InspectionBoard inspections={inspections} actions={actions} />;
-  if (view === "agenda") return <InspectionAgenda inspections={inspections} actions={actions} />;
-  return <InspectionList inspections={inspections} actions={actions} onOpen={onOpen} />;
+  if (view === "agenda") return <InspectionAgenda inspections={inspections} actions={actions} focusedId={focusedId} onFocus={onFocus} />;
+  return <InspectionList inspections={inspections} actions={actions} onOpen={onOpen} focusedId={focusedId} onFocus={onFocus} />;
 }
 
-function InspectionList({ inspections, actions, onOpen }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers; onOpen: (inspection: InspectionRecord) => void }) {
-  return inspections.length ? <div className="inspection-table-box"><table className="inspection-table"><thead><tr><th>Vistoria</th><th>Situação</th><th>Vencimento</th><th>Ação</th></tr></thead><tbody>{inspections.map((inspection) => <tr key={inspection.id} data-inspection-id={inspection.id}><td data-label="Vistoria"><strong>{inspectionName(inspection)}</strong><span>Responsável · {inspection.participantName?.trim() || "indisponível"}</span><span>{presentInspectionSource(inspection.source)} · {inspection.evidenceCount} evidência(s) · v{inspection.version}</span></td><td data-label="Situação"><InspectionStatus status={inspection.status} /></td><td data-label="Vencimento"><strong>{formatInspectionDate(inspection.dueAt)}</strong><span>Prazo final · {formatInspectionDate(inspection.deadlineAt)}</span></td><td data-label="Ação" data-align="center" data-action><div className="inspection-row-actions"><IconButton label={`Abrir detalhes da vistoria ${inspectionName(inspection)}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onOpen(inspection)} />{inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo</Link>}<InspectionActions inspection={inspection} actions={actions} /></div></td></tr>)}</tbody></table></div> : <EmptyInspections />;
+function InspectionList({ inspections, actions, onOpen, focusedId, onFocus }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers; onOpen: (inspection: InspectionRecord) => void; focusedId?: string; onFocus?: (id: string) => void }) {
+  if (!inspections.length) return <EmptyInspections />;
+  return <ol className="inspection-focus-rows" aria-label="Vistorias">{inspections.map((inspection) => <li key={inspection.id} className="inspection-focus-row" data-focused={focusedId === inspection.id} data-inspection-id={inspection.id}>
+    <div className="inspection-focus-row-main">{onFocus ? <><button className="inspection-focus-select" type="button" aria-pressed={focusedId === inspection.id} onClick={() => onFocus(inspection.id)}>{inspectionName(inspection)}</button><Link className="inspection-focus-mobile-link" href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`}>{inspectionName(inspection)}</Link></> : <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`}>{inspectionName(inspection)}</Link>}<span>Responsável · {inspection.participantName?.trim() || "indisponível"}</span></div>
+    <div className="inspection-focus-row-side"><time dateTime={inspection.dueAt || undefined}>{formatInspectionDate(inspection.dueAt)}</time><InspectionStatus status={inspection.status} /><IconButton label={`Abrir detalhes da vistoria ${inspectionName(inspection)}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onOpen(inspection)} />{inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo</Link>}<InspectionActions inspection={inspection} actions={actions} /></div>
+  </li>)}</ol>;
 }
 
 function InspectionBoard({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
   const groups = groupInspectionsByStatus(inspections);
-  return <div className="inspection-board">{inspectionColumns.map((column) => <section className="inspection-column" key={column.key} aria-labelledby={`inspection-column-${column.key}`}><h2 id={`inspection-column-${column.key}`}>{column.label}<span aria-label={`${groups[column.key].length} vistorias`}>{groups[column.key].length}</span></h2>{groups[column.key].length ? <div className="inspection-column-list">{groups[column.key].map((inspection) => <InspectionCompactCard key={inspection.id} inspection={inspection} actions={actions} />)}</div> : <p className="inspection-column-empty">Nenhuma vistoria nesta situação.</p>}</section>)}</div>;
+  const [mobileColumn, setMobileColumn] = useState<InspectionColumnKey>("planejamento");
+  return <><div className="inspection-board-mobile-tabs" role="group" aria-label="Etapa do quadro">{inspectionColumns.map((column) => <button key={column.key} type="button" aria-pressed={mobileColumn === column.key} onClick={() => setMobileColumn(column.key)}>{column.label} · {groups[column.key].length}</button>)}</div><div className="inspection-board">{inspectionColumns.map((column) => <section className="inspection-column" data-mobile-active={mobileColumn === column.key} key={column.key} aria-labelledby={`inspection-column-${column.key}`}><h2 id={`inspection-column-${column.key}`}>{column.label}<span aria-label={`${groups[column.key].length} vistorias`}>{groups[column.key].length}</span></h2>{groups[column.key].length ? <div className="inspection-column-list">{groups[column.key].map((inspection) => <InspectionCompactCard key={inspection.id} inspection={inspection} actions={actions} compact />)}</div> : <p className="inspection-column-empty">Nenhuma vistoria nesta situação.</p>}</section>)}</div></>;
 }
 
-function InspectionAgenda({ inspections, actions }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers }) {
+function InspectionAgenda({ inspections, actions, focusedId, onFocus }: { inspections: InspectionRecord[]; actions?: InspectionActionHandlers; focusedId?: string; onFocus?: (id: string) => void }) {
   const sorted = sortInspectionsByDueAt(inspections);
-  return sorted.length ? <div className="inspection-agenda-layout"><ol className="inspection-agenda">{sorted.map((inspection) => <li key={inspection.id}><div className="inspection-agenda-date"><span>Vencimento</span><strong>{formatAgendaDay(inspection.dueAt)}</strong><small>{formatInspectionStatus(inspection.status)}</small></div><InspectionCompactCard inspection={inspection} actions={actions} /></li>)}</ol><aside className="inspection-agenda-context"><span>Leitura da agenda</span><h2>Do prazo à ação.</h2><p>Selecione um registro para consultar a situação, o vencimento e o prazo final.</p><hr /><p>A triagem continua disponível para acompanhar a classificação das vistorias.</p><Link href="/triage">Abrir triagem →</Link></aside></div> : <EmptyInspections />;
+  const groups = new Map<string, InspectionRecord[]>();
+  for (const inspection of sorted) {
+    const date = parseDate(inspection.dueAt);
+    const day = date ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "long" }).format(date) : "Sem data";
+    groups.set(day, [...(groups.get(day) ?? []), inspection]);
+  }
+  return sorted.length ? <div className="inspection-agenda-layout"><ol className="inspection-agenda">{[...groups].map(([day, items]) => <li className="inspection-agenda-group" key={day}><h2>{day} · {items.length} {items.length === 1 ? "vistoria" : "vistorias"}</h2><ol>{items.map((inspection) => <li key={inspection.id} className="inspection-agenda-item"><time dateTime={inspection.dueAt}>{parseDate(inspection.dueAt) ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(inspection.dueAt)) : "—"}</time><InspectionCompactCard inspection={inspection} actions={actions} focused={focusedId === inspection.id} onFocus={onFocus} compact /></li>)}</ol></li>)}</ol></div> : <EmptyInspections />;
 }
 
-function InspectionCompactCard({ inspection, actions }: { inspection: InspectionRecord; actions?: InspectionActionHandlers }) {
-  return <article className="inspection-record-card" data-inspection-id={inspection.id}>
-    <span className="inspection-record-kicker">{presentInspectionSource(inspection.source)}</span>
-    <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-record-title">{inspectionName(inspection)}</Link>
+function InspectionCompactCard({ inspection, actions, focused, onFocus, compact = false }: { inspection: InspectionRecord; actions?: InspectionActionHandlers; focused?: boolean; onFocus?: (id: string) => void; compact?: boolean }) {
+  return <article className={`inspection-record-card${compact ? " inspection-record-card--focus" : ""}`} data-focused={focused} data-inspection-id={inspection.id}>
+    {!compact && <span className="inspection-record-kicker">{presentInspectionSource(inspection.source)}</span>}
+    {onFocus ? <><button className="inspection-focus-select inspection-record-title" type="button" aria-pressed={focused} onClick={() => onFocus(inspection.id)}>{inspectionName(inspection)}</button><Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-focus-mobile-link inspection-record-title">{inspectionName(inspection)}</Link></> : <Link href={`/inspections?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-record-title">{inspectionName(inspection)}</Link>}
     <span>Responsável · {inspection.participantName?.trim() || "indisponível"}</span>
-    {inspection.assetAddress && <span>{inspection.assetAddress}</span>}
-    <span>Vencimento · {formatInspectionDate(inspection.dueAt)}</span>
-    <span>{inspection.evidenceCount} evidência(s) · prazo final {formatInspectionDate(inspection.deadlineAt)} · v{inspection.version}</span>
+    {compact && !onFocus && <><span>{formatInspectionDate(inspection.dueAt)}</span><span className="inspection-status">{formatInspectionStatus(inspection.status)}</span></>}
+    {!compact && inspection.assetAddress && <span>{inspection.assetAddress}</span>}
+    {!compact && <span>Vencimento · {formatInspectionDate(inspection.dueAt)}</span>}
+    {!compact && <span>{inspection.evidenceCount} evidência(s) · prazo final {formatInspectionDate(inspection.deadlineAt)} · v{inspection.version}</span>}
     {inspection.status === "COMPLETED" && <Link href={`/reports?inspectionId=${encodeURIComponent(inspection.id)}`} className="inspection-open-link">Abrir laudo →</Link>}
     <InspectionActions inspection={inspection} actions={actions} />
   </article>;
@@ -182,11 +194,6 @@ function parseDate(value: string | null | undefined): Date | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-function formatAgendaDay(value: string | null | undefined): string {
-  const date = parseDate(value);
-  return date ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(date) : value ? "Data inválida" : "Sem data";
 }
 
 function inspectionName(inspection: InspectionRecord): string {

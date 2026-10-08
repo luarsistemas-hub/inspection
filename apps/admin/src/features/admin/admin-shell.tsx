@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccountMenu, AdaptiveNavigation, Alert, Button, Checkbox, DataTable, Dialog, Field, Icon, IconButton, Input, PageHeader, Pagination, Recovery, Select, Status, Textarea, ThemeSelector, type AdaptiveNavigationItem } from "@inspection/design-system";
+import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AccountMenu, AdaptiveNavigation, Alert, Button, Checkbox, Dialog, Field, Icon, IconButton, Input, PageHeader, Pagination, Recovery, Select, Status, Textarea, ThemeSelector, type AdaptiveNavigationItem } from "@inspection/design-system";
 import { beginPKCE, endAdminSSO } from "@/auth/pkce";
 import { clearProtectedContext, clearSession, getIDToken, hasAdminAccess, hasAdminRouteAccess, hasAnalysisPromptAccess, restoreMembershipContext, setIdentity, setMembershipContext, type AdminIdentity } from "@/auth/session";
 import { graphql, graphqlIdentity, type GraphQLFailure } from "@/graphql/client";
@@ -24,7 +24,7 @@ type Action = "unit" | "invite" | "participant" | "asset" | "policy";
 type AdminFormOptions = { units: G.AdminOrganizationQuery["businessUnits"]["nodes"]; segments: G.AdminCatalogsQuery["segmentDefinitions"]["nodes"]; templates: G.AdminCatalogsQuery["templates"]["nodes"] };
 
 const pages: Record<string, { title: string; responsibility: string; primary: string }> = {
-  "/overview": { title: "Visão administrativa", responsibility: "Contexto e saúde da configuração da imobiliária", primary: "Revisar contexto" },
+  "/overview": { title: "Minha operação", responsibility: "Contexto e saúde da configuração da imobiliária", primary: "Revisar contexto" },
   "/organization": { title: "Organização", responsibility: "Unidades e estrutura da sua operação.", primary: "Criar unidade" },
   "/access": { title: "Identidade e acesso", responsibility: "Usuários, convites, papéis e acesso efetivo", primary: "Convidar usuário" },
   "/catalogs": { title: "Responsáveis pela vistoria", responsibility: "Responsáveis, contatos e segmentos", primary: "Criar responsável" },
@@ -59,6 +59,7 @@ export function AdminShell({ section }: { section?: string }) {
   const [loading, setLoading] = useState(false); const [error, setError] = useState<string>(); const [needsBootstrap, setNeedsBootstrap] = useState(false); const [bootstrapPending, setBootstrapPending] = useState(false);
   const [analysisPrompt, setAnalysisPrompt] = useState<G.AdminAnalysisPromptQuery["analysisPrompt"]>();
   const [action, setAction] = useState<Action>(); const [detail, setDetail] = useState<Row>(); const [addressEdit, setAddressEdit] = useState<Row>(); const [history, setHistory] = useState<HistoryPage>(); const [historyError, setHistoryError] = useState<string>(); const [correction, setCorrection] = useState<Row>();
+  const [focusedRowId, setFocusedRowId] = useState<string>();
   const request = useRef<AbortController | undefined>(undefined); const historyRequest = useRef<AbortController | undefined>(undefined); const collectionGuard = useRef(new RequestGuard()).current; const historyGeneration = useRef(0); const query = params.get("search") ?? ""; const cursor = params.get("after");
   const updateParams = useCallback((updates: Record<string, string | null>) => { const next = new URLSearchParams(params.toString()); Object.entries(updates).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); router.replace(`${pathname}${next.size ? `?${next}` : ""}`); }, [params, pathname, router]);
 
@@ -111,17 +112,18 @@ export function AdminShell({ section }: { section?: string }) {
   const bootstrap = async () => { if (bootstrapPending) return; setBootstrapPending(true); setError(undefined); try { await graphqlIdentity<G.BootstrapTenantMutation>(G.BootstrapTenantDocument, { input: { name: "Minha operação", businessUnitCode: "MATRIZ", businessUnitName: "Matriz", clientMutationId: "local-bootstrap-admin" } }); await loadIdentity(); } catch (failure) { setError(failureText(failure)); } finally { setBootstrapPending(false); } };
   const permitted = hasAdminAccess(); const routePermitted = permitted && hasAdminRouteAccess(pathname, identityData?.me.roles ?? []); const canInviteInternalUsers = identityData?.me.roles.some((role) => ["TENANT_ADMIN", "ACCESS_ADMIN", "ORGANIZATION_ADMIN"].includes(role)) ?? false; const promptPermitted = permitted && hasAnalysisPromptAccess() && Boolean(identityData?.me.roles.some((role) => role === "TENANT_ADMIN" || role === "INSPECTION_CONFIG_ADMIN") && identityData.me.productEntitlements.includes("ADMIN")); const activeMembership = identityData?.me.memberships.find((x) => x.id === restoreMembershipContext()?.membershipId); const tenantName = identityData?.tenant?.name ?? "Não selecionado";
   const profileName = identityData?.tenant?.name?.trim() || "Imobiliária";
+  const visibleCollection = collection ? { ...collection, rows: pathname === "/organization" && query.trim() ? collection.rows.filter((row) => `${row.Unidade ?? ""} ${row.Código ?? ""}`.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR"))) : collection.rows } : undefined;
   const policyVersion = collection?.rows.find((row) => row.Recurso === "Política de publicação")?.Versão;
   const currentPolicyVersion = typeof policyVersion === "number" && Number.isSafeInteger(policyVersion) && policyVersion > 0 ? policyVersion : undefined;
   const primaryAction = () => {
-    if (pathname === "/overview") return void load();
+    if (pathname === "/overview") return void router.push("/organization");
     if (pathname === "/templates") return;
     if (pathname === "/audit") return exportCsv();
     if (pathname === "/access" && !canInviteInternalUsers) return;
     setAction(pathname === "/organization" ? "unit" : pathname === "/access" ? "invite" : pathname === "/catalogs" ? "participant" : pathname === "/assets" ? "asset" : "policy");
   };
-  if (needsBootstrap) return <main className="admin-denial"><ThemeSelector /><Recovery kind={error ? "error" : "unavailable"} title="Primeiro acesso">{error ?? status}</Recovery><Button disabled={bootstrapPending} isPending={bootstrapPending} pendingLabel="Criando…" onClick={() => void bootstrap()}>Criar operação local</Button></main>;
-  if (error && !identityData) return <main className="admin-denial"><section className="inspection-recovery inspection-recovery--denied" aria-labelledby="admin-denial-title"><div className="admin-denial-heading"><h2 id="admin-denial-title">Administração</h2><ThemeSelector /></div><div role="status">{error}</div></section><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname)}>Entrar com conta administrativa</Button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Painel</a></main>;
+  if (needsBootstrap) return <AdminGate title="Primeiro acesso" description="Crie a operação local para configurar o ambiente de trabalho."><ThemeSelector /><Recovery kind={error ? "error" : "unavailable"} title="Configuração inicial">{error ?? status}</Recovery><Button disabled={bootstrapPending} isPending={bootstrapPending} pendingLabel="Criando…" onClick={() => void bootstrap()}>Criar operação local</Button></AdminGate>;
+  if (error && !identityData) return <AdminGate title="Administração" description="Entre com uma conta autorizada para continuar."><ThemeSelector /><div className="admin-gate-notice" role="status">{error}</div><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname)}>Entrar com conta administrativa</Button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Painel</a></AdminGate>;
   const visibleNavItems = navItems.filter(([, href]) => Boolean(identityData && hasAdminRouteAccess(href, identityData.me.roles)) && (href !== "/prompts" || promptPermitted) && (href !== "/llm-usage" || identityData?.me.canViewLLMCosts));
   const primaryAdminHrefs = ["/overview", "/organization", "/access"];
   const navigationItem = ([label, href]: readonly [string, string]): AdaptiveNavigationItem => ({ href, label, icon: href === "/overview" ? "layout-dashboard" : href === "/organization" ? "building-2" : href === "/access" ? "users" : href === "/catalogs" ? "clipboard-check" : href === "/assets" || href === "/templates" ? "building-2" : href === "/prompts" ? "sparkles" : href === "/governance" ? "shield-check" : href === "/audit" ? "history" : "chart-no-axes-combined", group: href === "/governance" || href === "/audit" ? "Governança" : href === "/prompts" || href === "/llm-usage" ? "Análise" : "Cadastros" });
@@ -131,6 +133,7 @@ export function AdminShell({ section }: { section?: string }) {
   return <main className={`admin-shell${pathname === "/overview" ? " admin-shell--overview" : ""}`}>
     <a className="skip-link" href="#admin-content">Pular para o conteúdo</a>
     <header className="admin-header">
+      <Link className="admin-brand" href="/overview" aria-label="Inspection Administração: visão geral"><span className="admin-brand-mark" aria-hidden="true">I</span><span className="admin-brand-desktop">Administração <small>/ {tenantName}</small></span><span className="admin-brand-mobile">Inspection</span></Link>
       <div className="admin-header-context">
         <ThemeSelector />
         <AccountMenu
@@ -148,13 +151,13 @@ export function AdminShell({ section }: { section?: string }) {
       </div>
     </header>
     <div className="admin-layout">
-      <AdaptiveNavigation label="Navegação administrativa" activeHref={pathname} primaryItems={primaryAdminItems} secondaryItems={secondaryAdminItems} renderLink={(item, className, onNavigate) => item.href.startsWith("/") ? <Link key={item.href} aria-current={pathname === item.href ? "page" : undefined} className={className} href={item.href} onClick={onNavigate} prefetch={false}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></Link> : <a key={item.href} className={className} href={item.href} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></a>} />
+      <AdaptiveNavigation label="Navegação administrativa" activeHref={pathname} primaryItems={primaryAdminItems} secondaryItems={secondaryAdminItems} renderLink={(item, className, onNavigate) => item.href.startsWith("/") ? <Link key={item.href} aria-current={pathname === item.href ? "page" : undefined} className={className} href={item.href} title={item.label} onClick={onNavigate} prefetch={false}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></Link> : <a key={item.href} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></a>} />
       <section id="admin-content" className="admin-content" aria-labelledby="page-title">
-        <PageHeader id="page-title" emphasis={pathname === "/overview" ? "brand" : "plain"} breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={section ?? page.title} description={page.responsibility} descriptionMode="disclosure" actions={pathname === "/llm-usage" || pathname === "/templates" || (pathname === "/access" && !canInviteInternalUsers) ? null : <Button disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
+        <PageHeader id="page-title" emphasis="plain" breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={pathname === "/overview" ? page.title : section ?? page.title} description={page.responsibility} descriptionMode="disclosure" actions={pathname === "/llm-usage" || pathname === "/templates" || (pathname === "/access" && !canInviteInternalUsers) ? null : <Button disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
         {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !routePermitted || (pathname === "/prompts" && !promptPermitted) ? <Recovery kind="denied" title="Acesso restrito">Você não tem permissão para acessar este recurso neste escopo.</Recovery> : pathname === "/prompts" ? error ? <Recovery kind="error" title="Não foi possível carregar o prompt" onRetry={() => void load()}>{error}</Recovery> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : pathname === "/templates" ? <TemplateEditorPage /> : <>
-          <div className="collection-toolbar"><Field label={pathname === "/organization" ? "Buscar unidade" : "Buscar nesta coleção"}><Input value={query} onChange={(event) => updateParams({ search: event.target.value || null, after: null })} placeholder={pathname === "/organization" ? "Nome ou código da unidade" : pathname === "/assets" ? "Nome, código, endereço, CEP ou cidade" : "Nome, identificador ou contexto"} /></Field>{query && <Button variant="secondary" onClick={() => updateParams({ search: null, after: null })}>Limpar busca</Button>}</div>
+          {pathname !== "/overview" && <div className="collection-toolbar"><Field label={pathname === "/organization" ? "Buscar unidade" : "Buscar nesta coleção"}><Input value={query} onChange={(event) => updateParams({ search: event.target.value || null, after: null })} placeholder={pathname === "/organization" ? "Nome ou código da unidade" : pathname === "/assets" ? "Nome, código, endereço, CEP ou cidade" : "Nome, identificador ou contexto"} /></Field>{query && <Button variant="secondary" onClick={() => updateParams({ search: null, after: null })}>Limpar busca</Button>}</div>}
           <p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>
-          {error ? <Recovery kind="error" title="Não foi possível carregar a coleção" onRetry={() => void load()}>{error}</Recovery> : <CollectionView data={collection} query={query} compact={pathname === "/organization"} tenantName={tenantName} onHistory={showHistory} onNext={(after) => updateParams({ after })} />}
+          {error ? <Recovery kind="error" title="Não foi possível carregar a coleção" onRetry={() => void load()}>{error}</Recovery> : pathname === "/overview" ? <AdminOverview data={collection} tenantName={tenantName} /> : <div className="admin-focus-workspace"><div className="admin-focus-list"><CollectionView data={visibleCollection} query={query} tenantName={tenantName} focusedRowId={focusedRowId} onFocus={setFocusedRowId} onHistory={showHistory} onNext={(after) => updateParams({ after })} /></div>{visibleCollection?.rows.length ? <AdminFocusDetail data={visibleCollection} focusedRowId={focusedRowId} onHistory={showHistory} /> : null}</div>}
         </>}
       </section>
     </div>
@@ -165,12 +168,17 @@ export function AdminShell({ section }: { section?: string }) {
   </main>;
 }
 
+function AdminGate({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return <main className="admin-denial"><aside className="admin-gate-story"><div className="admin-gate-story-brand"><span className="admin-brand-mark" aria-hidden="true">I</span><span>Inspection</span></div><div><h2>Cada vistoria, com clareza.</h2><p>Planeje vistorias e reúna evidências para decidir com segurança.</p></div><small>Administração</small></aside><section className="admin-gate-form"><span className="admin-gate-mobile-brand">Inspection</span><h1>{title}</h1><p>{description}</p>{children}<small>Português (Brasil) · Acesso seguro</small></section></main>;
+}
+
 type TemplateRequirementDraft = { key: string; section: string; label: string; instructions: string; minimumCount: number; maximumCount: number; preserved?: Record<string, unknown> };
 type TemplateDefinitionDraft = { schemaVersion: number; segmentVersionId: string; participantRoles: string[]; defaultComparisonMode: string; requirements: Array<Record<string, unknown>>; analysisType: "REAL_ESTATE"; policy: { gpsRequired: boolean; geofenceMeters: number; allowGallery: boolean } };
 
 function TemplateEditorPage() {
   const [catalogs, setCatalogs] = useState<G.AdminCatalogsQuery>();
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [segmentVersionId, setSegmentVersionId] = useState("");
   const [key, setKey] = useState(""); const [name, setName] = useState("");
   const [requirements, setRequirements] = useState<TemplateRequirementDraft[]>([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]);
@@ -183,6 +191,7 @@ function TemplateEditorPage() {
     try {
       const result = await graphql<G.AdminCatalogsQuery>(G.AdminCatalogsDocument, { first: 100, after: null, search: null });
       setCatalogs(result);
+      setSelectedTemplateId((current) => current || result.templates.nodes[0]?.id || "");
       const activeSegment = result.segmentDefinitions.nodes.find((segment) => segment.activeVersionId);
       if (activeSegment?.activeVersionId) setSegmentVersionId((current) => current || activeSegment.activeVersionId!);
       setStatus(`${result.templates.nodes.length} modelo(s) carregados.`);
@@ -201,12 +210,12 @@ function TemplateEditorPage() {
       if (definition.participantRoles?.length) setParticipantRoles(definition.participantRoles); setComparisonMode(definition.defaultComparisonMode || "CHECKLIST_ONLY");
       setRequirements(definition.requirements.map((requirement) => ({ key: String(requirement.key), section: String(requirement.section), label: String(requirement.label), instructions: String(requirement.instructions ?? ""), minimumCount: Number(requirement.minimumCount ?? 0), maximumCount: Number(requirement.maximumCount ?? 5), preserved: requirement })));
       setGpsRequired(Boolean(definition.policy?.gpsRequired)); setAllowGallery(Boolean(definition.policy?.allowGallery)); setGeofenceMeters(Number(definition.policy?.geofenceMeters ?? 150));
-      setError(""); setStatus(`Editando versão ativa ${result.templateVersion.versionNumber}. A publicação criará uma versão nova.`);
+      setError(""); setStatus(`Versão ativa ${result.templateVersion.versionNumber}. Abra o checklist para editar; a publicação criará uma versão nova.`);
     }).catch((failure) => { if (!cancelled) setError(failureText(failure)); });
     return () => { cancelled = true; };
   }, [activeVersionId, selectedTemplateKey, selectedTemplateName]);
 
-  const resetDraft = () => { setSelectedTemplateId(""); setKey(""); setName(""); setRequirements([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]); setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY"); setError(""); setStatus("Novo modelo: escolha um segmento e monte o checklist."); };
+  const resetDraft = () => { setIsEditingTemplate(true); setSelectedTemplateId(""); setKey(""); setName(""); setRequirements([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]); setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY"); setError(""); setStatus("Novo modelo: escolha um segmento e monte o checklist."); };
   const updateRequirement = (index: number, field: keyof TemplateRequirementDraft, value: string) => setRequirements((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "minimumCount" || field === "maximumCount" ? Number(value) : value } : item));
   const publish = async (event: FormEvent) => {
     event.preventDefault(); if (busy) return;
@@ -231,17 +240,17 @@ function TemplateEditorPage() {
   };
 
   return <div className="admin-template-editor">
-    <div className="template-editor-toolbar"><label>Modelo existente<select aria-label="Modelo existente" value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}><option value="">Novo modelo</option>{catalogs?.templates.nodes.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.key}</option>)}</select></label><Button type="button" variant="secondary" onClick={resetDraft}>Novo modelo</Button></div>
+    <div className="template-editor-toolbar"><label>Modelo existente<select aria-label="Modelo existente" value={selectedTemplateId} onChange={(event) => { setSelectedTemplateId(event.target.value); setIsEditingTemplate(false); }}><option value="">Selecione um modelo</option>{catalogs?.templates.nodes.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.key}</option>)}</select></label><Button type="button" variant="secondary" onClick={resetDraft}>Novo modelo</Button></div>
     <p role="status">{status}</p>
-    <form className="admin-form" onSubmit={publish}>
+    <div className="admin-template-workspace">{isEditingTemplate ? <form className="admin-form" onSubmit={publish}>
       <Field label="Chave do modelo" required><Input required value={key} onChange={(event) => setKey(event.target.value)} disabled={Boolean(selectedTemplateId)} /></Field>
       <Field label="Nome do modelo" required><Input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
       <Field label="Segmento do imóvel" required><Select required value={segmentVersionId} onChange={(event) => setSegmentVersionId(event.target.value)}>{catalogs?.segmentDefinitions.nodes.filter((segment) => segment.activeVersionId).map((segment) => <option key={segment.id} value={segment.activeVersionId!}>{segment.name} · {segment.key}</option>)}</Select></Field>
       <fieldset className="template-requirements"><legend>Checklist de captura</legend><p>A comparação e o vínculo com projeto são escolhidos na vistoria, então este modelo define somente os itens de captura.</p>{requirements.map((requirement, index) => <fieldset className="template-requirement" key={`${index}-${requirement.key}`}><legend>Item {index + 1}</legend><Field label="Chave" required><Input required value={requirement.key} onChange={(event) => updateRequirement(index, "key", event.target.value)} /></Field><Field label="Seção" required><Input required value={requirement.section} onChange={(event) => updateRequirement(index, "section", event.target.value)} /></Field><Field label="O que fotografar" required><Input required value={requirement.label} onChange={(event) => updateRequirement(index, "label", event.target.value)} /></Field><Field label="Orientação"><Textarea value={requirement.instructions} onChange={(event) => updateRequirement(index, "instructions", event.target.value)} /></Field><div className="template-count-fields"><Field label="Mínimo de fotos"><Input type="number" min={0} max={200} value={requirement.minimumCount} onChange={(event) => updateRequirement(index, "minimumCount", event.target.value)} /></Field><Field label="Máximo de fotos"><Input type="number" min={1} max={200} value={requirement.maximumCount} onChange={(event) => updateRequirement(index, "maximumCount", event.target.value)} /></Field></div><Button type="button" variant="secondary" disabled={requirements.length <= 1} onClick={() => setRequirements((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remover item</Button></fieldset>)}<Button type="button" variant="secondary" onClick={() => setRequirements((current) => [...current, { key: `item-${current.length + 1}`, section: "Geral", label: "Novo item", instructions: "", minimumCount: 0, maximumCount: 5 }])}>Adicionar item</Button></fieldset>
       <fieldset className="template-policy"><legend>Captura</legend><Checkbox label="Exigir localização GPS" checked={gpsRequired} onChange={(event) => setGpsRequired(event.target.checked)} /><Checkbox label="Permitir escolher fotos da galeria" checked={allowGallery} onChange={(event) => setAllowGallery(event.target.checked)} /><Field label="Raio permitido em metros"><Input type="number" min={25} max={10000} value={geofenceMeters} onChange={(event) => setGeofenceMeters(Number(event.target.value))} /></Field></fieldset>
       {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" isPending={busy} pendingLabel="Publicando e ativando…" disabled={!catalogs?.segmentDefinitions.nodes.some((segment) => segment.activeVersionId === segmentVersionId)}>Publicar nova versão do modelo</Button>
-    </form>
-    <h2>Modelos ativos</h2><ul className="collection">{catalogs?.templates.nodes.map((template) => <li key={template.id}><strong>{template.name}</strong><span>{template.key} · v{template.version} · {template.activeVersionId ? "Ativo" : "Sem versão ativa"}</span><Button type="button" variant="secondary" onClick={() => setSelectedTemplateId(template.id)}>Editar checklist</Button></li>)}</ul>
+    </form> : <section className="admin-template-summary"><span className="admin-focus-eyebrow">Modelo selecionado</span><h2>{selectedTemplate?.name ?? "Seus modelos de vistoria"}</h2><dl><div><dt>Nome do modelo</dt><dd>{selectedTemplate?.name ?? "Selecione um modelo abaixo ou crie um novo."}</dd></div><div><dt>Chave</dt><dd>{key || "—"}</dd></div></dl><div className="admin-template-checklist"><div className="admin-template-checklist-heading"><h3>Checklist de captura</h3>{selectedTemplate && <Button type="button" variant="secondary" onClick={() => setIsEditingTemplate(true)}>Editar</Button>}</div><p>{selectedTemplate ? `${requirements.length} item(ns) · ${catalogs?.segmentDefinitions.nodes.find((segment) => segment.activeVersionId === segmentVersionId)?.name ?? "Segmento do imóvel"}` : "O checklist aparece após selecionar um modelo."}</p>{selectedTemplate && <button className="admin-template-open" type="button" onClick={() => setIsEditingTemplate(true)}>Abrir checklist →</button>}</div></section>}<aside className="admin-focus-detail admin-template-detail"><span className="admin-focus-eyebrow">Identificação</span><h2>{selectedTemplate?.name ?? "Novo modelo"}</h2><dl><div><dt>Chave</dt><dd>{key || "A definir"}</dd></div><div><dt>Segmento</dt><dd>{catalogs?.segmentDefinitions.nodes.find((segment) => segment.activeVersionId === segmentVersionId)?.name ?? "A definir"}</dd></div><div><dt>Checklist</dt><dd>{requirements.length} item(ns) de captura</dd></div><div><dt>Versão</dt><dd>{selectedTemplate?.version ?? "Nova"}</dd></div></dl></aside></div>
+    <h2>Modelos ativos</h2><ul className="admin-template-list">{catalogs?.templates.nodes.map((template) => <li key={template.id}><div><strong>{template.name}</strong><span>{template.key} · v{template.version} · {template.activeVersionId ? "Ativo" : "Sem versão ativa"}</span></div><Button type="button" variant="secondary" onClick={() => { setSelectedTemplateId(template.id); setIsEditingTemplate(false); }}>Abrir modelo</Button></li>)}</ul>
   </div>;
 }
 
@@ -264,38 +273,65 @@ function AnalysisPromptEditor({ prompt, onSaved }: { prompt?: G.AdminAnalysisPro
   };
   if (!prompt) return <Recovery kind="loading" title="Carregando prompt global">A configuração atual será exibida quando estiver disponível.</Recovery>;
   return <form className="prompt-editor" onSubmit={submit} aria-label="Editar prompt global de análise">
-    <div className="prompt-editor-meta"><span>Tipo: Imóveis</span><span>Modelo fixo: {prompt.modelAlias}</span><span>Confiança mínima: {prompt.minimumConfidenceBps / 100}%</span><span>Revisão: {prompt.revision}</span><span>Digest: {prompt.canonicalDigest}</span><span>Atualizado: {prompt.updatedAt}</span></div>
-    <Field label="Instrução do sistema" required><Textarea required minLength={1} maxLength={20000} rows={18} value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} /></Field>
+    <div className="prompt-editor-main"><Field label="Instrução do sistema" required><Textarea required minLength={1} maxLength={20000} rows={18} value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} /></Field>
     <p className="prompt-editor-help">{systemPrompt.length}/20000 caracteres. O schema de saída, o alias do modelo e o limiar de confiança são fixos. Cada alteração gera uma nova revisão e um registro de auditoria sem armazenar o conteúdo anterior. As mudanças afetam somente inspeções criadas depois da gravação.</p>
     <Checkbox label="Confirmo a alteração do prompt global." checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
     {error && <Alert tone="danger">{error}</Alert>}
     <Button type="submit" isPending={busy} pendingLabel="Salvando…" disabled={!confirmed || systemPrompt === prompt.systemPrompt}>Salvar nova revisão</Button>
+    </div><aside className="admin-focus-detail prompt-editor-meta"><span className="admin-focus-eyebrow">Parâmetros</span><h2>Instrução global</h2><dl><div><dt>Tipo</dt><dd>Imóveis</dd></div><div><dt>Modelo</dt><dd>{prompt.modelAlias}</dd></div><div><dt>Confiança mínima</dt><dd>{prompt.minimumConfidenceBps / 100}%</dd></div><div><dt>Revisão</dt><dd>{prompt.revision}</dd></div><div><dt>Digest</dt><dd>{prompt.canonicalDigest}</dd></div><div><dt>Atualizado</dt><dd>{prompt.updatedAt}</dd></div></dl></aside>
   </form>;
 }
 
-function CollectionView({ data, query, compact, tenantName, onHistory, onNext }: { data?: Collection; query: string; compact: boolean; tenantName: string; onHistory: (row: Row) => void; onNext: (cursor: string) => void }) {
+function CollectionView({ data, query, tenantName, focusedRowId, onFocus, onHistory, onNext }: { data?: Collection; query: string; tenantName: string; focusedRowId?: string; onFocus: (id: string) => void; onHistory: (row: Row) => void; onNext: (cursor: string) => void }) {
   if (!data) return <Recovery kind="loading" title="Carregando registros">O contexto atual será preservado.</Recovery>;
-  const rows = compact && query.trim() ? data.rows.filter((row) => `${row.Unidade ?? ""} ${row.Código ?? ""}`.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR"))) : data.rows;
-  if (!rows.length) return <Recovery kind="empty" title={query ? "Nenhum resultado para os filtros atuais" : `Nenhum registro configurado em ${data.title}.`}>{query ? "Os filtros foram preservados. Ajuste a busca ou limpe os filtros." : "Use a ação principal para iniciar este recurso."}</Recovery>;
-  const columns = compact ? ["Unidade", "Código", "Situação"] : data.columns.filter((column) => column !== "ID");
-  const headingColumn = (data.title === "Auditoria" ? "Ação" : data.title === "Prompts de análise" ? "Tipo" : undefined) ?? columns.find((column) => column === "Unidade" || column === "Imóvel") ?? columns[0] ?? "Registro";
-  const mobileColumns: Record<string, string[]> = {
-    "Visão administrativa": ["Valor"], Organização: ["Código", "Situação"], "Identidade e acesso": ["Abrangência", "Situação"],
-    "Responsáveis pela vistoria": ["Situação", "Contatos"], "Configuração de vistorias": ["Código do imóvel", "Situação"],
-    "Prompts de análise": ["Modelo", "Revisão"], Governança: ["Situação", "Atualizado"], Auditoria: ["Ação", "Resultado", "Data/hora"],
+  if (!data.rows.length) return <Recovery kind="empty" title={query ? "Nenhum resultado para os filtros atuais" : `Nenhum registro configurado em ${data.title}.`}>{query ? "Ajuste a busca ou limpe os filtros." : "Use a ação principal para iniciar este recurso."}</Recovery>;
+  const activeRowId = data.rows.some((row, index) => String(row.ID ?? index) === focusedRowId) ? focusedRowId : String(data.rows[0].ID ?? 0);
+  const titleColumn = ({ Organização: "Unidade", "Identidade e acesso": "Usuário", "Responsáveis pela vistoria": "Responsável pela vistoria", "Configuração de vistorias": "Imóvel", Governança: "Recurso", Auditoria: "Ação" } as Record<string, string>)[data.title] ?? data.columns.find((column) => column !== "ID") ?? "Registro";
+  const secondaryColumns = ({ Organização: ["Código"], "Identidade e acesso": ["Perfil de acesso", "Abrangência", "E-mail"], "Responsáveis pela vistoria": ["E-mail", "Confirmação do e-mail"], "Configuração de vistorias": ["Código do imóvel", "Endereço"], Governança: ["Detalhe", "Atualizado"], Auditoria: ["Recurso", "Abrangência"] } as Record<string, string[]>)[data.title] ?? [];
+  const stateColumn = data.title === "Auditoria" ? "Resultado" : "Situação";
+  const formatCell = (row: Row, column: string) => {
+    const value = String(row[column] ?? "—");
+    if (column === "Situação") return formatAdminStatus(value);
+    if ((column === "Atualizado" || column === "Data/hora") && value !== "—") { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date); }
+    return value;
   };
-  const summaryColumns = (mobileColumns[data.title] ?? ["Situação"]).filter((column) => columns.includes(column));
-  const renderValue = (item: Row, column: string) => {
-    const value = String(item[column] ?? "—");
-    if (column === "Situação") return <Status>{formatAdminStatus(value)}</Status>;
-    if (/^(Atualizado|Data\/hora)$/.test(column) && value !== "—") {
+  const auditDay = (row: Row) => { const date = new Date(String(row["Data/hora"] ?? "")); return Number.isNaN(date.getTime()) ? "Sem data" : new Intl.DateTimeFormat("pt-BR", { dateStyle: "full" }).format(date); };
+  return <><ol className="admin-focus-rows" aria-label={`${data.title}: registros`}>
+    {data.rows.map((item, index) => {
+      const id = String(item.ID ?? index);
+      const day = data.title === "Auditoria" ? auditDay(item) : null;
+      const previousDay = index > 0 ? auditDay(data.rows[index - 1]) : null;
+      const subtitle = secondaryColumns.filter((column) => item[column] != null && String(item[column]) !== "—").map((column) => formatCell(item, column)).join(" · ");
+      const date = data.title === "Auditoria" && item["Data/hora"] ? new Date(String(item["Data/hora"])) : null;
+      const time = date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(date) : null;
+      return <li key={id}>{day !== null && day !== previousDay && <h2 className="admin-focus-day">{day}</h2>}<div className="admin-focus-row" data-focused={id === activeRowId}>
+        <div className="admin-focus-row-main"><button className="admin-row-focus admin-row-title-desktop" type="button" aria-pressed={id === activeRowId} onClick={() => onFocus(id)}>{String(item[titleColumn] ?? "Registro")}</button><button className="admin-row-focus admin-row-title-mobile" type="button" onClick={() => onHistory(item)}>{String(item[titleColumn] ?? "Registro")}</button>{subtitle && <span>{subtitle}</span>}</div>
+        <div className="admin-focus-row-side">{time && <time dateTime={String(item["Data/hora"])}>{time}</time>}{item[stateColumn] != null && <Status>{formatCell(item, stateColumn)}</Status>}<IconButton label={`Abrir detalhes de ${String(item[titleColumn] ?? "registro")}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onHistory(item)} /></div>
+      </div></li>;
+    })}
+  </ol><div className="admin-collection-foot"><span>{data.rows.length} registros · {data.hasNextPage ? "mais páginas disponíveis" : "fim da consulta"}</span><span>Contexto: {tenantName}</span></div>{data.hasNextPage && data.endCursor && <Pagination page={1} hasNextPage onPrevious={() => undefined} onNext={() => onNext(data.endCursor!)} />}</>;
+}
+
+function AdminFocusDetail({ data, focusedRowId, onHistory }: { data: Collection; focusedRowId?: string; onHistory: (row: Row) => void }) {
+  const row = data.rows.find((item, index) => String(item.ID ?? index) === focusedRowId) ?? data.rows[0];
+  if (!row) return null;
+  const visible = data.columns.filter((column) => column !== "ID" && row[column] != null);
+  const titleKey = visible.find((column) => ["Unidade", "Usuário", "Responsável pela vistoria", "Imóvel", "Ação", "Recurso", "Contexto", "Tipo"].includes(column)) ?? visible[0] ?? "Registro";
+  const displayValue = (column: string) => {
+    const value = String(row[column] ?? "—");
+    if (column === "Situação") return formatAdminStatus(value);
+    if ((column === "Atualizado" || column === "Data/hora") && value !== "—") {
       const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+      if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
     }
-    const abbreviated = /^(ID|Digest|Vistoria)$/.test(column) && value.length > 30 ? `${value.slice(0, 12)}…${value.slice(-8)}` : value;
-    return <span className="inspection-compact-text" title={value}>{abbreviated}</span>;
+    return value;
   };
-  return <><DataTable density="compact" caption={`${data.title}: coleção administrativa`} mobileLabel={data.title} columns={[...columns.map((column) => ({ id: column, label: column, align: ["Versão", "Contatos"].includes(column) ? "end" as const : "start" as const })), { id: "action", label: "Ação", align: "center", action: true }]}>{rows.map((item, index) => <tr key={`${item.ID ?? index}`}>{columns.map((column) => <td key={column} data-label={column} data-align={["Versão", "Contatos"].includes(column) ? "end" : undefined}>{column === headingColumn ? <strong>{renderValue(item, column)}</strong> : renderValue(item, column)}</td>)}<td data-label="Ação" data-align="center" data-action><IconButton label={`Abrir detalhes de ${String(item[headingColumn] ?? "registro")}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onHistory(item)} /></td></tr>)}</DataTable><ul className="admin-mobile-collection" aria-label={`${data.title}: registros`}>{rows.map((item, index) => <li key={`${item.ID ?? index}`}><article><div className="admin-mobile-row"><h2>{String(item[headingColumn] ?? "Registro")}</h2><IconButton label={`Abrir detalhes de ${String(item[headingColumn] ?? "registro")}`} tooltip="Abrir detalhes" icon="eye" onPress={() => onHistory(item)} /></div><dl>{summaryColumns.map((column) => <div key={column}><dt>{column}</dt><dd>{renderValue(item, column)}</dd></div>)}</dl></article></li>)}</ul><div className="admin-collection-foot"><span>{compact ? `${rows.length} unidade(s) encontradas.` : `${rows.length} registros · ${data.hasNextPage ? "mais páginas disponíveis" : "fim da consulta"}`}</span><span>Contexto: {tenantName}</span></div>{data.hasNextPage && data.endCursor && <Pagination page={1} hasNextPage onPrevious={() => undefined} onNext={() => onNext(data.endCursor!)} />}</>;
+  return <aside className="admin-focus-detail" aria-label="Resumo do registro selecionado"><span className="admin-focus-eyebrow">Registro selecionado</span><h2>{String(row[titleKey] ?? data.title)}</h2><p>{data.responsibility}</p><dl>{visible.filter((column) => column !== titleKey).slice(0, 6).map((column) => <div key={column}><dt>{column}</dt><dd>{displayValue(column)}</dd></div>)}</dl><Button variant="secondary" onClick={() => onHistory(row)}>Ver detalhes e histórico <span aria-hidden="true">→</span></Button></aside>;
+}
+
+function AdminOverview({ data, tenantName }: { data?: Collection; tenantName: string }) {
+  if (!data) return <Recovery kind="loading" title="Carregando contexto">A configuração da operação será exibida em instantes.</Recovery>;
+  return <div className="admin-focus-workspace admin-overview-workspace"><section className="admin-overview-context" aria-label="Seu contexto de trabalho"><span className="admin-focus-eyebrow">Seu contexto de trabalho</span><h2>{tenantName}</h2><dl>{data.rows.map((row, index) => <div key={String(row.Contexto ?? index)}><dt>{String(row.Contexto ?? "Informação")}</dt><dd>{String(row.Valor ?? "—")}</dd></div>)}</dl><div className="admin-overview-links"><Link href="/organization">Organização <span aria-hidden="true">→</span></Link><Link href="/access">Usuários e acessos <span aria-hidden="true">→</span></Link></div></section><aside className="admin-focus-detail"><span className="admin-focus-eyebrow">Selecionado</span><h2>Administração</h2><dl><div><dt>Operação</dt><dd>{tenantName}</dd></div><div><dt>Abrangência</dt><dd>{String(data.rows.find((row) => row.Contexto === "Abrangência efetiva")?.Valor ?? "Imobiliária")}</dd></div></dl><Link className="admin-focus-link" href="/organization">Revisar contexto <span aria-hidden="true">→</span></Link></aside></div>;
 }
 
 function HistoryPanel({ detail, history, error, onRetry, onNext, onClose, onCorrect, onAddressEdit, onResend }: { detail: Row; history?: HistoryPage; error?: string; onRetry: () => void; onNext: () => void; onClose: () => void; onCorrect: (row: Row) => void; onAddressEdit: (row: Row) => void; onResend: (row: Row) => void }) {

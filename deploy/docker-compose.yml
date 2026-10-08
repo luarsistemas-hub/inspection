@@ -71,9 +71,9 @@ services:
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: ["/bin/sh", "-ec"]
     command:
-      - >-
-        aws s3api head-bucket --bucket inspection-private --endpoint-url http://minio:9000
-        || aws s3api create-bucket --bucket inspection-private --endpoint-url http://minio:9000
+      - |
+        aws s3api head-bucket --bucket inspection-private --endpoint-url http://minio:9000 || aws s3api create-bucket --bucket inspection-private --endpoint-url http://minio:9000
+        aws s3api put-bucket-cors --bucket inspection-private --endpoint-url http://minio:9000 --cors-configuration '{"CORSRules":[{"AllowedHeaders":["*"],"AllowedMethods":["PUT","GET","HEAD"],"AllowedOrigins":["http://localhost:${INSPECTION_ADMIN_PORT:-3000}","http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}","http://localhost:${INSPECTION_CAPTURE_PORT:-3003}","http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]}'
 
   inspection-bootstrap:
     image: postgres:18-alpine
@@ -119,6 +119,7 @@ services:
       INSPECTION_SUPER_ADMIN_USERNAME: ${INSPECTION_SUPER_ADMIN_USERNAME:?set in .env.inspection}
       INSPECTION_SUPER_ADMIN_SUBJECT: ${INSPECTION_SUPER_ADMIN_SUBJECT:?set in .env.inspection}
       INSPECTION_SUPER_ADMIN_PASSWORD: ${INSPECTION_SUPER_ADMIN_PASSWORD:?set in .env.inspection}
+      KEYCLOAK_REPAIR_REQUIRED_ACTIONS: "true"
       KEYCLOAK_SMTP_SERVER_JSON: '{"host":"mailpit","port":"1025","from":"inspection@localhost","auth":"false","ssl":"false","starttls":"false"}'
     entrypoint:
       - /bin/sh

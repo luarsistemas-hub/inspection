@@ -8,11 +8,11 @@
   "defaultLocale": "pt-BR",
   "supportedLocales": ["pt-BR", "en"],
   "requiredActions": [
-    {"alias": "VERIFY_EMAIL", "enabled": false, "defaultAction": false, "priority": 10},
-    {"alias": "UPDATE_PROFILE", "enabled": false, "defaultAction": false, "priority": 20},
-    {"alias": "CONFIGURE_TOTP", "enabled": false, "defaultAction": false, "priority": 30},
-    {"alias": "UPDATE_PASSWORD", "enabled": true, "defaultAction": false, "priority": 40},
-    {"alias": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 50}
+    {"alias": "VERIFY_EMAIL", "providerId": "VERIFY_EMAIL", "enabled": false, "defaultAction": false, "priority": 10},
+    {"alias": "UPDATE_PROFILE", "providerId": "UPDATE_PROFILE", "enabled": false, "defaultAction": false, "priority": 20},
+    {"alias": "CONFIGURE_TOTP", "providerId": "CONFIGURE_TOTP", "enabled": false, "defaultAction": false, "priority": 30},
+    {"alias": "UPDATE_PASSWORD", "providerId": "UPDATE_PASSWORD", "enabled": true, "defaultAction": false, "priority": 40},
+    {"alias": "VERIFY_PROFILE", "providerId": "VERIFY_PROFILE", "enabled": false, "defaultAction": false, "priority": 50}
   ],
   "clients": [
     {

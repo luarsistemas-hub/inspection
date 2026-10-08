@@ -426,3 +426,53 @@ select:focus-visible {
 #keycloak-bg button[data-password-toggle] {
   min-height: 48px;
 }
+
+/* Foco: a mesma entrada contida e clara do Admin e do Painel. */
+.pf-v5-c-login__container {
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  max-width: none;
+}
+
+.inspection-brand-panel {
+  gap: 2rem;
+  padding: clamp(2rem, 5vw, 4.5rem);
+  border-right: 1px solid var(--inspection-line);
+  background: #edf1ff;
+  color: var(--inspection-ink);
+}
+
+.inspection-brand-panel::before,
+.inspection-brand-panel::after,
+.inspection-floorplan { display: none; }
+.inspection-brand-eyebrow { color: #1944c2; font-size: 11px; letter-spacing: 1.2px; }
+.inspection-brand-copy h2 { max-width: 410px; color: var(--inspection-ink); font-size: clamp(2rem, 3.2vw, 2.9rem); }
+.inspection-brand-description { max-width: 340px; color: var(--inspection-muted); font-size: 16px; }
+.inspection-brand-footer { border-color: var(--inspection-line); color: var(--inspection-muted); font-size: 13px; }
+.pf-v5-c-login__main { padding: 7rem clamp(2rem, 7vw, 6rem) 3rem; }
+.pf-v5-c-login__main-title { font-size: clamp(1.7rem, 2.4vw, 2rem); }
+.pf-v5-c-login__main-header { margin-bottom: 1.5rem; }
+.pf-v5-c-login__main-body { max-width: 400px; }
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text,
+.pf-v5-c-check__label { font-size: 13px; }
+.pf-v5-c-form-control,
+.pf-v5-c-input-group { border-radius: 8px; }
+.pf-v5-c-button.pf-m-primary { border-radius: 8px; }
+
+@media (max-width: 900px) {
+  .pf-v5-c-login__container { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+  .inspection-brand-panel { padding: 2rem; }
+  .inspection-brand-copy h2 { font-size: 2rem; }
+  .pf-v5-c-login__main { padding-inline: 2rem; }
+}
+
+@media (max-width: 680px) {
+  .pf-v5-c-login__container { display: flex; }
+  .inspection-brand-panel { min-height: 4.5rem; padding: 1.1rem 1.5rem; border-right: 0; border-bottom: 1px solid var(--inspection-line); background: var(--inspection-paper); }
+  .inspection-brand-copy > :not(.inspection-brand-eyebrow),
+  .inspection-brand-footer { display: none; }
+  .inspection-brand-eyebrow { margin: 0; color: var(--inspection-ink); }
+  .pf-v5-c-login__main { flex: 1; align-self: stretch; justify-content: center; padding: 2rem 1.5rem 3rem; }
+  #kc-header { top: 1.3rem; right: 1.5rem; }
+  #kc-header-wrapper { color: var(--inspection-ink) !important; }
+}

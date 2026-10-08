@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -33,6 +35,7 @@ type Input struct {
 	TemplateID                                 *identity.ID
 	Name, ExternalKey, Address, IdempotencyKey string
 	AddressDetails                             *address.Details
+	ReuseExistingAddress                       bool
 	LatitudeE6, LongitudeE6                    *int32
 	GeofenceMeters                             int
 	Attributes                                 map[string]any
@@ -134,6 +137,19 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
+		if in.ReuseExistingAddress && in.AddressDetails != nil {
+			if err := lockAddress(tx, in.TenantID, details); err != nil {
+				return err
+			}
+			reused, found, err := s.reuseAddress(tx, in, details, name)
+			if err != nil {
+				return err
+			}
+			if found {
+				out = reused
+				return nil
+			}
+		}
 		var count int64
 		if err := tx.Model(&database.Asset{}).Where("tenant_id=?", in.TenantID).Count(&count).Error; err != nil {
 			return err
@@ -160,6 +176,184 @@ func (s Service) Register(ctx context.Context, in Input) (View, error) {
 		return s.load(tx, &out)
 	})
 	return out, err
+}
+
+// lockAddress serializes onboarding find-or-create operations for a normalized
+// address across API instances. Hash collisions only cause extra serialization.
+func lockAddress(tx *gorm.DB, tenantID identity.ID, details address.Details) error {
+	if tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+	key := fmt.Sprintf("%s:%s", tenantID, onboardingAddressKey(details))
+	return tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key).Error
+}
+
+func onboardingAddressKey(details address.Details) string {
+	details = address.Normalize(details)
+	parts, _ := json.Marshal([]string{
+		details.PostalCode,
+		strings.ToLower(details.Street),
+		strings.ToLower(details.Number),
+		fmt.Sprint(details.WithoutNumber),
+		strings.ToLower(details.Complement),
+		strings.ToLower(details.City),
+		strings.ToUpper(details.State),
+	})
+	digest := sha256.Sum256(parts)
+	return hex.EncodeToString(digest[:])
+}
+
+func (s Service) reuseAddress(tx *gorm.DB, in Input, details address.Details, name string) (View, bool, error) {
+	var candidates []database.Asset
+	if err := tx.Where("tenant_id = ? AND address_status = 'COMPLETE' AND status = 'ACTIVE' AND address_postal_code = ?", in.TenantID, details.PostalCode).
+		Order("created_at ASC, id ASC").Find(&candidates).Error; err != nil {
+		return View{}, false, err
+	}
+	var existing View
+	for _, candidate := range candidates {
+		if sameOnboardingAddress(candidate, details) {
+			existing.Asset = candidate
+			break
+		}
+	}
+	if existing.Asset.ID == (identity.ID{}) {
+		return View{}, false, nil
+	}
+	if err := s.load(tx, &existing); err != nil {
+		return View{}, false, err
+	}
+
+	attributes := in.Attributes
+	updateAttributes := true
+	if _, err := s.Bus.Ask(tx.Statement.Context, segmentresolve.ValidateAttributesQuery{
+		TenantID: in.TenantID, VersionID: existing.Asset.SegmentVersionID, Attributes: attributes,
+	}); err != nil {
+		if !apperror.Is(err, apperror.InvalidInput) {
+			return View{}, false, err
+		}
+		updateAttributes = false
+	}
+	var attrs []byte
+	var digest string
+	if updateAttributes {
+		var err error
+		attrs, digest, err = catalog.CanonicalJSON(attributes)
+		if err != nil {
+			return View{}, false, err
+		}
+	}
+
+	// Curated values survive a new onboarding: a renamed asset keeps its name and
+	// optional fields are only replaced when the new submission provides them.
+	merged := details
+	if merged.District == "" {
+		merged.District = existing.Asset.AddressDistrict
+	}
+	if merged.MunicipalityCode == "" {
+		merged.MunicipalityCode = existing.Asset.AddressMunicipalityCode
+	}
+	if merged.Reference == "" {
+		merged.Reference = existing.Asset.AddressReference
+	}
+	formattedAddress := address.Format(merged)
+
+	now := time.Now().UTC()
+	updates := map[string]any{}
+	if strings.TrimSpace(existing.Asset.Name) == "" && name != "" {
+		updates["name"] = name
+	}
+	addressUpdates := map[string]any{
+		"address": formattedAddress, "address_country_code": "BR", "address_postal_code": merged.PostalCode,
+		"address_street": merged.Street, "address_number": merged.Number,
+		"address_without_number": merged.WithoutNumber, "address_complement": merged.Complement,
+		"address_city": merged.City, "address_state": merged.State,
+		"address_district": merged.District, "address_municipality_code": merged.MunicipalityCode,
+		"address_reference": merged.Reference, "address_status": "COMPLETE",
+	}
+	for column, value := range addressUpdates {
+		if !assetColumnEquals(existing.Asset, column, value) {
+			updates[column] = value
+		}
+	}
+	attributesChanged := updateAttributes && existing.Attributes.CanonicalDigest != digest
+	if len(updates) == 0 && !attributesChanged {
+		return existing, true, nil
+	}
+	updates["version"] = existing.Asset.Version + 1
+	updates["updated_at"] = now
+	result := tx.Model(&database.Asset{}).Where("tenant_id = ? AND id = ? AND version = ?",
+		in.TenantID, existing.Asset.ID, existing.Asset.Version).Updates(updates)
+	if result.Error != nil {
+		return View{}, false, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return View{}, false, apperror.New(apperror.Conflict, "version", "stale asset version")
+	}
+	if attributesChanged {
+		attribute := database.AssetAttributeVersion{
+			ID: identity.NewID(), TenantID: in.TenantID, AssetID: existing.Asset.ID,
+			SegmentVersionID: existing.Asset.SegmentVersionID, VersionNumber: existing.Asset.Version + 1,
+			AttributesJSON: attrs, CanonicalDigest: digest, CreatedAt: now,
+		}
+		if err := tx.Create(&attribute).Error; err != nil {
+			return View{}, false, err
+		}
+		existing.Attributes = attribute
+	}
+	if err := tx.Where("tenant_id = ? AND id = ?", in.TenantID, existing.Asset.ID).First(&existing.Asset).Error; err != nil {
+		return View{}, false, err
+	}
+	if err := s.load(tx, &existing); err != nil {
+		return View{}, false, err
+	}
+	return existing, true, nil
+}
+
+func sameOnboardingAddress(asset database.Asset, details address.Details) bool {
+	details = address.Normalize(details)
+	existing := address.Normalize(address.Details{
+		PostalCode: asset.AddressPostalCode, Street: asset.AddressStreet, Number: asset.AddressNumber,
+		WithoutNumber: asset.AddressWithoutNumber, Complement: asset.AddressComplement,
+		City: asset.AddressCity, State: asset.AddressState,
+	})
+	return existing.PostalCode == details.PostalCode &&
+		strings.EqualFold(existing.Street, details.Street) &&
+		strings.EqualFold(existing.Number, details.Number) &&
+		existing.WithoutNumber == details.WithoutNumber &&
+		strings.EqualFold(existing.Complement, details.Complement) &&
+		strings.EqualFold(existing.City, details.City) &&
+		strings.EqualFold(existing.State, details.State)
+}
+
+func assetColumnEquals(asset database.Asset, column string, value any) bool {
+	switch column {
+	case "address":
+		return asset.Address == value.(string)
+	case "address_country_code":
+		return asset.AddressCountryCode == value.(string)
+	case "address_postal_code":
+		return asset.AddressPostalCode == value.(string)
+	case "address_street":
+		return asset.AddressStreet == value.(string)
+	case "address_number":
+		return asset.AddressNumber == value.(string)
+	case "address_without_number":
+		return asset.AddressWithoutNumber == value.(bool)
+	case "address_complement":
+		return asset.AddressComplement == value.(string)
+	case "address_city":
+		return asset.AddressCity == value.(string)
+	case "address_state":
+		return asset.AddressState == value.(string)
+	case "address_district":
+		return asset.AddressDistrict == value.(string)
+	case "address_municipality_code":
+		return asset.AddressMunicipalityCode == value.(string)
+	case "address_reference":
+		return asset.AddressReference == value.(string)
+	default:
+		return false
+	}
 }
 
 func (s Service) Update(ctx context.Context, assetID identity.ID, expectedVersion int64, in Input) (View, error) {
