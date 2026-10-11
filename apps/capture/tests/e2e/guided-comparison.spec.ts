@@ -6,7 +6,7 @@ const referenceSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height
 const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
 const replacementPhoto = Buffer.concat([photo, Buffer.from([1])]);
 
-test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, and advances after upload", async ({ page }) => {
+test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, and advances after upload", async ({ page }, testInfo) => {
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: -27.4487, longitude: -48.428, accuracy: 35 });
   let createdUploads = 0;
@@ -60,10 +60,15 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await expect(page.getByRole("combobox", { name: "Requisito" })).toHaveCount(0);
   const photoPanel = page.locator(".capture-photo-panel");
   await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" })).toBeVisible();
-  await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" })).toBeInViewport();
+  await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" })).toBeInViewport({ ratio: 1 });
   await expect(photoPanel.getByRole("button", { name: "Tirar foto", exact: true })).toHaveCount(0);
   await expect(page.locator(".capture-camera-action")).toHaveCount(0);
 
+  await page.getByRole("button", { name: "Ambientes", exact: true }).click();
+  await expect(page.getByRole("navigation", { name: "Fotos de referência" }).getByRole("button", { name: /Sala/ })).toBeDisabled();
+  await page.getByRole("dialog").getByRole("button", { name: /fechar/i }).click();
+  await expect(page.getByRole("navigation", { name: "Fotos de referência" })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("guided-initial.png"), fullPage: true });
   const primaryChooser = page.waitForEvent("filechooser");
   await photoPanel.getByRole("button", { name: "Tocar ou clicar para tirar a foto" }).click();
   await (await primaryChooser).setFiles({ name: "cozinha.png", mimeType: "image/png", buffer: photo });
@@ -71,12 +76,33 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await expect(page.getByRole("heading", { name: "Confira sua foto" })).toBeVisible();
   expect(createdUploads).toBe(0);
   const canceledChooser = page.waitForEvent("filechooser");
-  await photoPanel.getByRole("button", { name: "Tocar ou clicar na foto para substituí-la" }).click();
+  await photoPanel.getByRole("button", { name: "Tirar novamente", exact: true }).click();
   await (await canceledChooser).setFiles([]);
   await expect(page.getByRole("img", { name: "Prévia da sua foto de comparação" })).toBeVisible();
   expect(createdUploads).toBe(0);
+  const comparison = page.getByRole("slider", { name: "Comparar referência e sua foto" });
+  await expect(comparison).toHaveValue("50");
+  await comparison.focus();
+  await comparison.press("ArrowRight");
+  await expect(comparison).toHaveValue("51");
+  await expect(comparison).toHaveAttribute("aria-valuetext", "51% referência, 49% sua foto");
+  await expect(page.locator(".capture-photo-comparison__current")).toHaveCSS("clip-path", "inset(0px 0px 0px 51%)");
+  await page.getByRole("button", { name: "Ver fotos completas" }).click();
+  await expect(page.getByRole("img", { name: "Sua foto completa", exact: true })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: /fechar/i }).click();
+  await expect(page.getByRole("button", { name: "Anterior", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Próxima foto", exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("guided-preview.png"), fullPage: true });
   const confirmPhoto = photoPanel.getByRole("button", { name: "Confirmar foto" });
-  await expect(confirmPhoto).toBeInViewport();
+  await expect(confirmPhoto).toBeInViewport({ ratio: 1 });
+  const originalViewport = page.viewportSize();
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(confirmPhoto).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await page.screenshot({ path: testInfo.outputPath("guided-preview-320.png"), fullPage: true });
+  if (originalViewport) await page.setViewportSize(originalViewport);
   await expect(confirmPhoto).toHaveAttribute("data-tooltip", "Confirmar foto");
   const confirmBounds = await confirmPhoto.boundingBox();
   expect(confirmBounds?.width).toBeGreaterThanOrEqual(44);
@@ -85,17 +111,20 @@ test("E2E-030; E2E-041 guided comparison shows each reference, previews photos, 
   await expect.poll(() => confirmPhoto.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
   await confirmPhoto.focus();
   await confirmPhoto.press("Enter");
-  await expect(page.getByText("Foto 2 de 2")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Evidências · Foto 2 de 2")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("img", { name: "Foto de referência: Sala" })).toBeVisible();
   expect(createdUploads).toBe(1);
+  await page.getByRole("button", { name: "Ambientes", exact: true }).click();
   await page.getByRole("navigation", { name: "Fotos de referência" }).getByRole("button", { name: /Cozinha/ }).click();
   await expect(page.getByRole("img", { name: "Sua foto: Cozinha" })).toBeVisible();
   await expect(page.getByText("Foto registrada neste dispositivo.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Ambientes", exact: true }).click();
   await page.getByRole("navigation", { name: "Fotos de referência" }).getByRole("button", { name: /Sala/ }).click();
   await page.getByLabel("Tirar ou substituir foto").setInputFiles({ name: "sala.png", mimeType: "image/png", buffer: photo });
   await page.getByRole("button", { name: "Confirmar foto" }).click();
   await expect(page.getByLabel("Resumo da captura")).toHaveText("2/2", { timeout: 15_000 });
   expect(createdUploads).toBe(2);
+  await page.getByRole("button", { name: "Ambientes", exact: true }).click();
   await page.getByRole("navigation", { name: "Fotos de referência" }).getByRole("button", { name: /Cozinha/ }).click();
   await expect(photoPanel.getByRole("button", { name: "Tocar ou clicar na foto para substituí-la" })).toBeVisible();
   const replacementChooser = page.waitForEvent("filechooser");

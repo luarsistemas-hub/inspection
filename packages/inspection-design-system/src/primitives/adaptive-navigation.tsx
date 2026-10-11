@@ -18,11 +18,13 @@ export type AdaptiveNavigationProps = {
   primaryItems: AdaptiveNavigationItem[];
   secondaryItems?: AdaptiveNavigationItem[];
   moreBadge?: string | number;
+  desktopCollapsed?: boolean;
+  onDesktopCollapsedChange?: (collapsed: boolean) => void;
   renderLink: (item: AdaptiveNavigationItem, className: string, onNavigate?: () => void) => ReactNode;
 };
 
 /** Uses a bottom bar on compact windows, a rail on medium windows, and a full sidebar on large windows. */
-export function AdaptiveNavigation({ label, activeHref, primaryItems, secondaryItems = [], moreBadge, renderLink }: AdaptiveNavigationProps) {
+export function AdaptiveNavigation({ label, activeHref, primaryItems, secondaryItems = [], moreBadge, desktopCollapsed = false, onDesktopCollapsedChange, renderLink }: AdaptiveNavigationProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const hasSecondaryActive = secondaryItems.some((item) => item.href === activeHref);
   const allItems = [...primaryItems, ...secondaryItems];
@@ -56,6 +58,14 @@ export function AdaptiveNavigation({ label, activeHref, primaryItems, secondaryI
 
   return <>
     <nav aria-label={label} className="inspection-adaptive-navigation__sidebar">
+      {onDesktopCollapsedChange ? <button
+        aria-expanded={!desktopCollapsed}
+        aria-label={desktopCollapsed ? "Expandir menu" : "Recolher menu"}
+        className="inspection-adaptive-navigation__desktop-toggle"
+        onClick={() => onDesktopCollapsedChange(!desktopCollapsed)}
+        title={desktopCollapsed ? "Expandir menu" : "Recolher menu"}
+        type="button"
+      ><Icon name="menu" size={22} /><span>{desktopCollapsed ? "Expandir menu" : "Recolher menu"}</span></button> : null}
       <span className="inspection-adaptive-navigation__section">{label}</span>
       <div className="inspection-adaptive-navigation__group">{primaryItems.map((item) => <span key={item.href}>{renderItem(item, "sidebar")}</span>)}</div>
       {groupedItems(secondaryItems).map(({ group, items }) => <div className="inspection-adaptive-navigation__group inspection-adaptive-navigation__group--secondary" key={group}><span className="inspection-adaptive-navigation__section">{group}</span>{items.map((item) => <span key={item.href}>{renderItem(item, "sidebar")}</span>)}</div>)}

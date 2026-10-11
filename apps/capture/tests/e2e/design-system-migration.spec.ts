@@ -314,7 +314,8 @@ test("IT-151 denied required location never persists the camera preview", async 
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
   await page.locator(".capture-camera-action input[type=file]").setInputFiles({ name: "fachada.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64") });
   await page.getByRole("button", { name: "Usar esta foto" }).click();
-  await expect(page.getByText(/A localização é obrigatória para este requisito/)).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText(/O acesso à localização foi negado/)).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText(/A foto continua na prévia/)).toBeVisible();
   await expect(page.getByText("Foto salva neste dispositivo. Envio pendente até voltar a conexão.")).toHaveCount(0);
 });
 

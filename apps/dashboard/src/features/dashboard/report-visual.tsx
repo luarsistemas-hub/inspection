@@ -1,33 +1,55 @@
 import { useMemo, useState } from "react";
+import { Icon } from "@inspection/design-system";
 import type { CustomerEvidenceQuery, CustomerReportQuery, ReportWorkspaceQuery } from "@/graphql/generated";
-import { presentAnalysisMode, presentAnalysisStatus, presentFindingCategory, presentNoRelevantChange, presentClassification, presentReportPDFStatus } from "./presentation";
+import { presentAnalysisStatus, presentFindingCategory, presentClassification, presentNoRelevantChange } from "./presentation";
 
 type InternalReport = NonNullable<ReportWorkspaceQuery["report"]>;
 type CustomerReport = NonNullable<CustomerReportQuery["customerReport"]>;
 
-export function ReportVisual({ report, onDownload, onMediaError }: { report: InternalReport; onDownload: () => void; onMediaError?: () => void }) {
+export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, downloadMessage, downloadSha256, onPublish, onInvalidatePublication }: {
+  report: InternalReport;
+  onDownload: () => void;
+  onMediaError?: () => void;
+  downloadUrl?: string;
+  downloadMessage?: string;
+  downloadSha256?: string;
+  onPublish?: () => void;
+  onInvalidatePublication?: () => void;
+}) {
   return <article className="report-visual">
-    <ReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} compact />
-    <div className="report-visual-actions"><button onClick={onDownload}>Preparar download PDF</button><span>PDF: {presentReportPDFStatus(report.pdfStatus)}</span></div>
+    <header className="report-header report-header--internal">
+      <div className="report-property">
+        <p className="report-address">{report.context.asset.address || report.context.asset.name}</p>
+        <p className="report-version">Versão {report.version}</p>
+      </div>
+      <div className="report-header-bottom">
+        <div className="report-status-line">
+          <strong className={`report-classification report-classification--${report.classification.toLowerCase()}`}>{presentClassification(report.classification)}</strong>
+          <details className="report-advisory-info"><summary aria-label="Sobre a triagem interna"><Icon name="info" size={18} /></summary><p>{report.advisory}</p></details>
+        </div>
+        <div className="report-header-tools">
+          {downloadUrl ? <a className="report-download-link" href={downloadUrl} target="_blank" rel="noreferrer"><span className="report-download-full">Baixar PDF</span><span className="report-download-short">PDF</span></a> : <button className="report-download-button" onClick={onDownload} aria-label="Preparar PDF"><span className="report-download-full">Preparar PDF</span><span className="report-download-short">PDF</span></button>}
+          {onPublish && onInvalidatePublication && <details className="report-publication-menu"><summary aria-label="Gerenciar publicação"><Icon name="more-horizontal" size={20} /></summary><div><span>Gestão da publicação</span><button type="button" onClick={onPublish}>Publicar para o cliente</button><button type="button" onClick={onInvalidatePublication}>Invalidar publicação</button></div></details>}
+        </div>
+      </div>
+      {downloadMessage && <p className="report-detail-status" role="status">{downloadMessage}</p>}
+    </header>
+    <div className="report-details">
+      <details><summary>Dados do imóvel e da vistoria</summary><p>{report.context.asset.externalKey} · Responsável: {report.context.participant?.name}<br />{report.context.template?.name} · v{report.context.template?.version}{report.context.inspection?.stageLabel && <> · {report.context.inspection.stageLabel}</>}</p></details>
+      <details><summary>Informações técnicas</summary><p>Digest canônico: {report.jsonDigest}</p><p>Digest renderizado: {report.htmlDigest}</p>{downloadSha256 && <p>Digest do PDF: {downloadSha256}</p>}<pre>{JSON.stringify(report.canonicalJSON, null, 2)}</pre></details>
+    </div>
     <ReportSections key={report.id} requirements={report.requirements} evidence={report.evidence} findings={report.findings} onMediaError={onMediaError} />
   </article>;
 }
 
 export function CustomerReportVisual({ report, evidence, onMediaError }: { report: CustomerReport; evidence: CustomerEvidenceQuery["customerEvidence"]["nodes"]; onMediaError?: () => void }) {
   return <article className="report-visual report-visual--customer">
-    <ReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} />
+    <CustomerReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} />
     <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, availability: item.mediaAvailability }))} findings={[]} onMediaError={onMediaError} />
   </article>;
 }
 
-function ReportHeader({ classification, advisory, context, version, compact = false }: { classification: string; advisory: string; context: InternalReport["context"] | CustomerReport["context"]; version: number; compact?: boolean }) {
-  if (compact) return <header className="report-header report-header--compact">
-    <div className="report-title"><p className="report-kicker">Laudo de vistoria · v{version}</p><h2>{context.asset.name}</h2><p>{context.asset.address}</p></div>
-    <div className="report-summary"><strong className={`report-classification report-classification--${classification.toLowerCase()}`}>{presentClassification(classification)}</strong>
-      <details><summary>Dados do imóvel e da vistoria</summary><p>{context.asset.externalKey} · Responsável: {context.participant.name}<br />{context.template.name} · v{context.template.version}{context.inspection.stageLabel && <> · {context.inspection.stageLabel}</>}</p></details>
-    </div>
-    <p className="report-advisory">{advisory}</p>
-  </header>;
+function CustomerReportHeader({ classification, advisory, context, version }: { classification: string; advisory: string; context: CustomerReport["context"]; version: number }) {
   return <header className="report-header">
     <div><p className="report-kicker">Laudo de vistoria · versão {version}</p><h2>{context.asset.name}</h2><p>{context.asset.address}</p><p>{context.asset.externalKey} · Responsável: {context.participant.name}</p></div>
     <div className="report-result"><strong>{presentClassification(classification)}</strong><span>{context.template.name} · v{context.template.version}</span>{context.inspection.stageLabel && <span>{context.inspection.stageLabel}</span>}</div>
@@ -60,10 +82,10 @@ function ReportSections({ requirements, evidence, findings, onMediaError }: { re
   if (!sections.length) return <ReportEvidence requirements={requirements} evidence={evidence} findings={findings} onMediaError={onMediaError} />;
 
   return <div className="report-workspace">
-    <nav className="report-section-nav" aria-label="Ambientes do laudo">
+    {sections.length > 1 && <nav className="report-section-nav" aria-label="Ambientes do laudo">
       <span>Neste laudo</span>
       {sections.map((section) => <button type="button" key={section} aria-pressed={section === activeSection} onClick={() => setRequestedSection(section)}>{section === UNMATCHED_SECTION ? UNMATCHED_LABEL : section}<small>{counts.get(section) ?? 0}</small></button>)}
-    </nav>
+    </nav>}
     <div className="report-section-content">
       {showUnmatched
         ? <ReportEvidence requirements={[]} evidence={visibleEvidence} findings={[]} onMediaError={onMediaError} />
@@ -82,9 +104,19 @@ function ReportEvidence({ requirements, evidence, findings, onMediaError }: { re
       const related = findings.filter((finding) => finding.evidenceIds.some((id) => items.some((item) => item.id === id)));
       const reference = items.filter((item) => item.role === "REFERENCE");
       const current = items.filter((item) => item.role !== "REFERENCE");
-      return <section className="report-requirement" key={requirement.key}><header><span>{requirement.section}</span><h3>{requirement.label}</h3>{requirement.instructions && <p>{requirement.instructions}</p>}<small>{presentAnalysisMode(requirement.analysisMode)} · {presentAnalysisStatus(requirement.analysisStatus)}{requirement.analysisMode === "COMPARE_ORIGIN_CURRENT" && requirement.noRelevantChange !== null && ` · ${presentNoRelevantChange(requirement.noRelevantChange)}`}</small></header><div className="report-comparison">{reference.length > 0 && <EvidenceColumn title="Referência" items={reference} onMediaError={onMediaError} />}<EvidenceColumn title={reference.length > 0 ? "Vistoria atual" : "Fotos da vistoria"} items={current} onMediaError={onMediaError} /></div>{related.length > 0 ? <section className="report-findings" aria-label={`Constatações de ${requirement.label}`}>{related.map((finding) => <article key={`${finding.title}-${finding.description}`}><strong>{presentFindingCategory(finding.category)} · {finding.title} · {finding.severity}</strong><p>{finding.description}</p><span>Ação recomendada: {finding.recommendedAction}</span></article>)}</section> : requirement.analysisStatus === "COMPLETED" ? <p className="report-empty">Nenhuma constatação foi registrada; isso não confirma a ausência de problemas.</p> : null}</section>;
+      return <section className="report-requirement" key={requirement.key}>
+        <header className="report-requirement-heading"><div><span>{requirement.section}</span><h3>{requirement.label}</h3>{requirement.instructions && <p>{requirement.instructions}</p>}</div><small>{presentAnalysisStatus(requirement.analysisStatus)}{related.length === 0 && requirement.analysisMode === "COMPARE_ORIGIN_CURRENT" && requirement.noRelevantChange !== null && <> · {presentNoRelevantChange(requirement.noRelevantChange)}</>}</small></header>
+        <div className={`report-requirement-body${related.length ? "" : " report-requirement-body--without-findings"}`}>
+          {related.length > 0 && <section className="report-findings" aria-label={`Constatações de ${requirement.label}`}>{related.map((finding) => <article key={`${finding.title}-${finding.description}`}><span>{presentFindingCategory(finding.category)} · {finding.severity}</span><h4>{finding.title}</h4><p>{finding.description}</p><p><strong>Ação recomendada</strong> · {finding.recommendedAction}</p></article>)}</section>}
+          <div className="report-comparison">{reference.length > 0 && <EvidenceColumn title="Referência" items={reference} onMediaError={onMediaError} />}<EvidenceColumn title={reference.length > 0 ? "Vistoria atual" : "Fotos da vistoria"} items={current} onMediaError={onMediaError} /></div>
+          {related.length === 0 && requirement.analysisStatus === "COMPLETED" && <p className="report-no-findings">Nenhuma constatação foi registrada; isso não confirma a ausência de problemas.</p>}
+        </div>
+      </section>;
     })}
-    {unmatched.length > 0 && <section className="report-requirement"><header><span>Evidências</span><h3>Evidências adicionais</h3><p>Estas evidências pertencem ao laudo, mas não estão associadas a um requisito conhecido nesta versão.</p></header><div className="report-comparison">{unmatchedReference.length > 0 && <EvidenceColumn title="Referência" items={unmatchedReference} onMediaError={onMediaError} />}{unmatchedCurrent.length > 0 && <EvidenceColumn title="Fotos da vistoria" items={unmatchedCurrent} onMediaError={onMediaError} />}</div></section>}
+    {unmatched.length > 0 && <section className="report-requirement">
+      <header className="report-requirement-heading"><div><span>Evidências</span><h3>Evidências adicionais</h3><p>Estas evidências pertencem ao laudo, mas não estão associadas a um requisito conhecido nesta versão.</p></div></header>
+      <div className="report-requirement-body report-requirement-body--without-findings"><div className="report-comparison">{unmatchedReference.length > 0 && <EvidenceColumn title="Referência" items={unmatchedReference} onMediaError={onMediaError} />}{unmatchedCurrent.length > 0 && <EvidenceColumn title="Fotos da vistoria" items={unmatchedCurrent} onMediaError={onMediaError} />}</div></div>
+    </section>}
   </section>;
 }
 

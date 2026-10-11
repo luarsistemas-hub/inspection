@@ -30,6 +30,7 @@ import { localDateTimeToInstant } from "./datetime";
 import { CustomerReportVisual, ReportVisual } from "./report-visual";
 
 type Page = "Início" | "Agenda de vistorias" | "Vistorias" | "Projetos e etapas" | "Triagem" | "Laudos" | "Portfólio" | "Notificações";
+const desktopNavigationStorageKey = "inspection.dashboard.navigation-collapsed";
 
 export function DashboardShell({ section }: { section: Page }) {
   const pathname = usePathname();
@@ -40,7 +41,16 @@ export function DashboardShell({ section }: { section: Page }) {
   const [message, setMessage] = useState("Verificando acesso…");
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
   const [operationalRefreshKey, setOperationalRefreshKey] = useState(0);
+  const [desktopNavigationCollapsed, setDesktopNavigationCollapsed] = useState(false);
   const gateRequest = useRef(0);
+
+  useEffect(() => {
+    setDesktopNavigationCollapsed(localStorage.getItem(desktopNavigationStorageKey) === "true");
+  }, []);
+  const changeDesktopNavigationCollapsed = (collapsed: boolean) => {
+    setDesktopNavigationCollapsed(collapsed);
+    localStorage.setItem(desktopNavigationStorageKey, String(collapsed));
+  };
 
   const loadGate = useCallback(async () => {
     const request = ++gateRequest.current;
@@ -115,7 +125,7 @@ export function DashboardShell({ section }: { section: Page }) {
   const itemFor = ([label, href]: [string, string]): AdaptiveNavigationItem => ({
     href,
     label,
-    icon: href === "/tenants/current" || href === "/portfolio" ? "layout-dashboard" : href === "/schedules" ? "calendar" : href === "/inspections" ? "clipboard-check" : href === "/projects" ? "building-2" : href === "/triage" ? "search" : href === "/reports" ? "history" : "users",
+    icon: href === "/tenants/current" ? "layout-dashboard" : href === "/schedules" ? "calendar" : href === "/inspections" ? "clipboard-check" : href === "/projects" ? "folder-kanban" : href === "/portfolio" ? "building-2" : href === "/triage" ? "search" : href === "/reports" ? "file-text" : "bell",
     badge: href === "/notifications" && notifications.unreadCount > 0 ? notifications.unreadCount : undefined,
   });
   const primaryItems = capability.links.filter(([, href]) => primaryHrefs.includes(href)).map(itemFor);
@@ -123,7 +133,7 @@ export function DashboardShell({ section }: { section: Page }) {
   if (capability.canUseAdmin) secondaryItems.push({ href: process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000", label: "Abrir Administração", icon: "arrow-up-right" });
   const activeHref = pathname === "/" ? "/tenants/current" : pathname;
   const pageDescription = section === "Início" ? "Acompanhe as vistorias em andamento e os imóveis que exigem atenção." : section === "Laudos" ? "Consulte os laudos gerados das suas vistorias." : undefined;
-  return <main className="dashboard-shell"><header><strong className="dashboard-brand"><span className="dashboard-brand-mark" aria-hidden="true">I</span><span className="dashboard-brand-desktop">Painel <small>/ {identity.tenantName}</small></span><span className="dashboard-brand-mobile">Inspection</span></strong><div className="dashboard-context"><ThemeSelector /><AccountMenu name={identity.tenantName} description={capability.audience === "customer" ? "Cliente" : "Operação"} onSignOut={signOut}>{memberships.length > 1 ? <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} /> : null}</AccountMenu></div></header><AdaptiveNavigation label="Painel" activeHref={activeHref} primaryItems={primaryItems} secondaryItems={secondaryItems} moreBadge={notifications.unreadCount > 0 ? notifications.unreadCount : undefined} renderLink={(item, className, onNavigate) => <Link key={item.href} aria-current={activeHref === item.href ? "page" : undefined} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} />{item.badge ? <span className="inspection-adaptive-navigation__badge" aria-hidden="true">{item.badge}</span> : null}</span><span>{item.label}</span></Link>} /><section>{section !== "Vistorias" && <PageHeader title={section} description={pageDescription} descriptionMode="disclosure" emphasis="plain" breadcrumbs={<><Link href="/tenants/current">Painel</Link><span aria-hidden="true">/</span><span>{section}</span></>} actions={section === "Início" ? <Link className="dashboard-primary-action" href="/schedules">Ver agenda</Link> : ["Agenda de vistorias", "Projetos e etapas", "Triagem", "Notificações"].includes(section) ? null : <button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); if (capability.audience === "internal" && section === "Laudos") setReportsRefreshKey((value) => value + 1); }}>Atualizar</button>} />}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} reportsRefreshKey={reportsRefreshKey} operationalRefreshKey={operationalRefreshKey} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
+  return <main className={`dashboard-shell${desktopNavigationCollapsed ? " dashboard-shell--navigation-collapsed" : ""}`}><header><strong className="dashboard-brand"><span className="dashboard-brand-mark" aria-hidden="true">I</span><span className="dashboard-brand-desktop">Painel <small>/ {identity.tenantName}</small></span><span className="dashboard-brand-mobile">Inspection</span></strong><div className="dashboard-context"><ThemeSelector /><AccountMenu name={identity.tenantName} description={capability.audience === "customer" ? "Cliente" : "Operação"} onSignOut={signOut}>{memberships.length > 1 ? <MembershipPicker memberships={memberships} selected={getMembershipId()} onChange={switchMembership} /> : null}</AccountMenu></div></header><AdaptiveNavigation label="Painel" activeHref={activeHref} primaryItems={primaryItems} secondaryItems={secondaryItems} moreBadge={notifications.unreadCount > 0 ? notifications.unreadCount : undefined} desktopCollapsed={desktopNavigationCollapsed} onDesktopCollapsedChange={changeDesktopNavigationCollapsed} renderLink={(item, className, onNavigate) => <Link key={item.href} aria-current={activeHref === item.href ? "page" : undefined} aria-label={item.label} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} />{item.badge ? <span className="inspection-adaptive-navigation__badge" aria-hidden="true">{item.badge}</span> : null}</span><span>{item.label}</span></Link>} /><section>{section !== "Vistorias" && <PageHeader title={section} description={pageDescription} descriptionMode="disclosure" emphasis="plain" breadcrumbs={<><Link href="/tenants/current">Painel</Link><span aria-hidden="true">/</span><span>{section}</span></>} actions={section === "Início" ? <Link className="dashboard-primary-action" href="/schedules">Ver agenda</Link> : ["Agenda de vistorias", "Projetos e etapas", "Triagem", "Notificações"].includes(section) ? null : <button className="secondary" onClick={() => { void loadGate(); void notifications.refresh(); router.refresh(); if (capability.audience === "internal" && section === "Laudos") setReportsRefreshKey((value) => value + 1); }}>Atualizar</button>} />}{notifications.error && <p className="warning" role="status">Dados já exibidos podem estar desatualizados. {notifications.error}</p>}{capability.audience === "customer" ? <CustomerPortal section={section} /> : <OperationsDashboard section={section} capability={capability} reportsRefreshKey={reportsRefreshKey} operationalRefreshKey={operationalRefreshKey} />}{section === "Notificações" && <NotificationCenter notifications={notifications} />}</section></main>;
 }
 
 function MembershipPicker({ memberships, selected, onChange }: { memberships: DashboardMembershipsQuery["me"]["memberships"]; selected?: string; onChange: (id: string) => void }) {

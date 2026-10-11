@@ -312,6 +312,47 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   });
 
+  test("desktop navigation alternates between labeled and compact layouts", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await installMocks(page);
+    await page.route("**/protocol/openid-connect/token", (route) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ access_token: "navigation-test-token" }) }));
+    await page.addInitScript(() => sessionStorage.setItem("inspection.dashboard.pkce", JSON.stringify({ verifier: "navigation-test-verifier", state: "navigation-test-state", returnTo: "/triage" })));
+    await page.goto("/auth/callback?code=navigation-test-code&state=navigation-test-state");
+    await expect(page).toHaveURL(/\/triage$/);
+
+    const shell = page.locator(".dashboard-shell");
+    const sidebar = page.locator("nav.inspection-adaptive-navigation__sidebar");
+    const toggle = sidebar.locator(".inspection-adaptive-navigation__desktop-toggle");
+    await expect(toggle).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Triagem" })).toBeVisible();
+    const expandedWidth = await sidebar.evaluate((element) => element.getBoundingClientRect().width);
+
+    await toggle.click();
+    await expect(shell).toHaveClass(/dashboard-shell--navigation-collapsed/);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toHaveAttribute("aria-label", "Expandir menu");
+    await expect(sidebar.getByRole("link", { name: "Triagem" })).toBeVisible();
+    await expect(sidebar.getByText("Triagem", { exact: true })).toBeHidden();
+    await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThan(expandedWidth);
+
+    await sidebar.getByRole("link", { name: "Laudos" }).click();
+    await expect(page).toHaveURL(/\/reports$/);
+    await expect(shell).toHaveClass(/dashboard-shell--navigation-collapsed/);
+
+    await toggle.click();
+    await expect(shell).not.toHaveClass(/dashboard-shell--navigation-collapsed/);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(sidebar.getByText("Triagem", { exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(toggle).toBeHidden();
+    await expect(sidebar).toBeVisible();
+
+    await page.setViewportSize({ width: 412, height: 915 });
+    await expect(toggle).toBeHidden();
+    await expect(page.locator("nav.inspection-adaptive-navigation__compact")).toBeVisible();
+  });
+
   test("E2E-066 opens an inspection in a modal and returns with its filters", async ({ page }) => {
     await installMocks(page);
     await loginAsLocalAdmin(page, "/inspections");

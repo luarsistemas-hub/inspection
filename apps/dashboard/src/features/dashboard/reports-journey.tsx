@@ -195,15 +195,22 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
     </> : <div className="report-list-state report-focus-empty" role="status">{listLoading ? <p>Carregando laudos…</p> : <><span className="report-focus-empty-icon" aria-hidden="true">▧</span><h2>{search || classification ? "Nenhum laudo encontrado" : "Nenhum laudo disponível"}</h2><p>{search || classification ? "Ajuste a busca ou a classificação para consultar outros laudos." : "Os laudos gerados neste contexto ficarão reunidos aqui."}</p><Link href="/inspections">Ver vistorias →</Link></>}</div>}
 
     <Dialog isOpen={Boolean(inspectionId)} onClose={closeDialog} title="Laudo de vistoria" size="wide">
-      <div className="report-dialog-heading"><span>{currentReport ? `${currentReport.context.asset.name} · v${currentReport.version}` : "Consulta do laudo"}</span><button type="button" className="secondary" onClick={closeDialog} aria-label="Fechar laudo">Fechar</button></div>
+      <div className="report-dialog-body">
       {detailLoading && <p role="status">Carregando laudo, evidências e constatações…</p>}
       {detailError && <div className="report-detail-state" role="alert"><p>{detailError}</p><button className="secondary" onClick={() => inspectionId && void loadDetail(inspectionId)}>Tentar novamente</button></div>}
       {currentReport && <>
-        <ReportVisual report={currentReport} onDownload={() => void prepareDownload()} onMediaError={refreshMedia} />
-        <p className="report-detail-status" role="status">{detailMessage}{download?.url && <> <a href={download.url} target="_blank" rel="noreferrer">Baixar PDF</a></>}</p>
-        {canPublish && <details className="report-publication-menu"><summary>Ações de publicação</summary><div><button onClick={() => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() })}>Publicar laudo</button><button className="secondary" onClick={() => setInvalidating(true)}>Invalidar publicação</button></div></details>}
-        <details><summary>Informações técnicas</summary><p>Digest canônico: {currentReport.jsonDigest}</p><p>Digest renderizado: {currentReport.htmlDigest}</p>{download?.sha256 && <p>Digest do PDF: {download.sha256}</p>}<pre>{JSON.stringify(currentReport.canonicalJSON, null, 2)}</pre></details>
+        <ReportVisual
+          report={currentReport}
+          onDownload={() => void prepareDownload()}
+          onMediaError={refreshMedia}
+          downloadUrl={download?.url ?? undefined}
+          downloadMessage={detailMessage}
+          downloadSha256={download?.sha256 ?? undefined}
+          onPublish={canPublish ? () => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() }) : undefined}
+          onInvalidatePublication={canPublish ? () => setInvalidating(true) : undefined}
+        />
       </>}
+      </div>
     </Dialog>
     <ConfirmationDialog isOpen={invalidating && Boolean(currentReport)} onClose={() => setInvalidating(false)} title="Invalidar publicação" target="Publicação do laudo selecionado" scope="Contexto operacional atual" consequence="A publicação deixará de estar disponível para o cliente." confirmLabel="Invalidar publicação" reasonLabel="Motivo da invalidação" onConfirm={async (reason) => { if (!currentReport) return; const failure = await updatePublication(InvalidateReportPublicationDocument, { publicationId: currentReport.id, expectedVersion: currentReport.version, reason, clientMutationId: crypto.randomUUID() }); if (failure) throw new Error(failure); }} />
   </div>;

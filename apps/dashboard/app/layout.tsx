@@ -1,6 +1,7 @@
 import "@inspection/design-system/styles.css";
 import "./styles.css";
 import "./focus.css";
+import "./report.css";
 import type { Metadata } from "next";
 import { ThemeProvider, ThemeScript } from "@inspection/design-system";
 

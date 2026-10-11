@@ -366,3 +366,19 @@
 .dashboard-shell .home-inspection-type,
 .dashboard-shell .home-inspection-main > span:nth-of-type(2) { display: none; }
 .dashboard-shell .home-inspection-row { padding-block: .95rem; }
+
+/* The desktop menu can reveal labels; narrower layouts keep the compact navigation. */
+.dashboard-shell .inspection-adaptive-navigation__desktop-toggle { align-self: stretch; justify-content: center; inline-size: 100%; background: transparent; color: #bdc9e6; }
+.dashboard-shell .inspection-adaptive-navigation__desktop-toggle:hover { background: #263556; color: white; }
+.dashboard-shell .inspection-adaptive-navigation__desktop-toggle:focus-visible { outline: 2px solid var(--inspection-brand); outline-offset: 2px; background: #263556; color: white; }
+.dashboard-shell .inspection-adaptive-navigation__desktop-toggle > span { display: none; }
+@media (min-width: 75rem) {
+  .dashboard-shell--navigation-collapsed .inspection-adaptive-navigation__item--sidebar > span:last-child { display: none; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) { grid-template-columns: 14.5rem minmax(0, 1fr); }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) > .inspection-adaptive-navigation__sidebar { align-items: stretch; padding-inline: .7rem; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) .inspection-adaptive-navigation__desktop-toggle { justify-content: flex-start; gap: .65rem; padding-inline: .7rem; font-size: .82rem; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) .inspection-adaptive-navigation__desktop-toggle > span { display: inline; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) .inspection-adaptive-navigation__section { display: block; color: #9cadd2; font-size: .68rem; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) .inspection-adaptive-navigation__item--sidebar { justify-content: flex-start; gap: .65rem; padding-inline: .7rem; font-size: .82rem; }
+  .dashboard-shell:not(.dashboard-shell--navigation-collapsed) .inspection-adaptive-navigation__item--sidebar > span:last-child { position: static; inline-size: auto; block-size: auto; overflow: visible; clip-path: none; white-space: normal; }
+}

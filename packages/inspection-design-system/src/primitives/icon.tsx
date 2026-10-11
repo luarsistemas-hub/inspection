@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-export type IconName = "check" | "info" | "warning" | "error" | "menu" | "close" | "more-horizontal" | "calendar" | "arrow-right" | "chevron-down" | "camera" | "map-pin" | "layout-dashboard" | "building-2" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "log-out" | "moon" | "sun" | "monitor" | "eye";
+export type IconName = "check" | "info" | "warning" | "error" | "menu" | "close" | "more-horizontal" | "calendar" | "arrow-right" | "chevron-down" | "camera" | "map-pin" | "layout-dashboard" | "building-2" | "folder-kanban" | "file-text" | "bell" | "users" | "clipboard-check" | "settings" | "sparkles" | "shield-check" | "history" | "chart-no-axes-combined" | "settings-2" | "search" | "arrow-up-right" | "log-out" | "moon" | "sun" | "monitor" | "eye";
 export type IconProps = SVGProps<SVGSVGElement> & { name: IconName; title?: string; size?: number };
 
 const paths: Record<IconName, string> = {
@@ -18,6 +18,9 @@ const paths: Record<IconName, string> = {
   "map-pin": "M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0ZM12 10h.01",
   "layout-dashboard": "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
   "building-2": "M6 22V3h12v19M3 22h18M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1M10 22v-3h4v3",
+  "folder-kanban": "M3 7V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 3h18M8 14v3m4-5v5m4-4v4",
+  "file-text": "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8M8 17h8",
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4",
   users: "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m12-11a4 4 0 0 1 0 8m4 3v-2a4 4 0 0 0-3-3.87M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
   "clipboard-check": "M9 4h6m-6-2h6a2 2 0 0 1 2 2v2H7V4a2 2 0 0 1 2-2Zm9 2h2v18H4V4h2m3 11 2 2 5-5",
   settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2m9-9h-2M5 12H3m15.36-6.36-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0-1.42-1.42M7.06 7.06 5.64 5.64",
