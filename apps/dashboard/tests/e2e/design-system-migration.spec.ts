@@ -240,6 +240,31 @@ test.describe("Dashboard design-system migration deterministic integration", () 
     expect(mocks.calls.some(({ operation }) => operation === "Reports")).toBe(true);
   });
 
+  test("keeps technical metadata out of the report on desktop and mobile", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await page.route("**/protocol/openid-connect/token", (route) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ access_token: "report-test-token" }) }));
+    await page.addInitScript(() => sessionStorage.setItem("inspection.dashboard.pkce", JSON.stringify({ verifier: "report-test-verifier", state: "report-test-state", returnTo: "/reports" })));
+    await page.goto("/auth/callback?code=report-test-code&state=report-test-state");
+    await expect(page).toHaveURL(/\/reports$/);
+    await page.getByRole("button", { name: /Abrir detalhes do laudo/ }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Laudo de vistoria" });
+    const reportContent = dialog.locator(".report-visual");
+    await expect(reportContent).toBeVisible();
+    await expect(reportContent).not.toContainText("Informações técnicas");
+    await expect(reportContent).not.toContainText(/Digest (?:canônico|renderizado|do PDF)/);
+    await expect(reportContent.locator("pre")).toHaveCount(0);
+    await expect(reportContent.getByText("Dados do imóvel e da vistoria", { exact: true })).toHaveCount(1);
+    expect(mocks.calls.some(({ operation }) => operation === "ReportWorkspace")).toBe(true);
+
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(reportContent).toBeVisible();
+      await expect(reportContent).not.toContainText("Informações técnicas");
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+  });
+
   test("IT-126, IT-127, IT-128, IT-129, IT-130, E2E-026 and E2E-040 keep customer projections published-only", async ({ page }) => {
     await installMocks(page, "CUSTOMER_VIEWER");
     await loginAsLocalAdmin(page, "/portfolio");

@@ -257,3 +257,19 @@
 }
 .admin-brand-mobile { display: none; }
 @media (max-width: 37.5rem) { .admin-brand-desktop { display: none; }.admin-brand-mobile { display: inline; } }
+
+/* Desktop navigation alternates between labels and the compact icon rail. */
+.admin-shell .inspection-adaptive-navigation__desktop-toggle { align-self: stretch; justify-content: center; inline-size: 100%; background: transparent; color: #bdc9e6; }
+.admin-shell .inspection-adaptive-navigation__desktop-toggle:hover { background: #263556; color: white; }
+.admin-shell .inspection-adaptive-navigation__desktop-toggle:focus-visible { outline: 2px solid var(--inspection-brand); outline-offset: 2px; background: #263556; color: white; }
+.admin-shell .inspection-adaptive-navigation__desktop-toggle > span { display: none; }
+@media (min-width: 75rem) {
+  .admin-shell--navigation-collapsed .inspection-adaptive-navigation__item--sidebar > span:last-child { display: none; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) { grid-template-columns: 14.5rem minmax(0, 1fr); }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__sidebar { align-items: stretch; padding-inline: .7rem; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__desktop-toggle { justify-content: flex-start; gap: .65rem; padding-inline: .7rem; font-size: .82rem; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__desktop-toggle > span { display: inline; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__section { display: block; color: #9cadd2; font-size: .68rem; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__item--sidebar { justify-content: flex-start; gap: .65rem; padding-inline: .7rem; font-size: .82rem; }
+  .admin-shell:not(.admin-shell--navigation-collapsed) .inspection-adaptive-navigation__item--sidebar > span:last-child { position: static; inline-size: auto; block-size: auto; overflow: visible; clip-path: none; white-space: normal; }
+}

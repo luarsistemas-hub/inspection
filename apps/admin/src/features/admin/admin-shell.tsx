@@ -47,6 +47,19 @@ const navItems = [
   ["Auditoria", "/audit"],
   ["Consumo de LLM", "/llm-usage"],
 ] as const;
+const desktopNavigationStorageKey = "inspection.admin.navigation-collapsed";
+const navIcons: Record<(typeof navItems)[number][1], AdaptiveNavigationItem["icon"]> = {
+  "/overview": "layout-dashboard",
+  "/organization": "building-2",
+  "/access": "users",
+  "/catalogs": "clipboard-check",
+  "/assets": "settings-2",
+  "/templates": "file-text",
+  "/prompts": "sparkles",
+  "/governance": "shield-check",
+  "/audit": "history",
+  "/llm-usage": "chart-no-axes-combined",
+};
 const emptyID = "00000000-0000-0000-0000-000000000000";
 const makeRow = (values: Record<string, string | number | boolean | null | undefined>): Row => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, typeof value === "boolean" ? (value ? "Sim" : "Não") : value ?? "—"]));
 const failureText = (failure: unknown) => failure instanceof Error ? failure.message : (failure as GraphQLFailure).message ?? "Não foi possível concluir a operação.";
@@ -60,6 +73,14 @@ export function AdminShell({ section }: { section?: string }) {
   const [analysisPrompt, setAnalysisPrompt] = useState<G.AdminAnalysisPromptQuery["analysisPrompt"]>();
   const [action, setAction] = useState<Action>(); const [detail, setDetail] = useState<Row>(); const [addressEdit, setAddressEdit] = useState<Row>(); const [history, setHistory] = useState<HistoryPage>(); const [historyError, setHistoryError] = useState<string>(); const [correction, setCorrection] = useState<Row>();
   const [focusedRowId, setFocusedRowId] = useState<string>();
+  const [desktopNavigationCollapsed, setDesktopNavigationCollapsed] = useState(false);
+  useEffect(() => {
+    setDesktopNavigationCollapsed(localStorage.getItem(desktopNavigationStorageKey) === "true");
+  }, []);
+  const changeDesktopNavigationCollapsed = (collapsed: boolean) => {
+    setDesktopNavigationCollapsed(collapsed);
+    localStorage.setItem(desktopNavigationStorageKey, String(collapsed));
+  };
   const request = useRef<AbortController | undefined>(undefined); const historyRequest = useRef<AbortController | undefined>(undefined); const collectionGuard = useRef(new RequestGuard()).current; const historyGeneration = useRef(0); const query = params.get("search") ?? ""; const cursor = params.get("after");
   const updateParams = useCallback((updates: Record<string, string | null>) => { const next = new URLSearchParams(params.toString()); Object.entries(updates).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); router.replace(`${pathname}${next.size ? `?${next}` : ""}`); }, [params, pathname, router]);
 
@@ -126,11 +147,11 @@ export function AdminShell({ section }: { section?: string }) {
   if (error && !identityData) return <AdminGate title="Administração" description="Entre com uma conta autorizada para continuar."><ThemeSelector /><div className="admin-gate-notice" role="status">{error}</div><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", pathname)}>Entrar com conta administrativa</Button><a href={process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002"}>Ir para o Painel</a></AdminGate>;
   const visibleNavItems = navItems.filter(([, href]) => Boolean(identityData && hasAdminRouteAccess(href, identityData.me.roles)) && (href !== "/prompts" || promptPermitted) && (href !== "/llm-usage" || identityData?.me.canViewLLMCosts));
   const primaryAdminHrefs = ["/overview", "/organization", "/access"];
-  const navigationItem = ([label, href]: readonly [string, string]): AdaptiveNavigationItem => ({ href, label, icon: href === "/overview" ? "layout-dashboard" : href === "/organization" ? "building-2" : href === "/access" ? "users" : href === "/catalogs" ? "clipboard-check" : href === "/assets" || href === "/templates" ? "building-2" : href === "/prompts" ? "sparkles" : href === "/governance" ? "shield-check" : href === "/audit" ? "history" : "chart-no-axes-combined", group: href === "/governance" || href === "/audit" ? "Governança" : href === "/prompts" || href === "/llm-usage" ? "Análise" : "Cadastros" });
+  const navigationItem = ([label, href]: (typeof navItems)[number]): AdaptiveNavigationItem => ({ href, label, icon: navIcons[href], group: href === "/governance" || href === "/audit" ? "Governança" : href === "/prompts" || href === "/llm-usage" ? "Análise" : "Cadastros" });
   const primaryAdminItems = visibleNavItems.filter(([, href]) => primaryAdminHrefs.includes(href)).map(navigationItem);
   const secondaryAdminItems = visibleNavItems.filter(([, href]) => !primaryAdminHrefs.includes(href)).map(navigationItem);
   secondaryAdminItems.push({ href: process.env.NEXT_PUBLIC_DASHBOARD_URL ?? "http://localhost:3002", label: "Abrir Painel", icon: "arrow-up-right" });
-  return <main className={`admin-shell${pathname === "/overview" ? " admin-shell--overview" : ""}`}>
+  return <main className={`admin-shell${pathname === "/overview" ? " admin-shell--overview" : ""}${desktopNavigationCollapsed ? " admin-shell--navigation-collapsed" : ""}`}>
     <a className="skip-link" href="#admin-content">Pular para o conteúdo</a>
     <header className="admin-header">
       <Link className="admin-brand" href="/overview" aria-label="Inspection Administração: visão geral"><span className="admin-brand-mark" aria-hidden="true">I</span><span className="admin-brand-desktop">Administração <small>/ {tenantName}</small></span><span className="admin-brand-mobile">Inspection</span></Link>
@@ -151,7 +172,7 @@ export function AdminShell({ section }: { section?: string }) {
       </div>
     </header>
     <div className="admin-layout">
-      <AdaptiveNavigation label="Navegação administrativa" activeHref={pathname} primaryItems={primaryAdminItems} secondaryItems={secondaryAdminItems} renderLink={(item, className, onNavigate) => item.href.startsWith("/") ? <Link key={item.href} aria-current={pathname === item.href ? "page" : undefined} className={className} href={item.href} title={item.label} onClick={onNavigate} prefetch={false}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></Link> : <a key={item.href} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></a>} />
+      <AdaptiveNavigation label="Navegação administrativa" activeHref={pathname} primaryItems={primaryAdminItems} secondaryItems={secondaryAdminItems} desktopCollapsed={desktopNavigationCollapsed} onDesktopCollapsedChange={changeDesktopNavigationCollapsed} renderLink={(item, className, onNavigate) => item.href.startsWith("/") ? <Link key={item.href} aria-current={pathname === item.href ? "page" : undefined} aria-label={item.label} className={className} href={item.href} title={item.label} onClick={onNavigate} prefetch={false}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></Link> : <a key={item.href} aria-label={item.label} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></a>} />
       <section id="admin-content" className="admin-content" aria-labelledby="page-title">
         <PageHeader id="page-title" emphasis="plain" breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={pathname === "/overview" ? page.title : section ?? page.title} description={page.responsibility} descriptionMode="disclosure" actions={pathname === "/llm-usage" || pathname === "/templates" || (pathname === "/access" && !canInviteInternalUsers) ? null : <Button disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
         {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !routePermitted || (pathname === "/prompts" && !promptPermitted) ? <Recovery kind="denied" title="Acesso restrito">Você não tem permissão para acessar este recurso neste escopo.</Recovery> : pathname === "/prompts" ? error ? <Recovery kind="error" title="Não foi possível carregar o prompt" onRetry={() => void load()}>{error}</Recovery> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : pathname === "/templates" ? <TemplateEditorPage /> : <>

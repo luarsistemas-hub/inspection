@@ -205,7 +205,6 @@ export function ReportsJourney({ canPublish, refreshKey = 0 }: { canPublish: boo
           onMediaError={refreshMedia}
           downloadUrl={download?.url ?? undefined}
           downloadMessage={detailMessage}
-          downloadSha256={download?.sha256 ?? undefined}
           onPublish={canPublish ? () => void updatePublication(PublishReportDocument, { inspectionId: currentReport.inspectionId, snapshotId: currentReport.id, clientMutationId: crypto.randomUUID() }) : undefined}
           onInvalidatePublication={canPublish ? () => setInvalidating(true) : undefined}
         />

@@ -36,7 +36,10 @@ describe("Report evidence presentation", () => {
     expect(document.querySelector(".report-advisory-info")?.hasAttribute("open")).toBe(false);
     expect(document.querySelector(".report-advisory-info p")?.textContent).toBe(report.advisory);
     expect(document.querySelector(".report-publication-menu")).toBeNull();
-    expect(document.querySelector(".report-header--internal")?.textContent).not.toContain("Informações técnicas");
+    expect(document.querySelector(".report-visual")?.textContent).not.toContain("Informações técnicas");
+    expect(document.querySelector(".report-visual")?.textContent).not.toMatch(/Digest (?:canônico|renderizado|do PDF)/);
+    expect(document.querySelector(".report-visual pre")).toBeNull();
+    expect(document.querySelector(".report-details summary")?.textContent).toBe("Dados do imóvel e da vistoria");
 
     const managerHtml = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {}, onPublish: () => {}, onInvalidatePublication: () => {} }));
     const managerDocument = new DOMParser().parseFromString(managerHtml, "text/html");

@@ -6,13 +6,12 @@ import { presentAnalysisStatus, presentFindingCategory, presentClassification, p
 type InternalReport = NonNullable<ReportWorkspaceQuery["report"]>;
 type CustomerReport = NonNullable<CustomerReportQuery["customerReport"]>;
 
-export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, downloadMessage, downloadSha256, onPublish, onInvalidatePublication }: {
+export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, downloadMessage, onPublish, onInvalidatePublication }: {
   report: InternalReport;
   onDownload: () => void;
   onMediaError?: () => void;
   downloadUrl?: string;
   downloadMessage?: string;
-  downloadSha256?: string;
   onPublish?: () => void;
   onInvalidatePublication?: () => void;
 }) {
@@ -36,7 +35,6 @@ export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, do
     </header>
     <div className="report-details">
       <details><summary>Dados do imóvel e da vistoria</summary><p>{report.context.asset.externalKey} · Responsável: {report.context.participant?.name}<br />{report.context.template?.name} · v{report.context.template?.version}{report.context.inspection?.stageLabel && <> · {report.context.inspection.stageLabel}</>}</p></details>
-      <details><summary>Informações técnicas</summary><p>Digest canônico: {report.jsonDigest}</p><p>Digest renderizado: {report.htmlDigest}</p>{downloadSha256 && <p>Digest do PDF: {downloadSha256}</p>}<pre>{JSON.stringify(report.canonicalJSON, null, 2)}</pre></details>
     </div>
     <ReportSections key={report.id} requirements={report.requirements} evidence={report.evidence} findings={report.findings} onMediaError={onMediaError} />
   </article>;

@@ -113,6 +113,39 @@ function usageReply(tenantName: string, inspectionId: string): GraphQLReply {
 test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM provider)", () => {
   test.skip(process.env.INSPECTION_E2E_MOCKS !== "true", "run explicitly with INSPECTION_E2E_MOCKS=true and the local mock-configured identity stack");
 
+  test("desktop menu switches between labels and icons; smaller screens stay compact", async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await installMocks(page);
+    await loginAsLocalAdmin(page, "/organization");
+
+    const sidebar = page.locator(".admin-shell .inspection-adaptive-navigation__sidebar");
+    const toggle = sidebar.getByRole("button", { name: "Recolher menu" });
+    const organization = sidebar.getByRole("link", { name: "Organização" });
+    await expect(toggle).toBeVisible();
+    await expect(organization.locator("span:last-child")).toBeVisible();
+    const expandedWidth = (await sidebar.boundingBox())?.width ?? 0;
+
+    await toggle.click();
+    await expect(sidebar.getByRole("button", { name: "Expandir menu" })).toBeVisible();
+    await expect(organization.locator("span:last-child")).toBeHidden();
+    const compactWidth = (await sidebar.boundingBox())?.width ?? 0;
+    expect(compactWidth).toBeLessThan(expandedWidth);
+
+    await page.reload();
+    await loginAsLocalAdmin(page, "/organization");
+    await expect(sidebar.getByRole("button", { name: "Expandir menu" })).toBeVisible();
+    await sidebar.getByRole("button", { name: "Expandir menu" }).click();
+    await expect(organization.locator("span:last-child")).toBeVisible();
+
+    await page.setViewportSize({ width: 900, height: 800 });
+    await expect(sidebar.getByRole("button", { name: "Recolher menu" })).toBeHidden();
+    await expect(organization.locator("span:last-child")).toHaveCSS("clip-path", "inset(50%)");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(sidebar).toBeHidden();
+    await expect(page.locator(".admin-shell .inspection-adaptive-navigation__compact")).toBeVisible();
+  });
+
   test("IT-031 prevents invalid codes from reaching later activation stages", async ({ page }) => {
     let mutationCount = 0;
     await page.route("**/graphql", async (route) => {
