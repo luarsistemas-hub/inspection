@@ -17,7 +17,7 @@ Comandos:
   seed             cria dados locais para QA após o onboarding do Admin
   status           mostra containers e URLs locais
   logs [serviço]   acompanha logs de toda a stack ou de um serviço
-  down             para a stack preservando volumes
+  down [-v]         para a stack; -v também remove os volumes
   help             mostra esta ajuda
 
 Variáveis úteis: INSPECTION_ENV_FILE e INSPECTION_STARTUP_TIMEOUT (segundos).
@@ -217,7 +217,12 @@ EOF
     if [[ -n "${2:-}" ]]; then compose logs -f "$2"; else compose logs -f; fi
     ;;
   down)
-    require_base; [[ -f "$env_file" ]] || init; load_env; compose down
+    require_base; [[ -f "$env_file" ]] || init; load_env
+    case "${2:-}" in
+      "") [[ $# -eq 1 ]] || die "uso: ./scripts/local.sh down [-v]"; compose down ;;
+      -v|--volumes) [[ $# -eq 2 ]] || die "uso: ./scripts/local.sh down [-v]"; compose down -v ;;
+      *) die "uso: ./scripts/local.sh down [-v]" ;;
+    esac
     ;;
   help|-h|--help) usage ;;
   *) usage; die "comando desconhecido: $1" ;;

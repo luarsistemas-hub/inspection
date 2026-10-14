@@ -80,17 +80,17 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	ledgerDB := db
+	runtimeDB := db
 	if cfg.RuntimeDatabaseURL != "" && cfg.RuntimeDatabaseURL != cfg.DatabaseURL {
-		ledgerDB, err = database.Open(cfg.RuntimeDatabaseURL)
+		runtimeDB, err = database.Open(cfg.RuntimeDatabaseURL)
 		if err != nil {
-			return fmt.Errorf("ledger database: %w", err)
+			return fmt.Errorf("runtime database: %w", err)
 		}
-		if sqlDB, dbErr := ledgerDB.DB(); dbErr == nil {
+		if sqlDB, dbErr := runtimeDB.DB(); dbErr == nil {
 			defer sqlDB.Close()
 		}
 	}
-	callLedger, err := recordllmcall.Setup(recordllmcall.Dependencies{DB: ledgerDB})
+	callLedger, err := recordllmcall.Setup(recordllmcall.Dependencies{DB: runtimeDB})
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func run() error {
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.PromotionID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
-		return originpromote.Process(ctx, db, privateStore, envelope.TenantID, payload.PromotionID)
+		return originpromote.Process(ctx, runtimeDB, privateStore, envelope.TenantID, payload.PromotionID)
 	}
 	classifiedHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {

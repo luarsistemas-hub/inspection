@@ -201,7 +201,7 @@ func eligibleInspection(tx *gorm.DB, tenantID identity.ID, inspection database.I
 
 func availableMedia(tx *gorm.DB, tenantID, inspectionID identity.ID) ([]Media, error) {
 	var rows []database.MediaObject
-	err := tx.Table("media.media_objects m").
+	err := tx.Table("media.media_objects AS m").
 		Select("m.*").
 		Joins("JOIN inspections.responsibilities r ON r.id=m.responsibility_id AND r.tenant_id=m.tenant_id").
 		Joins("JOIN capture.capture_drafts d ON d.responsibility_id=m.responsibility_id AND d.tenant_id=m.tenant_id AND d.status='SUBMITTED'").

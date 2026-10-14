@@ -143,12 +143,23 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			if err := tx.Where("tenant_id=? AND id=?", tenantID, item.SourceID).First(&source).Error; err != nil {
 				return err
 			}
+			var sourceDisplay database.MediaDerivative
+			if err := tx.Where("tenant_id=? AND media_id=? AND kind='DISPLAY'", tenantID, item.SourceID).First(&sourceDisplay).Error; err != nil {
+				return err
+			}
 			media := database.MediaObject{ID: item.TargetID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: item.OriginalKey, ContentType: source.ContentType, SHA256: item.OriginalHash, SizeBytes: source.SizeBytes, Status: "READY", IdempotencyKey: "promotion:" + promotion.ID.String() + ":" + item.TargetID.String(), RequirementKey: "origin:" + item.TargetID.String(), Description: source.Description, AttentionItems: source.AttentionItems, CaptureSource: source.CaptureSource, CapturedAt: source.CapturedAt, DeviceContext: source.DeviceContext, LatitudeE6: source.LatitudeE6, LongitudeE6: source.LongitudeE6, AccuracyMM: source.AccuracyMM, DistanceMM: source.DistanceMM, Flags: source.Flags, CreatedAt: now}
 			if err := tx.Create(&media).Error; err != nil {
 				return err
 			}
-			derivative := database.MediaDerivative{ID: identity.NewID(), TenantID: tenantID, MediaID: item.TargetID, ObjectKey: item.DisplayKey, Kind: "DISPLAY", SHA256: item.DisplayHash, CreatedAt: now}
-			if err := tx.Create(&derivative).Error; err != nil {
+			derivative := database.MediaDerivative{ID: identity.NewID(), TenantID: tenantID, MediaID: item.TargetID, ObjectKey: item.DisplayKey, Kind: "DISPLAY", SHA256: item.DisplayHash, ContentType: sourceDisplay.ContentType, Width: sourceDisplay.Width, Height: sourceDisplay.Height, SizeBytes: sourceDisplay.SizeBytes, Profile: sourceDisplay.Profile, CreatedAt: now}
+			insert := tx
+			if derivative.Width == 0 {
+				insert = insert.Omit("Width")
+			}
+			if derivative.Height == 0 {
+				insert = insert.Omit("Height")
+			}
+			if err := insert.Create(&derivative).Error; err != nil {
 				return err
 			}
 			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, MediaID: item.TargetID, Category: "property", Description: source.Description, AttentionItems: source.AttentionItems, CreatedAt: now}

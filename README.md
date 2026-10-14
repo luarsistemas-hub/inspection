@@ -50,6 +50,7 @@ Mailpit local em <http://localhost:8026>.
 ./scripts/local.sh logs inspection-api
 ./scripts/local.sh migrate
 ./scripts/local.sh down
+./scripts/local.sh down -v
 ./scripts/verify.sh
 ```
 
