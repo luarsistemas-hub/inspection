@@ -45,14 +45,6 @@ jobs:
         options: >-
           --health-cmd "rabbitmq-diagnostics -q ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
-      llm-wiremock:
-        image: wiremock/wiremock:3.13.1
-        ports: ["18080:8080"]
-        volumes:
-          - ${{ github.workspace }}/deploy/wiremock/litellm:/home/wiremock/mappings:ro
-        options: >-
-          --health-cmd "wget -q -O - http://localhost:8080/__admin/health"
-          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - name: Validate input SHAs
         env:
@@ -83,6 +75,20 @@ jobs:
           sudo apt-get install --yes awscli curl ffmpeg postgresql-client
           ffmpeg -version
           ffprobe -version
+      # Started after checkout: a service-container bind mount would create the
+      # workspace path as root before checkout and break workspace cleanup.
+      - name: Start deterministic LLM provider stub
+        run: |
+          set -euo pipefail
+          docker run --detach --name video-ci-llm-wiremock --publish 18080:8080 \
+            --volume "$GITHUB_WORKSPACE/deploy/wiremock/litellm:/home/wiremock/mappings:ro" \
+            wiremock/wiremock:3.13.1
+          for _ in $(seq 1 60); do
+            curl --fail --silent http://localhost:18080/__admin/health >/dev/null && exit 0
+            sleep 2
+          done
+          echo 'WireMock did not become healthy' >&2
+          exit 1
       - name: Create database roles and bucket
         env:
           PGPASSWORD: postgres
