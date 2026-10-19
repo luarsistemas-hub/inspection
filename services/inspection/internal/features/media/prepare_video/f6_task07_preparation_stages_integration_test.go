@@ -68,10 +68,16 @@ func TestVV_IT_147PreparationExecutorTransitionsReceivedExtractingReady(t *testi
 	}
 	decoder := &gatedExtractionDecoder{inner: video.FFmpeg{Threads: 1}, entered: make(chan struct{}), release: make(chan struct{})}
 	executor := checkpointExecutor(t, h, decoder, time.Now)
-	done := make(chan error, 1)
-	go func() { _, runErr := executor.RunDue(ctx); done <- runErr }()
+	type runResult struct {
+		handled bool
+		err     error
+	}
+	done := make(chan runResult, 1)
+	go func() { handled, runErr := executor.RunDue(ctx); done <- runResult{handled: handled, err: runErr} }()
 	select {
 	case <-decoder.entered:
+	case result := <-done:
+		t.Fatalf("RunDue returned before reaching extraction: handled=%t err=%v", result.handled, result.err)
 	case <-time.After(20 * time.Second):
 		t.Fatal("preparation never reached extraction")
 	}
@@ -86,9 +92,12 @@ func TestVV_IT_147PreparationExecutorTransitionsReceivedExtractingReady(t *testi
 	}
 	close(decoder.release)
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("complete preparation: %v", err)
+	case result := <-done:
+		if result.err != nil {
+			t.Fatalf("complete preparation: %v", result.err)
+		}
+		if !result.handled {
+			t.Fatal("RunDue completed without handling the preparation")
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("preparation did not finish")

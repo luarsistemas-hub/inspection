@@ -53,6 +53,7 @@ func TestCurrentAttemptDurationBoundaryIT109(t *testing.T) {
 				t.Fatal(err)
 			}
 			fixture := seedPreparationFixture(t, h, clip, "video/mp4", "CURRENT", "CAMERA")
+			deferUnrelatedPreparationJobs(t, h, fixture, fixture.now.Add(48*time.Hour))
 			executor, err := Setup(Dependencies{
 				DB: h.DB, ClaimDB: h.AdminDB, Store: objectstore.VideoStore{Store: h.Store}, Decoder: video.FFmpeg{Threads: 1},
 				Detector: sensitivecontent.NewDisabledDetector(), Gateway: scopeGatewayFunc(func(_ context.Context, request llm.StructuredRequest) (llm.StructuredResult, error) {
@@ -129,6 +130,7 @@ func TestPrepareOriginRejectsActualDurationAboveFrozenLimitIT036(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := seedPreparationFixture(t, h, clip, "video/mp4", "ORIGIN", "CAMERA")
+	deferUnrelatedPreparationJobs(t, h, fixture, fixture.now.Add(48*time.Hour))
 	executor, err := Setup(Dependencies{
 		DB: h.DB, ClaimDB: h.AdminDB, Store: objectstore.VideoStore{Store: h.Store}, Decoder: video.FFmpeg{Threads: 1},
 		Detector: sensitivecontent.NewDisabledDetector(), Gateway: scopeGatewayFunc(func(context.Context, llm.StructuredRequest) (llm.StructuredResult, error) {

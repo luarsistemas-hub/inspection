@@ -338,7 +338,10 @@ func (f FFmpeg) frameTimestamps(ctx context.Context, path string, limits Limits)
 	var parseErr error
 	for scanner.Scan() {
 		line := strings.TrimSpace(strings.Split(scanner.Text(), ",")[0])
-		if line == "" || line == "N/A" {
+		if line == "" {
+			continue
+		}
+		if line == "N/A" {
 			parseErr = ErrSourceInvalid
 			break
 		}

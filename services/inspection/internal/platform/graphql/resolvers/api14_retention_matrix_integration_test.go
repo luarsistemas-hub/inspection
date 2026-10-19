@@ -316,7 +316,7 @@ func newAPI14RetentionFixture(t *testing.T) api14RetentionFixture {
 		t.Fatal(err)
 	}
 	mediaID, originVersionID := identity.NewID(), identity.NewID()
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	sourceExpiry := now.Add(30 * 24 * time.Hour)
 	retentionDays := 30
 	if err := h.WithinTenant(ctx, seed.TenantID, func(tx *gorm.DB) error {

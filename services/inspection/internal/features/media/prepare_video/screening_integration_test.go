@@ -50,12 +50,13 @@ func TestFalsePositiveRacesScreeningCompletionUsesCommittedDecisionIT141(t *test
 		t.Fatal(err)
 	}
 	mediaID, attemptID, preparationID, leaseToken := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	objectKey := "it141/" + fixture.TenantID.String() + "/source.mp4"
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Create(&database.VideoAttempt{ID: attemptID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, Kind: "CURRENT", PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: 1 << 30, AcquisitionSource: "CAMERA", Status: "RECEIVED", IdempotencyKey: "it141-attempt", PayloadDigest: "it141-digest", AdmittedAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, ObjectKey: "it141/source.mp4", ContentType: "video/mp4", SHA256: "it141-digest", SizeBytes: 123, Status: "SCREENED", MediaKind: "VIDEO", VideoAttemptID: &attemptID, RequirementKey: "video:main", IdempotencyKey: "it141-media", AttentionItems: []byte(`[]`), Flags: []byte(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, ObjectKey: objectKey, ContentType: "video/mp4", SHA256: "it141-digest", SizeBytes: 123, Status: "SCREENED", MediaKind: "VIDEO", VideoAttemptID: &attemptID, RequirementKey: "video:main", IdempotencyKey: "it141-media", AttentionItems: []byte(`[]`), Flags: []byte(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Status: "PROCESSING", Phase: "SCREENING", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, LeaseToken: &leaseToken, LeaseExpiresAt: ptrTime(now.Add(time.Minute)), PendingObjectKeys: []byte(`[]`), CreatedAt: now}).Error; err != nil {

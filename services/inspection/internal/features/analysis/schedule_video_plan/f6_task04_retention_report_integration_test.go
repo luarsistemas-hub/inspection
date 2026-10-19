@@ -5,6 +5,7 @@ package schedule_video_plan
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -95,16 +96,16 @@ func TestVV_IT_262FinalReportWithPendingRequiredJobStaysPending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requestFinal := func() {
+	requestFinal := func() error {
 		t.Helper()
 		payload, _ := json.Marshal(map[string]any{"inspectionId": fixture.inspectionID, "force": true})
-		if err := fixture.h.WithinTenant(fixture.ctx, fixture.tenantID, func(tx *gorm.DB) error {
+		return fixture.h.WithinTenant(fixture.ctx, fixture.tenantID, func(tx *gorm.DB) error {
 			return handler(fixture.ctx, tx, events.RawEnvelope{ID: identity.NewID(), Type: "analysis.comparison_completed.v1", TenantID: fixture.tenantID, CorrelationID: "vv-it262-" + identity.NewID().String(), Payload: payload})
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
 	}
-	requestFinal()
+	if err := requestFinal(); !errors.Is(err, classify.ErrClassificationPending) {
+		t.Fatalf("pending kitchen job classification error = %v, want ErrClassificationPending", err)
+	}
 	if runs, classified := task04ClassificationState(t, fixture, plan.ID); runs != 0 || classified != 0 {
 		t.Fatalf("pending kitchen job still produced classification=%d classifiedEvents=%d", runs, classified)
 	}
@@ -120,7 +121,9 @@ func TestVV_IT_262FinalReportWithPendingRequiredJobStaysPending(t *testing.T) {
 	}
 	prepareTask04FrameObjects(t, fixture)
 	processTask04Job(t, fixture, job)
-	requestFinal()
+	if err := requestFinal(); err != nil {
+		t.Fatalf("terminal kitchen job classification failed: %v", err)
+	}
 	if runs, classified := task04ClassificationState(t, fixture, plan.ID); runs != 1 || classified != 1 {
 		t.Fatalf("terminal jobs produced classification=%d classifiedEvents=%d, want 1/1", runs, classified)
 	}

@@ -121,7 +121,7 @@ func TestAPI03ForeignReplacementMediaIsNotFoundIT401(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreignMedia := database.MediaObject{ID: identity.NewID(), TenantID: other.TenantID, ResponsibilityID: other.ResponsibilityID, ObjectKey: "it401/foreign-video", ContentType: "video/mp4", SHA256: strings.Repeat("b", 64), SizeBytes: 1, Status: "FAILED", MediaKind: "VIDEO", RequirementKey: "video:main"}
+	foreignMedia := database.MediaObject{ID: identity.NewID(), TenantID: other.TenantID, ResponsibilityID: other.ResponsibilityID, ObjectKey: "it401/foreign-video", ContentType: "video/mp4", SHA256: strings.Repeat("b", 64), SizeBytes: 1, Status: "FAILED", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`)}
 	if err := fixture.harness.WithinTenant(context.Background(), other.TenantID, func(tx *gorm.DB) error { return tx.Create(&foreignMedia).Error }); err != nil {
 		t.Fatal(err)
 	}
