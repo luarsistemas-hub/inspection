@@ -11,7 +11,7 @@ import time
 
 import oci
 from oci.auth.signers import InstancePrincipalsSecurityTokenSigner
-from oci.monitoring.models import Datapoint, MetricData, PostMetricDataDetails
+from oci.monitoring.models import Datapoint, MetricDataDetails, PostMetricDataDetails
 
 
 METADATA_URL = "http://169.254.169.254/opc/v2/instance/"
@@ -200,7 +200,7 @@ def main():
     now = datetime.now(timezone.utc)
 
     def metric(name, value, dimensions):
-        return MetricData(
+        return MetricDataDetails(
             compartment_id=compartment,
             namespace="inspection_host",
             name=name,

@@ -11,14 +11,26 @@ SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "host/publish-metrics.py"
 
 
 def load_collector():
+    class Model:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class MetricData(Model):
+        def __init__(self, **kwargs):
+            if "datapoints" in kwargs:
+                raise TypeError("Unrecognized keyword arguments: datapoints")
+            super().__init__(**kwargs)
+
     oci = types.ModuleType("oci")
     oci.auth = types.ModuleType("oci.auth")
     oci.auth.signers = types.ModuleType("oci.auth.signers")
     oci.auth.signers.InstancePrincipalsSecurityTokenSigner = object
     oci.monitoring = types.ModuleType("oci.monitoring")
     oci.monitoring.models = types.ModuleType("oci.monitoring.models")
-    for name in ("Datapoint", "MetricData", "PostMetricDataDetails"):
-        setattr(oci.monitoring.models, name, type(name, (), {}))
+    oci.monitoring.models.Datapoint = Model
+    oci.monitoring.models.MetricData = MetricData
+    oci.monitoring.models.MetricDataDetails = Model
+    oci.monitoring.models.PostMetricDataDetails = Model
     old = {name: sys.modules.get(name) for name in ("oci", "oci.auth", "oci.auth.signers", "oci.monitoring", "oci.monitoring.models")}
     sys.modules.update({"oci": oci, "oci.auth": oci.auth, "oci.auth.signers": oci.auth.signers,
                         "oci.monitoring": oci.monitoring, "oci.monitoring.models": oci.monitoring.models})
@@ -100,6 +112,29 @@ class PublishMetricsTests(unittest.TestCase):
         self.assertEqual(self.module.SCHEDULER_METRICS_URL, "http://127.0.0.1:8092/metrics")
         self.assertEqual(self.module.API_METRICS_URL, "http://127.0.0.1:8093/metrics")
         self.assertIn("/srv/inspection/video-scratch", SCRIPT.read_text())
+
+    def test_main_submits_oci_ingestion_metric_details(self):
+        submitted = []
+
+        class Client:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def post_metric_data(self, details):
+                submitted.append(details)
+
+        with mock.patch.dict(self.module.os.environ, {"OCI_REGION": "us-ashburn-1", "INSPECTION_COMPARTMENT_OCID": "test-compartment"}), \
+             mock.patch.object(self.module, "read_instance_id", return_value="test-instance"), \
+             mock.patch.object(self.module, "used_percent", return_value=25.0), \
+             mock.patch.object(self.module, "video_metrics", return_value={"VideoMetricsScrapeOk": 1.0}), \
+             mock.patch.object(self.module, "api_metrics", return_value={"ApiMetricsScrapeOk": 1.0}), \
+             mock.patch.object(self.module.oci.monitoring, "MonitoringClient", Client, create=True):
+            self.module.main()
+
+        self.assertEqual(len(submitted), 1)
+        metrics = submitted[0].metric_data
+        self.assertEqual({metric.name for metric in metrics}, {"DataVolumeUsedPercent", "HostHeartbeat", "VideoMetricsScrapeOk", "ApiMetricsScrapeOk"})
+        self.assertTrue(all(metric.datapoints[0].value is not None for metric in metrics))
 
 
 if __name__ == "__main__":
