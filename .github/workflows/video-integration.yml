@@ -72,7 +72,8 @@ jobs:
       - name: Install media tools and PostgreSQL client
         run: |
           sudo apt-get update
-          sudo apt-get install --yes awscli curl ffmpeg postgresql-client
+          sudo apt-get install --yes curl ffmpeg postgresql-client
+          aws --version
           ffmpeg -version
           ffprobe -version
       # Started after checkout: a service-container bind mount would create the
