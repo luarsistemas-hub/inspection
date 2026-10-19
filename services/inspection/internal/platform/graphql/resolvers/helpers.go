@@ -642,6 +642,19 @@ func mapSchedule(row database.Schedule) *graphql1.Schedule {
 
 func mapInspection(view inspectioncore.View) *graphql1.Inspection {
 	row := view.Inspection
+	var attention *graphql1.InspectionAttention
+	var attentionKind graphql1.InspectionAttentionKind
+	switch row.Status {
+	case inspectioncore.StatusReviewRequired:
+		attentionKind = graphql1.InspectionAttentionKindPrivacyReview
+	case inspectioncore.StatusProcessingFailed:
+		attentionKind = graphql1.InspectionAttentionKindPreparationFailed
+	case inspectioncore.StatusReplacementPending:
+		attentionKind = graphql1.InspectionAttentionKindReplacementRequested
+	}
+	if attentionKind != "" {
+		attention = &graphql1.InspectionAttention{Kind: attentionKind, Since: row.UpdatedAt.UTC().Format(time.RFC3339Nano)}
+	}
 	var reminders []string
 	_ = json.Unmarshal(row.ReminderInstants, &reminders)
 	mode := view.Reference.ComparisonMode
@@ -677,7 +690,7 @@ func mapInspection(view inspectioncore.View) *graphql1.Inspection {
 		active := view.PromotedOriginIsActive
 		promotedOriginIsActive = &active
 	}
-	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, MediaKind: row.MediaKind, ComparisonMode: optionalString(mode), ReferenceVersionID: referenceVersionID, ReferenceVersionNumber: referenceVersionNumber, ReferenceMediaKind: referenceMediaKind, ReferenceVersionStatus: referenceVersionStatus, ReferenceIsActive: referenceIsActive, OriginPromotionStatus: optionalString(view.OriginPromotionStatus), OriginPromotionFailure: promotionFailure, PromotedOriginVersionID: promotedOriginVersionID, PromotedOriginVersionNumber: promotedOriginVersionNumber, PromotedOriginMediaKind: promotedOriginMediaKind, PromotedOriginIsActive: promotedOriginIsActive, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version), AssetName: view.AssetName, AssetAddress: view.AssetAddress, AssetExternalKey: view.AssetExternalKey, ParticipantName: view.ParticipantName}
+	return &graphql1.Inspection{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: row.TemplateVersionID.String(), AnalysisPromptSnapshotID: row.AnalysisPromptSnapshotID.String(), ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), Source: row.Source, SourceReason: optionalString(row.SourceReason), StateReason: optionalString(row.StateReason), Status: row.Status, MediaKind: row.MediaKind, ComparisonMode: optionalString(mode), ReferenceVersionID: referenceVersionID, ReferenceVersionNumber: referenceVersionNumber, ReferenceMediaKind: referenceMediaKind, ReferenceVersionStatus: referenceVersionStatus, ReferenceIsActive: referenceIsActive, OriginPromotionStatus: optionalString(view.OriginPromotionStatus), OriginPromotionFailure: promotionFailure, PromotedOriginVersionID: promotedOriginVersionID, PromotedOriginVersionNumber: promotedOriginVersionNumber, PromotedOriginMediaKind: promotedOriginMediaKind, PromotedOriginIsActive: promotedOriginIsActive, EvidenceCount: row.EvidenceCount, DueAt: row.DueAt.Format(time.RFC3339Nano), DeadlineAt: row.DeadlineAt.Format(time.RFC3339Nano), ReminderInstants: reminders, Version: int(row.Version), AssetName: view.AssetName, AssetAddress: view.AssetAddress, AssetExternalKey: view.AssetExternalKey, ParticipantName: view.ParticipantName, Attention: attention}
 }
 
 func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {

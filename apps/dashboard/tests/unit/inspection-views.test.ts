@@ -50,6 +50,7 @@ describe("Inspection views", () => {
       inspection("in-progress", "IN_PROGRESS", "2026-09-10T11:00:00Z"),
       inspection("completed", "COMPLETED", "2026-09-10T12:00:00Z"),
       inspection("canceled", "CANCELED", "2026-09-10T13:00:00Z"),
+      inspection("privacy", "REVIEW_REQUIRED", "2026-09-10T14:00:00Z"),
     ];
     const groups = groupInspectionsByStatus(records);
 
@@ -57,6 +58,7 @@ describe("Inspection views", () => {
     expect(groups.execucao.map(({ id }) => id)).toEqual(["in-progress"]);
     expect(groups.concluidas.map(({ id }) => id)).toEqual(["completed"]);
     expect(groups.encerradas.map(({ id }) => id)).toEqual(["canceled"]);
+    expect(groups.pendencias.map(({ id }) => id)).toEqual(["privacy"]);
     expect(Object.values(groups).flat()).toHaveLength(records.length);
   });
 
@@ -71,7 +73,7 @@ describe("Inspection views", () => {
   it("keeps an unknown status visible with a legible fallback", () => {
     const groups = groupInspectionsByStatus([inspection("unknown", "FUTURE_STATUS", "2026-09-10T10:00:00Z")]);
 
-    expect(groups.planejamento.map(({ id }) => id)).toEqual(["unknown"]);
+    expect(groups.pendencias.map(({ id }) => id)).toEqual(["unknown"]);
     expect(formatInspectionStatus("INVITED")).toBe("Convite enviado");
     expect(formatInspectionStatus("FUTURE_STATUS")).toBe("Situação não reconhecida");
     expect(formatInspectionStatus("")).toBe("Situação não reconhecida");

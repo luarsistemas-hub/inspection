@@ -13,7 +13,7 @@ const mediaFeedbacks: Record<string, MediaFeedback> = {
     tone: "warning",
     title: "Imagem bloqueada para revisão",
     message: "A análise automática encontrou um conteúdo que precisa ser revisado para este requisito.",
-    guidance: "Confira se a foto mostra somente o imóvel. Se a análise estiver incorreta, explique o motivo e envie uma declaração de falso positivo."
+    guidance: "A foto não poderá ser enviada nesta vistoria. Tire outra foto ou aguarde a revisão do gestor."
   },
   REJECTED: {
     tone: "warning",
@@ -57,8 +57,8 @@ export function presentMediaFeedback(value: string): MediaFeedback { return medi
 export function presentSubmissionBlock(input: { online: boolean; pending: number; blocked: number; allRequirementsSatisfied: boolean }): string {
   if (!input.online) return "Conecte-se para verificar e enviar a vistoria.";
   if (input.blocked > 0) return input.blocked === 1
-    ? "1 imagem foi bloqueada pela análise automática. Volte às evidências para substituir a foto ou declarar um falso positivo."
-    : `${input.blocked} imagens foram bloqueadas pela análise automática. Volte às evidências para substituir as fotos ou declarar um falso positivo.`;
+    ? "1 imagem foi bloqueada pela análise automática. Tire outra foto ou aguarde a revisão do gestor."
+    : `${input.blocked} imagens foram bloqueadas pela análise automática. Tire outras fotos ou aguarde a revisão do gestor.`;
   if (input.pending > 0) return `Aguarde ${input.pending} envio(s) pendente(s) antes de confirmar.`;
   if (!input.allRequirementsSatisfied) return "Ainda não há evidências válidas para todos os requisitos. Volte às evidências, envie outra foto ou registre uma justificativa de impossibilidade.";
   return "";

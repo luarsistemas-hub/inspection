@@ -368,6 +368,12 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 	}); err != nil {
 		return nil, err
 	}
+	if current.Status == "FAILED" || current.Status == "CANCELED" {
+		if current.ErrorCode == "SENSITIVE_CONTENT" {
+			return nil, errSensitivePreparation
+		}
+		return nil, errPreparationFailed
+	}
 	if current.Status != "READY" {
 		return nil, errDeferred
 	}
@@ -383,6 +389,12 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 			return tx.WithContext(ctx).Where("tenant_id=? AND id=?", job.TenantID, *originPreparation).Take(&origin).Error
 		}); err != nil {
 			return nil, err
+		}
+		if origin.Status == "FAILED" || origin.Status == "CANCELED" {
+			if origin.ErrorCode == "SENSITIVE_CONTENT" {
+				return nil, errSensitivePreparation
+			}
+			return nil, errPreparationFailed
 		}
 		if origin.Status != "READY" {
 			return nil, errDeferred
@@ -504,12 +516,35 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 }
 
 var errDeferred = errors.New("video plan prerequisite is not ready")
+var errSensitivePreparation = errors.New("sensitive content preparation blocked")
+var errPreparationFailed = errors.New("video preparation failed")
 
 func (s *Scheduler) finishFailure(ctx context.Context, job database.VideoPlan, token identity.ID, cause error) error {
 	now := s.now().UTC()
 	terminal := errors.Is(cause, ErrInvalidEvent) || errors.Is(cause, buildplan.ErrInvalidPlan) || errors.Is(cause, buildplan.ErrProviderTerminal)
 	updates := map[string]any{"lease_token": nil, "lease_until": nil, "error_code": "VIDEO_PLAN_FAILED"}
-	if errors.Is(cause, errDeferred) {
+	if errors.Is(cause, errSensitivePreparation) || errors.Is(cause, errPreparationFailed) {
+		code := "PREPARATION_FAILED"
+		inspectionStatus := "PROCESSING_FAILED"
+		if errors.Is(cause, errSensitivePreparation) {
+			code = "SENSITIVE_CONTENT"
+			inspectionStatus = "REVIEW_REQUIRED"
+		}
+		updates["status"] = "BLOCKED"
+		updates["error_code"] = code
+		updates["next_attempt_at"] = now
+		return s.within(ctx, job.TenantID, func(tx *gorm.DB) error {
+			result := tx.WithContext(ctx).Model(&database.VideoPlan{}).Where("tenant_id=? AND id=? AND status='BUILDING' AND lease_token=?", job.TenantID, job.ID, token).Updates(updates)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return fmt.Errorf("%w while recording failure", ErrLeaseLost)
+			}
+			result = tx.WithContext(ctx).Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status='ANALYZING'", job.TenantID, job.InspectionID).Update("status", inspectionStatus)
+			return result.Error
+		})
+	} else if errors.Is(cause, errDeferred) {
 		updates["next_attempt_at"] = now.Add(10 * time.Second)
 		updates["error_code"] = ""
 		updates["attempts"] = max(job.Attempts-1, 0)

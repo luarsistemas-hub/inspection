@@ -36,6 +36,21 @@ import (
 )
 
 const (
+	StatusPlanned            = "PLANNED"
+	StatusInvited            = "INVITED"
+	StatusInProgress         = "IN_PROGRESS"
+	StatusSubmitted          = "SUBMITTED"
+	StatusAnalyzing          = "ANALYZING"
+	StatusRecapturePending   = "RECAPTURE_PENDING"
+	StatusReviewRequired     = "REVIEW_REQUIRED"
+	StatusProcessingFailed   = "PROCESSING_FAILED"
+	StatusReplacementPending = "REPLACEMENT_PENDING"
+	StatusCompleted          = "COMPLETED"
+	StatusCanceled           = "CANCELED"
+	StatusInvalidated        = "INVALIDATED"
+)
+
+const (
 	SourceScheduled = "SCHEDULED"
 	SourceMilestone = "MILESTONE"
 	SourceManual    = "MANUAL"
@@ -453,7 +468,7 @@ func (s Service) List(ctx context.Context, in ListInput) (ListResult, error) {
 
 func validInspectionStatusGroup(group string) bool {
 	switch group {
-	case "", "PLANNING", "EXECUTION", "COMPLETED", "CLOSED":
+	case "", "PLANNING", "EXECUTION", "ATTENTION", "COMPLETED", "CLOSED":
 		return true
 	default:
 		return false
@@ -466,6 +481,8 @@ func statusesForGroup(group string) []string {
 		return []string{"PLANNED", "INVITED"}
 	case "EXECUTION":
 		return []string{"IN_PROGRESS", "SUBMITTED", "ANALYZING", "RECAPTURE_PENDING"}
+	case "ATTENTION":
+		return []string{StatusReviewRequired, StatusProcessingFailed, StatusReplacementPending}
 	case "COMPLETED":
 		return []string{"COMPLETED"}
 	case "CLOSED":
@@ -542,7 +559,17 @@ func ValidateInspectionTransition(current, target string, evidenceCount int, rea
 		}
 		return nil
 	}
-	allowed := map[string]map[string]bool{"PLANNED": {"INVITED": true}, "INVITED": {"IN_PROGRESS": true}, "IN_PROGRESS": {"SUBMITTED": true}, "SUBMITTED": {"ANALYZING": true}, "ANALYZING": {"RECAPTURE_PENDING": true, "COMPLETED": true}, "RECAPTURE_PENDING": {"ANALYZING": true}}
+	allowed := map[string]map[string]bool{
+		StatusPlanned:            {StatusInvited: true},
+		StatusInvited:            {StatusInProgress: true},
+		StatusInProgress:         {StatusSubmitted: true},
+		StatusSubmitted:          {StatusAnalyzing: true},
+		StatusAnalyzing:          {StatusRecapturePending: true, StatusReviewRequired: true, StatusProcessingFailed: true, StatusCompleted: true},
+		StatusReviewRequired:     {StatusAnalyzing: true, StatusReplacementPending: true},
+		StatusProcessingFailed:   {StatusAnalyzing: true, StatusReplacementPending: true},
+		StatusReplacementPending: {StatusAnalyzing: true, StatusReviewRequired: true},
+		StatusRecapturePending:   {StatusAnalyzing: true},
+	}
 	if !allowed[current][target] {
 		return apperror.New(apperror.InvalidState, "status", "invalid inspection transition")
 	}

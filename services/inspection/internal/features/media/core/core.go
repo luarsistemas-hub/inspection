@@ -16,6 +16,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/sensitivecontent"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"inspection/services/inspection/internal/platform/video"
@@ -603,7 +604,7 @@ func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data
 		if err := tx.Where("tenant_id=? AND id=?", tenantID, mediaID).First(&media).Error; err != nil {
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
 		}
-		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at desc").First(&prior).Error; err == nil && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN") {
+		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at desc").First(&prior).Error; err == nil && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN" || prior.Status == "DISABLED") {
 			return nil
 		} else if err != nil && err != gorm.ErrRecordNotFound {
 			return err
@@ -623,7 +624,7 @@ func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data
 	if err != nil {
 		return database.ScreeningRun{}, err
 	}
-	if prior.ID != (identity.ID{}) && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN") {
+	if prior.ID != (identity.ID{}) && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN" || prior.Status == "DISABLED") {
 		return prior, nil
 	}
 	result, err := s.Detector.Detect(ctx, data)
@@ -634,7 +635,7 @@ func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data
 				return apperror.New(apperror.NotFound, "mediaId", "media not found")
 			}
 			var terminal database.ScreeningRun
-			if queryErr := tx.Where("tenant_id=? AND media_id=? AND status IN ?", tenantID, mediaID, []string{"CLEARED", "BLOCKED", "OVERRIDDEN"}).Order("created_at desc").First(&terminal).Error; queryErr == nil {
+			if queryErr := tx.Where("tenant_id=? AND media_id=? AND status IN ?", tenantID, mediaID, []string{"CLEARED", "BLOCKED", "OVERRIDDEN", "DISABLED"}).Order("created_at desc").First(&terminal).Error; queryErr == nil {
 				return nil
 			} else if queryErr != gorm.ErrRecordNotFound {
 				return queryErr
@@ -650,7 +651,9 @@ func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data
 	regions, _ := json.Marshal(result.Regions)
 	status := "CLEARED"
 	mediaStatus := "READY"
-	if len(result.Regions) > 0 {
+	if s.Detector.Disabled() {
+		status = "DISABLED"
+	} else if len(result.Regions) > 0 {
 		status, mediaStatus = "BLOCKED", "SCREENED"
 	}
 	run := database.ScreeningRun{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, Status: status, ModelDigest: result.ModelDigest, Regions: regions, CreatedAt: s.now()}
@@ -660,7 +663,7 @@ func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
 		}
 		var prior database.ScreeningRun
-		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at desc").First(&prior).Error; err == nil && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN") {
+		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at desc").First(&prior).Error; err == nil && (prior.Status == "CLEARED" || prior.Status == "BLOCKED" || prior.Status == "OVERRIDDEN" || prior.Status == "DISABLED") {
 			run = prior
 			return nil
 		}
@@ -687,12 +690,25 @@ func (s Service) DeclareFalsePositive(ctx context.Context, tenantID, responsibil
 	now := s.now()
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var draft database.CaptureDraft
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
 		}
 		var media database.MediaObject
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND responsibility_id=?", tenantID, mediaID, responsibilityID).First(&media).Error; err != nil {
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+		}
+		if draft.Status != "OPEN" {
+			if draft.Status != "SUBMITTED" || media.MediaKind != "VIDEO" {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
+			var responsibility database.Responsibility
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).Take(&responsibility).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
+			var inspection database.Inspection
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil || inspection.Status != "REVIEW_REQUIRED" {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
 		}
 		var run database.ScreeningRun
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at desc").First(&run).Error; err != nil {
@@ -734,7 +750,15 @@ func (s Service) DeclareFalsePositive(ctx context.Context, tenantID, responsibil
 		if err := tx.Model(&media).Updates(map[string]any{"status": mediaStatus, "flags": flags}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: responsibilityID, Action: "media.sensitive_false_positive_declared", TargetType: "media", TargetID: mediaID.String(), Outcome: "ACCEPTED", Reason: reason, CorrelationID: "media-false-positive-" + mediaID.String(), OccurredAt: now}).Error
+		actorID := responsibilityID
+		correlationID := "media-false-positive-" + mediaID.String()
+		if meta, ok := requestctx.FromContext(ctx); ok && meta.Principal.Internal && meta.Principal.IdentityID != (identity.ID{}) {
+			actorID = meta.Principal.IdentityID
+			if meta.CorrelationID != "" {
+				correlationID = meta.CorrelationID
+			}
+		}
+		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: actorID, Action: "media.sensitive_false_positive_declared", TargetType: "media", TargetID: mediaID.String(), Outcome: "ACCEPTED", Reason: reason, CorrelationID: correlationID, OccurredAt: now}).Error
 	})
 }
 

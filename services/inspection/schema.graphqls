@@ -26,6 +26,7 @@ type Query {
   project(id: ID!): Project
   inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
+  sensitiveContentScreeningBypassed: Boolean!
   report(inspectionId: ID!, version: Int): Report
   videoPreparationEvidence(preparationId: ID!, first: Int = 25, after: String): VideoPreparationEvidenceConnection!
   videoPreparations(status: [String!], first: Int = 25, after: String): VideoPreparationConnection!
@@ -201,8 +202,10 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
+enum InspectionStatusGroup { PLANNING EXECUTION ATTENTION COMPLETED CLOSED }
+enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQUESTED }
+type InspectionAttention { kind: InspectionAttentionKind! mediaId: ID replacementDeadlineAt: String since: String! }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String attention: InspectionAttention }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }

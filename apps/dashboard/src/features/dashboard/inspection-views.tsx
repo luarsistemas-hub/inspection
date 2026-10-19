@@ -29,6 +29,7 @@ const storagePrefix = "dashboard.inspections.view.";
 const inspectionColumns = [
   { key: "planejamento", label: "Planejamento", statuses: ["PLANNED", "INVITED"] },
   { key: "execucao", label: "Em execução", statuses: ["IN_PROGRESS", "SUBMITTED", "ANALYZING", "RECAPTURE_PENDING"] },
+  { key: "pendencias", label: "Pendências", statuses: ["REVIEW_REQUIRED", "PROCESSING_FAILED", "REPLACEMENT_PENDING"] },
   { key: "concluidas", label: "Concluídas", statuses: ["COMPLETED"] },
   { key: "encerradas", label: "Encerradas", statuses: ["CANCELED", "INVALIDATED"] },
 ] as const;
@@ -40,6 +41,9 @@ const inspectionStatusLabels: Record<string, string> = {
   SUBMITTED: "Enviada",
   ANALYZING: "Em análise",
   RECAPTURE_PENDING: "Complemento solicitado",
+  REVIEW_REQUIRED: "Revisão de privacidade necessária",
+  PROCESSING_FAILED: "Falha na preparação",
+  REPLACEMENT_PENDING: "Nova gravação solicitada",
   COMPLETED: "Concluída",
   CANCELED: "Cancelada",
   INVALIDATED: "Invalidada",
@@ -74,11 +78,11 @@ export function persistInspectionView(membershipId: string | undefined, view: In
 }
 
 export function getInspectionColumn(status: string): InspectionColumnKey {
-  return inspectionColumns.find((column) => column.statuses.some((candidate) => candidate === status))?.key ?? "planejamento";
+	return inspectionColumns.find((column) => column.statuses.some((candidate) => candidate === status))?.key ?? "pendencias";
 }
 
 export function groupInspectionsByStatus(inspections: InspectionRecord[]): Record<InspectionColumnKey, InspectionRecord[]> {
-  const groups: Record<InspectionColumnKey, InspectionRecord[]> = { planejamento: [], execucao: [], concluidas: [], encerradas: [] };
+	const groups: Record<InspectionColumnKey, InspectionRecord[]> = { planejamento: [], execucao: [], pendencias: [], concluidas: [], encerradas: [] };
   for (const inspection of inspections) groups[getInspectionColumn(inspection.status)].push(inspection);
   return groups;
 }

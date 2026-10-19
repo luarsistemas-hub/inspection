@@ -64,7 +64,6 @@ async function mockCapture(page: Page, scenario: CaptureScenario = {}) {
       impossibleReason = variables.variables?.input?.reason ?? "";
       return route.fulfill({ json: { data: { declareCaptureImpossibility: { answer: { requirementKey: "front", mediaIds: [], impossibilityReason: impossibleReason, version: 1 }, userErrors: [], clientMutationId: "c" } } } });
     }
-    if (query.includes("declareSensitiveDetectionFalsePositive")) return route.fulfill({ json: { data: { declareSensitiveDetectionFalsePositive: { media: { id: "screened-media", status: "PROCESSING" }, userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("createMediaUpload")) return route.fulfill({ json: { data: { createMediaUpload: { upload: { mediaId: "gallery-media", uploadId: "gallery-upload", expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 5 * 1024 * 1024 }, userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("presignMediaParts")) return route.fulfill({ json: { data: { presignMediaParts: { parts: [{ partNumber: 1, url: "/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [], clientMutationId: "c" } } } });
     if (query.includes("completeMediaUpload")) return route.fulfill({ json: { data: { completeMediaUpload: { media: { id: "gallery-media", status: scenario.rejectedUpload ? "REJECTED" : "READY" }, userErrors: [], clientMutationId: "c" } } } });
@@ -509,7 +508,7 @@ test("E2E-052 retains the server-confirmed impossibility reason after reauthenti
   await expect(page.getByText("Justificativa registrada: Acesso bloqueado")).toBeVisible();
 });
 
-test("E2E-053 submits a false-positive explanation without treating screening as accepted", async ({ page }) => {
+test("E2E-053 keeps screened photos out of submission and offers manager review", async ({ page }) => {
   await mockCapture(page, { screenedMedia: true });
   await enterConsent(page);
   await page.evaluate(async () => {
@@ -533,10 +532,7 @@ test("E2E-053 submits a false-positive explanation without treating screening as
   });
   await acceptPurposes(page);
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await page.getByRole("button", { name: "Declarar falso positivo" }).click();
-  await page.getByLabel("Motivo do falso positivo").fill("A superfície não contém conteúdo sensível.");
-  await page.getByRole("button", { name: "Enviar declaração de falso positivo" }).click();
-  await expect(page.getByText("Falso positivo registrado para revisão.")).toBeVisible();
-  await expect(page.getByText("Recebida; aguardando verificação do servidor")).toBeVisible();
+  await expect(page.getByText("A foto não poderá ser enviada nesta vistoria. Tire outra foto ou aguarde a revisão do gestor.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Declarar falso positivo" })).toHaveCount(0);
   await expect(page.getByLabel("Resumo da captura")).toHaveText("0/1");
 });

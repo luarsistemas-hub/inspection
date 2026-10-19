@@ -172,7 +172,7 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
   const busyRef = useRef(false); const listRequest = useRef(0); const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const returnToCollection = () => { const next = new URLSearchParams(params.toString()); next.delete("inspectionId"); const search = next.toString(); router.replace(search ? `/inspections?${search}` : "/inspections", { scroll: false }); };
   const openInspection = (inspection: InspectionsQuery["inspections"]["nodes"][number]) => { const next = new URLSearchParams(params.toString()); next.set("inspectionId", inspection.id); router.replace(`/inspections?${next}`, { scroll: false }); };
-  const statusGroup: InspectionStatusGroup | null = ({ planejamento: "PLANNING", execucao: "EXECUTION", concluidas: "COMPLETED", encerradas: "CLOSED" } as const)[statusFilter as Exclude<typeof statusFilter, "todas">] ?? null;
+  const statusGroup: InspectionStatusGroup | null = ({ planejamento: "PLANNING", execucao: "EXECUTION", pendencias: "ATTENTION", concluidas: "COMPLETED", encerradas: "CLOSED" } as const)[statusFilter as Exclude<typeof statusFilter, "todas">] ?? null;
   const load = useCallback(async (input: { after?: string | null; append?: boolean; immediate?: boolean; search?: string; group?: InspectionStatusGroup | null } = {}) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const request = ++listRequest.current;
@@ -204,7 +204,7 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
     <div className="inspection-view-bar"><InfoDisclosure label="visualização da lista" heading={<strong>Visualização</strong>}>A troca preserva os registros e os filtros.</InfoDisclosure><InspectionViewSelector view={view} onChange={setView} /></div>
     <div className={view === "quadro" ? "inspection-focus-workspace inspection-focus-workspace--board" : "inspection-focus-workspace"}><div className="inspection-focus-list"><form className="inspection-toolbar" role="search" aria-label="Buscar vistorias" onSubmit={submitSearch}>
       <label htmlFor="inspection-search">Buscar vistoria<input id="inspection-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Imóvel, responsável, endereço, código ou ID" /></label>
-      <label className="inspection-status-filter" htmlFor="inspection-status">Situação<select id="inspection-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as InspectionColumnKey | "todas")}><option value="todas">Todas</option><option value="planejamento">Planejamento</option><option value="execucao">Em execução</option><option value="concluidas">Concluídas</option><option value="encerradas">Encerradas</option></select></label>
+      <label className="inspection-status-filter" htmlFor="inspection-status">Situação<select id="inspection-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as InspectionColumnKey | "todas")}><option value="todas">Todas</option><option value="planejamento">Planejamento</option><option value="execucao">Em execução</option><option value="pendencias">Pendências</option><option value="concluidas">Concluídas</option><option value="encerradas">Encerradas</option></select></label>
       <IconButton label="Buscar vistorias" tooltip="Buscar vistorias" icon="search" onPress={() => void load({ search: query, group: statusGroup, immediate: true })} />
     </form>
     <p className="inspection-load-status" role="status">{message}</p>
@@ -254,6 +254,7 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
   const asset = options.data?.assets.nodes.find((item) => item.id === detail.assetId);
   return <section className="inspection-workspace" aria-labelledby="inspection-detail-title">
     <header className="inspection-detail-heading"><div><span className="inspection-record-kicker">{presentInspectionSource(detail.source)}</span><h2 id="inspection-detail-title">{assetName}</h2></div><span className="inspection-status">{presentDashboardStatus(detail.status)}</span></header>
+    {detail.attention && <section className="inspection-origin-context" role="status"><h3>{detail.attention.kind === "PRIVACY_REVIEW" ? "Revisão de privacidade necessária" : detail.attention.kind === "PREPARATION_FAILED" ? "Falha na preparação" : "Nova gravação solicitada"}</h3><p>{detail.attention.kind === "PRIVACY_REVIEW" ? "A vistoria aguarda a revisão da mídia pelo gestor." : detail.attention.kind === "PREPARATION_FAILED" ? "A preparação do vídeo falhou. Um gestor pode tentar processá-lo novamente ou solicitar outra gravação." : `Aguardando nova gravação${detail.attention.replacementDeadlineAt ? ` até ${formatInspectionDate(detail.attention.replacementDeadlineAt)}` : ""}.`}</p></section>}
     <dl className="inspection-detail-grid">
       <div><dt>Responsável</dt><dd>{participantName}</dd></div>
       <div><dt>Endereço</dt><dd>{detail.assetAddress?.trim() || "Endereço indisponível"}</dd></div>

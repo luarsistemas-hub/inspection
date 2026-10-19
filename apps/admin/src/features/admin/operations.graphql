@@ -31,7 +31,6 @@ mutation AdminReprocessVideoPreparation($input: ReprocessVideoPreparationInput!)
 mutation AdminApplyVideoLegalHold($input: LegalHoldInput!) { applyLegalHold(input: $input) { status requestId userErrors { code field message } clientMutationId } }
 mutation AdminReleaseVideoLegalHold($input: LegalHoldInput!) { releaseLegalHold(input: $input) { status requestId userErrors { code field message } clientMutationId } }
 mutation AdminRecordVideoDeletionRequest($input: RecordDeletionRequestInput!) { recordDeletionRequest(input: $input) { status requestId userErrors { code field message } clientMutationId } }
-mutation AdminDeclareVideoFalsePositive($input: SensitiveFalsePositiveInput!) { declareSensitiveDetectionFalsePositive(input: $input) { media { id } userErrors { code field message } clientMutationId } }
 query AdminRetentionPolicies { retentionPolicies { nodes { id evidenceDays operationalDays securityDays version } pageInfo { endCursor hasNextPage } } }
 query AdminNotificationDeliveries($first: Int!, $after: String) { notificationDeliveries(first: $first, after: $after) { nodes { id status createdAt updatedAt inspectionId invitationId logicalTemplate failureCode recipientMasked responsibilityVersion canCorrectResponsibleEmail } pageInfo { endCursor hasNextPage } } }
 
@@ -55,3 +54,5 @@ mutation AdminUpdateAsset($input: UpdateAssetInput!) { updateAsset(input: $input
 mutation AdminConfigurePublicationPolicy($input: ConfigurePublicationPolicyInput!) { configurePublicationPolicy(input: $input) { policy { mode version } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminCorrectInspectionResponsibleEmail($input: CorrectInspectionResponsibleEmailInput!) { correctInspectionResponsibleEmail(input: $input) { correction { inspectionId responsibilityId invitationId deliveryId deliveryStatus responsibilityStatus responsibilityVersion recipientMasked canCorrectResponsibleEmail } userErrors { code field message correlationId } clientMutationId } }
 mutation AdminUpdateAnalysisPrompt($input: UpdateAnalysisPromptInput!) { updateAnalysisPrompt(input: $input) { prompt { analysisType systemPrompt modelAlias minimumConfidenceBps canonicalDigest revision updatedAt } userErrors { code field message correlationId } clientMutationId } }
+
+query AdminSensitiveContentScreeningStatus { sensitiveContentScreeningBypassed }

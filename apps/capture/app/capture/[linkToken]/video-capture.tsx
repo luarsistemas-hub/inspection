@@ -1,10 +1,9 @@
 "use client";
 
 import React, { type ChangeEvent, useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Field, ProductIdentity, Status, Textarea, ThemeSelector } from "@inspection/design-system";
+import { Alert, Button, Card, ProductIdentity, Status, ThemeSelector } from "@inspection/design-system";
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
 import { captureOperations, graphql } from "@/graphql/client";
-import { throwOnUserErrors } from "@/pwa/mutation-errors";
 import { appendVideoChunk, discardVideoDraft, finalizeVideoDraft, listVideoDrafts, loadVideoDraft, saveVideoDraft, type VideoDraft, videoChunks } from "@/pwa/video-drafts";
 import { startVideoRecorder, supportedVideoMime, type VideoRecorderSession } from "@/pwa/video-recorder";
 import { refreshVideoReceipt, uploadVideoDraft } from "@/pwa/video-uploads";
@@ -49,7 +48,7 @@ const message = (error: unknown): string => {
 };
 
 const blockedVideoStatuses = new Set(["SCREENED", "SENSITIVE_CONTENT", "REJECTED", "CHECKSUM_MISMATCH", "SOURCE_INVALID", "DURATION_EXCEEDED", "RESOURCE_LIMIT", "FRAME_INTEGRITY_FAILED"]);
-const needsSensitiveReview = (status?: string) => status === "SCREENED" || status === "SENSITIVE_CONTENT";
+const preparationLabel = (status?: string) => ({ SCREENED: "aguardando revisão de privacidade", SENSITIVE_CONTENT: "aguardando revisão de privacidade", READY: "pronto", QUEUED: "em preparação", PROCESSING: "em preparação", FAILED: "preparação interrompida", REJECTED: "gravação não aceita", CHECKSUM_MISMATCH: "gravação não aceita", SOURCE_INVALID: "gravação não aceita", DURATION_EXCEEDED: "gravação não aceita", RESOURCE_LIMIT: "gravação não aceita", FRAME_INTEGRITY_FAILED: "gravação não aceita" } as Record<string, string>)[status ?? ""] ?? "recebido";
 
 export function MutedVideoPreview({ src, onCanPlay, onLoadedMetadata, onError }: {
   src: string;
@@ -72,7 +71,6 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
   const [busy, setBusy] = useState(false);
   const [completedParts, setCompletedParts] = useState(0);
   const [totalParts, setTotalParts] = useState(0);
-  const [falsePositiveReason, setFalsePositiveReason] = useState("");
   const session = useRef<VideoRecorderSession | undefined>(undefined);
   const admitted = useRef<VideoDraft | undefined>(undefined);
   const actionPending = useRef(false);
@@ -194,24 +192,12 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
         const result = await graphql(captureOperations.submit, { input: { confirmIncomplete: false, clientMutationId: `${current.id}:submit` } });
         throwOnUserErrors(result.submitCapture);
       }
-      setPhase("submitted"); setNotice("Envio confirmado. A preparação das imagens continua no servidor.");
+      setPhase("submitted"); setNotice("Envio confirmado.");
     } catch (error) {
       try { const external = (await graphql(captureOperations.bootstrap)).externalCapture; if (external.status === "COMPLETED") { setPhase("submitted"); return; } } catch { /* Keep the pending state when reconciliation is unavailable. */ }
       if (!onSessionFailure(error)) setNotice(message(error));
     } finally { actionPending.current = false; setBusy(false); }
   };
-  const declareFalsePositive = async () => {
-    if (!current?.mediaId || !falsePositiveReason.trim() || busy) return;
-    setBusy(true);
-    try {
-      const result = await graphql(captureOperations.falsePositive, { input: { mediaId: current.mediaId, reason: falsePositiveReason, clientMutationId: crypto.randomUUID() } });
-      throwOnUserErrors(result.declareSensitiveDetectionFalsePositive);
-      const updated = await refreshVideoReceipt(current);
-      updateDraft(updated); setFalsePositiveReason(""); setNotice("Declaração registrada para revisão da mídia bloqueada.");
-    } catch (error) { if (!onSessionFailure(error)) setNotice(message(error)); }
-    finally { setBusy(false); }
-  };
-
   return <main className="capture-shell"><RegisterServiceWorker /><div className="capture-workspace">
     <header className="capture-intro"><div className="capture-utility-bar"><ProductIdentity product="Capture" /><ThemeSelector /></div><h1>{kind === "ORIGIN" ? "Registrar vídeo de origem" : kind === "RECAPTURE" ? "Registrar complemento em vídeo" : "Registrar vistoria em vídeo"}</h1></header>
     <Card className="capture-card capture-card--wide">
@@ -224,7 +210,7 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
       {phase === "idle" && <div className="capture-actions"><Button disabled={busy || !supportedMime || drafts.some((item) => ["SAVED", "CONFIRMED", "RECEIVED"].includes(item.state))} onClick={() => void start()}>Começar gravação</Button>{allowFile && <><Button variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>Escolher vídeo permitido</Button><input ref={fileInput} type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(event) => void importFile(event)} /></>}</div>}
       {phase === "preview" && current && <div><h3>Revise a gravação</h3>{stoppedAtLimit && <Alert tone="warning">O limite desta gravação foi atingido. Revise o vídeo antes de confirmar o envio.</Alert>}{previewURL && <MutedVideoPreview src={previewURL} onCanPlay={(event) => { if (event.currentTarget.duration <= current.maxDurationSeconds) setPlayable(true); }} onLoadedMetadata={(event) => { if (event.currentTarget.duration > current.maxDurationSeconds) { setPlayable(false); setNotice("Este vídeo excede o limite da tentativa. Grave novamente."); } }} onError={() => { setPlayable(false); setNotice("Este dispositivo não conseguiu reproduzir o vídeo. Grave novamente em um navegador compatível."); }} />}<p>{clock(elapsed)} de até {clock(current.maxDurationSeconds)}. O vídeo só será enviado após sua confirmação.</p><div className="capture-actions"><Button variant="secondary" disabled={busy} onClick={() => void discard()}>Descartar e gravar novamente</Button><Button disabled={!playable || busy || !online} onClick={() => void resume(current)}>Confirmar e enviar</Button></div></div>}
       {phase === "uploading" && <p role="status">Enviando vídeo: {completedParts} de {totalParts || "…"} partes recebidas. Mantenha esta página aberta enquanto o envio estiver em andamento.</p>}
-      {(phase === "received" || phase === "submitted") && <div><Status tone={blockedVideoStatuses.has(current?.preparationStatus ?? "") ? "warning" : "success"}>Vídeo recebido</Status><p>Preparação: {current?.preparationStatus ?? "PENDENTE"}. Recebimento não significa que as imagens já estão prontas.</p>{needsSensitiveReview(current?.preparationStatus) && <div><p>O vídeo foi bloqueado pela triagem. Se a detecção estiver incorreta, registre uma declaração para revisão.</p><Field label="Motivo do falso positivo"><Textarea aria-label="Motivo do falso positivo" value={falsePositiveReason} onChange={(event) => setFalsePositiveReason(event.target.value)} /></Field><Button disabled={busy || !online || !falsePositiveReason.trim()} onClick={() => void declareFalsePositive()}>Declarar falso positivo</Button></div>}{blockedVideoStatuses.has(current?.preparationStatus ?? "") && !needsSensitiveReview(current?.preparationStatus) && <><Alert tone="warning">A preparação rejeitou esta gravação ({current?.preparationStatus}). Uma substituição exige autorização vigente.</Alert><Button disabled={busy || !online || !supportedMime} onClick={() => void start()}>Gravar substituição</Button>{allowFile && <><Button variant="secondary" disabled={busy || !online} onClick={() => fileInput.current?.click()}>Escolher vídeo substituto</Button><input ref={fileInput} type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(event) => void importFile(event)} /></>}</>}{phase === "received" && !blockedVideoStatuses.has(current?.preparationStatus ?? "") && <Button disabled={busy || !online} onClick={() => void submit()}>Confirmar vistoria</Button>}{phase === "submitted" && <p>Vistoria enviada. A preparação continua no servidor.</p>}</div>}
+      {(phase === "received" || phase === "submitted") && <div><Status tone={blockedVideoStatuses.has(current?.preparationStatus ?? "") ? "warning" : "success"}>Vídeo recebido</Status>{needsSensitiveReview(current?.preparationStatus) ? <p>Recebemos seu vídeo, mas a análise está pausada para uma revisão de privacidade. Você será avisado se for preciso gravar novamente.</p> : <p>Estado do vídeo: {preparationLabel(current?.preparationStatus)}.</p>}{blockedVideoStatuses.has(current?.preparationStatus ?? "") && !needsSensitiveReview(current?.preparationStatus) && <Alert tone="warning">A preparação desta gravação foi interrompida. O gestor da vistoria poderá solicitar uma nova gravação.</Alert>}{phase === "received" && !blockedVideoStatuses.has(current?.preparationStatus ?? "") && <Button disabled={busy || !online} onClick={() => void submit()}>Confirmar vistoria</Button>}</div>}
       {drafts.length > 0 && phase !== "submitted" && <section><h3>Gravações neste dispositivo</h3><ul>{drafts.map((draft) => <li key={draft.id}><span>{draft.state === "INCOMPLETE" ? "Gravação incompleta; não há recuperação garantida" : draft.state === "UNSAVED" ? "Salvamento falhou" : draft.state === "RECEIVED" ? `Recebida · ${draft.preparationStatus ?? "preparando"}` : draft.state === "CONFIRMED" ? "Envio pendente" : "Salva localmente; envio pendente"}</span>{draft.state === "SAVED" && <Button variant="secondary" disabled={busy} onClick={() => void showPreview(draft).catch((error) => setNotice(message(error)))}>Revisar</Button>}{(draft.state === "INCOMPLETE" || draft.state === "UNSAVED") && <Button variant="secondary" disabled={busy} onClick={() => void discard(draft)}>Descartar e gravar novamente</Button>}{(draft.state === "CONFIRMED" || draft.state === "RECEIVED") && <Button variant="secondary" disabled={busy || !online} onClick={() => void (draft.state === "RECEIVED" ? refreshVideoReceipt(draft).then((updated) => { updateDraft(updated); setPhase("received"); }).catch((error) => setNotice(message(error))) : resume(draft))}>{draft.state === "RECEIVED" ? "Atualizar status" : "Retomar envio"}</Button>}</li>)}</ul></section>}
       {notice && <Alert tone="warning">{notice}</Alert>}
     </Card><p className="capture-privacy-note">Acesso pessoal vinculado ao convite. Não compartilhe este link.</p>

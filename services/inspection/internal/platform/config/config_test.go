@@ -63,6 +63,28 @@ func TestEnvBoolUsesSafeFallback(t *testing.T) {
 	}
 }
 
+func TestStrictSensitiveContentBypassBoolean(t *testing.T) {
+	key := "INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION"
+	for _, value := range []string{"true", "1", "yes", "on", "TRUE"} {
+		t.Setenv(key, value)
+		got, err := strictEnvBool(key, false)
+		if err != nil || !got {
+			t.Errorf("strictEnvBool(%q) = %v, %v; want true, nil", value, got, err)
+		}
+	}
+	for _, value := range []string{"false", "0", "no", "off", "FALSE"} {
+		t.Setenv(key, value)
+		got, err := strictEnvBool(key, true)
+		if err != nil || got {
+			t.Errorf("strictEnvBool(%q) = %v, %v; want false, nil", value, got, err)
+		}
+	}
+	t.Setenv(key, "invalid")
+	if _, err := strictEnvBool(key, false); err == nil {
+		t.Fatal("strictEnvBool accepted an invalid value")
+	}
+}
+
 func TestConfigContractsUT058UT059(t *testing.T) {
 	valid := Config{Environment: "production", DatabaseURL: "postgres://runtime@db/inspection", AllowedOrigin: "https://app.example", MetricsToken: "secret", OIDCIssuer: "https://id.example", OIDCAudience: "inspection", SuperAdminIssuer: "https://id.example", SuperAdminSubject: "admin-subject", SuperAdminPassword: "fixture-secret", SchemaMin: 1, SchemaMax: 1, RuntimeDBRole: "inspection_runtime", MinIOEndpoint: "s3.example", MinIOBucket: "inspection", MinIOAccessKey: "key", MinIOSecretKey: "secret", MinIORegion: "us-ashburn-1", StoragePublicBaseURL: "https://storage.example"}
 	if err := valid.Validate(); err != nil {

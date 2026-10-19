@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCaptureCsrfToken, clearCaptureLinkToken, getCaptureCsrfToken, getCaptureLinkToken, setCaptureCsrfToken, setCaptureLinkToken } from "@/auth/capture-session";
 import { graphql } from "@/graphql/client";
 import { ExternalCaptureBootstrapDocument } from "@/graphql/generated";
-import { isBlockedMediaStatus, isFalsePositiveActionable, isGalleryAllowed, isTerminalBootstrapStatus, requirementsSatisfied } from "@/pwa/capture-policy";
-import { type CaptureDraft, hasDraftCapacity, hasDuplicateDraft, loadDraft, loadDraftsForResponsibility, mediaCountForRequirement, persistDraftMediaStatus, readyForSubmission, removeDraftsForResponsibility, saveDraft } from "@/pwa/drafts";
+import { isBlockedMediaStatus, isGalleryAllowed, isTerminalBootstrapStatus, requirementsSatisfied } from "@/pwa/capture-policy";
+import { type CaptureDraft, hasDraftCapacity, hasDuplicateDraft, loadDraft, loadDraftsForResponsibility, mediaCountForRequirement, readyForSubmission, removeDraftsForResponsibility, saveDraft } from "@/pwa/drafts";
 
 const draft = (id = "draft-1"): CaptureDraft => ({ id, responsibilityId: "responsibility-1", blob: new Blob(["photo"], { type: "image/jpeg" }), sha256: "hash", parts: [{ number: 1, complete: false }], metadata: { requirementKey: "front", description: "Fachada", source: "camera", capturedAt: "2026-09-07T00:00:00Z" } });
 
@@ -76,16 +76,6 @@ describe("Capture drafts and transport", () => {
     expect(await loadDraft("offline")).toEqual(expect.objectContaining({ id: "offline", responsibilityId: offlineDraft.responsibilityId, parts: [], metadataSaved: false, schemaVersion: 1 }));
   });
   it("removes actionable local state when bootstrap is final", async () => { await saveDraft(draft()); await removeDraftsForResponsibility("responsibility-1"); expect(await loadDraftsForResponsibility("responsibility-1")).toEqual([]); });
-  it("persists the post-false-positive status without requiring capacity for existing photo bytes", async () => {
-    const screened = { ...draft(), mediaId: "media-1", mediaStatus: "SCREENED" };
-    await saveDraft(screened);
-    vi.stubGlobal("navigator", { storage: { estimate: vi.fn().mockResolvedValue({ quota: 100, usage: 100 }) } });
-
-    await persistDraftMediaStatus(screened, "READY");
-
-    expect((await loadDraft("draft-1"))?.mediaStatus).toBe("READY");
-    vi.unstubAllGlobals();
-  });
   it("warns before the storage quota threshold", async () => { vi.stubGlobal("navigator", { storage: { estimate: vi.fn().mockResolvedValue({ quota: 100, usage: 90 }) } }); expect(await hasDraftCapacity(1)).toBe(false); vi.unstubAllGlobals(); });
   it("blocks finalization while any media is not verified", () => { expect(readyForSubmission([draft()], true)).toBe(false); expect(readyForSubmission([{ ...draft(), mediaId: "m", mediaStatus: "READY", metadataSaved: true, parts: [{ number: 1, complete: true, etag: "e" }] }], true)).toBe(true); });
   it("allows an online submission with no media when every required answer is impossible", () => { expect(readyForSubmission([], true, true)).toBe(true); expect(readyForSubmission([{ ...draft(), mediaId: "m", metadataSaved: false, parts: [{ number: 1, complete: true, etag: "e" }] }], true, true)).toBe(false); });
@@ -125,12 +115,6 @@ describe("Capture drafts and transport", () => {
     expect(isBlockedMediaStatus(screened.mediaStatus)).toBe(true);
     expect(requirementsSatisfied(requirements, [{ requirementKey: "front", mediaIds: ["screened"], impossibilityReason: null, version: 0 }], [screened])).toBe(false);
     expect(readyForSubmission([screened], true, true)).toBe(false);
-  });
-  it("offers false-positive declaration only for SCREENED media", () => {
-    expect(isFalsePositiveActionable("SCREENED")).toBe(true);
-    expect(isFalsePositiveActionable("REJECTED")).toBe(false);
-    expect(isFalsePositiveActionable("PURGED")).toBe(false);
-    expect(isFalsePositiveActionable("ABORTED")).toBe(false);
   });
   it("allows gallery only when both policy and requirement permit it", () => {
     const requirement = { key: "front", section: "A", label: "Frente", instructions: null, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false };

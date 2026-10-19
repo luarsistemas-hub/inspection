@@ -234,6 +234,9 @@ func retry(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		if result.RowsAffected != 1 {
 			return apperror.New(apperror.Conflict, "expectedPreparationVersion", "video preparation has changed")
 		}
+		if err := resumeBlockedPlans(tx, c.TenantID, job.ID, job.ID); err != nil {
+			return err
+		}
 		if meta.Principal.IdentityID != (identity.ID{}) {
 			if err := tx.WithContext(ctx).Create(&database.AuditEvent{ID: identity.NewID(), TenantID: c.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.preparation_retried", TargetType: "media", TargetID: c.MediaID.String(), Outcome: "ACCEPTED", CorrelationID: meta.CorrelationID, OccurredAt: now}).Error; err != nil {
 				return err
@@ -331,6 +334,9 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		if err := tx.WithContext(ctx).Create(&job).Error; err != nil {
 			return err
 		}
+		if err := resumeBlockedPlans(tx, c.TenantID, sourceJob.ID, job.ID); err != nil {
+			return err
+		}
 		if meta.Principal.IdentityID != (identity.ID{}) {
 			if err := tx.WithContext(ctx).Create(&database.AuditEvent{ID: identity.NewID(), TenantID: c.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.preparation_reprocessed", TargetType: "media", TargetID: c.MediaID.String(), Outcome: "ACCEPTED", CorrelationID: meta.CorrelationID, OccurredAt: now}).Error; err != nil {
 				return err
@@ -340,6 +346,29 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		return nil
 	})
 	return status, err
+}
+
+func resumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPreparationID identity.ID) error {
+	var plans []database.VideoPlan
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND status='BLOCKED' AND (current_preparation_id=? OR origin_preparation_id=?)", tenantID, previousPreparationID, previousPreparationID).Find(&plans).Error; err != nil {
+		return err
+	}
+	for _, plan := range plans {
+		updates := map[string]any{"status": "BUILDING", "next_attempt_at": time.Now().UTC(), "attempts": 0, "error_code": "", "lease_token": nil, "lease_until": nil}
+		if plan.CurrentPreparationID == previousPreparationID {
+			updates["current_preparation_id"] = nextPreparationID
+		}
+		if plan.OriginPreparationID != nil && *plan.OriginPreparationID == previousPreparationID {
+			updates["origin_preparation_id"] = nextPreparationID
+		}
+		if err := tx.Model(&database.VideoPlan{}).Where("tenant_id=? AND id=? AND status='BLOCKED'", tenantID, plan.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status IN ('REVIEW_REQUIRED','PROCESSING_FAILED')", tenantID, plan.InspectionID).Update("status", "ANALYZING").Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func statusForJob(job database.VideoPreparationJob) Status {

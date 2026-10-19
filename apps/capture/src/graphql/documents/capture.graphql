@@ -31,7 +31,6 @@ mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMet
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 
-mutation DeclareSensitiveDetectionFalsePositive($input: SensitiveFalsePositiveInput!) { declareSensitiveDetectionFalsePositive(input: $input) { media { id status flags } userErrors { code field message correlationId } clientMutationId } }
 
 mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }
 

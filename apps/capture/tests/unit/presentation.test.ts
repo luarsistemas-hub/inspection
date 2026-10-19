@@ -19,7 +19,7 @@ describe("capture presenters", () => {
       tone: "warning",
       title: "Imagem bloqueada para revisão",
       message: "A análise automática encontrou um conteúdo que precisa ser revisado para este requisito.",
-      guidance: "Confira se a foto mostra somente o imóvel. Se a análise estiver incorreta, explique o motivo e envie uma declaração de falso positivo."
+      guidance: "A foto não poderá ser enviada nesta vistoria. Tire outra foto ou aguarde a revisão do gestor."
     });
   });
 
@@ -29,7 +29,7 @@ describe("capture presenters", () => {
   });
 
   it("explains why a review cannot be submitted", () => {
-    expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 2, allRequirementsSatisfied: false })).toBe("2 imagens foram bloqueadas pela análise automática. Volte às evidências para substituir as fotos ou declarar um falso positivo.");
+    expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 2, allRequirementsSatisfied: false })).toBe("2 imagens foram bloqueadas pela análise automática. Tire outras fotos ou aguarde a revisão do gestor.");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: false })).toContain("Ainda não há evidências válidas");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: true })).toBe("");
   });

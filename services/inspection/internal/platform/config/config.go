@@ -14,69 +14,81 @@ import (
 
 // Config contains only process-wide, validated runtime configuration.
 type Config struct {
-	Environment            string
-	Stage                  string
-	TestAuthEnabled        bool
-	HTTPAddress            string
-	DatabaseURL            string
-	RuntimeDatabaseURL     string
-	DispatcherDatabaseURL  string
-	MigrationDatabaseURL   string
-	AllowedOrigin          string
-	AllowedOrigins         []string
-	AdminOrigin            string
-	CaptureOrigin          string
-	OnboardingOrigin       string
-	TurnstileEnabled       bool
-	TurnstileSiteKey       string
-	TurnstileSecret        string
-	MetricsToken           string
-	OIDCIssuer             string
-	OIDCAudience           string
-	OIDCAudiences          []string
-	OIDCJWKSURL            string
-	SuperAdminIssuer       string
-	SuperAdminSubject      string
-	SuperAdminPassword     string
-	SchemaMin              int
-	SchemaMax              int
-	ShutdownTimeout        time.Duration
-	RuntimeDBRole          string
-	StoragePublic          bool
-	ImageValidationEnabled bool
-	RabbitMQURL            string
-	DragonflyAddress       string
-	DragonflyPassword      string
-	MinIOEndpoint          string
-	MinIOPublicEndpoint    string
-	MinIOAccessKey         string
-	MinIOSecretKey         string
-	MinIOBucket            string
-	MinIOSecure            bool
-	MinIOPublicSecure      bool
-	MinIORegion            string
-	StoragePublicBaseURL   string
-	OTPPepper              string
-	KeycloakAdminURL       string
-	KeycloakRealm          string
-	KeycloakClientID       string
-	KeycloakClientSecret   string
-	SMTPAddress            string
-	SMTPFrom               string
-	SMTPUsername           string
-	SMTPPassword           string
-	SMTPReplyTo            string
-	TwilioBaseURL          string
-	TwilioAccountSID       string
-	TwilioAuthToken        string
-	TwilioFrom             string
-	TwilioCallbackURL      string
-	LiteLLMURL             string
-	LLMMode                string
-	LiteLLMAPIKey          string
-	ProviderTimeout        time.Duration
-	ReportPDF              ReportPDFConfig
-	Notification           NotificationConfig
+	Environment                    string
+	Stage                          string
+	TestAuthEnabled                bool
+	HTTPAddress                    string
+	DatabaseURL                    string
+	RuntimeDatabaseURL             string
+	DispatcherDatabaseURL          string
+	MigrationDatabaseURL           string
+	AllowedOrigin                  string
+	AllowedOrigins                 []string
+	AdminOrigin                    string
+	CaptureOrigin                  string
+	OnboardingOrigin               string
+	TurnstileEnabled               bool
+	TurnstileSiteKey               string
+	TurnstileSecret                string
+	MetricsToken                   string
+	OIDCIssuer                     string
+	OIDCAudience                   string
+	OIDCAudiences                  []string
+	OIDCJWKSURL                    string
+	SuperAdminIssuer               string
+	SuperAdminSubject              string
+	SuperAdminPassword             string
+	SchemaMin                      int
+	SchemaMax                      int
+	ShutdownTimeout                time.Duration
+	RuntimeDBRole                  string
+	StoragePublic                  bool
+	ImageValidationEnabled         bool
+	SkipSensitiveContentValidation bool
+	RabbitMQURL                    string
+	DragonflyAddress               string
+	DragonflyPassword              string
+	MinIOEndpoint                  string
+	MinIOPublicEndpoint            string
+	MinIOAccessKey                 string
+	MinIOSecretKey                 string
+	MinIOBucket                    string
+	MinIOSecure                    bool
+	MinIOPublicSecure              bool
+	MinIORegion                    string
+	StoragePublicBaseURL           string
+	OTPPepper                      string
+	KeycloakAdminURL               string
+	KeycloakRealm                  string
+	KeycloakClientID               string
+	KeycloakClientSecret           string
+	SMTPAddress                    string
+	SMTPFrom                       string
+	SMTPUsername                   string
+	SMTPPassword                   string
+	SMTPReplyTo                    string
+	TwilioBaseURL                  string
+	TwilioAccountSID               string
+	TwilioAuthToken                string
+	TwilioFrom                     string
+	TwilioCallbackURL              string
+	LiteLLMURL                     string
+	LLMMode                        string
+	LiteLLMAPIKey                  string
+	ProviderTimeout                time.Duration
+	ReportPDF                      ReportPDFConfig
+	Notification                   NotificationConfig
+}
+
+// SensitiveContentBypassSource returns the variable that disabled screening, if any.
+func (c Config) SensitiveContentBypassSource() string {
+	if c.SkipSensitiveContentValidation {
+		return "INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION"
+	}
+	if !c.ImageValidationEnabled {
+		return "INSPECTION_IMAGE_VALIDATION_ENABLED"
+	}
+	return ""
 }
 
 // ReportPDFConfig bounds worker-side Maroto rendering work.
@@ -111,6 +123,10 @@ type NotificationConfig struct {
 
 // Load reads and validates environment configuration without requiring a file.
 func Load() (Config, error) {
+	skipSensitiveContentValidation, err := strictEnvBool("INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION", false)
+	if err != nil {
+		return Config{}, err
+	}
 	environment := env("INSPECTION_ENV", "local")
 	stage := stageFromEnvironment()
 	pdfRetryDelays, err := reportPDFRetryDelays()
@@ -130,11 +146,12 @@ func Load() (Config, error) {
 		MetricsToken: os.Getenv("INSPECTION_METRICS_TOKEN"), OIDCIssuer: os.Getenv("INSPECTION_OIDC_ISSUER"),
 		OIDCAudience: os.Getenv("INSPECTION_OIDC_AUDIENCE"), OIDCAudiences: splitExact(os.Getenv("INSPECTION_OIDC_AUDIENCES")), OIDCJWKSURL: os.Getenv("INSPECTION_OIDC_JWKS_URL"), SuperAdminIssuer: os.Getenv("INSPECTION_SUPER_ADMIN_ISSUER"), SuperAdminSubject: os.Getenv("INSPECTION_SUPER_ADMIN_SUBJECT"), SuperAdminPassword: os.Getenv("INSPECTION_SUPER_ADMIN_PASSWORD"), SchemaMin: envInt("INSPECTION_SCHEMA_MIN", 13),
 		SchemaMax: envInt("INSPECTION_SCHEMA_MAX", migrations.LatestVersion()), ShutdownTimeout: 10 * time.Second,
-		RuntimeDBRole:          env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
-		StoragePublic:          strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
-		ImageValidationEnabled: envBool("INSPECTION_IMAGE_VALIDATION_ENABLED", true),
-		RabbitMQURL:            env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
-		DragonflyAddress:       env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
+		RuntimeDBRole:                  env("INSPECTION_RUNTIME_DB_ROLE", "inspection_runtime"),
+		StoragePublic:                  strings.EqualFold(os.Getenv("INSPECTION_STORAGE_PUBLIC"), "true"),
+		ImageValidationEnabled:         envBool("INSPECTION_IMAGE_VALIDATION_ENABLED", true),
+		SkipSensitiveContentValidation: skipSensitiveContentValidation,
+		RabbitMQURL:                    env("INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
+		DragonflyAddress:               env("INSPECTION_DRAGONFLY_ADDRESS", "localhost:6379"), DragonflyPassword: os.Getenv("INSPECTION_DRAGONFLY_PASSWORD"),
 		MinIOEndpoint: env("INSPECTION_S3_ENDPOINT", env("INSPECTION_MINIO_ENDPOINT", "localhost:9000")), MinIOPublicEndpoint: env("INSPECTION_MINIO_PUBLIC_ENDPOINT", ""), MinIOAccessKey: env("INSPECTION_S3_ACCESS_KEY", env("INSPECTION_MINIO_ACCESS_KEY", "inspection")), MinIOSecretKey: env("INSPECTION_S3_SECRET_KEY", env("INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret")), MinIOBucket: env("INSPECTION_S3_BUCKET", env("INSPECTION_MINIO_BUCKET", "inspection-private")), MinIOSecure: envBool("INSPECTION_S3_SECURE", strings.EqualFold(os.Getenv("INSPECTION_MINIO_SECURE"), "true")), MinIOPublicSecure: strings.EqualFold(os.Getenv("INSPECTION_MINIO_PUBLIC_SECURE"), "true"), MinIORegion: env("INSPECTION_S3_REGION", "us-east-1"), StoragePublicBaseURL: os.Getenv("INSPECTION_S3_PUBLIC_BASE_URL"),
 		OTPPepper: env("INSPECTION_OTP_PEPPER", "local-development-pepper-change-me-32"), SMTPAddress: env("INSPECTION_SMTP_ADDRESS", "localhost:1025"), SMTPFrom: env("INSPECTION_SMTP_FROM", "inspection@localhost"), SMTPUsername: os.Getenv("INSPECTION_SMTP_USERNAME"), SMTPPassword: os.Getenv("INSPECTION_SMTP_PASSWORD"), SMTPReplyTo: os.Getenv("INSPECTION_SMTP_REPLY_TO"),
 		KeycloakAdminURL: env("INSPECTION_KEYCLOAK_ADMIN_URL", "http://localhost:8081"), KeycloakRealm: env("INSPECTION_KEYCLOAK_REALM", "inspection"), KeycloakClientID: keycloakClientID, KeycloakClientSecret: keycloakClientSecret,
@@ -400,6 +417,21 @@ func envBool(key string, fallback bool) bool {
 		return false
 	default:
 		return fallback
+	}
+}
+
+func strictEnvBool(key string, fallback bool) (bool, error) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("configuration: %s must be a boolean", key)
 	}
 }
 

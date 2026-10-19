@@ -318,6 +318,7 @@ type ComplexityRoot struct {
 		AssetExternalKey            func(childComplexity int) int
 		AssetID                     func(childComplexity int) int
 		AssetName                   func(childComplexity int) int
+		Attention                   func(childComplexity int) int
 		BusinessUnitID              func(childComplexity int) int
 		ComparisonMode              func(childComplexity int) int
 		DeadlineAt                  func(childComplexity int) int
@@ -348,6 +349,13 @@ type ComplexityRoot struct {
 		TemplateID                  func(childComplexity int) int
 		TemplateVersionID           func(childComplexity int) int
 		Version                     func(childComplexity int) int
+	}
+
+	InspectionAttention struct {
+		Kind                  func(childComplexity int) int
+		MediaID               func(childComplexity int) int
+		ReplacementDeadlineAt func(childComplexity int) int
+		Since                 func(childComplexity int) int
 	}
 
 	InspectionConnection struct {
@@ -959,59 +967,60 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		AnalysisPrompt           func(childComplexity int, typeArg AnalysisType) int
-		Asset                    func(childComplexity int, id string) int
-		Assets                   func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
-		AuditEvents              func(childComplexity int, first *int, after *string) int
-		BusinessUnits            func(childComplexity int, first *int, after *string) int
-		CustomerEvidence         func(childComplexity int, inspectionID string, mode *EvidenceMode, first *int, after *string) int
-		CustomerPortfolio        func(childComplexity int, filter *CustomerPortfolioFilter, first *int, after *string) int
-		CustomerReport           func(childComplexity int, inspectionID string, version *int) int
-		CustomerTimeline         func(childComplexity int, assetID *string, projectID *string, first *int, after *string) int
-		DashboardSummary         func(childComplexity int, projectID *string, businessUnitID *string) int
-		ExternalCapture          func(childComplexity int) int
-		Inspection               func(childComplexity int, id string) int
-		InspectionLLMUsage       func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
-		Inspections              func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
-		LlmUsage                 func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
-		LlmUsageTenants          func(childComplexity int, search *string, first *int, after *string) int
-		LookupPostalCode         func(childComplexity int, postalCode string) int
-		Me                       func(childComplexity int) int
-		Memberships              func(childComplexity int, first *int, after *string) int
-		MyNotifications          func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
-		NotificationDeliveries   func(childComplexity int, first *int, after *string) int
-		OnboardingDefinition     func(childComplexity int, segment string) int
-		OnboardingSession        func(childComplexity int) int
-		OnboardingStatus         func(childComplexity int) int
-		OriginPromotion          func(childComplexity int, inspectionID string) int
-		OriginVersions           func(childComplexity int, assetID string, first *int, after *string) int
-		Participant              func(childComplexity int, id string) int
-		Participants             func(childComplexity int, search *string, first *int, after *string) int
-		Project                  func(childComplexity int, id string) int
-		ProjectTimeline          func(childComplexity int, projectID string) int
-		Projects                 func(childComplexity int, first *int, after *string) int
-		PublicationPolicy        func(childComplexity int) int
-		Report                   func(childComplexity int, inspectionID string, version *int) int
-		ReportDownload           func(childComplexity int, snapshotID string, kind *string) int
-		Reports                  func(childComplexity int, first *int, after *string, search *string, classification *string) int
-		RetentionPolicies        func(childComplexity int) int
-		Schedules                func(childComplexity int, first *int, after *string) int
-		SegmentDefinitionVersion func(childComplexity int, id string) int
-		SegmentDefinitions       func(childComplexity int, search *string, first *int, after *string) int
-		TemplateVersion          func(childComplexity int, id string) int
-		Templates                func(childComplexity int, search *string, first *int, after *string) int
-		Tenant                   func(childComplexity int) int
-		TriageAssignees          func(childComplexity int, inspectionID string) int
-		TriageCase               func(childComplexity int, inspectionID string) int
-		TriageInspections        func(childComplexity int, first *int, after *string, classification *string, status *string) int
-		TriageWorkspace          func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
-		UsageSummary             func(childComplexity int, from *string, to *string) int
-		VideoAdmission           func(childComplexity int) int
-		VideoPolicy              func(childComplexity int) int
-		VideoPreparation         func(childComplexity int, mediaID string) int
-		VideoPreparationEvidence func(childComplexity int, preparationID string, first *int, after *string) int
-		VideoPreparations        func(childComplexity int, status []string, first *int, after *string) int
-		VideoUploadStatus        func(childComplexity int, mediaID string) int
+		AnalysisPrompt                    func(childComplexity int, typeArg AnalysisType) int
+		Asset                             func(childComplexity int, id string) int
+		Assets                            func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
+		AuditEvents                       func(childComplexity int, first *int, after *string) int
+		BusinessUnits                     func(childComplexity int, first *int, after *string) int
+		CustomerEvidence                  func(childComplexity int, inspectionID string, mode *EvidenceMode, first *int, after *string) int
+		CustomerPortfolio                 func(childComplexity int, filter *CustomerPortfolioFilter, first *int, after *string) int
+		CustomerReport                    func(childComplexity int, inspectionID string, version *int) int
+		CustomerTimeline                  func(childComplexity int, assetID *string, projectID *string, first *int, after *string) int
+		DashboardSummary                  func(childComplexity int, projectID *string, businessUnitID *string) int
+		ExternalCapture                   func(childComplexity int) int
+		Inspection                        func(childComplexity int, id string) int
+		InspectionLLMUsage                func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
+		Inspections                       func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
+		LlmUsage                          func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
+		LlmUsageTenants                   func(childComplexity int, search *string, first *int, after *string) int
+		LookupPostalCode                  func(childComplexity int, postalCode string) int
+		Me                                func(childComplexity int) int
+		Memberships                       func(childComplexity int, first *int, after *string) int
+		MyNotifications                   func(childComplexity int, unreadOnly *bool, kind *string, projectID *string, first *int, after *string) int
+		NotificationDeliveries            func(childComplexity int, first *int, after *string) int
+		OnboardingDefinition              func(childComplexity int, segment string) int
+		OnboardingSession                 func(childComplexity int) int
+		OnboardingStatus                  func(childComplexity int) int
+		OriginPromotion                   func(childComplexity int, inspectionID string) int
+		OriginVersions                    func(childComplexity int, assetID string, first *int, after *string) int
+		Participant                       func(childComplexity int, id string) int
+		Participants                      func(childComplexity int, search *string, first *int, after *string) int
+		Project                           func(childComplexity int, id string) int
+		ProjectTimeline                   func(childComplexity int, projectID string) int
+		Projects                          func(childComplexity int, first *int, after *string) int
+		PublicationPolicy                 func(childComplexity int) int
+		Report                            func(childComplexity int, inspectionID string, version *int) int
+		ReportDownload                    func(childComplexity int, snapshotID string, kind *string) int
+		Reports                           func(childComplexity int, first *int, after *string, search *string, classification *string) int
+		RetentionPolicies                 func(childComplexity int) int
+		Schedules                         func(childComplexity int, first *int, after *string) int
+		SegmentDefinitionVersion          func(childComplexity int, id string) int
+		SegmentDefinitions                func(childComplexity int, search *string, first *int, after *string) int
+		SensitiveContentScreeningBypassed func(childComplexity int) int
+		TemplateVersion                   func(childComplexity int, id string) int
+		Templates                         func(childComplexity int, search *string, first *int, after *string) int
+		Tenant                            func(childComplexity int) int
+		TriageAssignees                   func(childComplexity int, inspectionID string) int
+		TriageCase                        func(childComplexity int, inspectionID string) int
+		TriageInspections                 func(childComplexity int, first *int, after *string, classification *string, status *string) int
+		TriageWorkspace                   func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
+		UsageSummary                      func(childComplexity int, from *string, to *string) int
+		VideoAdmission                    func(childComplexity int) int
+		VideoPolicy                       func(childComplexity int) int
+		VideoPreparation                  func(childComplexity int, mediaID string) int
+		VideoPreparationEvidence          func(childComplexity int, preparationID string, first *int, after *string) int
+		VideoPreparations                 func(childComplexity int, status []string, first *int, after *string) int
+		VideoUploadStatus                 func(childComplexity int, mediaID string) int
 	}
 
 	ReanalyzeVideoInspectionPayload struct {
@@ -1727,6 +1736,7 @@ type QueryResolver interface {
 	Project(ctx context.Context, id string) (*Project, error)
 	Inspections(ctx context.Context, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) (*InspectionConnection, error)
 	Inspection(ctx context.Context, id string) (*Inspection, error)
+	SensitiveContentScreeningBypassed(ctx context.Context) (bool, error)
 	Report(ctx context.Context, inspectionID string, version *int) (*Report, error)
 	VideoPreparationEvidence(ctx context.Context, preparationID string, first *int, after *string) (*VideoPreparationEvidenceConnection, error)
 	VideoPreparations(ctx context.Context, status []string, first *int, after *string) (*VideoPreparationConnection, error)
@@ -3005,6 +3015,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Inspection.AssetName(childComplexity), true
+	case "Inspection.attention":
+		if e.ComplexityRoot.Inspection.Attention == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Inspection.Attention(childComplexity), true
 	case "Inspection.businessUnitId":
 		if e.ComplexityRoot.Inspection.BusinessUnitID == nil {
 			break
@@ -3185,6 +3201,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Inspection.Version(childComplexity), true
+
+	case "InspectionAttention.kind":
+		if e.ComplexityRoot.InspectionAttention.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionAttention.Kind(childComplexity), true
+	case "InspectionAttention.mediaId":
+		if e.ComplexityRoot.InspectionAttention.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionAttention.MediaID(childComplexity), true
+	case "InspectionAttention.replacementDeadlineAt":
+		if e.ComplexityRoot.InspectionAttention.ReplacementDeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionAttention.ReplacementDeadlineAt(childComplexity), true
+	case "InspectionAttention.since":
+		if e.ComplexityRoot.InspectionAttention.Since == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionAttention.Since(childComplexity), true
 
 	case "InspectionConnection.nodes":
 		if e.ComplexityRoot.InspectionConnection.Nodes == nil {
@@ -6614,6 +6655,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SegmentDefinitions(childComplexity, args["search"].(*string), args["first"].(*int), args["after"].(*string)), true
+	case "Query.sensitiveContentScreeningBypassed":
+		if e.ComplexityRoot.Query.SensitiveContentScreeningBypassed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.SensitiveContentScreeningBypassed(childComplexity), true
 	case "Query.templateVersion":
 		if e.ComplexityRoot.Query.TemplateVersion == nil {
 			break
@@ -9369,6 +9416,7 @@ type Query {
   project(id: ID!): Project
   inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
+  sensitiveContentScreeningBypassed: Boolean!
   report(inspectionId: ID!, version: Int): Report
   videoPreparationEvidence(preparationId: ID!, first: Int = 25, after: String): VideoPreparationEvidenceConnection!
   videoPreparations(status: [String!], first: Int = 25, after: String): VideoPreparationConnection!
@@ -9544,8 +9592,10 @@ type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
-enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
+enum InspectionStatusGroup { PLANNING EXECUTION ATTENTION COMPLETED CLOSED }
+enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQUESTED }
+type InspectionAttention { kind: InspectionAttentionKind! mediaId: ID replacementDeadlineAt: String since: String! }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String attention: InspectionAttention }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -10510,8 +10560,24 @@ func (ec *executionContext) childFields_Inspection(ctx context.Context, field gr
 		return ec.fieldContext_Inspection_assetExternalKey(ctx, field)
 	case "participantName":
 		return ec.fieldContext_Inspection_participantName(ctx, field)
+	case "attention":
+		return ec.fieldContext_Inspection_attention(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Inspection", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionAttention(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_InspectionAttention_kind(ctx, field)
+	case "mediaId":
+		return ec.fieldContext_InspectionAttention_mediaId(ctx, field)
+	case "replacementDeadlineAt":
+		return ec.fieldContext_InspectionAttention_replacementDeadlineAt(ctx, field)
+	case "since":
+		return ec.fieldContext_InspectionAttention_since(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionAttention", field.Name)
 }
 
 func (ec *executionContext) childFields_InspectionConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -20749,6 +20815,130 @@ func (ec *executionContext) _Inspection_participantName(ctx context.Context, fie
 }
 func (ec *executionContext) fieldContext_Inspection_participantName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Inspection", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Inspection_attention(ctx context.Context, field graphql.CollectedField, obj *Inspection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Inspection_attention(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Attention, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionAttention) graphql.Marshaler {
+			return ec.marshalOInspectionAttention2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionAttention(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Inspection_attention(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Inspection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionAttention(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionAttention_kind(ctx context.Context, field graphql.CollectedField, obj *InspectionAttention) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionAttention_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v InspectionAttentionKind) graphql.Marshaler {
+			return ec.marshalNInspectionAttentionKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionAttentionKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionAttention_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionAttention", field, false, false, errors.New("field of type InspectionAttentionKind does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionAttention_mediaId(ctx context.Context, field graphql.CollectedField, obj *InspectionAttention) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionAttention_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionAttention_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionAttention", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionAttention_replacementDeadlineAt(ctx context.Context, field graphql.CollectedField, obj *InspectionAttention) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionAttention_replacementDeadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplacementDeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionAttention_replacementDeadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionAttention", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionAttention_since(ctx context.Context, field graphql.CollectedField, obj *InspectionAttention) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionAttention_since(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Since, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionAttention_since(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionAttention", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _InspectionConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *InspectionConnection) (ret graphql.Marshaler) {
@@ -33937,6 +34127,29 @@ func (ec *executionContext) fieldContext_Query_inspection(ctx context.Context, f
 		return fc, err
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Query_sensitiveContentScreeningBypassed(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_sensitiveContentScreeningBypassed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().SensitiveContentScreeningBypassed(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_sensitiveContentScreeningBypassed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _Query_report(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -52732,6 +52945,64 @@ func (ec *executionContext) _Inspection(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "attention":
+			out.Values[i] = ec._Inspection_attention(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inspectionAttentionImplementors = []string{"InspectionAttention"}
+
+func (ec *executionContext) _InspectionAttention(ctx context.Context, sel ast.SelectionSet, obj *InspectionAttention) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionAttentionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionAttention")
+		case "kind":
+			out.Values[i] = ec._InspectionAttention_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaId":
+			out.Values[i] = ec._InspectionAttention_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "replacementDeadlineAt":
+			out.Values[i] = ec._InspectionAttention_replacementDeadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "since":
+			out.Values[i] = ec._InspectionAttention_since(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -57600,6 +57871,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_inspection(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "sensitiveContentScreeningBypassed":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_sensitiveContentScreeningBypassed(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -63708,6 +64001,16 @@ func (ec *executionContext) marshalNInspection2ᚖinspectionᚋservicesᚋinspec
 	return ec._Inspection(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNInspectionAttentionKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionAttentionKind(ctx context.Context, v any) (InspectionAttentionKind, error) {
+	var res InspectionAttentionKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInspectionAttentionKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionAttentionKind(ctx context.Context, sel ast.SelectionSet, v InspectionAttentionKind) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNInspectionConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionConnection(ctx context.Context, sel ast.SelectionSet, v *InspectionConnection) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -66129,6 +66432,13 @@ func (ec *executionContext) marshalOInspection2ᚖinspectionᚋservicesᚋinspec
 		return graphql.Null
 	}
 	return ec._Inspection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInspectionAttention2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionAttention(ctx context.Context, sel ast.SelectionSet, v *InspectionAttention) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InspectionAttention(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOInspectionStatusGroup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionStatusGroup(ctx context.Context, v any) (*InspectionStatusGroup, error) {

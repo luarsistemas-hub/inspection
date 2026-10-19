@@ -1851,20 +1851,7 @@ func (r *mutationResolver) DeclareSensitiveDetectionFalsePositive(ctx context.Co
 		}
 		return &graphql1.MediaPayload{Media: mapMedia(raw.(database.MediaObject)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 	}
-	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mediaID, err := identity.ParseID(input.MediaID)
-	if err != nil {
-		return nil, invalidID("mediaId")
-	}
-	raw, err := r.Bus.Send(ctx, mediafalsepositive.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, MediaID: mediaID, Reason: input.Reason})
-	if err != nil {
-		return nil, err
-	}
-	media := raw.(database.MediaObject)
-	return &graphql1.MediaPayload{Media: mapMedia(media), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return nil, apperror.New(apperror.Forbidden, "", "sensitive-content decisions require an internal reviewer")
 }
 
 // ConfigureRetentionPolicy is the resolver for the configureRetentionPolicy field.
@@ -2705,6 +2692,28 @@ func (r *queryResolver) Inspection(ctx context.Context, id string) (*graphql1.In
 		return nil, err
 	}
 	return mapInspection(view), nil
+}
+
+// SensitiveContentScreeningBypassed is the resolver for the sensitiveContentScreeningBypassed field.
+func (r *queryResolver) SensitiveContentScreeningBypassed(ctx context.Context) (bool, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return false, unauthenticated()
+	}
+	if !meta.Principal.Internal {
+		return false, apperror.New(apperror.Forbidden, "", "permission denied")
+	}
+	if err := internalRole(meta, auth.TenantAdmin); err != nil {
+		return false, err
+	}
+	if r.DB == nil {
+		return false, apperror.New(apperror.DependencyUnavailable, "", "database unavailable")
+	}
+	var count int64
+	if err := r.DB.WithContext(ctx).Table("platform.worker_runtime_settings").Where("screening_bypassed=true").Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // Report is the resolver for the report field.

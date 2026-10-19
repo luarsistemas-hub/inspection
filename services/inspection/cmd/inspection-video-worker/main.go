@@ -99,9 +99,12 @@ func run() error {
 	}
 	store := objectstore.VideoStore{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minio}}
 	detector := sensitivecontent.NewEmbeddedDetector()
-	if !cfg.ImageValidationEnabled {
+	if source := cfg.SensitiveContentBypassSource(); source != "" {
 		detector = sensitivecontent.NewDisabledDetector()
-		log.Printf("video worker: sensitive-content screening is explicitly disabled")
+		log.Printf("inspection-video-worker: sensitive-content screening bypass enabled by %s", source)
+	}
+	if err := reportSensitiveScreeningState(runtimeDB, "inspection-video-worker", cfg.SensitiveContentBypassSource()); err != nil {
+		return fmt.Errorf("report sensitive screening state: %w", err)
 	}
 	executor, err := preparevideo.Setup(preparevideo.Dependencies{DB: runtimeDB, ClaimDB: claimDB, Store: store, Decoder: video.FFmpeg{Threads: limits.DecoderThreads}, Detector: detector, Gateway: gateway, Now: time.Now, TempDir: "/var/lib/inspection-video-scratch", Limits: limits, Metrics: metrics})
 	if err != nil {
@@ -369,4 +372,9 @@ func checkGateway(baseURL, mode string) error {
 		return fmt.Errorf("gateway health returned %d", response.StatusCode)
 	}
 	return nil
+}
+
+func reportSensitiveScreeningState(db *gorm.DB, worker, source string) error {
+	return db.Exec(`INSERT INTO platform.worker_runtime_settings(worker,screening_bypassed,source_variable,reported_at)
+VALUES (?, ?, ?, now()) ON CONFLICT (worker) DO UPDATE SET screening_bypassed=EXCLUDED.screening_bypassed, source_variable=EXCLUDED.source_variable, reported_at=EXCLUDED.reported_at`, worker, source != "", source).Error
 }

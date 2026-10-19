@@ -9,7 +9,6 @@ const blockedMediaStatuses = new Set(["SCREENED", "REJECTED", "PURGED", "ABORTED
 
 export const isTerminalBootstrapStatus = (status: string): boolean => terminalBootstrapStatuses.has(status);
 export const isBlockedMediaStatus = (status?: string): boolean => status !== undefined && blockedMediaStatuses.has(status);
-export const isFalsePositiveActionable = (status?: string): boolean => status === "SCREENED";
 
 export function createDraftResumeGuard() {
   const activeDrafts = new Set<string>();

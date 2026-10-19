@@ -6,7 +6,6 @@ import {
   CompleteMediaUploadDocument,
   CreateMediaUploadDocument,
   DeclareCaptureImpossibilityDocument,
-  DeclareSensitiveDetectionFalsePositiveDocument,
   ExternalCaptureBootstrapDocument,
   PresignMediaPartsDocument,
   RequestInvitationOtpDocument,
@@ -81,7 +80,6 @@ export const captureOperations = {
   completeUpload: CompleteMediaUploadDocument,
   metadata: SaveCaptureMetadataDocument,
   impossibility: DeclareCaptureImpossibilityDocument,
-  falsePositive: DeclareSensitiveDetectionFalsePositiveDocument,
   submit: SubmitCaptureDocument,
   submitRecapture: SubmitRecaptureDocument
 };

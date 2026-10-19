@@ -540,41 +540,49 @@ type GlobalLLMCallUsage struct {
 }
 
 type Inspection struct {
-	ID                          string   `json:"id"`
-	BusinessUnitID              string   `json:"businessUnitId"`
-	AssetID                     string   `json:"assetId"`
-	ParticipantID               string   `json:"participantId"`
-	TemplateID                  string   `json:"templateId"`
-	TemplateVersionID           string   `json:"templateVersionId"`
-	AnalysisPromptSnapshotID    string   `json:"analysisPromptSnapshotId"`
-	ProjectID                   *string  `json:"projectId,omitempty"`
-	StageID                     *string  `json:"stageId,omitempty"`
-	Source                      string   `json:"source"`
-	SourceReason                *string  `json:"sourceReason,omitempty"`
-	StateReason                 *string  `json:"stateReason,omitempty"`
-	Status                      string   `json:"status"`
-	MediaKind                   string   `json:"mediaKind"`
-	ComparisonMode              *string  `json:"comparisonMode,omitempty"`
-	ReferenceVersionID          *string  `json:"referenceVersionId,omitempty"`
-	ReferenceVersionNumber      *int     `json:"referenceVersionNumber,omitempty"`
-	ReferenceMediaKind          *string  `json:"referenceMediaKind,omitempty"`
-	ReferenceVersionStatus      *string  `json:"referenceVersionStatus,omitempty"`
-	ReferenceIsActive           *bool    `json:"referenceIsActive,omitempty"`
-	OriginPromotionStatus       *string  `json:"originPromotionStatus,omitempty"`
-	OriginPromotionFailure      *string  `json:"originPromotionFailure,omitempty"`
-	PromotedOriginVersionID     *string  `json:"promotedOriginVersionId,omitempty"`
-	PromotedOriginVersionNumber *int     `json:"promotedOriginVersionNumber,omitempty"`
-	PromotedOriginMediaKind     *string  `json:"promotedOriginMediaKind,omitempty"`
-	PromotedOriginIsActive      *bool    `json:"promotedOriginIsActive,omitempty"`
-	EvidenceCount               int      `json:"evidenceCount"`
-	DueAt                       string   `json:"dueAt"`
-	DeadlineAt                  string   `json:"deadlineAt"`
-	ReminderInstants            []string `json:"reminderInstants"`
-	Version                     int      `json:"version"`
-	AssetName                   *string  `json:"assetName,omitempty"`
-	AssetAddress                *string  `json:"assetAddress,omitempty"`
-	AssetExternalKey            *string  `json:"assetExternalKey,omitempty"`
-	ParticipantName             *string  `json:"participantName,omitempty"`
+	ID                          string               `json:"id"`
+	BusinessUnitID              string               `json:"businessUnitId"`
+	AssetID                     string               `json:"assetId"`
+	ParticipantID               string               `json:"participantId"`
+	TemplateID                  string               `json:"templateId"`
+	TemplateVersionID           string               `json:"templateVersionId"`
+	AnalysisPromptSnapshotID    string               `json:"analysisPromptSnapshotId"`
+	ProjectID                   *string              `json:"projectId,omitempty"`
+	StageID                     *string              `json:"stageId,omitempty"`
+	Source                      string               `json:"source"`
+	SourceReason                *string              `json:"sourceReason,omitempty"`
+	StateReason                 *string              `json:"stateReason,omitempty"`
+	Status                      string               `json:"status"`
+	MediaKind                   string               `json:"mediaKind"`
+	ComparisonMode              *string              `json:"comparisonMode,omitempty"`
+	ReferenceVersionID          *string              `json:"referenceVersionId,omitempty"`
+	ReferenceVersionNumber      *int                 `json:"referenceVersionNumber,omitempty"`
+	ReferenceMediaKind          *string              `json:"referenceMediaKind,omitempty"`
+	ReferenceVersionStatus      *string              `json:"referenceVersionStatus,omitempty"`
+	ReferenceIsActive           *bool                `json:"referenceIsActive,omitempty"`
+	OriginPromotionStatus       *string              `json:"originPromotionStatus,omitempty"`
+	OriginPromotionFailure      *string              `json:"originPromotionFailure,omitempty"`
+	PromotedOriginVersionID     *string              `json:"promotedOriginVersionId,omitempty"`
+	PromotedOriginVersionNumber *int                 `json:"promotedOriginVersionNumber,omitempty"`
+	PromotedOriginMediaKind     *string              `json:"promotedOriginMediaKind,omitempty"`
+	PromotedOriginIsActive      *bool                `json:"promotedOriginIsActive,omitempty"`
+	EvidenceCount               int                  `json:"evidenceCount"`
+	DueAt                       string               `json:"dueAt"`
+	DeadlineAt                  string               `json:"deadlineAt"`
+	ReminderInstants            []string             `json:"reminderInstants"`
+	Version                     int                  `json:"version"`
+	AssetName                   *string              `json:"assetName,omitempty"`
+	AssetAddress                *string              `json:"assetAddress,omitempty"`
+	AssetExternalKey            *string              `json:"assetExternalKey,omitempty"`
+	ParticipantName             *string              `json:"participantName,omitempty"`
+	Attention                   *InspectionAttention `json:"attention,omitempty"`
+}
+
+type InspectionAttention struct {
+	Kind                  InspectionAttentionKind `json:"kind"`
+	MediaID               *string                 `json:"mediaId,omitempty"`
+	ReplacementDeadlineAt *string                 `json:"replacementDeadlineAt,omitempty"`
+	Since                 string                  `json:"since"`
 }
 
 type InspectionConnection struct {
@@ -2273,11 +2281,69 @@ func (e EvidenceMode) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type InspectionAttentionKind string
+
+const (
+	InspectionAttentionKindPrivacyReview        InspectionAttentionKind = "PRIVACY_REVIEW"
+	InspectionAttentionKindPreparationFailed    InspectionAttentionKind = "PREPARATION_FAILED"
+	InspectionAttentionKindReplacementRequested InspectionAttentionKind = "REPLACEMENT_REQUESTED"
+)
+
+var AllInspectionAttentionKind = []InspectionAttentionKind{
+	InspectionAttentionKindPrivacyReview,
+	InspectionAttentionKindPreparationFailed,
+	InspectionAttentionKindReplacementRequested,
+}
+
+func (e InspectionAttentionKind) IsValid() bool {
+	switch e {
+	case InspectionAttentionKindPrivacyReview, InspectionAttentionKindPreparationFailed, InspectionAttentionKindReplacementRequested:
+		return true
+	}
+	return false
+}
+
+func (e InspectionAttentionKind) String() string {
+	return string(e)
+}
+
+func (e *InspectionAttentionKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InspectionAttentionKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InspectionAttentionKind", str)
+	}
+	return nil
+}
+
+func (e InspectionAttentionKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *InspectionAttentionKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e InspectionAttentionKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type InspectionStatusGroup string
 
 const (
 	InspectionStatusGroupPlanning  InspectionStatusGroup = "PLANNING"
 	InspectionStatusGroupExecution InspectionStatusGroup = "EXECUTION"
+	InspectionStatusGroupAttention InspectionStatusGroup = "ATTENTION"
 	InspectionStatusGroupCompleted InspectionStatusGroup = "COMPLETED"
 	InspectionStatusGroupClosed    InspectionStatusGroup = "CLOSED"
 )
@@ -2285,13 +2351,14 @@ const (
 var AllInspectionStatusGroup = []InspectionStatusGroup{
 	InspectionStatusGroupPlanning,
 	InspectionStatusGroupExecution,
+	InspectionStatusGroupAttention,
 	InspectionStatusGroupCompleted,
 	InspectionStatusGroupClosed,
 }
 
 func (e InspectionStatusGroup) IsValid() bool {
 	switch e {
-	case InspectionStatusGroupPlanning, InspectionStatusGroupExecution, InspectionStatusGroupCompleted, InspectionStatusGroupClosed:
+	case InspectionStatusGroupPlanning, InspectionStatusGroupExecution, InspectionStatusGroupAttention, InspectionStatusGroupCompleted, InspectionStatusGroupClosed:
 		return true
 	}
 	return false

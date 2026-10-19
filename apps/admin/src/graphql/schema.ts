@@ -585,6 +585,7 @@ export type Inspection = {
   assetExternalKey: Maybe<Scalars['String']['output']>;
   assetId: Scalars['ID']['output'];
   assetName: Maybe<Scalars['String']['output']>;
+  attention: Maybe<InspectionAttention>;
   businessUnitId: Scalars['ID']['output'];
   comparisonMode: Maybe<Scalars['String']['output']>;
   deadlineAt: Scalars['String']['output'];
@@ -616,6 +617,19 @@ export type Inspection = {
   templateVersionId: Scalars['ID']['output'];
   version: Scalars['Int']['output'];
 };
+
+export type InspectionAttention = {
+  __typename?: 'InspectionAttention';
+  kind: InspectionAttentionKind;
+  mediaId: Maybe<Scalars['ID']['output']>;
+  replacementDeadlineAt: Maybe<Scalars['String']['output']>;
+  since: Scalars['String']['output'];
+};
+
+export type InspectionAttentionKind =
+  | 'PREPARATION_FAILED'
+  | 'PRIVACY_REVIEW'
+  | 'REPLACEMENT_REQUESTED';
 
 export type InspectionConnection = {
   __typename?: 'InspectionConnection';
@@ -653,6 +667,7 @@ export type InspectionPayload = {
 };
 
 export type InspectionStatusGroup =
+  | 'ATTENTION'
   | 'CLOSED'
   | 'COMPLETED'
   | 'EXECUTION'
@@ -1912,6 +1927,7 @@ export type Query = {
   schedules: ScheduleConnection;
   segmentDefinitionVersion: Maybe<SegmentDefinitionVersion>;
   segmentDefinitions: SegmentDefinitionConnection;
+  sensitiveContentScreeningBypassed: Scalars['Boolean']['output'];
   templateVersion: Maybe<TemplateVersion>;
   templates: TemplateConnection;
   tenant: Maybe<Tenant>;

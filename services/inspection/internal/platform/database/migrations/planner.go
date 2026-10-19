@@ -2046,6 +2046,62 @@ BEGIN
   END IF;
 END $$;
 `},
+		{Version: 78, Name: "sensitive_review_and_recoverable_video_plans", Compatible: true, SQL: `
+ALTER TABLE inspections.inspections DROP CONSTRAINT IF EXISTS chk_inspection_status;
+ALTER TABLE inspections.inspections ADD CONSTRAINT chk_inspection_status CHECK (status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING','RECAPTURE_PENDING','REVIEW_REQUIRED','PROCESSING_FAILED','REPLACEMENT_PENDING','COMPLETED','CANCELED','INVALIDATED'));
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS chk_video_plan_status;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT chk_video_plan_status CHECK (status IN ('BUILDING','SEALED','FAILED','BLOCKED'));
+CREATE TABLE IF NOT EXISTS platform.worker_runtime_settings (
+  worker varchar(96) PRIMARY KEY,
+  screening_bypassed boolean NOT NULL,
+  source_variable varchar(96) NOT NULL DEFAULT '',
+  reported_at timestamptz NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT, UPDATE ON platform.worker_runtime_settings TO inspection_runtime, inspection_worker;
+
+WITH terminal_preparations AS (
+  SELECT p.tenant_id, p.id, p.inspection_id,
+         CASE WHEN coalesce(current_p.error_code, '')='SENSITIVE_CONTENT' OR coalesce(origin_p.error_code, '')='SENSITIVE_CONTENT'
+              THEN 'SENSITIVE_CONTENT' ELSE 'PREPARATION_FAILED' END AS failure_code
+  FROM analysis.video_plans p
+  LEFT JOIN media.video_preparation_jobs current_p ON current_p.tenant_id=p.tenant_id AND current_p.id=p.current_preparation_id
+  LEFT JOIN media.video_preparation_jobs origin_p ON origin_p.tenant_id=p.tenant_id AND origin_p.id=p.origin_preparation_id
+  WHERE p.status='BUILDING' AND (current_p.status IN ('FAILED','CANCELED') OR origin_p.status IN ('FAILED','CANCELED'))
+)
+UPDATE analysis.video_plans p
+SET status='BLOCKED', error_code=t.failure_code, lease_token=NULL, lease_until=NULL, next_attempt_at=now()
+FROM terminal_preparations t
+WHERE p.tenant_id=t.tenant_id AND p.id=t.id;
+
+UPDATE inspections.inspections i
+SET status=CASE WHEN p.error_code='SENSITIVE_CONTENT' THEN 'REVIEW_REQUIRED' ELSE 'PROCESSING_FAILED' END,
+    updated_at=now()
+FROM analysis.video_plans p
+WHERE p.tenant_id=i.tenant_id AND p.inspection_id=i.id AND p.status='BLOCKED' AND i.status='ANALYZING';
+
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz,
+  p_terminal_updated_before timestamptz,
+  p_deadline_before timestamptz
+) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT s.tenant_id FROM schedules.schedules s
+  WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION
+  SELECT r.tenant_id FROM schedules.reminder_plans r
+  WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING','REPLACEMENT_PENDING') AND i.deadline_at<=p_deadline_before
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
+`},
 	}
 }
 

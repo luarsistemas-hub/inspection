@@ -114,29 +114,6 @@ export async function saveDraft(draft: CaptureDraft): Promise<void> {
   await transact(storeName, "readwrite", (store) => store.put({ ...metadata, blob: storedBytes, blobType: blob.type, schemaVersion: 1 }));
 }
 
-export async function persistDraftMediaStatus(draft: CaptureDraft, mediaStatus: string): Promise<CaptureDraft> {
-  const updated = { ...draft, mediaStatus };
-  const db = await open();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(storeName, "readwrite");
-      const store = transaction.objectStore(storeName);
-      const request = store.get(draft.id);
-      request.onsuccess = () => {
-        if (!valid(request.result)) {
-          transaction.abort();
-          return;
-        }
-        store.put({ ...request.result, mediaStatus });
-      };
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error ?? request.error);
-      transaction.onabort = () => reject(transaction.error ?? request.error ?? new Error("Não foi possível atualizar o status da foto salva."));
-    });
-  } finally { db.close(); }
-  return updated;
-}
-
 export async function loadDraft(id: string): Promise<CaptureDraft | undefined> {
   const value = await transact<unknown>(storeName, "readonly", (store) => store.get(id));
   if (valid(value)) return restoreBlob(value);

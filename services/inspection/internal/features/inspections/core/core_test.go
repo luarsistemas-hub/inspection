@@ -62,6 +62,28 @@ func TestUT022UT023InspectionStateMachine(t *testing.T) {
 	}
 }
 
+func TestAttentionInspectionTransitions(t *testing.T) {
+	allowed := [][2]string{
+		{StatusAnalyzing, StatusReviewRequired}, {StatusAnalyzing, StatusProcessingFailed},
+		{StatusReviewRequired, StatusAnalyzing}, {StatusReviewRequired, StatusReplacementPending},
+		{StatusProcessingFailed, StatusAnalyzing}, {StatusProcessingFailed, StatusReplacementPending},
+		{StatusReplacementPending, StatusAnalyzing}, {StatusReplacementPending, StatusReviewRequired},
+	}
+	for _, transition := range allowed {
+		if err := ValidateInspectionTransition(transition[0], transition[1], 1, ""); err != nil {
+			t.Errorf("transition %s -> %s rejected: %v", transition[0], transition[1], err)
+		}
+	}
+	for _, transition := range [][2]string{{StatusPlanned, StatusReviewRequired}, {StatusReplacementPending, StatusProcessingFailed}, {StatusReviewRequired, StatusCompleted}} {
+		if err := ValidateInspectionTransition(transition[0], transition[1], 1, ""); err == nil {
+			t.Errorf("transition %s -> %s unexpectedly allowed", transition[0], transition[1])
+		}
+	}
+	if got := statusesForGroup("ATTENTION"); len(got) != 3 {
+		t.Fatalf("attention group statuses = %v, want 3 states", got)
+	}
+}
+
 func TestInspectionListFiltersAndSearchEscaping(t *testing.T) {
 	if !validInspectionStatusGroup("") || !validInspectionStatusGroup("COMPLETED") || validInspectionStatusGroup("UNKNOWN") {
 		t.Fatal("inspection status group validation returned an unexpected result")

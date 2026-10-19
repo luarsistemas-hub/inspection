@@ -176,9 +176,12 @@ func run() error {
 	}
 	privateStore := objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}
 	detector := sensitivecontent.NewEmbeddedDetector()
-	if !cfg.ImageValidationEnabled {
-		log.Printf("inspection-worker: image validation disabled by INSPECTION_IMAGE_VALIDATION_ENABLED")
+	if source := cfg.SensitiveContentBypassSource(); source != "" {
+		log.Printf("inspection-worker: sensitive-content screening bypass enabled by %s", source)
 		detector = sensitivecontent.NewDisabledDetector()
+	}
+	if err := reportSensitiveScreeningState(runtimeDB, "inspection-worker", cfg.SensitiveContentBypassSource()); err != nil {
+		return fmt.Errorf("report sensitive screening state: %w", err)
 	}
 	mediaHandler, err := processmedia.Setup(processmedia.Dependencies{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}, Detector: detector})
 	if err != nil {
@@ -391,6 +394,11 @@ func run() error {
 			return err
 		}
 	})
+}
+
+func reportSensitiveScreeningState(db *gorm.DB, worker, source string) error {
+	return db.Exec(`INSERT INTO platform.worker_runtime_settings(worker,screening_bypassed,source_variable,reported_at)
+VALUES (?, ?, ?, now()) ON CONFLICT (worker) DO UPDATE SET screening_bypassed=EXCLUDED.screening_bypassed, source_variable=EXCLUDED.source_variable, reported_at=EXCLUDED.reported_at`, worker, source != "", source).Error
 }
 
 func inspectionCreatedHandler(inApp func(context.Context, *gorm.DB, events.RawEnvelope) error) func(context.Context, *gorm.DB, events.RawEnvelope) error {

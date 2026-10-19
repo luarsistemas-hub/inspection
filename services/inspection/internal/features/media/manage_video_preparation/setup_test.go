@@ -28,12 +28,12 @@ func TestPreparationStatusAndRetryAreFencedAndAudited(t *testing.T) {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	for _, schema := range []string{"media", "audit"} {
+	for _, schema := range []string{"media", "audit", "analysis", "inspections"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.VideoPreparationJob{}, &database.MediaObject{}, &database.VideoSource{}, &database.VideoFrame{}, &database.AuditEvent{}} {
+	for _, model := range []any{&database.VideoPreparationJob{}, &database.MediaObject{}, &database.VideoSource{}, &database.VideoFrame{}, &database.AuditEvent{}, &database.VideoPlan{}, &database.Inspection{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
