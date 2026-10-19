@@ -118,7 +118,7 @@ jobs:
           aws --endpoint-url http://localhost:9000 s3api head-bucket --bucket inspection-private 2>/dev/null || aws --endpoint-url http://localhost:9000 s3api create-bucket --bucket inspection-private
       - name: Run required video integration tests
         env:
-          INSPECTION_ENV: test
+          INSPECTION_ENV: local
           INSPECTION_TEST_AUTH_ENABLED: "true"
           INSPECTION_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable
           INSPECTION_TEST_MIGRATION_DATABASE_URL: postgres://inspection_migrator:inspection-migrator-ci@localhost:5432/inspection?sslmode=disable
