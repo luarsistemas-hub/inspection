@@ -1,8 +1,8 @@
-import { getAccessToken, getMembershipId } from "@/auth/session";
+import { accessTokenForRequest, getMembershipId } from "@/auth/session";
 
 /** Prepares the short-lived, same-origin cookie used by authenticated video playback. */
 export async function prepareVideoPlaybackSession(): Promise<void> {
-  const token = getAccessToken();
+  const token = await accessTokenForRequest();
   if (!token) throw new Error("Autenticação necessária");
   const membershipId = getMembershipId();
   const response = await fetch("/api/media/videos/session", {

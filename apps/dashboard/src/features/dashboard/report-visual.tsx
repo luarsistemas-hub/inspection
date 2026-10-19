@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@inspection/design-system";
 import type { CustomerEvidenceQuery, CustomerReportQuery, ReportWorkspaceQuery } from "@/graphql/generated";
-import { getAccessToken, getMembershipId } from "@/auth/session";
+import { accessTokenForRequest, getMembershipId } from "@/auth/session";
 import { prepareVideoPlaybackSession } from "@/auth/video-playback-session";
 import { presentAnalysisStatus, presentFindingCategory, presentClassification, presentNoRelevantChange } from "./presentation";
 
@@ -195,7 +195,7 @@ function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; o
     let createdURL: string | undefined;
     setBlobURL(undefined);
     const load = async () => {
-      const token = getAccessToken();
+      const token = await accessTokenForRequest();
       if (!token) throw new Error("missing access token");
       const endpoint = new URL(process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql");
       const target = new URL(url, endpoint.origin);

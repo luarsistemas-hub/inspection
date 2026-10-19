@@ -4,7 +4,7 @@ import { clearProtectedContext, clearSession, getAccessToken, setMembershipConte
 import { AdminIdentityDocument } from "@/graphql/generated";
 
 describe("Admin GraphQL transport", () => {
-  afterEach(() => { clearProtectedContext(); clearSession(); vi.unstubAllGlobals(); });
+  afterEach(() => { clearProtectedContext(); clearSession(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
   it("UT-071 sends only the in-memory Admin token and omits credentials", async () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1");
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { id: "1" } } }), { status: 200 }));
@@ -46,5 +46,25 @@ describe("Admin GraphQL transport", () => {
 
     expect(log).toHaveBeenCalledWith("[GraphQL] query AdminIdentity failed", { errors });
     log.mockRestore();
+  });
+  it("renews an expiring Admin token before the protected query", async () => {
+    vi.stubEnv("NEXT_PUBLIC_OIDC_TOKEN_URL", "https://id.example/token");
+    setSession("old", undefined, undefined, "refresh-1", 5);
+    setMembershipContext("membership-1");
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "new", refresh_token: "refresh-2", expires_in: 300 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { me: { id: "1" } } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    await graphql(AdminIdentityDocument);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[1][1] as RequestInit).headers).toMatchObject({ Authorization: "Bearer new", "X-Inspection-Membership-ID": "membership-1" });
+    expect(getAccessToken()).toBe("new");
+  });
+  it("keeps credentials on a temporary refresh outage", async () => {
+    vi.stubEnv("NEXT_PUBLIC_OIDC_TOKEN_URL", "https://id.example/token");
+    setSession("old", undefined, undefined, "refresh-1", 5);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 })));
+    await expect(graphqlIdentity(AdminIdentityDocument)).rejects.toThrow("Não foi possível renovar");
+    expect(getAccessToken()).toBe("old");
   });
 });
