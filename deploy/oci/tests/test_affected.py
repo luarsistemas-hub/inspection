@@ -2,6 +2,7 @@ import importlib.util
 import json
 import subprocess
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 MODULE = Path(__file__).parents[1] / "affected.py"
@@ -67,6 +68,75 @@ class AffectedTests(unittest.TestCase):
     def test_go_dependency_walk_finds_api_command(self):
         files = affected.go_inputs("api", "inspection-api")
         self.assertIn("services/inspection/cmd/inspection-api/main.go", files)
+        self.assertFalse(any(path.endswith("_test.go") for path in files))
+
+    def test_unlisted_or_deleted_production_go_source_selects_all_go_components(self):
+        paths = [
+            "services/inspection/cmd/inspection-worker/dashboard_projection.go",
+            "services/inspection/cmd/inspection-worker/triage_projection.go",
+            "libs/identity/removed.go",
+        ]
+        with patch.object(affected, "git", return_value="\n".join(paths)), patch.object(
+            affected, "go_inputs", return_value=set(paths)
+        ):
+            result = affected.resolve("base", "head")
+
+        self.assertEqual(
+            result["targets"],
+            ["api", "operations", "scheduler", "video-worker", "worker"],
+        )
+
+    def test_listed_go_source_uses_its_dependency_component(self):
+        path = "services/inspection/cmd/inspection-worker/main.go"
+
+        def go_inputs(component, _command):
+            return {path} if component == "worker" else set()
+
+        with patch.object(affected, "git", return_value=path), patch.object(
+            affected, "go_inputs", side_effect=go_inputs
+        ):
+            result = affected.resolve("base", "head")
+
+        self.assertEqual(result["targets"], ["worker"])
+
+    def test_go_tests_and_testdata_are_ignored(self):
+        paths = [
+            "services/inspection/internal/features/media/prepare_video/integration_fixture_test.go",
+            "services/inspection/internal/integration/harness/config.go",
+            "services/inspection/internal/integration/harness/fixtures.go",
+            "services/inspection/internal/integration/harness/harness.go",
+            "services/inspection/internal/integration/harness/README.md",
+            "services/inspection/internal/contracts/events/testdata/registry.json",
+            "libs/identity/identity_test.go",
+            "libs/identity/testdata/fixture.json",
+        ]
+        with patch.object(affected, "git", return_value="\n".join(paths)), patch.object(
+            affected, "go_inputs", return_value=set(paths)
+        ):
+            result = affected.resolve("base", "head")
+
+        self.assertEqual(result["targets"], [])
+
+    def test_inspection_build_docs_and_metadata_are_ignored(self):
+        paths = [
+            "services/inspection/Dockerfile",
+            "services/inspection/README.md",
+            "services/inspection/gqlgen.yml",
+            "services/inspection/operation-manifest.json",
+        ]
+        with patch.object(affected, "git", return_value="\n".join(paths)), patch.object(
+            affected, "go_inputs", return_value=set()
+        ):
+            result = affected.resolve("base", "head")
+
+        self.assertEqual(result["targets"], [])
+
+    def test_unknown_non_go_path_still_fails_closed(self):
+        with patch.object(affected, "git", return_value="deploy/oci/novo-arquivo.bin"), patch.object(
+            affected, "go_inputs", return_value=set()
+        ):
+            with self.assertRaisesRegex(ValueError, "Unclassified changed path"):
+                affected.resolve("base", "head")
 
 
 if __name__ == "__main__":

@@ -41,7 +41,7 @@ def go_inputs(component: str, command: str) -> set[str]:
         source = source[end:]
     result: set[str] = set()
     for package in packages:
-        for field in ("GoFiles", "CgoFiles", "EmbedFiles", "TestGoFiles", "XTestGoFiles"):
+        for field in ("GoFiles", "CgoFiles", "EmbedFiles"):
             for name in package.get(field, []):
                 path = (Path(package["Dir"]) / name).resolve()
                 try:
@@ -106,6 +106,9 @@ def resolve(base: str, head: str, requested_scope: str = "changed", targets: lis
             for name in go_components
         } if changed else {}
         for path in changed:
+            if matches(path, catalog["ignoredPaths"]):
+                recognized.add(path)
+                continue
             for name, spec in components.items():
                 if spec["kind"] in ("go", "go-tools"):
                     if path in go_file_sets[name]:
@@ -118,7 +121,17 @@ def resolve(base: str, head: str, requested_scope: str = "changed", targets: lis
                 if matches(path, rule["paths"]):
                     selected.update(rule["components"])
                     recognized.add(path)
-            if matches(path, catalog["ignoredPaths"]):
+            # go list only reports files that currently exist and belong to a
+            # build command. A removed or otherwise unlisted production Go file
+            # is still a source change, so conservatively rebuild every Go image.
+            if (
+                path.endswith(".go")
+                and not path.endswith("_test.go")
+                and (path.startswith("services/inspection/") or path.startswith("libs/"))
+                and not any(path in files for files in go_file_sets.values())
+                and not matches(path, ["services/inspection/**/testdata/**", "libs/**/testdata/**"])
+            ):
+                selected.update(go_components)
                 recognized.add(path)
         unknown = sorted(set(changed) - recognized)
         if unknown:
