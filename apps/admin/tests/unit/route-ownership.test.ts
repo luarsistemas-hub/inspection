@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { safeAdminPath } from "@/auth/return-path";
+import { hasAdminRouteAccess } from "@/auth/session";
 import { adminRoutes, legacyRedirects } from "@/routes";
 
 describe("UT-075 product route ownership", () => {
   it("keeps Admin routes separate from Dashboard and Capture concerns", () => {
-    expect(adminRoutes).toEqual(expect.arrayContaining(["/activate", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit", "/prompts"]));
+    expect(adminRoutes).toEqual(expect.arrayContaining(["/activate", "/organization", "/access", "/catalogs", "/assets", "/templates", "/video", "/video-operations", "/governance", "/audit", "/prompts"]));
+    expect(hasAdminRouteAccess("/video-operations", ["TENANT_ADMIN"])).toBe(true);
+    expect(hasAdminRouteAccess("/video-operations", ["GOVERNANCE_ADMIN", "AUDITOR"])).toBe(false);
     expect(adminRoutes).not.toContain("/reports");
     expect(adminRoutes).not.toContain("/capture/[linkToken]");
   });
@@ -13,6 +16,7 @@ describe("UT-075 product route ownership", () => {
 describe("C07 safe destinations", () => {
   it("UT-045 retains an owned prompt destination and its query", () => {
     expect(safeAdminPath("/prompts?source=bookmark")).toBe("/prompts?source=bookmark");
+    expect(safeAdminPath("/video?source=bookmark")).toBe("/video?source=bookmark");
   });
 
   it("UT-046 rejects external destinations", () => {

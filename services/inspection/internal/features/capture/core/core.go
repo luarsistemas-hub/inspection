@@ -35,6 +35,31 @@ type Requirement struct {
 	ComparisonTarget     string
 }
 
+// VideoMainRequirement returns the canonical participant upload slot for a video capture.
+func VideoMainRequirement(comparisonTarget string) Requirement {
+	return Requirement{
+		Key:                 "video:main",
+		Section:             "vistoria",
+		Label:               "Vídeo principal",
+		Instructions:        "Grave um único vídeo contínuo da vistoria.",
+		EvidenceKind:        "VIDEO",
+		Required:            true,
+		MinimumMedia:        1,
+		MaximumMedia:        1,
+		CaptureSourcePolicy: "CAMERA_DEFAULT",
+		ComparisonTarget:    comparisonTarget,
+	}
+}
+
+// VideoSupplementRequirement returns the canonical participant upload slot for a video recapture.
+func VideoSupplementRequirement(comparisonTarget, instructions string) Requirement {
+	requirement := VideoMainRequirement(comparisonTarget)
+	requirement.Key = "video:supplement"
+	requirement.Label = "Complemento em vídeo"
+	requirement.Instructions = instructions
+	return requirement
+}
+
 type Answer struct {
 	RequirementKey string
 	ReadyMedia     int

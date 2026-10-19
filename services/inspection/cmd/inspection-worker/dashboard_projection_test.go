@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	handlereportready "inspection/services/inspection/internal/features/reports/handle_report_ready"
 	"inspection/services/inspection/internal/platform/database"
 
 	"gorm.io/driver/sqlite"
@@ -28,14 +29,14 @@ func TestDashboardProjectionUpsertPreservesIdentityOnReplay(t *testing.T) {
 	}
 	tenant, inspection, originalID := identity.NewID(), identity.NewID(), identity.NewID()
 	first := database.DashboardInspection{ID: originalID, TenantID: tenant, InspectionID: inspection, AssetID: identity.NewID(), Classification: "NORMAL", Status: "PLANNED", Sequence: 1, UpdatedAt: time.Now()}
-	if err := upsertDashboardInspection(db, first); err != nil {
+	if err := handlereportready.UpsertDashboardInspection(db, first); err != nil {
 		t.Fatal(err)
 	}
 	updated := first
 	updated.ID = identity.NewID()
 	updated.Classification, updated.Status, updated.Sequence = "ATTENTION", "COMPLETED", 2
 	for range 2 {
-		if err := upsertDashboardInspection(db, updated); err != nil {
+		if err := handlereportready.UpsertDashboardInspection(db, updated); err != nil {
 			t.Fatal(err)
 		}
 	}

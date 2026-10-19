@@ -108,6 +108,15 @@ func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, 
 	var out View
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND id=? AND status IN ('PUBLISHED','ACTIVE')", tenantID, versionID).First(&out.Version).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			var existing database.TemplateVersion
+			if lookupErr := tx.Where("tenant_id=? AND id=?", tenantID, versionID).First(&existing).Error; errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "versionId", "template version not found")
+			} else if lookupErr != nil {
+				return lookupErr
+			}
 			return apperror.New(apperror.InvalidState, "versionId", "published template version required")
 		}
 		if out.Version.Status == "ACTIVE" {

@@ -15,6 +15,7 @@ import { RequestGuard } from "./request-guard";
 import { LLMUsagePage } from "../llm-usage/llm-usage-page";
 import { AddressFieldStyles, AddressForm, emptyPostalAddress, type PostalAddress, type PostalLookup } from "@inspection/address";
 import { AssetAttributeFields, normalizeAssetAttributes, type SegmentAttributeSchema } from "./asset-attributes";
+import { VideoOperationsPage } from "./video-operations-page";
 
 type Row = Record<string, string | number | null>;
 type Collection = { title: string; responsibility: string; columns: string[]; rows: Row[]; hasNextPage: boolean; endCursor: string | null };
@@ -30,6 +31,8 @@ const pages: Record<string, { title: string; responsibility: string; primary: st
   "/catalogs": { title: "Responsáveis pela vistoria", responsibility: "Responsáveis, contatos e segmentos", primary: "Criar responsável" },
   "/assets": { title: "Configuração de vistorias", responsibility: "Modelos de vistoria e imóveis", primary: "Registrar imóvel" },
   "/templates": { title: "Modelos de vistoria", responsibility: "Checklists reutilizáveis associados ao segmento do imóvel.", primary: "Novo modelo" },
+  "/video": { title: "Vídeo", responsibility: "Modalidade e limites de captura de vídeo desta imobiliária.", primary: "Salvar limites" },
+  "/video-operations": { title: "Operações de vídeo", responsibility: "Preparações, admissão e ações de retenção e revisão.", primary: "" },
   "/prompts": { title: "Prompts de análise", responsibility: "Instrução global usada pela análise visual de imóveis", primary: "Atualizar prompt" },
   "/governance": { title: "Governança", responsibility: "Publicação, entregas e retenção", primary: "Configurar política" },
   "/audit": { title: "Auditoria", responsibility: "Eventos, histórico, uso e exportações autorizadas", primary: "Exportar filtros" },
@@ -42,6 +45,8 @@ const navItems = [
   ["Responsáveis pela vistoria", "/catalogs"],
   ["Configuração", "/assets"],
   ["Modelos de vistoria", "/templates"],
+  ["Vídeo", "/video"],
+  ["Operações de vídeo", "/video-operations"],
   ["Prompts de análise", "/prompts"],
   ["Governança", "/governance"],
   ["Auditoria", "/audit"],
@@ -55,6 +60,8 @@ const navIcons: Record<(typeof navItems)[number][1], AdaptiveNavigationItem["ico
   "/catalogs": "clipboard-check",
   "/assets": "settings-2",
   "/templates": "file-text",
+  "/video": "camera",
+  "/video-operations": "settings-2",
   "/prompts": "sparkles",
   "/governance": "shield-check",
   "/audit": "history",
@@ -100,7 +107,7 @@ export function AdminShell({ section }: { section?: string }) {
   useEffect(() => { const controller = new AbortController(); void loadIdentity(controller.signal).catch((failure: GraphQLFailure) => setError(failure.code === "FORBIDDEN" || failure.code === "UNAUTHENTICATED" ? "Acesso administrativo não autorizado. Nenhuma configuração foi carregada." : failure.message)); return () => controller.abort(); }, [loadIdentity]);
 
   const load = useCallback(async () => {
-    if (!identityData || !hasAdminAccess() || !hasAdminRouteAccess(pathname, identityData.me.roles) || pathname === "/llm-usage" || pathname === "/templates") return; request.current?.abort(); const controller = new AbortController(); request.current = controller; const currentGeneration = collectionGuard.begin();
+    if (!identityData || !hasAdminAccess() || !hasAdminRouteAccess(pathname, identityData.me.roles) || pathname === "/llm-usage" || pathname === "/templates" || pathname === "/video" || pathname === "/video-operations") return; request.current?.abort(); const controller = new AbortController(); request.current = controller; const currentGeneration = collectionGuard.begin();
     setLoading(true); setError(undefined); const variables = { first: 25, after: cursor, search: query || null };
     try { let next: Collection;
       switch (pathname) {
@@ -125,7 +132,7 @@ export function AdminShell({ section }: { section?: string }) {
       if (collectionGuard.isCurrent(currentGeneration, controller.signal)) { setCollection(next); setStatus(`${next.title} atualizado. ${next.rows.length} registros visíveis.`); }
     } catch (failure) { if (!controller.signal.aborted && collectionGuard.isCurrent(currentGeneration)) setError(failureText(failure)); } finally { if (collectionGuard.isCurrent(currentGeneration)) setLoading(false); }
   }, [collectionGuard, cursor, identityData, pathname, query]);
-  useEffect(() => { if (!identityData || !hasAdminAccess() || !hasAdminRouteAccess(pathname, identityData.me.roles) || pathname === "/llm-usage") return; const timer = window.setTimeout(() => void load(), query ? 250 : 0); return () => { window.clearTimeout(timer); request.current?.abort(); }; }, [identityData, load, pathname, query]);
+  useEffect(() => { if (!identityData || !hasAdminAccess() || !hasAdminRouteAccess(pathname, identityData.me.roles) || pathname === "/llm-usage" || pathname === "/video" || pathname === "/video-operations") return; const timer = window.setTimeout(() => void load(), query ? 250 : 0); return () => { window.clearTimeout(timer); request.current?.abort(); }; }, [identityData, load, pathname, query]);
 
   const selectMembership = async (membershipId: string) => { if (!membershipOptions.some((item) => item.id === membershipId)) return; request.current?.abort(); collectionGuard.invalidate(); historyRequest.current?.abort(); historyGeneration.current += 1; clearProtectedContext(); setCollection(undefined); setDetail(undefined); setHistory(undefined); setHistoryError(undefined); setError(undefined); updateParams({ after: null }); setMembershipContext(membershipId); setStatus("Trocando o contexto de acesso. Os dados anteriores foram descartados."); try { const result = await graphql<G.AdminIdentityQuery>(G.AdminIdentityDocument); setIdentityData(result); establishIdentity(result); } catch (failure) { setError(failureText(failure)); } };
   const showHistory = async (item: Row, after: string | null = null, append = false) => { historyRequest.current?.abort(); const controller = new AbortController(); historyRequest.current = controller; const currentGeneration = ++historyGeneration.current; setDetail(item); if (!append) setHistory(undefined); setHistoryError(undefined); try { const result = await graphql<G.AdminHistoryQuery>(G.AdminHistoryDocument, { first: 25, after }, controller.signal); if (currentGeneration === historyGeneration.current && !controller.signal.aborted) { const events = result.auditEvents.nodes.filter((event) => isHistoryForResource(item, event.targetId)); setHistory((current) => ({ events: append && current ? [...current.events, ...events] : events, hasNextPage: result.auditEvents.pageInfo.hasNextPage, endCursor: result.auditEvents.pageInfo.endCursor })); } } catch (failure) { if (!controller.signal.aborted && currentGeneration === historyGeneration.current) setHistoryError(failureText(failure)); } };
@@ -138,7 +145,7 @@ export function AdminShell({ section }: { section?: string }) {
   const currentPolicyVersion = typeof policyVersion === "number" && Number.isSafeInteger(policyVersion) && policyVersion > 0 ? policyVersion : undefined;
   const primaryAction = () => {
     if (pathname === "/overview") return void router.push("/organization");
-    if (pathname === "/templates") return;
+    if (pathname === "/templates" || pathname === "/video") return;
     if (pathname === "/audit") return exportCsv();
     if (pathname === "/access" && !canInviteInternalUsers) return;
     setAction(pathname === "/organization" ? "unit" : pathname === "/access" ? "invite" : pathname === "/catalogs" ? "participant" : pathname === "/assets" ? "asset" : "policy");
@@ -174,8 +181,8 @@ export function AdminShell({ section }: { section?: string }) {
     <div className="admin-layout">
       <AdaptiveNavigation label="Navegação administrativa" activeHref={pathname} primaryItems={primaryAdminItems} secondaryItems={secondaryAdminItems} desktopCollapsed={desktopNavigationCollapsed} onDesktopCollapsedChange={changeDesktopNavigationCollapsed} renderLink={(item, className, onNavigate) => item.href.startsWith("/") ? <Link key={item.href} aria-current={pathname === item.href ? "page" : undefined} aria-label={item.label} className={className} href={item.href} title={item.label} onClick={onNavigate} prefetch={false}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></Link> : <a key={item.href} aria-label={item.label} className={className} href={item.href} title={item.label} onClick={onNavigate}><span className="inspection-adaptive-navigation__icon"><Icon name={item.icon} size={22} /></span><span>{item.label}</span></a>} />
       <section id="admin-content" className="admin-content" aria-labelledby="page-title">
-        <PageHeader id="page-title" emphasis="plain" breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={pathname === "/overview" ? page.title : section ?? page.title} description={page.responsibility} descriptionMode="disclosure" actions={pathname === "/llm-usage" || pathname === "/templates" || (pathname === "/access" && !canInviteInternalUsers) ? null : <Button disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
-        {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !routePermitted || (pathname === "/prompts" && !promptPermitted) ? <Recovery kind="denied" title="Acesso restrito">Você não tem permissão para acessar este recurso neste escopo.</Recovery> : pathname === "/prompts" ? error ? <Recovery kind="error" title="Não foi possível carregar o prompt" onRetry={() => void load()}>{error}</Recovery> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : pathname === "/templates" ? <TemplateEditorPage /> : <>
+        <PageHeader id="page-title" emphasis="plain" breadcrumbs={<><Link href="/overview">Administração</Link><span aria-hidden="true">/</span><span>{page.title}</span></>} title={pathname === "/overview" ? page.title : section ?? page.title} description={page.responsibility} descriptionMode="disclosure" actions={pathname === "/llm-usage" || pathname === "/templates" || pathname === "/video-operations" || (pathname === "/access" && !canInviteInternalUsers) ? null : <Button disabled={!routePermitted || loading || pathname === "/prompts" || (pathname === "/audit" && !collection)} onClick={primaryAction} isPending={loading && pathname === "/overview"} pendingLabel="Atualizando…">{page.primary}</Button>} />
+        {pathname === "/llm-usage" ? <LLMUsagePage permitted={Boolean(identityData?.me.canViewLLMCosts)} /> : !routePermitted || (pathname === "/prompts" && !promptPermitted) ? <Recovery kind="denied" title="Acesso restrito">Você não tem permissão para acessar este recurso neste escopo.</Recovery> : pathname === "/prompts" ? error ? <Recovery kind="error" title="Não foi possível carregar o prompt" onRetry={() => void load()}>{error}</Recovery> : <AnalysisPromptEditor prompt={analysisPrompt} onSaved={() => { setCollection(undefined); void load(); }} /> : pathname === "/templates" ? <TemplateEditorPage /> : pathname === "/video" ? <VideoPolicyPage /> : pathname === "/video-operations" ? <VideoOperationsPage /> : <>
           {pathname !== "/overview" && <div className="collection-toolbar"><Field label={pathname === "/organization" ? "Buscar unidade" : "Buscar nesta coleção"}><Input value={query} onChange={(event) => updateParams({ search: event.target.value || null, after: null })} placeholder={pathname === "/organization" ? "Nome ou código da unidade" : pathname === "/assets" ? "Nome, código, endereço, CEP ou cidade" : "Nome, identificador ou contexto"} /></Field>{query && <Button variant="secondary" onClick={() => updateParams({ search: null, after: null })}>Limpar busca</Button>}</div>}
           <p role="status" className="status-line">{loading ? `Carregando ${page.title.toLowerCase()}…` : status}</p>
           {error ? <Recovery kind="error" title="Não foi possível carregar a coleção" onRetry={() => void load()}>{error}</Recovery> : pathname === "/overview" ? <AdminOverview data={collection} tenantName={tenantName} /> : <div className="admin-focus-workspace"><div className="admin-focus-list"><CollectionView data={visibleCollection} query={query} tenantName={tenantName} focusedRowId={focusedRowId} onFocus={setFocusedRowId} onHistory={showHistory} onNext={(after) => updateParams({ after })} /></div>{visibleCollection?.rows.length ? <AdminFocusDetail data={visibleCollection} focusedRowId={focusedRowId} onHistory={showHistory} /> : null}</div>}
@@ -194,12 +201,13 @@ function AdminGate({ title, description, children }: { title: string; descriptio
 }
 
 type TemplateRequirementDraft = { key: string; section: string; label: string; instructions: string; minimumCount: number; maximumCount: number; preserved?: Record<string, unknown> };
-type TemplateDefinitionDraft = { schemaVersion: number; segmentVersionId: string; participantRoles: string[]; defaultComparisonMode: string; requirements: Array<Record<string, unknown>>; analysisType: "REAL_ESTATE"; policy: { gpsRequired: boolean; geofenceMeters: number; allowGallery: boolean } };
+type TemplateDefinitionDraft = { schemaVersion: number; segmentVersionId: string; participantRoles: string[]; defaultComparisonMode: string; isVideo?: boolean; requirements: Array<Record<string, unknown>>; analysisType: "REAL_ESTATE"; policy: { gpsRequired: boolean; geofenceMeters: number; allowGallery: boolean } };
 
 function TemplateEditorPage() {
   const [catalogs, setCatalogs] = useState<G.AdminCatalogsQuery>();
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+  const [isVideo, setIsVideo] = useState(false);
   const [segmentVersionId, setSegmentVersionId] = useState("");
   const [key, setKey] = useState(""); const [name, setName] = useState("");
   const [requirements, setRequirements] = useState<TemplateRequirementDraft[]>([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]);
@@ -227,6 +235,7 @@ function TemplateEditorPage() {
     void graphql<G.AdminTemplateVersionQuery>(G.AdminTemplateVersionDocument, { id: activeVersionId }).then((result) => {
       if (cancelled || !result.templateVersion) return;
       const definition = result.templateVersion.definition as TemplateDefinitionDraft;
+      setIsVideo(Boolean(definition.isVideo));
       setKey(selectedTemplateKey ?? ""); setName(selectedTemplateName ?? ""); setSegmentVersionId(definition.segmentVersionId);
       if (definition.participantRoles?.length) setParticipantRoles(definition.participantRoles); setComparisonMode(definition.defaultComparisonMode || "CHECKLIST_ONLY");
       setRequirements(definition.requirements.map((requirement) => ({ key: String(requirement.key), section: String(requirement.section), label: String(requirement.label), instructions: String(requirement.instructions ?? ""), minimumCount: Number(requirement.minimumCount ?? 0), maximumCount: Number(requirement.maximumCount ?? 5), preserved: requirement })));
@@ -236,14 +245,14 @@ function TemplateEditorPage() {
     return () => { cancelled = true; };
   }, [activeVersionId, selectedTemplateKey, selectedTemplateName]);
 
-  const resetDraft = () => { setIsEditingTemplate(true); setSelectedTemplateId(""); setKey(""); setName(""); setRequirements([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]); setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY"); setError(""); setStatus("Novo modelo: escolha um segmento e monte o checklist."); };
+  const resetDraft = () => { setIsEditingTemplate(true); setSelectedTemplateId(""); setKey(""); setName(""); setIsVideo(false); setRequirements([{ key: "overview", section: "Geral", label: "Visão geral", instructions: "", minimumCount: 1, maximumCount: 5 }]); setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY"); setError(""); setStatus("Novo modelo: escolha um segmento e monte o checklist."); };
   const updateRequirement = (index: number, field: keyof TemplateRequirementDraft, value: string) => setRequirements((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "minimumCount" || field === "maximumCount" ? Number(value) : value } : item));
   const publish = async (event: FormEvent) => {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     const clientMutationId = `template-publish-${crypto.randomUUID()}`;
     const definition: TemplateDefinitionDraft = {
-      schemaVersion: 1, segmentVersionId, participantRoles, defaultComparisonMode: comparisonMode,
+      schemaVersion: 1, segmentVersionId, participantRoles, defaultComparisonMode: comparisonMode, isVideo,
       requirements: requirements.map(({ preserved, ...requirement }) => ({ evidenceKind: "PHOTO", required: true, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", ...preserved, ...requirement })),
       analysisType: "REAL_ESTATE", policy: { gpsRequired, geofenceMeters, allowGallery },
     };
@@ -267,12 +276,23 @@ function TemplateEditorPage() {
       <Field label="Chave do modelo" required><Input required value={key} onChange={(event) => setKey(event.target.value)} disabled={Boolean(selectedTemplateId)} /></Field>
       <Field label="Nome do modelo" required><Input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
       <Field label="Segmento do imóvel" required><Select required value={segmentVersionId} onChange={(event) => setSegmentVersionId(event.target.value)}>{catalogs?.segmentDefinitions.nodes.filter((segment) => segment.activeVersionId).map((segment) => <option key={segment.id} value={segment.activeVersionId!}>{segment.name} · {segment.key}</option>)}</Select></Field>
+      <fieldset className="template-policy"><legend>Modalidade</legend><Checkbox label="Inspeção por vídeo contínuo" checked={isVideo} onChange={(event) => setIsVideo(event.target.checked)} /><p>A modalidade fica fixa na versão publicada do modelo.</p></fieldset>
       <fieldset className="template-requirements"><legend>Checklist de captura</legend><p>A comparação e o vínculo com projeto são escolhidos na vistoria, então este modelo define somente os itens de captura.</p>{requirements.map((requirement, index) => <fieldset className="template-requirement" key={`${index}-${requirement.key}`}><legend>Item {index + 1}</legend><Field label="Chave" required><Input required value={requirement.key} onChange={(event) => updateRequirement(index, "key", event.target.value)} /></Field><Field label="Seção" required><Input required value={requirement.section} onChange={(event) => updateRequirement(index, "section", event.target.value)} /></Field><Field label="O que fotografar" required><Input required value={requirement.label} onChange={(event) => updateRequirement(index, "label", event.target.value)} /></Field><Field label="Orientação"><Textarea value={requirement.instructions} onChange={(event) => updateRequirement(index, "instructions", event.target.value)} /></Field><div className="template-count-fields"><Field label="Mínimo de fotos"><Input type="number" min={0} max={200} value={requirement.minimumCount} onChange={(event) => updateRequirement(index, "minimumCount", event.target.value)} /></Field><Field label="Máximo de fotos"><Input type="number" min={1} max={200} value={requirement.maximumCount} onChange={(event) => updateRequirement(index, "maximumCount", event.target.value)} /></Field></div><Button type="button" variant="secondary" disabled={requirements.length <= 1} onClick={() => setRequirements((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remover item</Button></fieldset>)}<Button type="button" variant="secondary" onClick={() => setRequirements((current) => [...current, { key: `item-${current.length + 1}`, section: "Geral", label: "Novo item", instructions: "", minimumCount: 0, maximumCount: 5 }])}>Adicionar item</Button></fieldset>
       <fieldset className="template-policy"><legend>Captura</legend><Checkbox label="Exigir localização GPS" checked={gpsRequired} onChange={(event) => setGpsRequired(event.target.checked)} /><Checkbox label="Permitir escolher fotos da galeria" checked={allowGallery} onChange={(event) => setAllowGallery(event.target.checked)} /><Field label="Raio permitido em metros"><Input type="number" min={25} max={10000} value={geofenceMeters} onChange={(event) => setGeofenceMeters(Number(event.target.value))} /></Field></fieldset>
       {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" isPending={busy} pendingLabel="Publicando e ativando…" disabled={!catalogs?.segmentDefinitions.nodes.some((segment) => segment.activeVersionId === segmentVersionId)}>Publicar nova versão do modelo</Button>
     </form> : <section className="admin-template-summary"><span className="admin-focus-eyebrow">Modelo selecionado</span><h2>{selectedTemplate?.name ?? "Seus modelos de vistoria"}</h2><dl><div><dt>Nome do modelo</dt><dd>{selectedTemplate?.name ?? "Selecione um modelo abaixo ou crie um novo."}</dd></div><div><dt>Chave</dt><dd>{key || "—"}</dd></div></dl><div className="admin-template-checklist"><div className="admin-template-checklist-heading"><h3>Checklist de captura</h3>{selectedTemplate && <Button type="button" variant="secondary" onClick={() => setIsEditingTemplate(true)}>Editar</Button>}</div><p>{selectedTemplate ? `${requirements.length} item(ns) · ${catalogs?.segmentDefinitions.nodes.find((segment) => segment.activeVersionId === segmentVersionId)?.name ?? "Segmento do imóvel"}` : "O checklist aparece após selecionar um modelo."}</p>{selectedTemplate && <button className="admin-template-open" type="button" onClick={() => setIsEditingTemplate(true)}>Abrir checklist →</button>}</div></section>}<aside className="admin-focus-detail admin-template-detail"><span className="admin-focus-eyebrow">Identificação</span><h2>{selectedTemplate?.name ?? "Novo modelo"}</h2><dl><div><dt>Chave</dt><dd>{key || "A definir"}</dd></div><div><dt>Segmento</dt><dd>{catalogs?.segmentDefinitions.nodes.find((segment) => segment.activeVersionId === segmentVersionId)?.name ?? "A definir"}</dd></div><div><dt>Checklist</dt><dd>{requirements.length} item(ns) de captura</dd></div><div><dt>Versão</dt><dd>{selectedTemplate?.version ?? "Nova"}</dd></div></dl></aside></div>
     <h2>Modelos ativos</h2><ul className="admin-template-list">{catalogs?.templates.nodes.map((template) => <li key={template.id}><div><strong>{template.name}</strong><span>{template.key} · v{template.version} · {template.activeVersionId ? "Ativo" : "Sem versão ativa"}</span></div><Button type="button" variant="secondary" onClick={() => { setSelectedTemplateId(template.id); setIsEditingTemplate(false); }}>Abrir modelo</Button></li>)}</ul>
   </div>;
+}
+
+function VideoPolicyPage() {
+  const [policy, setPolicy] = useState<G.AdminVideoPolicyQuery["videoPolicy"]>();
+  const [duration, setDuration] = useState(15); const [originDays, setOriginDays] = useState(30); const [currentDays, setCurrentDays] = useState(5);
+  const [busy, setBusy] = useState(false); const [error, setError] = useState<string>(); const [status, setStatus] = useState("Carregando limites efetivos…");
+  const load = useCallback(async () => { try { const result=await graphql<G.AdminVideoPolicyQuery>(G.AdminVideoPolicyDocument); setPolicy(result.videoPolicy); setDuration(result.videoPolicy.maxDurationMinutes); setOriginDays(result.videoPolicy.originRetentionDays); setCurrentDays(result.videoPolicy.currentRetentionDays); setStatus(`Versão ${result.videoPolicy.version} carregada. Os valores novos se aplicam às próximas tentativas e aos próximos vídeos preparados.`); setError(undefined); } catch(failure){setError(failureText(failure));setStatus("Não foi possível carregar os limites.");} },[]);
+  useEffect(()=>{void load();},[load]);
+  const save=async(event:FormEvent)=>{event.preventDefault();if(!policy||busy)return;setBusy(true);setError(undefined);try{const result=await graphql<G.AdminConfigureVideoPolicyMutation>(G.AdminConfigureVideoPolicyDocument,{input:{maxDurationMinutes:duration,originRetentionDays:originDays,currentRetentionDays:currentDays,expectedVersion:policy.version,clientMutationId:`video-policy-${crypto.randomUUID()}`}});const payload=result.configureVideoPolicy;if(payload.userErrors.length||!payload.policy)throw new Error(payload.userErrors[0]?.message??"Não foi possível salvar os limites.");await load();}catch(failure){setError(failureText(failure));}finally{setBusy(false);}};
+  return <section className="admin-form"><p role="status">{status}</p><p>Valores padrão: 15 minutos por vídeo, 30 dias para origens e 5 dias para vídeos atuais e complementares. A duração aceita até 60 minutos; a retenção aceita de 1 a 36500 dias.</p><form onSubmit={save}><Field label="Duração máxima por vídeo (minutos)"><Input type="number" min={1} max={60} step={1} required value={duration} onChange={event=>setDuration(Number(event.target.value))}/></Field><Field label="Retenção dos vídeos de origem (dias)"><Input type="number" min={1} max={36500} step={1} required value={originDays} onChange={event=>setOriginDays(Number(event.target.value))}/></Field><Field label="Retenção dos vídeos atuais e complementares (dias)"><Input type="number" min={1} max={36500} step={1} required value={currentDays} onChange={event=>setCurrentDays(Number(event.target.value))}/></Field>{error&&<Alert tone="danger">{error}</Alert>}<Button type="submit" disabled={busy||!policy} isPending={busy} pendingLabel="Salvando limites…">Salvar limites de vídeo</Button></form></section>;
 }
 
 function AnalysisPromptEditor({ prompt, onSaved }: { prompt?: G.AdminAnalysisPromptQuery["analysisPrompt"]; onSaved: () => void }) {

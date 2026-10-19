@@ -12,6 +12,7 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/i
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-prompt-seed ./services/inspection/cmd/inspection-prompt-seed && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-seed ./services/inspection/cmd/inspection-seed && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-worker ./services/inspection/cmd/inspection-worker && \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-video-worker ./services/inspection/cmd/inspection-video-worker && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-scheduler ./services/inspection/cmd/inspection-scheduler && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-schema-check ./services/inspection/cmd/inspection-schema-check && \
     GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -trimpath -o /out/inspection-keycloak-check ./services/inspection/cmd/inspection-keycloak-check
@@ -24,6 +25,13 @@ USER inspection
 
 FROM runtime AS prebuilt
 COPY --chown=inspection:inspection .build/oci-bin/ /usr/local/bin/
+
+FROM runtime AS video-worker
+USER root
+RUN apk add --no-cache ffmpeg && mkdir -p /var/lib/inspection-video-scratch && chown inspection:inspection /var/lib/inspection-video-scratch
+USER inspection
+COPY --from=build --chown=inspection:inspection /out/inspection-video-worker /usr/local/bin/inspection-video-worker
+ENTRYPOINT ["/usr/local/bin/inspection-video-worker"]
 
 FROM runtime AS local
 COPY --from=build /out /usr/local/bin

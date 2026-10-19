@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@inspection/design-system";
 import type { CustomerEvidenceQuery, CustomerReportQuery, ReportWorkspaceQuery } from "@/graphql/generated";
+import { getAccessToken, getMembershipId } from "@/auth/session";
+import { prepareVideoPlaybackSession } from "@/auth/video-playback-session";
 import { presentAnalysisStatus, presentFindingCategory, presentClassification, presentNoRelevantChange } from "./presentation";
 
 type InternalReport = NonNullable<ReportWorkspaceQuery["report"]>;
@@ -36,7 +38,7 @@ export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, do
     <div className="report-details">
       <details><summary>Dados do imóvel e da vistoria</summary><p>{report.context.asset.externalKey} · Responsável: {report.context.participant?.name}<br />{report.context.template?.name} · v{report.context.template?.version}{report.context.inspection?.stageLabel && <> · {report.context.inspection.stageLabel}</>}</p></details>
     </div>
-    <ReportSections key={report.id} requirements={report.requirements} evidence={report.evidence} findings={report.findings} onMediaError={onMediaError} />
+    <ReportSections key={report.id} requirements={report.requirements} evidence={report.evidence.nodes} findings={report.findings} onMediaError={onMediaError} />
   </article>;
 }
 
@@ -58,7 +60,7 @@ function CustomerReportHeader({ classification, advisory, context, version }: { 
 const UNMATCHED_SECTION = "\u0000unmatched";
 const UNMATCHED_LABEL = "Evidências adicionais";
 
-function ReportSections({ requirements, evidence, findings, onMediaError }: { requirements: InternalReport["requirements"]; evidence: InternalReport["evidence"]; findings: InternalReport["findings"]; onMediaError?: () => void }) {
+function ReportSections({ requirements, evidence, findings, onMediaError }: { requirements: InternalReport["requirements"]; evidence: InternalReport["evidence"]["nodes"]; findings: InternalReport["findings"]; onMediaError?: () => void }) {
   const { sections, counts, unmatched } = useMemo(() => {
     const names = [...new Set(requirements.map((requirement) => requirement.section))];
     const unmatchedItems = unmatchedReportEvidence(requirements, evidence);
@@ -92,7 +94,9 @@ function ReportSections({ requirements, evidence, findings, onMediaError }: { re
   </div>;
 }
 
-function ReportEvidence({ requirements, evidence, findings, onMediaError }: { requirements: Array<{ key: string; section: string; label: string; instructions?: string | null; noRelevantChange?: boolean | null; analysisMode: string; analysisStatus: string }>; evidence: Array<{ id: string; requirementKey: string; role: string; description?: string | null; capturedAt?: string | null; flags: string[]; availability: string; url?: string | null }>; findings: Array<{ category?: string; title: string; description: string; severity: string; recommendedAction: string; evidenceIds: string[] }>; onMediaError?: () => void }) {
+type ReportEvidenceItem = { id: string; requirementKey: string; role: string; description?: string | null; capturedAt?: string | null; flags: string[]; availability: string; sourceAvailability?: string | null; url?: string | null; evidenceKind?: string | null; frameId?: string | null; timestampMs?: number | null; ptsMicros?: string | null; sourceMediaId?: string | null; component?: string | null; label?: string | null };
+
+function ReportEvidence({ requirements, evidence, findings, onMediaError }: { requirements: Array<{ key: string; section: string; label: string; instructions?: string | null; noRelevantChange?: boolean | null; analysisMode: string; analysisStatus: string }>; evidence: ReportEvidenceItem[]; findings: Array<{ category?: string; title: string; description: string; severity: string; recommendedAction: string; evidenceIds: string[] }>; onMediaError?: () => void }) {
   const unmatched = unmatchedReportEvidence(requirements, evidence);
   const unmatchedReference = unmatched.filter((item) => item.role === "REFERENCE");
   const unmatchedCurrent = unmatched.filter((item) => item.role !== "REFERENCE");
@@ -105,6 +109,7 @@ function ReportEvidence({ requirements, evidence, findings, onMediaError }: { re
       return <section className="report-requirement" key={requirement.key}>
         <header className="report-requirement-heading"><div><span>{requirement.section}</span><h3>{requirement.label}</h3>{requirement.instructions && <p>{requirement.instructions}</p>}</div><small>{presentAnalysisStatus(requirement.analysisStatus)}{related.length === 0 && requirement.analysisMode === "COMPARE_ORIGIN_CURRENT" && requirement.noRelevantChange !== null && <> · {presentNoRelevantChange(requirement.noRelevantChange)}</>}</small></header>
         <div className={`report-requirement-body${related.length ? "" : " report-requirement-body--without-findings"}`}>
+          {requirement.analysisMode === "CURRENT_ONLY" && <p className="report-no-baseline">Esta análise mostra apenas a condição observada agora; não há referência histórica para comparar.</p>}
           {related.length > 0 && <section className="report-findings" aria-label={`Constatações de ${requirement.label}`}>{related.map((finding) => <article key={`${finding.title}-${finding.description}`}><span>{presentFindingCategory(finding.category)} · {finding.severity}</span><h4>{finding.title}</h4><p>{finding.description}</p><p><strong>Ação recomendada</strong> · {finding.recommendedAction}</p></article>)}</section>}
           <div className="report-comparison">{reference.length > 0 && <EvidenceColumn title="Referência" items={reference} onMediaError={onMediaError} />}<EvidenceColumn title={reference.length > 0 ? "Vistoria atual" : "Fotos da vistoria"} items={current} onMediaError={onMediaError} /></div>
           {related.length === 0 && requirement.analysisStatus === "COMPLETED" && <p className="report-no-findings">Nenhuma constatação foi registrada; isso não confirma a ausência de problemas.</p>}
@@ -123,6 +128,88 @@ export function unmatchedReportEvidence<T extends { requirementKey: string }>(re
   return evidence.filter((item) => !requirementKeys.has(item.requirementKey));
 }
 
-function EvidenceColumn({ title, items, onMediaError }: { title: string; items: Array<{ id: string; description?: string | null; capturedAt?: string | null; flags: string[]; availability: string; url?: string | null }>; onMediaError?: () => void }) {
-  return <section className="report-evidence-column"><h4>{title}</h4>{items.length ? <div className="report-image-grid">{items.map((item) => <figure key={item.id}>{item.availability === "AVAILABLE" && item.url ? <img src={item.url} loading="lazy" alt={item.description ? `${title}: ${item.description}` : title} onError={() => onMediaError?.()} /> : <div className="report-image-missing">Imagem indisponível</div>}<figcaption>{item.description ?? "Sem descrição"}{item.capturedAt && <small>{new Date(item.capturedAt).toLocaleString("pt-BR")}</small>}{item.flags.length > 0 && <small>{item.flags.join(" · ")}</small>}</figcaption></figure>)}</div> : <p className="report-empty">Nenhuma imagem para esta etapa.</p>}</section>;
+function EvidenceColumn({ title, items, onMediaError }: { title: string; items: ReportEvidenceItem[]; onMediaError?: () => void }) {
+  const videoEvidence = items.some(isVideoEvidence);
+  return <section className="report-evidence-column"><h4>{videoEvidence ? (title === "Referência" ? "ORIGEM" : "ATUAL") : title}</h4>{items.length ? <div className="report-image-grid">{items.map((item) => <figure key={`${item.id}:${item.url ?? ""}`}>{item.availability === "AVAILABLE" && item.url ? <EvidenceImage url={item.url} alt={item.description ? `${title}: ${item.description}` : title} onMediaError={onMediaError} /> : <div className="report-image-missing">Imagem indisponível</div>}{isVideoEvidence(item) && <VideoEvidencePlayer item={item} onMediaError={onMediaError} /> }<figcaption>{item.description ?? item.label ?? "Sem descrição"}{(item.component || item.timestampMs !== null && item.timestampMs !== undefined || item.frameId) && <small>{[item.component, formatVideoTime(item.timestampMs), item.frameId ? `Frame ${shortFrameId(item.frameId)}` : undefined].filter(Boolean).join(" · ")}</small>}{item.ptsMicros && <small>PTS {formatVideoTime(Number(item.ptsMicros) / 1000)}</small>}{item.capturedAt && <small>{new Date(item.capturedAt).toLocaleString("pt-BR")}</small>}{(item.sourceAvailability === "EXPIRED" || item.sourceAvailability === "MISSING") && isVideoEvidence(item) && <small>Vídeo original expirado; frame preservado.</small>}{item.flags.length > 0 && <small>{item.flags.join(" · ")}</small>}</figcaption></figure>)}</div> : <p className="report-empty">Nenhuma imagem para esta etapa.</p>}</section>;
+}
+
+function isVideoEvidence(item: ReportEvidenceItem): boolean { return item.evidenceKind === "VIDEO_FRAME" && Boolean(item.sourceMediaId); }
+function formatVideoTime(timestampMs?: number | null): string | undefined {
+  if (timestampMs === null || timestampMs === undefined || !Number.isFinite(timestampMs) || timestampMs < 0) return undefined;
+  const seconds = Math.floor(timestampMs / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+function shortFrameId(frameId: string): string { return frameId.slice(0, 8); }
+
+export function VideoEvidencePlayer({ item, onMediaError }: { item: ReportEvidenceItem; onMediaError?: () => void }) {
+  const [active, setActive] = useState(false);
+  const [state, setState] = useState<"idle" | "preparing" | "playing" | "unavailable" | "unsupported">("idle");
+  const [sessionReady, setSessionReady] = useState(false);
+  const [seekUnavailable, setSeekUnavailable] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const expired = item.sourceAvailability === "EXPIRED" || item.sourceAvailability === "MISSING";
+  const timestampMs = item.timestampMs;
+  const validTimestamp = timestampMs !== null && timestampMs !== undefined && Number.isFinite(timestampMs) && timestampMs >= 0;
+  const endpoint = item.sourceMediaId ? `/api/media/videos/${encodeURIComponent(item.sourceMediaId)}/content` : "";
+
+  const activate = async () => {
+    setActive(true);
+    if (expired) { setState("unavailable"); return; }
+    if (!validTimestamp || !endpoint) { setSeekUnavailable(true); setState("unavailable"); return; }
+    setState("preparing");
+    try {
+      await prepareVideoPlaybackSession();
+      setSessionReady(true);
+      setState("playing");
+    } catch {
+      setState("unavailable");
+      onMediaError?.();
+    }
+  };
+
+  const seekToEvidence = () => {
+    const video = videoRef.current;
+    if (!video || !validTimestamp || timestampMs === null || timestampMs === undefined) return;
+    if (!Number.isFinite(video.duration) || timestampMs / 1000 >= video.duration) { setSeekUnavailable(true); setState("unavailable"); return; }
+    video.currentTime = timestampMs / 1000;
+  };
+
+  return <div className="report-video-player">
+    {!expired && !active && <button type="button" className="report-video-activate" onClick={() => void activate()} aria-label={`Reproduzir vídeo no ponto ${formatVideoTime(timestampMs) ?? "indisponível"}`}>Reproduzir vídeo · {formatVideoTime(timestampMs) ?? "tempo indisponível"}</button>}
+    {expired && <p role="status">Vídeo original expirado; o frame retido continua disponível.</p>}
+    {active && seekUnavailable && <p role="status">Evidência de vídeo indisponível neste timestamp.</p>}
+    {active && state === "preparing" && <p role="status">Preparando reprodução…</p>}
+    {active && state === "unavailable" && !expired && !seekUnavailable && <p role="status">Não foi possível carregar o vídeo. O frame retido continua disponível.</p>}
+    {active && sessionReady && !expired && !seekUnavailable && validTimestamp && endpoint && <div className="report-video-controls"><video ref={videoRef} src={endpoint} preload="metadata" controls playsInline aria-label={`Vídeo da evidência ${item.label ?? item.component ?? shortFrameId(item.frameId ?? item.id)}`} onLoadedMetadata={seekToEvidence} onError={() => { setState("unsupported"); onMediaError?.(); }} /><button type="button" onClick={seekToEvidence}>Ir para {formatVideoTime(timestampMs)}</button>{state === "unsupported" && <p role="status">Este navegador não reproduz o vídeo. As imagens e constatações continuam disponíveis.</p>}</div>}
+  </div>;
+}
+
+function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; onMediaError?: () => void }) {
+  const [blobURL, setBlobURL] = useState<string>();
+  const onError = useRef(onMediaError);
+  useEffect(() => { onError.current = onMediaError; }, [onMediaError]);
+  const authenticatedFrame = url.startsWith("/media/video-evidence/");
+  useEffect(() => {
+    if (!authenticatedFrame) return;
+    const controller = new AbortController();
+    let createdURL: string | undefined;
+    setBlobURL(undefined);
+    const load = async () => {
+      const token = getAccessToken();
+      if (!token) throw new Error("missing access token");
+      const endpoint = new URL(process.env.NEXT_PUBLIC_INSPECTION_API_URL ?? "http://localhost:8080/graphql");
+      const target = new URL(url, endpoint.origin);
+      const membership = getMembershipId();
+      const response = await fetch(target, { signal: controller.signal, credentials: "omit", headers: { Authorization: `Bearer ${token}`, ...(membership ? { "X-Inspection-Membership-ID": membership } : {}) } });
+      if (!response.ok) throw new Error("frame unavailable");
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) throw new Error("invalid frame content");
+      createdURL = URL.createObjectURL(blob);
+      if (!controller.signal.aborted) setBlobURL(createdURL);
+    };
+    void load().catch(() => { if (!controller.signal.aborted) onError.current?.(); });
+    return () => { controller.abort(); if (createdURL) URL.revokeObjectURL(createdURL); };
+  }, [authenticatedFrame, url]);
+  if (authenticatedFrame && !blobURL) return <div className="report-image-missing">Carregando frame…</div>;
+  return <img src={authenticatedFrame ? blobURL : url} loading="lazy" alt={alt} onError={() => onMediaError?.()} />;
 }

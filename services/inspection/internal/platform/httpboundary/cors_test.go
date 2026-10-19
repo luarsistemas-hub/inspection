@@ -47,7 +47,7 @@ func TestCORSAllowsCredentialsAndCSRFHeaderForEveryConfiguredOrigin(t *testing.T
 	if admin.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatal("admin origin missing credential permission")
 	}
-	if admin.Header().Get("Access-Control-Expose-Headers") != "X-CSRF-Token" {
+	if !containsHeader(admin.Header().Get("Access-Control-Expose-Headers"), "X-CSRF-Token") {
 		t.Fatal("admin origin cannot read CSRF token header")
 	}
 	capture := httptest.NewRecorder()
@@ -57,7 +57,20 @@ func TestCORSAllowsCredentialsAndCSRFHeaderForEveryConfiguredOrigin(t *testing.T
 	if capture.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatal("capture origin missing credential permission")
 	}
-	if capture.Header().Get("Access-Control-Expose-Headers") != "X-CSRF-Token" {
+	if !containsHeader(capture.Header().Get("Access-Control-Expose-Headers"), "X-CSRF-Token") {
 		t.Fatal("capture origin cannot read CSRF token header")
+	}
+}
+
+func TestCORSAllowsAuthenticatedMediaReadPreflight(t *testing.T) {
+	h := CORS("https://dashboard.example", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	req := httptest.NewRequest(http.MethodOptions, "/media/video-evidence/frame", nil)
+	req.Header.Set("Origin", "https://dashboard.example")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "authorization,x-inspection-membership-id,range")
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, req)
+	if response.Code != http.StatusNoContent || !containsHeader(response.Header().Get("Access-Control-Allow-Methods"), http.MethodGet) || !containsHeader(response.Header().Get("Access-Control-Allow-Headers"), "Authorization") || !containsHeader(response.Header().Get("Access-Control-Allow-Headers"), "Range") || !containsHeader(response.Header().Get("Access-Control-Expose-Headers"), "Content-Range") {
+		t.Fatalf("media preflight denied: status=%d headers=%v", response.Code, response.Header())
 	}
 }

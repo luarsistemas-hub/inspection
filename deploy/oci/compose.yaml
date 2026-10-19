@@ -284,6 +284,8 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:8092:8080"
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
       interval: 15s
@@ -291,6 +293,35 @@ services:
       retries: 12
     mem_limit: 512m
     mem_reservation: 256m
+    networks: [data, app]
+
+  inspection-video-worker:
+    image: ${VIDEO_WORKER_IMAGE:?immutable video worker image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      <<: *runtime-env
+      INSPECTION_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}
+      INSPECTION_VIDEO_SCRATCH_BYTES: "4294967296"
+      INSPECTION_VIDEO_REQUIRED_FREE_BYTES: "8589934592"
+    volumes:
+      - /srv/inspection/video-scratch:/var/lib/inspection-video-scratch
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      dragonfly: { condition: service_healthy }
+      litellm: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:8091:8080"
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    mem_limit: 2g
+    mem_reservation: 1280m
+    cpus: 1.0
+    profiles: [video]
     networks: [data, app]
 
   admin:

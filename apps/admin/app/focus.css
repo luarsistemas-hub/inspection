@@ -92,6 +92,10 @@
 .admin-gate-form > .inspection-button { inline-size: 100%; min-block-size: 2.75rem; border-radius: .5rem; }
 .admin-gate-form > a { justify-self: start; font-size: .8rem; text-decoration: none; }
 .admin-gate-form > small { margin-block-start: .5rem; color: var(--inspection-muted); font-size: .7rem; }
+.admin-activation .admin-form { max-block-size: none; overflow: visible; }
+.admin-activation .admin-form > .inspection-button { inline-size: 100%; min-block-size: 2.75rem; border-radius: .5rem; }
+.admin-activation .inspection-steps { gap: .4rem; }
+.admin-activation .inspection-steps__item { min-block-size: 2.4rem; padding: .45rem .8rem; font-size: .75rem; }
 .admin-gate-notice { padding: .75rem; border-inline-start: 2px solid var(--inspection-brand); background: var(--inspection-surface-container); color: var(--inspection-muted); font-size: .8rem; }
 .admin-gate-mobile-brand { display: none; }
 .admin-template-editor { max-inline-size: 72rem; }

@@ -26,7 +26,7 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 		if err := db.Model(&database.Origin{}).Where("tenant_id=?", query.TenantID).Update("active_version_id", nil).Error; err != nil {
 			t.Fatal(err)
 		}
-		if _, err := resolve(db, query); code(err) != apperror.InvalidState {
+		if _, err := resolve(db, query); code(err) != apperror.InvalidInput {
 			t.Fatalf("missing active origin accepted: %v", err)
 		}
 	})
@@ -39,6 +39,14 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 	t.Run("IT-315 fixed origin rejects a newly active mismatch", func(t *testing.T) {
 		db, query, activeID := originFixture(t, 1)
 		oldID := identity.NewID()
+		var origin database.Origin
+		if err := db.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).Take(&origin).Error; err != nil {
+			t.Fatal(err)
+		}
+		oldVersion := database.OriginVersion{ID: oldID, TenantID: query.TenantID, OriginID: origin.ID, VersionNumber: 0, ResponsibilityID: identity.NewID(), Status: "INVALIDATED", IdempotencyKey: "origin-old", CreatedAt: time.Now().UTC()}
+		if err := db.Create(&oldVersion).Error; err != nil {
+			t.Fatal(err)
+		}
 		query.VersionID = &oldID
 		if _, err := resolve(db, query); code(err) != apperror.Conflict {
 			t.Fatalf("stale requested origin accepted: %v", err)
@@ -64,6 +72,110 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestResolveReferenceMissingOriginReturnsInvalidInput(t *testing.T) {
+	t.Run("origin does not exist", func(t *testing.T) {
+		db, query, _ := originFixture(t, 1)
+		if err := db.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).Delete(&database.Origin{}).Error; err != nil {
+			t.Fatal(err)
+		}
+		_, err := resolve(db, query)
+		if got := code(err); got != apperror.InvalidInput {
+			t.Fatalf("missing origin error code = %s, want %s: %v", got, apperror.InvalidInput, err)
+		}
+	})
+
+	t.Run("origin has no active version", func(t *testing.T) {
+		db, query, _ := originFixture(t, 1)
+		if err := db.Model(&database.Origin{}).Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).Update("active_version_id", nil).Error; err != nil {
+			t.Fatal(err)
+		}
+		_, err := resolve(db, query)
+		if got := code(err); got != apperror.InvalidInput {
+			t.Fatalf("missing active version error code = %s, want %s: %v", got, apperror.InvalidInput, err)
+		}
+	})
+}
+
+func TestVideoOriginCannotBePinnedWhilePreparationIsDiscoveringIT056(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS origins").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.VideoPreparationJob{}} {
+		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
+			t.Fatal(err)
+		}
+	}
+	tenantID, assetID, originID, versionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest-discovering", IdempotencyKey: "video-origin-discovering", CreatedAt: now, ActivatedAt: &now}
+	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: tenantID, MediaID: identity.NewID(), Status: "PROCESSING", Phase: "DISCOVERING", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, CreatedAt: now}
+	for _, row := range []any{&origin, &version, &preparation} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = resolve(db, Query{TenantID: tenantID, AssetID: assetID, MediaKind: "VIDEO"})
+	if code(err) != apperror.InvalidState {
+		t.Fatalf("createInspection reference lookup accepted DISCOVERING origin: %v", err)
+	}
+}
+
+func TestVideoOriginUsesOneMediaRequirementAndKeepsScopeProjection(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS origins").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.VideoPreparationJob{}, &database.VideoScopeItem{}, &database.VideoFrame{}} {
+		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
+			t.Fatal(err)
+		}
+	}
+	tenantID, assetID, originID, versionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	mediaID, frameID, scopeID := identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest", IdempotencyKey: "video-origin", CreatedAt: now, ActivatedAt: &now}
+	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: tenantID, MediaID: mediaID, Status: "READY", ManifestDigest: "manifest", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, CreatedAt: now}
+	frame := database.VideoFrame{ID: frameID, TenantID: tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 1200000, SHA256: "digest", ObjectKey: "frame.jpg", CreatedAt: now}
+	scope := database.VideoScopeItem{ID: scopeID, TenantID: tenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front view", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: []byte(`[]`), CreatedAt: now}
+	// A repeated, visually identical bedroom keeps an unresolved identity.
+	bedroomFrameID, bedroomScopeID := identity.NewID(), identity.NewID()
+	bedroomFrame := database.VideoFrame{ID: bedroomFrameID, TenantID: tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 9000000, SHA256: "digest-bedroom", ObjectKey: "bedroom.jpg", CreatedAt: now}
+	bedroom := database.VideoScopeItem{ID: bedroomScopeID, TenantID: tenantID, PreparationID: preparationID, FrameID: bedroomFrameID, EnvironmentCandidate: "bedroom", ComponentLabel: "wardrobe", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "AMBIGUOUS", Landmarks: []byte(`[]`), CreatedAt: now.Add(time.Second)}
+	for _, row := range []any{&origin, &version, &preparation, &frame, &scope, &bedroomFrame, &bedroom} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := resolve(db, Query{TenantID: tenantID, AssetID: assetID, MediaKind: "VIDEO"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Requirements) != 1 || result.Requirements[0].Key != "video:main" || result.Requirements[0].EvidenceKind != "VIDEO" {
+		t.Fatalf("video requirements = %+v, want only video:main", result.Requirements)
+	}
+	if len(result.VideoScope) != 2 || result.VideoScope[0].ScopeItemID != scopeID || result.VideoScope[0].ComponentLabel != "sink" || result.VideoScope[0].ViewLabel != "front view" || result.VideoScope[0].Ambiguous {
+		t.Fatalf("video scope projection lost source component: %+v", result.VideoScope)
+	}
+	if result.VideoScope[1].ScopeItemID != bedroomScopeID || !result.VideoScope[1].Ambiguous {
+		t.Fatalf("identity-ambiguous bedroom was not marked ambiguous: %+v", result.VideoScope[1])
+	}
 }
 
 func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.ID) {

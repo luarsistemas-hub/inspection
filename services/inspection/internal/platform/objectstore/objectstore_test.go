@@ -97,6 +97,9 @@ func TestUT007ExactMultipartMapping(t *testing.T) {
 	}
 }
 func TestUT008StableErrors(t *testing.T) {
+	if err := mapError(nil); err != nil {
+		t.Fatalf("successful storage operation mapped to error: %v", err)
+	}
 	for _, expected := range []error{ErrNotFound, ErrExpired, ErrChecksum, ErrDenied} {
 		if !errors.Is(mapError(expected), expected) {
 			t.Fatalf("lost stable error %v", expected)

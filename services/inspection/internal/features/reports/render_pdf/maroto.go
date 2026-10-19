@@ -8,6 +8,7 @@ import (
 	stdimage "image"
 	_ "image/jpeg"
 	_ "image/png"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -47,10 +48,11 @@ type PDFDocument struct {
 
 // MarotoRenderer composes a report from canonical snapshot data without HTML.
 type MarotoRenderer struct {
-	MaxEvidence   int
-	MaxPages      int
-	MaxImageBytes int64
-	MaxPDFBytes   int64
+	DashboardOrigin string
+	MaxEvidence     int
+	MaxPages        int
+	MaxImageBytes   int64
+	MaxPDFBytes     int64
 }
 
 func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets pdf.AssetBundle) ([]byte, error) {
@@ -135,6 +137,15 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	addText("Imóvel: "+asset.Name+" · "+asset.Address, props.Text{Size: 9, Bottom: 2})
 	addText(fmt.Sprintf("Responsável: %s · Modelo: %s v%d", document.Snapshot.Context.Participant.Name, document.Snapshot.Context.Template.Name, document.Snapshot.Context.Template.Version), props.Text{Size: 9, Bottom: 2})
 	addText(document.Snapshot.Advisory, props.Text{Size: 9, Bottom: 4})
+	if len(document.Snapshot.ScopeStatements) > 0 {
+		addText("Escopo da análise", props.Text{Size: 11, Top: 2})
+		for _, statement := range scopeStatementLines(document.Snapshot.ScopeStatements) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			addText(statement, props.Text{Size: 9})
+		}
+	}
 	addText("Motivos", props.Text{Size: 11, Top: 2})
 	if len(document.Snapshot.ReasonCodes) == 0 {
 		addText("Nenhum motivo adicional registrado.", props.Text{Size: 9})
@@ -166,7 +177,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 			addText("Nenhuma evidência registrada para este requisito.", props.Text{Size: 8})
 			continue
 		}
-		if err := addEvidenceRows(ctx, documentMaker, items, assets); err != nil {
+		if err := addEvidenceRows(ctx, documentMaker, items, assets, requirement.Label, document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
 	}
@@ -179,7 +190,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	sort.Strings(extraKeys)
 	for _, key := range extraKeys {
 		addText("Evidências adicionais", props.Text{Size: 10, Top: 4})
-		if err := addEvidenceRows(ctx, documentMaker, evidenceByRequirement[key], assets); err != nil {
+		if err := addEvidenceRows(ctx, documentMaker, evidenceByRequirement[key], assets, "", document.SnapshotID, r.DashboardOrigin); err != nil {
 			return nil, err
 		}
 	}
@@ -291,6 +302,14 @@ func textRows(value string, prop props.Text, limit int) []marotocore.Row {
 	return rows
 }
 
+func scopeStatementLines(statements []string) []string {
+	lines := make([]string, len(statements))
+	for index, statement := range statements {
+		lines[index] = "• " + statement
+	}
+	return lines
+}
+
 func analysisSummary(requirement core.Requirement) string {
 	summary := label(requirement.AnalysisMode) + " · " + label(requirement.AnalysisStatus)
 	if requirement.AnalysisMode == "COMPARE_ORIGIN_CURRENT" && requirement.NoRelevantChange != nil {
@@ -300,12 +319,15 @@ func analysisSummary(requirement core.Requirement) string {
 			summary += " · Alteração relevante identificada"
 		}
 	}
+	if requirement.Coverage != "" {
+		summary += " · " + requirement.Coverage
+	}
 	return summary
 }
 
 // addEvidenceRows lays out reference photos in the left column and current
 // photos in the right one; without references, photos fill two columns.
-func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items []core.Evidence, assets pdf.AssetBundle) error {
+func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items []core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) error {
 	var references, others []core.Evidence
 	for _, item := range items {
 		if item.Role == "REFERENCE" {
@@ -334,27 +356,33 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		leftImage, leftCaption := col.New(6), ""
-		rightImage, rightCaption := col.New(6), ""
+		leftImage, leftCaption, leftLink := col.New(6), "", ""
+		rightImage, rightCaption, rightLink := col.New(6), "", ""
 		var err error
 		if index < len(left) {
-			if leftImage, leftCaption, err = evidenceComponents(left[index], assets); err != nil {
+			if leftImage, leftCaption, leftLink, err = evidenceComponents(left[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
 				return err
 			}
 		}
 		if index < len(right) {
-			if rightImage, rightCaption, err = evidenceComponents(right[index], assets); err != nil {
+			if rightImage, rightCaption, rightLink, err = evidenceComponents(right[index], assets, componentLabel, snapshotID, dashboardOrigin); err != nil {
 				return err
 			}
 		}
 		if len([]rune(leftCaption)) <= captionChunk && len([]rune(rightCaption)) <= captionChunk {
 			// Image and caption share one row so a page break cannot separate them.
-			lines := max(captionLines(leftCaption), captionLines(rightCaption))
+			lines := max(captionLines(leftCaption)+linkLineCount(leftLink), captionLines(rightCaption)+linkLineCount(rightLink))
 			if leftCaption != "" {
 				leftImage.Add(text.New(leftCaption, props.Text{Size: 8, Family: "Roboto", Top: imageHeightMM + 1}))
 			}
+			if leftLink != "" {
+				addLinkText(leftImage, leftLink, imageHeightMM+1+float64(captionLines(leftCaption))*captionLineMM)
+			}
 			if rightCaption != "" {
 				rightImage.Add(text.New(rightCaption, props.Text{Size: 8, Family: "Roboto", Top: imageHeightMM + 1}))
+			}
+			if rightLink != "" {
+				addLinkText(rightImage, rightLink, imageHeightMM+1+float64(captionLines(rightCaption))*captionLineMM)
 			}
 			documentMaker.AddRows(row.New(imageHeightMM+2+float64(lines)*captionLineMM).Add(leftImage, rightImage))
 		} else {
@@ -369,6 +397,16 @@ func addEvidenceRows(ctx context.Context, documentMaker marotocore.Maroto, items
 					rightColumn.Add(text.New(rightChunks[line], props.Text{Size: 8, Family: "Roboto", Top: 1}))
 				}
 				documentMaker.AddRows(row.New().Add(leftColumn, rightColumn))
+			}
+			if leftLink != "" || rightLink != "" {
+				linkLeft, linkRight := col.New(6), col.New(6)
+				if leftLink != "" {
+					addLinkText(linkLeft, leftLink, 0)
+				}
+				if rightLink != "" {
+					addLinkText(linkRight, rightLink, 0)
+				}
+				documentMaker.AddRows(row.New(float64(max(linkLineCount(leftLink), linkLineCount(rightLink)))*captionLineMM).Add(linkLeft, linkRight))
 			}
 		}
 		documentMaker.AddRows(row.New(3))
@@ -390,7 +428,54 @@ func captionLines(caption string) int {
 	return (len([]rune(caption)) + captionCharsPerLine - 1) / captionCharsPerLine
 }
 
-func evidenceComponents(item core.Evidence, assets pdf.AssetBundle) (marotocore.Col, string, error) {
+func linkLineCount(link string) int {
+	if link == "" {
+		return 0
+	}
+	return len(linkTextLines(link))
+}
+
+func addLinkText(column marotocore.Col, link string, top float64) {
+	for index, chunk := range linkTextLines(link) {
+		target := link
+		column.Add(text.New(chunk, props.Text{Size: 7, Family: "Roboto", Top: top + float64(index)*captionLineMM, Hyperlink: &target}))
+	}
+}
+
+func linkTextLines(link string) []string {
+	path, query, hasQuery := strings.Cut(link, "?")
+	segments := strings.Split(path, "/")
+	var result []string
+	current := ""
+	flush := func() {
+		if current != "" {
+			result = append(result, current)
+			current = ""
+		}
+	}
+	for index, segment := range segments {
+		part := segment
+		if index < len(segments)-1 {
+			part += "/"
+		}
+		if current != "" && len([]rune(current+part)) > captionCharsPerLine {
+			flush()
+		}
+		if len([]rune(part)) > captionCharsPerLine {
+			flush()
+			result = append(result, chunkText(part, captionCharsPerLine)...)
+			continue
+		}
+		current += part
+	}
+	flush()
+	if hasQuery {
+		result = append(result, chunkText("?"+query, captionCharsPerLine)...)
+	}
+	return result
+}
+
+func evidenceComponents(item core.Evidence, assets pdf.AssetBundle, componentLabel, snapshotID, dashboardOrigin string) (marotocore.Col, string, string, error) {
 	imageColumn := col.New(6)
 	data := assets["evidence-"+item.ID+".jpg"]
 	if len(data) == 0 || item.Availability == "MISSING" {
@@ -398,7 +483,7 @@ func evidenceComponents(item core.Evidence, assets pdf.AssetBundle) (marotocore.
 	} else {
 		dimensions, format, err := stdimage.DecodeConfig(bytes.NewReader(data))
 		if err != nil || dimensions.Width <= 0 || dimensions.Height <= 0 {
-			return nil, "", fmt.Errorf("report PDF: invalid evidence image")
+			return nil, "", "", fmt.Errorf("report PDF: invalid evidence image")
 		}
 		imageExtension := extension.Jpg
 		switch format {
@@ -406,7 +491,7 @@ func evidenceComponents(item core.Evidence, assets pdf.AssetBundle) (marotocore.
 		case "png":
 			imageExtension = extension.Png
 		default:
-			return nil, "", fmt.Errorf("report PDF: unsupported evidence image format %q", format)
+			return nil, "", "", fmt.Errorf("report PDF: unsupported evidence image format %q", format)
 		}
 		const maxWidthMM, maxHeightMM, columnWidthMM = 84.0, imageHeightMM, 90.0
 		aspect := float64(dimensions.Height) / float64(dimensions.Width)
@@ -421,10 +506,39 @@ func evidenceComponents(item core.Evidence, assets pdf.AssetBundle) (marotocore.
 	if item.CapturedAt != "" {
 		caption += " · " + item.CapturedAt
 	}
+	if item.EvidenceKind == "VIDEO_FRAME" && (item.SourceAvailability == "EXPIRED" || item.SourceAvailability == "MISSING") {
+		caption += " · Vídeo original indisponível; frame preservado"
+	}
+	link := ""
+	if item.EvidenceKind == "VIDEO_FRAME" {
+		caption = videoFrameCaption(item, componentLabel, caption)
+		if dashboardOrigin != "" && snapshotID != "" {
+			link = dashboardOrigin + "/media/video-evidence/" + url.PathEscape(item.FrameID) + "?snapshotId=" + url.QueryEscape(snapshotID)
+		}
+	}
 	for _, flag := range item.Flags {
 		caption += " · " + label(flag)
 	}
-	return imageColumn, caption, nil
+	return imageColumn, caption, link, nil
+}
+
+func videoFrameCaption(item core.Evidence, componentLabel, caption string) string {
+	if strings.TrimSpace(componentLabel) != "" {
+		caption = strings.TrimSpace(componentLabel) + " · " + caption
+	}
+	if item.TimestampMS != nil {
+		seconds := *item.TimestampMS / 1000
+		caption += fmt.Sprintf(" · %02d:%02d", seconds/60, seconds%60)
+	}
+	caption += " · Frame " + item.FrameID + " · Fonte " + item.SourceMediaID
+	return caption
+}
+
+func abbreviatedID(value string) string {
+	if len(value) > 8 {
+		return value[:8]
+	}
+	return value
 }
 
 func classificationLabel(value string) string {

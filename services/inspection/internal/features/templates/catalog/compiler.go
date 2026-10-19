@@ -62,12 +62,21 @@ type Policy struct {
 
 type TemplateDocument struct {
 	SchemaVersion         int                  `json:"schemaVersion"`
+	IsVideo               bool                 `json:"isVideo,omitempty"`
 	SegmentVersionID      string               `json:"segmentVersionId"`
 	ParticipantRoles      []string             `json:"participantRoles"`
 	DefaultComparisonMode ComparisonMode       `json:"defaultComparisonMode"`
 	Requirements          []CaptureRequirement `json:"requirements"`
 	AnalysisType          string               `json:"analysisType"`
 	Policy                Policy               `json:"policy"`
+}
+
+// MediaKind returns the fixed modality declared by this template version.
+func (d TemplateDocument) MediaKind() string {
+	if d.IsVideo {
+		return "VIDEO"
+	}
+	return "PHOTO"
 }
 
 type References interface {

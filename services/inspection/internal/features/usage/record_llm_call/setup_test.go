@@ -58,6 +58,35 @@ func TestLedgerPersistsStartAndFinishWithPartialUsage(t *testing.T) {
 	}
 }
 
+func TestOriginVideoScopeLedgerAllowsMissingInspection(t *testing.T) {
+	db := ledgerDB(t)
+	ledger, err := Setup(Dependencies{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantID, callID := identity.NewID(), identity.NewID()
+	ctx := observability.WithCorrelation(context.Background(), observability.Correlation{TenantID: tenantID.String()})
+	start := llm.CallStart{CallID: callID.String(), TenantID: tenantID.String(), JobID: identity.NewID().String(), EventID: identity.NewID().String(), ExecutionID: identity.NewID().String(), CorrelationID: "origin-scope", Mode: "mock", ComparisonMode: "VIDEO_SCOPE", ModelAlias: "inspection-video-preparation", PromptDigest: "digest"}
+	if err := ledger.Start(ctx, start); err != nil {
+		t.Fatal(err)
+	}
+	var row database.LLMCallRecord
+	if err := db.Where("call_id=?", callID).Take(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.InspectionID != nil {
+		t.Fatalf("origin-only call acquired an inspection: %v", row.InspectionID)
+	}
+	if err := ledger.Finish(ctx, llm.CallFinish{CallID: callID.String(), TechnicalOutcome: "success", FinishedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	start.CallID = identity.NewID().String()
+	start.ComparisonMode = "CURRENT_ONLY"
+	if err := ledger.Start(ctx, start); err == nil {
+		t.Fatal("condition call without an inspection was accepted")
+	}
+}
+
 func TestLedgerFinishDoesNotOverwriteAFinishedCall(t *testing.T) {
 	db := ledgerDB(t)
 	ledger, err := Setup(Dependencies{DB: db})

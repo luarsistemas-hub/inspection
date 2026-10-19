@@ -18,6 +18,7 @@ import (
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/sensitivecontent"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -80,6 +81,14 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 	var existing database.MediaObject
 	var existingUpload database.MultipartUpload
 	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		draftErr := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error
+		if draftErr != nil && !errors.Is(draftErr, gorm.ErrRecordNotFound) {
+			return draftErr
+		}
+		if draftErr == nil && draft.MediaKind == "VIDEO" {
+			return apperror.New(apperror.InvalidInput, "contentType", "photo uploads are unavailable for video captures")
+		}
 		err := tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&existing).Error
 		if err != nil {
 			return err
@@ -102,6 +111,9 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 		var draft database.CaptureDraft
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND status='OPEN'", tenantID, responsibilityID).First(&draft).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+		}
+		if draft.MediaKind == "VIDEO" {
+			return apperror.New(apperror.InvalidInput, "contentType", "photo uploads are unavailable for video captures")
 		}
 		if err := tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&existing).Error; err == nil {
 			if existing.ContentType != contentType || existing.SizeBytes != size || !strings.EqualFold(existing.SHA256, hash) {
@@ -162,6 +174,134 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 	return Upload{MediaID: mediaID, UploadID: remoteID, ObjectKey: key, ExpiresAt: expires}, nil
 }
 
+// CreateVideoWithAttempt creates a multipart upload bound to a server-admitted attempt.
+func (s Service) CreateVideoWithAttempt(ctx context.Context, tenantID, responsibilityID, attemptID identity.ID, contentType, hash string, size int64, idempotencyKey string) (Upload, error) {
+	if tenantID == (identity.ID{}) || responsibilityID == (identity.ID{}) || attemptID == (identity.ID{}) || !objectstore.SupportedVideoType(contentType) || size <= 0 || size > objectstore.MaxVideoBytes || len(hash) != 64 || strings.TrimSpace(idempotencyKey) == "" {
+		return Upload{}, apperror.New(apperror.InvalidInput, "input", "invalid video upload")
+	}
+	if _, err := hex.DecodeString(hash); err != nil {
+		return Upload{}, apperror.New(apperror.InvalidInput, "sha256", "sha256 must be hexadecimal")
+	}
+	now := s.now()
+	mediaID := identity.NewID()
+	var attempt database.VideoAttempt
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND responsibility_id=? AND id=?", tenantID, responsibilityID, attemptID).First(&attempt).Error; err != nil {
+			return apperror.New(apperror.NotFound, "attemptId", "video attempt not found")
+		}
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+			return apperror.New(apperror.InvalidState, "responsibilityId", "capture is closed")
+		}
+		if draft.MediaKind != "VIDEO" {
+			return apperror.New(apperror.InvalidInput, "attemptId", "video uploads are unavailable for photo captures")
+		}
+		return nil
+	}); err != nil {
+		return Upload{}, err
+	}
+	var existing database.MediaObject
+	var priorUpload database.MultipartUpload
+	lookupErr := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&existing).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id=? AND media_id=?", tenantID, existing.ID).First(&priorUpload).Error
+	})
+	if lookupErr == nil {
+		if existing.MediaKind != "VIDEO" || existing.VideoAttemptID == nil || *existing.VideoAttemptID != attemptID || existing.ContentType != contentType || existing.SizeBytes != size || !strings.EqualFold(existing.SHA256, hash) {
+			return Upload{}, apperror.New(apperror.Conflict, "clientMutationId", "video request payload changed")
+		}
+		return Upload{MediaID: existing.ID, UploadID: priorUpload.UploadID, ObjectKey: priorUpload.ObjectKey, ExpiresAt: priorUpload.ExpiresAt}, nil
+	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return Upload{}, lookupErr
+	}
+	if attempt.Status != "ACTIVE" || !now.Before(attempt.ExpiresAt) || size > attempt.MaxBytes {
+		return Upload{}, apperror.New(apperror.InvalidState, "attemptId", "video attempt is unavailable")
+	}
+	key, remoteID, err := s.Store.CreateMultipart(ctx, tenantID, mediaID, contentType)
+	if err != nil {
+		return Upload{}, dependency(err)
+	}
+	expires := now.Add(UploadTTL)
+	if attempt.ExpiresAt.Before(expires) {
+		expires = attempt.ExpiresAt
+	}
+	var replay Upload
+	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var current database.VideoAttempt
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND id=? AND status='ACTIVE'", tenantID, responsibilityID, attemptID).First(&current).Error; err != nil {
+			return apperror.New(apperror.InvalidState, "attemptId", "video attempt is unavailable")
+		}
+		var concurrent database.MediaObject
+		if err := tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&concurrent).Error; err == nil {
+			if concurrent.MediaKind != "VIDEO" || concurrent.VideoAttemptID == nil || *concurrent.VideoAttemptID != attemptID || concurrent.ContentType != contentType || concurrent.SizeBytes != size || !strings.EqualFold(concurrent.SHA256, hash) {
+				return apperror.New(apperror.Conflict, "clientMutationId", "video request payload changed")
+			}
+			var concurrentUpload database.MultipartUpload
+			if err := tx.Where("tenant_id=? AND media_id=?", tenantID, concurrent.ID).First(&concurrentUpload).Error; err != nil {
+				return err
+			}
+			replay = Upload{MediaID: concurrent.ID, UploadID: concurrentUpload.UploadID, ObjectKey: concurrentUpload.ObjectKey, ExpiresAt: concurrentUpload.ExpiresAt}
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if !s.now().Before(current.ExpiresAt) {
+			return apperror.New(apperror.SessionExpired, "attemptId", "video attempt expired")
+		}
+		var draft database.CaptureDraft
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+			return apperror.New(apperror.InvalidState, "responsibilityId", "capture is closed")
+		}
+		// A responsibility closed by expiry, revocation or cancellation keeps
+		// its draft untouched; a saved local recording must not reopen it.
+		var closed int64
+		if err := tx.Model(&database.Responsibility{}).Where("tenant_id=? AND id=? AND status IN ?", tenantID, responsibilityID, []string{"EXPIRED", "REVOKED", "CANCELED"}).Count(&closed).Error; err != nil {
+			return err
+		}
+		if closed > 0 {
+			return apperror.New(apperror.InvalidState, "responsibilityId", "capture is closed")
+		}
+		if draft.MediaKind != "VIDEO" {
+			return apperror.New(apperror.InvalidInput, "attemptId", "video uploads are unavailable for photo captures")
+		}
+		var attemptMedia int64
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND video_attempt_id=?", tenantID, responsibilityID, attemptID).Count(&attemptMedia).Error; err != nil {
+			return err
+		}
+		if attemptMedia != 0 {
+			return apperror.New(apperror.Conflict, "attemptId", "video attempt already has an accepted media object")
+		}
+		var n int64
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND status IN ?", tenantID, responsibilityID, []string{"UPLOADING", "RECEIVED", "VERIFIED", "SCREENED", "READY"}).Count(&n).Error; err != nil {
+			return err
+		}
+		if n >= 100 {
+			return apperror.New(apperror.RateLimited, "media", "unfinished upload limit reached")
+		}
+		requirementKey := "video:main"
+		if current.Kind == "SUPPLEMENT" {
+			requirementKey = "video:supplement"
+		}
+		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", MediaKind: "VIDEO", VideoAttemptID: &attemptID, IdempotencyKey: idempotencyKey, RequirementKey: requirementKey, AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}
+		upload := database.MultipartUpload{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, UploadID: remoteID, ObjectKey: key, Status: "UPLOADING", ExpiresAt: expires, CreatedAt: now}
+		if err := tx.Create(&media).Error; err != nil {
+			return err
+		}
+		return tx.Create(&upload).Error
+	})
+	if err != nil {
+		_ = s.Store.Client.AbortMultipart(ctx, s.Store.Bucket, key, remoteID)
+		return Upload{}, err
+	}
+	if replay.MediaID != (identity.ID{}) {
+		_ = s.Store.Client.AbortMultipart(ctx, s.Store.Bucket, key, remoteID)
+		return replay, nil
+	}
+	return Upload{MediaID: mediaID, UploadID: remoteID, ObjectKey: key, ExpiresAt: expires}, nil
+}
+
 func (s Service) Presign(ctx context.Context, tenantID, responsibilityID, mediaID identity.ID, parts []int) ([]objectstore.PresignedPart, error) {
 	var upload database.MultipartUpload
 	var media database.MediaObject
@@ -176,7 +316,7 @@ func (s Service) Presign(ctx context.Context, tenantID, responsibilityID, mediaI
 	}
 	allowedParts := objectstore.ExpectedParts(media.SizeBytes)
 	seen := make(map[int]struct{}, len(parts))
-	if len(parts) == 0 {
+	if len(parts) == 0 || len(parts) > objectstore.MaxPresignParts {
 		return nil, apperror.New(apperror.InvalidInput, "partNumbers", "at least one upload part is required")
 	}
 	for _, part := range parts {
@@ -242,10 +382,13 @@ func (s Service) Reconcile(ctx context.Context, tenantID, responsibilityID, medi
 	var upload database.MultipartUpload
 	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var draft database.CaptureDraft
-		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || (draft.Status != "OPEN" && draft.Status != "SUBMITTED") {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
 		}
 		if err := tx.Where("tenant_id=? AND id=? AND responsibility_id=?", tenantID, mediaID, responsibilityID).First(&media).Error; err != nil {
+			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+		}
+		if draft.MediaKind == "VIDEO" && media.MediaKind != "VIDEO" {
 			return apperror.New(apperror.NotFound, "mediaId", "media not found")
 		}
 		return tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).First(&upload).Error
@@ -254,6 +397,20 @@ func (s Service) Reconcile(ctx context.Context, tenantID, responsibilityID, medi
 	}
 	result := Reconciliation{MediaID: mediaID, Status: media.Status, ExpiresAt: upload.ExpiresAt}
 	if media.Status != "UPLOADING" || upload.Status != "UPLOADING" {
+		if media.MediaKind == "VIDEO" {
+			if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+				var rows []database.UploadPart
+				if err := tx.Where("tenant_id=? AND upload_id=?", tenantID, upload.ID).Order("part ASC").Find(&rows).Error; err != nil {
+					return err
+				}
+				for _, row := range rows {
+					result.Received = append(result.Received, objectstore.UploadedPart{Number: row.Part, ETag: row.ETag, SizeBytes: row.SizeBytes})
+				}
+				return nil
+			}); err != nil {
+				return Reconciliation{}, err
+			}
+		}
 		return result, nil
 	}
 	if !s.now().Before(upload.ExpiresAt) {
@@ -305,6 +462,20 @@ func (s Service) Reconcile(ctx context.Context, tenantID, responsibilityID, medi
 }
 
 func (s Service) Complete(ctx context.Context, tenantID, responsibilityID, mediaID identity.ID, parts []objectstore.Part) (database.MediaObject, error) {
+	var kind string
+	if err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var row database.MediaObject
+		if err := tx.Where("tenant_id=? AND id=? AND responsibility_id=?", tenantID, mediaID, responsibilityID).First(&row).Error; err != nil {
+			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+		}
+		kind = row.MediaKind
+		return nil
+	}); err != nil {
+		return database.MediaObject{}, err
+	}
+	if kind == "VIDEO" {
+		return s.completeVideoReceipt(ctx, tenantID, responsibilityID, mediaID, parts)
+	}
 	var media database.MediaObject
 	var upload database.MultipartUpload
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -347,6 +518,82 @@ func (s Service) Complete(ctx context.Context, tenantID, responsibilityID, media
 		return nil
 	})
 	return media, err
+}
+
+func (s Service) completeVideoReceipt(ctx context.Context, tenantID, responsibilityID, mediaID identity.ID, parts []objectstore.Part) (database.MediaObject, error) {
+	var media database.MediaObject
+	var upload database.MultipartUpload
+	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND responsibility_id=? AND media_kind='VIDEO'", tenantID, mediaID, responsibilityID).First(&media).Error; err != nil {
+			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+		}
+		if media.Status == "RECEIVED" {
+			return nil
+		}
+		if media.Status != "UPLOADING" && media.Status != "COMPLETING" {
+			return apperror.New(apperror.InvalidState, "mediaId", "video upload is not active")
+		}
+		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).First(&upload).Error; err != nil {
+			return err
+		}
+		if !s.now().Before(upload.ExpiresAt) {
+			return apperror.New(apperror.SessionExpired, "mediaId", "upload expired")
+		}
+		if media.Status == "COMPLETING" {
+			return nil
+		}
+		return tx.Model(&media).Update("status", "COMPLETING").Error
+	})
+	if err != nil {
+		return database.MediaObject{}, err
+	}
+	if media.Status == "RECEIVED" {
+		return media, nil
+	}
+	if err := s.Store.CompleteVideoReceipt(ctx, upload.ObjectKey, upload.UploadID, parts, media.SizeBytes, media.ContentType, media.SHA256); err != nil {
+		_ = s.within(context.WithoutCancel(ctx), tenantID, func(tx *gorm.DB) error {
+			return tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status='COMPLETING'", tenantID, mediaID).Update("status", "UPLOADING").Error
+		})
+		return database.MediaObject{}, dependency(err)
+	}
+	now := s.now()
+	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status='COMPLETING'", tenantID, mediaID).Update("status", "RECEIVED").Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.MultipartUpload{}).Where("tenant_id=? AND media_id=?", tenantID, mediaID).Updates(map[string]any{"status": "COMPLETED", "completed_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id=? AND upload_id=?", tenantID, upload.ID).Delete(&database.UploadPart{}).Error; err != nil {
+			return err
+		}
+		for _, part := range parts {
+			partSize := int64(objectstore.PartSizeBytes)
+			if part.Number == objectstore.ExpectedParts(media.SizeBytes) {
+				partSize = media.SizeBytes - int64(part.Number-1)*objectstore.PartSizeBytes
+			}
+			row := database.UploadPart{ID: identity.NewID(), TenantID: tenantID, UploadID: upload.ID, Part: part.Number, ETag: part.ETag, SizeBytes: partSize, CreatedAt: now}
+			if err := tx.Create(&row).Error; err != nil {
+				return err
+			}
+		}
+		if media.VideoAttemptID != nil {
+			if err := tx.Model(&database.VideoAttempt{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *media.VideoAttemptID).Update("status", "RECEIVED").Error; err != nil {
+				return err
+			}
+		}
+		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: video.DefaultProfile().Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error; err != nil {
+			return err
+		}
+		eventID := identity.NewID()
+		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "media.upload_completed.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: mediaID, CorrelationID: "media-received-" + mediaID.String(), Payload: map[string]any{"mediaId": mediaID, "responsibilityId": responsibilityID, "status": "RECEIVED_PENDING_VALIDATION"}})
+	})
+	if err != nil {
+		return database.MediaObject{}, err
+	}
+	media.Status = "RECEIVED"
+	return media, nil
 }
 
 func (s Service) Screen(ctx context.Context, tenantID, mediaID identity.ID, data []byte) (database.ScreeningRun, error) {
@@ -463,6 +710,15 @@ func (s Service) DeclareFalsePositive(ctx context.Context, tenantID, responsibil
 		if media.Status != "SCREENED" {
 			return apperror.New(apperror.InvalidState, "mediaId", "media no longer accepts a screening decision")
 		}
+		if media.MediaKind == "VIDEO" {
+			updated := tx.Model(&database.VideoSource{}).Where("tenant_id=? AND media_id=? AND screening_status='BLOCKED'", tenantID, mediaID).Update("screening_status", "APPROVED")
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return apperror.New(apperror.InvalidState, "mediaId", "video screening decision is unavailable")
+			}
+		}
 		run.Status, run.FalsePositiveReason, run.OverriddenAt = "OVERRIDDEN", reason, &now
 		if err := tx.Save(&run).Error; err != nil {
 			return err
@@ -471,7 +727,11 @@ func (s Service) DeclareFalsePositive(ctx context.Context, tenantID, responsibil
 		_ = json.Unmarshal(media.Flags, &currentFlags)
 		currentFlags = append(currentFlags, "SENSITIVE_CONTENT_FALSE_POSITIVE")
 		flags, _ := json.Marshal(unique(currentFlags))
-		if err := tx.Model(&media).Updates(map[string]any{"status": "READY", "flags": flags}).Error; err != nil {
+		mediaStatus := "READY"
+		if media.MediaKind == "VIDEO" {
+			mediaStatus = "SCREENED"
+		}
+		if err := tx.Model(&media).Updates(map[string]any{"status": mediaStatus, "flags": flags}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenantID, ActorID: responsibilityID, Action: "media.sensitive_false_positive_declared", TargetType: "media", TargetID: mediaID.String(), Outcome: "ACCEPTED", Reason: reason, CorrelationID: "media-false-positive-" + mediaID.String(), OccurredAt: now}).Error

@@ -35,7 +35,11 @@ func (p *publisherStub) PublishConfirmed(_ context.Context, value Publication) e
 }
 func eventBody(t *testing.T, eventType string, version int) []byte {
 	t.Helper()
-	raw, err := json.Marshal(events.Envelope[map[string]string]{ID: identity.NewID(), Type: eventType, SchemaVersion: version, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), CorrelationID: "corr", CausationID: "cause", Payload: map[string]string{"id": "value"}})
+	payload := map[string]any{"id": "value"}
+	if eventType == "inspection.classified.v1" {
+		payload = map[string]any{"inspectionId": identity.NewID(), "classificationRunId": identity.NewID(), "classification": "NORMAL", "reasonCodes": []string{}}
+	}
+	raw, err := json.Marshal(events.Envelope[map[string]any]{ID: identity.NewID(), Type: eventType, SchemaVersion: version, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), CorrelationID: "corr", CausationID: "cause", Payload: payload})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +88,27 @@ func TestIT354AtomicBusinessWriteAndOutbox(t *testing.T) {
 		t.Fatalf("partial commit: %d %d", outcomes, outbox)
 	}
 }
+
+func TestIT615OutboxRejectsSensitiveVideoPayloadBeforePublish(t *testing.T) {
+	db := sqliteDB(t)
+	for _, payload := range []map[string]any{
+		{"mediaId": identity.NewID(), "presignedUrl": "https://storage.invalid/private"},
+		{"mediaId": identity.NewID(), "imageBytes": "secret-image-data"},
+	} {
+		envelope := events.Envelope[map[string]any]{ID: identity.NewID(), Type: "media.received.v1", SchemaVersion: 1, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), CorrelationID: "it-615", Payload: payload}
+		if err := AddOutbox(db, envelope); !errors.Is(err, events.ErrInvalidEnvelope) {
+			t.Fatalf("sensitive payload was accepted: %v", err)
+		}
+	}
+	var queued int64
+	if err := db.Model(&database.OutboxIntent{}).Count(&queued).Error; err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("%d forbidden events entered the outbox", queued)
+	}
+}
+
 func TestIT355AndIT356ConfirmedOutbox(t *testing.T) {
 	db := sqliteDB(t)
 	now := time.Now().UTC()

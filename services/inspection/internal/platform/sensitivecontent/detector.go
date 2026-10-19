@@ -40,6 +40,12 @@ type Model interface {
 }
 type Detector struct{ Model Model }
 
+// Disabled reports whether this detector is the explicit no-screening policy.
+func (d Detector) Disabled() bool {
+	_, ok := d.Model.(disabledModel)
+	return ok
+}
+
 type embeddedModel struct{}
 type disabledModel struct{}
 

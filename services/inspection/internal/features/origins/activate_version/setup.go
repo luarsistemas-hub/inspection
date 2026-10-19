@@ -2,6 +2,7 @@ package activate_version
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"inspection/libs/identity"
@@ -33,20 +34,26 @@ func Setup(d Dependencies) error {
 		var version database.OriginVersion
 		if err := (tenanttx.Runner{DB: d.DB}).Within(ctx, command.TenantID, func(tx *gorm.DB) error {
 			return tx.Where("tenant_id=? AND id=?", command.TenantID, command.VersionID).First(&version).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.New(apperror.NotFound, "versionId", "origin version not found")
+		} else if err != nil {
+			return nil, err
 		}
 		var origin database.Origin
 		if err := (tenanttx.Runner{DB: d.DB}).Within(ctx, command.TenantID, func(tx *gorm.DB) error {
 			return tx.Where("tenant_id=? AND id=?", command.TenantID, version.OriginID).First(&origin).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.New(apperror.NotFound, "versionId", "origin version not found")
+		} else if err != nil {
+			return nil, err
 		}
 		var asset database.Asset
 		if err := (tenanttx.Runner{DB: d.DB}).Within(ctx, command.TenantID, func(tx *gorm.DB) error {
 			return tx.Where("tenant_id=? AND id=?", command.TenantID, origin.AssetID).First(&asset).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.New(apperror.NotFound, "versionId", "origin version not found")
+		} else if err != nil {
+			return nil, err
 		}
 		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 			return nil, err

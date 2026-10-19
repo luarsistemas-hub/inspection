@@ -18,11 +18,15 @@ func TestPresentErrorLogsInternalCauseWithoutLeakingIt(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{CorrelationID: "corr-qa"})
 	public := PresentError(ctx, errors.New("postgres password=secret"))
-	if public.Message != "internal error" || public.Extensions["correlationId"] != "corr-qa" {
+	if public.Message != "internal error" || public.Extensions["correlationId"] != "corr-qa" || public.Extensions["code"] != string(apperror.Internal) {
 		t.Fatalf("unexpected public error: %+v", public)
 	}
-	if !strings.Contains(output.String(), "corr-qa") || !strings.Contains(output.String(), "postgres password=secret") {
-		t.Fatalf("internal error was not traceable: %s", output.String())
+	logged := output.String()
+	if !strings.Contains(logged, "corr-qa") || !strings.Contains(logged, "errorCode=INTERNAL") {
+		t.Fatalf("internal error log omitted safe correlation fields: %s", logged)
+	}
+	if strings.Contains(logged, "postgres") || strings.Contains(logged, "password") || strings.Contains(logged, "secret") {
+		t.Fatalf("internal error detail leaked to logs: %s", logged)
 	}
 	if strings.Contains(public.Message, "password") || strings.Contains(public.Message, "secret") {
 		t.Fatalf("internal detail leaked: %s", public.Message)

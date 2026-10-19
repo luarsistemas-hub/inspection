@@ -28,6 +28,7 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video_admission"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -74,6 +75,7 @@ type ReminderDispatch struct {
 
 type Service struct {
 	DB             *gorm.DB
+	Within         func(context.Context, identity.ID, func(*gorm.DB) error) error
 	Bus            *mediator.Bus
 	Authorizer     auth.Authorizer
 	Now            func() time.Time
@@ -110,14 +112,17 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if mode != catalog.ChecklistOnly && mode != catalog.FixedOrigin {
 		return database.Schedule{}, apperror.New(apperror.InvalidInput, "comparisonMode", "unsupported comparison mode")
 	}
+	if document.DefaultComparisonMode == catalog.FixedOrigin && mode == catalog.ChecklistOnly {
+		return database.Schedule{}, apperror.New(apperror.InvalidInput, "comparisonMode", "template requires a fixed origin")
+	}
 	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 		return database.Schedule{}, err
 	}
 	if mode == catalog.FixedOrigin {
-		// Validate that an active origin exists without pinning it: each
-		// occurrence resolves the origin active at its own creation, so a later
-		// promotion does not break the remaining recurrences.
-		if _, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID}); err != nil {
+		// Validate that an active origin exists without pinning it: each occurrence
+		// resolves the origin active at its own creation, so a later promotion does
+		// not break the remaining recurrences.
+		if err := resolveFixedOrigin(ctx, s.Bus, in, document.MediaKind()); err != nil {
 			return database.Schedule{}, err
 		}
 	}
@@ -129,13 +134,18 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	now := s.now()
 	templateVersionID := template.Version.ID
 	row := database.Schedule{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: in.TemplateID, TemplateVersionID: &templateVersionID, ComparisonMode: string(mode), ProjectID: in.ProjectID, StageID: in.StageID, ReferenceVersionID: in.ReferenceVersionID, RRule: strings.TrimSpace(in.RRule), Timezone: strings.TrimSpace(in.Timezone), StartsAt: in.StartsAt.UTC(), NextDueAt: next.UTC(), DeadlineMinutes: in.DeadlineMinutes, ReminderOffsets: offsets, Status: "ACTIVE", Version: 1, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
-	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
+	err = s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		var existing database.Schedule
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", in.TenantID, in.IdempotencyKey).First(&existing).Error; err == nil {
 			row = existing
 			return nil
 		} else if err != gorm.ErrRecordNotFound {
 			return err
+		}
+		if document.MediaKind() == "VIDEO" {
+			if err := video_admission.RequireEnabled(tx); err != nil {
+				return err
+			}
 		}
 		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err
@@ -248,7 +258,7 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 		limit = 100
 	}
 	var due []database.Schedule
-	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		return tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("tenant_id=? AND status='ACTIVE' AND next_due_at<=?", tenantID, now.UTC()).Order("next_due_at ASC").Limit(limit).Find(&due).Error
 	})
 	if err != nil {
@@ -280,7 +290,7 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 			return results, err
 		}
 		eventID := inspection.EventID
-		err = (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
 			row := database.OccurrenceMaterialization{ID: identity.NewID(), TenantID: tenantID, ScheduleID: schedule.ID, DueInstant: dueAt, InspectionID: inspection.Inspection.ID, EventID: eventID, CreatedAt: s.now()}
 			if err := tx.Create(&row).Error; err != nil {
 				var existing database.OccurrenceMaterialization
@@ -410,6 +420,11 @@ func (s Service) withSchedule(ctx context.Context, tenantID, scheduleID identity
 	})
 }
 
+func resolveFixedOrigin(ctx context.Context, bus *mediator.Bus, in Input, mediaKind string) error {
+	_, err := bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: mediaKind})
+	return err
+}
+
 func validateOffsets(deadlineMinutes int, offsets []int) error {
 	if deadlineMinutes <= 0 {
 		return apperror.New(apperror.InvalidInput, "deadlineMinutes", "deadline is required")
@@ -435,4 +450,11 @@ func (s Service) now() time.Time {
 		return s.Now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (s Service) within(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {
+	if s.Within != nil {
+		return s.Within(ctx, tenantID, fn)
+	}
+	return (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, fn)
 }

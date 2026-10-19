@@ -4,6 +4,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -11,11 +12,13 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video_admission"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -76,6 +79,19 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
+		var templateVersion database.TemplateVersion
+		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, in.TemplateVersionID).First(&templateVersion).Error; err != nil {
+			return apperror.New(apperror.NotFound, "templateVersionId", "template version not found")
+		}
+		var definition catalog.TemplateDocument
+		if err := json.Unmarshal(templateVersion.DefinitionJSON, &definition); err != nil {
+			return apperror.New(apperror.InvalidInput, "templateVersionId", "template definition is invalid")
+		}
+		if definition.MediaKind() == "VIDEO" {
+			if err := video_admission.RequireEnabled(tx); err != nil {
+				return err
+			}
+		}
 		var origin database.Origin
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND asset_id=?", in.TenantID, in.AssetID).First(&origin).Error
 		if err == gorm.ErrRecordNotFound {
@@ -91,7 +107,8 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 			return err
 		}
 		version := database.OriginVersion{ID: identity.NewID(), TenantID: in.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: identity.NewID(), SupersedesID: origin.ActiveVersionID, Status: "DRAFT", IdempotencyKey: in.IdempotencyKey, CreatedAt: now}
-		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: version.ResponsibilityID, Kind: "ORIGIN", TemplateVersionID: in.TemplateVersionID, ReferencePayload: defaultJSON(in.Reference), PolicyPayload: defaultJSON(in.Policy), Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
+		version.MediaKind = definition.MediaKind()
+		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: version.ResponsibilityID, Kind: "ORIGIN", MediaKind: definition.MediaKind(), TemplateVersionID: in.TemplateVersionID, ReferencePayload: defaultJSON(in.Reference), PolicyPayload: defaultJSON(in.Policy), Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: version.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.ExpiresAt, CreatedAt: now}
 		for _, row := range []any{&version, &draft, &invite} {
 			if err := tx.Create(row).Error; err != nil {
@@ -127,25 +144,84 @@ func (s Service) ActivateCompletedTx(tx *gorm.DB, tenantID, responsibilityID ide
 	if result.Status == "ACTIVE" || result.Status == "SUPERSEDED" {
 		return result, nil
 	}
+	if result.Status == "INVALIDATED" {
+		return database.OriginVersion{}, apperror.New(apperror.InvalidState, "responsibility", "invalidated origin versions cannot be activated")
+	}
 	var draft database.CaptureDraft
 	if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil || draft.Status != "SUBMITTED" {
 		return database.OriginVersion{}, apperror.New(apperror.InvalidState, "responsibility", "origin capture must be submitted before activation")
 	}
-	var media []database.MediaObject
-	if err := tx.Where("tenant_id=? AND responsibility_id=? AND status='READY'", tenantID, responsibilityID).Find(&media).Error; err != nil {
-		return database.OriginVersion{}, err
-	}
-	if len(media) == 0 {
-		return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "at least one ready described origin photo is required")
-	}
-	for _, item := range media {
-		if strings.TrimSpace(item.Description) == "" || strings.TrimSpace(item.RequirementKey) == "" {
-			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "origin photos require category and description")
+	if draft.MediaKind == "VIDEO" {
+		var media database.MediaObject
+		if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO'", tenantID, responsibilityID).Order("created_at DESC, id DESC").Take(&media).Error; err != nil {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "a received and prepared video origin is required")
 		}
-		evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: result.ID, MediaID: item.ID, Category: item.RequirementKey, Description: item.Description, AttentionItems: item.AttentionItems, CreatedAt: now}
-		if err := tx.Where(database.OriginEvidence{TenantID: tenantID, MediaID: item.ID}).Attrs(evidence).FirstOrCreate(&evidence).Error; err != nil {
+		var preparation database.VideoPreparationJob
+		if err := tx.Where("tenant_id=? AND media_id=?", tenantID, media.ID).Order("created_at DESC, id DESC").Take(&preparation).Error; err != nil {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin preparation is not ready")
+		}
+		if preparation.ErrorCode == "NO_USABLE_SCOPE" {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin has no usable reference scope; capture a replacement video")
+		}
+		if media.Status != "READY" || preparation.Status != "READY" || preparation.ManifestDigest == "" {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin preparation is not ready")
+		}
+		var source database.VideoSource
+		if err := tx.Where("tenant_id=? AND media_id=? AND screening_status IN ('APPROVED','DISABLED')", tenantID, media.ID).Take(&source).Error; err != nil {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin screening is not complete")
+		}
+		var scopeItems []database.VideoScopeItem
+		if err := tx.Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Find(&scopeItems).Error; err != nil {
 			return database.OriginVersion{}, err
 		}
+		if len(scopeItems) == 0 {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin has no usable retained frame scope; capture a replacement video")
+		}
+		frameIDs := make([]identity.ID, 0, len(scopeItems))
+		for _, item := range scopeItems {
+			frameIDs = append(frameIDs, item.FrameID)
+		}
+		var frames []database.VideoFrame
+		if err := tx.Where("tenant_id=? AND preparation_id=? AND source_media_id=? AND id IN ? AND sha256<>'' AND object_key<>''", tenantID, preparation.ID, media.ID, frameIDs).Find(&frames).Error; err != nil {
+			return database.OriginVersion{}, err
+		}
+		validFrames := make(map[identity.ID]struct{}, len(frames))
+		for _, frame := range frames {
+			validFrames[frame.ID] = struct{}{}
+		}
+		for _, item := range scopeItems {
+			if _, ok := validFrames[item.FrameID]; !ok {
+				return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "video origin frame lineage is incomplete")
+			}
+		}
+		result.MediaKind = "VIDEO"
+		result.VideoPreparationID = &preparation.ID
+		result.ScopeManifestDigest = preparation.ManifestDigest
+		if err := tx.Save(&result).Error; err != nil {
+			return database.OriginVersion{}, err
+		}
+		reference := database.VideoEvidenceReference{ID: identity.NewID(), TenantID: tenantID, PreparationID: preparation.ID, OwnerType: "ORIGIN_VERSION", OwnerID: result.ID, CreatedAt: now}
+		if err := tx.Where("tenant_id=? AND preparation_id=? AND owner_type=? AND owner_id=?", tenantID, preparation.ID, reference.OwnerType, reference.OwnerID).FirstOrCreate(&reference).Error; err != nil {
+			return database.OriginVersion{}, err
+		}
+	} else {
+		var media []database.MediaObject
+		if err := tx.Where("tenant_id=? AND responsibility_id=? AND status='READY' AND media_kind='PHOTO'", tenantID, responsibilityID).Find(&media).Error; err != nil {
+			return database.OriginVersion{}, err
+		}
+		if len(media) == 0 {
+			return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "at least one ready described origin photo is required")
+		}
+		for _, item := range media {
+			if strings.TrimSpace(item.Description) == "" || strings.TrimSpace(item.RequirementKey) == "" {
+				return database.OriginVersion{}, apperror.New(apperror.InvalidState, "media", "origin photos require category and description")
+			}
+			evidence := database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: result.ID, MediaID: item.ID, Category: item.RequirementKey, Description: item.Description, AttentionItems: item.AttentionItems, CreatedAt: now}
+			if err := tx.Where(database.OriginEvidence{TenantID: tenantID, MediaID: item.ID}).Attrs(evidence).FirstOrCreate(&evidence).Error; err != nil {
+				return database.OriginVersion{}, err
+			}
+		}
+		result.MediaKind = "PHOTO"
 	}
 	var origin database.Origin
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, result.OriginID).First(&origin).Error; err != nil {
@@ -153,6 +229,9 @@ func (s Service) ActivateCompletedTx(tx *gorm.DB, tenantID, responsibilityID ide
 	}
 	if origin.ActiveVersionID != nil && *origin.ActiveVersionID != result.ID {
 		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *origin.ActiveVersionID).Update("status", "SUPERSEDED").Error; err != nil {
+			return database.OriginVersion{}, err
+		}
+		if err := releaseOriginReference(tx, tenantID, *origin.ActiveVersionID); err != nil {
 			return database.OriginVersion{}, err
 		}
 	}
@@ -170,8 +249,10 @@ func (s Service) Invalidate(ctx context.Context, tenantID, versionID identity.ID
 	var row database.OriginVersion
 	now := s.now()
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, versionID).First(&row).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, versionID).First(&row).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.New(apperror.NotFound, "versionId", "origin version not found")
+		} else if err != nil {
+			return err
 		}
 		if row.Status == "INVALIDATED" {
 			return nil
@@ -180,9 +261,16 @@ func (s Service) Invalidate(ctx context.Context, tenantID, versionID identity.ID
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
+		if err := releaseOriginReference(tx, tenantID, row.ID); err != nil {
+			return err
+		}
 		return tx.Model(&database.Origin{}).Where("tenant_id=? AND id=? AND active_version_id=?", tenantID, row.OriginID, row.ID).Updates(map[string]any{"active_version_id": nil, "updated_at": now, "version": gorm.Expr("version + 1")}).Error
 	})
 	return row, err
+}
+
+func releaseOriginReference(tx *gorm.DB, tenantID, versionID identity.ID) error {
+	return tx.Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, versionID).Delete(&database.VideoEvidenceReference{}).Error
 }
 
 func defaultJSON(v json.RawMessage) json.RawMessage {

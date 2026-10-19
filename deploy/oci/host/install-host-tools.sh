@@ -17,10 +17,12 @@ for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh
   install -o root -g root -m 0755 "$source_dir/$name" "$staging/$name"
   bash -n "$staging/$name"
 done
+install -o root -g root -m 0644 "$source_dir/../components.json" "$staging/components.json"
 if [[ -e "$target" ]]; then
   for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh; do
     cmp -s "$staging/$name" "$target/$name" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
   done
+  cmp -s "$staging/components.json" "$target/components.json" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
   rm -rf "$staging"
 else
   mv "$staging" "$target"

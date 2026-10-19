@@ -51,6 +51,16 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if in.JobID != (identity.ID{}) {
 			return nil
 		}
+		var inspection database.Inspection
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
+			return err
+		}
+		// Video comparisons are created only from a sealed immutable plan by the
+		// dedicated video worker. The ordinary photo queue must not select latest
+		// answers or become coupled to video preparation availability.
+		if inspection.MediaKind == "VIDEO" {
+			return nil
+		}
 		var draft database.CaptureDraft
 		query := tx.WithContext(ctx).Where("tenant_id=?", envelope.TenantID)
 		if in.DraftID != (identity.ID{}) {
@@ -67,10 +77,6 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		if len(answers) == 0 {
 			return messaging.ErrPermanent
-		}
-		var inspection database.Inspection
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
-			return err
 		}
 		var snapshot database.AnalysisPromptSnapshot
 		if err := tx.WithContext(ctx).Where("id=? AND analysis_type=?", inspection.AnalysisPromptSnapshotID, "REAL_ESTATE").First(&snapshot).Error; err != nil {

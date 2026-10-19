@@ -2,6 +2,7 @@ package request
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"inspection/libs/identity"
@@ -39,8 +40,10 @@ func Setup(d Dependencies) error {
 		var inspection database.Inspection
 		if err := (tenanttx.Runner{DB: d.DB}).Within(ctx, input.TenantID, func(tx *gorm.DB) error {
 			return tx.Where("tenant_id=? AND id=?", input.TenantID, input.InspectionID).First(&inspection).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+		} else if err != nil {
+			return nil, err
 		}
 		if _, err := d.Authorizer.Authorize(ctx, input.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, true); err != nil {
 			return nil, err

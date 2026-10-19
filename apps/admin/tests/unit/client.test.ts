@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { graphql, graphqlIdentity } from "@/graphql/client";
+import { graphql, graphqlIdentity, graphqlOptionalPermission } from "@/graphql/client";
 import { clearProtectedContext, clearSession, getAccessToken, setMembershipContext, setSession } from "@/auth/session";
 import { AdminIdentityDocument } from "@/graphql/generated";
 
@@ -16,6 +16,11 @@ describe("Admin GraphQL transport", () => {
     setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["ACCESS_ADMIN"] }); setMembershipContext("membership-1"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "Negado", extensions: { code: "FORBIDDEN" } }] }), { status: 200 })));
     await expect(graphql(AdminIdentityDocument)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(getAccessToken()).toBeUndefined();
+  });
+  it("preserves an active session when an optional platform capability is forbidden", async () => {
+    setSession("admin-token", { tenantId: "tenant", tenantName: "Tenant", entitlements: ["ADMIN"], roles: ["TENANT_ADMIN"] }); setMembershipContext("membership-1"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "Negado", extensions: { code: "FORBIDDEN" } }] }), { status: 200 })));
+    await expect(graphqlOptionalPermission(AdminIdentityDocument)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(getAccessToken()).toBe("admin-token");
   });
   it("lists identity-owned memberships without sending a tenant selector", async () => {
     setSession("admin-token"); setMembershipContext("stale-membership");

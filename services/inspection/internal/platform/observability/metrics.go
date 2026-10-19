@@ -63,6 +63,7 @@ type metricMetadata struct {
 }
 
 var llmDurationBuckets = []float64{0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300}
+var httpRequestDurationBuckets = []float64{0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
 // NewMetrics returns an empty collector.
 func NewMetrics() *Metrics {
@@ -72,29 +73,197 @@ func NewMetrics() *Metrics {
 		hist:       make(map[string]histogram),
 		histograms: make(map[string]map[string]labeledHistogram),
 		metricMeta: map[string]metricMetadata{
-			"inspection_llm_calls_total":                   {typeName: "counter", help: "LLM gateway calls delivered to the configured transport."},
-			"inspection_llm_call_duration_seconds":         {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
-			"inspection_llm_inflight":                      {typeName: "gauge", help: "LLM gateway calls currently in flight."},
-			"inspection_llm_tokens_total":                  {typeName: "counter", help: "Provider reported LLM tokens."},
-			"inspection_llm_cached_input_tokens_total":     {typeName: "counter", help: "Provider reported input tokens served from cache."},
-			"inspection_llm_cache_hit_calls_total":         {typeName: "counter", help: "LLM calls with at least one provider reported cached input token."},
-			"inspection_llm_cache_usage_missing_total":     {typeName: "counter", help: "Delivered LLM calls without cached input token metadata."},
-			"inspection_llm_images_total":                  {typeName: "counter", help: "Images sent to the LLM gateway."},
-			"inspection_llm_request_body_bytes_total":      {typeName: "counter", help: "Serialized request body bytes sent to the LLM gateway."},
-			"inspection_llm_usage_missing_total":           {typeName: "counter", help: "LLM calls without provider usage metadata."},
-			"inspection_llm_ledger_writes_total":           {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
-			"inspection_analysis_validation_total":         {typeName: "counter", help: "Structured analysis validation outcomes."},
-			"inspection_analysis_stage_duration_seconds":   {typeName: "histogram", help: "Analysis stage duration in seconds."},
-			"inspection_analysis_processing_total":         {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
-			"inspection_analysis_delivery_actions_total":   {typeName: "counter", help: "RabbitMQ retry and dead letter delivery actions."},
-			"inspection_report_pdf_jobs_total":             {typeName: "counter", help: "Report PDF job outcomes."},
-			"inspection_report_pdf_active":                 {typeName: "gauge", help: "Report PDF jobs currently processing in this worker."},
-			"inspection_report_pdf_pending":                {typeName: "gauge", help: "Report PDF jobs waiting for processing or retry."},
-			"inspection_report_pdf_stage_duration_seconds": {typeName: "histogram", help: "Report PDF processing time by stage."},
-			"inspection_report_pdf_pages":                  {typeName: "histogram", help: "Pages in completed report PDFs."},
-			"inspection_report_pdf_bytes":                  {typeName: "histogram", help: "Bytes in completed report PDFs."},
-			"inspection_report_pdf_expired_leases_total":   {typeName: "counter", help: "Report PDF reservations recovered after lease expiry."},
+			"inspection_http_request_duration_seconds":          {typeName: "histogram", help: "HTTP request duration by bounded route and response status class."},
+			"inspection_llm_calls_total":                        {typeName: "counter", help: "LLM gateway calls delivered to the configured transport."},
+			"inspection_llm_call_duration_seconds":              {typeName: "histogram", help: "Duration of LLM gateway calls in seconds."},
+			"inspection_llm_inflight":                           {typeName: "gauge", help: "LLM gateway calls currently in flight."},
+			"inspection_llm_tokens_total":                       {typeName: "counter", help: "Provider reported LLM tokens."},
+			"inspection_llm_cached_input_tokens_total":          {typeName: "counter", help: "Provider reported input tokens served from cache."},
+			"inspection_llm_cache_hit_calls_total":              {typeName: "counter", help: "LLM calls with at least one provider reported cached input token."},
+			"inspection_llm_cache_usage_missing_total":          {typeName: "counter", help: "Delivered LLM calls without cached input token metadata."},
+			"inspection_llm_images_total":                       {typeName: "counter", help: "Images sent to the LLM gateway."},
+			"inspection_llm_request_body_bytes_total":           {typeName: "counter", help: "Serialized request body bytes sent to the LLM gateway."},
+			"inspection_llm_usage_missing_total":                {typeName: "counter", help: "LLM calls without provider usage metadata."},
+			"inspection_llm_ledger_writes_total":                {typeName: "counter", help: "Durable LLM call ledger write outcomes."},
+			"inspection_analysis_validation_total":              {typeName: "counter", help: "Structured analysis validation outcomes."},
+			"inspection_analysis_stage_duration_seconds":        {typeName: "histogram", help: "Analysis stage duration in seconds."},
+			"inspection_analysis_processing_total":              {typeName: "counter", help: "Analysis processing outcomes after the transaction boundary."},
+			"inspection_analysis_delivery_actions_total":        {typeName: "counter", help: "RabbitMQ retry and dead letter delivery actions."},
+			"inspection_report_pdf_jobs_total":                  {typeName: "counter", help: "Report PDF job outcomes."},
+			"inspection_report_pdf_active":                      {typeName: "gauge", help: "Report PDF jobs currently processing in this worker."},
+			"inspection_report_pdf_pending":                     {typeName: "gauge", help: "Report PDF jobs waiting for processing or retry."},
+			"inspection_report_pdf_stage_duration_seconds":      {typeName: "histogram", help: "Report PDF processing time by stage."},
+			"inspection_report_pdf_pages":                       {typeName: "histogram", help: "Pages in completed report PDFs."},
+			"inspection_report_pdf_bytes":                       {typeName: "histogram", help: "Bytes in completed report PDFs."},
+			"inspection_report_pdf_expired_leases_total":        {typeName: "counter", help: "Report PDF reservations recovered after lease expiry."},
+			"inspection_video_preparations_total":               {typeName: "counter", help: "Video preparation attempts by stage and terminal outcome."},
+			"inspection_video_preparation_attempts_total":       {typeName: "counter", help: "Video preparation attempts by stage."},
+			"inspection_video_decoded_seconds_total":            {typeName: "counter", help: "Video duration decoded in seconds."},
+			"inspection_video_selected_frames_total":            {typeName: "counter", help: "Frames selected and retained from video sources."},
+			"inspection_video_selected_bytes_total":             {typeName: "counter", help: "Bytes selected and retained for video evidence."},
+			"inspection_video_lease_losses_total":               {typeName: "counter", help: "Video preparation and plan leases lost before completion."},
+			"inspection_video_gateway_requests_total":           {typeName: "counter", help: "Video gateway calls by bounded purpose and outcome."},
+			"inspection_video_gateway_tokens_total":             {typeName: "counter", help: "Provider-reported video gateway tokens by bounded purpose and direction."},
+			"inspection_video_expiration_lag_seconds":           {typeName: "gauge", help: "Current overdue source expiration lag in seconds."},
+			"inspection_video_partial_deletions_total":          {typeName: "counter", help: "Video source deletions requiring retry after partial failure."},
+			"inspection_video_scope_discoveries_total":          {typeName: "counter", help: "Discovered video scope components and environments by result."},
+			"inspection_video_plan_items_total":                 {typeName: "counter", help: "Sealed video plan items by bounded outcome."},
+			"inspection_video_unprocessed_candidates_total":     {typeName: "counter", help: "Video plan candidates left unprocessed at seal."},
+			"inspection_video_provider_config_failures_total":   {typeName: "counter", help: "Terminal video provider configuration failures."},
+			"inspection_video_work_heartbeat_timestamp_seconds": {typeName: "gauge", help: "Unix timestamp of the last video work heartbeat."},
+			"inspection_video_queue_depth":                      {typeName: "gauge", help: "Runnable video work by stage and status."},
+			"inspection_video_oldest_runnable_age_seconds":      {typeName: "gauge", help: "Age of the oldest runnable video job by stage."},
 		},
+	}
+}
+
+// ObserveHTTPRequest records latency with bounded route and status labels.
+func (m *Metrics) ObserveHTTPRequest(route, statusClass string, duration time.Duration) {
+	if route != "graphql" && route != "media" && route != "health" {
+		route = "other"
+	}
+	if statusClass != "2xx" && statusClass != "3xx" && statusClass != "4xx" && statusClass != "5xx" {
+		statusClass = "5xx"
+	}
+	m.observeHistogram("inspection_http_request_duration_seconds", map[string]string{"route": route, "status_class": statusClass}, duration.Seconds(), httpRequestDurationBuckets)
+}
+
+// VideoPreparation records bounded preparation stages and outcomes.
+func (m *Metrics) VideoPreparation(stage, outcome string) {
+	m.counter("inspection_video_preparations_total", map[string]string{"stage": safeVideoStage(stage), "status": safeVideoStatus(outcome)}, 1)
+}
+
+// VideoPreparationAttempt records a worker attempt without exposing job identifiers.
+func (m *Metrics) VideoPreparationAttempt(stage string) {
+	m.counter("inspection_video_preparation_attempts_total", map[string]string{"stage": safeVideoStage(stage)}, 1)
+}
+
+// VideoSelected records bounded resource totals from a completed source.
+func (m *Metrics) VideoSelected(decodedSeconds float64, frames int, bytes int64) {
+	if decodedSeconds >= 0 {
+		m.counter("inspection_video_decoded_seconds_total", nil, decodedSeconds)
+	}
+	if frames >= 0 {
+		m.counter("inspection_video_selected_frames_total", nil, float64(frames))
+	}
+	if bytes >= 0 {
+		m.counter("inspection_video_selected_bytes_total", nil, float64(bytes))
+	}
+}
+
+// VideoLeaseLost records a fenced preparation or plan attempt.
+func (m *Metrics) VideoLeaseLost(stage string) {
+	m.counter("inspection_video_lease_losses_total", map[string]string{"stage": safeVideoStage(stage)}, 1)
+}
+
+// VideoGateway records bounded provider usage for a video purpose.
+func (m *Metrics) VideoGateway(purpose, outcome string, inputTokens, outputTokens *int64) {
+	purpose = safeVideoPurpose(purpose)
+	m.counter("inspection_video_gateway_requests_total", map[string]string{"purpose": purpose, "status": safeVideoStatus(outcome)}, 1)
+	if inputTokens != nil {
+		m.counter("inspection_video_gateway_tokens_total", map[string]string{"purpose": purpose, "direction": "input"}, float64(*inputTokens))
+	}
+	if outputTokens != nil {
+		m.counter("inspection_video_gateway_tokens_total", map[string]string{"purpose": purpose, "direction": "output"}, float64(*outputTokens))
+	}
+}
+
+// VideoQueue publishes bounded database aggregate observations.
+func (m *Metrics) VideoQueue(stage, status string, depth int64, oldestAge time.Duration) {
+	labels := map[string]string{"stage": safeVideoStage(stage), "status": safeVideoStatus(status)}
+	m.gauge("inspection_video_queue_depth", labels, float64(max(depth, 0)))
+	m.gauge("inspection_video_oldest_runnable_age_seconds", labels, max(oldestAge.Seconds(), 0))
+}
+
+// VideoExpirationLag records the highest observed overdue source delay.
+func (m *Metrics) VideoExpirationLag(seconds float64) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.gauges["inspection_video_expiration_lag_seconds"] == nil {
+		m.gauges["inspection_video_expiration_lag_seconds"] = make(map[string]float64)
+	}
+	key := labelKey(nil)
+	m.gauges["inspection_video_expiration_lag_seconds"][key] = max(m.gauges["inspection_video_expiration_lag_seconds"][key], max(seconds, 0))
+}
+
+// ResetVideoExpirationLag starts a fresh scheduler-wide sweep observation.
+func (m *Metrics) ResetVideoExpirationLag() {
+	m.gauge("inspection_video_expiration_lag_seconds", nil, 0)
+}
+
+// VideoPartialDeletion records an incomplete object deletion that must be retried.
+func (m *Metrics) VideoPartialDeletion() {
+	m.counter("inspection_video_partial_deletions_total", nil, 1)
+}
+
+// VideoScope records discovered components or environments when a preparation is sealed.
+func (m *Metrics) VideoScope(resource, result string, count int) {
+	if resource != "components" && resource != "environments" {
+		resource = "other"
+	}
+	if result != "success" && result != "empty" && result != "limited" {
+		result = "other"
+	}
+	m.counter("inspection_video_scope_discoveries_total", map[string]string{"stage": "scope", "resource": resource, "result": result}, float64(max(count, 0)))
+}
+
+// VideoPlanSeal records bounded outcomes and technically unprocessed candidates.
+func (m *Metrics) VideoPlanSeal(outcomes map[string]int) {
+	for outcome, count := range outcomes {
+		if count <= 0 {
+			continue
+		}
+		switch outcome {
+		case "MATCHED", "CURRENT_ONLY", "INCONCLUSIVE", "TECHNICAL_FAILURE":
+		default:
+			outcome = "other"
+		}
+		m.counter("inspection_video_plan_items_total", map[string]string{"outcome": strings.ToLower(outcome)}, float64(count))
+		if outcome == "TECHNICAL_FAILURE" {
+			m.counter("inspection_video_unprocessed_candidates_total", nil, float64(count))
+		}
+	}
+}
+
+// VideoProviderConfigFailure records terminal authentication/configuration errors only.
+func (m *Metrics) VideoProviderConfigFailure(purpose string) {
+	m.counter("inspection_video_provider_config_failures_total", map[string]string{"purpose": safeVideoPurpose(purpose)}, 1)
+}
+
+// VideoWorkHeartbeat records the time at which the worker last started work.
+func (m *Metrics) VideoWorkHeartbeat(at time.Time) {
+	if !at.IsZero() {
+		m.gauge("inspection_video_work_heartbeat_timestamp_seconds", nil, float64(at.Unix()))
+	}
+}
+
+func safeVideoStage(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "download", "probe", "screening", "decode", "scope", "select", "persist", "plan", "expire", "delete", "received", "extracting", "discovering", "ready":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "other"
+	}
+}
+
+func safeVideoStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "queued", "running", "ready", "failed", "retry", "matched", "inconclusive", "unprocessed", "success", "error":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "other"
+	}
+}
+
+func safeVideoPurpose(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "scope", "matching", "verification":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "other"
 	}
 }
 

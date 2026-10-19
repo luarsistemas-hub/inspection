@@ -57,6 +57,72 @@ func TestNotificationDeliveryV2IsReferenceOnly(t *testing.T) {
 	}
 }
 
+func TestVideoPreparedRequiresBoundedReferencePayloadUT072UT073(t *testing.T) {
+	envelope := Envelope[VideoPreparedPayload]{ID: identity.NewID(), Type: "media.video_prepared.v1", SchemaVersion: 1, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), AggregateID: identity.NewID(), CorrelationID: "video-preparation", Payload: VideoPreparedPayload{MediaID: identity.NewID(), PreparationID: identity.NewID(), ManifestDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultRegistry().Validate(raw); err != nil {
+		t.Fatalf("valid preparation event rejected: %v", err)
+	}
+	envelope.Payload.PreparationID = identity.ID{}
+	raw, _ = json.Marshal(envelope)
+	if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("missing preparation id accepted: %v", err)
+	}
+	envelope.Payload.PreparationID = identity.NewID()
+	envelope.Payload.ManifestDigest = "short"
+	raw, _ = json.Marshal(envelope)
+	if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("invalid manifest digest accepted: %v", err)
+	}
+	if _, err := DefaultRegistry().Validate(make([]byte, MaxPayloadBytes+1)); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("oversized event accepted: %v", err)
+	}
+}
+
+func TestVideoComparisonRequestRequiresExactPlanMembership(t *testing.T) {
+	envelope := Envelope[VideoComparisonRequestedPayload]{ID: identity.NewID(), Type: "analysis.video_comparison_requested.v1", SchemaVersion: 1, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), AggregateID: identity.NewID(), CorrelationID: "video-plan", Payload: VideoComparisonRequestedPayload{ComparisonJobID: identity.NewID(), VideoPlanID: identity.NewID(), VideoPlanItemID: identity.NewID()}}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultRegistry().Validate(raw); err != nil {
+		t.Fatalf("valid pinned video comparison event rejected: %v", err)
+	}
+	envelope.Payload.VideoPlanItemID = identity.ID{}
+	raw, _ = json.Marshal(envelope)
+	if _, err := DefaultRegistry().Validate(raw); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("event without plan-item membership accepted: %v", err)
+	}
+}
+
+func TestInspectionClassifiedAllowsPhotoAndPinsVideoGeneration(t *testing.T) {
+	base := Envelope[InspectionClassifiedPayload]{ID: identity.NewID(), Type: "inspection.classified.v1", SchemaVersion: 1, OccurredAt: time.Now().UTC(), TenantID: identity.NewID(), CorrelationID: "classified", Payload: InspectionClassifiedPayload{InspectionID: identity.NewID(), ClassificationRunID: identity.NewID(), Classification: "NORMAL", ReasonCodes: []string{}}}
+	validate := func(e Envelope[InspectionClassifiedPayload]) error {
+		raw, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		_, err = DefaultRegistry().Validate(raw)
+		return err
+	}
+	if err := validate(base); err != nil {
+		t.Fatalf("PHOTO classification without videoPlanId rejected: %v", err)
+	}
+	base.Payload.VideoPlanID = ptrID(identity.NewID())
+	if err := validate(base); err != nil {
+		t.Fatalf("pinned video classification rejected: %v", err)
+	}
+	base.Payload.VideoPlanID = ptrID(identity.ID{})
+	if err := validate(base); !errors.Is(err, ErrInvalidEnvelope) {
+		t.Fatalf("zero videoPlanId accepted: %v", err)
+	}
+}
+
+func ptrID(id identity.ID) *identity.ID { return &id }
+
 func TestLifecycleEventsIT551ToIT554IT581ToIT582(t *testing.T) {
 	registry := DefaultRegistry()
 	for _, eventType := range []string{"inspection.created.v1", "inspection.state_changed.v1", "project.stage_changed.v1"} {

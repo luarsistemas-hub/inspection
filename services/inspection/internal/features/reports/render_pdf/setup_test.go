@@ -44,7 +44,7 @@ func TestSnapshotEventSchedulesBothAudiencesIdempotentlyAndSkipsLegacy(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, _ := json.Marshal(map[string]string{"snapshotId": snapshot.ID.String()})
+	payload, _ := json.Marshal(map[string]string{"snapshotId": snapshot.ID.String(), "inspectionId": inspectionID.String()})
 	envelope := events.RawEnvelope{ID: identity.NewID(), TenantID: tenantID, Payload: payload}
 	for range 2 {
 		if err := handler(context.Background(), db, envelope); err != nil {
@@ -63,7 +63,7 @@ func TestSnapshotEventSchedulesBothAudiencesIdempotentlyAndSkipsLegacy(t *testin
 	if err := db.Create(&snapshot).Error; err != nil {
 		t.Fatal(err)
 	}
-	payload, _ = json.Marshal(map[string]string{"snapshotId": snapshot.ID.String()})
+	payload, _ = json.Marshal(map[string]string{"snapshotId": snapshot.ID.String(), "inspectionId": inspectionID.String()})
 	envelope.Payload = payload
 	if err := handler(context.Background(), db, envelope); err != nil {
 		t.Fatal(err)
@@ -75,11 +75,23 @@ func TestSnapshotEventSchedulesBothAudiencesIdempotentlyAndSkipsLegacy(t *testin
 }
 
 func TestSetupExecutorRequiresDatabaseAndPrivateStore(t *testing.T) {
-	if _, err := SetupExecutor(nil, objectstore.Store{}, DefaultLimits(), time.Now); err == nil {
+	if _, err := SetupExecutor(nil, objectstore.Store{}, DefaultLimits(), time.Now, ""); err == nil {
 		t.Fatal("missing database accepted")
 	}
-	if _, err := SetupExecutor(&gorm.DB{}, objectstore.Store{}, DefaultLimits(), time.Now); err == nil {
+	if _, err := SetupExecutor(&gorm.DB{}, objectstore.Store{}, DefaultLimits(), time.Now, ""); err == nil {
 		t.Fatal("missing private store accepted")
+	}
+	store := objectstore.Store{Client: &memoryClient{}}
+	if _, err := SetupExecutor(&gorm.DB{}, store, DefaultLimits(), time.Now, "https://dashboard.example/inspections"); err == nil {
+		t.Fatal("dashboard URL with a path accepted as origin")
+	}
+	executor, err := SetupExecutor(&gorm.DB{}, store, DefaultLimits(), time.Now, "  https://dashboard.example/ ")
+	if err != nil || executor.renderer.DashboardOrigin != "https://dashboard.example" {
+		t.Fatalf("validated dashboard origin = %q, err=%v", executor.renderer.DashboardOrigin, err)
+	}
+	executor, err = SetupExecutor(&gorm.DB{}, store, DefaultLimits(), time.Now, "")
+	if err != nil || executor.renderer.DashboardOrigin != "" {
+		t.Fatalf("empty dashboard origin = %q, err=%v", executor.renderer.DashboardOrigin, err)
 	}
 }
 

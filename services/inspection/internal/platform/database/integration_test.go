@@ -60,9 +60,6 @@ func TestPostgresMigrationAndRLSIT341ToIT349(t *testing.T) {
 	if !forced || owner == "inspection_runtime" || bypass {
 		t.Fatalf("unsafe role forced=%v owner=%s bypass=%v", forced, owner, bypass)
 	}
-	if err := admin.Exec(`ALTER ROLE inspection_runtime LOGIN PASSWORD 'runtime-test'`).Error; err != nil {
-		t.Fatal(err)
-	}
 	runtimeDSN := os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL")
 	if runtimeDSN == "" {
 		t.Fatal("INSPECTION_TEST_RUNTIME_DATABASE_URL not set")

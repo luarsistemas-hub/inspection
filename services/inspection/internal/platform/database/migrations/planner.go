@@ -1540,6 +1540,512 @@ CREATE POLICY tenant_isolation ON reports.report_pdf_jobs
 GRANT USAGE ON SCHEMA reports TO inspection_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE ON reports.report_pdf_jobs TO inspection_runtime;
 `},
+		{Version: 54, Name: "video_capture_contracts", Compatible: true, SQL: `
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS media_kind varchar(8) NOT NULL DEFAULT 'PHOTO';
+ALTER TABLE capture.capture_drafts ADD COLUMN IF NOT EXISTS media_kind varchar(8) NOT NULL DEFAULT 'PHOTO';
+ALTER TABLE media.media_objects ADD COLUMN IF NOT EXISTS media_kind varchar(8) NOT NULL DEFAULT 'PHOTO';
+ALTER TABLE media.media_objects ADD COLUMN IF NOT EXISTS video_attempt_id uuid;
+ALTER TABLE invitations.processing_acceptances ADD COLUMN IF NOT EXISTS video_processing boolean NOT NULL DEFAULT false;
+ALTER TABLE inspections.inspections ADD CONSTRAINT chk_inspection_media_kind CHECK (media_kind IN ('PHOTO','VIDEO'));
+ALTER TABLE capture.capture_drafts ADD CONSTRAINT chk_capture_draft_media_kind CHECK (media_kind IN ('PHOTO','VIDEO'));
+ALTER TABLE media.media_objects ADD CONSTRAINT chk_media_object_media_kind CHECK (media_kind IN ('PHOTO','VIDEO'));
+ALTER TABLE media.media_objects DROP CONSTRAINT IF EXISTS chk_media_size;
+ALTER TABLE media.media_objects ADD CONSTRAINT chk_media_size CHECK ((media_kind='PHOTO' AND size_bytes BETWEEN 1 AND 20971520) OR (media_kind='VIDEO' AND size_bytes BETWEEN 1 AND 1073741824));
+ALTER TABLE media.media_objects DROP CONSTRAINT IF EXISTS chk_media_status;
+ALTER TABLE media.media_objects ADD CONSTRAINT chk_media_status CHECK (status IN ('INITIATED','UPLOADING','COMPLETING','UPLOADED','RECEIVED','VERIFIED','SCREENED','READY','REJECTED','FAILED','ABORTED','PURGED'));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_media_tenant_id ON media.media_objects(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_responsibility_tenant_id ON inspections.responsibilities(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_submission_tenant_id ON capture.submission_versions(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inspection_tenant_id ON inspections.inspections(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_origin_version_tenant_id ON origins.origin_versions(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_attempt_tenant_id ON capture.video_attempts(tenant_id,id);
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS fk_video_attempt_responsibility;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT fk_video_attempt_responsibility FOREIGN KEY(tenant_id,responsibility_id) REFERENCES inspections.responsibilities(tenant_id,id);
+ALTER TABLE media.media_objects DROP CONSTRAINT IF EXISTS fk_video_attempt;
+ALTER TABLE media.media_objects ADD CONSTRAINT fk_video_attempt FOREIGN KEY(tenant_id,video_attempt_id) REFERENCES capture.video_attempts(tenant_id,id);
+CREATE TABLE IF NOT EXISTS media.video_policies (
+  tenant_id uuid PRIMARY KEY,
+  max_duration_minutes integer NOT NULL DEFAULT 15 CHECK (max_duration_minutes BETWEEN 1 AND 60),
+  origin_retention_days integer NOT NULL DEFAULT 30 CHECK (origin_retention_days BETWEEN 1 AND 36500),
+  current_retention_days integer NOT NULL DEFAULT 5 CHECK (current_retention_days BETWEEN 1 AND 36500),
+  version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+  last_mutation_id varchar(200) NOT NULL DEFAULT '',
+  last_payload_digest varchar(64) NOT NULL DEFAULT '',
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE media.video_policies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_policies FORCE ROW LEVEL SECURITY;
+ALTER TABLE media.video_policies DROP CONSTRAINT IF EXISTS chk_video_policy_duration;
+ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_duration CHECK (max_duration_minutes BETWEEN 1 AND 60);
+ALTER TABLE media.video_policies DROP CONSTRAINT IF EXISTS chk_video_policy_origin_retention;
+ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_origin_retention CHECK (origin_retention_days BETWEEN 1 AND 36500);
+ALTER TABLE media.video_policies DROP CONSTRAINT IF EXISTS chk_video_policy_current_retention;
+ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_current_retention CHECK (current_retention_days BETWEEN 1 AND 36500);
+CREATE POLICY tenant_isolation ON media.video_policies USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE ON media.video_policies TO inspection_runtime;
+CREATE TABLE IF NOT EXISTS platform.video_admission (
+  id integer PRIMARY KEY CHECK (id=1), enabled boolean NOT NULL DEFAULT false, version bigint NOT NULL DEFAULT 1 CHECK (version>0),
+  changed_by uuid, changed_at timestamptz NOT NULL DEFAULT now(), reason varchar(2000) NOT NULL DEFAULT '',
+  mutation_id varchar(200) NOT NULL DEFAULT '', payload_hash varchar(64) NOT NULL DEFAULT ''
+);
+INSERT INTO platform.video_admission(id,enabled,version,changed_at) VALUES (1,false,1,now()) ON CONFLICT (id) DO NOTHING;
+ALTER TABLE platform.video_admission DROP CONSTRAINT IF EXISTS chk_video_admission_singleton;
+ALTER TABLE platform.video_admission ADD CONSTRAINT chk_video_admission_singleton CHECK (id=1);
+GRANT SELECT, UPDATE ON platform.video_admission TO inspection_runtime;
+CREATE TABLE IF NOT EXISTS capture.video_attempts (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, responsibility_id uuid NOT NULL, kind varchar(16) NOT NULL,
+  policy_version bigint NOT NULL, max_duration_seconds integer NOT NULL CHECK (max_duration_seconds BETWEEN 60 AND 3600),
+  max_bytes bigint NOT NULL CHECK (max_bytes BETWEEN 1 AND 1073741824), acquisition_source varchar(16) NOT NULL,
+  status varchar(16) NOT NULL, idempotency_key varchar(200) NOT NULL, payload_digest varchar(64) NOT NULL,
+  admitted_at timestamptz NOT NULL, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id,id), UNIQUE (tenant_id,responsibility_id,idempotency_key),
+  CHECK (kind IN ('ORIGIN','CURRENT','SUPPLEMENT')), CHECK (acquisition_source IN ('CAMERA','FILE')),
+  CHECK (status IN ('ACTIVE','RECEIVED','CANCELED','EXPIRED','REJECTED'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_video_attempt_one_active ON capture.video_attempts(tenant_id,responsibility_id) WHERE status='ACTIVE';
+CREATE INDEX IF NOT EXISTS idx_video_attempt_expiry ON capture.video_attempts(status,expires_at);
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS chk_video_attempt_duration;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT chk_video_attempt_duration CHECK (max_duration_seconds BETWEEN 60 AND 3600);
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS chk_video_attempt_bytes;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT chk_video_attempt_bytes CHECK (max_bytes BETWEEN 1 AND 1073741824);
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS chk_video_attempt_kind;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT chk_video_attempt_kind CHECK (kind IN ('ORIGIN','CURRENT','SUPPLEMENT'));
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS chk_video_attempt_source;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT chk_video_attempt_source CHECK (acquisition_source IN ('CAMERA','FILE'));
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS chk_video_attempt_status;
+ALTER TABLE capture.video_attempts ADD CONSTRAINT chk_video_attempt_status CHECK (status IN ('ACTIVE','RECEIVED','CANCELED','EXPIRED','REJECTED'));
+ALTER TABLE capture.video_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE capture.video_attempts FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON capture.video_attempts USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE ON capture.video_attempts TO inspection_runtime;
+CREATE TABLE IF NOT EXISTS media.video_preparation_jobs (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, media_id uuid NOT NULL, submission_id uuid NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'QUEUED', attempts integer NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  lease_token uuid, lease_expires_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id,media_id), CHECK (status IN ('QUEUED','PROCESSING','READY','FAILED','CANCELED'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_job_tenant_id ON media.video_preparation_jobs(tenant_id,id);
+ALTER TABLE media.video_preparation_jobs DROP CONSTRAINT IF EXISTS fk_video_job_media;
+ALTER TABLE media.video_preparation_jobs ADD CONSTRAINT fk_video_job_media FOREIGN KEY(tenant_id,media_id) REFERENCES media.media_objects(tenant_id,id);
+ALTER TABLE media.video_preparation_jobs DROP CONSTRAINT IF EXISTS fk_video_job_submission;
+ALTER TABLE media.video_preparation_jobs ADD CONSTRAINT fk_video_job_submission FOREIGN KEY(tenant_id,submission_id) REFERENCES capture.submission_versions(tenant_id,id);
+CREATE INDEX IF NOT EXISTS idx_video_preparation_due ON media.video_preparation_jobs(status,next_attempt_at,created_at);
+ALTER TABLE media.video_preparation_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_preparation_jobs FORCE ROW LEVEL SECURITY;
+ALTER TABLE media.video_preparation_jobs DROP CONSTRAINT IF EXISTS chk_video_preparation_job_status;
+ALTER TABLE media.video_preparation_jobs ADD CONSTRAINT chk_video_preparation_job_status CHECK (status IN ('QUEUED','PROCESSING','READY','FAILED','CANCELED'));
+CREATE POLICY tenant_isolation ON media.video_preparation_jobs USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE ON media.video_preparation_jobs TO inspection_runtime;
+CREATE TABLE IF NOT EXISTS media.video_frames (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, source_media_id uuid NOT NULL, preparation_id uuid NOT NULL,
+  pts_us bigint NOT NULL CHECK(pts_us>=0), sha256 varchar(64) NOT NULL, object_key varchar(1000) NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id), UNIQUE(tenant_id,preparation_id,pts_us,sha256)
+);
+ALTER TABLE media.video_frames DROP CONSTRAINT IF EXISTS fk_video_frame_source;
+ALTER TABLE media.video_frames ADD CONSTRAINT fk_video_frame_source FOREIGN KEY(tenant_id,source_media_id) REFERENCES media.media_objects(tenant_id,id);
+ALTER TABLE media.video_frames DROP CONSTRAINT IF EXISTS fk_video_frame_preparation;
+ALTER TABLE media.video_frames ADD CONSTRAINT fk_video_frame_preparation FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id);
+ALTER TABLE media.video_frames ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_frames FORCE ROW LEVEL SECURITY;
+ALTER TABLE media.video_frames DROP CONSTRAINT IF EXISTS chk_video_frame_pts;
+ALTER TABLE media.video_frames ADD CONSTRAINT chk_video_frame_pts CHECK (pts_us >= 0);
+CREATE POLICY tenant_isolation ON media.video_frames USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT ON media.video_frames TO inspection_runtime;
+CREATE TABLE IF NOT EXISTS analysis.video_plans (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, inspection_id uuid NOT NULL, submission_id uuid NOT NULL,
+  reference_version_id uuid, generation integer NOT NULL, plan_digest varchar(64) NOT NULL, sealed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id), UNIQUE(tenant_id,submission_id,generation)
+);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_inspection;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_inspection FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_submission;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_submission FOREIGN KEY(tenant_id,submission_id) REFERENCES capture.submission_versions(tenant_id,id);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_reference;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_reference FOREIGN KEY(tenant_id,reference_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+CREATE TABLE IF NOT EXISTS media.video_evidence_references (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, preparation_id uuid NOT NULL, owner_type varchar(32) NOT NULL,
+  owner_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id),
+  CHECK(owner_type IN ('ORIGIN_VERSION','VIDEO_PLAN','REPORT_SNAPSHOT','ACTIVE_WORK'))
+);
+ALTER TABLE media.video_evidence_references DROP CONSTRAINT IF EXISTS fk_video_evidence_preparation;
+ALTER TABLE media.video_evidence_references ADD CONSTRAINT fk_video_evidence_preparation FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id);
+ALTER TABLE analysis.video_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plans FORCE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS uq_video_plan_submission_generation;
+DROP INDEX IF EXISTS analysis.uq_video_plan_submission_generation;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT uq_video_plan_submission_generation UNIQUE(tenant_id,submission_id,generation);
+CREATE POLICY tenant_isolation ON analysis.video_plans USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+ALTER TABLE media.video_evidence_references ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_evidence_references FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON media.video_evidence_references USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT USAGE ON SCHEMA analysis TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE ON analysis.video_plans TO inspection_runtime;
+GRANT SELECT, INSERT, DELETE ON media.video_evidence_references TO inspection_runtime;
+`},
+		{Version: 55, Name: "durable_video_preparation_state", Compatible: true, SQL: `
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS phase varchar(32) NOT NULL DEFAULT 'RECEIVED';
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS heartbeat_at timestamptz;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS processed_frames integer NOT NULL DEFAULT 0;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS source_sha256 varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS profile_digest varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS manifest_digest varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS pending_object_keys jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS error_code varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS first_ready_at timestamptz;
+CREATE TABLE IF NOT EXISTS media.video_sources (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, media_id uuid NOT NULL,
+  container varchar(32) NOT NULL, codec varchar(32) NOT NULL, pixel_format varchar(32) NOT NULL,
+  color_transfer varchar(32) NOT NULL, duration_micros bigint NOT NULL CHECK(duration_micros>0),
+  width integer NOT NULL CHECK(width>0), height integer NOT NULL CHECK(height>0), rotation integer NOT NULL DEFAULT 0,
+  frame_rate double precision NOT NULL CHECK(frame_rate>0), audio_present boolean NOT NULL DEFAULT false,
+  screening_status varchar(16) NOT NULL DEFAULT 'PENDING' CHECK(screening_status IN ('PENDING','APPROVED','BLOCKED','FAILED','DISABLED')),
+  screening_model_digest varchar(64) NOT NULL DEFAULT '', flagged_region_count integer NOT NULL DEFAULT 0,
+  flagged_regions_truncated boolean NOT NULL DEFAULT false,
+  first_frame_ready_at timestamptz, retention_days integer, source_expiry_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id,media_id), UNIQUE(tenant_id,id),
+  FOREIGN KEY(tenant_id,media_id) REFERENCES media.media_objects(tenant_id,id)
+);
+ALTER TABLE media.video_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_sources FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON media.video_sources USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE ON media.video_sources TO inspection_runtime;
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS width integer NOT NULL DEFAULT 1;
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS height integer NOT NULL DEFAULT 1;
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS role varchar(16) NOT NULL DEFAULT 'BASELINE';
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS quality varchar(32) NOT NULL DEFAULT '';
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS size_bytes bigint NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS media.video_scope_items (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, preparation_id uuid NOT NULL, frame_id uuid NOT NULL,
+  environment_candidate varchar(120) NOT NULL, component_label varchar(120) NOT NULL,
+  view_label varchar(120) NOT NULL, visibility varchar(120) NOT NULL, landmarks jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id),
+  FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id),
+  FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id)
+);
+CREATE INDEX IF NOT EXISTS idx_video_scope_preparation ON media.video_scope_items(tenant_id,preparation_id,frame_id);
+ALTER TABLE media.video_scope_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_scope_items FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON media.video_scope_items USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT ON media.video_scope_items TO inspection_runtime;
+`},
+		{Version: 56, Name: "video_source_expiry_leases", Compatible: true, SQL: `
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS status varchar(16) NOT NULL DEFAULT 'RETAINED';
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS delete_lease_token uuid;
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS delete_lease_until timestamptz;
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS original_deleted_at timestamptz;
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS delete_error_code varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS media_kind varchar(8) NOT NULL DEFAULT 'PHOTO';
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS video_preparation_id uuid;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS scope_manifest_digest varchar(64) NOT NULL DEFAULT '';
+ALTER TABLE origins.origin_versions DROP CONSTRAINT IF EXISTS fk_origin_video_preparation;
+ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_video_preparation FOREIGN KEY(tenant_id,video_preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_evidence_owner ON media.video_evidence_references(tenant_id,preparation_id,owner_type,owner_id);
+ALTER TABLE media.video_sources DROP CONSTRAINT IF EXISTS chk_video_source_status;
+ALTER TABLE media.video_sources ADD CONSTRAINT chk_video_source_status CHECK (status IN ('RETAINED','DELETING','EXPIRED'));
+CREATE INDEX IF NOT EXISTS idx_video_source_expiry ON media.video_sources(tenant_id,source_expiry_at,status);
+CREATE TABLE IF NOT EXISTS media.video_source_leases (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, source_media_id uuid NOT NULL,
+  purpose varchar(24) NOT NULL, lease_until timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id),
+  FOREIGN KEY(tenant_id,source_media_id) REFERENCES media.video_sources(tenant_id,media_id),
+  CHECK(purpose IN ('PLAYBACK','EXTRACTION'))
+);
+CREATE INDEX IF NOT EXISTS idx_video_source_lease ON media.video_source_leases(tenant_id,source_media_id,lease_until);
+ALTER TABLE media.video_source_leases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media.video_source_leases FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON media.video_source_leases USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, DELETE ON media.video_source_leases TO inspection_runtime;
+`},
+		{Version: 57, Name: "sealed_video_plan_membership", Compatible: true, SQL: `
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS origin_preparation_id uuid;
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS current_preparation_id uuid;
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS status varchar(24) NOT NULL DEFAULT 'BUILDING';
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_origin_preparation;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_origin_preparation FOREIGN KEY(tenant_id,origin_preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_current_preparation;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_current_preparation FOREIGN KEY(tenant_id,current_preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS chk_video_plan_status;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT chk_video_plan_status CHECK(status IN ('BUILDING','SEALED','FAILED'));
+DROP INDEX IF EXISTS analysis.idx_video_plan_tenant_id;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_video_plan_tenant_id ON analysis.video_plans(tenant_id,id);
+CREATE TABLE IF NOT EXISTS analysis.video_plan_items (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, plan_id uuid NOT NULL, component_id uuid NOT NULL,
+  requirement_key varchar(240) NOT NULL, outcome varchar(24) NOT NULL, reason varchar(120) NOT NULL DEFAULT '',
+  input_digest varchar(64) NOT NULL, origin_frame_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_frame_ids jsonb NOT NULL DEFAULT '[]'::jsonb, core_groups jsonb NOT NULL DEFAULT '[]'::jsonb,
+  current_groups jsonb NOT NULL DEFAULT '[]'::jsonb, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id,id), UNIQUE(tenant_id,plan_id,component_id),
+  FOREIGN KEY(tenant_id,plan_id) REFERENCES analysis.video_plans(tenant_id,id),
+  CHECK(outcome IN ('MATCHED','CURRENT_ONLY','INCONCLUSIVE','TECHNICAL_FAILURE'))
+);
+DROP INDEX IF EXISTS analysis.idx_video_plan_item_tenant_id;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_video_plan_item_tenant_id ON analysis.video_plan_items(tenant_id,id);
+CREATE TABLE IF NOT EXISTS analysis.video_plan_item_frames (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, plan_item_id uuid NOT NULL, frame_id uuid NOT NULL,
+  role varchar(16) NOT NULL, core_group integer NOT NULL DEFAULT 0, pair_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(tenant_id,id),
+  FOREIGN KEY(tenant_id,plan_item_id) REFERENCES analysis.video_plan_items(tenant_id,id),
+  FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id),
+  CHECK(role IN ('ORIGIN','CURRENT'))
+);
+CREATE INDEX IF NOT EXISTS idx_video_plan_items ON analysis.video_plan_items(tenant_id,plan_id,requirement_key);
+CREATE INDEX IF NOT EXISTS idx_video_plan_item_frames ON analysis.video_plan_item_frames(tenant_id,plan_item_id,core_group,pair_order);
+ALTER TABLE analysis.video_plan_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plan_items FORCE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plan_item_frames ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plan_item_frames FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON analysis.video_plan_items USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY tenant_isolation ON analysis.video_plan_item_frames USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+ALTER TABLE analysis.comparison_jobs ADD COLUMN IF NOT EXISTS video_plan_id uuid;
+ALTER TABLE analysis.comparison_jobs ADD COLUMN IF NOT EXISTS video_plan_item_id uuid;
+ALTER TABLE analysis.comparison_jobs ADD COLUMN IF NOT EXISTS video_core_group integer NOT NULL DEFAULT 0;
+ALTER TABLE analysis.comparison_jobs DROP CONSTRAINT IF EXISTS fk_comparison_job_video_plan;
+ALTER TABLE analysis.comparison_jobs ADD CONSTRAINT fk_comparison_job_video_plan FOREIGN KEY(tenant_id,video_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+ALTER TABLE analysis.comparison_jobs DROP CONSTRAINT IF EXISTS fk_comparison_job_video_plan_item;
+ALTER TABLE analysis.comparison_jobs ADD CONSTRAINT fk_comparison_job_video_plan_item FOREIGN KEY(tenant_id,video_plan_item_id) REFERENCES analysis.video_plan_items(tenant_id,id);
+ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS video_plan_id uuid;
+ALTER TABLE reports.report_snapshots DROP CONSTRAINT IF EXISTS fk_report_snapshot_video_plan;
+ALTER TABLE reports.report_snapshots ADD CONSTRAINT fk_report_snapshot_video_plan FOREIGN KEY(tenant_id,video_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+GRANT SELECT, INSERT, UPDATE ON analysis.video_plans, analysis.video_plan_items, analysis.video_plan_item_frames TO inspection_runtime;
+`},
+		{Version: 58, Name: "pin_video_origin_to_analysis_plan", Compatible: true, SQL: `
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS video_plan_id uuid;
+ALTER TABLE origins.origin_versions DROP CONSTRAINT IF EXISTS fk_origin_video_plan;
+ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_video_plan FOREIGN KEY(tenant_id,video_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+GRANT SELECT, INSERT, UPDATE ON origins.origin_versions TO inspection_runtime;
+`},
+		{Version: 59, Name: "version_video_preparation_retries", Compatible: true, SQL: `
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS preparation_version integer NOT NULL DEFAULT 1;
+`},
+		{Version: 60, Name: "scoped_video_retention_holds", Compatible: true, SQL: `
+ALTER TABLE retention.legal_holds DROP CONSTRAINT IF EXISTS legal_holds_pkey;
+ALTER TABLE retention.legal_holds ALTER COLUMN inspection_id DROP NOT NULL;
+ALTER TABLE retention.legal_holds ADD CONSTRAINT legal_holds_pkey PRIMARY KEY (id,tenant_id);
+ALTER TABLE retention.legal_holds ADD COLUMN IF NOT EXISTS source_media_id uuid;
+ALTER TABLE retention.legal_holds ADD COLUMN IF NOT EXISTS origin_version_id uuid;
+ALTER TABLE retention.deletion_requests DROP CONSTRAINT IF EXISTS deletion_requests_pkey;
+ALTER TABLE retention.deletion_requests ALTER COLUMN inspection_id DROP NOT NULL;
+ALTER TABLE retention.deletion_requests ADD CONSTRAINT deletion_requests_pkey PRIMARY KEY (id,tenant_id);
+ALTER TABLE retention.deletion_requests ADD COLUMN IF NOT EXISTS source_media_id uuid;
+ALTER TABLE retention.deletion_requests ADD COLUMN IF NOT EXISTS origin_version_id uuid;
+ALTER TABLE retention.legal_holds DROP CONSTRAINT IF EXISTS chk_legal_hold_one_scope;
+ALTER TABLE retention.legal_holds ADD CONSTRAINT chk_legal_hold_one_scope CHECK (
+  num_nonnulls(inspection_id,source_media_id,origin_version_id) = 1
+);
+ALTER TABLE retention.deletion_requests DROP CONSTRAINT IF EXISTS chk_deletion_request_one_scope;
+ALTER TABLE retention.deletion_requests ADD CONSTRAINT chk_deletion_request_one_scope CHECK (
+  num_nonnulls(inspection_id,source_media_id,origin_version_id) = 1
+);
+ALTER TABLE retention.legal_holds DROP CONSTRAINT IF EXISTS fk_legal_hold_source;
+ALTER TABLE retention.legal_holds ADD CONSTRAINT fk_legal_hold_source FOREIGN KEY(tenant_id,source_media_id) REFERENCES media.video_sources(tenant_id,media_id);
+ALTER TABLE retention.legal_holds DROP CONSTRAINT IF EXISTS fk_legal_hold_origin;
+ALTER TABLE retention.legal_holds ADD CONSTRAINT fk_legal_hold_origin FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE retention.deletion_requests DROP CONSTRAINT IF EXISTS fk_deletion_request_source;
+ALTER TABLE retention.deletion_requests ADD CONSTRAINT fk_deletion_request_source FOREIGN KEY(tenant_id,source_media_id) REFERENCES media.video_sources(tenant_id,media_id);
+ALTER TABLE retention.deletion_requests DROP CONSTRAINT IF EXISTS fk_deletion_request_origin;
+ALTER TABLE retention.deletion_requests ADD CONSTRAINT fk_deletion_request_origin FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+DROP INDEX IF EXISTS retention.idx_retention_hold_active;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_retention_hold_inspection_active ON retention.legal_holds(tenant_id,inspection_id) WHERE active AND inspection_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_retention_hold_source_active ON retention.legal_holds(tenant_id,source_media_id) WHERE active AND source_media_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_retention_hold_origin_active ON retention.legal_holds(tenant_id,origin_version_id) WHERE active AND origin_version_id IS NOT NULL;
+GRANT SELECT, INSERT, UPDATE, DELETE ON retention.legal_holds, retention.deletion_requests TO inspection_runtime;
+`},
+		{Version: 61, Name: "persist_video_preparation_generation", Compatible: true, SQL: `
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS generation integer NOT NULL DEFAULT 1;
+`},
+		{Version: 62, Name: "permit_submitted_video_processing_status", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.reject_original_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE submitted boolean;
+BEGIN
+  IF OLD.status IN ('VERIFIED','SCREENED','READY','REJECTED','PURGED') AND
+     (NEW.object_key,NEW.content_type,NEW.sha256,NEW.size_bytes,NEW.tenant_id,NEW.responsibility_id,NEW.id,NEW.created_at)
+       IS DISTINCT FROM
+     (OLD.object_key,OLD.content_type,OLD.sha256,OLD.size_bytes,OLD.tenant_id,OLD.responsibility_id,OLD.id,OLD.created_at)
+  THEN RAISE EXCEPTION 'original media is immutable'; END IF;
+  SELECT EXISTS(SELECT 1 FROM capture.capture_drafts d WHERE d.tenant_id=OLD.tenant_id AND d.responsibility_id=OLD.responsibility_id AND d.status='SUBMITTED') INTO submitted;
+  IF submitted AND NEW.status <> 'PURGED' AND to_jsonb(NEW) IS DISTINCT FROM to_jsonb(OLD) AND
+     NOT (OLD.replaces_media_id IS NULL AND NEW.replaces_media_id IS NOT NULL AND (to_jsonb(NEW) - 'replaces_media_id') = (to_jsonb(OLD) - 'replaces_media_id')) AND
+     NOT (OLD.media_kind = 'VIDEO' AND NEW.media_kind = 'VIDEO' AND
+          OLD.status IN ('RECEIVED','VERIFIED','SCREENED') AND NEW.status IN ('VERIFIED','SCREENED','READY','REJECTED') AND
+          (to_jsonb(NEW) - 'status') = (to_jsonb(OLD) - 'status') AND
+          (NEW.status <> 'READY' OR EXISTS (
+            SELECT 1 FROM media.video_preparation_jobs p
+            WHERE p.tenant_id = OLD.tenant_id AND p.media_id = OLD.id AND p.status = 'READY'
+          )))
+  THEN RAISE EXCEPTION 'submitted evidence is immutable'; END IF;
+  RETURN NEW;
+END $$;
+`},
+		{Version: 63, Name: "retain_video_scope_identity_ambiguity", Compatible: true, SQL: `
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS identity_status varchar(16) NOT NULL DEFAULT 'RESOLVED';
+ALTER TABLE media.video_scope_items DROP CONSTRAINT IF EXISTS chk_video_scope_identity_status;
+ALTER TABLE media.video_scope_items ADD CONSTRAINT chk_video_scope_identity_status CHECK (identity_status IN ('RESOLVED','AMBIGUOUS'));
+`},
+		{Version: 64, Name: "allow_origin_video_scope_ledger_without_inspection", Compatible: true, SQL: `
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS llm_calls_pkey;
+ALTER TABLE usage.llm_calls ALTER COLUMN inspection_id DROP NOT NULL;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT llm_calls_pkey PRIMARY KEY (call_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_calls_tenant_call ON usage.llm_calls(tenant_id,call_id);
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_inspection_scope;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_inspection_scope CHECK (inspection_id IS NOT NULL OR comparison_mode = 'VIDEO_SCOPE');
+`},
+		{Version: 65, Name: "allow_origin_video_attempt_without_inspection", Compatible: true, SQL: `
+ALTER TABLE capture.video_attempts DROP CONSTRAINT IF EXISTS fk_video_attempt_responsibility;
+CREATE OR REPLACE FUNCTION capture.validate_video_attempt_responsibility() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.kind = 'ORIGIN' THEN
+    IF NOT EXISTS (SELECT 1 FROM capture.capture_drafts d WHERE d.tenant_id=NEW.tenant_id AND d.responsibility_id=NEW.responsibility_id AND d.kind='ORIGIN') THEN
+      RAISE EXCEPTION 'origin video attempt has no capture responsibility';
+    END IF;
+  ELSIF NOT EXISTS (SELECT 1 FROM inspections.responsibilities r WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.responsibility_id) THEN
+    RAISE EXCEPTION 'video attempt has no inspection responsibility';
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_validate_video_attempt_responsibility ON capture.video_attempts;
+CREATE TRIGGER trg_validate_video_attempt_responsibility BEFORE INSERT OR UPDATE OF tenant_id,responsibility_id,kind ON capture.video_attempts FOR EACH ROW EXECUTE FUNCTION capture.validate_video_attempt_responsibility();
+`},
+		{Version: 66, Name: "allow_pre_submission_video_preparation", Compatible: true, SQL: `
+ALTER TABLE media.video_preparation_jobs ALTER COLUMN submission_id DROP NOT NULL;
+`},
+		{Version: 67, Name: "persist_received_video_recapture_state", Compatible: true, SQL: `
+ALTER TABLE recapture.requests DROP CONSTRAINT IF EXISTS chk_recapture_status;
+ALTER TABLE recapture.requests ADD CONSTRAINT chk_recapture_status CHECK (status IN ('REQUESTED','ACCESSED','RECEIVED','SUBMITTED','EXPIRED','CANCELED'));
+DROP INDEX IF EXISTS recapture.idx_recapture_one_active;
+CREATE UNIQUE INDEX idx_recapture_one_active ON recapture.requests(tenant_id, inspection_id) WHERE status IN ('REQUESTED','ACCESSED','RECEIVED');
+`},
+		{Version: 68, Name: "durable_video_plan_execution", Compatible: true, SQL: `
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS lease_token uuid;
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS lease_until timestamptz;
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS next_attempt_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS error_code varchar(64) NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_video_plan_due ON analysis.video_plans(status,next_attempt_at,lease_until,created_at);
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS chk_video_plan_attempts;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT chk_video_plan_attempts CHECK(attempts >= 0);
+GRANT SELECT, INSERT, UPDATE ON analysis.video_plans TO inspection_runtime;
+`},
+		{Version: 69, Name: "active_video_plan_generation", Compatible: true, SQL: `
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS active_video_plan_id uuid;
+UPDATE inspections.inspections i
+SET active_video_plan_id = (
+  SELECT p.id FROM analysis.video_plans p
+  WHERE p.tenant_id=i.tenant_id AND p.inspection_id=i.id AND p.status='SEALED'
+  ORDER BY p.generation DESC, p.created_at DESC, p.id DESC LIMIT 1
+)
+WHERE i.media_kind='VIDEO' AND i.active_video_plan_id IS NULL
+  AND EXISTS (SELECT 1 FROM analysis.video_plans p WHERE p.tenant_id=i.tenant_id AND p.inspection_id=i.id AND p.status='SEALED');
+ALTER TABLE inspections.inspections DROP CONSTRAINT IF EXISTS fk_inspection_active_video_plan;
+ALTER TABLE inspections.inspections ADD CONSTRAINT fk_inspection_active_video_plan FOREIGN KEY(tenant_id,active_video_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+ALTER TABLE analysis.classification_runs ADD COLUMN IF NOT EXISTS video_plan_id uuid;
+ALTER TABLE analysis.classification_runs DROP CONSTRAINT IF EXISTS fk_classification_run_video_plan;
+ALTER TABLE analysis.classification_runs ADD CONSTRAINT fk_classification_run_video_plan FOREIGN KEY(tenant_id,video_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_classification_run_video_plan ON analysis.classification_runs(tenant_id,inspection_id,video_plan_id) WHERE video_plan_id IS NOT NULL;
+GRANT SELECT, UPDATE ON inspections.inspections TO inspection_runtime;
+GRANT SELECT, INSERT ON analysis.classification_runs TO inspection_runtime;
+`},
+		{Version: 70, Name: "version_video_preparations_by_profile", Compatible: true, SQL: `
+ALTER TABLE media.video_preparation_jobs DROP CONSTRAINT IF EXISTS video_preparation_jobs_tenant_id_media_id_key;
+DROP INDEX IF EXISTS media.idx_video_job_media;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_preparation_profile_generation
+  ON media.video_preparation_jobs(tenant_id,media_id,profile_digest,generation);
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS client_mutation_id varchar(128) NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_preparation_mutation
+  ON media.video_preparation_jobs(tenant_id,client_mutation_id) WHERE client_mutation_id <> '';
+CREATE INDEX IF NOT EXISTS idx_video_preparation_current
+  ON media.video_preparation_jobs(tenant_id,media_id,status,created_at DESC,id DESC);
+GRANT SELECT, INSERT, UPDATE ON media.video_preparation_jobs TO inspection_runtime;
+`},
+		{Version: 71, Name: "idempotent_video_plan_reanalysis", Compatible: true, SQL: `
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS client_mutation_id varchar(128) NOT NULL DEFAULT '';
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS expected_plan_id uuid;
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_expected_plan;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_expected_plan FOREIGN KEY(tenant_id,expected_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_plan_reanalysis_mutation
+  ON analysis.video_plans(tenant_id,client_mutation_id) WHERE client_mutation_id <> '';
+GRANT SELECT, INSERT, UPDATE ON analysis.video_plans TO inspection_runtime;
+`},
+		{Version: 72, Name: "video_plan_preparations_and_carried_results", Compatible: true, SQL: `
+ALTER TABLE analysis.video_plans ADD COLUMN IF NOT EXISTS parent_plan_id uuid;
+ALTER TABLE analysis.video_plans DROP CONSTRAINT IF EXISTS fk_video_plan_parent;
+ALTER TABLE analysis.video_plans ADD CONSTRAINT fk_video_plan_parent FOREIGN KEY(tenant_id,parent_plan_id) REFERENCES analysis.video_plans(tenant_id,id);
+ALTER TABLE analysis.video_plan_items ADD COLUMN IF NOT EXISTS carried_result_job_id uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_comparison_job_tenant_id ON analysis.comparison_jobs(tenant_id,id);
+ALTER TABLE analysis.video_plan_items DROP CONSTRAINT IF EXISTS fk_video_plan_item_carried_result;
+ALTER TABLE analysis.video_plan_items ADD CONSTRAINT fk_video_plan_item_carried_result FOREIGN KEY(tenant_id,carried_result_job_id) REFERENCES analysis.comparison_jobs(tenant_id,id);
+CREATE TABLE IF NOT EXISTS analysis.video_plan_preparations (
+  tenant_id uuid NOT NULL, plan_id uuid NOT NULL, preparation_id uuid NOT NULL,
+  role varchar(16) NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(tenant_id,plan_id,preparation_id),
+  FOREIGN KEY(tenant_id,plan_id) REFERENCES analysis.video_plans(tenant_id,id),
+  FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id),
+  CHECK(role IN ('MAIN','SUPPLEMENT','ORIGIN'))
+);
+CREATE INDEX IF NOT EXISTS idx_video_plan_preparations_preparation ON analysis.video_plan_preparations(tenant_id,preparation_id);
+ALTER TABLE analysis.video_plan_preparations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE analysis.video_plan_preparations FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON analysis.video_plan_preparations USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT ON analysis.video_plan_preparations TO inspection_runtime;
+GRANT SELECT, UPDATE ON analysis.video_plan_items TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE ON analysis.video_plans TO inspection_runtime;
+`},
+		{Version: 73, Name: "video_recapture_coverage_jobs", Compatible: true, SQL: `
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recapture_request_tenant_id ON recapture.requests(tenant_id,id);
+CREATE TABLE IF NOT EXISTS recapture.video_coverage_jobs (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL, preparation_id uuid NOT NULL,
+  request_id uuid NOT NULL, status varchar(16) NOT NULL DEFAULT 'QUEUED',
+  attempts integer NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL,
+  lease_token uuid, lease_until timestamptz, error_code varchar(64) NOT NULL DEFAULT '',
+  covered_ids jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id, preparation_id),
+  FOREIGN KEY(tenant_id, preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id),
+  FOREIGN KEY(tenant_id, request_id) REFERENCES recapture.requests(tenant_id,id),
+  CHECK(status IN ('QUEUED','PROCESSING','COMPLETED','FAILED'))
+);
+CREATE INDEX IF NOT EXISTS idx_video_coverage_due ON recapture.video_coverage_jobs(status,next_attempt_at,lease_until);
+ALTER TABLE recapture.video_coverage_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recapture.video_coverage_jobs FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON recapture.video_coverage_jobs USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE ON recapture.video_coverage_jobs TO inspection_runtime;
+`},
+		{Version: 74, Name: "scope_video_plan_frame_identity_index", Compatible: true, SQL: `
+DROP INDEX IF EXISTS analysis.idx_video_plan_frame_tenant_id;
+CREATE UNIQUE INDEX idx_video_plan_frame_tenant_id ON analysis.video_plan_item_frames(tenant_id,id);
+DROP INDEX IF EXISTS media.idx_video_evidence_reference_id;
+CREATE UNIQUE INDEX idx_video_evidence_reference_id ON media.video_evidence_references(tenant_id,id);
+`},
+		{Version: 75, Name: "recapture_unresolved_requirements", Compatible: true, SQL: `
+ALTER TABLE recapture.request_requirements DROP CONSTRAINT IF EXISTS chk_recapture_requirement_status;
+ALTER TABLE recapture.request_requirements ADD CONSTRAINT chk_recapture_requirement_status CHECK (status IN ('OPEN','CORRECTED','EXPIRED','UNRESOLVED','CANCELED'));
+`},
+		{Version: 76, Name: "retention_video_purge_delete_grants", Compatible: true, SQL: `
+GRANT DELETE ON analysis.video_plan_preparations, analysis.video_plan_items, analysis.video_plan_item_frames, analysis.video_plans TO inspection_runtime;
+GRANT DELETE ON media.video_preparation_jobs, media.video_scope_items, media.video_frames TO inspection_runtime;
+`},
+		{Version: 77, Name: "video_membership_tenant_foreign_keys", Compatible: true, SQL: `
+-- Tables first created by model synchronization skipped the inline composite
+-- keys of their CREATE TABLE IF NOT EXISTS. NOT VALID enforces every new write
+-- without failing on historical rows of existing environments.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_video_plan_item_plan' AND conrelid='analysis.video_plan_items'::regclass) THEN
+    ALTER TABLE analysis.video_plan_items ADD CONSTRAINT fk_video_plan_item_plan FOREIGN KEY(tenant_id,plan_id) REFERENCES analysis.video_plans(tenant_id,id) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_video_plan_item_frame_item' AND conrelid='analysis.video_plan_item_frames'::regclass) THEN
+    ALTER TABLE analysis.video_plan_item_frames ADD CONSTRAINT fk_video_plan_item_frame_item FOREIGN KEY(tenant_id,plan_item_id) REFERENCES analysis.video_plan_items(tenant_id,id) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_video_plan_item_frame_frame' AND conrelid='analysis.video_plan_item_frames'::regclass) THEN
+    ALTER TABLE analysis.video_plan_item_frames ADD CONSTRAINT fk_video_plan_item_frame_frame FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_video_scope_preparation' AND conrelid='media.video_scope_items'::regclass) THEN
+    ALTER TABLE media.video_scope_items ADD CONSTRAINT fk_video_scope_preparation FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='fk_video_scope_frame' AND conrelid='media.video_scope_items'::regclass) THEN
+    ALTER TABLE media.video_scope_items ADD CONSTRAINT fk_video_scope_frame FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id) NOT VALID;
+  END IF;
+END $$;
+`},
 	}
 }
 

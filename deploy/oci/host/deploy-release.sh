@@ -9,6 +9,10 @@ release_dir="/opt/inspection/releases/$release"
 release_env="/etc/inspection/releases/$release.env"
 [[ -d "$release_dir/deploy/oci" && -s "$release_env" ]] || { echo "Release bundle or manifest is missing" >&2; exit 1; }
 grep -qx "RELEASE_SHA=$release" "$release_env" || { echo "Release manifest SHA does not match" >&2; exit 1; }
+if [[ -s /etc/inspection/releases/current.env ]] && grep -q '^VIDEO_WORKER_IMAGE=' /etc/inspection/releases/current.env; then
+  echo 'Legacy deploy/rollback is disabled for video-enabled receipts; use plan/apply.' >&2
+  exit 1
+fi
 
 exec 9>/run/lock/inspection-deploy.lock
 flock -n 9 || { echo "Another deployment is running" >&2; exit 1; }
@@ -108,7 +112,7 @@ if [[ "$mode" == --rollback ]]; then
   phase=rollback_starting
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}"
   phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" /usr/local/sbin/inspection-smoke
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" "$release_dir/deploy/oci/host/smoke.sh"
 else
   phase=app_stopping
   write_block
@@ -128,7 +132,7 @@ else
   write_block
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}"
   phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" /usr/local/sbin/inspection-smoke
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" "$release_dir/deploy/oci/host/smoke.sh"
 fi
 
 phase=promoting

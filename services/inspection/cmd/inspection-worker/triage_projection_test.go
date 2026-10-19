@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	handleclassified "inspection/services/inspection/internal/features/reports/handle_classified"
 	"inspection/services/inspection/internal/platform/database"
 
 	"gorm.io/driver/sqlite"
@@ -40,10 +41,10 @@ func TestTriageReviewProjectionCreatesAndRefreshesCaseIdempotently(t *testing.T)
 	tenantID, inspectionID := identity.NewID(), identity.NewID()
 	now := time.Now().UTC()
 	classification := database.ClassificationRun{Classification: "ATTENTION", ReasonCodes: []byte(`["MISSING_EVIDENCE"]`)}
-	if err := upsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 1, now); err != nil {
+	if err := handleclassified.UpsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 1, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := upsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 1, now.Add(time.Minute)); err != nil {
+	if err := handleclassified.UpsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 1, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,7 +61,7 @@ func TestTriageReviewProjectionCreatesAndRefreshesCaseIdempotently(t *testing.T)
 	}
 
 	classification.Classification = "CRITICAL"
-	if err := upsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 2, now.Add(2*time.Minute)); err != nil {
+	if err := handleclassified.UpsertTriageReviewCase(context.Background(), db, tenantID, inspectionID, classification, 2, now.Add(2*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).First(&triage).Error; err != nil {

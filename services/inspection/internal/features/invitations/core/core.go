@@ -17,6 +17,7 @@ import (
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video_admission"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -54,6 +55,7 @@ type Session struct {
 type ProcessingConsent struct {
 	DisclosureVersion string
 	PhotoProcessing   bool
+	VideoProcessing   bool
 	AIAnalysis        bool
 	GPSUse            bool
 }
@@ -65,8 +67,8 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 	if err != nil {
 		return apperror.New(apperror.SessionExpired, "", "session expired")
 	}
-	if strings.TrimSpace(consent.DisclosureVersion) != PrivacyDisclosureVersion || !consent.PhotoProcessing || !consent.AIAnalysis || !consent.GPSUse {
-		return apperror.New(apperror.InvalidInput, "consent", "photo processing, AI analysis, and GPS use must be accepted")
+	if strings.TrimSpace(consent.DisclosureVersion) != PrivacyDisclosureVersion || !consent.AIAnalysis || !consent.GPSUse {
+		return apperror.New(apperror.InvalidInput, "consent", "processing, AI analysis, and GPS use must be accepted")
 	}
 	now := s.now()
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -81,15 +83,49 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 		if proofErr != nil || len(session.CSRFDigest) != 32 || !security.Equal(proof, bytes32(session.CSRFDigest)) {
 			return apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
 		}
-		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: session.ResponsibilityID, DisclosureVersion: strings.TrimSpace(consent.DisclosureVersion), PhotoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
+		var draft database.CaptureDraft
+		if err := tx.Select("media_kind", "kind").Where("tenant_id=? AND responsibility_id=?", tenantID, session.ResponsibilityID).First(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "responsibility", "capture not found")
+			}
+			return apperror.New(apperror.InvalidState, "consent", "capture is unavailable")
+		}
+		if (draft.MediaKind == "VIDEO" && !consent.VideoProcessing) || (draft.MediaKind == "PHOTO" && !consent.PhotoProcessing) {
+			return apperror.New(apperror.InvalidInput, "consent", "processing for this capture must be accepted")
+		}
+		if draft.MediaKind == "VIDEO" && draft.Kind != "RECAPTURE" {
+			var existing database.ProcessingAcceptance
+			err := tx.Select("id").Where("tenant_id=? AND responsibility_id=? AND video_processing=true", tenantID, session.ResponsibilityID).First(&existing).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if err := video_admission.RequireEnabled(tx); err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+		}
+		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: session.ResponsibilityID, DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: consent.PhotoProcessing, VideoProcessing: consent.VideoProcessing, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
+		return tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "responsibility_id"}}, DoUpdates: clause.AssignmentColumns([]string{"disclosure_version", "photo_processing", "video_processing", "ai_analysis", "gps_use", "accepted_at"})}).Create(&row).Error
 	})
 }
 
 func (s Service) HasProcessingAcceptance(ctx context.Context, tenantID, responsibilityID identity.ID) (bool, error) {
 	var count int64
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=? AND photo_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).Count(&count).Error
+		var draft database.CaptureDraft
+		if err := tx.Select("media_kind").Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		query := tx.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=? AND disclosure_version=? AND ai_analysis AND gps_use", tenantID, responsibilityID, PrivacyDisclosureVersion)
+		if draft.MediaKind == "VIDEO" {
+			query = query.Where("video_processing")
+		} else {
+			query = query.Where("photo_processing")
+		}
+		return query.Count(&count).Error
 	})
 	return count == 1, err
 }

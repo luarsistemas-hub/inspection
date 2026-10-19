@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -18,6 +17,7 @@ import (
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
+	processuploadcompleted "inspection/services/inspection/internal/features/media/process_upload_completed"
 	processmedia "inspection/services/inspection/internal/features/media/process_verified"
 	consumeevents "inspection/services/inspection/internal/features/messaging/consume_events"
 	dispatchoutbox "inspection/services/inspection/internal/features/messaging/dispatch_outbox"
@@ -26,13 +26,13 @@ import (
 	executedelivery "inspection/services/inspection/internal/features/notifications/execute_delivery"
 	recordinapp "inspection/services/inspection/internal/features/notifications/record_in_app"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
-	requestdelivery "inspection/services/inspection/internal/features/notifications/request_delivery"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	processdeadline "inspection/services/inspection/internal/features/recapture/process_deadline"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	generatesnapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
+	handleclassified "inspection/services/inspection/internal/features/reports/handle_classified"
+	handlereportready "inspection/services/inspection/internal/features/reports/handle_report_ready"
 	renderpdf "inspection/services/inspection/internal/features/reports/render_pdf"
-	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	purgedata "inspection/services/inspection/internal/features/retention/purge_data"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	recordllmcall "inspection/services/inspection/internal/features/usage/record_llm_call"
@@ -51,11 +51,37 @@ import (
 	"gorm.io/gorm"
 )
 
+// workerQueueDefinitions are the durable queues of the ordinary worker and
+// the event each one receives. Video condition requests are deliberately
+// absent: they belong to the dedicated video worker queue.
+var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+
+// ordinaryQueueContracts drops the dedicated video condition queue: the
+// ordinary worker declares it for topology but never consumes video payloads.
+func ordinaryQueueContracts(contracts []messaging.QueueContract) []messaging.QueueContract {
+	ordinary := make([]messaging.QueueContract, 0, len(contracts))
+	for _, contract := range contracts {
+		if contract.RoutingKey != "analysis.video_comparison_requested.v1" {
+			ordinary = append(ordinary, contract)
+		}
+	}
+	return ordinary
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "inspection-worker:", err)
 		os.Exit(1)
 	}
+}
+
+func resolveClassifiedVideoPlan(tx *gorm.DB, tenantID, inspectionID identity.ID, videoPlanID *identity.ID) (database.VideoPlan, error) {
+	if videoPlanID == nil || *videoPlanID == (identity.ID{}) {
+		return database.VideoPlan{}, messaging.ErrPermanent
+	}
+	var plan database.VideoPlan
+	err := tx.Where("tenant_id=? AND id=? AND inspection_id=? AND status='SEALED'", tenantID, *videoPlanID, inspectionID).Take(&plan).Error
+	return plan, err
 }
 
 func run() error {
@@ -125,8 +151,8 @@ func run() error {
 		return fmt.Errorf("rabbitmq channel: %w", err)
 	}
 	defer channel.Close()
-	contracts := make([]messaging.QueueContract, 0, 22)
-	for _, definition := range [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}} {
+	contracts := make([]messaging.QueueContract, 0, len(workerQueueDefinitions))
+	for _, definition := range workerQueueDefinitions {
 		contract, contractErr := messaging.NewQueueContract(definition[0], definition[1], 32)
 		if contractErr != nil {
 			return contractErr
@@ -155,6 +181,10 @@ func run() error {
 		detector = sensitivecontent.NewDisabledDetector()
 	}
 	mediaHandler, err := processmedia.Setup(processmedia.Dependencies{Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient}, Detector: detector})
+	if err != nil {
+		return err
+	}
+	uploadCompletedHandler, err := processuploadcompleted.Setup(processuploadcompleted.Dependencies{Now: time.Now})
 	if err != nil {
 		return err
 	}
@@ -209,19 +239,24 @@ func run() error {
 	pdfLimits.MaxImageBytes = cfg.ReportPDF.MaxImageBytes
 	pdfLimits.MaxPDFBytes = cfg.ReportPDF.MaxPDFBytes
 	pdfLimits.RetryDelays = cfg.ReportPDF.RetryDelays
-	pdfExecutor, err := renderpdf.SetupExecutor(db, privateStore, pdfLimits, time.Now, metrics)
+	pdfExecutor, err := renderpdf.SetupExecutor(db, privateStore, pdfLimits, time.Now, cfg.AdminOrigin, metrics)
 	if err != nil {
 		return err
 	}
 	analysisRequestHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {
-			JobID identity.ID `json:"jobId"`
+			JobID           identity.ID `json:"jobId"`
+			ComparisonJobID identity.ID `json:"comparisonJobId"`
 		}
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
 			return messaging.ErrPermanent
 		}
-		if payload.JobID != (identity.ID{}) {
-			return processJob(ctx, tx, mustPayload(envelope.Payload, payload.JobID), envelope.TenantID)
+		jobID := payload.JobID
+		if jobID == (identity.ID{}) {
+			jobID = payload.ComparisonJobID
+		}
+		if jobID != (identity.ID{}) {
+			return processJob(ctx, tx, mustPayload(envelope.Payload, jobID), envelope.TenantID)
 		}
 		return requestJobs(ctx, tx, envelope)
 	}
@@ -234,232 +269,18 @@ func run() error {
 		}
 		return originpromote.Process(ctx, runtimeDB, privateStore, envelope.TenantID, payload.PromotionID)
 	}
-	classifiedHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-		var payload struct {
-			InspectionID   identity.ID `json:"inspectionId"`
-			Classification string      `json:"classification"`
-			ReasonCodes    []string    `json:"reasonCodes"`
-		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
-			return messaging.ErrPermanent
-		}
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
-			return err
-		}
-		var class database.ClassificationRun
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").First(&class).Error; err != nil {
-			return err
-		}
-		var previous database.ClassificationRun
-		previousClassification := ""
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").Offset(1).First(&previous).Error; err == nil {
-			previousClassification = previous.Classification
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		var configuredRecipients []database.NotificationRecipient
-		if err := tx.Where("tenant_id=? AND verified=true AND selected=true", envelope.TenantID).Order("channel ASC, destination ASC").Find(&configuredRecipients).Error; err != nil {
-			return err
-		}
-		recipients := make([]requestdelivery.Recipient, 0, len(configuredRecipients))
-		for _, recipient := range configuredRecipients {
-			recipients = append(recipients, requestdelivery.Recipient{ID: recipient.IdentityID.String(), Channel: recipient.Channel, Destination: recipient.Destination, Internal: true, Verified: recipient.Verified, Selected: recipient.Selected})
-		}
-		if err := requestdelivery.Request(ctx, tx, notificationService, requestdelivery.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, Previous: previousClassification, Current: class.Classification, Recipients: recipients, CorrelationID: envelope.CorrelationID}); err != nil {
-			return err
-		}
-		var reference database.ReferenceSnapshot
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).First(&reference).Error; err != nil {
-			return err
-		}
-		referenceVersion := reference.ReferenceVersionID
-		referenceVersionID := "reference-free"
-		if referenceVersion != nil {
-			referenceVersionID = referenceVersion.String()
-		}
-		// Reports are always scoped to the inspection that produced them. Project
-		// membership only adds stage context to the snapshot.
-		mode := "HISTORICAL"
-		var timeline []reportcore.TimelineEntry
-		if inspection.ProjectID != nil {
-			var stages []database.ProjectStage
-			if err := tx.Where("tenant_id=? AND project_id=?", envelope.TenantID, *inspection.ProjectID).Order("position ASC").Find(&stages).Error; err == nil {
-				for _, stage := range stages {
-					timeline = append(timeline, reportcore.TimelineEntry{StageID: stage.ID.String(), Status: stage.Status, Position: stage.Position})
-				}
-			}
-		}
-		var jobs []database.ComparisonJob
-		if err := tx.Where("tenant_id=? AND inspection_id=? AND id IN (SELECT DISTINCT ON (requirement_key) id FROM analysis.comparison_jobs WHERE tenant_id=? AND inspection_id=? ORDER BY requirement_key, created_at DESC, id DESC)", envelope.TenantID, payload.InspectionID, envelope.TenantID, payload.InspectionID).Order("requirement_key ASC").Find(&jobs).Error; err != nil {
-			return err
-		}
-		findings := make([]reportcore.Finding, 0)
-		type requirementAnalysis struct {
-			mode, status     string
-			noRelevantChange *bool
-		}
-		analysisStatuses := make(map[string]requirementAnalysis)
-		evidence := make([]reportcore.Evidence, 0)
-		for _, job := range jobs {
-			var run database.AnalysisRun
-			if err := tx.Where("tenant_id=? AND job_id=?", envelope.TenantID, job.ID).Order("created_at DESC").First(&run).Error; err == nil {
-				var output struct {
-					NoRelevantChange *bool `json:"noRelevantChange"`
-				}
-				_ = json.Unmarshal(run.Output, &output)
-				analysisMode := "CURRENT_ONLY"
-				if reference.ReferenceVersionID != nil && reference.ComparisonMode == "FIXED_ORIGIN" && strings.HasPrefix(job.RequirementKey, "origin:") {
-					analysisMode = "COMPARE_ORIGIN_CURRENT"
-				}
-				analysisStatuses[job.RequirementKey] = requirementAnalysis{mode: analysisMode, status: job.Status, noRelevantChange: output.NoRelevantChange}
-				var rows []database.FindingRecord
-				if err := tx.Where("tenant_id=? AND analysis_run_id=?", envelope.TenantID, run.ID).Order("created_at ASC").Find(&rows).Error; err != nil {
-					return err
-				}
-				for _, row := range rows {
-					var evidenceIDs []string
-					_ = json.Unmarshal(row.Evidence, &evidenceIDs)
-					findings = append(findings, reportcore.Finding{ID: row.ID.String(), Category: row.Category, Title: row.Title, Description: row.Description, Severity: row.Severity, Confidence: row.Confidence, EvidenceIDs: evidenceIDs, Quality: row.Quality, RecommendedAction: row.RecommendedAction})
-				}
-			} else if err != gorm.ErrRecordNotFound {
-				return err
-			}
-			var answer database.RequirementAnswer
-			if err := tx.Where("tenant_id=? AND requirement_key=? AND draft_id IN (SELECT id FROM capture.capture_drafts WHERE tenant_id=? AND responsibility_id IN (SELECT id FROM inspections.responsibilities WHERE tenant_id=? AND inspection_id=?))", envelope.TenantID, job.RequirementKey, envelope.TenantID, envelope.TenantID, payload.InspectionID).Order("updated_at DESC").First(&answer).Error; err != nil {
-				if err == gorm.ErrRecordNotFound {
-					continue
-				}
-				return err
-			}
-			var mediaIDs []identity.ID
-			_ = json.Unmarshal(answer.MediaIDs, &mediaIDs)
-			var flags []string
-			_ = json.Unmarshal(answer.Flags, &flags)
-			for _, mediaID := range mediaIDs {
-				item := reportcore.Evidence{ID: mediaID.String(), RequirementKey: job.RequirementKey, Role: "CURRENT", Flags: append([]string(nil), flags...)}
-				var media database.MediaObject
-				if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, mediaID).First(&media).Error; err == nil {
-					item.Description = media.Description
-					item.CaptureSource = media.CaptureSource
-					if media.CapturedAt != nil {
-						item.CapturedAt = media.CapturedAt.UTC().Format(time.RFC3339Nano)
-					}
-					item.Availability = "MISSING"
-					var derivative database.MediaDerivative
-					if err := tx.Where("tenant_id=? AND media_id=? AND kind=?", envelope.TenantID, mediaID, "DISPLAY").First(&derivative).Error; err == nil {
-						item.DisplayDigest, item.Availability = derivative.SHA256, "AVAILABLE"
-					} else if err != gorm.ErrRecordNotFound {
-						return err
-					}
-					var mediaFlags []string
-					if json.Unmarshal(media.Flags, &mediaFlags) == nil && len(mediaFlags) > 0 {
-						item.Flags = append(item.Flags, mediaFlags...)
-					}
-				} else if err != gorm.ErrRecordNotFound {
-					return err
-				}
-				evidence = append(evidence, item)
-			}
-		}
-		context, requirements, referenceEvidence, err := reportSnapshotContext(ctx, tx, envelope.TenantID, inspection, reference, envelope.OccurredAt)
-		if err != nil {
-			return err
-		}
-		for i := range requirements {
-			if result, ok := analysisStatuses[requirements[i].Key]; ok {
-				requirements[i].AnalysisMode = result.mode
-				requirements[i].AnalysisStatus = result.status
-				requirements[i].NoRelevantChange = result.noRelevantChange
-			} else {
-				requirements[i].AnalysisMode = "CURRENT_ONLY"
-				requirements[i].AnalysisStatus = "PENDING"
-			}
-		}
-		var promptSnapshot database.AnalysisPromptSnapshot
-		if err := tx.Where("id=?", inspection.AnalysisPromptSnapshotID).First(&promptSnapshot).Error; err != nil {
-			return err
-		}
-		evidence = append(referenceEvidence, evidence...)
-		result, err := createReport(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence})
-		if err != nil {
-			return err
-		}
-		now := time.Now().UTC()
-		if err := upsertTriageReviewCase(ctx, tx, envelope.TenantID, payload.InspectionID, class, result.Version, now); err != nil {
-			return err
-		}
-		eventID := identity.NewID()
-		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "report.snapshot_created.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"snapshotId": result.SnapshotID, "inspectionId": payload.InspectionID, "version": result.Version}})
+	classifiedHandler, err := handleclassified.Setup(handleclassified.Dependencies{Notifications: notificationService, CreateSnapshot: createReport, Now: time.Now})
+	if err != nil {
+		return err
 	}
-	dashboardHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-		var payload struct {
-			InspectionID identity.ID `json:"inspectionId"`
-		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
-			return messaging.ErrPermanent
-		}
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
-			return err
-		}
-		var class database.ClassificationRun
-		if err := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("created_at DESC").First(&class).Error; err != nil {
-			return err
-		}
-		row := database.DashboardInspection{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, ProjectID: inspection.ProjectID, AssetID: inspection.AssetID, Classification: class.Classification, Status: inspection.Status, Invalidated: inspection.Status == "INVALIDATED", Sequence: time.Now().UnixNano(), UpdatedAt: time.Now().UTC()}
-		if err := upsertDashboardInspection(tx.WithContext(ctx), row); err != nil {
-			return err
-		}
-		var snapshot database.ReportSnapshot
-		snapshotErr := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID).Order("version_number DESC").First(&snapshot).Error
-		if snapshotErr != nil && snapshotErr != gorm.ErrRecordNotFound {
-			return snapshotErr
-		}
-		return upsertTriageReviewCase(ctx, tx, envelope.TenantID, payload.InspectionID, class, snapshot.VersionNumber, time.Now().UTC())
+
+	reportReadyHandler, err := handlereportready.Setup(handlereportready.Dependencies{InAppNotification: inAppNotification, UpsertTriage: handleclassified.UpsertTriageReviewCase, Now: time.Now})
+	if err != nil {
+		return err
 	}
+
 	retentionHandler := func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-		var payload struct {
-			InspectionID identity.ID `json:"inspectionId"`
-		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
-			return messaging.ErrPermanent
-		}
-		var hold database.LegalHold
-		if err := tx.Where("tenant_id=? AND inspection_id=? AND active", envelope.TenantID, payload.InspectionID).First(&hold).Error; err == nil {
-			return nil
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		// Never trust the fact that an event was published as proof that a
-		// retention clock elapsed. Rebuild the authoritative clock from the
-		// terminal inspection timestamp and the latest tenant policy so a replay
-		// or forged early event cannot delete evidence prematurely.
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
-			return err
-		}
-		policy := retentioncore.DefaultPolicy()
-		var configured database.RetentionPolicy
-		if err := tx.Where("tenant_id=?", envelope.TenantID).Order("version DESC").First(&configured).Error; err == nil {
-			policy.EvidenceReports = time.Duration(configured.EvidenceDays) * 24 * time.Hour
-			policy.Operational = time.Duration(configured.OperationalDays) * 24 * time.Hour
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		}
-		clock, err := retentioncore.NewClock(retentioncore.EvidenceReports, inspection.UpdatedAt, time.Time{}, policy)
-		if err != nil {
-			return err
-		}
-		if !clock.Eligible(time.Now().UTC()) {
-			return gorm.ErrInvalidData
-		}
-		purge, err := purgedata.PurgeWithStore(ctx, tx, privateStore, envelope.TenantID, payload.InspectionID, clock)
-		if err != nil {
-			return err
-		}
-		now := purge.CreatedAt
-		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
+		return purgedata.HandleDueEvent(ctx, tx, privateStore, envelope)
 	}
 	handlers := map[string]func(context.Context, *gorm.DB, events.RawEnvelope) error{
 		"inspection.created.v1": inspectionCreatedHandler(inAppNotification),
@@ -494,6 +315,7 @@ func run() error {
 		},
 		"origin.invitation_requested.v1": invitationHandler,
 		"origin.promotion_requested.v1":  promotionHandler,
+		"media.upload_completed.v1":      uploadCompletedHandler,
 		"media.verified.v1":              mediaHandler,
 		"recapture.deadline_reached.v1":  deadlineHandler,
 		"recapture.requested.v1":         inAppNotification,
@@ -504,28 +326,18 @@ func run() error {
 			}
 			return inAppNotification(ctx, tx, envelope)
 		},
-		"analysis.comparison_requested.v1": analysisRequestHandler,
-		"analysis.comparison_completed.v1": classify,
-		"inspection.classified.v1":         classifiedHandler,
-		"report.snapshot_created.v1":       render,
-		"report.ready.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
-			if err := dashboardHandler(ctx, tx, envelope); err != nil {
-				return err
-			}
-			return inAppNotification(ctx, tx, envelope)
-		},
+		"analysis.comparison_requested.v1":   analysisRequestHandler,
+		"analysis.comparison_completed.v1":   classify,
+		"inspection.classified.v1":           classifiedHandler,
+		"report.snapshot_created.v1":         render,
+		"report.ready.v1":                    reportReadyHandler,
 		"notification.delivery_requested.v2": consumedelivery.Setup(),
 		"notification.delivery_terminal.v1":  terminalAlert,
 		"retention.purge_due.v1":             retentionHandler,
-		"retention.purged.v1": func(_ context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
-			var payload map[string]any
-			if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
-				return messaging.ErrPermanent
-			}
-			return nil
-		},
+		"retention.purged.v1":                purgedata.HandlePurgedEvent,
 	}
-	consume, err := consumeevents.Setup(consumeevents.Dependencies{DB: db, Connection: connection, Contracts: contracts, Registry: events.DefaultRegistry(), Handlers: handlers, Observer: workerObserver, DeliveryObserver: workerObserver})
+	ordinaryContracts := ordinaryQueueContracts(contracts)
+	consume, err := consumeevents.Setup(consumeevents.Dependencies{DB: db, Connection: connection, Contracts: ordinaryContracts, Registry: events.DefaultRegistry(), Handlers: handlers, Observer: workerObserver, DeliveryObserver: workerObserver})
 	if err != nil {
 		return err
 	}
@@ -707,6 +519,94 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		evidence = append(evidence, value)
 	}
 	return context, requirements, evidence, nil
+}
+
+func reportVideoPlanEvidence(ctx context.Context, tx *gorm.DB, tenantID, planItemID identity.ID) ([]reportcore.Evidence, error) {
+	var item database.VideoPlanItem
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, planItemID).Take(&item).Error; err != nil {
+		return nil, err
+	}
+	var memberships []database.VideoPlanItemFrame
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_item_id=?", tenantID, item.ID).Order("core_group ASC,role ASC,pair_order ASC").Find(&memberships).Error; err != nil {
+		return nil, err
+	}
+	evidence := make([]reportcore.Evidence, 0, len(memberships))
+	for _, membership := range memberships {
+		var frame database.VideoFrame
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, membership.FrameID).Take(&frame).Error; err != nil {
+			return nil, err
+		}
+		var source database.VideoSource
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", tenantID, frame.SourceMediaID).Take(&source).Error; err != nil {
+			return nil, err
+		}
+		evidence = append(evidence, reportVideoFrameEvidence(item, membership, frame, source))
+	}
+	return evidence, nil
+}
+
+func loadReportVideoPlanJobs(ctx context.Context, tx *gorm.DB, tenantID, inspectionID, planID identity.ID) ([]database.ComparisonJob, error) {
+	var jobs []database.ComparisonJob
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND video_plan_id=?", tenantID, inspectionID, planID).Order("requirement_key ASC,video_core_group ASC").Find(&jobs).Error; err != nil {
+		return nil, err
+	}
+	var items []database.VideoPlanItem
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND carried_result_job_id IS NOT NULL", tenantID, planID).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return jobs, nil
+	}
+	var plan database.VideoPlan
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, planID).Take(&plan).Error; err != nil {
+		return nil, err
+	}
+	if plan.ParentPlanID == nil {
+		return nil, messaging.ErrPermanent
+	}
+	ancestorIDs := make([]identity.ID, 0, 4)
+	seen := map[identity.ID]struct{}{plan.ID: {}}
+	current := plan
+	for depth := 0; current.ParentPlanID != nil; depth++ {
+		if depth >= 32 {
+			return nil, messaging.ErrPermanent
+		}
+		parentID := *current.ParentPlanID
+		if _, exists := seen[parentID]; exists {
+			return nil, messaging.ErrPermanent
+		}
+		seen[parentID] = struct{}{}
+		ancestorIDs = append(ancestorIDs, parentID)
+		var ancestor database.VideoPlan
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND inspection_id=?", tenantID, parentID, inspectionID).Take(&ancestor).Error; err != nil {
+			return nil, err
+		}
+		current = ancestor
+	}
+	for _, item := range items {
+		var carried database.ComparisonJob
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND inspection_id=? AND video_plan_id IN ? AND status IN ('COMPLETED','INCONCLUSIVE','FAILED')", tenantID, *item.CarriedResultJobID, inspectionID, ancestorIDs).Take(&carried).Error; err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, carried)
+	}
+	return jobs, nil
+}
+
+func reportVideoFrameEvidence(item database.VideoPlanItem, membership database.VideoPlanItemFrame, frame database.VideoFrame, source database.VideoSource) reportcore.Evidence {
+	role := "CURRENT"
+	if membership.Role == "ORIGIN" {
+		role = "REFERENCE"
+	}
+	ptsMicros := frame.PTSMicros
+	timestampMS := ptsMicros / 1000
+	return reportcore.Evidence{
+		ID: frame.ID.String(), RequirementKey: item.RequirementKey, Role: role,
+		EvidenceKind: "VIDEO_FRAME", FrameID: frame.ID.String(), SourceMediaID: frame.SourceMediaID.String(),
+		PreparationID: frame.PreparationID.String(), PTSMicros: &ptsMicros, TimestampMS: &timestampMS, FrameDigest: frame.SHA256,
+		CaptureSource: "VIDEO", DisplayDigest: frame.SHA256, Availability: "AVAILABLE", SourceAvailability: source.Status,
+		Description: fmt.Sprintf("Quadro do vídeo em %d ms", timestampMS),
+	}
 }
 
 func reportSnapshotRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, templateDefinition []byte) ([]reportcore.Requirement, error) {

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"inspection/services/inspection/internal/platform/video"
 )
 
 func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
@@ -81,6 +83,56 @@ func TestHTTPGatewayRejectsMalformedProviderResponseAndUnauthorizedImage(t *test
 	}
 }
 
+func TestHTTPGatewayAllowsVideoFramesOnlyForAuxiliaryModes(t *testing.T) {
+	image := NormalizedImage{EvidenceID: "frame-1", Source: "VIDEO_FRAME", Digest: "digest", DataURL: "data:image/jpeg;base64,AAAA"}
+	_, err := (HTTPGateway{BaseURL: "http://127.0.0.1:1"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-video-preparation", PromptDigest: "digest", Mode: "VIDEO_SCOPE", SystemPrompt: "system", UserPrompt: "scope", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{image}})
+	var typed *Error
+	if !errors.As(err, &typed) || typed.Code != CodeTransport {
+		t.Fatalf("video frame was rejected before auxiliary gateway call: %v", err)
+	}
+	_, err = (HTTPGateway{BaseURL: "http://127.0.0.1:1"}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", Mode: "CURRENT_ONLY", SystemPrompt: "system", UserPrompt: "condition", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{image}})
+	if !errors.As(err, &typed) || typed.Code != CodeInvalidInput {
+		t.Fatalf("video frame reached condition processing: %v", err)
+	}
+	request := StructuredRequest{ModelAlias: "inspection-video-preparation", PromptDigest: "digest", Mode: "VIDEO_SCOPE", SystemPrompt: "system", UserPrompt: "scope", JSONSchema: []byte(`{"type":"object"}`), Images: make([]NormalizedImage, 25)}
+	_, err = (HTTPGateway{BaseURL: "http://127.0.0.1:1"}).CompleteStructured(context.Background(), request)
+	if !errors.As(err, &typed) || typed.Code != CodeInvalidInput {
+		t.Fatalf("oversized semantic batch reached gateway: %v", err)
+	}
+}
+
+func TestVideoScopeGatewayPreservesKnownFrameObservationsUT080(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		encoded, _ := json.Marshal(body)
+		for _, id := range []string{"F1", "F2"} {
+			if !strings.Contains(string(encoded), "evidenceId="+id) {
+				t.Fatalf("frame %s omitted from gateway request", id)
+			}
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"observations\":[{\"frameId\":\"F1\",\"environmentCandidate\":\"kitchen\",\"componentLabel\":\"sink\",\"viewLabel\":\"wide\",\"visibility\":\"VISIBLE\",\"landmarks\":[]},{\"frameId\":\"F2\",\"environmentCandidate\":\"bathroom\",\"componentLabel\":\"basin\",\"viewLabel\":\"wide\",\"visibility\":\"VISIBLE\",\"landmarks\":[]}],\"unresolvedFrameIds\":[]}"}}]}`))
+	}))
+	defer server.Close()
+	request := StructuredRequest{ModelAlias: "inspection-video-preparation", PromptDigest: "digest", Mode: "VIDEO_SCOPE", SystemPrompt: "system", UserPrompt: "scope", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "F1", Source: "VIDEO_FRAME", Digest: "d1", DataURL: "data:image/jpeg;base64,AAAA"}, {EvidenceID: "F2", Source: "VIDEO_FRAME", Digest: "d2", DataURL: "data:image/jpeg;base64,AAAA"}}}
+	result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scope struct {
+		Observations []video.ScopeObservation `json:"observations"`
+		Unresolved   []string                 `json:"unresolvedFrameIds"`
+	}
+	if err := json.Unmarshal(result.JSON, &scope); err != nil {
+		t.Fatal(err)
+	}
+	if err := video.ValidateScope([]string{"F1", "F2"}, scope.Observations, scope.Unresolved); err != nil {
+		t.Fatalf("gateway observations did not preserve valid frame IDs: %v", err)
+	}
+}
+
 func TestHTTPGatewayClassifiesProviderHTTPStatuses(t *testing.T) {
 	for _, tc := range []struct {
 		status int
@@ -103,7 +155,7 @@ func TestHTTPGatewayClassifiesProviderHTTPStatuses(t *testing.T) {
 	}
 }
 
-func TestHTTPGatewayClassifiesTimeoutNetworkAndMissingUsage(t *testing.T) {
+func TestHTTPGatewayClassifiesTimeoutNetworkAndMissingUsageUT081(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		<-time.After(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)

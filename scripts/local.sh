@@ -11,7 +11,7 @@ Uso: ./scripts/local.sh <comando>
 
 Comandos:
   init             cria .env.inspection a partir de .env.example
-  up               constrói e sobe a stack completa (Admin, Dashboard, Capture e Onboarding)
+  up               constrói e sobe a stack completa, incluindo o worker de vídeo
   infra            sobe somente infraestrutura, bootstrap e migrations
   migrate          executa migrations e recria os papéis locais
   seed             cria dados locais para QA após o onboarding do Admin
@@ -20,7 +20,8 @@ Comandos:
   down [-v]         para a stack; -v também remove os volumes
   help             mostra esta ajuda
 
-Variáveis úteis: INSPECTION_ENV_FILE e INSPECTION_STARTUP_TIMEOUT (segundos).
+Variáveis úteis: INSPECTION_ENV_FILE, INSPECTION_STARTUP_TIMEOUT (segundos)
+e INSPECTION_VIDEO_WORKER=0 para subir sem o worker de vídeo.
 EOF
 }
 
@@ -51,6 +52,12 @@ load_env() {
 
 compose() {
   local llm_url="${INSPECTION_LITELLM_DOCKER_URL:-}"
+  local -a profiles=()
+  case "${INSPECTION_VIDEO_WORKER:-1}" in
+    1) profiles+=(--profile video) ;;
+    0) ;;
+    *) die "INSPECTION_VIDEO_WORKER deve ser 0 ou 1" ;;
+  esac
   if [[ -z "$llm_url" ]]; then
     if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
       llm_url="http://litellm:4000"
@@ -59,7 +66,10 @@ compose() {
     fi
   fi
   if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
-    INSPECTION_LITELLM_DOCKER_URL="$llm_url" docker compose --profile llm-live --env-file "$env_file" -f "$compose_file" "$@"
+    profiles+=(--profile llm-live)
+  fi
+  if [[ ${#profiles[@]} -gt 0 ]]; then
+    INSPECTION_LITELLM_DOCKER_URL="$llm_url" docker compose "${profiles[@]}" --env-file "$env_file" -f "$compose_file" "$@"
   else
     INSPECTION_LITELLM_DOCKER_URL="$llm_url" docker compose --env-file "$env_file" -f "$compose_file" "$@"
   fi
@@ -146,6 +156,9 @@ case "${1:-help}" in
       check_port "${INSPECTION_DASHBOARD_PORT:-3002}" "Dashboard"
       check_port "${INSPECTION_CAPTURE_PORT:-3003}" "Capture"
       check_port "${INSPECTION_ONBOARDING_PORT:-3004}" "Onboarding"
+      if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
+        check_port "${INSPECTION_VIDEO_WORKER_PORT:-8091}" "worker de vídeo"
+      fi
     fi
     compose up -d --build --remove-orphans
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API"
@@ -154,6 +167,9 @@ case "${1:-help}" in
     wait_http "http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}/inspections" "Dashboard"
     wait_http "http://localhost:${INSPECTION_CAPTURE_PORT:-3003}/manifest.webmanifest" "Capture"
     wait_http "http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}/" "Onboarding"
+    if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
+      wait_http "http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health" "Worker de vídeo"
+    fi
     ;;
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env; validate_llm_mode
@@ -203,6 +219,7 @@ URLs locais:
   Dashboard      http://localhost:${INSPECTION_DASHBOARD_PORT:-3002}
   Capture        http://localhost:${INSPECTION_CAPTURE_PORT:-3003}
   Onboarding     http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}
+  Video worker   http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health
   GraphQL        http://localhost:${INSPECTION_API_PORT:-8080}/graphql
   Health/ready   http://localhost:${INSPECTION_API_PORT:-8080}/healthz | /readyz
   Keycloak       http://localhost:8081 (credenciais em .env.inspection)

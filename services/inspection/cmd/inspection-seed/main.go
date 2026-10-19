@@ -34,7 +34,22 @@ func main() {
 		log.Fatal(err)
 	}
 	ctx := context.Background()
-	url, err := seedqa.Setup(ctx, db, issuer, captureBaseURL)
+	mediaKind := envOr("INSPECTION_QA_MEDIA_KIND", "PHOTO")
+	scenario := os.Getenv("INSPECTION_QA_SCENARIO")
+	if scenario != "" && scenario != "ORIGIN_VIDEO" && scenario != "FIXED_ORIGIN_VIDEO" {
+		log.Fatal("INSPECTION_QA_SCENARIO must be ORIGIN_VIDEO or FIXED_ORIGIN_VIDEO")
+	}
+	if scenario != "" && os.Getenv("INSPECTION_ENV") != "local" {
+		log.Fatal("video origin QA scenarios can only run in the local environment")
+	}
+	if scenario != "" {
+		mediaKind = "VIDEO"
+	}
+	enableVideoAdmission := os.Getenv("INSPECTION_QA_ENABLE_VIDEO_ADMISSION") == "true"
+	if enableVideoAdmission && os.Getenv("INSPECTION_ENV") != "local" {
+		log.Fatal("QA video admission can only be enabled in the local environment")
+	}
+	url, err := seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, enableVideoAdmission)
 	if errors.Is(err, seedqa.ErrLocalOnboardingMissing) {
 		apiURL := os.Getenv("INSPECTION_API_URL")
 		if apiURL == "" {
@@ -43,10 +58,21 @@ func main() {
 		if bootstrapErr := bootstrapLocalAdmin(ctx, apiURL, tokenIssuer, issuer, envOr("INSPECTION_SEED_USERNAME", "admin"), envOr("INSPECTION_SEED_PASSWORD", "admin")); bootstrapErr != nil {
 			log.Fatalf("local onboarding is missing and automatic bootstrap failed: %v", bootstrapErr)
 		}
-		url, err = seedqa.Setup(ctx, db, issuer, captureBaseURL)
+		url, err = seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, enableVideoAdmission)
 	}
 	if err != nil {
 		log.Fatal(err)
+	}
+	if scenario == "ORIGIN_VIDEO" {
+		url, err = seedqa.SetupOriginVideoInvite(ctx, db, issuer, captureBaseURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if scenario == "FIXED_ORIGIN_VIDEO" {
+		if err := seedqa.SetupFixedOriginVideo(ctx, db, issuer, os.Getenv("INSPECTION_MINIO_ENDPOINT"), os.Getenv("INSPECTION_MINIO_ACCESS_KEY"), os.Getenv("INSPECTION_MINIO_SECRET_KEY"), os.Getenv("INSPECTION_MINIO_BUCKET"), os.Getenv("INSPECTION_MINIO_SECURE") == "true"); err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Printf("QA data created. Capture URL: %s\n", url)
 }

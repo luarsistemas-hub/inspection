@@ -22,6 +22,7 @@ import (
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
 	postallookup "inspection/services/inspection/internal/features/addresses/lookup_postal_code"
 	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
+	reanalyzevideoinsp "inspection/services/inspection/internal/features/analysis/reanalyze_video_inspection"
 	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	archiveasset "inspection/services/inspection/internal/features/assets/archive_asset"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
@@ -30,6 +31,7 @@ import (
 	updateasset "inspection/services/inspection/internal/features/assets/update_asset"
 	listaudit "inspection/services/inspection/internal/features/audit/list_events"
 	recordaudit "inspection/services/inspection/internal/features/audit/record_event"
+	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
@@ -51,10 +53,13 @@ import (
 	revokeinvitation "inspection/services/inspection/internal/features/invitations/revoke_invitation"
 	verifyotp "inspection/services/inspection/internal/features/invitations/verify_otp"
 	mediacomplete "inspection/services/inspection/internal/features/media/complete_upload"
+	mediavideopolicy "inspection/services/inspection/internal/features/media/configure_video_policy"
 	mediacore "inspection/services/inspection/internal/features/media/core"
 	mediacreate "inspection/services/inspection/internal/features/media/create_upload"
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
+	mediavideoprep "inspection/services/inspection/internal/features/media/manage_video_preparation"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
+	mediareadvideo "inspection/services/inspection/internal/features/media/read_video_evidence"
 	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
 	receivemetastatus "inspection/services/inspection/internal/features/notifications/receive_meta_status"
 	receivetwiliostatus "inspection/services/inspection/internal/features/notifications/receive_twilio_status"
@@ -67,11 +72,13 @@ import (
 	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
+	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
+	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	deactivateparticipant "inspection/services/inspection/internal/features/participants/deactivate_participant"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
@@ -130,6 +137,8 @@ import (
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/requestctx"
 	process "inspection/services/inspection/internal/platform/runtime"
+	"inspection/services/inspection/internal/platform/security"
+	"inspection/services/inspection/internal/platform/testfailure"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -150,6 +159,11 @@ func run() error {
 	db, err := database.Open(cfg.DatabaseURL)
 	if err != nil {
 		return err
+	}
+	if cfg.Environment == "test" {
+		if err := testfailure.Install(db); err != nil {
+			return err
+		}
 	}
 	metrics := observability.NewMetrics()
 	// The operational service is constructed independently from the legacy OTP
@@ -404,14 +418,21 @@ func run() error {
 			return origininvalidate.Setup(origininvalidate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
 		},
 		func() error {
+			return originclose.Setup(originclose.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
 			return originlist.Setup(originlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
 			return originpromote.Setup(originpromote.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
+			return originpromotevideo.Setup(originpromotevideo.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})
 		},
+		func() error { return capturebeginvideo.Setup(capturebeginvideo.Dependencies{DB: db, Bus: bus}) },
 		func() error {
 			return capturereferences.Setup(capturereferences.Dependencies{Bus: bus, DB: db, Store: mediaStore})
 		},
@@ -423,6 +444,15 @@ func run() error {
 			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})
 		},
 		func() error { return mediacreate.Setup(mediacreate.Dependencies{Bus: bus, Service: mediaService}) },
+		func() error {
+			return mediavideopolicy.Setup(mediavideopolicy.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return mediavideoprep.Setup(mediavideoprep.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return reanalyzevideoinsp.Setup(reanalyzevideoinsp.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
 		func() error { return mediapresign.Setup(mediapresign.Dependencies{Bus: bus, Service: mediaService}) },
 		func() error {
 			return mediareconcile.Setup(mediareconcile.Dependencies{Bus: bus, Service: mediaService})
@@ -447,6 +477,11 @@ func run() error {
 		}
 	}
 	mux := http.NewServeMux()
+	if _, err := mediareadvideo.Setup(mux, mediareadvideo.Dependencies{DB: db, Store: mediaStore, Authorizer: authorizer, Authenticate: func(r *http.Request) (requestctx.Metadata, bool) {
+		return authenticateMediaRead(r, cfg.TestAuthEnabled, authenticator, membershipStore, invitationService)
+	}}); err != nil {
+		return err
+	}
 	if err := onboardinglogout.Setup(mux, onboardinglogout.Dependencies{
 		Sessions: onboardingService,
 		SecureCookie: func(r *http.Request) bool {
@@ -546,12 +581,46 @@ func run() error {
 		if cookie, cookieErr := r.Cookie("inspection_user_invitation"); cookieErr == nil {
 			ctx = requestctx.WithUserInvitationCredentials(ctx, requestctx.UserInvitationCredentials{SessionToken: cookie.Value, CSRFToken: r.Header.Get("X-CSRF-Token")})
 		}
-		server.ServeHTTP(w, r.WithContext(requestctx.WithIdempotencyKey(ctx, r.Header.Get("Idempotency-Key"))))
+		r = testfailure.WithRequest(r.WithContext(ctx), cfg.Environment)
+		ctx = requestctx.WithIdempotencyKey(r.Context(), r.Header.Get("Idempotency-Key"))
+		server.ServeHTTP(w, r.WithContext(ctx))
 	}))
 	if err := operational.SetupWithMetrics(mux, func(r *http.Request) error { return database.Compatible(r.Context(), db, cfg.SchemaMin, cfg.SchemaMax) }, cfg.MetricsToken, metrics); err != nil {
 		return err
 	}
-	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, mux), cfg.ShutdownTimeout)
+	return process.Serve(cfg.HTTPAddress, httpboundary.CORS(cfg.AllowedOrigins, cfg.CaptureOrigin, observability.HTTPMetrics(metrics, mux)), cfg.ShutdownTimeout)
+}
+
+func authenticateMediaRead(r *http.Request, testAuth bool, authenticator auth.Authenticator, memberships auth.GORMMembershipStore, invitations invitationcore.Service) (requestctx.Metadata, bool) {
+	if cookie, err := r.Cookie("inspection_external"); err == nil {
+		responsibilityID, validateErr := invitations.ValidateSession(r.Context(), cookie.Value, r.Header.Get("X-CSRF-Token"))
+		tenantID, tenantErr := security.ParseScopedToken(cookie.Value)
+		if validateErr != nil || tenantErr != nil {
+			return requestctx.Metadata{}, false
+		}
+		return requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: responsibilityID, TenantID: tenantID, Internal: true}, CorrelationID: r.Header.Get("X-Correlation-ID"), StartedAt: time.Now().UTC()}, true
+	}
+	if testAuth && r.Header.Get("X-Inspection-Test-Tenant") != "" {
+		metadata, err := auth.TestMetadataFromHeaders(r)
+		return metadata, err == nil
+	}
+	if r.Header.Get("Authorization") == "" {
+		return requestctx.Metadata{}, false
+	}
+	principal, err := authenticator.Authenticate(r.Context(), r.Header.Get("Authorization"))
+	if err != nil || r.Header.Get(auth.MembershipHeader) == "" {
+		return requestctx.Metadata{}, false
+	}
+	membershipID, err := identity.ParseID(strings.TrimSpace(r.Header.Get(auth.MembershipHeader)))
+	if err != nil {
+		return requestctx.Metadata{}, false
+	}
+	resolved, err := memberships.ResolveMembership(r.Context(), principal.Issuer, principal.Subject, membershipID)
+	if err != nil || resolved.Disabled {
+		return requestctx.Metadata{}, false
+	}
+	resolved.Audience, resolved.Product = principal.Audience, principal.Product
+	return requestctx.Metadata{TenantID: resolved.TenantID, Principal: resolved, CorrelationID: r.Header.Get("X-Correlation-ID"), StartedAt: time.Now().UTC()}, true
 }
 
 // isMembershipOptionalRequest allows only identity selection and tenant

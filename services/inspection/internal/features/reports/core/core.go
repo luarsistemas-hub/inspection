@@ -19,6 +19,7 @@ type Snapshot struct {
 	ProjectID          string            `json:"projectId,omitempty"`
 	TemplateVersionID  string            `json:"templateVersionId"`
 	ReferenceVersionID string            `json:"referenceVersionId"`
+	VideoPlanID        string            `json:"videoPlanId,omitempty"`
 	PromptDigest       string            `json:"promptDigest"`
 	Mode               string            `json:"mode"`
 	Classification     string            `json:"classification"`
@@ -29,7 +30,9 @@ type Snapshot struct {
 	Requirements       []Requirement     `json:"requirements,omitempty"`
 	Findings           []Finding         `json:"findings,omitempty"`
 	Evidence           []Evidence        `json:"evidence,omitempty"`
-	Advisory           string            `json:"advisory"`
+	// ScopeStatements bound video conclusions to the observed scope.
+	ScopeStatements []string `json:"scopeStatements,omitempty"`
+	Advisory        string   `json:"advisory"`
 }
 
 // Context is the immutable, reader-friendly identity of the inspection at the
@@ -101,15 +104,23 @@ type Finding struct {
 // Evidence is a report-safe view of current evidence metadata. Object keys,
 // signed URLs, and media bytes never enter a snapshot.
 type Evidence struct {
-	ID             string   `json:"id"`
-	RequirementKey string   `json:"requirementKey"`
-	Role           string   `json:"role"`
-	Description    string   `json:"description,omitempty"`
-	CaptureSource  string   `json:"captureSource,omitempty"`
-	CapturedAt     string   `json:"capturedAt,omitempty"`
-	DisplayDigest  string   `json:"displayDigest,omitempty"`
-	Availability   string   `json:"availability,omitempty"`
-	Flags          []string `json:"flags,omitempty"`
+	ID                 string   `json:"id"`
+	RequirementKey     string   `json:"requirementKey"`
+	Role               string   `json:"role"`
+	EvidenceKind       string   `json:"evidenceKind,omitempty"`
+	FrameID            string   `json:"frameId,omitempty"`
+	SourceMediaID      string   `json:"sourceMediaId,omitempty"`
+	PreparationID      string   `json:"preparationId,omitempty"`
+	PTSMicros          *int64   `json:"ptsMicros,omitempty"`
+	TimestampMS        *int64   `json:"timestampMs,omitempty"`
+	FrameDigest        string   `json:"frameDigest,omitempty"`
+	SourceAvailability string   `json:"sourceAvailability,omitempty"`
+	Description        string   `json:"description,omitempty"`
+	CaptureSource      string   `json:"captureSource,omitempty"`
+	CapturedAt         string   `json:"capturedAt,omitempty"`
+	DisplayDigest      string   `json:"displayDigest,omitempty"`
+	Availability       string   `json:"availability,omitempty"`
+	Flags              []string `json:"flags,omitempty"`
 }
 
 type TimelineEntry struct {
@@ -171,6 +182,15 @@ func Validate(snapshot Snapshot) error {
 		if strings.TrimSpace(evidence.ID) == "" || strings.TrimSpace(evidence.RequirementKey) == "" || (evidence.Role != "" && evidence.Role != "CURRENT" && evidence.Role != "REFERENCE") {
 			return fmt.Errorf("report evidence identity is required")
 		}
+		if evidence.EvidenceKind != "" && evidence.EvidenceKind != "PHOTO" && evidence.EvidenceKind != "VIDEO_FRAME" {
+			return fmt.Errorf("report evidence kind is invalid")
+		}
+		if evidence.EvidenceKind == "VIDEO_FRAME" && (evidence.FrameID != evidence.ID || strings.TrimSpace(evidence.SourceMediaID) == "" || strings.TrimSpace(evidence.PreparationID) == "" || evidence.TimestampMS == nil || *evidence.TimestampMS < 0 || len(evidence.FrameDigest) != 64) {
+			return fmt.Errorf("video frame provenance is incomplete")
+		}
+		if evidence.EvidenceKind == "VIDEO_FRAME" && evidence.PTSMicros != nil && (*evidence.PTSMicros < 0 || *evidence.PTSMicros/1000 != *evidence.TimestampMS) {
+			return fmt.Errorf("video frame timestamp is inconsistent")
+		}
 		for _, flag := range evidence.Flags {
 			if strings.Contains(strings.ToLower(flag), "http://") || strings.Contains(strings.ToLower(flag), "https://") {
 				return fmt.Errorf("report evidence cannot persist mutable media URLs")
@@ -207,7 +227,7 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 	if err := Validate(snapshot); err != nil {
 		return nil, err
 	}
-	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p><h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p><p class="muted">{{analysisMode .AnalysisMode}} · {{analysisStatus .AnalysisStatus}}{{if .HasNoRelevantChange}} · {{noRelevantChange .NoRelevantChange}}{{end}}</p><div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{category .Category}} · {{.Title}}</strong><p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
+	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p>{{if .Snapshot.ScopeStatements}}<h2>Escopo da análise</h2><ul>{{range .Snapshot.ScopeStatements}}<li>{{.}}</li>{{end}}</ul>{{end}}<h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p><p class="muted">{{analysisMode .AnalysisMode}} · {{analysisStatus .AnalysisStatus}}{{if .HasNoRelevantChange}} · {{noRelevantChange .NoRelevantChange}}{{end}}</p>{{if .Coverage}}<p class="muted">{{.Coverage}}</p>{{end}}<div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{category .Category}} · {{.Title}}</strong><p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
 	t, err := template.New("report").Funcs(template.FuncMap{
 		"classification": presentClassification, "mode": presentMode, "reason": presentReason,
 		"requirement": presentRequirement, "captureSource": presentCaptureSource, "flag": presentFlag, "severity": presentSeverity, "action": presentAction,
@@ -225,10 +245,10 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 }
 
 type evidenceGroup struct {
-	Label, Instructions, AnalysisMode, AnalysisStatus string
-	NoRelevantChange                                  *bool
-	HasNoRelevantChange                               bool
-	Evidence                                          []Evidence
+	Label, Instructions, Coverage, AnalysisMode, AnalysisStatus string
+	NoRelevantChange                                            *bool
+	HasNoRelevantChange                                         bool
+	Evidence                                                    []Evidence
 }
 type htmlModel struct {
 	Snapshot       Snapshot
@@ -240,7 +260,7 @@ func groupEvidence(snapshot Snapshot) []evidenceGroup {
 	byKey := make(map[string]*evidenceGroup, len(snapshot.Requirements))
 	groups := make([]evidenceGroup, 0, len(snapshot.Requirements))
 	for _, requirement := range snapshot.Requirements {
-		groups = append(groups, evidenceGroup{Label: requirement.Label, Instructions: requirement.Instructions, AnalysisMode: requirement.AnalysisMode, AnalysisStatus: requirement.AnalysisStatus, NoRelevantChange: requirement.NoRelevantChange, HasNoRelevantChange: requirement.AnalysisMode == "COMPARE_ORIGIN_CURRENT" && requirement.NoRelevantChange != nil})
+		groups = append(groups, evidenceGroup{Label: requirement.Label, Instructions: requirement.Instructions, Coverage: requirement.Coverage, AnalysisMode: requirement.AnalysisMode, AnalysisStatus: requirement.AnalysisStatus, NoRelevantChange: requirement.NoRelevantChange, HasNoRelevantChange: requirement.AnalysisMode == "COMPARE_ORIGIN_CURRENT" && requirement.NoRelevantChange != nil})
 		byKey[requirement.Key] = &groups[len(groups)-1]
 	}
 	for _, item := range snapshot.Evidence {

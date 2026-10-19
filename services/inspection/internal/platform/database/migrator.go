@@ -38,6 +38,20 @@ func (m Migrator) Migrate(ctx context.Context) error {
 	}
 	if migrationTable == nil {
 		models = append(models, &legacyAnalysisProfile{}, &legacyAnalysisProfileVersion{})
+	} else {
+		// The scoped-retention migration changes retention table primary keys
+		// before inspection_id becomes nullable. AutoMigrate would try to alter
+		// that column first and PostgreSQL rejects dropping NOT NULL on a key
+		// column, so let the canonical migration own these tables on existing DBs.
+		filtered := models[:0]
+		for _, model := range models {
+			switch model.(type) {
+			case *DeletionRequest, *LegalHold, *LLMCallRecord:
+				continue
+			}
+			filtered = append(filtered, model)
+		}
+		models = filtered
 	}
 	if err := db.AutoMigrate(models...); err != nil {
 		return fmt.Errorf("additive migration: %w", err)

@@ -43,6 +43,10 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminAssets": return { data: { assets: { nodes: [{ id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101", addressDetails: null, addressStatus: "LEGACY", status: "ACTIVE", businessUnitId: "unit-a", segmentVersionId: "segment-version-a", templateId: "template-a", latitudeE6: 12345, longitudeE6: 67890, geofenceMeters: 150, attributes: { propertyType: "residential" }, policyOverrides: { allowGallery: true }, assignments: [{ participantId: "participant-a", role: "OWNER", active: true }], version: 1 }], pageInfo: pageInfo() } } };
     case "AdminLookupPostalCode": return { data: { lookupPostalCode: { found: true, postalCode: "01001000", street: "Praça da Sé", district: "Sé", city: "São Paulo", state: "SP", municipalityCode: "3550308" } } };
     case "AdminPublicationPolicy": return { data: { publicationPolicy: { mode: "MANUAL", version: 1 } } };
+    case "AdminVideoPreparations": return { data: { videoPreparations: { nodes: [{ mediaId: "media-a", preparationId: "preparation-a", status: "FAILED", stage: "EXTRACTING", preparationVersion: 2, attempts: 3, processedFrames: 12, errorCode: "STORE_UNAVAILABLE", retryable: true, sourceAvailable: true, firstFrameReadyAt: null, sourceExpiryAt: null }], pageInfo: pageInfo() } } };
+    case "AdminVideoAdmission": return { data: { videoAdmission: { enabled: false, version: 4, reason: "QA hold", changedAt: "2026-01-01T00:00:00Z" } } };
+    case "AdminRetryVideoPreparation": return { data: { retryVideoPreparation: { preparation: { mediaId: "media-a", preparationId: "preparation-a", status: "QUEUED", stage: "RECEIVED", preparationVersion: 3, attempts: 0, errorCode: "", retryable: false, sourceAvailable: true }, userErrors: [], clientMutationId: "retry" } } };
+    case "AdminReprocessVideoPreparation": return { data: { reprocessVideoPreparation: { preparation: { mediaId: "media-a", preparationId: "preparation-b", status: "QUEUED", stage: "RECEIVED", preparationVersion: 3, attempts: 0, errorCode: "", retryable: false, sourceAvailable: true }, userErrors: [], clientMutationId: "reprocess" } } };
     case "AdminRetentionPolicies": return { data: { retentionPolicies: { nodes: [{ id: "retention-a", evidenceDays: 30, operationalDays: 60, securityDays: 90, version: 1 }], pageInfo: pageInfo() } } };
     case "AdminNotificationDeliveries": return { data: { notificationDeliveries: { nodes: [{ id: "delivery-a", status: "FAILED", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-02T00:00:00Z", inspectionId: "inspection-a", invitationId: null, logicalTemplate: "invite", failureCode: "BOUNCE", recipientMasked: "a***@example.test", responsibilityVersion: 1, canCorrectResponsibleEmail: true }], pageInfo: pageInfo() } } };
     case "AdminAudit": return { data: { auditEvents: { nodes: [{ id: "event-a", action: "UPDATED", targetType: "Asset", targetId: "asset-a", outcome: "SUCCEEDED", reason: "fixture event", correlationId: "correlation-a", occurredAt: "2026-01-01T00:00:00Z" }], pageInfo: pageInfo() }, usageSummary: { from: "2026-01-01", to: "2026-01-02", requests: 1, inputTokens: 2, outputTokens: 3, cost: null } } };
@@ -941,5 +945,17 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByRole("button", { name: "Atualizar" }).click();
     await expect(page.getByRole("alert").getByText("Falha ao atualizar o consumo.")).toBeVisible();
     await expect(page.getByRole("table", { name: "Chamadas de LLM" })).toHaveCount(0);
+  });
+
+  test("video operations filters preparations and confirms a retry", async ({ page }) => {
+    const mocks = await installMocks(page);
+    page.on("dialog", (dialog) => dialog.accept());
+    await loginAsLocalAdmin(page, "/video-operations");
+    await expect(page.getByRole("heading", { name: "Operações de vídeo" })).toBeVisible();
+    await expect(page.getByText("STORE_UNAVAILABLE")).toBeVisible();
+    await expect(page.getByText("Admissão da plataforma")).toBeVisible();
+    await page.getByRole("button", { name: "Tentar novamente" }).click();
+    await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminRetryVideoPreparation").length).toBe(1);
+    expect(mocks.calls.find((call) => call.operation === "AdminRetryVideoPreparation")?.variables.input).toMatchObject({ mediaId: "media-a", expectedPreparationVersion: 2 });
   });
 });

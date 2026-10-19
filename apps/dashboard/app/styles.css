@@ -532,6 +532,14 @@ legend { padding-inline: var(--inspection-space-2); font-weight: 700; }
 .inspection-technical-details summary { color: var(--inspection-muted); font-size: .82rem; cursor: pointer; }
 .inspection-technical-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--inspection-space-2); margin-block: var(--inspection-space-3) 0; }
 .inspection-technical-details dl > div { background: var(--inspection-surface-raised); }
+.origin-management { display: grid; gap: var(--inspection-space-3); padding-block-start: var(--inspection-space-3); border-block-start: 1px solid var(--inspection-border); }
+.origin-management h3, .origin-management p { margin: 0; }
+.origin-invite-controls { display: flex; align-items: end; flex-wrap: wrap; gap: var(--inspection-space-2); }
+.origin-invite-controls label { display: grid; flex: 1 1 14rem; gap: var(--inspection-space-1); }
+.origin-management ul { display: grid; gap: var(--inspection-space-2); margin: 0; padding: 0; list-style: none; }
+.origin-management li { display: grid; gap: var(--inspection-space-2); min-inline-size: 0; padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface); }
+.origin-management li > span { color: var(--inspection-muted); font-size: .875rem; }
+.origin-management .actions { display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); }
 @media (max-width: 37.5rem) {
   .inspection-toolbar { grid-template-columns: minmax(0, 1fr) 3rem; gap: var(--inspection-space-2); }
   .inspection-toolbar > label:first-child { grid-column: 1 / -1; }
@@ -540,5 +548,6 @@ legend { padding-inline: var(--inspection-space-2); font-weight: 700; }
   .inspection-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .inspection-detail-grid .inspection-detail-reason { grid-column: auto; }
   .inspection-technical-details dl { grid-template-columns: minmax(0, 1fr); }
+  .origin-invite-controls > * { flex: 1 1 100%; }
   .inspection-table td[data-label="Vistoria"] > span { display: block; }
 }

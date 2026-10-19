@@ -107,7 +107,7 @@ async function withIndexedDBLock<T>(name: string, action: () => Promise<T>): Pro
   try { return await action(); } finally { clearInterval(heartbeat); await releaseLock(name, owner); }
 }
 
-async function withDraftLock<T>(draftId: string, action: () => Promise<T>): Promise<T> {
+export async function withDraftLock<T>(draftId: string, action: () => Promise<T>): Promise<T> {
   const name = `capture-upload:${draftId}`;
   if (navigator.locks) return navigator.locks.request(name, { mode: "exclusive" }, action);
   return withIndexedDBLock(name, action);
@@ -120,7 +120,7 @@ export function uploadDraft(draft: CaptureDraft, onProgress?: UploadProgressCall
     const totalParts = current.parts.length;
     reportProgress(onProgress, { phase: "preparing", percent: 5, completedParts: current.parts.filter((part) => part.complete).length, totalParts });
     if (!current.mediaId || !current.uploadId) {
-      const created = await graphql(captureOperations.createUpload, { input: { contentType: draft.blob.type, sizeBytes: draft.blob.size, sha256: draft.sha256, clientMutationId: draft.id } });
+      const created = await graphql(captureOperations.createUpload, { input: { contentType: draft.blob.type, sizeBytes: draft.blob.size, sha256: draft.sha256, attemptId: null, clientMutationId: draft.id } });
       throwOnUserErrors(created.createMediaUpload);
       if (!created.createMediaUpload.upload) throw new Error("A API não retornou o upload de mídia.");
       current = { ...draft, ...created.createMediaUpload.upload, parts: partsFor(draft.blob, created.createMediaUpload.upload.partSizeBytes || defaultPartSize) };

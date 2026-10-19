@@ -3,10 +3,13 @@ package render_pdf
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,11 +23,62 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestUT058PDFSourceAvailabilityOverlayPreservesCanonicalSnapshot(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"ATTACH DATABASE ':memory:' AS media",
+		"CREATE TABLE media.video_sources (id text primary key, tenant_id text, media_id text, status text, original_deleted_at datetime, source_expiry_at datetime)",
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenantID, sourceID, frameID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Exec("INSERT INTO media.video_sources (id, tenant_id, media_id, status) VALUES (?, ?, ?, 'RETAINED')", identity.NewID(), tenantID, sourceID).Error; err != nil {
+		t.Fatal(err)
+	}
+	snapshot := reportcore.Snapshot{Evidence: []reportcore.Evidence{{ID: frameID.String(), EvidenceKind: "VIDEO_FRAME", SourceMediaID: sourceID.String(), SourceAvailability: "AVAILABLE", Availability: "AVAILABLE"}}}
+	canonical, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := overlaySourceAvailability(context.Background(), db, tenantID, &snapshot, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Evidence[0].SourceAvailability != "AVAILABLE" {
+		t.Fatal("retained source marked unavailable")
+	}
+	if err := db.Exec("UPDATE media.video_sources SET status='EXPIRED' WHERE tenant_id=? AND media_id=?", tenantID, sourceID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := overlaySourceAvailability(context.Background(), db, tenantID, &snapshot, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Evidence[0].SourceAvailability != "EXPIRED" || snapshot.Evidence[0].Availability != "AVAILABLE" {
+		t.Fatalf("unexpected render overlay: %+v", snapshot.Evidence[0])
+	}
+	_, caption, _, err := evidenceComponents(snapshot.Evidence[0], nil, "", "inspection-1", "")
+	if err != nil || !strings.Contains(caption, "Vídeo original indisponível; frame preservado") {
+		t.Fatalf("missing PDF notice: %q, %v", caption, err)
+	}
+	var stored reportcore.Snapshot
+	if err := json.Unmarshal(canonical, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.Evidence[0].SourceAvailability != "AVAILABLE" {
+		t.Fatal("canonical source state changed")
+	}
+}
+
 // memoryClient is a minimal in-memory object store; only Get/Put/Delete are used.
 type memoryClient struct {
 	mu      sync.Mutex
 	objects map[string][]byte
 	putErr  error
+	getHook func(string)
 }
 
 func (m *memoryClient) CreateMultipart(context.Context, string, string, string) (string, error) {
@@ -41,6 +95,9 @@ func (m *memoryClient) Head(context.Context, string, string) (objectstore.Head, 
 	return objectstore.Head{}, nil
 }
 func (m *memoryClient) Get(_ context.Context, _, key string) (io.ReadCloser, error) {
+	if m.getHook != nil {
+		m.getHook(key)
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	data, ok := m.objects[key]
@@ -96,6 +153,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	for _, ddl := range []string{
 		`CREATE TABLE media.derivatives (id blob PRIMARY KEY, tenant_id blob, media_id blob, object_key text, kind text, sha256 text, content_type text, width integer, height integer, size_bytes integer, profile text, created_at datetime)`,
+		`CREATE TABLE media.video_frames (id blob PRIMARY KEY, tenant_id blob, source_media_id blob, preparation_id blob, sha256 text, object_key text, width integer, height integer, size_bytes integer)`,
 		`CREATE TABLE messaging.outbox (id blob PRIMARY KEY, tenant_id blob, type text, schema_version integer, payload blob, correlation_id text, causation_id text, status text, attempts integer, next_attempt_at datetime, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,
 	} {
 		if err := db.Exec(ddl).Error; err != nil {
@@ -114,7 +172,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	env := &testEnv{db: db, client: &memoryClient{objects: map[string][]byte{}}, clock: &clock, tenantID: identity.NewID()}
 	store := objectstore.Store{Bucket: "private", Client: env.client}
 	limits := DefaultLimits()
-	executor, err := SetupExecutor(db, store, limits, func() time.Time { return *env.clock })
+	executor, err := SetupExecutor(db, store, limits, func() time.Time { return *env.clock }, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,13 +433,43 @@ func TestLoadDisplayAssetsVerifiesDigestOfBytesRead(t *testing.T) {
 	}
 }
 
+func TestVideoPDFUsesPinnedFrameAndFailsOnMissingDigestUT056(t *testing.T) {
+	env := newTestEnv(t)
+	frameID, sourceID, preparationID := identity.NewID(), identity.NewID(), identity.NewID()
+	data := jpegBytes(t, 40, 30)
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	const frameKey = "frames/pinned-F11.jpg"
+	env.client.objects[frameKey] = data
+	if err := env.db.Exec("INSERT INTO media.video_frames (id,tenant_id,source_media_id,preparation_id,sha256,object_key,width,height,size_bytes) VALUES (?,?,?,?,?,?,?,?,?)", frameID, env.tenantID, sourceID, preparationID, digest, frameKey, 40, 30, len(data)).Error; err != nil {
+		t.Fatal(err)
+	}
+	value := validPDFSnapshot()
+	value.Evidence = []reportcore.Evidence{{ID: frameID.String(), RequirementKey: "video:sink", Role: "CURRENT", EvidenceKind: "VIDEO_FRAME", FrameID: frameID.String(), SourceMediaID: sourceID.String(), PreparationID: preparationID.String(), FrameDigest: digest, DisplayDigest: digest, Availability: "AVAILABLE"}}
+	assets, err := env.executor.loadDisplayAssets(context.Background(), env.tenantID, value)
+	if err != nil || !bytes.Equal(assets["evidence-"+frameID.String()+".jpg"], data) {
+		t.Fatalf("pinned frame not loaded into PDF: err=%v assets=%v", err, assets)
+	}
+	value.Evidence[0].FrameDigest = strings.Repeat("a", 64)
+	if _, err := env.executor.loadDisplayAssets(context.Background(), env.tenantID, value); !errors.Is(err, errFrameIntegrity) || errorCode(err) != "FRAME_INTEGRITY_FAILED" {
+		t.Fatalf("missing snapshot digest did not fail closed: %v", err)
+	}
+	value.Evidence[0].FrameDigest = digest
+	if err := env.db.Exec("DELETE FROM media.video_frames WHERE id=?", frameID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.executor.loadDisplayAssets(context.Background(), env.tenantID, value); !errors.Is(err, errFrameIntegrity) {
+		t.Fatalf("missing pinned frame was substituted: %v", err)
+	}
+}
+
 func TestSnapshotEventForPurgedSnapshotIsAcknowledged(t *testing.T) {
 	env := newTestEnv(t)
 	handler, err := Setup(Dependencies{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, _ := json.Marshal(map[string]string{"snapshotId": identity.NewID().String()})
+	payload, _ := json.Marshal(map[string]string{"snapshotId": identity.NewID().String(), "inspectionId": identity.NewID().String()})
 	if err := handler(context.Background(), env.db, rawEnvelope(env.tenantID, payload)); err != nil {
 		t.Fatalf("purged snapshot event err = %v", err)
 	}

@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export function installRuntimeGuards(page: Page) {
+export function installRuntimeGuards(page: Page, expectedFailure?: (failure: string) => boolean) {
   const failures: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") failures.push(`console: ${message.text()}`); });
   page.on("pageerror", (error) => failures.push(`page: ${error.message}`));
@@ -13,5 +13,5 @@ export function installRuntimeGuards(page: Page) {
       // Non-JSON responses are covered by the transport unit tests.
     }
   });
-  return async () => expect(failures, failures.join("\n")).toEqual([]);
+  return async () => expect(failures.filter((failure) => !expectedFailure?.(failure)), failures.join("\n")).toEqual([]);
 }

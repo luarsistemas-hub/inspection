@@ -29,6 +29,7 @@ import (
 	"inspection/services/inspection/internal/platform/pagination"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video_admission"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -53,15 +54,21 @@ type CreateInput struct {
 }
 
 type View struct {
-	Inspection       database.Inspection
-	Responsibility   database.Responsibility
-	Policy           database.PolicySnapshot
-	Reference        database.ReferenceSnapshot
-	EventID          identity.ID
-	AssetName        *string
-	AssetAddress     *string
-	AssetExternalKey *string
-	ParticipantName  *string
+	Inspection             database.Inspection
+	Responsibility         database.Responsibility
+	Policy                 database.PolicySnapshot
+	Reference              database.ReferenceSnapshot
+	ReferenceVersion       *database.OriginVersion
+	ReferenceIsActive      bool
+	OriginPromotionStatus  string
+	OriginPromotionFailure string
+	PromotedOriginVersion  *database.OriginVersion
+	PromotedOriginIsActive bool
+	EventID                identity.ID
+	AssetName              *string
+	AssetAddress           *string
+	AssetExternalKey       *string
+	ParticipantName        *string
 }
 
 type ListInput struct {
@@ -145,12 +152,33 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if in.ComparisonMode != "" {
 		comparisonMode = in.ComparisonMode
 	}
-	if comparisonMode != catalog.ChecklistOnly && comparisonMode != catalog.FixedOrigin {
-		return View{}, apperror.New(apperror.InvalidInput, "comparisonMode", "unsupported comparison mode")
+	if err := validateComparisonMode(document, comparisonMode); err != nil {
+		return View{}, err
+	}
+	if !strings.EqualFold(document.AnalysisType, "REAL_ESTATE") {
+		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
+	}
+	if in.Source != SourceScheduled {
+		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
+		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, nil, true); err != nil {
+			return View{}, err
+		}
+		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
+			if apperror.Is(err, apperror.Forbidden) {
+				return View{}, apperror.New(apperror.NotFound, "", "resource not found")
+			}
+			return View{}, err
+		}
+		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
+			if apperror.Is(err, apperror.Forbidden) {
+				return View{}, apperror.New(apperror.NotFound, "", "resource not found")
+			}
+			return View{}, err
+		}
 	}
 	var originReference *originresolve.Result
 	if comparisonMode == catalog.FixedOrigin {
-		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID})
+		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: document.MediaKind()})
 		if err != nil {
 			return View{}, err
 		}
@@ -160,18 +188,6 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		in.ReferenceVersionID = &referenceID
 	} else if requiresReference(comparisonMode) && in.ReferenceVersionID == nil {
 		return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "effective reference is required")
-	}
-	if !strings.EqualFold(document.AnalysisType, "REAL_ESTATE") {
-		return View{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
-	}
-	if in.Source != SourceScheduled {
-		roles := []string{auth.TenantAdmin, auth.Manager, auth.Employee}
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
-			return View{}, err
-		}
-		if _, err := s.Authorizer.Authorize(ctx, in.TenantID, roles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: participant.Participant.BusinessUnitID}, true); err != nil {
-			return View{}, err
-		}
 	}
 	policyPayload, policyDigest, err := snapshotPolicy(document, asset, comparisonMode, in.ReferenceVersionID)
 	if err != nil {
@@ -186,6 +202,11 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			return s.load(tx, &out)
 		} else if err != gorm.ErrRecordNotFound {
 			return err
+		}
+		if document.MediaKind() == "VIDEO" {
+			if err := video_admission.RequireEnabled(tx); err != nil {
+				return err
+			}
 		}
 		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err
@@ -208,13 +229,19 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			"templateId": *templateID, "templateVersionId": template.Version.ID,
 			"analysisType": document.AnalysisType, "analysisPromptSnapshotId": resolvedPrompt.Snapshot.ID, "source": in.Source,
 		})
-		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
+		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", MediaKind: document.MediaKind(), DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ParticipantID: in.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		policy := database.PolicySnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, SchemaVersion: 1, Payload: policyPayload, CanonicalDigest: policyDigest, CreatedAt: now}
 		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": comparisonMode}
 		if originReference != nil {
 			referenceDocument["originVersionId"] = originReference.Version.ID
-			referenceDocument["items"] = originReference.Evidence
+			if originReference.Version.MediaKind == "VIDEO" {
+				referenceDocument["mediaKind"] = "VIDEO"
+				referenceDocument["scope"] = originReference.VideoScope
+			} else {
+				referenceDocument["mediaKind"] = "PHOTO"
+				referenceDocument["items"] = originReference.Evidence
+			}
 		}
 		referencePayload, _ := json.Marshal(referenceDocument)
 		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(comparisonMode), Payload: referencePayload, CreatedAt: now}
@@ -234,8 +261,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 				})
 			}
 		}
+		requirements = inspectionCaptureRequirements(document.MediaKind(), string(comparisonMode), requirements)
 		requirementPayload, _ := json.Marshal(requirements)
-		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "INSPECTION", TemplateVersionID: template.Version.ID, ReferencePayload: referencePayload, PolicyPayload: policyPayload, Requirements: requirementPayload, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
+		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "INSPECTION", MediaKind: document.MediaKind(), TemplateVersionID: template.Version.ID, ReferencePayload: referencePayload, PolicyPayload: policyPayload, Requirements: requirementPayload, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		for _, row := range []any{&inspection, &responsibility, &policy, &reference, &draft} {
 			if err := tx.Create(row).Error; err != nil {
 				return err
@@ -252,6 +280,15 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		return View{}, err
 	}
 	return out, nil
+}
+
+func inspectionCaptureRequirements(mediaKind, comparisonTarget string, requirements []capturecore.Requirement) []capturecore.Requirement {
+	if mediaKind != "VIDEO" {
+		return requirements
+	}
+	// VIDEO has one immutable participant upload slot. Any pinned expected
+	// components remain in ReferencePayload and never become upload slots.
+	return []capturecore.Requirement{capturecore.VideoMainRequirement(comparisonTarget)}
 }
 
 func (s Service) Cancel(ctx context.Context, tenantID, inspectionID identity.ID, expectedVersion int64) (View, error) {
@@ -539,7 +576,54 @@ func (s Service) load(tx *gorm.DB, out *View) error {
 	if err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Policy).Error; err != nil {
 		return err
 	}
-	return tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Reference).Error
+	err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&out.Reference).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		return err
+	}
+	var origin database.Origin
+	if out.Reference.ReferenceVersionID != nil {
+		var version database.OriginVersion
+		if err := tx.Where("tenant_id=? AND id=?", out.Inspection.TenantID, *out.Reference.ReferenceVersionID).First(&version).Error; err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return err
+			}
+		} else {
+			out.ReferenceVersion = &version
+			if err := tx.Where("tenant_id=? AND id=?", out.Inspection.TenantID, version.OriginID).First(&origin).Error; err == nil {
+				out.ReferenceIsActive = origin.ActiveVersionID != nil && *origin.ActiveVersionID == version.ID
+			}
+		}
+	}
+	if out.Inspection.MediaKind == "VIDEO" {
+		var promoted database.OriginVersion
+		if err := tx.Where("tenant_id=? AND idempotency_key=?", out.Inspection.TenantID, "video-promotion:"+out.Inspection.ID.String()).First(&promoted).Error; err == nil {
+			out.PromotedOriginVersion = &promoted
+			out.OriginPromotionStatus = promoted.Status
+			if origin.ID == (identity.ID{}) {
+				_ = tx.Where("tenant_id=? AND id=?", out.Inspection.TenantID, promoted.OriginID).First(&origin).Error
+			}
+			out.PromotedOriginIsActive = origin.ActiveVersionID != nil && *origin.ActiveVersionID == promoted.ID
+		}
+	}
+	var promotion database.OriginPromotion
+	if err := tx.Where("tenant_id=? AND inspection_id=?", out.Inspection.TenantID, out.Inspection.ID).First(&promotion).Error; err == nil {
+		out.OriginPromotionStatus = promotion.Status
+		out.OriginPromotionFailure = promotion.FailureReason
+		if promotion.OriginVersionID != nil {
+			var promoted database.OriginVersion
+			if err := tx.Where("tenant_id=? AND id=?", out.Inspection.TenantID, *promotion.OriginVersionID).First(&promoted).Error; err == nil {
+				out.PromotedOriginVersion = &promoted
+				if origin.ID == (identity.ID{}) {
+					_ = tx.Where("tenant_id=? AND id=?", out.Inspection.TenantID, promoted.OriginID).First(&origin).Error
+				}
+				out.PromotedOriginIsActive = origin.ActiveVersionID != nil && *origin.ActiveVersionID == promoted.ID
+			}
+		}
+	}
+	return nil
 }
 
 func (s Service) now() time.Time {
@@ -551,6 +635,16 @@ func (s Service) now() time.Time {
 
 func requiresReference(mode catalog.ComparisonMode) bool {
 	return mode == catalog.FixedOrigin || mode == catalog.PlannedStage || mode == catalog.BeforeAfter
+}
+
+func validateComparisonMode(document catalog.TemplateDocument, mode catalog.ComparisonMode) error {
+	if mode != catalog.ChecklistOnly && mode != catalog.FixedOrigin {
+		return apperror.New(apperror.InvalidInput, "comparisonMode", "unsupported comparison mode")
+	}
+	if document.DefaultComparisonMode == catalog.FixedOrigin && mode == catalog.ChecklistOnly {
+		return apperror.New(apperror.InvalidInput, "comparisonMode", "template requires a fixed origin")
+	}
+	return nil
 }
 
 func snapshotPolicy(document catalog.TemplateDocument, asset assetcore.View, mode catalog.ComparisonMode, referenceID *identity.ID) ([]byte, string, error) {

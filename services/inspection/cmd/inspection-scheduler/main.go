@@ -15,6 +15,8 @@ import (
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	getparticipant "inspection/services/inspection/internal/features/participants/get_participant"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
+	expiresources "inspection/services/inspection/internal/features/retention/expire_video_sources"
+	processdeletions "inspection/services/inspection/internal/features/retention/process_deletion_requests"
 	materializedue "inspection/services/inspection/internal/features/schedules/materialize_due"
 	schedulereminders "inspection/services/inspection/internal/features/schedules/schedule_reminders"
 	resolvetemplate "inspection/services/inspection/internal/features/templates/resolve_template"
@@ -24,6 +26,7 @@ import (
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/notifications"
+	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/observability"
 	"inspection/services/inspection/internal/platform/operational"
 	"inspection/services/inspection/internal/platform/requestctx"
@@ -34,6 +37,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+const videoExpiryInterval = 5 * time.Minute
 
 func main() {
 	if err := run(); err != nil {
@@ -50,6 +55,19 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	storeClient, err := objectstore.NewMinIOWithRegion(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOSecure, cfg.MinIORegion)
+	if err != nil {
+		return err
+	}
+	metrics := observability.NewMetrics()
+	videoExpiry, err := expiresources.Setup(expiresources.Dependencies{DB: db, Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: storeClient}, Metrics: metrics})
+	if err != nil {
+		return err
+	}
+	deletionRequests, err := processdeletions.Setup(processdeletions.Dependencies{DB: db, Store: objectstore.Store{Bucket: cfg.MinIOBucket, Client: storeClient}})
+	if err != nil {
+		return err
+	}
 	deadlineNotifications, err := reminddeadlines.Setup(reminddeadlines.Dependencies{DB: db})
 	if err != nil {
 		return err
@@ -58,7 +76,6 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	metrics := observability.NewMetrics()
 	providerResolver, err := notifications.NewProviderResolver(notifications.Provider(cfg.Notification.WhatsAppProvider))
 	if err != nil {
 		return err
@@ -99,7 +116,7 @@ func run() error {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			runMaterializer(ctx, db, bus, deadlineNotifications)
+			runMaterializer(ctx, db, bus, deadlineNotifications, videoExpiry, deletionRequests, metrics)
 		}()
 		<-ctx.Done()
 		select {
@@ -111,9 +128,10 @@ func run() error {
 	})
 }
 
-func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(context.Context, identity.ID, time.Time) error) {
+func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadlineNotifications func(context.Context, identity.ID, time.Time) error, videoExpiry *expiresources.Executor, deletionRequests *processdeletions.Executor, metrics *observability.Metrics) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	var lastVideoExpiryRun time.Time
 	for {
 		if ctx.Err() != nil {
 			return
@@ -123,6 +141,10 @@ func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadli
 		if err := db.WithContext(ctx).Raw("SELECT pending.tenant_id FROM platform.discover_scheduler_tenants(?, ?, ?) AS pending(tenant_id)", now, now.AddDate(-5, 0, 0), now.Add(24*time.Hour)).Scan(&tenantIDs).Error; err != nil {
 			log.Printf("scheduler tenant discovery failed: %v", err)
 		} else {
+			videoExpiryDue := dueEvery(lastVideoExpiryRun, now, videoExpiryInterval)
+			if videoExpiryDue {
+				metrics.ResetVideoExpirationLag()
+			}
 			for _, tenantID := range tenantIDs {
 				if ctx.Err() != nil {
 					return
@@ -137,9 +159,23 @@ func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadli
 				if err := emitRetentionDue(ctx, db, tenantID, now); err != nil {
 					log.Printf("scheduler retention discovery failed: %v", err)
 				}
+				if videoExpiryDue {
+					if _, err := deletionRequests.RunDue(tenantCtx, tenantID, processdeletions.DefaultBatchSize); err != nil {
+						log.Printf("scheduler deletion request processing failed: %v", err)
+					}
+					if _, err := videoExpiry.RunDue(tenantCtx, tenantID, now, expiresources.DefaultBatchSize); err != nil {
+						log.Printf("scheduler video source expiry failed: %v", err)
+					}
+					if _, err := videoExpiry.PurgeInactiveOriginBanks(tenantCtx, tenantID, expiresources.DefaultBatchSize); err != nil {
+						log.Printf("scheduler inactive origin frame purge failed: %v", err)
+					}
+				}
 				if err := deadlineNotifications(tenantCtx, tenantID, now); err != nil {
 					log.Printf("scheduler deadline notification failed: %v", err)
 				}
+			}
+			if videoExpiryDue {
+				lastVideoExpiryRun = now
 			}
 		}
 		select {
@@ -148,6 +184,10 @@ func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadli
 		case <-ticker.C:
 		}
 	}
+}
+
+func dueEvery(last, now time.Time, interval time.Duration) bool {
+	return last.IsZero() || now.Sub(last) >= interval
 }
 
 func emitRetentionDue(ctx context.Context, db *gorm.DB, tenantID identity.ID, now time.Time) error {

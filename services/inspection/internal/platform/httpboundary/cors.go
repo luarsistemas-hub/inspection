@@ -37,9 +37,9 @@ func CORS(configured interface{}, args ...interface{}) http.Handler {
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Correlation-ID, X-Inspection-Membership-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, Accept-Ranges, Content-Range")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-CSRF-Token, X-Correlation-ID, X-Inspection-Membership-ID, Range")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
 			w.Header().Set("Vary", "Origin")
 		}
 		if r.Method == http.MethodOptions {

@@ -37,6 +37,10 @@ with tarfile.open(archive_path, "r:gz") as outer:
     copy_archive(outer, root, ("plan.json", "bundle.tgz"))
 plan_path=root/"plan.json"; bundle_path=root/"bundle.tgz"
 plan=json.loads(plan_path.read_text(encoding="utf-8"))
+if plan.get("schemaVersion") != 2:
+    raise SystemExit("Plan schema v1 is unsupported; regenerate the plan with the current planner")
+if plan.get("operation") not in {"deploy", "rollback"}:
+    raise SystemExit("Unsupported deployment operation")
 claimed=plan.pop("planSha256", None)
 actual=hashlib.sha256(json.dumps(plan,sort_keys=True,separators=(",",":")).encode()).hexdigest()
 if claimed != actual or claimed != expected_hash or plan.get("deploymentId") != expected_id:
@@ -79,5 +83,5 @@ install -o root -g root -m 0600 "$stage/plan.json" "$job_dir/plan.json"
 # The supervised unit takes the same lock; release it before queueing that unit.
 flock -u 9
 systemd-run --quiet --no-block --unit="inspection-deployment-$deployment_id" --property=Type=oneshot --property=RemainAfterExit=yes \
-  /usr/local/sbin/inspection-run-deployment "$deployment_id" "$source_sha" "$approved_plan_sha"
+  "/opt/inspection/host-tools/$source_sha/run-deployment.sh" "$deployment_id" "$source_sha" "$approved_plan_sha"
 echo "Deployment $deployment_id accepted for supervised execution."

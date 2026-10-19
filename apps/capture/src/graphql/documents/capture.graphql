@@ -1,7 +1,7 @@
 query ExternalCaptureBootstrap {
   externalCapture {
-    responsibilityId recaptureRequestId status confirmationOnly kind disclosureVersion reference policy
-    referenceItems { mediaId requirementKey description availability imageUrl imageUrlExpiresAt }
+    responsibilityId recaptureRequestId recaptureDeadlineAt status confirmationOnly kind mediaKind disclosureVersion reference policy
+    referenceItems { mediaId evidenceId sourceMediaId timestampMs environment component view ambiguous gap requirementKey description reason availability imageUrl imageUrlExpiresAt }
     requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed }
     answers { requirementKey mediaIds impossibilityReason version }
   }
@@ -16,6 +16,12 @@ mutation AcceptProcessing($input: AcceptProcessingInput!) { acceptProcessing(inp
 mutation RevokeInvitation($input: RevokeInvitationInput!) { revokeInvitation(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 
 mutation CreateMediaUpload($input: CreateMediaUploadInput!) { createMediaUpload(input: $input) { upload { mediaId uploadId expiresAt partSizeBytes } userErrors { code field message correlationId } clientMutationId } }
+
+mutation BeginVideoCapture($input: BeginVideoCaptureInput!) { beginVideoCapture(input: $input) { attempt { id kind acquisitionSource maxDurationSeconds maxBytes policyVersion admittedAt expiresAt status } userErrors { code field message correlationId } clientMutationId } }
+
+query VideoUploadStatus($mediaId: ID!) { videoUploadStatus(mediaId: $mediaId) { mediaId status expiresAt receivedParts confirmedParts { partNumber etag sizeBytes } missingParts } }
+
+query VideoPreparation($mediaId: ID!) { videoPreparation(mediaId: $mediaId) { mediaId stage errorCode retryable processedFrames sourceAvailable } }
 
 mutation PresignMediaParts($input: PresignMediaPartsInput!) { presignMediaParts(input: $input) { parts { partNumber url expiresAt } userErrors { code field message correlationId } clientMutationId } }
 

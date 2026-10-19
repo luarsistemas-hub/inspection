@@ -25,6 +25,9 @@ type PublicError struct {
 // PresentError maps every resolver failure to the stable public GraphQL error
 // contract without exposing wrapped database or provider details.
 func PresentError(ctx context.Context, err error) *gqlerror.Error {
+	if graphErr, ok := err.(*gqlerror.Error); ok && len(graphErr.Path) == 0 {
+		return graphErr
+	}
 	correlationID := "unavailable"
 	if metadata, ok := requestctx.FromContext(ctx); ok && metadata.CorrelationID != "" {
 		correlationID = metadata.CorrelationID
@@ -32,7 +35,7 @@ func PresentError(ctx context.Context, err error) *gqlerror.Error {
 	public := MapError(err, correlationID)
 	if public.Code == apperror.Internal {
 		operation := graphqlOperationName(ctx)
-		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "error", err)
+		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "errorCode", string(public.Code))
 	}
 	return &gqlerror.Error{Message: public.Message, Extensions: map[string]any{"code": string(public.Code), "field": public.Field, "correlationId": public.CorrelationID}}
 }

@@ -6,6 +6,9 @@ package resolvers
 // here.
 
 import (
+	"context"
+
+	"inspection/libs/identity"
 	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
@@ -29,6 +32,7 @@ import (
 type Resolver struct {
 	Bus                      *mediator.Bus
 	DB                       *gorm.DB
+	WithinTenant             func(context.Context, identity.ID, func(*gorm.DB) error) error
 	Invitations              invitationcore.Service
 	ScheduleService          schedulecore.Service
 	InspectionService        inspectioncore.Service

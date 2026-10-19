@@ -16,7 +16,7 @@ def digest(value):
 
 
 class ApplyPlanTests(unittest.TestCase):
-    def scenario(self, failure="services", prior_block="", migration=False):
+    def scenario(self, failure="services", prior_block="", migration=False, schema_version=2):
         temporary = tempfile.TemporaryDirectory(prefix="inspection-apply-test-")
         self.addCleanup(temporary.cleanup)
         root = pathlib.Path(temporary.name)
@@ -29,11 +29,12 @@ class ApplyPlanTests(unittest.TestCase):
         for directory in (previous, candidate):
             (directory / "compose.yaml").write_text("name: inspection\n")
             (directory / "Caddyfile").write_text("localhost {}\n")
+            (directory / "components.json").write_bytes((SOURCE.parents[1] / "components.json").read_bytes())
         (root / "opt/inspection/current").symlink_to(previous)
-        images = {name.upper() + "_IMAGE": "example.test/" + name + "@sha256:" + "b" * 64
-                  for name in ("api", "worker", "scheduler", "operations", "admin", "dashboard",
+        images = {name.upper().replace("-", "_") + "_IMAGE": "example.test/" + name + "@sha256:" + "b" * 64
+                  for name in ("api", "worker", "scheduler", "video-worker", "operations", "admin", "dashboard",
                                "capture", "onboarding", "keycloak", "postgres", "dragonfly", "rabbitmq", "caddy", "litellm")}
-        old_images = {key: value for key, value in images.items() if key != "LITELLM_IMAGE"}
+        old_images = {key: value for key, value in images.items() if key not in {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE"}}
         receipt = "DEPLOYMENT_ID=previous\n" + "".join(f"{k}={v}\n" for k, v in old_images.items())
         (root / "etc/inspection/compose.env").write_text(receipt)
         (root / "etc/inspection/releases/current.env").write_text(receipt)
@@ -47,8 +48,9 @@ class ApplyPlanTests(unittest.TestCase):
             "SMTP_ADDRESS=smtp.example.test:587\nSMTP_FROM=inspection@example.test\n")
         (root / "etc/inspection/secrets.d/SMTP_USERNAME").write_text("smtp-user")
         (root / "etc/inspection/secrets.d/SMTP_PASSWORD").write_text("smtp-password")
-        plan = {"deploymentId": "deploy-test-1", "sourceSha": RELEASE,
+        plan = {"schemaVersion":schema_version, "operation":"deploy", "deploymentId": "deploy-test-1", "sourceSha": RELEASE,
                 "targets": ["worker"], "desiredImages": images,
+                "componentSources": {name:"b"*40 for name in ("api","worker","scheduler","video-worker","operations","admin","dashboard","capture","onboarding","keycloak")},
                 "expectedActiveStateSha256": digest(old_images), "operations": {"runMigration": migration}}
         plan["planSha256"] = digest(plan)
         plan_path = root / "plan.json"
@@ -61,6 +63,7 @@ class ApplyPlanTests(unittest.TestCase):
 
         executable("bin/id", "#!/bin/sh\necho 0\n")
         executable("bin/chown", "#!/bin/sh\nexit 0\n")
+        executable("bin/flock", "#!/bin/sh\nexit 0\n")
         executable("bin/install", """#!/usr/bin/env python3
 import os,pathlib,shutil,sys
 args=sys.argv[1:]
@@ -162,13 +165,20 @@ exit 0
         self.assertEqual(block.read_text(), "previous block\n")
         self.assertFalse(any(" stop " in line or " up " in line for line in trace))
 
+    def test_schema_v1_plan_is_rejected_with_regeneration_message(self):
+        _, result, _, _ = self.scenario(failure="", schema_version=1)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("regenerate the plan", result.stderr)
+
     def test_success_promotes_receipt_and_clears_block(self):
         root, result, _, block = self.scenario(failure="", prior_block="previous block\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(block.exists())
-        self.assertIn("DEPLOYMENT_ID=deploy-test-1", (root / "etc/inspection/releases/current.env").read_text())
-        self.assertIn(RELEASE, str((root / "opt/inspection/current").resolve()))
         env = (root / "etc/inspection/compose.env").read_text()
+        self.assertIn("DEPLOYMENT_ID=deploy-test-1", (root / "etc/inspection/releases/current.env").read_text())
+        self.assertIn("VIDEO_WORKER_IMAGE=" + "example.test/video-worker@sha256:" + "b" * 64, env)
+        self.assertIn("COMPONENT_SOURCE_VIDEO_WORKER=" + "b" * 40, (root / "etc/inspection/releases/current.env").read_text())
+        self.assertIn(RELEASE, str((root / "opt/inspection/current").resolve()))
         smtp = next(line for line in env.splitlines() if line.startswith("KEYCLOAK_SMTP_SERVER_JSON="))
         self.assertEqual(json.loads(smtp.split("=", 1)[1].strip("'")), {
             "host": "smtp.example.test", "port": "587", "from": "inspection@example.test",

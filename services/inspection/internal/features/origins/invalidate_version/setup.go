@@ -2,6 +2,7 @@ package invalidate_version
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"inspection/libs/identity"
@@ -41,8 +42,10 @@ func Setup(d Dependencies) error {
 				return err
 			}
 			return tx.Where("tenant_id=? AND id=?", command.TenantID, origin.AssetID).First(&asset).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.New(apperror.NotFound, "versionId", "origin version not found")
+		} else if err != nil {
+			return nil, err
 		}
 		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 			return nil, err

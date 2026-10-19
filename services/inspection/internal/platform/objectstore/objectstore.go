@@ -24,6 +24,9 @@ import (
 const (
 	MaxOriginalBytes = 20 * 1024 * 1024
 	PartSizeBytes    = 5 * 1024 * 1024
+	MaxVideoBytes    = 1 << 30
+	MaxPresignParts  = 16
+	MaxVideoRange    = 16 * 1024 * 1024
 )
 
 var (
@@ -66,6 +69,87 @@ type Client interface {
 	Head(context.Context, string, string) (Head, error)
 	Get(context.Context, string, string) (io.ReadCloser, error)
 	Put(context.Context, string, string, io.Reader, int64, string) error
+}
+
+// RangeGetter is implemented by stores that can stream a bounded byte range.
+type RangeGetter interface {
+	GetRange(context.Context, string, string, int64, int64) (io.ReadCloser, error)
+}
+
+// VideoStore exposes streaming operations for large original videos.
+type VideoStore struct{ Store Store }
+
+func (v VideoStore) Open(ctx context.Context, key string) (io.ReadCloser, Head, error) {
+	if v.Store.Client == nil || key == "" {
+		return nil, Head{}, ErrInvalid
+	}
+	head, err := v.Store.Client.Head(ctx, v.Store.Bucket, key)
+	if err != nil {
+		return nil, Head{}, mapError(err)
+	}
+	if head.Size <= 0 || head.Size > MaxVideoBytes {
+		return nil, Head{}, ErrInvalid
+	}
+	reader, err := v.Store.Client.Get(ctx, v.Store.Bucket, key)
+	if err != nil {
+		return nil, Head{}, mapError(err)
+	}
+	return &exactReadCloser{ReadCloser: reader, remaining: head.Size}, head, nil
+}
+
+// OpenRange uses inclusive offsets and refuses unbounded reads.
+func (v VideoStore) OpenRange(ctx context.Context, key string, start, end int64) (io.ReadCloser, error) {
+	length := end - start + 1
+	client, ok := v.Store.Client.(RangeGetter)
+	if !ok || key == "" || start < 0 || length <= 0 || length > MaxVideoRange {
+		return nil, ErrInvalid
+	}
+	reader, err := client.GetRange(ctx, v.Store.Bucket, key, start, end)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &exactReadCloser{ReadCloser: reader, remaining: length}, nil
+}
+
+// Put streams an object without buffering the original in memory.
+func (v VideoStore) Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
+	if v.Store.Client == nil || key == "" || reader == nil || size <= 0 || size > MaxVideoBytes || strings.TrimSpace(contentType) == "" {
+		return ErrInvalid
+	}
+	return mapError(v.Store.Client.Put(ctx, v.Store.Bucket, key, reader, size, contentType))
+}
+
+func (v VideoStore) Delete(ctx context.Context, key string) error {
+	deleter, ok := v.Store.Client.(Deleter)
+	if !ok || key == "" {
+		return ErrInvalid
+	}
+	return mapError(deleter.Delete(ctx, v.Store.Bucket, key))
+}
+
+type exactReadCloser struct {
+	io.ReadCloser
+	remaining int64
+	failed    bool
+}
+
+func (r *exactReadCloser) Read(p []byte) (int, error) {
+	if r.failed {
+		return 0, io.ErrUnexpectedEOF
+	}
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	if int64(len(p)) > r.remaining {
+		p = p[:r.remaining]
+	}
+	n, err := r.ReadCloser.Read(p)
+	r.remaining -= int64(n)
+	if err == io.EOF && r.remaining > 0 {
+		r.failed = true
+		return n, io.ErrUnexpectedEOF
+	}
+	return n, err
 }
 
 type Deleter interface {
@@ -130,7 +214,7 @@ func (s Store) Cleanup(ctx context.Context, catalog MultipartCatalog) (int, erro
 }
 
 func (s Store) CreateMultipart(ctx context.Context, tenantID identity.ID, mediaID identity.ID, contentType string) (string, string, error) {
-	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || !SupportedType(contentType) {
+	if s.Client == nil || s.Bucket == "" || tenantID == (identity.ID{}) || mediaID == (identity.ID{}) || (!SupportedType(contentType) && !SupportedVideoType(contentType)) {
 		return "", "", ErrInvalid
 	}
 	key, err := opaqueKey(tenantID, mediaID)
@@ -142,6 +226,50 @@ func (s Store) CreateMultipart(ctx context.Context, tenantID identity.ID, mediaI
 		return "", "", mapError(err)
 	}
 	return key, uploadID, nil
+}
+
+// SupportedVideoType is a declared transport type; the content is validated asynchronously.
+func SupportedVideoType(contentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "video/mp4", "video/quicktime", "video/webm":
+		return true
+	default:
+		return false
+	}
+}
+
+// CompleteVideoReceipt confirms multipart completion and declared object size only.
+// It deliberately does not claim content or digest validation.
+func (s Store) CompleteVideoReceipt(ctx context.Context, key, uploadID string, parts []Part, expectedSize int64, expectedType, expectedHash string) error {
+	if s.Client == nil || expectedSize <= 0 || expectedSize > MaxVideoBytes || !SupportedVideoType(expectedType) || !validParts(parts) || len(parts) != ExpectedParts(expectedSize) {
+		return ErrInvalid
+	}
+	err := s.Client.CompleteMultipart(ctx, s.Bucket, key, uploadID, parts)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		// A lost completion response is reconciled against the authoritative object.
+		head, headErr := s.Client.Head(ctx, s.Bucket, key)
+		if headErr != nil {
+			return mapError(err)
+		}
+		if head.Size != expectedSize || !sameMediaType(head.ContentType, expectedType) {
+			return ErrInvalid
+		}
+		if head.ChecksumSHA256 != "" && !strings.EqualFold(head.ChecksumSHA256, expectedHash) {
+			return ErrChecksum
+		}
+		return nil
+	}
+	head, err := s.Client.Head(ctx, s.Bucket, key)
+	if err != nil {
+		return mapError(err)
+	}
+	if head.Size != expectedSize || !sameMediaType(head.ContentType, expectedType) {
+		return ErrInvalid
+	}
+	if head.ChecksumSHA256 != "" && !strings.EqualFold(head.ChecksumSHA256, expectedHash) {
+		return ErrChecksum
+	}
+	return nil
 }
 
 // PutOriginal stores a validated original through the private client.
@@ -359,6 +487,9 @@ func opaqueKey(tenantID, mediaID identity.ID) (string, error) {
 }
 
 func mapError(err error) error {
+	if err == nil {
+		return nil
+	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return fmt.Errorf("dependency unavailable: %w", err)
 	}

@@ -44,7 +44,7 @@ jobs:
       - name: Validate OCI deployment code
         run: |
           set -euo pipefail
-          bash -n deploy/oci/ops.sh deploy/oci/host/*.sh
+          for script in deploy/oci/ops.sh deploy/oci/host/*.sh; do bash -n "$script"; done
           python3 -m unittest discover -s deploy/oci/tests -v
           docker compose --env-file deploy/oci/compose.env.example -f deploy/oci/compose.yaml config --quiet
           python3 -m py_compile deploy/oci/affected.py deploy/oci/planner.py deploy/oci/verify-release.py

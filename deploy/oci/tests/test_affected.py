@@ -12,7 +12,7 @@ spec.loader.exec_module(affected)
 class AffectedTests(unittest.TestCase):
     def test_design_system_selects_all_frontends(self):
         result = affected.resolve("", "", "all")
-        self.assertEqual(len(result["targets"]), 9)
+        self.assertEqual(len(result["targets"]), 10)
 
     def test_unknown_component_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unknown component"):

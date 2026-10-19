@@ -22,12 +22,14 @@ type StructuredRequest struct {
 // Position are populated for comparative evidence so the adapter can preserve
 // the relationship between an origin image and its current counterpart.
 type NormalizedImage struct {
-	EvidenceID string
-	Source     string
-	PairID     string
-	Position   string
-	DataURL    string
-	Digest     string
+	EvidenceID      string
+	Source          string
+	PairID          string
+	Position        string
+	DataURL         string
+	Digest          string
+	VisibilityKnown bool
+	Visible         bool
 }
 
 // StructuredResult records actual provider facts, never estimated usage.

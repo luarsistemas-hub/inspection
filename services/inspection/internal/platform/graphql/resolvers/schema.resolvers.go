@@ -7,8 +7,12 @@ package resolvers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"inspection/libs/identity"
 	assignroles "inspection/services/inspection/internal/features/access/assign_role_scope"
 	disablemembership "inspection/services/inspection/internal/features/access/disable_membership"
@@ -16,6 +20,7 @@ import (
 	listidentitymemberships "inspection/services/inspection/internal/features/access/list_identity_memberships"
 	postallookup "inspection/services/inspection/internal/features/addresses/lookup_postal_code"
 	getanalysisprompt "inspection/services/inspection/internal/features/analysis/get_prompt"
+	reanalyzevideoinsp "inspection/services/inspection/internal/features/analysis/reanalyze_video_inspection"
 	updateanalysisprompt "inspection/services/inspection/internal/features/analysis/update_prompt"
 	assetarchive "inspection/services/inspection/internal/features/assets/archive_asset"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
@@ -24,6 +29,7 @@ import (
 	assetregister "inspection/services/inspection/internal/features/assets/register_asset"
 	assetupdate "inspection/services/inspection/internal/features/assets/update_asset"
 	listaudit "inspection/services/inspection/internal/features/audit/list_events"
+	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
@@ -39,19 +45,24 @@ import (
 	revokeinvitation "inspection/services/inspection/internal/features/invitations/revoke_invitation"
 	verifyotp "inspection/services/inspection/internal/features/invitations/verify_otp"
 	mediacomplete "inspection/services/inspection/internal/features/media/complete_upload"
+	mediavideopolicy "inspection/services/inspection/internal/features/media/configure_video_policy"
 	mediacore "inspection/services/inspection/internal/features/media/core"
 	mediacreate "inspection/services/inspection/internal/features/media/create_upload"
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
+	mediavideoprep "inspection/services/inspection/internal/features/media/manage_video_preparation"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
+	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
+	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
 	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
+	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	participantlist "inspection/services/inspection/internal/features/participants/list_participants"
@@ -90,12 +101,14 @@ import (
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/requestctx"
+	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"net/http"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // RequestOnboardingOtp is the resolver for the requestOnboardingOtp field.
@@ -875,7 +888,11 @@ func (r *mutationResolver) ActivateOriginVersion(ctx context.Context, input grap
 		return nil, err
 	}
 	row := raw.(database.OriginVersion)
-	return &graphql1.OriginVersionPayload{Version: mapOriginVersion(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	version, err := r.projectOriginVersion(ctx, meta.TenantID, row)
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // InvalidateOriginVersion is the resolver for the invalidateOriginVersion field.
@@ -893,7 +910,35 @@ func (r *mutationResolver) InvalidateOriginVersion(ctx context.Context, input gr
 		return nil, err
 	}
 	row := raw.(database.OriginVersion)
-	return &graphql1.OriginVersionPayload{Version: mapOriginVersion(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	version, err := r.projectOriginVersion(ctx, meta.TenantID, row)
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// CloseOriginInvitation is the resolver for the closeOriginInvitation field.
+func (r *mutationResolver) CloseOriginInvitation(ctx context.Context, input graphql1.CloseOriginInvitationInput) (*graphql1.OriginVersionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	id, err := identity.ParseID(input.VersionID)
+	if err != nil {
+		return nil, invalidID("versionId")
+	}
+	raw, err := r.Bus.Send(ctx, originclose.Command{TenantID: meta.TenantID, ActorID: meta.Principal.IdentityID, VersionID: id, Reason: input.Reason, ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
+	if err != nil {
+		if apperror.Is(err, apperror.InvalidInput) || apperror.Is(err, apperror.InvalidState) || apperror.Is(err, apperror.Conflict) {
+			return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+		}
+		return nil, err
+	}
+	version, err := r.projectOriginVersion(ctx, meta.TenantID, raw.(database.OriginVersion))
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // PromoteInspectionPhotos is the resolver for the promoteInspectionPhotos field.
@@ -919,6 +964,34 @@ func (r *mutationResolver) PromoteInspectionPhotos(ctx context.Context, input gr
 		return nil, err
 	}
 	return &graphql1.OriginPromotionPayload{Promotion: mapOriginPromotion(raw.(originpromote.Result)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// PromoteInspectionVideo is the resolver for the promoteInspectionVideo field.
+func (r *mutationResolver) PromoteInspectionVideo(ctx context.Context, input graphql1.PromoteInspectionVideoInput) (*graphql1.OriginVersionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	raw, err := r.Bus.Send(ctx, originpromotevideo.Command{TenantID: meta.TenantID, InspectionID: inspectionID, ClientMutationID: input.ClientMutationID})
+	if err != nil {
+		code, _, _ := apperror.Public(err)
+		switch code {
+		case apperror.Unauthenticated, apperror.Forbidden, apperror.DependencyUnavailable, apperror.Internal:
+			return nil, err
+		default:
+			return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+		}
+	}
+	row := raw.(database.OriginVersion)
+	version, err := r.projectOriginVersion(ctx, meta.TenantID, row)
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // CreateSchedule is the resolver for the createSchedule field.
@@ -1084,6 +1157,10 @@ func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.Pl
 	if err != nil {
 		return nil, err
 	}
+	referenceID, err := parseOptionalID(input.ReferenceVersionID, "referenceVersionId")
+	if err != nil {
+		return nil, err
+	}
 	if stageID != nil && projectID == nil && (input.CreateProject == nil || !*input.CreateProject) {
 		return nil, apperror.New(apperror.InvalidInput, "stageId", "stage requires a project")
 	}
@@ -1125,7 +1202,7 @@ func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.Pl
 			if err != nil {
 				return err
 			}
-			row, err := r.ScheduleService.Create(workCtx, schedulecore.Input{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: nil, ProjectID: projectID, StageID: stageID, RRule: *input.Rrule, Timezone: *input.Timezone, StartsAt: startsAt, DeadlineMinutes: *input.DeadlineMinutes, ReminderOffsetsMinutes: input.ReminderOffsetsMinutes, IdempotencyKey: key + "/schedule"})
+			row, err := r.ScheduleService.Create(workCtx, schedulecore.Input{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: referenceID, ProjectID: projectID, StageID: stageID, RRule: *input.Rrule, Timezone: *input.Timezone, StartsAt: startsAt, DeadlineMinutes: *input.DeadlineMinutes, ReminderOffsetsMinutes: input.ReminderOffsetsMinutes, IdempotencyKey: key + "/schedule"})
 			if err != nil {
 				return err
 			}
@@ -1150,7 +1227,7 @@ func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.Pl
 		if err != nil {
 			return err
 		}
-		view, err := r.InspectionService.Create(workCtx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: &templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, Source: inspectioncore.SourceManual, SourceKey: key + "/inspection", Reason: *input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+		view, err := r.InspectionService.Create(workCtx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: &templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: referenceID, ProjectID: projectID, StageID: stageID, Source: inspectioncore.SourceManual, SourceKey: key + "/inspection", Reason: *input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
 		if err != nil {
 			return err
 		}
@@ -1326,13 +1403,175 @@ func (r *mutationResolver) ReopenProject(ctx context.Context, input graphql1.Reo
 func (r *mutationResolver) AcceptProcessing(ctx context.Context, input graphql1.AcceptProcessingInput) (*graphql1.CapturePayload, error) {
 	credentials, ok := requestctx.ExternalCredentialsFromContext(ctx)
 	if !ok {
-		return nil, unauthenticated()
+		return nil, externalOperationAuthError(ctx)
 	}
-	_, err := r.Bus.Send(ctx, acceptprocessing.Command{SessionToken: credentials.SessionToken, CSRFToken: credentials.CSRFToken, Consent: invitationcore.ProcessingConsent{DisclosureVersion: input.DisclosureVersion, PhotoProcessing: input.PhotoProcessing, AIAnalysis: input.AiAnalysis, GPSUse: input.GpsUse}})
+	if _, err := r.Invitations.ValidateSession(ctx, credentials.SessionToken, credentials.CSRFToken); err != nil {
+		return nil, err
+	}
+	videoConsent := input.VideoProcessing != nil && *input.VideoProcessing
+	_, err := r.Bus.Send(ctx, acceptprocessing.Command{SessionToken: credentials.SessionToken, CSRFToken: credentials.CSRFToken, Consent: invitationcore.ProcessingConsent{DisclosureVersion: input.DisclosureVersion, PhotoProcessing: input.PhotoProcessing, VideoProcessing: videoConsent, AIAnalysis: input.AiAnalysis, GPSUse: input.GpsUse}})
 	if err != nil {
 		return nil, err
 	}
 	return &graphql1.CapturePayload{Status: "ACCEPTED", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// BeginVideoCapture freezes the effective video limits for one authorized attempt.
+func (r *mutationResolver) BeginVideoCapture(ctx context.Context, input graphql1.BeginVideoCaptureInput) (*graphql1.VideoAttemptPayload, error) {
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var replaces *identity.ID
+	if input.ReplacesMediaID != nil {
+		id, parseErr := identity.ParseID(*input.ReplacesMediaID)
+		if parseErr != nil {
+			return nil, invalidID("replacesMediaId")
+		}
+		replaces = &id
+	}
+	raw, err := r.Bus.Send(ctx, capturebeginvideo.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AcquisitionSource: input.AcquisitionSource, MutationID: input.ClientMutationID, ReplacesMediaID: replaces})
+	if err != nil {
+		return nil, err
+	}
+	row := raw.(database.VideoAttempt)
+	return &graphql1.VideoAttemptPayload{Attempt: &graphql1.VideoAttempt{ID: row.ID.String(), Kind: row.Kind, AcquisitionSource: row.AcquisitionSource, MaxDurationSeconds: row.MaxDurationSeconds, MaxBytes: int(row.MaxBytes), PolicyVersion: int(row.PolicyVersion), AdmittedAt: row.AdmittedAt.Format(time.RFC3339Nano), ExpiresAt: row.ExpiresAt.Format(time.RFC3339Nano), Status: row.Status}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ConfigureVideoPolicy applies an optimistic tenant policy update.
+func (r *mutationResolver) ConfigureVideoPolicy(ctx context.Context, input graphql1.ConfigureVideoPolicyInput) (*graphql1.VideoPolicyPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	raw, err := r.Bus.Send(ctx, mediavideopolicy.Command{TenantID: meta.TenantID, MaxDurationMinutes: input.MaxDurationMinutes, OriginRetentionDays: input.OriginRetentionDays, CurrentRetentionDays: input.CurrentRetentionDays, ExpectedVersion: int64(input.ExpectedVersion), MutationID: input.ClientMutationID})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.VideoPolicyPayload{Policy: mapVideoPolicy(raw.(database.VideoPolicy)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// RetryVideoPreparation starts a new audited attempt against the same received source.
+func (r *mutationResolver) RetryVideoPreparation(ctx context.Context, input graphql1.RetryVideoPreparationInput) (*graphql1.VideoPreparationPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	mediaID, err := identity.ParseID(input.MediaID)
+	if err != nil {
+		return nil, invalidID("mediaId")
+	}
+	raw, err := r.Bus.Send(ctx, mediavideoprep.RetryCommand{TenantID: meta.TenantID, MediaID: mediaID, ExpectedPreparationVersion: input.ExpectedPreparationVersion, MutationID: input.ClientMutationID})
+	if err != nil {
+		return nil, err
+	}
+	status := raw.(mediavideoprep.Status)
+	return &graphql1.VideoPreparationPayload{Preparation: mapVideoPreparationStatus(status), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ReprocessVideoPreparation is the resolver for the reprocessVideoPreparation field.
+func (r *mutationResolver) ReprocessVideoPreparation(ctx context.Context, input graphql1.ReprocessVideoPreparationInput) (*graphql1.VideoPreparationPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	mediaID, err := identity.ParseID(input.MediaID)
+	if err != nil {
+		return nil, invalidID("mediaId")
+	}
+	raw, err := r.Bus.Send(ctx, mediavideoprep.ReprocessCommand{TenantID: meta.TenantID, MediaID: mediaID, ExpectedPreparationVersion: input.ExpectedPreparationVersion, ProfileDigest: input.ProfileDigest, MutationID: input.ClientMutationID})
+	if err != nil {
+		code, _, _ := apperror.Public(err)
+		switch code {
+		case apperror.InvalidInput, apperror.InvalidState, apperror.Conflict, apperror.NotFound:
+			return &graphql1.VideoPreparationPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+		}
+		return nil, videoDatabaseFailure(err)
+	}
+	return &graphql1.VideoPreparationPayload{Preparation: mapVideoPreparationStatus(raw.(mediavideoprep.Status)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ReanalyzeVideoInspection queues another immutable generation for a sealed video plan.
+func (r *mutationResolver) ReanalyzeVideoInspection(ctx context.Context, input graphql1.ReanalyzeVideoInspectionInput) (*graphql1.ReanalyzeVideoInspectionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	expectedPlanID, err := identity.ParseID(input.ExpectedPlanID)
+	if err != nil {
+		return nil, invalidID("expectedPlanId")
+	}
+	raw, err := r.Bus.Send(ctx, reanalyzevideoinsp.Command{TenantID: meta.TenantID, InspectionID: inspectionID, ExpectedPlanID: expectedPlanID, ClientMutationID: input.ClientMutationID})
+	if err != nil {
+		code, _, _ := apperror.Public(err)
+		switch code {
+		case apperror.InvalidInput, apperror.InvalidState, apperror.Conflict, apperror.NotFound:
+			return &graphql1.ReanalyzeVideoInspectionPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+		}
+		return nil, videoDatabaseFailure(err)
+	}
+	result := raw.(reanalyzevideoinsp.Result)
+	planID, generation := result.PlanID.String(), result.Generation
+	return &graphql1.ReanalyzeVideoInspectionPayload{PlanID: &planID, Generation: &generation, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// ConfigureVideoAdmission changes the platform-wide admission gate and records its audit reason.
+func (r *mutationResolver) ConfigureVideoAdmission(ctx context.Context, input graphql1.ConfigureVideoAdmissionInput) (*graphql1.VideoAdmissionPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	reason := strings.TrimSpace(input.Reason)
+	if err := capturecore.ValidateDescription(reason, true); err != nil {
+		return nil, apperror.New(apperror.InvalidInput, "reason", "reason is required")
+	}
+	var row database.VideoAdmission
+	if strings.TrimSpace(input.ClientMutationID) == "" {
+		return nil, apperror.New(apperror.InvalidInput, "clientMutationId", "mutation id is required")
+	}
+	payloadDigestBytes := sha256.Sum256([]byte(fmt.Sprintf("%t:%s", input.Enabled, reason)))
+	payloadDigest := hex.EncodeToString(payloadDigestBytes[:])
+	withinTenant := r.WithinTenant
+	if withinTenant == nil {
+		withinTenant = (tenanttx.Runner{DB: r.DB}).Within
+	}
+	err := withinTenant(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=1").First(&row).Error; err != nil {
+			return err
+		}
+		if row.MutationID == input.ClientMutationID {
+			if row.PayloadHash != payloadDigest {
+				return apperror.New(apperror.Conflict, "clientMutationId", "mutation payload changed")
+			}
+			return nil
+		}
+		if input.ExpectedVersion < 1 || row.Version != int64(input.ExpectedVersion) {
+			return apperror.New(apperror.Conflict, "expectedVersion", "video admission has changed")
+		}
+		now := time.Now().UTC()
+		row.Enabled = input.Enabled
+		row.Version++
+		row.ChangedBy = meta.Principal.IdentityID
+		row.ChangedAt = now
+		row.Reason = reason
+		row.MutationID = input.ClientMutationID
+		row.PayloadHash = payloadDigest
+		if err := tx.Save(&row).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: meta.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.admission_configured", TargetType: "video_admission", TargetID: "1", Outcome: "ACCEPTED", Reason: reason, CorrelationID: meta.CorrelationID, OccurredAt: now}).Error
+	})
+	if err != nil {
+		return nil, videoDatabaseFailure(err)
+	}
+	return &graphql1.VideoAdmissionPayload{Admission: mapVideoAdmission(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // CreateMediaUpload is the resolver for the createMediaUpload field.
@@ -1341,7 +1580,16 @@ func (r *mutationResolver) CreateMediaUpload(ctx context.Context, input graphql1
 	if err != nil {
 		return nil, err
 	}
-	raw, err := r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID})
+	var raw any
+	if input.AttemptID != nil {
+		attemptID, parseErr := identity.ParseID(*input.AttemptID)
+		if parseErr != nil {
+			return nil, invalidID("attemptId")
+		}
+		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AttemptID: &attemptID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID})
+	} else {
+		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1463,17 +1711,30 @@ func (r *mutationResolver) DeclareCaptureImpossibility(ctx context.Context, inpu
 func (r *mutationResolver) SubmitCapture(ctx context.Context, input graphql1.SubmitCaptureInput) (*graphql1.SubmissionPayload, error) {
 	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
 	if err != nil {
-		return nil, err
+		// A successful submit completes the invitation and revokes its write
+		// session. Permit a retry through the completed-capture read session;
+		// the submit command returns the existing immutable submission.
+		if _, hasExternalCredentials := requestctx.ExternalCredentialsFromContext(ctx); !hasExternalCredentials {
+			return nil, err
+		}
+		tenantID, responsibilityID, err = r.externalCaptureReadResponsibility(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	raw, err := r.Bus.Send(ctx, capturesubmit.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ConfirmIncomplete: input.ConfirmIncomplete})
 	if err != nil {
 		return nil, err
 	}
 	submission := raw.(database.SubmissionVersion)
+	preparationPending, err := submissionPreparationPending(ctx, r.DB, tenantID, submission)
+	if err != nil {
+		return nil, err
+	}
 	if writer, ok := requestctx.ResponseWriter(ctx); ok {
 		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	}
-	return &graphql1.SubmissionPayload{Submission: &graphql1.Submission{ID: submission.ID.String(), Complete: submission.Complete, RequiresAttention: submission.RequiresAttention, SubmittedAt: submission.SubmittedAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return &graphql1.SubmissionPayload{Submission: &graphql1.Submission{ID: submission.ID.String(), Complete: submission.Complete, RequiresAttention: submission.RequiresAttention, PreparationPending: preparationPending, SubmittedAt: submission.SubmittedAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // RequestRecapture is the resolver for the requestRecapture field.
@@ -1520,13 +1781,38 @@ func (r *mutationResolver) UpdateTriageCase(ctx context.Context, input graphql1.
 
 // SubmitRecapture is the resolver for the submitRecapture field.
 func (r *mutationResolver) SubmitRecapture(ctx context.Context, input graphql1.SubmitRecaptureInput) (*graphql1.RecapturePayload, error) {
-	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
-	if err != nil {
-		return nil, err
-	}
 	requestID, err := identity.ParseID(input.RequestID)
 	if err != nil {
 		return nil, invalidID("requestId")
+	}
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		// Capture submission revokes the invitation. A retry may confirm an
+		// already received RC1 with the same completed-capture credential, but
+		// it must never regain mutation authority.
+		credentials, ok := requestctx.ExternalCredentialsFromContext(ctx)
+		if !ok {
+			return nil, err
+		}
+		readResponsibility, readErr := r.Invitations.ValidateCaptureRead(ctx, credentials.SessionToken, credentials.CSRFToken)
+		if readErr != nil || readResponsibility == (identity.ID{}) {
+			return nil, err
+		}
+		readTenant, tenantErr := security.ParseScopedToken(credentials.SessionToken)
+		if tenantErr != nil {
+			return nil, err
+		}
+		var request database.RecaptureRequest
+		lookupErr := withTask06Tenant(ctx, r.DB, readTenant, func(tx *gorm.DB) error {
+			return tx.WithContext(ctx).Where("tenant_id=? AND id=? AND responsibility_id=? AND status='RECEIVED'", readTenant, requestID, readResponsibility).Take(&request).Error
+		})
+		if lookupErr != nil {
+			if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+			return nil, lookupErr
+		}
+		return &graphql1.RecapturePayload{Recapture: &graphql1.Recapture{ID: request.ID.String(), ResponsibilityID: request.ResponsibilityID.String(), Status: request.Status}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 	}
 	raw, err := r.Bus.Send(ctx, recapturesubmit.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequestID: requestID, ConfirmIncomplete: input.ConfirmIncomplete})
 	if err != nil {
@@ -1538,6 +1824,33 @@ func (r *mutationResolver) SubmitRecapture(ctx context.Context, input graphql1.S
 
 // DeclareSensitiveDetectionFalsePositive is the resolver for the declareSensitiveDetectionFalsePositive field.
 func (r *mutationResolver) DeclareSensitiveDetectionFalsePositive(ctx context.Context, input graphql1.SensitiveFalsePositiveInput) (*graphql1.MediaPayload, error) {
+	if meta, ok := requestctx.FromContext(ctx); ok && meta.Principal.Internal {
+		if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+			return nil, err
+		}
+		mediaID, err := identity.ParseID(input.MediaID)
+		if err != nil {
+			return nil, invalidID("mediaId")
+		}
+		var media database.MediaObject
+		if r.DB == nil {
+			return nil, apperror.New(apperror.DependencyUnavailable, "", "database unavailable")
+		}
+		err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+			return tx.WithContext(ctx).Where("tenant_id = ? AND id = ?", meta.TenantID, mediaID).Take(&media).Error
+		})
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
+			}
+			return nil, err
+		}
+		raw, err := r.Bus.Send(ctx, mediafalsepositive.Command{TenantID: meta.TenantID, ResponsibilityID: media.ResponsibilityID, MediaID: mediaID, Reason: input.Reason})
+		if err != nil {
+			return nil, err
+		}
+		return &graphql1.MediaPayload{Media: mapMedia(raw.(database.MediaObject)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	}
 	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
 	if err != nil {
 		return nil, err
@@ -1604,29 +1917,31 @@ func (r *mutationResolver) RecordDeletionRequest(ctx context.Context, input grap
 	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
 		return nil, err
 	}
-	inspectionID, err := identity.ParseID(input.InspectionID)
+	scope, err := parseRetentionScope(input.InspectionID, input.SourceMediaID, input.OriginVersionID)
 	if err != nil {
-		return nil, invalidID("inspectionId")
+		return nil, err
 	}
 	var row database.DeletionRequest
 	if input.Reason != nil {
 		row.Reason = *input.Reason
 	}
 	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
-		var inspection database.Inspection
-		if err := tx.Session(&gorm.Session{}).Where("id=?", inspectionID).First(&inspection).Error; err != nil {
+		if err := lockRetentionScope(tx, meta.TenantID, scope); err != nil {
+			return err
+		}
+		if err := rejectKnownDeletionBlock(tx, meta.TenantID, scope); err != nil {
 			return err
 		}
 		var existing database.DeletionRequest
-		if err := tx.Session(&gorm.Session{}).Where("inspection_id=? AND status IN ('REQUESTED','REFUSED')", inspectionID).Order("requested_at DESC").First(&existing).Error; err == nil {
+		if err := retentionScopeQuery(tx.Session(&gorm.Session{NewDB: true}).Model(&database.DeletionRequest{}).Where("tenant_id=?", meta.TenantID), scope).Where("status IN ('REQUESTED','REFUSED')").Order("requested_at DESC").First(&existing).Error; err == nil {
 			row = existing
 			return nil
 		} else if err != gorm.ErrRecordNotFound {
 			return err
 		}
 		now := time.Now().UTC()
-		row = database.DeletionRequest{ID: identity.NewID(), TenantID: meta.TenantID, InspectionID: inspectionID, Status: "REQUESTED", RequestedAt: now, Reason: row.Reason}
-		return tx.Session(&gorm.Session{}).Create(&row).Error
+		row = database.DeletionRequest{ID: identity.NewID(), TenantID: meta.TenantID, InspectionID: scope.inspectionID, SourceMediaID: scope.sourceMediaID, OriginVersionID: scope.originVersionID, Status: "REQUESTED", RequestedAt: now, Reason: row.Reason}
+		return tx.Session(&gorm.Session{NewDB: true}).Create(&row).Error
 	})
 	if err != nil {
 		return nil, err
@@ -2265,7 +2580,8 @@ func (r *queryResolver) OriginVersions(ctx context.Context, assetID string, firs
 	result := raw.(originlist.Result)
 	nodes := make([]*graphql1.OriginVersion, 0, len(result.Versions))
 	for _, row := range result.Versions {
-		nodes = append(nodes, mapOriginVersion(row))
+		details := result.Details[row.ID]
+		nodes = append(nodes, mapOriginVersion(row, &details))
 	}
 	return &graphql1.OriginVersionConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
@@ -2414,13 +2730,17 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 			query = query.Where("version_number=?", *version)
 		}
 		return query.First(&row).Error
-	}); err != nil {
+	}); errors.Is(err, gorm.ErrRecordNotFound) {
+		// The inspection is authorized; without a snapshot its report is
+		// still being produced, while a missing explicit version is unknown.
+		if version != nil {
+			return nil, apperror.New(apperror.NotFound, "version", "report version not found")
+		}
+		return nil, apperror.New(apperror.InvalidState, "inspectionId", "report is not ready")
+	} else if err != nil {
 		return nil, err
 	}
 	view := mapReport(row)
-	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
-		return nil, err
-	}
 	var artifact database.ReportArtifact
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("snapshot_id=? AND kind='PDF'", row.ID).First(&artifact).Error
@@ -2437,6 +2757,112 @@ func (r *queryResolver) Report(ctx context.Context, inspectionID string, version
 	return view, nil
 }
 
+// VideoPreparationEvidence is the resolver for the videoPreparationEvidence field.
+func (r *queryResolver) VideoPreparationEvidence(ctx context.Context, preparationID string, first *int, after *string) (*graphql1.VideoPreparationEvidenceConnection, error) {
+	return r.videoPreparationEvidence(ctx, preparationID, first, after)
+}
+
+// VideoPreparations is the resolver for the videoPreparations field.
+func (r *queryResolver) VideoPreparations(ctx context.Context, status []string, first *int, after *string) (*graphql1.VideoPreparationConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if err := internalRole(meta, auth.Manager, auth.Employee); err != nil {
+		return nil, err
+	}
+	for _, value := range status {
+		switch value {
+		case "QUEUED", "PROCESSING", "FAILED", "READY":
+		default:
+			return nil, graphql1Error("status")
+		}
+	}
+	limit, err := pageLimit(first)
+	if err != nil {
+		return nil, err
+	}
+	var cursorTime time.Time
+	var cursorID identity.ID
+	if after != nil && *after != "" {
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(*after)
+		parts := strings.Split(string(decoded), "|")
+		if decodeErr != nil || len(parts) != 3 || parts[0] != meta.TenantID.String() {
+			return nil, graphql1Error("after")
+		}
+		cursorTime, err = time.Parse(time.RFC3339Nano, parts[1])
+		if err != nil {
+			return nil, graphql1Error("after")
+		}
+		cursorID, err = identity.ParseID(parts[2])
+		if err != nil {
+			return nil, graphql1Error("after")
+		}
+	}
+	if r.DB == nil {
+		return nil, apperror.New(apperror.DependencyUnavailable, "", "database unavailable")
+	}
+	var jobs []database.VideoPreparationJob
+	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		query := tx.WithContext(ctx).Where("tenant_id = ?", meta.TenantID)
+		if len(status) > 0 {
+			query = query.Where("status IN ?", status)
+		}
+		if !cursorTime.IsZero() {
+			query = query.Where("created_at < ? OR (created_at = ? AND id < ?)", cursorTime, cursorTime, cursorID)
+		}
+		return query.Order("created_at DESC, id DESC").Limit(limit + 1).Find(&jobs).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	more := len(jobs) > limit
+	if more {
+		jobs = jobs[:limit]
+	}
+	connection := &graphql1.VideoPreparationConnection{Nodes: make([]*graphql1.VideoPreparationStatus, 0, len(jobs)), PageInfo: pageInfo("", more)}
+	err = withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+		for _, job := range jobs {
+			item := &graphql1.VideoPreparationStatus{MediaID: job.MediaID.String(), PreparationID: job.ID.String(), Status: job.Status, Stage: job.Phase, PreparationVersion: job.PreparationVersion, Attempts: job.Attempts, ProcessedFrames: job.ProcessedFrames, ErrorCode: safeVideoPreparationError(job.ErrorCode), ManifestDigest: job.ManifestDigest}
+			var source database.VideoSource
+			sourceErr := tx.WithContext(ctx).Where("tenant_id = ? AND media_id = ?", meta.TenantID, job.MediaID).Take(&source).Error
+			if sourceErr == nil {
+				item.SourceAvailable = source.Status != "EXPIRED" && source.Status != "DELETING" && source.Status != "DELETED"
+				if source.SourceExpiryAt != nil {
+					value := source.SourceExpiryAt.UTC().Format(time.RFC3339Nano)
+					item.SourceExpiryAt = &value
+				}
+			} else if sourceErr == gorm.ErrRecordNotFound {
+				var media database.MediaObject
+				if mediaErr := tx.WithContext(ctx).Where("tenant_id = ? AND id = ?", meta.TenantID, job.MediaID).Take(&media).Error; mediaErr == nil {
+					item.SourceAvailable = media.ObjectKey != "" && media.Status != "EXPIRED" && media.Status != "DELETED" && media.Status != "REJECTED"
+				} else if mediaErr != gorm.ErrRecordNotFound {
+					return mediaErr
+				}
+			} else {
+				return sourceErr
+			}
+			item.Retryable = job.Status == "FAILED" && item.SourceAvailable && source.ScreeningStatus != "BLOCKED"
+			if job.FirstReadyAt != nil {
+				value := job.FirstReadyAt.UTC().Format(time.RFC3339Nano)
+				item.FirstFrameReadyAt = &value
+				item.Stage = "READY"
+			}
+			connection.Nodes = append(connection.Nodes, item)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(jobs) > 0 {
+		last := jobs[len(jobs)-1]
+		cursor := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s|%s|%s", meta.TenantID, last.CreatedAt.UTC().Format(time.RFC3339Nano), last.ID)))
+		connection.PageInfo = pageInfo(cursor, more)
+	}
+	return connection, nil
+}
+
 // Reports is the resolver for the reports field.
 func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, search *string, classification *string) (*graphql1.ReportConnection, error) {
 	meta, ok := requestctx.FromContext(ctx)
@@ -2444,6 +2870,9 @@ func (r *queryResolver) Reports(ctx context.Context, first *int, after *string, 
 		return nil, unauthenticated()
 	}
 	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee, auth.Viewer); err != nil {
+		return nil, err
+	}
+	if _, err := pageLimit(first); err != nil {
 		return nil, err
 	}
 	input := listreports.Input{TenantID: meta.TenantID, TenantAdmin: hasRole(meta, auth.TenantAdmin)}
@@ -2528,7 +2957,9 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	var snapshot database.ReportSnapshot
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		return tx.Where("id=?", id).Take(&snapshot).Error
-	}); err != nil {
+	}); errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, apperror.New(apperror.NotFound, "snapshotId", "report not found")
+	} else if err != nil {
 		return nil, err
 	}
 	if err := authorizeReportInspection(ctx, r.DB, meta, snapshot.InspectionID); err != nil {
@@ -2543,7 +2974,10 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
 		if isCustomer {
 			var publication database.ReportPublication
-			if err := tx.Where("tenant_id=? AND snapshot_id=? AND status='PUBLISHED'", meta.TenantID, id).First(&publication).Error; err != nil {
+			if err := tx.Where("tenant_id=? AND snapshot_id=? AND status='PUBLISHED'", meta.TenantID, id).First(&publication).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				// Unpublished or revoked releases are undisclosed to customers.
+				return apperror.New(apperror.NotFound, "snapshotId", "report not found")
+			} else if err != nil {
 				return err
 			}
 		}
@@ -2576,9 +3010,11 @@ func (r *queryResolver) ReportDownload(ctx context.Context, snapshotID string, k
 	}
 	url := ""
 	if r.Store.Client != nil {
-		if signed, signErr := r.Store.PresignGet(ctx, row.ObjectKey, 5*time.Minute); signErr == nil {
-			url = signed
+		signed, signErr := r.Store.PresignGet(ctx, row.ObjectKey, 5*time.Minute)
+		if signErr != nil {
+			return nil, apperror.New(apperror.DependencyUnavailable, "store", "report download is unavailable")
 		}
+		url = signed
 	}
 	return &graphql1.ReportDownload{SnapshotID: row.SnapshotID.String(), Kind: kindOut, ObjectKey: "", Status: row.Status, URL: url, Sha256: strptr(row.SHA256)}, nil
 }
@@ -2888,6 +3324,18 @@ func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string,
 	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
+	id, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	// Published visibility does not replace business-unit/asset scope checks;
+	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
+	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
+		if apperror.Is(err, apperror.Forbidden) {
+			return nil, apperror.New(apperror.NotFound, "", "not found")
+		}
+		return nil, err
+	}
 	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, version)
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -2908,6 +3356,18 @@ func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID strin
 	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
 		return nil, err
 	}
+	id, err := identity.ParseID(inspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	// Published visibility does not replace business-unit/asset scope checks;
+	// customer views answer NOT_FOUND so out-of-scope reports stay undisclosed.
+	if err := authorizeReportInspection(ctx, r.DB, meta, id); err != nil {
+		if apperror.Is(err, apperror.Forbidden) {
+			return nil, apperror.New(apperror.NotFound, "", "not found")
+		}
+		return nil, err
+	}
 	row, err := r.publishedSnapshot(ctx, meta.TenantID, inspectionID, nil)
 	if err == gorm.ErrRecordNotFound {
 		return &graphql1.CustomerEvidenceConnection{Nodes: []*graphql1.CustomerEvidenceItem{}, PageInfo: pageInfo("", false)}, nil
@@ -2916,36 +3376,37 @@ func (r *queryResolver) CustomerEvidence(ctx context.Context, inspectionID strin
 		return nil, err
 	}
 	view := mapReport(row)
-	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
-		return nil, err
-	}
 	labels := make(map[string]*graphql1.ReportRequirement, len(view.Requirements))
 	for _, requirement := range view.Requirements {
 		labels[requirement.Key] = requirement
 	}
-	limit := intValue(first)
-	if limit <= 0 || limit > 100 {
-		limit = 25
+	limit, err := pageLimit(first)
+	if err != nil {
+		return nil, err
 	}
-	start := stringValue(after)
+	start, err := decodeEvidenceCursor(stringValue(after), meta.TenantID, row.ID)
+	if err != nil {
+		return nil, graphql1Error("after")
+	}
+	page, hasNext, err := sliceEvidencePage(view.Evidence.Nodes, limit, start)
+	if err != nil {
+		return nil, graphql1Error("after")
+	}
+	view.Evidence.Nodes = page
+	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
+		return nil, err
+	}
 	nodes := make([]*graphql1.CustomerEvidenceItem, 0, limit)
-	for _, item := range view.Evidence {
-		if start != "" && item.ID <= start {
-			continue
-		}
-		if len(nodes) == limit {
-			break
-		}
+	for _, item := range page {
 		var section, label *string
 		if requirement := labels[item.RequirementKey]; requirement != nil {
 			section, label = optional(requirement.Section), optional(requirement.Label)
 		}
-		nodes = append(nodes, &graphql1.CustomerEvidenceItem{ID: item.ID, RequirementKey: item.RequirementKey, Section: section, Label: label, Role: item.Role, Description: item.Description, CaptureSource: item.CaptureSource, CapturedAt: item.CapturedAt, State: "CURRENT", LineageID: item.ID, MediaAvailability: item.Availability, Flags: item.Flags, URL: item.URL})
+		nodes = append(nodes, &graphql1.CustomerEvidenceItem{ID: item.ID, RequirementKey: item.RequirementKey, Section: section, Label: label, Role: item.Role, Description: item.Description, CaptureSource: item.CaptureSource, CapturedAt: item.CapturedAt, State: "CURRENT", LineageID: item.ID, MediaAvailability: item.Availability, SourceAvailability: item.SourceAvailability, EvidenceKind: item.EvidenceKind, FrameID: item.FrameID, TimestampMs: item.TimestampMs, PtsMicros: item.PtsMicros, PreparationID: item.PreparationID, PlanID: item.PlanID, SourceMediaID: item.SourceMediaID, Component: item.Component, Flags: item.Flags, URL: item.URL})
 	}
-	hasNext := len(view.Evidence) > len(nodes)
 	end := ""
 	if len(nodes) > 0 {
-		end = nodes[len(nodes)-1].ID
+		end = encodeEvidenceCursor(meta.TenantID, row.ID, nodes[len(nodes)-1].ID)
 	}
 	return &graphql1.CustomerEvidenceConnection{Nodes: nodes, PageInfo: pageInfo(end, hasNext)}, nil
 }
@@ -3394,7 +3855,19 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	reference, policy := map[string]any{}, map[string]any{}
 	_ = json.Unmarshal(view.Draft.ReferencePayload, &reference)
 	_ = json.Unmarshal(view.Draft.PolicyPayload, &policy)
-	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, TemplateVersionID: view.Draft.TemplateVersionID.String(), Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
+	if view.Draft.MediaKind == "VIDEO" {
+		if policy == nil {
+			policy = map[string]any{}
+		}
+		rawPolicy, err := r.Bus.Ask(ctx, mediavideopolicy.CaptureQuery{TenantID: tenantID})
+		if err != nil {
+			return nil, err
+		}
+		videoPolicy := rawPolicy.(database.VideoPolicy)
+		policy["maxDurationSeconds"] = videoPolicy.MaxDurationMinutes * 60
+		policy["videoPolicyVersion"] = videoPolicy.Version
+	}
+	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, MediaKind: view.Draft.MediaKind, TemplateVersionID: view.Draft.TemplateVersionID.String(), Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
 	if view.Draft.Kind == "RECAPTURE" {
 		var request database.RecaptureRequest
 		if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -3404,6 +3877,8 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 		}
 		requestID := request.ID.String()
 		response.RecaptureRequestID = &requestID
+		deadline := request.DeadlineAt.UTC().Format(time.RFC3339Nano)
+		response.RecaptureDeadlineAt = &deadline
 	}
 	if view.ConfirmationOnly {
 		response.Status = "CONFIRMED"
@@ -3423,6 +3898,36 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	}
 	for _, item := range referencesRaw.([]capturereferences.Item) {
 		mapped := &graphql1.CaptureReferenceItem{MediaID: item.MediaID.String(), RequirementKey: item.RequirementKey, Description: item.Description, Availability: item.Availability}
+		if item.Reason != "" {
+			value := item.Reason
+			mapped.Reason = &value
+		}
+		if item.EvidenceID != (identity.ID{}) {
+			value := item.EvidenceID.String()
+			mapped.EvidenceID = &value
+		}
+		if item.SourceMediaID != (identity.ID{}) {
+			value := item.SourceMediaID.String()
+			mapped.SourceMediaID = &value
+		}
+		if item.TimestampMS != 0 {
+			value := int(item.TimestampMS)
+			mapped.TimestampMs = &value
+		}
+		if item.Environment != "" {
+			value := item.Environment
+			mapped.Environment = &value
+		}
+		if item.Component != "" {
+			value := item.Component
+			mapped.Component = &value
+		}
+		if item.View != "" {
+			value := item.View
+			mapped.View = &value
+		}
+		ambiguous, gap := item.Ambiguous, item.Gap
+		mapped.Ambiguous, mapped.Gap = &ambiguous, &gap
 		if item.ImageURL != "" {
 			mapped.ImageURL = &item.ImageURL
 		}
@@ -3471,13 +3976,146 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	return response, nil
 }
 
+// VideoPolicy returns tenant-specific limits or the canonical defaults.
+func (r *queryResolver) VideoPolicy(ctx context.Context) (*graphql1.VideoPolicy, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	raw, err := r.Bus.Ask(ctx, mediavideopolicy.Query{TenantID: meta.TenantID})
+	if err != nil {
+		return nil, err
+	}
+	return mapVideoPolicy(raw.(database.VideoPolicy)), nil
+}
+
+// VideoAdmission exposes the platform gate only to the configured platform operator.
+func (r *queryResolver) VideoAdmission(ctx context.Context) (*graphql1.VideoAdmission, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	var row database.VideoAdmission
+	if err := r.DB.WithContext(ctx).Where("id=1").First(&row).Error; err != nil {
+		return nil, videoDatabaseFailure(err)
+	}
+	return mapVideoAdmission(row), nil
+}
+
+// VideoUploadStatus returns server-confirmed multipart state for the scoped capture.
+func (r *queryResolver) VideoUploadStatus(ctx context.Context, mediaID string) (*graphql1.VideoUploadStatus, error) {
+	tenantID, responsibilityID, err := r.externalCaptureReadResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	parsedID, err := identity.ParseID(mediaID)
+	if err != nil {
+		return nil, invalidID("mediaId")
+	}
+	raw, err := r.Bus.Ask(ctx, mediareconcile.Query{TenantID: tenantID, ResponsibilityID: responsibilityID, MediaID: parsedID})
+	if err != nil {
+		return nil, err
+	}
+	state := raw.(mediacore.Reconciliation)
+	received := make([]int, 0, len(state.Received))
+	confirmed := make([]*graphql1.VideoReceivedPart, 0, len(state.Received))
+	for _, part := range state.Received {
+		received = append(received, part.Number)
+		confirmed = append(confirmed, &graphql1.VideoReceivedPart{PartNumber: part.Number, Etag: part.ETag, SizeBytes: int(part.SizeBytes)})
+	}
+	return &graphql1.VideoUploadStatus{MediaID: state.MediaID.String(), Status: state.Status, ExpiresAt: state.ExpiresAt.Format(time.RFC3339Nano), ReceivedParts: received, ConfirmedParts: confirmed, MissingParts: state.MissingParts}, nil
+}
+
+// VideoPreparation returns a safe tenant-scoped view of durable preparation progress.
+func (r *queryResolver) VideoPreparation(ctx context.Context, mediaID string) (*graphql1.VideoPreparationStatus, error) {
+	var tenantID identity.ID
+	var responsibilityID identity.ID
+	var err error
+	_, external := requestctx.ExternalCredentialsFromContext(ctx)
+	if external {
+		tenantID, responsibilityID, err = r.externalCaptureReadResponsibility(ctx)
+		if err != nil {
+			return nil, unauthenticated()
+		}
+	} else {
+		meta, ok := requestctx.FromContext(ctx)
+		if !ok {
+			return nil, unauthenticated()
+		}
+		tenantID = meta.TenantID
+	}
+	parsedID, err := identity.ParseID(mediaID)
+	if err != nil {
+		return nil, invalidID("mediaId")
+	}
+	if responsibilityID != (identity.ID{}) {
+		var media database.MediaObject
+		err = withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND responsibility_id=? AND id=? AND media_kind='VIDEO'", tenantID, responsibilityID, parsedID).First(&media).Error
+		})
+		if err != nil {
+			return nil, apperror.New(apperror.NotFound, "mediaId", "video not found")
+		}
+	}
+	query := any(mediavideoprep.Query{TenantID: tenantID, MediaID: parsedID})
+	if external {
+		query = mediavideoprep.CaptureQuery{TenantID: tenantID, MediaID: parsedID}
+	}
+	raw, err := r.Bus.Ask(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return mapVideoPreparationStatus(raw.(mediavideoprep.Status)), nil
+}
+
+// Evidence is the resolver for the evidence field.
+func (r *reportResolver) Evidence(ctx context.Context, obj *graphql1.Report, first *int, after *string) (*graphql1.ReportEvidenceConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	limit, err := pageLimit(first)
+	if err != nil {
+		return nil, err
+	}
+	resourceID, parseErr := identity.ParseID(obj.ID)
+	if parseErr != nil {
+		return nil, invalidID("snapshotId")
+	}
+	start, err := decodeEvidenceCursor(stringValue(after), meta.TenantID, resourceID)
+	if err != nil {
+		return nil, graphql1Error("after")
+	}
+	items := obj.Evidence.Nodes
+	page, more, err := sliceEvidencePage(items, limit, start)
+	if err != nil {
+		return nil, graphql1Error("after")
+	}
+	view := &graphql1.Report{ID: obj.ID, CanonicalJSON: obj.CanonicalJSON, Evidence: &graphql1.ReportEvidenceConnection{Nodes: page}}
+	if err := hydrateReportMedia(ctx, r.DB, r.Store, meta.TenantID, view); err != nil {
+		return nil, err
+	}
+	end := ""
+	if len(page) > 0 {
+		end = encodeEvidenceCursor(meta.TenantID, resourceID, page[len(page)-1].ID)
+	}
+	return &graphql1.ReportEvidenceConnection{Nodes: page, PageInfo: pageInfo(end, more)}, nil
+}
+
 // Mutation returns graphql1.MutationResolver implementation.
 func (r *Resolver) Mutation() graphql1.MutationResolver { return &mutationResolver{r} }
 
 // Query returns graphql1.QueryResolver implementation.
 func (r *Resolver) Query() graphql1.QueryResolver { return &queryResolver{r} }
 
+// Report returns graphql1.ReportResolver implementation.
+func (r *Resolver) Report() graphql1.ReportResolver { return &reportResolver{r} }
+
 type (
 	mutationResolver struct{ *Resolver }
 	queryResolver    struct{ *Resolver }
+	reportResolver   struct{ *Resolver }
 )

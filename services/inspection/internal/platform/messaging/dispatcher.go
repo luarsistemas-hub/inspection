@@ -143,6 +143,9 @@ func AddOutbox[T any](tx *gorm.DB, envelope events.Envelope[T]) error {
 	if err != nil {
 		return err
 	}
+	if _, err := events.DefaultRegistry().Validate(data); err != nil {
+		return fmt.Errorf("outbox: invalid event contract: %w", err)
+	}
 	return tx.Create(&database.OutboxIntent{ID: envelope.ID, TenantID: envelope.TenantID, Type: envelope.Type, SchemaVersion: envelope.SchemaVersion, Payload: data, CorrelationID: envelope.CorrelationID, CausationID: envelope.CausationID, Status: "PENDING", NextAttemptAt: envelope.OccurredAt, CreatedAt: envelope.OccurredAt}).Error
 }
 

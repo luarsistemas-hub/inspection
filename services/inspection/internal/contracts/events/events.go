@@ -33,6 +33,29 @@ type Envelope[T any] struct {
 
 type RawEnvelope = Envelope[json.RawMessage]
 
+// VideoPreparedPayload identifies the durable frame bank committed by a worker.
+type VideoPreparedPayload struct {
+	MediaID        identity.ID `json:"mediaId"`
+	PreparationID  identity.ID `json:"preparationId"`
+	ManifestDigest string      `json:"manifestDigest"`
+}
+
+// VideoComparisonRequestedPayload binds one condition job to sealed plan membership.
+type VideoComparisonRequestedPayload struct {
+	ComparisonJobID identity.ID `json:"comparisonJobId"`
+	VideoPlanID     identity.ID `json:"videoPlanId"`
+	VideoPlanItemID identity.ID `json:"videoPlanItemId"`
+}
+
+// InspectionClassifiedPayload binds classification to the sealed video generation when applicable.
+type InspectionClassifiedPayload struct {
+	InspectionID        identity.ID  `json:"inspectionId"`
+	ClassificationRunID identity.ID  `json:"classificationRunId"`
+	VideoPlanID         *identity.ID `json:"videoPlanId,omitempty"`
+	Classification      string       `json:"classification"`
+	ReasonCodes         []string     `json:"reasonCodes"`
+}
+
 type Registry struct {
 	mu      sync.RWMutex
 	version map[string]int
@@ -75,7 +98,43 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 	if containsForbidden(envelope.Payload) {
 		return RawEnvelope{}, fmt.Errorf("%w: forbidden payload field", ErrInvalidEnvelope)
 	}
+	if envelope.Type == "media.video_prepared.v1" {
+		var payload VideoPreparedPayload
+		payloadDecoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		payloadDecoder.DisallowUnknownFields()
+		if err := payloadDecoder.Decode(&payload); err != nil || payload.MediaID == (identity.ID{}) || payload.PreparationID == (identity.ID{}) || !validDigest(payload.ManifestDigest) {
+			return RawEnvelope{}, fmt.Errorf("%w: video preparation payload", ErrInvalidEnvelope)
+		}
+	}
+	if envelope.Type == "analysis.video_comparison_requested.v1" {
+		var payload VideoComparisonRequestedPayload
+		payloadDecoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		payloadDecoder.DisallowUnknownFields()
+		if err := payloadDecoder.Decode(&payload); err != nil || payload.ComparisonJobID == (identity.ID{}) || payload.VideoPlanID == (identity.ID{}) || payload.VideoPlanItemID == (identity.ID{}) {
+			return RawEnvelope{}, fmt.Errorf("%w: video comparison payload", ErrInvalidEnvelope)
+		}
+	}
+	if envelope.Type == "inspection.classified.v1" {
+		var payload InspectionClassifiedPayload
+		payloadDecoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+		payloadDecoder.DisallowUnknownFields()
+		if err := payloadDecoder.Decode(&payload); err != nil || payload.InspectionID == (identity.ID{}) || payload.ClassificationRunID == (identity.ID{}) || payload.Classification == "" || payload.ReasonCodes == nil || payload.VideoPlanID != nil && *payload.VideoPlanID == (identity.ID{}) {
+			return RawEnvelope{}, fmt.Errorf("%w: inspection classified payload", ErrInvalidEnvelope)
+		}
+	}
 	return envelope, nil
+}
+
+func validDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validType(eventType string, version int) bool {
@@ -120,10 +179,10 @@ func DefaultRegistry() *Registry {
 	for _, name := range []string{
 		"participant.channel_verified.v1", "origin.invitation_requested.v1", "inspection.created.v1",
 		"origin.promotion_requested.v1",
-		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1",
-		"capture.submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1",
-		"analysis.comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
-		"report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
+		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1", "media.received.v1",
+		"capture.submitted.v1", "capture.video_submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1",
+		"analysis.comparison_requested.v1", "analysis.video_comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
+		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
 	} {
 		_ = r.Register(name, 1)
 	}

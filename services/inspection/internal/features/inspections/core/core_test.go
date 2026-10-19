@@ -2,12 +2,42 @@ package core
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
+	"inspection/services/inspection/internal/platform/apperror"
 )
+
+func TestChecklistOnlyRejectsTemplateWithMandatoryFixedOrigin(t *testing.T) {
+	err := validateComparisonMode(catalog.TemplateDocument{DefaultComparisonMode: catalog.FixedOrigin}, catalog.ChecklistOnly)
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidInput {
+		t.Fatalf("validation error = %v, want INVALID_INPUT", err)
+	}
+}
+
+func TestInspectionCaptureRequirementsUseSingleVideoSlotAndPreservePhotoRequirements(t *testing.T) {
+	video := inspectionCaptureRequirements("VIDEO", "FIXED_ORIGIN", []capturecore.Requirement{{Key: "video:" + identity.NewID().String(), EvidenceKind: "VIDEO_FRAME"}})
+	if len(video) != 1 || video[0].Key != "video:main" || video[0].EvidenceKind != "VIDEO" || video[0].MinimumMedia != 1 || video[0].MaximumMedia != 1 || video[0].ComparisonTarget != "FIXED_ORIGIN" {
+		t.Fatalf("video capture requirements = %+v", video)
+	}
+	for _, mode := range []string{"CHECKLIST_ONLY", "CURRENT_ONLY"} {
+		got := inspectionCaptureRequirements("VIDEO", mode, []capturecore.Requirement{{Key: "room", EvidenceKind: "VIDEO"}})
+		if len(got) != 1 || got[0].Key != "video:main" || got[0].ComparisonTarget != mode {
+			t.Fatalf("%s video requirements = %+v", mode, got)
+		}
+	}
+	photo := []capturecore.Requirement{{Key: "origin:" + identity.NewID().String(), EvidenceKind: "PHOTO"}}
+	gotPhoto := inspectionCaptureRequirements("PHOTO", "FIXED_ORIGIN", photo)
+	if len(gotPhoto) != 1 || gotPhoto[0] != photo[0] {
+		t.Fatalf("photo capture requirements changed: got=%+v want=%+v", gotPhoto, photo)
+	}
+}
 
 func TestUT022UT023InspectionStateMachine(t *testing.T) {
 	valid := [][2]string{{"PLANNED", "INVITED"}, {"INVITED", "IN_PROGRESS"}, {"IN_PROGRESS", "SUBMITTED"}, {"SUBMITTED", "ANALYZING"}, {"ANALYZING", "RECAPTURE_PENDING"}, {"RECAPTURE_PENDING", "ANALYZING"}, {"ANALYZING", "COMPLETED"}}

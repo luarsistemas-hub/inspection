@@ -46,7 +46,7 @@ func TestE2E009ExpiredWorkerLeaseBecomesUnknownWithoutDuplicateSend(t *testing.T
 	if err := h.AdminDB.Create(&database.Delivery{ID: deliveryID, TenantID: tenantID, IntentID: identity.NewID(), Status: string(core.StateQueued), LogicalTemplate: "reminder", TemplateVersion: "v1", CorrelationID: "e2e-009", IdempotencyKey: "e2e-009", RequestDigest: "e2e-009", SelectedProvider: "twilio", CreatedAt: now.Add(-2 * time.Minute), UpdatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ChannelAttempt{ID: attemptID, TenantID: tenantID, DeliveryID: deliveryID, Channel: "SMS", Destination: "+15550000001", Status: string(core.StateQueued), Provider: "twilio", TemplateVariables: []byte(`{"recipientName":"test"}`), NextAttemptAt: now, CreatedAt: now.Add(-2 * time.Minute), UpdatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ChannelAttempt{ID: attemptID, TenantID: tenantID, DeliveryID: deliveryID, Channel: "SMS", Destination: "+15550000001", Status: string(core.StateQueued), Provider: "twilio", TemplateVariables: []byte(`{"captureUrl":"https://capture.example.test/session","recipientName":"test"}`), NextAttemptAt: now, CreatedAt: now.Add(-2 * time.Minute), UpdatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	adapter := &blockingAdapter{started: make(chan struct{}), release: make(chan struct{})}

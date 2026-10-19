@@ -51,6 +51,27 @@ func TestTemplateCompilerUT025(t *testing.T) {
 	}
 }
 
+func TestVideoTemplateContractUT001UT002(t *testing.T) {
+	doc := validDocument()
+	doc.IsVideo = true
+	compiled, err := Compile(encode(t, doc), testRefs{})
+	if err != nil || compiled.Document.MediaKind() != "VIDEO" || !compiled.Document.IsVideo {
+		t.Fatalf("video modality did not compile: %#v %v", compiled.Document, err)
+	}
+	if compiled.Document.Requirements[0].EvidenceKind != "PHOTO" {
+		t.Fatal("video modality must not rewrite participant requirements into photos")
+	}
+	withoutFlag := validDocument()
+	photo, err := Compile(encode(t, withoutFlag), testRefs{})
+	if err != nil || photo.Document.MediaKind() != "PHOTO" || photo.Document.IsVideo {
+		t.Fatalf("missing isVideo did not default to PHOTO: %#v %v", photo.Document, err)
+	}
+	payload := strings.Replace(string(encode(t, withoutFlag)), `"schemaVersion":1`, `"schemaVersion":1,"videoMode":true`, 1)
+	if _, err := Compile([]byte(payload), testRefs{}); err == nil {
+		t.Fatal("unknown videoMode field weakened strict schema validation")
+	}
+}
+
 func TestPolicyResolverUT026UT027(t *testing.T) {
 	optional := false
 	radius := 250

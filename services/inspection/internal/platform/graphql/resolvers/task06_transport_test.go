@@ -101,6 +101,40 @@ func TestTask06GraphQLReadsAndStableAuth(t *testing.T) {
 			}
 		})
 	}
+	deletingSourceID := identity.NewID()
+	if err := db.Exec("INSERT INTO media.video_sources (id,tenant_id,media_id,screening_status,status) VALUES (?,?,?,?,?)", identity.NewID(), tenantID, deletingSourceID, "APPROVED", "DELETING").Error; err != nil {
+		t.Fatal(err)
+	}
+	response := executeTask06GraphQL(t, server, `mutation { applyLegalHold(input:{sourceMediaId:"`+deletingSourceID.String()+`",reason:"legal",clientMutationId:"source-hold"}) { status } }`, mutationContext)
+	if !strings.Contains(response, "CONFLICT") {
+		t.Fatalf("source hold raced deletion instead of returning conflict: %s", response)
+	}
+	var blockedHolds int64
+	if err := db.Model(&database.LegalHold{}).Where("tenant_id=? AND source_media_id=?", tenantID, deletingSourceID).Count(&blockedHolds).Error; err != nil || blockedHolds != 0 {
+		t.Fatalf("DELETING source acquired a new hold: count=%d err=%v", blockedHolds, err)
+	}
+	for _, query := range []string{
+		`mutation { applyLegalHold(input:{reason:"legal",clientMutationId:"no-scope"}) { status } }`,
+		`mutation { recordDeletionRequest(input:{inspectionId:"` + inspectionID.String() + `",sourceMediaId:"` + deletingSourceID.String() + `",clientMutationId:"two-scopes"}) { status } }`,
+	} {
+		response := executeTask06GraphQL(t, server, query, mutationContext)
+		if !strings.Contains(response, "INVALID_INPUT") {
+			t.Fatalf("retention mutation accepted an invalid selector set: %s", response)
+		}
+	}
+	// IT-620: two hold targets must fail before the service persists any hold.
+	var holdsBefore int64
+	if err := db.Model(&database.LegalHold{}).Where("tenant_id=?", tenantID).Count(&holdsBefore).Error; err != nil {
+		t.Fatal(err)
+	}
+	response = executeTask06GraphQL(t, server, `mutation { applyLegalHold(input:{inspectionId:"`+inspectionID.String()+`",sourceMediaId:"`+deletingSourceID.String()+`",reason:"two targets",clientMutationId:"it-620"}) { status userErrors { code } } }`, mutationContext)
+	if !strings.Contains(response, "INVALID_INPUT") {
+		t.Fatalf("IT-620 accepted two legal hold targets: %s", response)
+	}
+	var holdsAfter int64
+	if err := db.Model(&database.LegalHold{}).Where("tenant_id=?", tenantID).Count(&holdsAfter).Error; err != nil || holdsAfter != holdsBefore {
+		t.Fatalf("IT-620 created a hold: before=%d after=%d err=%v", holdsBefore, holdsAfter, err)
+	}
 }
 
 func task06ResolverDB(t *testing.T) *gorm.DB {
@@ -114,7 +148,7 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	for _, schema := range []string{"reports", "dashboard", "notifications", "retention", "usage", "inspections"} {
+	for _, schema := range []string{"reports", "dashboard", "notifications", "retention", "usage", "inspections", "media", "analysis"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -125,12 +159,15 @@ func task06ResolverDB(t *testing.T) *gorm.DB {
 		}
 	}
 	for _, statement := range []string{
+		`CREATE TABLE media.video_evidence_references (id blob primary key, tenant_id blob not null, preparation_id blob not null, owner_type text not null, owner_id blob not null, created_at datetime, unique(tenant_id, preparation_id, owner_type, owner_id))`,
+		`CREATE TABLE media.video_sources (id blob primary key, tenant_id blob not null, media_id blob not null, screening_status text not null, status text not null)`,
+		`CREATE TABLE analysis.video_plans (id blob primary key, tenant_id blob not null, inspection_id blob not null)`,
 		`CREATE TABLE inspections.inspections (id blob primary key, tenant_id blob not null, business_unit_id blob, asset_id blob, project_id blob)`,
 		`CREATE TABLE dashboard.inspections (id blob primary key, tenant_id blob not null, inspection_id blob not null, project_id blob, asset_id blob not null, classification text not null, status text not null, invalidated numeric not null default 0, sequence integer not null, updated_at datetime)`,
 		`CREATE TABLE notifications.deliveries (id blob primary key, tenant_id blob not null, intent_id blob not null, inspection_id blob, invitation_id blob, status text not null, logical_template text, template_version text, correlation_id text, idempotency_key text, request_digest text, recipient_id text, selected_provider text, scheduled_at datetime, lease_expires_at datetime, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE notifications.channel_attempts (id blob primary key, tenant_id blob not null, delivery_id blob not null, channel text not null, destination text not null, status text not null, provider text, provider_account text, receipt_id text, attempts integer not null default 0, last_error text, template_variables blob, next_attempt_at datetime, lease_expires_at datetime, last_attempt_at datetime, created_at datetime, updated_at datetime)`,
-		`CREATE TABLE retention.deletion_requests (id blob primary key, tenant_id blob not null, inspection_id blob not null, status text not null, reason text, requested_at datetime, processed_at datetime)`,
-		`CREATE TABLE retention.legal_holds (id blob primary key, tenant_id blob not null, inspection_id blob not null, reason text, active numeric not null, created_at datetime, released_at datetime)`,
+		`CREATE TABLE retention.deletion_requests (id blob primary key, tenant_id blob not null, inspection_id blob, source_media_id blob, origin_version_id blob, status text not null, reason text, requested_at datetime, processed_at datetime)`,
+		`CREATE TABLE retention.legal_holds (id blob primary key, tenant_id blob not null, inspection_id blob, source_media_id blob, origin_version_id blob, reason text, active numeric not null, created_at datetime, released_at datetime)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)

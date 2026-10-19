@@ -174,6 +174,58 @@ func TestMarotoRendererPairsReferenceAndCurrentPhotosAndAcceptsPNG(t *testing.T)
 	}
 }
 
+func TestMarotoRendererIncludesVideoFrameCaptionAndAuthenticatedLinkAcrossPages(t *testing.T) {
+	snapshot := validPDFSnapshot()
+	snapshot.Requirements[0].Label = "Cozinha · Bancada"
+	for index := 0; index < 12; index++ {
+		frameID := fmt.Sprintf("frame-id-%04d", index)
+		timestamp := int64(70123 + index*1000)
+		snapshot.Evidence = append(snapshot.Evidence, core.Evidence{
+			ID: frameID, RequirementKey: "roof", Role: "CURRENT", EvidenceKind: "VIDEO_FRAME",
+			FrameID: frameID, SourceMediaID: fmt.Sprintf("source-id-%04d", index), PreparationID: "preparation-id",
+			TimestampMS: &timestamp, FrameDigest: strings.Repeat("a", 64), Availability: "MISSING", SourceAvailability: "EXPIRED",
+		})
+	}
+	const snapshotID = "snapshot-video-001"
+	const dashboardOrigin = "https://dashboard.example"
+	result, err := (MarotoRenderer{DashboardOrigin: dashboardOrigin}).Render(context.Background(), PDFDocument{SnapshotID: snapshotID, Version: 1, Snapshot: snapshot}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := PageCount(result); got < 2 || got > 6 {
+		t.Fatalf("video report page count = %d, want between 2 and 6", got)
+	}
+	_, caption, link, err := evidenceComponents(snapshot.Evidence[0], nil, snapshot.Requirements[0].Label, snapshotID, dashboardOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLink := "https://dashboard.example/media/video-evidence/frame-id-0000?snapshotId=snapshot-video-001"
+	if link != wantLink {
+		t.Fatalf("dashboard inspection link = %q, want %q", link, wantLink)
+	}
+	if !strings.Contains(link, "/media/video-evidence/frame-id-0000?") || strings.Contains(strings.ToLower(link), "token") {
+		t.Fatalf("dashboard link is not an authenticated media route or contains a token: %q", link)
+	}
+	linkLines := linkTextLines(link)
+	if strings.Join(linkLines, "") != link || len(linkLines) != 3 || linkLines[2] != "?snapshotId=snapshot-video-001" {
+		t.Fatalf("dashboard link was split outside readable URL boundaries: %q", linkLines)
+	}
+	for _, want := range []string{"Cozinha · Bancada", "01:10", "Frame frame-id", "Fonte source-i", "Vídeo original indisponível; frame preservado"} {
+		if !strings.Contains(caption, want) {
+			t.Errorf("video frame caption %q does not contain %q", caption, want)
+		}
+	}
+	for _, want := range []string{wantLink} {
+		if !bytes.Contains(result, []byte(want)) {
+			t.Errorf("rendered PDF does not contain video evidence reference %q", want)
+		}
+	}
+	_, _, absentOriginLink, err := evidenceComponents(snapshot.Evidence[0], nil, snapshot.Requirements[0].Label, snapshotID, "")
+	if err != nil || absentOriginLink != "" {
+		t.Fatalf("missing dashboard origin produced link %q, err=%v", absentOriginLink, err)
+	}
+}
+
 func TestUniqueImageCountIgnoresMissingAndDuplicates(t *testing.T) {
 	items := []core.Evidence{{ID: "a"}, {ID: "a"}, {ID: "b", Availability: "MISSING"}, {ID: "c"}}
 	if got := UniqueImageCount(items); got != 2 {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/security"
@@ -121,6 +122,41 @@ func TestIT142ProcessingAcceptanceRetryIsIdempotent(t *testing.T) {
 	var count int64
 	if err := db.Model(&database.ProcessingAcceptance{}).Where("responsibility_id=?", session.ResponsibilityID).Count(&count).Error; err != nil || count != 1 {
 		t.Fatalf("duplicate acceptance: %d %v", count, err)
+	}
+}
+
+func TestIT129IT134VideoRequiresVideoAndDerivedImagesDisclosureAfterPhotoConsent(t *testing.T) {
+	db, service, token, notifier, _ := securityFixture(t)
+	ctx := context.Background()
+	if err := service.RequestOTP(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	session, err := service.VerifyOTP(ctx, token, notifier.code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantID, _, err := scopedHash(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`UPDATE capture.capture_drafts SET media_kind='VIDEO' WHERE responsibility_id=?`, session.ResponsibilityID).Error; err != nil {
+		t.Fatal(err)
+	}
+	oldPhoto := database.ProcessingAcceptance{DisclosureVersion: "photo-v1", PhotoProcessing: true, VideoProcessing: false, AIAnalysis: true, GPSUse: true}
+	if err := db.Exec(`INSERT INTO invitations.processing_acceptances (id,tenant_id,responsibility_id,disclosure_version,photo_processing,video_processing,ai_analysis,gps_use,accepted_at) VALUES (?,?,?,?,?,?,?,?,?)`, identity.NewID(), tenantID, session.ResponsibilityID, oldPhoto.DisclosureVersion, true, false, true, true, time.Unix(1000, 0)).Error; err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := service.HasProcessingAcceptance(ctx, tenantID, session.ResponsibilityID)
+	if err != nil || accepted {
+		t.Fatalf("old photo consent enabled video: accepted=%v err=%v", accepted, err)
+	}
+	video := ProcessingConsent{DisclosureVersion: PrivacyDisclosureVersion, VideoProcessing: true, AIAnalysis: true, GPSUse: true}
+	if err := service.AcceptProcessing(ctx, session.Token, session.CSRF, video); err != nil {
+		t.Fatal(err)
+	}
+	accepted, err = service.HasProcessingAcceptance(ctx, tenantID, session.ResponsibilityID)
+	if err != nil || !accepted {
+		t.Fatalf("video disclosure unavailable: accepted=%v err=%v", accepted, err)
 	}
 }
 

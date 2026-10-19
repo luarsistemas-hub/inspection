@@ -85,6 +85,49 @@ func TestObservedGatewayLogsSuccessfulCallAndUsage(t *testing.T) {
 	}
 }
 
+func TestObservedGatewayCountsTerminalVideoProviderConfigurationFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "authentication", err: NewError(CodeAuthentication, http.StatusUnauthorized, errors.New("unauthorized")), want: true},
+		{name: "rate limit", err: NewError(CodeRateLimit, http.StatusTooManyRequests, errors.New("limited")), want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			metrics := observability.NewMetrics()
+			gateway := ObservedGateway{Inner: observedGatewayStub{err: tc.err}, Metrics: metrics}
+			_, _ = gateway.CompleteStructured(context.Background(), StructuredRequest{Mode: "VIDEO_MATCH"})
+			got := strings.Contains(metrics.Prometheus(), `inspection_video_provider_config_failures_total{purpose="matching"} 1`)
+			if got != tc.want {
+				t.Fatalf("terminal provider metric=%t, want %t; metrics=%s", got, tc.want, metrics.Prometheus())
+			}
+		})
+	}
+}
+
+func TestObservedGatewayRedactsSensitiveGatewayErrorIT611(t *testing.T) {
+	var output bytes.Buffer
+	logger := observability.NewJSONLLMLogger(&output, "inspection-video-worker", "test", "mock")
+	gateway := ObservedGateway{
+		Inner:  observedGatewayStub{err: errors.New("gateway failed Authorization: Bearer qa-secret-123")},
+		Logger: logger,
+		Mode:   "mock",
+	}
+	ctx := observability.WithCorrelation(context.Background(), observability.Correlation{CorrelationID: "video-safe-error"})
+	_, err := gateway.CompleteStructured(ctx, StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest"})
+	if err == nil {
+		t.Fatal("gateway error was swallowed")
+	}
+	value := output.String()
+	if !strings.Contains(value, "video-safe-error") || !strings.Contains(value, CodeOf(err)) {
+		t.Fatalf("safe correlation or error code missing from logs: %s", value)
+	}
+	if strings.Contains(value, "qa-secret-123") || strings.Contains(value, "Authorization") || strings.Contains(value, err.Error()) {
+		t.Fatalf("sensitive gateway error leaked to logs: %s", value)
+	}
+}
+
 func TestHTTPGatewayClassifiesRateLimitAndCancellation(t *testing.T) {
 	server := newTestServer(t, 429, `{"error":"rate limited"}`)
 	defer server.Close()

@@ -18,6 +18,7 @@ import {
 import { graphql, type GraphQLFailure } from "@/graphql/client";
 import { presentDashboardStatus } from "./presentation";
 import { FocusDetail } from "./focus-detail";
+import { FixedOriginSelector, useTemplateMediaKind } from "./origin-controls";
 
 const scheduleTimezone = "America/Sao_Paulo";
 const frequencies = [
@@ -278,6 +279,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
   const [assetId, setAssetId] = useState("");
   const [participantId, setParticipantId] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [referenceVersionId, setReferenceVersionId] = useState("");
   const [comparisonMode, setComparisonMode] = useState("CHECKLIST_ONLY");
   const [frequency, setFrequency] = useState("MONTHLY");
   const [startsAt, setStartsAt] = useState("");
@@ -285,6 +287,8 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
   const [reminders, setReminders] = useState(["30"]);
   const [validationError, setValidationError] = useState("");
   const asset = options.data?.assets.nodes.find((item) => item.id === assetId);
+  const template = options.data?.templates.nodes.find((item) => item.id === templateId);
+  const mediaKind = useTemplateMediaKind(template?.activeVersionId);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -296,12 +300,12 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       participantId,
       templateId,
       comparisonMode,
+      referenceVersionId: comparisonMode === "FIXED_ORIGIN" ? referenceVersionId : null,
       rrule: `FREQ=${frequency}`,
       startsAt,
       timezone: scheduleTimezone,
       deadlineMinutes: settings.deadlineMinutes,
       reminderOffsetsMinutes: settings.reminders,
-      referenceVersionId: null,
       clientMutationId: mutationId(),
     });
   };
@@ -309,10 +313,11 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
   return <form className="schedule-form" onSubmit={submit}>
     <fieldset className="schedule-form-section">
       <legend>Dados da vistoria</legend>
-      <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={options} required />
+      <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); setReferenceVersionId(""); }} options={options} required />
       <EntityRelationshipField kind="participant" label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={options} required disabled={!assetId} />
-      <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={setTemplateId} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
-      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => setComparisonMode(event.target.value)}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com fotos de referência do imóvel</option></select></label>
+      <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={(value) => { setTemplateId(value); setReferenceVersionId(""); }} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
+      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value); setReferenceVersionId(""); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com {mediaKind === "VIDEO" ? "vídeo" : "fotos"} de referência do imóvel</option></select></label>
+      {comparisonMode === "FIXED_ORIGIN" && <FixedOriginSelector assetId={assetId} mediaKind={mediaKind} value={referenceVersionId} onChange={setReferenceVersionId} />}
     </fieldset>
     <fieldset className="schedule-form-section">
       <legend>Quando acontece</legend>
@@ -320,7 +325,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       <label>Repetir<select aria-label="Repetir" value={frequency} onChange={(event) => setFrequency(event.target.value)}>{frequencies.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     </fieldset>
     <ScheduleNotices deadlineMinutes={deadlineMinutes} onDeadlineChange={setDeadlineMinutes} reminders={reminders} onRemindersChange={setReminders} validationError={validationError} />
-    <button type="submit" disabled={busy}>Criar agenda</button>
+    <button type="submit" disabled={busy || comparisonMode === "FIXED_ORIGIN" && !referenceVersionId}>Criar agenda</button>
   </form>;
 }
 

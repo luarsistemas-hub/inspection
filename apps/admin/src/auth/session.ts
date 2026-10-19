@@ -42,6 +42,8 @@ const adminPageRoles: Record<string, string[]> = {
   "/catalogs": ["TENANT_ADMIN", "PARTICIPATION_ADMIN"],
   "/assets": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/templates": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
+  "/video": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
+  "/video-operations": ["TENANT_ADMIN"],
   "/governance": ["TENANT_ADMIN", "GOVERNANCE_ADMIN"],
   "/prompts": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
 };

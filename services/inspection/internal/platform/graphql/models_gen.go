@@ -12,6 +12,7 @@ import (
 type AcceptProcessingInput struct {
 	DisclosureVersion string `json:"disclosureVersion"`
 	PhotoProcessing   bool   `json:"photoProcessing"`
+	VideoProcessing   *bool  `json:"videoProcessing,omitempty"`
 	AiAnalysis        bool   `json:"aiAnalysis"`
 	GpsUse            bool   `json:"gpsUse"`
 	ClientMutationID  string `json:"clientMutationId"`
@@ -149,6 +150,12 @@ type AuditEventConnection struct {
 	PageInfo *PageInfo     `json:"pageInfo"`
 }
 
+type BeginVideoCaptureInput struct {
+	AcquisitionSource string  `json:"acquisitionSource"`
+	ReplacesMediaID   *string `json:"replacesMediaId,omitempty"`
+	ClientMutationID  string  `json:"clientMutationId"`
+}
+
 type BusinessUnit struct {
 	ID      string `json:"id"`
 	Code    string `json:"code"`
@@ -197,8 +204,17 @@ type CapturePayload struct {
 
 type CaptureReferenceItem struct {
 	MediaID           string  `json:"mediaId"`
+	EvidenceID        *string `json:"evidenceId,omitempty"`
+	SourceMediaID     *string `json:"sourceMediaId,omitempty"`
+	TimestampMs       *int    `json:"timestampMs,omitempty"`
+	Environment       *string `json:"environment,omitempty"`
+	Component         *string `json:"component,omitempty"`
+	View              *string `json:"view,omitempty"`
+	Ambiguous         *bool   `json:"ambiguous,omitempty"`
+	Gap               *bool   `json:"gap,omitempty"`
 	RequirementKey    string  `json:"requirementKey"`
 	Description       string  `json:"description"`
+	Reason            *string `json:"reason,omitempty"`
 	Availability      string  `json:"availability"`
 	ImageURL          *string `json:"imageUrl,omitempty"`
 	ImageURLExpiresAt *string `json:"imageUrlExpiresAt,omitempty"`
@@ -217,6 +233,12 @@ type CaptureRequirement struct {
 	CaptureSourcePolicy  string  `json:"captureSourcePolicy"`
 	ComparisonTarget     string  `json:"comparisonTarget"`
 	ImpossibilityAllowed bool    `json:"impossibilityAllowed"`
+}
+
+type CloseOriginInvitationInput struct {
+	VersionID        string `json:"versionId"`
+	Reason           string `json:"reason"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type CompleteInternalUserActivationInput struct {
@@ -256,6 +278,21 @@ type ConfigureRetentionPolicyInput struct {
 	OperationalDays  int    `json:"operationalDays"`
 	SecurityDays     *int   `json:"securityDays,omitempty"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ConfigureVideoAdmissionInput struct {
+	Enabled          bool   `json:"enabled"`
+	ExpectedVersion  int    `json:"expectedVersion"`
+	Reason           string `json:"reason"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ConfigureVideoPolicyInput struct {
+	MaxDurationMinutes   int    `json:"maxDurationMinutes"`
+	OriginRetentionDays  int    `json:"originRetentionDays"`
+	CurrentRetentionDays int    `json:"currentRetentionDays"`
+	ExpectedVersion      int    `json:"expectedVersion"`
+	ClientMutationID     string `json:"clientMutationId"`
 }
 
 type ContactInput struct {
@@ -301,10 +338,11 @@ type CreateInspectionInput struct {
 }
 
 type CreateMediaUploadInput struct {
-	ContentType      string `json:"contentType"`
-	SizeBytes        int    `json:"sizeBytes"`
-	Sha256           string `json:"sha256"`
-	ClientMutationID string `json:"clientMutationId"`
+	ContentType      string  `json:"contentType"`
+	SizeBytes        int     `json:"sizeBytes"`
+	Sha256           string  `json:"sha256"`
+	AttemptID        *string `json:"attemptId,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type CreateProjectInput struct {
@@ -352,20 +390,29 @@ type CustomerEvidenceConnection struct {
 }
 
 type CustomerEvidenceItem struct {
-	ID                string   `json:"id"`
-	RequirementKey    string   `json:"requirementKey"`
-	Section           *string  `json:"section,omitempty"`
-	Label             *string  `json:"label,omitempty"`
-	Role              string   `json:"role"`
-	Description       *string  `json:"description,omitempty"`
-	CaptureSource     *string  `json:"captureSource,omitempty"`
-	CapturedAt        *string  `json:"capturedAt,omitempty"`
-	State             string   `json:"state"`
-	LineageID         string   `json:"lineageId"`
-	ReplacedBy        *string  `json:"replacedBy,omitempty"`
-	MediaAvailability string   `json:"mediaAvailability"`
-	Flags             []string `json:"flags"`
-	URL               *string  `json:"url,omitempty"`
+	ID                 string   `json:"id"`
+	RequirementKey     string   `json:"requirementKey"`
+	Section            *string  `json:"section,omitempty"`
+	Label              *string  `json:"label,omitempty"`
+	Role               string   `json:"role"`
+	Description        *string  `json:"description,omitempty"`
+	CaptureSource      *string  `json:"captureSource,omitempty"`
+	CapturedAt         *string  `json:"capturedAt,omitempty"`
+	State              string   `json:"state"`
+	LineageID          string   `json:"lineageId"`
+	ReplacedBy         *string  `json:"replacedBy,omitempty"`
+	MediaAvailability  string   `json:"mediaAvailability"`
+	SourceAvailability *string  `json:"sourceAvailability,omitempty"`
+	EvidenceKind       *string  `json:"evidenceKind,omitempty"`
+	FrameID            *string  `json:"frameId,omitempty"`
+	TimestampMs        *int     `json:"timestampMs,omitempty"`
+	PtsMicros          *string  `json:"ptsMicros,omitempty"`
+	PreparationID      *string  `json:"preparationId,omitempty"`
+	PlanID             *string  `json:"planId,omitempty"`
+	SourceMediaID      *string  `json:"sourceMediaId,omitempty"`
+	Component          *string  `json:"component,omitempty"`
+	Flags              []string `json:"flags"`
+	URL                *string  `json:"url,omitempty"`
 }
 
 type CustomerPortfolioConnection struct {
@@ -436,18 +483,20 @@ type DisableMembershipInput struct {
 }
 
 type ExternalCapture struct {
-	ResponsibilityID   string                  `json:"responsibilityId"`
-	RecaptureRequestID *string                 `json:"recaptureRequestId,omitempty"`
-	Status             string                  `json:"status"`
-	ConfirmationOnly   bool                    `json:"confirmationOnly"`
-	Kind               string                  `json:"kind"`
-	TemplateVersionID  string                  `json:"templateVersionId"`
-	Reference          map[string]any          `json:"reference"`
-	ReferenceItems     []*CaptureReferenceItem `json:"referenceItems"`
-	Policy             map[string]any          `json:"policy"`
-	Requirements       []*CaptureRequirement   `json:"requirements"`
-	Answers            []*CaptureAnswer        `json:"answers"`
-	DisclosureVersion  string                  `json:"disclosureVersion"`
+	ResponsibilityID    string                  `json:"responsibilityId"`
+	RecaptureRequestID  *string                 `json:"recaptureRequestId,omitempty"`
+	RecaptureDeadlineAt *string                 `json:"recaptureDeadlineAt,omitempty"`
+	Status              string                  `json:"status"`
+	ConfirmationOnly    bool                    `json:"confirmationOnly"`
+	Kind                string                  `json:"kind"`
+	MediaKind           string                  `json:"mediaKind"`
+	TemplateVersionID   string                  `json:"templateVersionId"`
+	Reference           map[string]any          `json:"reference"`
+	ReferenceItems      []*CaptureReferenceItem `json:"referenceItems"`
+	Policy              map[string]any          `json:"policy"`
+	Requirements        []*CaptureRequirement   `json:"requirements"`
+	Answers             []*CaptureAnswer        `json:"answers"`
+	DisclosureVersion   string                  `json:"disclosureVersion"`
 }
 
 type ExternalSessionPayload struct {
@@ -491,28 +540,41 @@ type GlobalLLMCallUsage struct {
 }
 
 type Inspection struct {
-	ID                       string   `json:"id"`
-	BusinessUnitID           string   `json:"businessUnitId"`
-	AssetID                  string   `json:"assetId"`
-	ParticipantID            string   `json:"participantId"`
-	TemplateID               string   `json:"templateId"`
-	TemplateVersionID        string   `json:"templateVersionId"`
-	AnalysisPromptSnapshotID string   `json:"analysisPromptSnapshotId"`
-	ProjectID                *string  `json:"projectId,omitempty"`
-	StageID                  *string  `json:"stageId,omitempty"`
-	Source                   string   `json:"source"`
-	SourceReason             *string  `json:"sourceReason,omitempty"`
-	StateReason              *string  `json:"stateReason,omitempty"`
-	Status                   string   `json:"status"`
-	EvidenceCount            int      `json:"evidenceCount"`
-	DueAt                    string   `json:"dueAt"`
-	DeadlineAt               string   `json:"deadlineAt"`
-	ReminderInstants         []string `json:"reminderInstants"`
-	Version                  int      `json:"version"`
-	AssetName                *string  `json:"assetName,omitempty"`
-	AssetAddress             *string  `json:"assetAddress,omitempty"`
-	AssetExternalKey         *string  `json:"assetExternalKey,omitempty"`
-	ParticipantName          *string  `json:"participantName,omitempty"`
+	ID                          string   `json:"id"`
+	BusinessUnitID              string   `json:"businessUnitId"`
+	AssetID                     string   `json:"assetId"`
+	ParticipantID               string   `json:"participantId"`
+	TemplateID                  string   `json:"templateId"`
+	TemplateVersionID           string   `json:"templateVersionId"`
+	AnalysisPromptSnapshotID    string   `json:"analysisPromptSnapshotId"`
+	ProjectID                   *string  `json:"projectId,omitempty"`
+	StageID                     *string  `json:"stageId,omitempty"`
+	Source                      string   `json:"source"`
+	SourceReason                *string  `json:"sourceReason,omitempty"`
+	StateReason                 *string  `json:"stateReason,omitempty"`
+	Status                      string   `json:"status"`
+	MediaKind                   string   `json:"mediaKind"`
+	ComparisonMode              *string  `json:"comparisonMode,omitempty"`
+	ReferenceVersionID          *string  `json:"referenceVersionId,omitempty"`
+	ReferenceVersionNumber      *int     `json:"referenceVersionNumber,omitempty"`
+	ReferenceMediaKind          *string  `json:"referenceMediaKind,omitempty"`
+	ReferenceVersionStatus      *string  `json:"referenceVersionStatus,omitempty"`
+	ReferenceIsActive           *bool    `json:"referenceIsActive,omitempty"`
+	OriginPromotionStatus       *string  `json:"originPromotionStatus,omitempty"`
+	OriginPromotionFailure      *string  `json:"originPromotionFailure,omitempty"`
+	PromotedOriginVersionID     *string  `json:"promotedOriginVersionId,omitempty"`
+	PromotedOriginVersionNumber *int     `json:"promotedOriginVersionNumber,omitempty"`
+	PromotedOriginMediaKind     *string  `json:"promotedOriginMediaKind,omitempty"`
+	PromotedOriginIsActive      *bool    `json:"promotedOriginIsActive,omitempty"`
+	EvidenceCount               int      `json:"evidenceCount"`
+	DueAt                       string   `json:"dueAt"`
+	DeadlineAt                  string   `json:"deadlineAt"`
+	ReminderInstants            []string `json:"reminderInstants"`
+	Version                     int      `json:"version"`
+	AssetName                   *string  `json:"assetName,omitempty"`
+	AssetAddress                *string  `json:"assetAddress,omitempty"`
+	AssetExternalKey            *string  `json:"assetExternalKey,omitempty"`
+	ParticipantName             *string  `json:"participantName,omitempty"`
 }
 
 type InspectionConnection struct {
@@ -673,9 +735,11 @@ type LLMUsageFilter struct {
 }
 
 type LegalHoldInput struct {
-	InspectionID     string `json:"inspectionId"`
-	Reason           string `json:"reason"`
-	ClientMutationID string `json:"clientMutationId"`
+	InspectionID     *string `json:"inspectionId,omitempty"`
+	SourceMediaID    *string `json:"sourceMediaId,omitempty"`
+	OriginVersionID  *string `json:"originVersionId,omitempty"`
+	Reason           string  `json:"reason"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type MarkNotificationReadInput struct {
@@ -700,13 +764,15 @@ type Me struct {
 }
 
 type Media struct {
-	ID              string   `json:"id"`
-	Status          string   `json:"status"`
-	RequirementKey  *string  `json:"requirementKey,omitempty"`
-	Description     *string  `json:"description,omitempty"`
-	CaptureSource   *string  `json:"captureSource,omitempty"`
-	Flags           []string `json:"flags"`
-	ReplacesMediaID *string  `json:"replacesMediaId,omitempty"`
+	ID                string   `json:"id"`
+	Status            string   `json:"status"`
+	MediaKind         string   `json:"mediaKind"`
+	PreparationStatus *string  `json:"preparationStatus,omitempty"`
+	RequirementKey    *string  `json:"requirementKey,omitempty"`
+	Description       *string  `json:"description,omitempty"`
+	CaptureSource     *string  `json:"captureSource,omitempty"`
+	Flags             []string `json:"flags"`
+	ReplacesMediaID   *string  `json:"replacesMediaId,omitempty"`
 }
 
 type MediaPayload struct {
@@ -919,11 +985,12 @@ type OriginInvitationPayload struct {
 }
 
 type OriginPromotion struct {
-	InspectionID    string                  `json:"inspectionId"`
-	Status          string                  `json:"status"`
-	FailureReason   *string                 `json:"failureReason,omitempty"`
-	OriginVersionID *string                 `json:"originVersionId,omitempty"`
-	EligibleMedia   []*OriginPromotionMedia `json:"eligibleMedia"`
+	InspectionID     string                  `json:"inspectionId"`
+	Status           string                  `json:"status"`
+	FailureReason    *string                 `json:"failureReason,omitempty"`
+	OriginVersionID  *string                 `json:"originVersionId,omitempty"`
+	SelectedMediaIds []string                `json:"selectedMediaIds"`
+	EligibleMedia    []*OriginPromotionMedia `json:"eligibleMedia"`
 }
 
 type OriginPromotionMedia struct {
@@ -939,12 +1006,20 @@ type OriginPromotionPayload struct {
 }
 
 type OriginVersion struct {
-	ID            string  `json:"id"`
-	OriginID      string  `json:"originId"`
-	VersionNumber int     `json:"versionNumber"`
-	Status        string  `json:"status"`
-	SupersedesID  *string `json:"supersedesId,omitempty"`
-	ActivatedAt   *string `json:"activatedAt,omitempty"`
+	ID                  string  `json:"id"`
+	OriginID            string  `json:"originId"`
+	VersionNumber       int     `json:"versionNumber"`
+	Status              string  `json:"status"`
+	MediaKind           string  `json:"mediaKind"`
+	VideoPreparationID  *string `json:"videoPreparationId,omitempty"`
+	PreparationStatus   *string `json:"preparationStatus,omitempty"`
+	CaptureSubmitted    bool    `json:"captureSubmitted"`
+	Selectable          bool    `json:"selectable"`
+	SourceAvailability  *string `json:"sourceAvailability,omitempty"`
+	LimitedCoverage     bool    `json:"limitedCoverage"`
+	ScopeManifestDigest *string `json:"scopeManifestDigest,omitempty"`
+	SupersedesID        *string `json:"supersedesId,omitempty"`
+	ActivatedAt         *string `json:"activatedAt,omitempty"`
 }
 
 type OriginVersionConnection struct {
@@ -1009,6 +1084,7 @@ type PlanInspectionInput struct {
 	ParticipantID          string                      `json:"participantId"`
 	TemplateID             string                      `json:"templateId"`
 	ComparisonMode         CaptureComparisonMode       `json:"comparisonMode"`
+	ReferenceVersionID     *string                     `json:"referenceVersionId,omitempty"`
 	DueAt                  *string                     `json:"dueAt,omitempty"`
 	StartsAt               *string                     `json:"startsAt,omitempty"`
 	Timezone               *string                     `json:"timezone,omitempty"`
@@ -1159,6 +1235,11 @@ type PromoteInspectionPhotosInput struct {
 	ClientMutationID     string   `json:"clientMutationId"`
 }
 
+type PromoteInspectionVideoInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type PublicationPolicy struct {
 	Mode    string `json:"mode"`
 	Version int    `json:"version"`
@@ -1192,6 +1273,19 @@ type PublishTemplateVersionInput struct {
 }
 
 type Query struct {
+}
+
+type ReanalyzeVideoInspectionInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ExpectedPlanID   string `json:"expectedPlanId"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ReanalyzeVideoInspectionPayload struct {
+	PlanID           *string      `json:"planId,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+	Generation       *int         `json:"generation,omitempty"`
 }
 
 type Recapture struct {
@@ -1243,7 +1337,9 @@ type RecipientNotificationPayload struct {
 }
 
 type RecordDeletionRequestInput struct {
-	InspectionID     string  `json:"inspectionId"`
+	InspectionID     *string `json:"inspectionId,omitempty"`
+	SourceMediaID    *string `json:"sourceMediaId,omitempty"`
+	OriginVersionID  *string `json:"originVersionId,omitempty"`
 	Reason           *string `json:"reason,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
 }
@@ -1261,24 +1357,24 @@ type ReopenProjectInput struct {
 }
 
 type Report struct {
-	ID             string                 `json:"id"`
-	InspectionID   string                 `json:"inspectionId"`
-	ProjectID      *string                `json:"projectId,omitempty"`
-	Version        int                    `json:"version"`
-	Mode           string                 `json:"mode"`
-	Classification string                 `json:"classification"`
-	JSONDigest     string                 `json:"jsonDigest"`
-	HTMLDigest     string                 `json:"htmlDigest"`
-	CanonicalJSON  map[string]any         `json:"canonicalJSON"`
-	HTML           string                 `json:"html"`
-	CreatedAt      string                 `json:"createdAt"`
-	Advisory       string                 `json:"advisory"`
-	Context        *ReportContext         `json:"context"`
-	Requirements   []*ReportRequirement   `json:"requirements"`
-	Evidence       []*ReportEvidence      `json:"evidence"`
-	Findings       []*ReportFinding       `json:"findings"`
-	Timeline       []*ReportTimelineEntry `json:"timeline"`
-	PDFStatus      string                 `json:"pdfStatus"`
+	ID             string                    `json:"id"`
+	InspectionID   string                    `json:"inspectionId"`
+	ProjectID      *string                   `json:"projectId,omitempty"`
+	Version        int                       `json:"version"`
+	Mode           string                    `json:"mode"`
+	Classification string                    `json:"classification"`
+	JSONDigest     string                    `json:"jsonDigest"`
+	HTMLDigest     string                    `json:"htmlDigest"`
+	CanonicalJSON  map[string]any            `json:"canonicalJSON"`
+	HTML           string                    `json:"html"`
+	CreatedAt      string                    `json:"createdAt"`
+	Advisory       string                    `json:"advisory"`
+	Context        *ReportContext            `json:"context"`
+	Requirements   []*ReportRequirement      `json:"requirements"`
+	Evidence       *ReportEvidenceConnection `json:"evidence"`
+	Findings       []*ReportFinding          `json:"findings"`
+	Timeline       []*ReportTimelineEntry    `json:"timeline"`
+	PDFStatus      string                    `json:"pdfStatus"`
 }
 
 type ReportAssetContext struct {
@@ -1310,16 +1406,31 @@ type ReportDownload struct {
 }
 
 type ReportEvidence struct {
-	ID             string   `json:"id"`
-	RequirementKey string   `json:"requirementKey"`
-	Role           string   `json:"role"`
-	Description    *string  `json:"description,omitempty"`
-	CaptureSource  *string  `json:"captureSource,omitempty"`
-	CapturedAt     *string  `json:"capturedAt,omitempty"`
-	DisplayDigest  *string  `json:"displayDigest,omitempty"`
-	Availability   string   `json:"availability"`
-	Flags          []string `json:"flags"`
-	URL            *string  `json:"url,omitempty"`
+	ID                 string   `json:"id"`
+	RequirementKey     string   `json:"requirementKey"`
+	Role               string   `json:"role"`
+	Description        *string  `json:"description,omitempty"`
+	CaptureSource      *string  `json:"captureSource,omitempty"`
+	CapturedAt         *string  `json:"capturedAt,omitempty"`
+	DisplayDigest      *string  `json:"displayDigest,omitempty"`
+	Availability       string   `json:"availability"`
+	SourceAvailability *string  `json:"sourceAvailability,omitempty"`
+	EvidenceKind       *string  `json:"evidenceKind,omitempty"`
+	FrameID            *string  `json:"frameId,omitempty"`
+	TimestampMs        *int     `json:"timestampMs,omitempty"`
+	PtsMicros          *string  `json:"ptsMicros,omitempty"`
+	PreparationID      *string  `json:"preparationId,omitempty"`
+	PlanID             *string  `json:"planId,omitempty"`
+	SourceMediaID      *string  `json:"sourceMediaId,omitempty"`
+	Component          *string  `json:"component,omitempty"`
+	Label              *string  `json:"label,omitempty"`
+	Flags              []string `json:"flags"`
+	URL                *string  `json:"url,omitempty"`
+}
+
+type ReportEvidenceConnection struct {
+	Nodes    []*ReportEvidence `json:"nodes"`
+	PageInfo *PageInfo         `json:"pageInfo"`
 }
 
 type ReportFinding struct {
@@ -1401,6 +1512,13 @@ type ReportTimelineEntry struct {
 	Position       int     `json:"position"`
 }
 
+type ReprocessVideoPreparationInput struct {
+	MediaID                    string `json:"mediaId"`
+	ExpectedPreparationVersion int    `json:"expectedPreparationVersion"`
+	ProfileDigest              string `json:"profileDigest"`
+	ClientMutationID           string `json:"clientMutationId"`
+}
+
 type RequestAdminActivationOtpInput struct {
 	ActivationToken  *string `json:"activationToken,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
@@ -1479,6 +1597,12 @@ type RetentionPolicyPayload struct {
 	Policy           *RetentionPolicy `json:"policy,omitempty"`
 	UserErrors       []*UserError     `json:"userErrors"`
 	ClientMutationID string           `json:"clientMutationId"`
+}
+
+type RetryVideoPreparationInput struct {
+	MediaID                    string `json:"mediaId"`
+	ExpectedPreparationVersion int    `json:"expectedPreparationVersion"`
+	ClientMutationID           string `json:"clientMutationId"`
 }
 
 type RevokeInvitationInput struct {
@@ -1614,10 +1738,11 @@ type StartProjectStageInput struct {
 }
 
 type Submission struct {
-	ID                string `json:"id"`
-	Complete          bool   `json:"complete"`
-	RequiresAttention bool   `json:"requiresAttention"`
-	SubmittedAt       string `json:"submittedAt"`
+	ID                 string `json:"id"`
+	Complete           bool   `json:"complete"`
+	RequiresAttention  bool   `json:"requiresAttention"`
+	PreparationPending bool   `json:"preparationPending"`
+	SubmittedAt        string `json:"submittedAt"`
 }
 
 type SubmissionPayload struct {
@@ -1664,6 +1789,8 @@ type TemplateVersion struct {
 	VersionNumber   int            `json:"versionNumber"`
 	SchemaVersion   int            `json:"schemaVersion"`
 	Definition      map[string]any `json:"definition"`
+	IsVideo         bool           `json:"isVideo"`
+	MediaKind       string         `json:"mediaKind"`
 	CanonicalDigest string         `json:"canonicalDigest"`
 	Status          string         `json:"status"`
 	PublishedAt     string         `json:"publishedAt"`
@@ -1875,6 +2002,112 @@ type VerifyOnboardingOtpInput struct {
 	SessionLocator   string `json:"sessionLocator"`
 	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type VideoAdmission struct {
+	Enabled   bool    `json:"enabled"`
+	Version   int     `json:"version"`
+	ChangedAt string  `json:"changedAt"`
+	Reason    *string `json:"reason,omitempty"`
+}
+
+type VideoAdmissionPayload struct {
+	Admission        *VideoAdmission `json:"admission,omitempty"`
+	UserErrors       []*UserError    `json:"userErrors"`
+	ClientMutationID string          `json:"clientMutationId"`
+}
+
+type VideoAttempt struct {
+	ID                 string `json:"id"`
+	Kind               string `json:"kind"`
+	AcquisitionSource  string `json:"acquisitionSource"`
+	MaxDurationSeconds int    `json:"maxDurationSeconds"`
+	MaxBytes           int    `json:"maxBytes"`
+	PolicyVersion      int    `json:"policyVersion"`
+	AdmittedAt         string `json:"admittedAt"`
+	ExpiresAt          string `json:"expiresAt"`
+	Status             string `json:"status"`
+}
+
+type VideoAttemptPayload struct {
+	Attempt          *VideoAttempt `json:"attempt,omitempty"`
+	UserErrors       []*UserError  `json:"userErrors"`
+	ClientMutationID string        `json:"clientMutationId"`
+}
+
+type VideoPolicy struct {
+	MaxDurationMinutes   int `json:"maxDurationMinutes"`
+	OriginRetentionDays  int `json:"originRetentionDays"`
+	CurrentRetentionDays int `json:"currentRetentionDays"`
+	Version              int `json:"version"`
+}
+
+type VideoPolicyPayload struct {
+	Policy           *VideoPolicy `json:"policy,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type VideoPreparationConnection struct {
+	Nodes    []*VideoPreparationStatus `json:"nodes"`
+	PageInfo *PageInfo                 `json:"pageInfo"`
+}
+
+type VideoPreparationEvidenceConnection struct {
+	Nodes    []*VideoPreparationEvidenceItem `json:"nodes"`
+	PageInfo *PageInfo                       `json:"pageInfo"`
+}
+
+type VideoPreparationEvidenceItem struct {
+	Kind          string  `json:"kind"`
+	ID            string  `json:"id"`
+	FrameID       *string `json:"frameId,omitempty"`
+	PreparationID *string `json:"preparationId,omitempty"`
+	SourceMediaID *string `json:"sourceMediaId,omitempty"`
+	PtsMicros     *string `json:"ptsMicros,omitempty"`
+	TimestampMs   *int    `json:"timestampMs,omitempty"`
+	Component     *string `json:"component,omitempty"`
+	Label         *string `json:"label,omitempty"`
+	Environment   *string `json:"environment,omitempty"`
+	View          *string `json:"view,omitempty"`
+	Role          *string `json:"role,omitempty"`
+}
+
+type VideoPreparationPayload struct {
+	Preparation      *VideoPreparationStatus `json:"preparation,omitempty"`
+	UserErrors       []*UserError            `json:"userErrors"`
+	ClientMutationID string                  `json:"clientMutationId"`
+}
+
+type VideoPreparationStatus struct {
+	MediaID            string  `json:"mediaId"`
+	PreparationID      string  `json:"preparationId"`
+	Status             string  `json:"status"`
+	Stage              string  `json:"stage"`
+	PreparationVersion int     `json:"preparationVersion"`
+	Attempts           int     `json:"attempts"`
+	ProcessedFrames    int     `json:"processedFrames"`
+	ErrorCode          string  `json:"errorCode"`
+	Retryable          bool    `json:"retryable"`
+	SourceAvailable    bool    `json:"sourceAvailable"`
+	ManifestDigest     string  `json:"manifestDigest"`
+	FirstFrameReadyAt  *string `json:"firstFrameReadyAt,omitempty"`
+	SourceExpiryAt     *string `json:"sourceExpiryAt,omitempty"`
+}
+
+type VideoReceivedPart struct {
+	PartNumber int    `json:"partNumber"`
+	Etag       string `json:"etag"`
+	SizeBytes  int    `json:"sizeBytes"`
+}
+
+type VideoUploadStatus struct {
+	MediaID        string               `json:"mediaId"`
+	Status         string               `json:"status"`
+	ExpiresAt      string               `json:"expiresAt"`
+	ReceivedParts  []int                `json:"receivedParts"`
+	ConfirmedParts []*VideoReceivedPart `json:"confirmedParts"`
+	MissingParts   []int                `json:"missingParts"`
 }
 
 type AnalysisType string

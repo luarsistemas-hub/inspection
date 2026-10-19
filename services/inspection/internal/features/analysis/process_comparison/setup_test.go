@@ -20,12 +20,12 @@ func (g gateway) CompleteStructured(context.Context, llm.StructuredRequest) (llm
 }
 
 func TestValidateEvidenceEnforcesConfidenceAndKnownReferences(t *testing.T) {
-	request := llm.StructuredRequest{MinimumConfidenceBPS: 8500, Mode: "CURRENT_ONLY", Images: []llm.NormalizedImage{{EvidenceID: "known", Source: "CURRENT"}}}
-	result := analysis.Result{Findings: []analysis.Finding{{Category: "CONSERVATION", Title: "Marca", Description: "Marca visível", Severity: "LOW", Quality: "ADEQUATE", RecommendedAction: "Verificar", Confidence: .9, EvidenceIDs: []string{"unknown"}}}}
+	request := llm.StructuredRequest{MinimumConfidenceBPS: 8500, Mode: "CURRENT_ONLY", Images: []llm.NormalizedImage{{EvidenceID: "F11", Source: "CURRENT"}}}
+	result := analysis.Result{Findings: []analysis.Finding{{Category: "CONSERVATION", Title: "Marca", Description: "Marca visível", Severity: "LOW", Quality: "ADEQUATE", RecommendedAction: "Verificar", Confidence: .9, EvidenceIDs: []string{"F99"}}}}
 	if err := validateEvidence(result, request); err == nil {
 		t.Fatal("unknown evidence accepted")
 	}
-	result.Findings[0].EvidenceIDs = []string{"known"}
+	result.Findings[0].EvidenceIDs = []string{"F11"}
 	result.Findings[0].Confidence = .8499
 	if err := validateEvidence(result, request); err == nil {
 		t.Fatal("low confidence accepted")
@@ -39,7 +39,7 @@ func TestValidateEvidenceEnforcesConfidenceAndKnownReferences(t *testing.T) {
 		if category == "EVIDENCE_QUALITY" {
 			severity, quality = "NONE", "INSUFFICIENT"
 		}
-		result.Findings[0] = analysis.Finding{Category: category, Title: "Observação", Description: "Observação visual", Severity: severity, Quality: quality, RecommendedAction: "Verificar", Confidence: .8499, EvidenceIDs: []string{"known"}}
+		result.Findings[0] = analysis.Finding{Category: category, Title: "Observação", Description: "Observação visual", Severity: severity, Quality: quality, RecommendedAction: "Verificar", Confidence: .8499, EvidenceIDs: []string{"F11"}}
 		if err := validateEvidence(result, request); err == nil {
 			t.Fatalf("below-threshold %s finding accepted", category)
 		}
@@ -82,6 +82,35 @@ func TestValidateEvidenceModes(t *testing.T) {
 	}
 }
 
+func TestVV_IT_212HistoricalAbsenceRequiresPairedOriginAndCurrentEvidence(t *testing.T) {
+	request := llm.StructuredRequest{Mode: "COMPARE_ORIGIN_CURRENT", MinimumConfidenceBPS: 8500, Images: []llm.NormalizedImage{{EvidenceID: "origin", Source: "ORIGIN", PairID: "sink", VisibilityKnown: true, Visible: true}, {EvidenceID: "current", Source: "CURRENT", PairID: "sink", VisibilityKnown: true, Visible: false}}}
+	finding := analysis.Finding{Category: "INVENTORY", Title: "Item REMOVED", Description: "O item não está mais visível.", Severity: "LOW", Quality: "ADEQUATE", RecommendedAction: "Verificar", Confidence: .9, EvidenceIDs: []string{"current"}}
+	if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{finding}}, request); err == nil {
+		t.Fatal("unsupported historical absence passed without paired origin evidence")
+	}
+	finding.EvidenceIDs = []string{"origin", "current"}
+	if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{finding}}, request); err == nil {
+		t.Fatal("historical absence was accepted when current view is obstructed")
+	}
+	request.Images[1].Visible = true
+	if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{finding}}, request); err != nil {
+		t.Fatalf("visible paired historical evidence rejected: %v", err)
+	}
+}
+
+func TestCurrentOnlyRejectsStructuredRepairClaimUT048(t *testing.T) {
+	for name, output := range map[string]string{
+		"unsupported category":     `{"noRelevantChange":null,"findings":[{"category":"REPAIRED","title":"Pia","description":"Pia reparada","severity":"LOW","confidence":0.9,"evidenceIds":["F11"],"quality":"ADEQUATE","recommendedAction":"Verificar"}]}`,
+		"unsupported change field": `{"noRelevantChange":null,"findings":[{"category":"CONSERVATION","changeType":"REPAIRED","title":"Pia","description":"Pia visível","severity":"LOW","confidence":0.9,"evidenceIds":["F11"],"quality":"ADEQUATE","recommendedAction":"Verificar"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := analysis.ParseResult([]byte(output)); err == nil {
+				t.Fatal("unsupported historical claim passed structured response validation")
+			}
+		})
+	}
+}
+
 func TestAttemptCountIncludesBrokerDeliveries(t *testing.T) {
 	job := database.ComparisonJob{Attempts: 1}
 	if got := attemptCount(context.Background(), job); got != 2 {
@@ -101,5 +130,28 @@ func TestSetupRequiresAuthorizedRequestSeam(t *testing.T) {
 		return llm.StructuredRequest{}, nil
 	}, Now: time.Now}); err != nil {
 		t.Fatalf("valid dependencies rejected: %v", err)
+	}
+}
+
+func TestValidateEvidenceRejectsHistoricalChangeClaimsWithoutBaseline(t *testing.T) {
+	current := llm.StructuredRequest{MinimumConfidenceBPS: 8500, Mode: "CURRENT_ONLY", Images: []llm.NormalizedImage{{EvidenceID: "F11", Source: "CURRENT"}}}
+	observed := analysis.Finding{Category: "CONSERVATION", Title: "Risco na pia", Description: "Risco visível na pia da cozinha.", Severity: "LOW", Quality: "ADEQUATE", RecommendedAction: "Acompanhar", Confidence: .9, EvidenceIDs: []string{"F11"}}
+	if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{observed}}, current); err != nil {
+		t.Fatalf("current observed damage rejected: %v", err)
+	}
+	for _, claim := range []string{"Torneira removida", "Armário adicionado", "Pia substituída", "Rodapé reparado", "Novo risco na pia", "Window replaced"} {
+		finding := observed
+		finding.Title = claim
+		if err := validateEvidence(analysis.Result{Findings: []analysis.Finding{finding}}, current); err == nil {
+			t.Fatalf("current-only historical claim %q accepted", claim)
+		}
+	}
+	// A comparative pair may describe a replacement it can support.
+	comparative := llm.StructuredRequest{MinimumConfidenceBPS: 8500, Mode: "COMPARE_ORIGIN_CURRENT", Images: []llm.NormalizedImage{{EvidenceID: "F01", Source: "ORIGIN", PairID: "P1", VisibilityKnown: true, Visible: true}, {EvidenceID: "F11", Source: "CURRENT", PairID: "P1", VisibilityKnown: true, Visible: true}}}
+	replaced := observed
+	replaced.Title, replaced.EvidenceIDs = "Pia substituída", []string{"F01", "F11"}
+	changed := false
+	if err := validateEvidence(analysis.Result{NoRelevantChange: &changed, Findings: []analysis.Finding{replaced}}, comparative); err != nil {
+		t.Fatalf("paired comparative replacement rejected: %v", err)
 	}
 }

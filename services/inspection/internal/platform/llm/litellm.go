@@ -3,6 +3,7 @@ package llm
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,15 +25,35 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	if g.BaseURL == "" || request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("invalid structured request"))
 	}
+	if (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH") && len(request.Images) > 24 {
+		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("video image request limit exceeded"))
+	}
 	client := g.Client
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	content := make([]map[string]any, 0, len(request.Images)*2+1)
 	content = append(content, map[string]any{"type": "text", "text": request.UserPrompt})
+	var videoEncodedBytes int64
 	for _, image := range request.Images {
-		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN") {
+		videoSource := image.Source == "VIDEO_FRAME" && (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH")
+		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN" && !videoSource) {
 			return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("unauthorized image"))
+		}
+		if request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH" {
+			_, encoded, ok := strings.Cut(image.DataURL, ",")
+			if !ok {
+				return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("invalid video image data"))
+			}
+			decoded, decodeErr := base64.StdEncoding.DecodeString(encoded)
+			if decodeErr != nil {
+				return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("invalid video image data"))
+			}
+			decodedBytes := int64(len(decoded))
+			videoEncodedBytes += decodedBytes
+			if videoEncodedBytes > 24<<20 {
+				return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("video encoded image limit exceeded"))
+			}
 		}
 		label := "evidenceId=" + image.EvidenceID + "; role=" + image.Source
 		if image.PairID != "" {
@@ -47,6 +68,9 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	body, err := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "system", "content": request.SystemPrompt}, map[string]any{"role": "user", "content": content}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
 	if err != nil {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, err)
+	}
+	if (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH") && len(body) > 24<<20 {
+		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("video request payload limit exceeded"))
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(g.BaseURL, "/")+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {

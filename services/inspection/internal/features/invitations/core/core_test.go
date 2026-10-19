@@ -57,10 +57,22 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 	if err := db.Exec(`ATTACH DATABASE ':memory:' AS participants`).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob unique,disclosure_version text,photo_processing integer,ai_analysis integer,gps_use integer,accepted_at datetime)`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`} {
+	if err := db.Exec(`ATTACH DATABASE ':memory:' AS capture`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`ATTACH DATABASE ':memory:' AS platform`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob,disclosure_version text,photo_processing integer,video_processing integer NOT NULL DEFAULT 0,ai_analysis integer,gps_use integer,accepted_at datetime,unique(tenant_id,responsibility_id))`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`, `CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob unique,media_kind text,kind text)`} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := db.Exec(`CREATE TABLE platform.video_admission (id integer primary key,enabled boolean,version integer,changed_at datetime)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO platform.video_admission (id,enabled,version,changed_at) VALUES (1,1,1,CURRENT_TIMESTAMP)`).Error; err != nil {
+		t.Fatal(err)
 	}
 	tenantID := identity.NewID()
 	token, err := security.NewScopedToken(tenantID)
@@ -75,6 +87,9 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 		t.Fatal(err)
 	}
 	if err := db.Exec(`INSERT INTO inspections.responsibilities (id,tenant_id,inspection_id,participant_id,status,version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`, row.ResponsibilityID, tenantID, identity.NewID(), identity.NewID(), "PENDING", 1, now, now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO capture.capture_drafts (id,tenant_id,responsibility_id,media_kind) VALUES (?,?,?,?)`, identity.NewID(), tenantID, row.ResponsibilityID, "PHOTO").Error; err != nil {
 		t.Fatal(err)
 	}
 	return db, token

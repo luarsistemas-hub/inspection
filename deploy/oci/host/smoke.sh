@@ -5,10 +5,11 @@ source /etc/inspection/public.env
 compose_file="${INSPECTION_COMPOSE_FILE:-/opt/inspection/current/compose.yaml}"
 compose_env="${INSPECTION_COMPOSE_ENV:-/etc/inspection/compose.env}"
 compose=(docker compose --env-file "$compose_env" -f "$compose_file")
+export COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}video"
 deadline=$((SECONDS + 300))
 
 retry_http() {
-  local label="$1" url="$2" code
+  local label="$1" url="$2"
   while (( SECONDS < deadline )); do
     if curl --fail --location --silent --show-error --output /dev/null --max-time 10 "$url"; then
       return 0
@@ -44,9 +45,35 @@ retry_storage_cors() {
   return 1
 }
 
-services=(postgres dragonfly rabbitmq keycloak)
-if grep -q '^  litellm:' "$compose_file"; then services+=(litellm); fi
-services+=(inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding)
+script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+catalog="$(dirname "$script_path")/components.json"
+compose_services="$("${compose[@]}" config --services)"
+compose_environment="$("${compose[@]}" config --environment)"
+service_output="$(python3 - "$catalog" "$compose_services" "$compose_environment" <<'PY'
+import json, sys
+try:
+    components=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
+except (OSError, ValueError, KeyError, TypeError) as exc:
+    raise SystemExit(f"invalid or missing component catalog: {exc}")
+if not isinstance(components, dict) or not components or any(not isinstance(item, dict) or not isinstance(item.get("image"), str) or not isinstance(item.get("service"), (str, type(None))) for item in components.values()):
+    raise SystemExit("component catalog must define image and service for every component")
+services=set(sys.argv[2].splitlines())
+environment={line.partition("=")[0] for line in sys.argv[3].splitlines() if "=" in line}
+required=[]
+for name, item in components.items():
+    service=item["service"]
+    if service is None:
+        continue
+    if service in services:
+        required.append(service)
+    elif item["image"] in environment:
+        raise SystemExit(f"Compose image {item['image']} is configured but service {service!r} is missing")
+print("\n".join(required))
+PY
+)"
+services=()
+while IFS= read -r service; do [[ -n "$service" ]] && services+=("$service"); done <<< "$service_output"
+services=(postgres dragonfly rabbitmq keycloak litellm "${services[@]}")
 for service in "${services[@]}"; do
   id="$("${compose[@]}" ps -q "$service")"
   [[ -n "$id" ]] || { echo "Compose service has no container: $service" >&2; exit 1; }

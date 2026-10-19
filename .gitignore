@@ -21,4 +21,13 @@ node_modules/
 /.build/oci-bin/
 
 # Playwright artifacts from local e2e runs.
-apps/capture/test-results/
+**/test-results/
+**/playwright-report/
+
+# Go command binaries generated at the repository root.
+/inspection-worker
+/inspection-api
+/inspection-video-worker
+/inspection-scheduler
+/inspection-migrate
+/inspection-seed

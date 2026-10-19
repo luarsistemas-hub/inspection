@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -41,6 +42,14 @@ type Result struct {
 	RequestID, ResponsibilityID identity.ID
 	LinkToken                   string
 	Status                      string
+}
+
+// VideoFinalizeResult reports whether prepared visual coverage closed a video recapture.
+type VideoFinalizeResult struct {
+	Request                 database.RecaptureRequest
+	CoveredComponentIDs     []identity.ID
+	SupplementPreparationID identity.ID
+	Submitted               bool
 }
 type Service struct {
 	DB     *gorm.DB
@@ -90,8 +99,10 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 			return err
 		}
 		var inspection database.Inspection
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", in.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", in.TenantID, in.InspectionID).First(&inspection).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+		} else if err != nil {
+			return err
 		}
 		if inspection.Status != "SUBMITTED" && inspection.Status != "ANALYZING" && inspection.Status != "RECAPTURE_PENDING" && inspection.Status != "COMPLETED" {
 			return apperror.New(apperror.InvalidState, "inspectionId", "recapture requires submitted evidence")
@@ -105,36 +116,48 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 		if err := json.Unmarshal(originalDraft.Requirements, &originalRequirements); err != nil {
 			return apperror.Wrap(apperror.InvalidState, err)
 		}
-		available := make(map[string]capturecore.Requirement, len(originalRequirements))
-		for _, requirement := range originalRequirements {
-			available[requirement.Key] = requirement
-		}
-		focused := make([]capturecore.Requirement, 0, len(in.Items))
-		for _, item := range in.Items {
-			requirement, ok := available[item.RequirementKey]
-			if !ok {
-				return apperror.New(apperror.InvalidInput, "items", "selected requirement was not found")
+		var focused []capturecore.Requirement
+		var reference json.RawMessage
+		if originalDraft.MediaKind == "VIDEO" {
+			focused, reference, err = projectVideoRecapture(ctx, tx, in, originalDraft, originalRequirements)
+			if err != nil {
+				return err
 			}
-			requirement.Required = true
-			requirement.ImpossibilityAllowed = false
-			requirement.MinimumMedia = 1
-			requirement.Instructions = strings.TrimSpace(requirement.Instructions + "\nRecapture: " + item.Reason)
-			if requirement.MaximumMedia < 1 {
-				requirement.MaximumMedia = 1
+		} else {
+			available := make(map[string]capturecore.Requirement, len(originalRequirements))
+			for _, requirement := range originalRequirements {
+				available[requirement.Key] = requirement
 			}
-			focused = append(focused, requirement)
-			if item.OriginalMediaID != nil {
-				var count int64
-				if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND responsibility_id=? AND requirement_key=? AND status='READY'", in.TenantID, *item.OriginalMediaID, originalDraft.ResponsibilityID, item.RequirementKey).Count(&count).Error; err != nil || count != 1 {
-					return apperror.New(apperror.InvalidInput, "items", "selected original evidence was not found")
+			focused = make([]capturecore.Requirement, 0, len(in.Items))
+			for _, item := range in.Items {
+				requirement, ok := available[item.RequirementKey]
+				if !ok {
+					return apperror.New(apperror.InvalidInput, "items", "selected requirement was not found")
+				}
+				requirement.Required = true
+				requirement.ImpossibilityAllowed = false
+				requirement.MinimumMedia = 1
+				requirement.Instructions = strings.TrimSpace(requirement.Instructions + "\nRecapture: " + item.Reason)
+				if requirement.MaximumMedia < 1 {
+					requirement.MaximumMedia = 1
+				}
+				focused = append(focused, requirement)
+				if item.OriginalMediaID != nil {
+					var count int64
+					if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND responsibility_id=? AND requirement_key=? AND status='READY'", in.TenantID, *item.OriginalMediaID, originalDraft.ResponsibilityID, item.RequirementKey).Count(&count).Error; err != nil || count != 1 {
+						return apperror.New(apperror.InvalidInput, "items", "selected original evidence was not found")
+					}
 				}
 			}
 		}
 		var active database.RecaptureRequest
-		activeErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND inspection_id=? AND status IN ?", in.TenantID, in.InspectionID, []string{"REQUESTED", "ACCESSED"}).First(&active).Error
+		activeErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND inspection_id=? AND status IN ?", in.TenantID, in.InspectionID, []string{"REQUESTED", "ACCESSED", "RECEIVED"}).First(&active).Error
 		if activeErr == nil {
 			if !now.Before(active.DeadlineAt) {
 				return apperror.New(apperror.InvalidState, "inspectionId", "active recapture has expired and must be finalized")
+			}
+			if originalDraft.MediaKind == "VIDEO" {
+				return apperror.New(apperror.Conflict, "inspectionId", "an active video recapture already exists")
 			}
 			if err := mergeActiveRequest(tx, active, in.Items, focused, originalDraft.ReferencePayload, now); err != nil {
 				return err
@@ -155,11 +178,13 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 		reqJSON, _ := json.Marshal(focused)
 		responsibility := identity.NewID()
 		request := database.RecaptureRequest{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: in.InspectionID, ResponsibilityID: responsibility, Status: "REQUESTED", DeadlineAt: in.DeadlineAt, IdempotencyKey: in.IdempotencyKey, PayloadDigest: payloadDigest, CreatedAt: now, UpdatedAt: now}
-		reference, err := focusedReference(originalDraft.ReferencePayload, focused)
-		if err != nil {
-			return err
+		if originalDraft.MediaKind != "VIDEO" {
+			reference, err = focusedReference(originalDraft.ReferencePayload, focused)
+			if err != nil {
+				return err
+			}
 		}
-		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, Kind: "RECAPTURE", TemplateVersionID: originalDraft.TemplateVersionID, ReferencePayload: reference, PolicyPayload: originalDraft.PolicyPayload, Requirements: reqJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
+		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, Kind: "RECAPTURE", MediaKind: originalDraft.MediaKind, TemplateVersionID: originalDraft.TemplateVersionID, ReferencePayload: reference, PolicyPayload: originalDraft.PolicyPayload, Requirements: reqJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibilityRow := database.Responsibility{ID: responsibility, TenantID: in.TenantID, InspectionID: in.InspectionID, ParticipantID: inspection.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.DeadlineAt, CreatedAt: now}
 		for _, row := range []any{&request, &responsibilityRow, &draft, &invite} {
@@ -299,6 +324,15 @@ func (s Service) FinalizeTx(tx *gorm.DB, tenantID, requestID identity.ID, correc
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, requestID).First(&request).Error; err != nil {
 		return database.RecaptureRequest{}, apperror.New(apperror.NotFound, "requestId", "recapture not found")
 	}
+	if corrected && (request.Status == "RECEIVED" || request.Status == "SUBMITTED") {
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, request.ResponsibilityID).Take(&draft).Error; err != nil {
+			return database.RecaptureRequest{}, err
+		}
+		if draft.MediaKind == "VIDEO" {
+			return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "use FinalizeVideoTx with prepared visual coverage to fulfill a video recapture")
+		}
+	}
 	target := "SUBMITTED"
 	if !corrected {
 		target = "EXPIRED"
@@ -316,9 +350,21 @@ func (s Service) FinalizeTx(tx *gorm.DB, tenantID, requestID identity.ID, correc
 		target = "EXPIRED"
 	}
 	if request.Status != "REQUESTED" && request.Status != "ACCESSED" {
-		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "recapture is terminal")
+		if request.Status == "RECEIVED" && !corrected {
+			// A received supplement remains active until its prepared visual scope
+			// resolves the selected requirements or the request expires.
+		} else {
+			return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "recapture is terminal")
+		}
 	}
 	if corrected {
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, request.ResponsibilityID).Take(&draft).Error; err != nil {
+			return database.RecaptureRequest{}, err
+		}
+		if draft.MediaKind == "VIDEO" {
+			return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "use FinalizeVideoTx with prepared visual coverage to fulfill a video recapture")
+		}
 		var requirements []database.RecaptureRequirement
 		if err := tx.Where("tenant_id=? AND request_id=?", tenantID, request.ID).Find(&requirements).Error; err != nil {
 			return database.RecaptureRequest{}, err
@@ -340,7 +386,15 @@ func (s Service) FinalizeTx(tx *gorm.DB, tenantID, requestID identity.ID, correc
 		}
 	}
 	if !corrected {
-		if err := tx.Model(&database.RecaptureRequirement{}).Where("tenant_id=? AND request_id=? AND status='OPEN'", tenantID, request.ID).Update("status", "EXPIRED").Error; err != nil {
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, request.ResponsibilityID).Take(&draft).Error; err != nil {
+			return database.RecaptureRequest{}, err
+		}
+		requirementStatus := "EXPIRED"
+		if draft.MediaKind == "VIDEO" {
+			requirementStatus = "UNRESOLVED"
+		}
+		if err := tx.Model(&database.RecaptureRequirement{}).Where("tenant_id=? AND request_id=? AND status='OPEN'", tenantID, request.ID).Update("status", requirementStatus).Error; err != nil {
 			return database.RecaptureRequest{}, err
 		}
 		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=? AND status='OPEN'", tenantID, request.ResponsibilityID).Updates(map[string]any{"status": "EXPIRED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
@@ -373,7 +427,218 @@ func (s Service) FinalizeTx(tx *gorm.DB, tenantID, requestID identity.ID, correc
 		return database.RecaptureRequest{}, err
 	}
 	analysisEventID := identity.NewID()
-	if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: analysisEventID, Type: "analysis.comparison_requested.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: request.InspectionID, CorrelationID: "analysis-recapture-" + request.ID.String(), Payload: map[string]any{"inspectionId": request.InspectionID, "recaptureRequestId": request.ID, "corrected": corrected, "requiresAttention": !corrected}}); err != nil {
+	analysisEventType := "analysis.comparison_requested.v1"
+	analysisPayload := map[string]any{"inspectionId": request.InspectionID, "recaptureRequestId": request.ID, "corrected": corrected, "requiresAttention": !corrected}
+	var inspection database.Inspection
+	if err := tx.Where("tenant_id=? AND id=?", tenantID, request.InspectionID).Take(&inspection).Error; err != nil {
+		return database.RecaptureRequest{}, err
+	}
+	var recaptureDraft database.CaptureDraft
+	if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, request.ResponsibilityID).Take(&recaptureDraft).Error; err != nil {
+		return database.RecaptureRequest{}, err
+	}
+	if inspection.MediaKind == "VIDEO" || recaptureDraft.MediaKind == "VIDEO" {
+		analysisEventType = "analysis.comparison_completed.v1"
+		analysisPayload["force"] = true
+	}
+	if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: analysisEventID, Type: analysisEventType, SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: request.InspectionID, CorrelationID: "analysis-recapture-" + request.ID.String(), Payload: analysisPayload}); err != nil {
+		return database.RecaptureRequest{}, err
+	}
+	return request, nil
+}
+
+// FinalizeVideoTx closes a received video recapture using components verified by a prepared supplement.
+func (s Service) FinalizeVideoTx(tx *gorm.DB, tenantID, requestID identity.ID, coveredComponentIDs []identity.ID) (VideoFinalizeResult, error) {
+	var result VideoFinalizeResult
+	var request database.RecaptureRequest
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, requestID).First(&request).Error; err != nil {
+		return result, apperror.New(apperror.NotFound, "requestId", "recapture not found")
+	}
+	result.Request = request
+	if request.Status != "RECEIVED" && request.Status != "SUBMITTED" {
+		return result, apperror.New(apperror.InvalidState, "requestId", "video recapture is not ready for visual completion")
+	}
+	var draft database.CaptureDraft
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND kind='RECAPTURE'", tenantID, request.ResponsibilityID).Take(&draft).Error; err != nil {
+		return result, err
+	}
+	if draft.MediaKind != "VIDEO" {
+		return result, apperror.New(apperror.InvalidState, "requestId", "video recapture is required")
+	}
+	var reference struct {
+		VideoRecapture videoRecaptureProjection `json:"videoRecapture"`
+	}
+	if err := json.Unmarshal(draft.ReferencePayload, &reference); err != nil || len(reference.VideoRecapture.Selected) == 0 {
+		return result, apperror.New(apperror.InvalidState, "requestId", "video recapture selection is invalid")
+	}
+	selected := make(map[identity.ID]string, len(reference.VideoRecapture.Selected))
+	for _, item := range reference.VideoRecapture.Selected {
+		if item.ComponentID == (identity.ID{}) || item.RequirementKey != "video:"+item.ComponentID.String() {
+			return result, apperror.New(apperror.InvalidState, "requestId", "video recapture selection is invalid")
+		}
+		selected[item.ComponentID] = item.RequirementKey
+	}
+	seen := make(map[identity.ID]bool, len(coveredComponentIDs))
+	for _, componentID := range coveredComponentIDs {
+		if componentID == (identity.ID{}) || seen[componentID] {
+			return result, apperror.New(apperror.InvalidInput, "coveredComponentIds", "covered components must be unique selected components")
+		}
+		if _, ok := selected[componentID]; !ok {
+			return result, apperror.New(apperror.InvalidInput, "coveredComponentIds", "covered component was not selected for this recapture")
+		}
+		seen[componentID] = true
+	}
+	result.CoveredComponentIDs = append([]identity.ID(nil), coveredComponentIDs...)
+	if len(coveredComponentIDs) == 0 {
+		return result, nil
+	}
+	var supplement database.MediaObject
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND requirement_key='video:supplement' AND media_kind='VIDEO' AND status='READY'", tenantID, request.ResponsibilityID).Order("created_at desc").Take(&supplement).Error; err != nil {
+		return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "requestId", "ready prepared video supplement is required")
+	}
+	var submissions []database.SubmissionVersion
+	if err := tx.Where("tenant_id=? AND draft_id=? AND responsibility_id=?", tenantID, draft.ID, request.ResponsibilityID).Order("version_number desc").Find(&submissions).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	receivedBeforeDeadline := false
+	for _, submission := range submissions {
+		var receipt struct {
+			MediaKind string      `json:"mediaKind"`
+			MediaID   identity.ID `json:"mediaId"`
+		}
+		if err := json.Unmarshal(submission.Payload, &receipt); err == nil && receipt.MediaKind == "VIDEO" && receipt.MediaID == supplement.ID && submission.SubmittedAt.Before(request.DeadlineAt) {
+			receivedBeforeDeadline = true
+			break
+		}
+	}
+	if !receivedBeforeDeadline {
+		return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "requestId", "video supplement was not received before the recapture deadline")
+	}
+	var preparation database.VideoPreparationJob
+	if err := tx.Where("tenant_id=? AND media_id=? AND status='READY'", tenantID, supplement.ID).Order("generation desc").Take(&preparation).Error; err != nil {
+		return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "requestId", "ready prepared video supplement is required")
+	}
+	result.SupplementPreparationID = preparation.ID
+	var requirements []database.RecaptureRequirement
+	if err := tx.Where("tenant_id=? AND request_id=?", tenantID, request.ID).Find(&requirements).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	rowsByKey := make(map[string]database.RecaptureRequirement, len(requirements))
+	for _, requirement := range requirements {
+		rowsByKey[requirement.RequirementKey] = requirement
+	}
+	if request.Status == "SUBMITTED" {
+		for _, requirement := range requirements {
+			componentID := componentIDForRequirement(selected, requirement.RequirementKey)
+			requested := componentID != (identity.ID{}) && seen[componentID]
+			if (requirement.Status == "CORRECTED") != requested {
+				return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "requestId", "video recapture was already finalized with different coverage")
+			}
+		}
+		result.Request = request
+		result.Submitted = true
+		return result, nil
+	}
+	for componentID := range seen {
+		key := selected[componentID]
+		row, ok := rowsByKey[key]
+		if !ok {
+			return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "requestId", "selected video requirement is unavailable")
+		}
+		if row.Status != "CORRECTED" {
+			if err := tx.Model(&row).Update("status", "CORRECTED").Error; err != nil {
+				return VideoFinalizeResult{}, err
+			}
+		}
+	}
+	var cycles int64
+	if err := tx.Model(&database.RecaptureRequest{}).Where("tenant_id=? AND inspection_id=?", tenantID, request.InspectionID).Count(&cycles).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	if cycles >= MaxRecaptureCycles {
+		if err := tx.Model(&database.RecaptureRequirement{}).Where("tenant_id=? AND request_id=? AND status='OPEN'", tenantID, request.ID).Update("status", "UNRESOLVED").Error; err != nil {
+			return VideoFinalizeResult{}, err
+		}
+	}
+	request.Status = "SUBMITTED"
+	request.UpdatedAt = s.now()
+	if err := tx.Save(&request).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	if err := tx.Model(&database.Responsibility{}).Where("tenant_id=? AND id=?", tenantID, request.ResponsibilityID).Updates(map[string]any{"status": "SUBMITTED", "version": gorm.Expr("version + 1"), "updated_at": request.UpdatedAt}).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND responsibility_id=? AND revoked_at IS NULL", tenantID, request.ResponsibilityID).Update("revoked_at", request.UpdatedAt).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", tenantID, request.ResponsibilityID).Updates(map[string]any{"status": "REVOKED", "revoked_at": request.UpdatedAt}).Error; err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	transition := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status='RECAPTURE_PENDING'", tenantID, request.InspectionID).Updates(map[string]any{"status": "ANALYZING", "version": gorm.Expr("version + 1"), "updated_at": request.UpdatedAt})
+	if transition.Error != nil {
+		return VideoFinalizeResult{}, transition.Error
+	}
+	if transition.RowsAffected != 1 {
+		return VideoFinalizeResult{}, apperror.New(apperror.InvalidState, "inspection", "inspection no longer accepts recapture")
+	}
+	eventID := identity.NewID()
+	if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "recapture.completed.v1", SchemaVersion: 1, OccurredAt: request.UpdatedAt, TenantID: tenantID, AggregateID: request.ID, CorrelationID: "recapture-complete-" + request.ID.String(), Payload: map[string]any{"requestId": request.ID, "inspectionId": request.InspectionID, "corrected": true, "expired": false, "coveredComponentIds": coveredComponentIDs, "supplementPreparationId": preparation.ID}}); err != nil {
+		return VideoFinalizeResult{}, err
+	}
+	result.Request = request
+	result.Submitted = true
+	return result, nil
+}
+
+func componentIDForRequirement(selected map[identity.ID]string, key string) identity.ID {
+	for componentID, requirementKey := range selected {
+		if requirementKey == key {
+			return componentID
+		}
+	}
+	return identity.ID{}
+}
+
+// ReceiveVideoTx records a supplement receipt without treating the upload as
+// visual fulfillment. A later prepared plan must resolve selected components
+// before the request can transition to SUBMITTED.
+func (s Service) ReceiveVideoTx(tx *gorm.DB, tenantID, requestID, responsibilityID, submissionID identity.ID) (database.RecaptureRequest, error) {
+	var request database.RecaptureRequest
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND responsibility_id=?", tenantID, requestID, responsibilityID).First(&request).Error; err != nil {
+		return database.RecaptureRequest{}, apperror.New(apperror.NotFound, "requestId", "recapture not found")
+	}
+	now := s.now()
+	if !now.Before(request.DeadlineAt) {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "recapture deadline has expired")
+	}
+	if request.Status == "RECEIVED" {
+		return request, nil
+	}
+	if request.Status != "REQUESTED" && request.Status != "ACCESSED" {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "recapture is not accepting a supplement")
+	}
+	var draft database.CaptureDraft
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND kind='RECAPTURE' AND media_kind='VIDEO' AND status='SUBMITTED'", tenantID, responsibilityID).Take(&draft).Error; err != nil {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "submitted video supplement is required")
+	}
+	var submission database.SubmissionVersion
+	if err := tx.Where("tenant_id=? AND id=? AND draft_id=? AND responsibility_id=?", tenantID, submissionID, draft.ID, responsibilityID).Take(&submission).Error; err != nil {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "supplement submission was not found")
+	}
+	var receipt struct {
+		MediaKind string      `json:"mediaKind"`
+		MediaID   identity.ID `json:"mediaId"`
+	}
+	if err := json.Unmarshal(submission.Payload, &receipt); err != nil || receipt.MediaKind != "VIDEO" || receipt.MediaID == (identity.ID{}) {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "video supplement receipt is invalid")
+	}
+	var media database.MediaObject
+	if err := tx.Where("tenant_id=? AND id=? AND responsibility_id=? AND requirement_key='video:supplement' AND media_kind='VIDEO' AND status IN ?", tenantID, receipt.MediaID, responsibilityID, []string{"RECEIVED", "VERIFIED", "SCREENED", "READY"}).Take(&media).Error; err != nil {
+		return database.RecaptureRequest{}, apperror.New(apperror.InvalidState, "requestId", "confirmed video supplement receipt is required")
+	}
+	request.Status = "RECEIVED"
+	request.UpdatedAt = now
+	if err := tx.Save(&request).Error; err != nil {
 		return database.RecaptureRequest{}, err
 	}
 	return request, nil

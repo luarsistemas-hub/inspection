@@ -19,7 +19,7 @@ func (r qaTemplateReferences) AnalysisTypeExists(value string) bool {
 
 func TestQATemplateIsUsableByCreationFlows(t *testing.T) {
 	segmentID := identity.NewID()
-	encoded, err := qaTemplateDefinition(segmentID)
+	encoded, err := qaTemplateDefinition(segmentID, "PHOTO")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,9 +36,27 @@ func TestQATemplateIsUsableByCreationFlows(t *testing.T) {
 	}
 }
 
+func TestQAVideoTemplateDeclaresVideoCapture(t *testing.T) {
+	segmentID := identity.NewID()
+	encoded, err := qaTemplateDefinition(segmentID, "VIDEO")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := catalog.Compile(encoded, qaTemplateReferences{segment: segmentID.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Document.MediaKind() != "VIDEO" || len(compiled.Document.Requirements) != 1 || compiled.Document.Requirements[0].EvidenceKind != "VIDEO" {
+		t.Fatalf("QA origin template is not VIDEO: %+v", compiled.Document)
+	}
+}
+
 func TestSetupRejectsMissingDependencies(t *testing.T) {
-	if _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003"); err == nil {
+	if _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "PHOTO", false); err == nil {
 		t.Fatal("nil database accepted")
+	}
+	if _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "UNKNOWN", false); err == nil {
+		t.Fatal("unknown media kind accepted")
 	}
 }
 

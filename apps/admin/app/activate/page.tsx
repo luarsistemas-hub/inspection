@@ -4,6 +4,7 @@ import { FormEvent, useRef, useState } from "react";
 import { Alert, Button, Field, Input, Recovery, Steps } from "@inspection/design-system";
 import { beginPKCE } from "@/auth/pkce";
 import { isInitialPasswordValid, requestActivationCode, setInitialPassword, verifyActivationCode } from "@/auth/activation";
+import { ActivationShell } from "./activation-shell";
 
 type Stage = "request" | "verify" | "password" | "ready";
 
@@ -23,13 +24,13 @@ export default function ActivatePage() {
       setStage(stage === "request" ? "verify" : stage === "verify" ? "password" : "ready");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível concluir a ativação."); } finally { submitting.current = false; setBusy(false); }
   };
-  if (stage === "ready") return <main className="admin-denial"><Recovery kind="empty" title="Senha criada">Use sua nova senha para entrar na administração.</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", "/organization")}>Entrar na administração</Button></main>;
-  return <main className="admin-denial"><h1>Ative sua conta administrativa</h1><p>Confirme um código exclusivo de ativação antes de criar sua senha.</p><form className="admin-form" onSubmit={submit} noValidate>
+  if (stage === "ready") return <ActivationShell title="Senha criada" description="Sua conta administrativa está pronta para uso."><Recovery kind="empty" title="Acesso ativado">Use sua nova senha para entrar na administração.</Recovery><Button onClick={() => void beginPKCE(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", "/organization")}>Entrar na administração</Button></ActivationShell>;
+  return <ActivationShell title="Ative sua conta administrativa" description="Confirme um código exclusivo de ativação antes de criar sua senha."><form className="admin-form" onSubmit={submit} noValidate>
     <Steps label="Progresso da ativação" items={[{ id: "request", label: "Solicitar código", state: stage === "request" ? "current" : "complete" }, { id: "verify", label: "Confirmar código", state: stage === "verify" ? "current" : stage === "password" ? "complete" : "pending" }, { id: "password", label: "Criar senha", state: stage === "password" ? "current" : "pending" }]} />
     {stage === "request" ? <p>Enviaremos um código ao e-mail verificado no onboarding.</p> : null}
     {stage === "verify" ? <Field label="Código de ativação" required error={code && code.length !== 6 ? "Informe os seis dígitos do código." : undefined}><Input aria-label="Código de ativação" autoComplete="one-time-code" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} /></Field> : null}
     {stage === "password" ? <><Field label="Nova senha" required hint={process.env.NEXT_PUBLIC_STAGE?.trim().toLowerCase() === "dev" ? undefined : "Use pelo menos 6 caracteres, uma letra maiúscula e um caractere especial."}><Input aria-label="Nova senha" autoComplete="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field><Field label="Confirme a nova senha" required error={confirmation && password !== confirmation ? "As senhas não coincidem." : undefined}><Input aria-label="Confirme a nova senha" autoComplete="new-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Field></> : null}
     {message ? <Alert tone="danger">{message}</Alert> : null}
     <Button type="submit" isPending={busy} pendingLabel="Processando…" disabled={(stage === "verify" && code.length !== 6) || (stage === "password" && !isInitialPasswordValid(password, confirmation))}>{stage === "request" ? "Enviar código de ativação" : stage === "verify" ? "Confirmar código" : "Criar senha"}</Button>
-  </form></main>;
+  </form></ActivationShell>;
 }

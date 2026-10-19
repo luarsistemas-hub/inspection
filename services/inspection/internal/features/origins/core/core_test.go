@@ -9,6 +9,8 @@ import (
 
 	"inspection/libs/identity"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -64,6 +66,156 @@ func TestIT091ActivationRejectsUndescribedOriginEvidence(t *testing.T) {
 	}
 }
 
+func TestActivateVideoOriginRequiresUsableScopeAndPinsItsPreparation(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	preparationID, frameID := identity.NewID(), identity.NewID()
+	mediaID := identity.NewID()
+	media := database.MediaObject{ID: mediaID, TenantID: f.tenantID, ResponsibilityID: f.firstResponsibilityID, MediaKind: "VIDEO", ObjectKey: "video/source", ContentType: "video/mp4", SHA256: strings.Repeat("c", 64), SizeBytes: 10, Status: "READY", CreatedAt: f.now}
+	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: f.tenantID, MediaID: mediaID, Status: "READY", Phase: "READY", ManifestDigest: strings.Repeat("d", 64), CreatedAt: f.now}
+	source := database.VideoSource{ID: identity.NewID(), TenantID: f.tenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1000000, Width: 10, Height: 10, FrameRate: 30, ScreeningStatus: "APPROVED", Status: "RETAINED", CreatedAt: f.now, UpdatedAt: f.now}
+	frame := database.VideoFrame{ID: frameID, TenantID: f.tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: strings.Repeat("e", 64), ObjectKey: "video/frame.jpg", SizeBytes: 5, CreatedAt: f.now}
+	scope := database.VideoScopeItem{ID: identity.NewID(), TenantID: f.tenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front", Visibility: "CLEAR", Landmarks: json.RawMessage(`[]`), CreatedAt: f.now}
+	for _, row := range []any{&media, &preparation, &source, &frame, &scope} {
+		if err := f.db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", f.tenantID, f.firstResponsibilityID).Update("media_kind", "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	activated, err := f.service.ActivateCompleted(context.Background(), f.tenantID, f.firstResponsibilityID)
+	if err != nil || activated.Status != "ACTIVE" || activated.MediaKind != "VIDEO" || activated.VideoPreparationID == nil || *activated.VideoPreparationID != preparationID || activated.ScopeManifestDigest != preparation.ManifestDigest {
+		t.Fatalf("video origin not pinned to prepared scope: %+v %v", activated, err)
+	}
+	var refs int64
+	if err := f.db.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", f.tenantID, preparationID, activated.ID).Count(&refs).Error; err != nil || refs != 1 {
+		t.Fatalf("origin frame bank dependency count=%d err=%v", refs, err)
+	}
+}
+
+func TestInvalidateVideoOriginReleasesPreparationReference(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	preparationID, frameID, mediaID := identity.NewID(), identity.NewID(), identity.NewID()
+	for _, row := range []any{
+		&database.MediaObject{ID: mediaID, TenantID: f.tenantID, ResponsibilityID: f.firstResponsibilityID, MediaKind: "VIDEO", ObjectKey: "video/source", ContentType: "video/mp4", SHA256: strings.Repeat("c", 64), SizeBytes: 10, Status: "READY", CreatedAt: f.now},
+		&database.VideoPreparationJob{ID: preparationID, TenantID: f.tenantID, MediaID: mediaID, Status: "READY", Phase: "READY", ManifestDigest: strings.Repeat("d", 64), CreatedAt: f.now},
+		&database.VideoSource{ID: identity.NewID(), TenantID: f.tenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1000000, Width: 10, Height: 10, FrameRate: 30, ScreeningStatus: "APPROVED", Status: "RETAINED", CreatedAt: f.now, UpdatedAt: f.now},
+		&database.VideoFrame{ID: frameID, TenantID: f.tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: strings.Repeat("e", 64), ObjectKey: "video/frame.jpg", SizeBytes: 5, CreatedAt: f.now},
+		&database.VideoScopeItem{ID: identity.NewID(), TenantID: f.tenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front", Visibility: "CLEAR", Landmarks: json.RawMessage(`[]`), CreatedAt: f.now},
+	} {
+		if err := f.db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", f.tenantID, f.firstResponsibilityID).Update("media_kind", "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	version, err := f.service.ActivateCompleted(context.Background(), f.tenantID, f.firstResponsibilityID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.Invalidate(context.Background(), f.tenantID, version.ID); err != nil {
+		t.Fatal(err)
+	}
+	var references int64
+	if err := f.db.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", f.tenantID, preparationID, version.ID).Count(&references).Error; err != nil || references != 0 {
+		t.Fatalf("invalidated origin references=%d err=%v", references, err)
+	}
+}
+
+func TestActivateVideoOriginRejectsEmptyScope(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	mediaID := identity.NewID()
+	media := database.MediaObject{ID: mediaID, TenantID: f.tenantID, ResponsibilityID: f.firstResponsibilityID, MediaKind: "VIDEO", ObjectKey: "video/source", ContentType: "video/mp4", SHA256: strings.Repeat("c", 64), SizeBytes: 10, Status: "READY", CreatedAt: f.now}
+	preparation := database.VideoPreparationJob{ID: identity.NewID(), TenantID: f.tenantID, MediaID: mediaID, Status: "READY", Phase: "READY", ManifestDigest: strings.Repeat("d", 64), CreatedAt: f.now}
+	source := database.VideoSource{ID: identity.NewID(), TenantID: f.tenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1000000, Width: 10, Height: 10, FrameRate: 30, ScreeningStatus: "APPROVED", Status: "RETAINED", CreatedAt: f.now, UpdatedAt: f.now}
+	for _, row := range []any{&media, &preparation, &source} {
+		if err := f.db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", f.tenantID, f.firstResponsibilityID).Update("media_kind", "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.ActivateCompleted(context.Background(), f.tenantID, f.firstResponsibilityID); originCode(err) != apperror.InvalidState {
+		t.Fatalf("video origin with empty scope activated: %v", err)
+	}
+}
+
+func TestActivateInvalidatedVersionRejectedWithoutMutation(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	var version database.OriginVersion
+	if err := f.db.Where("responsibility_id=?", f.firstResponsibilityID).First(&version).Error; err != nil {
+		t.Fatal(err)
+	}
+	version.Status = "INVALIDATED"
+	version.InvalidatedAt = &f.now
+	if err := f.db.Save(&version).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Model(&database.Origin{}).Where("id=?", f.originID).Update("active_version_id", version.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.ActivateCompleted(context.Background(), f.tenantID, f.firstResponsibilityID); originCode(err) != apperror.InvalidState {
+		t.Fatalf("invalidated origin activation error=%v, want INVALID_STATE", err)
+	}
+	var got database.OriginVersion
+	if err := f.db.First(&got, "id=?", version.ID).Error; err != nil || got.Status != "INVALIDATED" || got.InvalidatedAt == nil {
+		t.Fatalf("invalidated origin was mutated: %+v err=%v", got, err)
+	}
+	var origin database.Origin
+	if err := f.db.First(&origin, "id=?", f.originID).Error; err != nil || origin.ActiveVersionID == nil || *origin.ActiveVersionID != version.ID {
+		t.Fatalf("origin pointer changed after rejected activation: %+v err=%v", origin, err)
+	}
+}
+
+func TestActivateVideoOriginRejectsScopeFrameWithoutDigest(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	preparationID, frameID, mediaID := identity.NewID(), identity.NewID(), identity.NewID()
+	media := database.MediaObject{ID: mediaID, TenantID: f.tenantID, ResponsibilityID: f.firstResponsibilityID, MediaKind: "VIDEO", ObjectKey: "video/source", ContentType: "video/mp4", SHA256: strings.Repeat("c", 64), SizeBytes: 10, Status: "READY", CreatedAt: f.now}
+	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: f.tenantID, MediaID: mediaID, Status: "READY", Phase: "READY", ManifestDigest: strings.Repeat("d", 64), CreatedAt: f.now}
+	source := database.VideoSource{ID: identity.NewID(), TenantID: f.tenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1000000, Width: 10, Height: 10, FrameRate: 30, ScreeningStatus: "APPROVED", Status: "RETAINED", CreatedAt: f.now, UpdatedAt: f.now}
+	frame := database.VideoFrame{ID: frameID, TenantID: f.tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: "", ObjectKey: "video/frame.jpg", SizeBytes: 5, CreatedAt: f.now}
+	scope := database.VideoScopeItem{ID: identity.NewID(), TenantID: f.tenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front", Visibility: "CLEAR", Landmarks: json.RawMessage(`[]`), CreatedAt: f.now}
+	for _, row := range []any{&media, &preparation, &source, &frame, &scope} {
+		if err := f.db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", f.tenantID, f.firstResponsibilityID).Update("media_kind", "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.ActivateCompleted(context.Background(), f.tenantID, f.firstResponsibilityID); originCode(err) != apperror.InvalidState {
+		t.Fatalf("video origin with scope frame missing digest activated: %v", err)
+	}
+}
+
+func TestInvitePersistsTemplateMediaKindOnOriginVersion(t *testing.T) {
+	for _, mediaKind := range []string{"PHOTO", "VIDEO"} {
+		t.Run(mediaKind, func(t *testing.T) {
+			f := newOriginActivationFixture(t)
+			templateID, templateVersionID := identity.NewID(), identity.NewID()
+			definition := catalog.TemplateDocument{SchemaVersion: catalog.SchemaVersion, IsVideo: mediaKind == "VIDEO", SegmentVersionID: identity.NewID().String(), ParticipantRoles: []string{"TENANT"}, Requirements: []catalog.CaptureRequirement{{Key: "room", Section: "room", Label: "room", EvidenceKind: mediaKind, MinimumCount: 1, MaximumCount: 1, Required: true}}}
+			definitionJSON, err := json.Marshal(definition)
+			if err != nil {
+				t.Fatal(err)
+			}
+			templateVersion := database.TemplateVersion{ID: templateVersionID, TenantID: f.tenantID, TemplateID: templateID, VersionNumber: 1, SchemaVersion: catalog.SchemaVersion, DefinitionJSON: definitionJSON, CanonicalDigest: strings.Repeat("f", 64), Status: "ACTIVE", IdempotencyKey: "template-" + mediaKind, PublishedAt: f.now, CreatedBy: identity.NewID()}
+			if err := f.db.Create(&templateVersion).Error; err != nil {
+				t.Fatal(err)
+			}
+			created, err := f.service.Invite(context.Background(), InviteInput{TenantID: f.tenantID, AssetID: identity.NewID(), TemplateVersionID: templateVersionID, Delivery: []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "participant@example.test"}}, Requirements: []capturecore.Requirement{{Key: "room", MinimumMedia: 1, MaximumMedia: 1}}, ExpiresAt: f.now.Add(time.Hour), IdempotencyKey: "invite-" + mediaKind})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var version database.OriginVersion
+			if err := f.db.First(&version, "id=?", created.VersionID).Error; err != nil || version.MediaKind != mediaKind {
+				t.Fatalf("origin version media kind=%q want %q err=%v", version.MediaKind, mediaKind, err)
+			}
+		})
+	}
+}
+
 type originActivationFixture struct {
 	db                                                      *gorm.DB
 	service                                                 Service
@@ -77,12 +229,12 @@ func newOriginActivationFixture(t *testing.T) originActivationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, schema := range []string{"origins", "capture", "media", "messaging"} {
+	for _, schema := range []string{"origins", "capture", "media", "messaging", "templates", "invitations", "platform"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.MediaObject{}, &database.OutboxIntent{}} {
+	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.MediaObject{}, &database.VideoPreparationJob{}, &database.VideoSource{}, &database.VideoFrame{}, &database.VideoScopeItem{}, &database.VideoEvidenceReference{}, &database.OutboxIntent{}, &database.TemplateVersion{}, &database.Invitation{}, &database.VideoAdmission{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
@@ -98,9 +250,40 @@ func newOriginActivationFixture(t *testing.T) originActivationFixture {
 			t.Fatal(err)
 		}
 	}
+	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1, ChangedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
 	return originActivationFixture{db: db, service: Service{DB: db, Now: func() time.Time { return now }, Within: func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
 		return db.WithContext(ctx).Transaction(fn)
 	}}, tenantID: tenantID, originID: originID, firstResponsibilityID: responsibilityID, firstMediaID: mediaID, now: now}
+}
+
+func TestInviteVideoDisabledRejectsBeforeCreatingResponsibilityRows(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	templateID, templateVersionID := identity.NewID(), identity.NewID()
+	definitionJSON, err := json.Marshal(catalog.TemplateDocument{SchemaVersion: catalog.SchemaVersion, IsVideo: true, SegmentVersionID: identity.NewID().String(), ParticipantRoles: []string{"TENANT"}, Requirements: []catalog.CaptureRequirement{{Key: "room", Section: "room", Label: "room", EvidenceKind: "VIDEO", MinimumCount: 1, MaximumCount: 1, Required: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: f.tenantID, TemplateID: templateID, VersionNumber: 1, SchemaVersion: catalog.SchemaVersion, DefinitionJSON: definitionJSON, CanonicalDigest: strings.Repeat("f", 64), Status: "ACTIVE", IdempotencyKey: "disabled-video-template", PublishedAt: f.now, CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.service.Invite(context.Background(), InviteInput{TenantID: f.tenantID, AssetID: identity.NewID(), TemplateVersionID: templateVersionID, Delivery: []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "participant@example.test"}}, Requirements: []capturecore.Requirement{{Key: "room", MinimumMedia: 1, MaximumMedia: 1}}, ExpiresAt: f.now.Add(time.Hour), IdempotencyKey: "disabled-video-invite"})
+	if originCode(err) != apperror.IntegrationDisabled {
+		t.Fatalf("disabled VIDEO invitation error=%v, want INTEGRATION_DISABLED", err)
+	}
+	for _, check := range []struct {
+		model any
+		want  int64
+	}{{&database.OriginVersion{}, 1}, {&database.CaptureDraft{}, 1}, {&database.Invitation{}, 0}, {&database.OutboxIntent{}, 0}} {
+		var count int64
+		if err := f.db.Model(check.model).Where("tenant_id=?", f.tenantID).Count(&count).Error; err != nil || count != check.want {
+			t.Fatalf("rejected invite changed %T rows: count=%d want=%d err=%v", check.model, count, check.want, err)
+		}
+	}
 }
 
 func mustJSONOrigin(value any) json.RawMessage {

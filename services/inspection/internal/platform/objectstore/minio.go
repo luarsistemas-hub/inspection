@@ -112,6 +112,21 @@ func (m *MinIOClient) Get(ctx context.Context, bucket, key string) (io.ReadClose
 	return object, nil
 }
 
+func (m *MinIOClient) GetRange(ctx context.Context, bucket, key string, start, end int64) (io.ReadCloser, error) {
+	if _, err := m.Head(ctx, bucket, key); err != nil {
+		return nil, err
+	}
+	options := minio.GetObjectOptions{}
+	if err := options.SetRange(start, end); err != nil {
+		return nil, ErrInvalid
+	}
+	object, err := m.Client.GetObject(ctx, bucket, key, options)
+	if err != nil {
+		return nil, mapMinIOError(err)
+	}
+	return object, nil
+}
+
 func (m *MinIOClient) Put(ctx context.Context, bucket, key string, reader io.Reader, size int64, contentType string) error {
 	_, err := m.Client.PutObject(ctx, bucket, key, reader, size, minio.PutObjectOptions{ContentType: contentType})
 	return mapMinIOError(err)

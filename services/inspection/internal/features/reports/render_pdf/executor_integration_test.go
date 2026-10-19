@@ -63,7 +63,7 @@ func TestPostgresConcurrentExecutorsProcessEachJobOnce(t *testing.T) {
 	store := objectstore.Store{Bucket: "private", Client: client}
 	var group sync.WaitGroup
 	for range 3 {
-		executor, err := SetupExecutor(db, store, DefaultLimits(), time.Now)
+		executor, err := SetupExecutor(db, store, DefaultLimits(), time.Now, "")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -126,11 +126,28 @@ func request(ctx context.Context, d Dependencies, c Command) (Result, error) {
 		var existing database.OriginPromotion
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND inspection_id=?", c.TenantID, c.InspectionID).First(&existing).Error
 		if err == nil {
-			if string(existing.SelectedMediaIDs) != string(selectedJSON) || existing.ExpectedAssetVersion != c.ExpectedAssetVersion {
+			requeue := existing.Status == StatusFailed
+			if string(existing.SelectedMediaIDs) != string(selectedJSON) {
 				return apperror.New(apperror.Conflict, "mediaIds", "a different reference selection was already requested")
 			}
+			if existing.ExpectedAssetVersion != c.ExpectedAssetVersion {
+				if existing.Status != StatusPending && existing.Status != StatusFailed {
+					return apperror.New(apperror.Conflict, "expectedAssetVersion", "the promotion is already being processed")
+				}
+				var currentAsset database.Asset
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", c.TenantID, inspection.AssetID).First(&currentAsset).Error; err != nil {
+					return err
+				}
+				if currentAsset.Version != c.ExpectedAssetVersion {
+					return apperror.New(apperror.Conflict, "expectedAssetVersion", "asset changed; refresh the asset and confirm the promotion again")
+				}
+				if err := tx.Model(&existing).Updates(map[string]any{"expected_asset_version": c.ExpectedAssetVersion, "failure_reason": "", "updated_at": now}).Error; err != nil {
+					return err
+				}
+				requeue = true
+			}
 			result = Result{Promotion: existing, Eligible: eligible}
-			if existing.Status == StatusPending || existing.Status == StatusFailed {
+			if requeue {
 				return enqueue(tx, c.TenantID, existing.ID, now)
 			}
 			return nil
@@ -186,17 +203,14 @@ func status(ctx context.Context, d Dependencies, q Query) (Result, error) {
 }
 
 func eligibleInspection(tx *gorm.DB, tenantID identity.ID, inspection database.Inspection) error {
-	if inspection.Status != "COMPLETED" {
-		return apperror.New(apperror.InvalidState, "inspectionId", "completed onboarding inspection required")
-	}
-	var request database.OnboardingRequest
-	if err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, inspection.ID).First(&request).Error; err != nil {
-		return apperror.New(apperror.InvalidState, "inspectionId", "only the first onboarding inspection can become a reference")
-	}
-	if request.OriginVersionID != nil {
-		return apperror.New(apperror.InvalidState, "inspectionId", "inspection already started with a reference")
+	if !isEligibleInspection(inspection) {
+		return apperror.New(apperror.InvalidState, "inspectionId", "completed photo inspection required")
 	}
 	return nil
+}
+
+func isEligibleInspection(inspection database.Inspection) bool {
+	return inspection.Status == "COMPLETED" && inspection.MediaKind == "PHOTO"
 }
 
 func availableMedia(tx *gorm.DB, tenantID, inspectionID identity.ID) ([]Media, error) {
@@ -205,7 +219,7 @@ func availableMedia(tx *gorm.DB, tenantID, inspectionID identity.ID) ([]Media, e
 		Select("m.*").
 		Joins("JOIN inspections.responsibilities r ON r.id=m.responsibility_id AND r.tenant_id=m.tenant_id").
 		Joins("JOIN capture.capture_drafts d ON d.responsibility_id=m.responsibility_id AND d.tenant_id=m.tenant_id AND d.status='SUBMITTED'").
-		Where("m.tenant_id=? AND r.inspection_id=? AND m.status='READY' AND trim(coalesce(m.description,'')) <> ''", tenantID, inspectionID).
+		Where("m.tenant_id=? AND r.inspection_id=? AND m.media_kind='PHOTO' AND m.status='READY' AND trim(coalesce(m.description,'')) <> ''", tenantID, inspectionID).
 		Order("m.created_at,m.id").Find(&rows).Error
 	if err != nil {
 		return nil, err

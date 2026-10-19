@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -255,6 +256,9 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 		seen := make(map[string]struct{}, len(finding.EvidenceIDs))
 		pairIDs := make(map[string]struct{})
 		hasCurrent := false
+		hasOrigin := false
+		visibleCurrent := false
+		visibleOrigin := false
 		for _, evidenceID := range finding.EvidenceIDs {
 			if _, ok := known[evidenceID]; !ok {
 				return fmt.Errorf("analysis: unknown evidence reference")
@@ -265,6 +269,13 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 			seen[evidenceID] = struct{}{}
 			image := byID[evidenceID]
 			hasCurrent = hasCurrent || image.Source == "CURRENT"
+			hasOrigin = hasOrigin || image.Source == "ORIGIN"
+			if image.Source == "CURRENT" {
+				visibleCurrent = visibleCurrent || image.VisibilityKnown && image.Visible
+			}
+			if image.Source == "ORIGIN" {
+				visibleOrigin = visibleOrigin || image.VisibilityKnown && image.Visible
+			}
 			if image.PairID != "" {
 				pairIDs[image.PairID] = struct{}{}
 			}
@@ -272,11 +283,39 @@ func validateEvidence(result analysis.Result, request llm.StructuredRequest) err
 		if finding.Category != "EVIDENCE_QUALITY" && !hasCurrent {
 			return fmt.Errorf("analysis: finding requires current evidence")
 		}
+		if assertsHistoricalAbsence(finding) && (!hasOrigin || !hasCurrent || !visibleOrigin || !visibleCurrent) {
+			return fmt.Errorf("analysis: historical absence requires visible paired origin and current evidence")
+		}
+		if !comparative && assertsHistoricalChange(finding) {
+			return fmt.Errorf("analysis: current-only result cannot claim an addition, replacement, repair or new condition")
+		}
 		if len(pairIDs) > 1 {
 			return fmt.Errorf("analysis: finding mixes evidence pairs")
 		}
 	}
 	return nil
+}
+
+func assertsHistoricalAbsence(finding analysis.Finding) bool {
+	text := strings.ToLower(finding.Title + " " + finding.Description)
+	for _, claim := range []string{"removed", "no longer present", "no longer visible", "absent", "removido", "removida", "não está mais", "nao esta mais", "ausente"} {
+		if strings.Contains(text, claim) {
+			return true
+		}
+	}
+	return false
+}
+
+// assertsHistoricalChange detects claims that only a historical baseline can
+// support: something was added, replaced, repaired or is newly damaged.
+func assertsHistoricalChange(finding analysis.Finding) bool {
+	text := strings.ToLower(finding.Title + " " + finding.Description)
+	for _, claim := range []string{"added", "replaced", "repaired", "newly", "new damage", "adicionad", "substituíd", "substituid", "reparad", "consertad", "trocad", "novo dano", "nova avaria", "novo risco", "recém-", "recem-"} {
+		if strings.Contains(text, claim) {
+			return true
+		}
+	}
+	return false
 }
 
 func retryOrFallback(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job database.ComparisonJob, now time.Time, cause error) error {

@@ -11,6 +11,7 @@ import (
 
 type Command struct {
 	TenantID, ResponsibilityID          identity.ID
+	AttemptID                           *identity.ID
 	ContentType, SHA256, IdempotencyKey string
 	SizeBytes                           int64
 }
@@ -25,6 +26,9 @@ func Setup(d Dependencies) error {
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 		command := raw.(Command)
+		if command.AttemptID != nil {
+			return d.Service.CreateVideoWithAttempt(ctx, command.TenantID, command.ResponsibilityID, *command.AttemptID, command.ContentType, command.SHA256, command.SizeBytes, command.IdempotencyKey)
+		}
 		return d.Service.CreateWithKey(ctx, command.TenantID, command.ResponsibilityID, command.ContentType, command.SHA256, command.SizeBytes, command.IdempotencyKey)
 	})
 }

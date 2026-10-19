@@ -16,6 +16,7 @@ export type AcceptProcessingInput = {
   disclosureVersion: Scalars['String']['input'];
   gpsUse: Scalars['Boolean']['input'];
   photoProcessing: Scalars['Boolean']['input'];
+  videoProcessing: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 export type ActivateSegmentDefinitionInput = {
@@ -161,6 +162,12 @@ export type AuditEventConnection = {
   pageInfo: PageInfo;
 };
 
+export type BeginVideoCaptureInput = {
+  acquisitionSource: Scalars['String']['input'];
+  clientMutationId: Scalars['String']['input'];
+  replacesMediaId: InputMaybe<Scalars['ID']['input']>;
+};
+
 export type BusinessUnit = {
   __typename?: 'BusinessUnit';
   code: Scalars['String']['output'];
@@ -218,12 +225,21 @@ export type CapturePayload = {
 
 export type CaptureReferenceItem = {
   __typename?: 'CaptureReferenceItem';
+  ambiguous: Maybe<Scalars['Boolean']['output']>;
   availability: Scalars['String']['output'];
+  component: Maybe<Scalars['String']['output']>;
   description: Scalars['String']['output'];
+  environment: Maybe<Scalars['String']['output']>;
+  evidenceId: Maybe<Scalars['ID']['output']>;
+  gap: Maybe<Scalars['Boolean']['output']>;
   imageUrl: Maybe<Scalars['String']['output']>;
   imageUrlExpiresAt: Maybe<Scalars['String']['output']>;
   mediaId: Scalars['ID']['output'];
+  reason: Maybe<Scalars['String']['output']>;
   requirementKey: Scalars['String']['output'];
+  sourceMediaId: Maybe<Scalars['ID']['output']>;
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  view: Maybe<Scalars['String']['output']>;
 };
 
 export type CaptureRequirement = {
@@ -240,6 +256,12 @@ export type CaptureRequirement = {
   minimumMedia: Scalars['Int']['output'];
   required: Scalars['Boolean']['output'];
   section: Scalars['String']['output'];
+};
+
+export type CloseOriginInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  reason: Scalars['String']['input'];
+  versionId: Scalars['ID']['input'];
 };
 
 export type CompleteInternalUserActivationInput = {
@@ -279,6 +301,21 @@ export type ConfigureRetentionPolicyInput = {
   evidenceDays: Scalars['Int']['input'];
   operationalDays: Scalars['Int']['input'];
   securityDays: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ConfigureVideoAdmissionInput = {
+  clientMutationId: Scalars['String']['input'];
+  enabled: Scalars['Boolean']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  reason: Scalars['String']['input'];
+};
+
+export type ConfigureVideoPolicyInput = {
+  clientMutationId: Scalars['String']['input'];
+  currentRetentionDays: Scalars['Int']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  maxDurationMinutes: Scalars['Int']['input'];
+  originRetentionDays: Scalars['Int']['input'];
 };
 
 export type ContactInput = {
@@ -324,6 +361,7 @@ export type CreateInspectionInput = {
 };
 
 export type CreateMediaUploadInput = {
+  attemptId: InputMaybe<Scalars['ID']['input']>;
   clientMutationId: Scalars['String']['input'];
   contentType: Scalars['String']['input'];
   sha256: Scalars['String']['input'];
@@ -380,17 +418,26 @@ export type CustomerEvidenceItem = {
   __typename?: 'CustomerEvidenceItem';
   captureSource: Maybe<Scalars['String']['output']>;
   capturedAt: Maybe<Scalars['String']['output']>;
+  component: Maybe<Scalars['String']['output']>;
   description: Maybe<Scalars['String']['output']>;
+  evidenceKind: Maybe<Scalars['String']['output']>;
   flags: Array<Scalars['String']['output']>;
+  frameId: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
   label: Maybe<Scalars['String']['output']>;
   lineageId: Scalars['ID']['output'];
   mediaAvailability: Scalars['String']['output'];
+  planId: Maybe<Scalars['ID']['output']>;
+  preparationId: Maybe<Scalars['ID']['output']>;
+  ptsMicros: Maybe<Scalars['String']['output']>;
   replacedBy: Maybe<Scalars['ID']['output']>;
   requirementKey: Scalars['String']['output'];
   role: Scalars['String']['output'];
   section: Maybe<Scalars['String']['output']>;
+  sourceAvailability: Maybe<Scalars['String']['output']>;
+  sourceMediaId: Maybe<Scalars['ID']['output']>;
   state: Scalars['String']['output'];
+  timestampMs: Maybe<Scalars['Int']['output']>;
   url: Maybe<Scalars['String']['output']>;
 };
 
@@ -477,7 +524,9 @@ export type ExternalCapture = {
   confirmationOnly: Scalars['Boolean']['output'];
   disclosureVersion: Scalars['String']['output'];
   kind: Scalars['String']['output'];
+  mediaKind: Scalars['String']['output'];
   policy: Scalars['JSON']['output'];
+  recaptureDeadlineAt: Maybe<Scalars['String']['output']>;
   recaptureRequestId: Maybe<Scalars['ID']['output']>;
   reference: Scalars['JSON']['output'];
   referenceItems: Array<CaptureReferenceItem>;
@@ -537,13 +586,26 @@ export type Inspection = {
   assetId: Scalars['ID']['output'];
   assetName: Maybe<Scalars['String']['output']>;
   businessUnitId: Scalars['ID']['output'];
+  comparisonMode: Maybe<Scalars['String']['output']>;
   deadlineAt: Scalars['String']['output'];
   dueAt: Scalars['String']['output'];
   evidenceCount: Scalars['Int']['output'];
   id: Scalars['ID']['output'];
+  mediaKind: Scalars['String']['output'];
+  originPromotionFailure: Maybe<Scalars['String']['output']>;
+  originPromotionStatus: Maybe<Scalars['String']['output']>;
   participantId: Scalars['ID']['output'];
   participantName: Maybe<Scalars['String']['output']>;
   projectId: Maybe<Scalars['ID']['output']>;
+  promotedOriginIsActive: Maybe<Scalars['Boolean']['output']>;
+  promotedOriginMediaKind: Maybe<Scalars['String']['output']>;
+  promotedOriginVersionId: Maybe<Scalars['ID']['output']>;
+  promotedOriginVersionNumber: Maybe<Scalars['Int']['output']>;
+  referenceIsActive: Maybe<Scalars['Boolean']['output']>;
+  referenceMediaKind: Maybe<Scalars['String']['output']>;
+  referenceVersionId: Maybe<Scalars['ID']['output']>;
+  referenceVersionNumber: Maybe<Scalars['Int']['output']>;
+  referenceVersionStatus: Maybe<Scalars['String']['output']>;
   reminderInstants: Array<Scalars['String']['output']>;
   source: Scalars['String']['output'];
   sourceReason: Maybe<Scalars['String']['output']>;
@@ -741,8 +803,10 @@ export type LlmUsageFilter = {
 
 export type LegalHoldInput = {
   clientMutationId: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
+  inspectionId: InputMaybe<Scalars['ID']['input']>;
+  originVersionId: InputMaybe<Scalars['ID']['input']>;
   reason: Scalars['String']['input'];
+  sourceMediaId: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type MarkNotificationReadInput = {
@@ -773,6 +837,8 @@ export type Media = {
   description: Maybe<Scalars['String']['output']>;
   flags: Array<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  mediaKind: Scalars['String']['output'];
+  preparationStatus: Maybe<Scalars['String']['output']>;
   replacesMediaId: Maybe<Scalars['ID']['output']>;
   requirementKey: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
@@ -837,8 +903,10 @@ export type Mutation = {
   archiveAsset: AssetPayload;
   archiveBusinessUnit: BusinessUnitPayload;
   assignRoleScopes: MembershipPayload;
+  beginVideoCapture: VideoAttemptPayload;
   cancelInspection: InspectionPayload;
   cancelSchedule: SchedulePayload;
+  closeOriginInvitation: OriginVersionPayload;
   closeProject: ProjectPayload;
   completeInternalUserActivation: InternalUserActivationPayload;
   completeMediaUpload: MediaPayload;
@@ -846,6 +914,8 @@ export type Mutation = {
   configureMyNotificationPreferences: NotificationPreferencesPayload;
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
+  configureVideoAdmission: VideoAdmissionPayload;
+  configureVideoPolicy: VideoPolicyPayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
   correctOnboardingResponsibleEmail: OnboardingPayload;
   createBusinessUnit: BusinessUnitPayload;
@@ -866,19 +936,23 @@ export type Mutation = {
   planInspection: PlanInspectionPayload;
   presignMediaParts: PresignedPartsPayload;
   promoteInspectionPhotos: OriginPromotionPayload;
+  promoteInspectionVideo: OriginVersionPayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
   publishTemplateVersion: TemplatePayload;
+  reanalyzeVideoInspection: ReanalyzeVideoInspectionPayload;
   recordDeletionRequest: RetentionMutationPayload;
   registerAsset: AssetPayload;
   releaseLegalHold: RetentionMutationPayload;
   reopenProject: ProjectPayload;
+  reprocessVideoPreparation: VideoPreparationPayload;
   requestAdminActivationOtp: OnboardingPayload;
   requestInternalUserActivationOtp: InternalUserActivationPayload;
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
   requestRecapture: RecapturePayload;
   resendInternalUserInvitation: MembershipPayload;
+  retryVideoPreparation: VideoPreparationPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
   saveOnboardingStep: OnboardingPayload;
@@ -948,6 +1022,11 @@ export type MutationAssignRoleScopesArgs = {
 };
 
 
+export type MutationBeginVideoCaptureArgs = {
+  input: BeginVideoCaptureInput;
+};
+
+
 export type MutationCancelInspectionArgs = {
   input: InspectionTransitionInput;
 };
@@ -955,6 +1034,11 @@ export type MutationCancelInspectionArgs = {
 
 export type MutationCancelScheduleArgs = {
   input: CancelScheduleInput;
+};
+
+
+export type MutationCloseOriginInvitationArgs = {
+  input: CloseOriginInvitationInput;
 };
 
 
@@ -990,6 +1074,16 @@ export type MutationConfigurePublicationPolicyArgs = {
 
 export type MutationConfigureRetentionPolicyArgs = {
   input: ConfigureRetentionPolicyInput;
+};
+
+
+export type MutationConfigureVideoAdmissionArgs = {
+  input: ConfigureVideoAdmissionInput;
+};
+
+
+export type MutationConfigureVideoPolicyArgs = {
+  input: ConfigureVideoPolicyInput;
 };
 
 
@@ -1093,6 +1187,11 @@ export type MutationPromoteInspectionPhotosArgs = {
 };
 
 
+export type MutationPromoteInspectionVideoArgs = {
+  input: PromoteInspectionVideoInput;
+};
+
+
 export type MutationPublishReportArgs = {
   input: PublishReportInput;
 };
@@ -1105,6 +1204,11 @@ export type MutationPublishSegmentDefinitionArgs = {
 
 export type MutationPublishTemplateVersionArgs = {
   input: PublishTemplateVersionInput;
+};
+
+
+export type MutationReanalyzeVideoInspectionArgs = {
+  input: ReanalyzeVideoInspectionInput;
 };
 
 
@@ -1125,6 +1229,11 @@ export type MutationReleaseLegalHoldArgs = {
 
 export type MutationReopenProjectArgs = {
   input: ReopenProjectInput;
+};
+
+
+export type MutationReprocessVideoPreparationArgs = {
+  input: ReprocessVideoPreparationInput;
 };
 
 
@@ -1155,6 +1264,11 @@ export type MutationRequestRecaptureArgs = {
 
 export type MutationResendInternalUserInvitationArgs = {
   input: ResendInternalUserInvitationInput;
+};
+
+
+export type MutationRetryVideoPreparationArgs = {
+  input: RetryVideoPreparationInput;
 };
 
 
@@ -1450,6 +1564,7 @@ export type OriginPromotion = {
   failureReason: Maybe<Scalars['String']['output']>;
   inspectionId: Scalars['ID']['output'];
   originVersionId: Maybe<Scalars['ID']['output']>;
+  selectedMediaIds: Array<Scalars['ID']['output']>;
   status: Scalars['String']['output'];
 };
 
@@ -1470,11 +1585,19 @@ export type OriginPromotionPayload = {
 export type OriginVersion = {
   __typename?: 'OriginVersion';
   activatedAt: Maybe<Scalars['String']['output']>;
+  captureSubmitted: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
+  limitedCoverage: Scalars['Boolean']['output'];
+  mediaKind: Scalars['String']['output'];
   originId: Scalars['ID']['output'];
+  preparationStatus: Maybe<Scalars['String']['output']>;
+  scopeManifestDigest: Maybe<Scalars['String']['output']>;
+  selectable: Scalars['Boolean']['output'];
+  sourceAvailability: Maybe<Scalars['String']['output']>;
   status: Scalars['String']['output'];
   supersedesId: Maybe<Scalars['ID']['output']>;
   versionNumber: Scalars['Int']['output'];
+  videoPreparationId: Maybe<Scalars['ID']['output']>;
 };
 
 export type OriginVersionConnection = {
@@ -1555,6 +1678,7 @@ export type PlanInspectionInput = {
   projectId: InputMaybe<Scalars['ID']['input']>;
   projectName: InputMaybe<Scalars['String']['input']>;
   reason: InputMaybe<Scalars['String']['input']>;
+  referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: InputMaybe<Array<Scalars['String']['input']>>;
   reminderOffsetsMinutes: InputMaybe<Array<Scalars['Int']['input']>>;
   rrule: InputMaybe<Scalars['String']['input']>;
@@ -1708,6 +1832,11 @@ export type PromoteInspectionPhotosInput = {
   mediaIds: Array<Scalars['ID']['input']>;
 };
 
+export type PromoteInspectionVideoInput = {
+  clientMutationId: Scalars['String']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
 export type PublicationPolicy = {
   __typename?: 'PublicationPolicy';
   mode: Scalars['String']['output'];
@@ -1791,6 +1920,12 @@ export type Query = {
   triageInspections: TriageInspectionConnection;
   triageWorkspace: TriageWorkspace;
   usageSummary: UsageSummary;
+  videoAdmission: VideoAdmission;
+  videoPolicy: VideoPolicy;
+  videoPreparation: VideoPreparationStatus;
+  videoPreparationEvidence: VideoPreparationEvidenceConnection;
+  videoPreparations: VideoPreparationConnection;
+  videoUploadStatus: VideoUploadStatus;
 };
 
 
@@ -2050,6 +2185,44 @@ export type QueryUsageSummaryArgs = {
   to: InputMaybe<Scalars['String']['input']>;
 };
 
+
+export type QueryVideoPreparationArgs = {
+  mediaId: Scalars['ID']['input'];
+};
+
+
+export type QueryVideoPreparationEvidenceArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  preparationId: Scalars['ID']['input'];
+};
+
+
+export type QueryVideoPreparationsArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  status: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryVideoUploadStatusArgs = {
+  mediaId: Scalars['ID']['input'];
+};
+
+export type ReanalyzeVideoInspectionInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedPlanId: Scalars['ID']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
+export type ReanalyzeVideoInspectionPayload = {
+  __typename?: 'ReanalyzeVideoInspectionPayload';
+  clientMutationId: Scalars['String']['output'];
+  generation: Maybe<Scalars['Int']['output']>;
+  planId: Maybe<Scalars['ID']['output']>;
+  userErrors: Array<UserError>;
+};
+
 export type Recapture = {
   __typename?: 'Recapture';
   deadlineAt: Maybe<Scalars['String']['output']>;
@@ -2105,8 +2278,10 @@ export type RecipientNotificationPayload = {
 
 export type RecordDeletionRequestInput = {
   clientMutationId: Scalars['String']['input'];
-  inspectionId: Scalars['ID']['input'];
+  inspectionId: InputMaybe<Scalars['ID']['input']>;
+  originVersionId: InputMaybe<Scalars['ID']['input']>;
   reason: InputMaybe<Scalars['String']['input']>;
+  sourceMediaId: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type RegisterAssetInput = {
@@ -2128,7 +2303,7 @@ export type Report = {
   classification: Scalars['String']['output'];
   context: ReportContext;
   createdAt: Scalars['String']['output'];
-  evidence: Array<ReportEvidence>;
+  evidence: ReportEvidenceConnection;
   findings: Array<ReportFinding>;
   html: Scalars['String']['output'];
   htmlDigest: Scalars['String']['output'];
@@ -2141,6 +2316,12 @@ export type Report = {
   requirements: Array<ReportRequirement>;
   timeline: Array<ReportTimelineEntry>;
   version: Scalars['Int']['output'];
+};
+
+
+export type ReportEvidenceArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type ReportAssetContext = {
@@ -2180,13 +2361,29 @@ export type ReportEvidence = {
   availability: Scalars['String']['output'];
   captureSource: Maybe<Scalars['String']['output']>;
   capturedAt: Maybe<Scalars['String']['output']>;
+  component: Maybe<Scalars['String']['output']>;
   description: Maybe<Scalars['String']['output']>;
   displayDigest: Maybe<Scalars['String']['output']>;
+  evidenceKind: Maybe<Scalars['String']['output']>;
   flags: Array<Scalars['String']['output']>;
+  frameId: Maybe<Scalars['ID']['output']>;
   id: Scalars['ID']['output'];
+  label: Maybe<Scalars['String']['output']>;
+  planId: Maybe<Scalars['ID']['output']>;
+  preparationId: Maybe<Scalars['ID']['output']>;
+  ptsMicros: Maybe<Scalars['String']['output']>;
   requirementKey: Scalars['String']['output'];
   role: Scalars['String']['output'];
+  sourceAvailability: Maybe<Scalars['String']['output']>;
+  sourceMediaId: Maybe<Scalars['ID']['output']>;
+  timestampMs: Maybe<Scalars['Int']['output']>;
   url: Maybe<Scalars['String']['output']>;
+};
+
+export type ReportEvidenceConnection = {
+  __typename?: 'ReportEvidenceConnection';
+  nodes: Array<ReportEvidence>;
+  pageInfo: PageInfo;
 };
 
 export type ReportFinding = {
@@ -2277,6 +2474,13 @@ export type ReportTimelineEntry = {
   status: Scalars['String']['output'];
 };
 
+export type ReprocessVideoPreparationInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedPreparationVersion: Scalars['Int']['input'];
+  mediaId: Scalars['ID']['input'];
+  profileDigest: Scalars['String']['input'];
+};
+
 export type RequestAdminActivationOtpInput = {
   activationToken: InputMaybe<Scalars['String']['input']>;
   clientMutationId: Scalars['String']['input'];
@@ -2361,6 +2565,12 @@ export type RetentionPolicyPayload = {
   clientMutationId: Scalars['String']['output'];
   policy: Maybe<RetentionPolicy>;
   userErrors: Array<UserError>;
+};
+
+export type RetryVideoPreparationInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedPreparationVersion: Scalars['Int']['input'];
+  mediaId: Scalars['ID']['input'];
 };
 
 export type RevokeInvitationInput = {
@@ -2508,6 +2718,7 @@ export type Submission = {
   __typename?: 'Submission';
   complete: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
+  preparationPending: Scalars['Boolean']['output'];
   requiresAttention: Scalars['Boolean']['output'];
   submittedAt: Scalars['String']['output'];
 };
@@ -2559,6 +2770,8 @@ export type TemplateVersion = {
   canonicalDigest: Scalars['String']['output'];
   definition: Scalars['JSON']['output'];
   id: Scalars['ID']['output'];
+  isVideo: Scalars['Boolean']['output'];
+  mediaKind: Scalars['String']['output'];
   publishedAt: Scalars['String']['output'];
   schemaVersion: Scalars['Int']['output'];
   status: Scalars['String']['output'];
@@ -2806,4 +3019,123 @@ export type VerifyOnboardingOtpInput = {
   clientMutationId: Scalars['String']['input'];
   code: Scalars['String']['input'];
   sessionLocator: Scalars['String']['input'];
+};
+
+export type VideoAdmission = {
+  __typename?: 'VideoAdmission';
+  changedAt: Scalars['String']['output'];
+  enabled: Scalars['Boolean']['output'];
+  reason: Maybe<Scalars['String']['output']>;
+  version: Scalars['Int']['output'];
+};
+
+export type VideoAdmissionPayload = {
+  __typename?: 'VideoAdmissionPayload';
+  admission: Maybe<VideoAdmission>;
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type VideoAttempt = {
+  __typename?: 'VideoAttempt';
+  acquisitionSource: Scalars['String']['output'];
+  admittedAt: Scalars['String']['output'];
+  expiresAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  maxBytes: Scalars['Int']['output'];
+  maxDurationSeconds: Scalars['Int']['output'];
+  policyVersion: Scalars['Int']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type VideoAttemptPayload = {
+  __typename?: 'VideoAttemptPayload';
+  attempt: Maybe<VideoAttempt>;
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type VideoPolicy = {
+  __typename?: 'VideoPolicy';
+  currentRetentionDays: Scalars['Int']['output'];
+  maxDurationMinutes: Scalars['Int']['output'];
+  originRetentionDays: Scalars['Int']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type VideoPolicyPayload = {
+  __typename?: 'VideoPolicyPayload';
+  clientMutationId: Scalars['String']['output'];
+  policy: Maybe<VideoPolicy>;
+  userErrors: Array<UserError>;
+};
+
+export type VideoPreparationConnection = {
+  __typename?: 'VideoPreparationConnection';
+  nodes: Array<VideoPreparationStatus>;
+  pageInfo: PageInfo;
+};
+
+export type VideoPreparationEvidenceConnection = {
+  __typename?: 'VideoPreparationEvidenceConnection';
+  nodes: Array<VideoPreparationEvidenceItem>;
+  pageInfo: PageInfo;
+};
+
+export type VideoPreparationEvidenceItem = {
+  __typename?: 'VideoPreparationEvidenceItem';
+  component: Maybe<Scalars['String']['output']>;
+  environment: Maybe<Scalars['String']['output']>;
+  frameId: Maybe<Scalars['ID']['output']>;
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  label: Maybe<Scalars['String']['output']>;
+  preparationId: Maybe<Scalars['ID']['output']>;
+  ptsMicros: Maybe<Scalars['String']['output']>;
+  role: Maybe<Scalars['String']['output']>;
+  sourceMediaId: Maybe<Scalars['ID']['output']>;
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  view: Maybe<Scalars['String']['output']>;
+};
+
+export type VideoPreparationPayload = {
+  __typename?: 'VideoPreparationPayload';
+  clientMutationId: Scalars['String']['output'];
+  preparation: Maybe<VideoPreparationStatus>;
+  userErrors: Array<UserError>;
+};
+
+export type VideoPreparationStatus = {
+  __typename?: 'VideoPreparationStatus';
+  attempts: Scalars['Int']['output'];
+  errorCode: Scalars['String']['output'];
+  firstFrameReadyAt: Maybe<Scalars['String']['output']>;
+  manifestDigest: Scalars['String']['output'];
+  mediaId: Scalars['ID']['output'];
+  preparationId: Scalars['ID']['output'];
+  preparationVersion: Scalars['Int']['output'];
+  processedFrames: Scalars['Int']['output'];
+  retryable: Scalars['Boolean']['output'];
+  sourceAvailable: Scalars['Boolean']['output'];
+  sourceExpiryAt: Maybe<Scalars['String']['output']>;
+  stage: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type VideoReceivedPart = {
+  __typename?: 'VideoReceivedPart';
+  etag: Scalars['String']['output'];
+  partNumber: Scalars['Int']['output'];
+  sizeBytes: Scalars['Int']['output'];
+};
+
+export type VideoUploadStatus = {
+  __typename?: 'VideoUploadStatus';
+  confirmedParts: Array<VideoReceivedPart>;
+  expiresAt: Scalars['String']['output'];
+  mediaId: Scalars['ID']['output'];
+  missingParts: Array<Scalars['Int']['output']>;
+  receivedParts: Array<Scalars['Int']['output']>;
+  status: Scalars['String']['output'];
 };

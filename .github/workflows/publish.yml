@@ -132,15 +132,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p upload
-          git archive --format=tar.gz --output=upload/source-bundle.tgz "$SOURCE_SHA" deploy/oci deploy/keycloak
-          bundle_sha="$(sha256sum upload/source-bundle.tgz | awk '{print $1}')"
+          git archive --format=tar.gz --output=upload/bundle.tgz "$SOURCE_SHA" deploy/oci deploy/keycloak
+          bundle_sha="$(sha256sum upload/bundle.tgz | awk '{print $1}')"
           if [[ "$OPERATION" == deploy ]]; then
             case "$SCOPE" in
-              changed) targets="$(jq -r '.suggestedTargets | join(",")' "$RUNNER_TEMP/inspection-publish-inputs/candidate.json")" ;;
-              all) targets=api,worker,scheduler,operations,admin,dashboard,capture,onboarding,keycloak ;;
+              changed) targets='' ;;
+              all) targets='' ;;
               selected) targets="$TARGETS_INPUT" ;;
             esac
-            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --candidate "$RUNNER_TEMP/inspection-publish-inputs/candidate.json" --targets "$targets" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json
+            planner_args=(--active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --candidate "$RUNNER_TEMP/inspection-publish-inputs/candidate.json" --targets "$targets" --scope "$SCOPE" --repo "$GITHUB_WORKSPACE" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json)
+            python3 deploy/oci/planner.py "${planner_args[@]}"
           else
             [[ -n "$TARGETS_INPUT" ]] || { echo 'Rollback requires explicit targets.' >&2; exit 2; }
             python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --rollback-from "$RUNNER_TEMP/inspection-publish-inputs/rollback.env" --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --bundle-sha256 "$bundle_sha" --output plan.json
@@ -223,7 +224,6 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > known_hosts
           chmod 0600 deploy_key known_hosts
-          cp package/source-bundle.tgz package/bundle.tgz
           tar -czf package.tar.gz -C package plan.json bundle.tgz
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
           accepted=0
@@ -253,5 +253,5 @@ jobs:
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" 'export-state current' > active.env
           grep -qx "DEPLOYMENT_ID=$DEPLOYMENT_ID" active.env
           grep -qx "PLAN_SHA256=$PLAN_SHA" active.env
-          test "$(grep -c '_IMAGE=' active.env)" -eq 14
+          test "$(grep -c '_IMAGE=' active.env)" -eq 15
           gh release create "state-$DEPLOYMENT_ID" active.env --repo "${GITHUB_REPOSITORY}" --target "${{ needs.plan.outputs.source_sha }}" --title "state-$DEPLOYMENT_ID" --notes "Host-verified active composition after applying plan $PLAN_SHA."

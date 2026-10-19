@@ -32,6 +32,15 @@ variable "bucket_name" {
 }
 variable "namespace" { type = string }
 variable "alert_topic_ocid" { type = string }
+variable "graphql_request_p95_threshold_seconds" {
+  description = "Warning threshold for API GraphQL request p95 latency."
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.graphql_request_p95_threshold_seconds > 0
+    error_message = "The GraphQL p95 latency threshold must be positive."
+  }
+}
 variable "secret_ocids" {
   description = "Map of approved runtime secret names to OCI Vault secret OCIDs."
   type        = map(string)

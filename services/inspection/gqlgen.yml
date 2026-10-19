@@ -8,6 +8,10 @@ models:
   JSON:
     model:
       - github.com/99designs/gqlgen/graphql.Map
+  Report:
+    fields:
+      evidence:
+        resolver: true
 resolver:
   layout: follow-schema
   dir: internal/platform/graphql/resolvers

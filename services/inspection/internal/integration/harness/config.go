@@ -13,25 +13,24 @@ import (
 // Values are intentionally environment-driven so the same harness can run
 // against Docker Compose, CI services, or an ephemeral test environment.
 type Config struct {
-	DatabaseURL             string
-	RuntimeDatabaseURL      string
-	RuntimeDatabasePassword string
-	MigrationDatabaseURL    string
-	RabbitMQURL             string
-	APIURL                  string
-	LiteLLMURL              string
-	TwilioURL               string
-	MetaURL                 string
-	MailpitURL              string
-	MailpitSMTPAddress      string
-	MinIOEndpoint           string
-	MinIOAccessKey          string
-	MinIOSecretKey          string
-	MinIOBucket             string
-	MinIOSecure             bool
-	RequestTimeout          time.Duration
-	PollInterval            time.Duration
-	Migrate                 bool
+	DatabaseURL          string
+	RuntimeDatabaseURL   string
+	MigrationDatabaseURL string
+	RabbitMQURL          string
+	APIURL               string
+	LiteLLMURL           string
+	TwilioURL            string
+	MetaURL              string
+	MailpitURL           string
+	MailpitSMTPAddress   string
+	MinIOEndpoint        string
+	MinIOAccessKey       string
+	MinIOSecretKey       string
+	MinIOBucket          string
+	MinIOSecure          bool
+	RequestTimeout       time.Duration
+	PollInterval         time.Duration
+	Migrate              bool
 }
 
 // LiveSmokeConfig contains only explicit live-provider settings. It never
@@ -66,28 +65,24 @@ type LiveSmokeConfig struct {
 // overrides before the regular service environment variables.
 func ConfigFromEnv() Config {
 	cfg := Config{
-		DatabaseURL:             firstEnv("INSPECTION_TEST_DATABASE_URL", "INSPECTION_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable"),
-		RuntimeDatabaseURL:      firstEnv("INSPECTION_TEST_RUNTIME_DATABASE_URL", "INSPECTION_RUNTIME_DATABASE_URL"),
-		RuntimeDatabasePassword: firstEnv("INSPECTION_TEST_RUNTIME_PASSWORD", "INSPECTION_RUNTIME_DATABASE_PASSWORD"),
-		MigrationDatabaseURL:    firstEnv("INSPECTION_TEST_MIGRATION_DATABASE_URL", "INSPECTION_TEST_DATABASE_URL", "INSPECTION_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable"),
-		RabbitMQURL:             firstEnv("INSPECTION_TEST_RABBITMQ_URL", "INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
-		APIURL:                  firstEnv("INSPECTION_TEST_API_URL", "INSPECTION_API_URL", "http://localhost:8080"),
-		LiteLLMURL:              firstEnv("INSPECTION_TEST_LITELLM_URL", "INSPECTION_LITELLM_URL", "http://localhost:18080"),
-		TwilioURL:               firstEnv("INSPECTION_TEST_TWILIO_URL", "INSPECTION_TWILIO_BASE_URL", "http://localhost:1081"),
-		MetaURL:                 firstEnv("INSPECTION_TEST_META_URL", "META_BASE_URL", "http://localhost:1082"),
-		MailpitURL:              firstEnv("INSPECTION_TEST_MAILPIT_URL", "http://localhost:8026"),
-		MailpitSMTPAddress:      firstEnv("INSPECTION_TEST_MAILPIT_SMTP", "localhost:1026"),
-		MinIOEndpoint:           firstEnv("INSPECTION_TEST_MINIO_ENDPOINT", "INSPECTION_MINIO_ENDPOINT", "localhost:9000"),
-		MinIOAccessKey:          firstEnv("INSPECTION_TEST_MINIO_ACCESS_KEY", "INSPECTION_MINIO_ACCESS_KEY", "inspection"),
-		MinIOSecretKey:          firstEnv("INSPECTION_TEST_MINIO_SECRET_KEY", "INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"),
-		MinIOBucket:             firstEnv("INSPECTION_TEST_MINIO_BUCKET", "INSPECTION_MINIO_BUCKET", "inspection-private"),
-		MinIOSecure:             envBool("INSPECTION_TEST_MINIO_SECURE", false),
-		RequestTimeout:          envDuration("INSPECTION_TEST_TIMEOUT", 30*time.Second),
-		PollInterval:            envDuration("INSPECTION_TEST_POLL_INTERVAL", 100*time.Millisecond),
-		Migrate:                 envBool("INSPECTION_TEST_MIGRATE", true),
-	}
-	if cfg.RuntimeDatabasePassword == "" {
-		cfg.RuntimeDatabasePassword = "runtime-test"
+		DatabaseURL:          firstEnv("INSPECTION_TEST_DATABASE_URL", "INSPECTION_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable"),
+		RuntimeDatabaseURL:   firstEnv("INSPECTION_TEST_RUNTIME_DATABASE_URL", "INSPECTION_RUNTIME_DATABASE_URL"),
+		MigrationDatabaseURL: firstEnv("INSPECTION_TEST_MIGRATION_DATABASE_URL", "INSPECTION_TEST_DATABASE_URL", "INSPECTION_DATABASE_URL", "postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable"),
+		RabbitMQURL:          firstEnv("INSPECTION_TEST_RABBITMQ_URL", "INSPECTION_RABBITMQ_URL", "amqp://inspection:inspection@localhost:5672/"),
+		APIURL:               firstEnv("INSPECTION_TEST_API_URL", "INSPECTION_API_URL", "http://localhost:8080"),
+		LiteLLMURL:           firstEnv("INSPECTION_TEST_LITELLM_URL", "INSPECTION_LITELLM_URL", "http://localhost:18080"),
+		TwilioURL:            firstEnv("INSPECTION_TEST_TWILIO_URL", "INSPECTION_TWILIO_BASE_URL", "http://localhost:1081"),
+		MetaURL:              firstEnv("INSPECTION_TEST_META_URL", "META_BASE_URL", "http://localhost:1082"),
+		MailpitURL:           firstEnv("INSPECTION_TEST_MAILPIT_URL", "http://localhost:8026"),
+		MailpitSMTPAddress:   firstEnv("INSPECTION_TEST_MAILPIT_SMTP", "localhost:1026"),
+		MinIOEndpoint:        firstEnv("INSPECTION_TEST_MINIO_ENDPOINT", "INSPECTION_MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey:       firstEnv("INSPECTION_TEST_MINIO_ACCESS_KEY", "INSPECTION_MINIO_ACCESS_KEY", "inspection"),
+		MinIOSecretKey:       firstEnv("INSPECTION_TEST_MINIO_SECRET_KEY", "INSPECTION_MINIO_SECRET_KEY", "inspection-local-secret"),
+		MinIOBucket:          firstEnv("INSPECTION_TEST_MINIO_BUCKET", "INSPECTION_MINIO_BUCKET", "inspection-private"),
+		MinIOSecure:          envBool("INSPECTION_TEST_MINIO_SECURE", false),
+		RequestTimeout:       envDuration("INSPECTION_TEST_TIMEOUT", 30*time.Second),
+		PollInterval:         envDuration("INSPECTION_TEST_POLL_INTERVAL", 100*time.Millisecond),
+		Migrate:              envBool("INSPECTION_TEST_MIGRATE", true),
 	}
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = "postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable"

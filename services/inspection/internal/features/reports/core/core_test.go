@@ -48,6 +48,30 @@ func TestCanonicalJSONIsStable(t *testing.T) {
 	}
 }
 
+func TestVideoFrameEvidenceRequiresExactImmutableLineage(t *testing.T) {
+	snapshot := validSnapshot()
+	timestamp := int64(70123)
+	ptsMicros := int64(70123456)
+	snapshot.Evidence = []Evidence{{ID: "frame-1", RequirementKey: "video:sink", Role: "CURRENT", EvidenceKind: "VIDEO_FRAME", FrameID: "frame-1", SourceMediaID: "source-1", PreparationID: "prep-1", PTSMicros: &ptsMicros, TimestampMS: &timestamp, FrameDigest: strings.Repeat("a", 64), SourceAvailability: "EXPIRED"}}
+	if err := Validate(snapshot); err != nil {
+		t.Fatalf("valid retained frame evidence rejected: %v", err)
+	}
+	data, _, err := CanonicalJSON(snapshot)
+	if err != nil || !strings.Contains(string(data), `"ptsMicros":70123456`) || !strings.Contains(string(data), `"timestampMs":70123`) {
+		t.Fatalf("canonical snapshot lost exact PTS or display timestamp: %s, %v", data, err)
+	}
+	snapshot.Evidence[0].TimestampMS = ptrInt64(70124)
+	if err := Validate(snapshot); err == nil {
+		t.Fatal("frame with inconsistent display timestamp accepted")
+	}
+	snapshot.Evidence[0].TimestampMS = nil
+	if err := Validate(snapshot); err == nil {
+		t.Fatal("frame without exact source timestamp accepted")
+	}
+}
+
+func ptrInt64(value int64) *int64 { return &value }
+
 func TestHTMLIsInternalAndEscaped(t *testing.T) {
 	snapshot := validSnapshot()
 	snapshot.Advisory = "<script>unsafe</script>"

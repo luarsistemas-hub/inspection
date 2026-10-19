@@ -57,6 +57,9 @@ Every row must end in one of these verified outcomes:
 | 34 | `onboardingDefinition` | Onboarding | New contract | Versioned segment metadata drives the public real-estate steps, origin modes, purposes, and pinned catalog references. |
 | 35 | `onboardingSession` | Onboarding | New contract | Server-confirmed public progress resumes from an opaque HttpOnly session with monotonic step state. |
 | 36 | `onboardingStatus` | Onboarding | New contract | Public onboarding observes the real responsible delivery/access state and can correct a pending recipient safely. |
+| 38 | `videoPreparation` | Admin; Dashboard | New contract | Authorized operators inspect durable preparation stage, frame counts, safe failure state, and original availability. |
+| 39 | `videoPreparationEvidence` | Admin; Dashboard | New contract | Authorized operators page scope observations and retained frames within one immutable preparation cursor. |
+| 40 | `videoPreparations` | Admin | New contract | Tenant operators filter durable video preparations by status and page stage, attempts, safe errors, retryability, and source availability. |
 
 ## Mutations
 
@@ -88,6 +91,7 @@ Every row must end in one of these verified outcomes:
 | 24 | `activateOriginVersion` | Admin | Missing UI | Make one verified immutable origin version the future comparison reference. |
 | 25 | `invalidateOriginVersion` | Admin | Missing UI | Invalidate future use with visible reason/history while preserving the original. |
 | 63 | `promoteInspectionPhotos` | Dashboard | Used | Tenant admin or manager selects first-onboarding evidence for resumable copy, immutable origin activation, and future comparisons. |
+| 64 | `promoteInspectionVideo` | Dashboard | Used | Tenant admin or manager promotes a completed video inspection's retained frame bank as the property's immutable video origin. |
 | 26 | `createSchedule` | Dashboard | Missing UI | Schedule creation with recurrence preview, timezone, deadline, reminders, and dependencies. |
 | 27 | `updateSchedule` | Dashboard | Missing UI | Version-safe recurrence/deadline/reminder update with next-due preview. |
 | 28 | `cancelSchedule` | Dashboard | Missing UI | Stop future generation and retain historical inspections. |
@@ -128,6 +132,10 @@ Every row must end in one of these verified outcomes:
 | 62 | `setAdminInitialPassword` | Onboarding | New contract | First password is sent only through the confidential Keycloak adapter and activation is retryable. |
 | 63 | `correctOnboardingResponsibleEmail` | Onboarding | New contract | Public onboarding double-confirms a pending responsible email, revokes the old link, and reissues atomically. |
 | 64 | `correctInspectionResponsibleEmail` | Admin | New contract | Authorized governance users correct or reissue a pending inspection invitation within the business-unit scope. |
+| 65 | `retryVideoPreparation` | Admin | New contract | Authorized operators retry an eligible failed preparation against the same retained source using optimistic preparation versioning and an audit record. |
+| 66 | `reprocessVideoPreparation` | Admin | New contract | Authorized operators create an immutable preparation generation using a deployed profile digest while preserving the original first-readiness anchor. |
+| 67 | `reanalyzeVideoInspection` | Dashboard | New contract | Authorized operators queue an audited video plan generation against the active plan's pinned submission and reference. |
+| 68 | `closeOriginInvitation` | Admin | New contract | Close a draft origin invitation by version, revoke scoped access, and preserve audit history. |
 
 ## Required Backend Capabilities Not Yet Represented Adequately
 

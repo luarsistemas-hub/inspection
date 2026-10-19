@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"regexp"
@@ -53,8 +54,10 @@ func (s Service) Upsert(ctx context.Context, tenantID, businessUnitID identity.I
 		var current database.Participant
 		if err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 			return tx.Where("tenant_id=? AND id=?", tenantID, *participantID).First(&current).Error
-		}); err != nil {
+		}); errors.Is(err, gorm.ErrRecordNotFound) {
 			return ParticipantView{}, apperror.New(apperror.NotFound, "participantId", "participant not found")
+		} else if err != nil {
+			return ParticipantView{}, err
 		}
 		if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: current.BusinessUnitID}, true); err != nil {
 			return ParticipantView{}, err
@@ -152,7 +155,11 @@ func ensureDefaultEmailSelection(tx *gorm.DB, tenantID, participantID identity.I
 			continue
 		}
 		var row database.ParticipantContact
-		if err := tx.Where("tenant_id=? AND participant_id=? AND channel='EMAIL' AND normalized=? AND active=true", tenantID, participantID, contact.Value).First(&row).Error; err != nil {
+		err := tx.Table("participants.contacts AS c").Select("c.*").Joins("JOIN participants.contact_verifications AS v ON v.tenant_id=c.tenant_id AND v.contact_id=c.id AND v.status='VERIFIED'").Where("c.tenant_id=? AND c.participant_id=? AND c.channel='EMAIL' AND c.normalized=? AND c.active=true", tenantID, participantID, contact.Value).Take(&row).Error
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				continue
+			}
 			return err
 		}
 		selection := database.ChannelSelection{ID: identity.NewID(), TenantID: tenantID, ParticipantID: participantID, ContactID: row.ID, CreatedAt: now}
@@ -235,12 +242,6 @@ func (s Service) SetChannels(ctx context.Context, tenantID, participantID identi
 		if err := s.load(tx, &result); err != nil {
 			return err
 		}
-		if sameIDs(result.Selected, unique) {
-			return nil
-		}
-		if p.Version != expectedVersion {
-			return apperror.New(apperror.Conflict, "version", "stale participant version")
-		}
 		for id := range unique {
 			var count int64
 			err := tx.Table("participants.contacts c").Joins("JOIN participants.contact_verifications v ON v.contact_id=c.id AND v.tenant_id=c.tenant_id").Where("c.tenant_id=? AND c.participant_id=? AND c.id=? AND c.active=true AND v.status='VERIFIED'", tenantID, participantID, id).Count(&count).Error
@@ -250,6 +251,12 @@ func (s Service) SetChannels(ctx context.Context, tenantID, participantID identi
 			if count == 0 {
 				return apperror.New(apperror.InvalidState, "contactIds", "selected channel must be verified and active")
 			}
+		}
+		if sameIDs(result.Selected, unique) {
+			return nil
+		}
+		if p.Version != expectedVersion {
+			return apperror.New(apperror.Conflict, "version", "stale participant version")
 		}
 		if err := tx.Where("tenant_id=? AND participant_id=?", tenantID, participantID).Delete(&database.ChannelSelection{}).Error; err != nil {
 			return err

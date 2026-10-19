@@ -53,3 +53,22 @@ func TestMetricsNeverPromoteUntrustedLabels(t *testing.T) {
 		t.Fatalf("unsafe metric label: %s", output)
 	}
 }
+
+func TestObserveHTTPRequestUsesBoundedLabelsAndLatencyBuckets(t *testing.T) {
+	m := NewMetrics()
+	m.ObserveHTTPRequest("/graphql/tenant-secret", "200", 250*time.Millisecond)
+	output := m.Prometheus()
+	for _, sample := range []string{
+		`inspection_http_request_duration_seconds_bucket{le="0.25",route="other",status_class="5xx"} 1`,
+		`inspection_http_request_duration_seconds_bucket{le="0.5",route="other",status_class="5xx"} 1`,
+		`inspection_http_request_duration_seconds_bucket{le="0.1",route="other",status_class="5xx"} 0`,
+		`inspection_http_request_duration_seconds_bucket{le="+Inf",route="other",status_class="5xx"} 1`,
+	} {
+		if !strings.Contains(output, sample) {
+			t.Fatalf("missing sample %q in:\n%s", sample, output)
+		}
+	}
+	if strings.Contains(output, "tenant-secret") || strings.Contains(output, "/graphql") {
+		t.Fatalf("unbounded label value leaked: %s", output)
+	}
+}

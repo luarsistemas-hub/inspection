@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { beginPKCE, endDashboardSSO } from "@/auth/pkce";
 import { clearSession, getIDToken, getMembershipId, getProtectedStateGeneration, selectMembership, setIdentity, type DashboardIdentity } from "@/auth/session";
+import { clearVideoPlaybackSession } from "@/auth/video-playback-session";
 import { composeCapabilities, type Capability } from "@/features/dashboard/capabilities";
 import { formatInspectionDate, InspectionViewSelector, InspectionViews, useInspectionView, type InspectionActionHandlers, type InspectionColumnKey } from "@/features/dashboard/inspection-views";
 import { SchedulesJourney } from "@/features/dashboard/schedules-journey";
@@ -19,7 +20,7 @@ import { deliveryPresentation } from "@/features/notifications/delivery-status";
 import { AccountMenu, AdaptiveNavigation, Dialog, Icon, IconButton, InfoDisclosure, PageHeader, Textarea, ThemeSelector, type AdaptiveNavigationItem } from "@inspection/design-system";
 import {
   AddExceptionalStageDocument, CancelInspectionDocument, CloseProjectDocument, CreateProjectDocument, PlanInspectionDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
-  CustomerTimelineDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, OriginPromotionDocument, PromoteInspectionPhotosDocument, ProjectDetailDocument,
+  CustomerTimelineDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, OriginPromotionDocument, PromoteInspectionPhotosDocument, PromoteInspectionVideoDocument, ProjectDetailDocument,
   InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, RequestRecaptureDocument, InspectionDetailDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument,
   type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type InspectionDetailQuery, type InspectionStatusGroup, type InspectionsQuery, type InspectionsQueryVariables, type OriginPromotionQuery, type ProjectsQuery, type ReportDownloadQuery,
 } from "@/graphql/generated";
@@ -28,6 +29,7 @@ import { graphql, type GraphQLFailure } from "@/graphql/client";
 import { presentClassification, presentDashboardStatus, presentInspectionSource, presentNotificationChannel, presentProjectStage } from "./presentation";
 import { localDateTimeToInstant } from "./datetime";
 import { CustomerReportVisual, ReportVisual } from "./report-visual";
+import { FixedOriginSelector, OriginManagement, useTemplateMediaKind } from "./origin-controls";
 
 type Page = "Início" | "Agenda de vistorias" | "Vistorias" | "Projetos e etapas" | "Triagem" | "Laudos" | "Portfólio" | "Notificações";
 const desktopNavigationStorageKey = "inspection.dashboard.navigation-collapsed";
@@ -113,6 +115,7 @@ export function DashboardShell({ section }: { section: Page }) {
   const signOut = () => {
     gateRequest.current += 1;
     const idToken = getIDToken();
+    clearVideoPlaybackSession();
     clearSession();
     sessionStorage.removeItem("inspection.dashboard.pkce");
     endDashboardSSO(process.env.NEXT_PUBLIC_OIDC_AUTHORIZE_URL ?? "http://localhost:8081/realms/inspection/protocol/openid-connect/auth", idToken);
@@ -218,23 +221,27 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
 
 function InspectionForm({ onSubmit, options, busy }: { onSubmit: (input: Record<string, unknown>) => void; options: FormOptionsState; busy: boolean }) {
   const [assetId, setAssetId] = useState(""); const [participantId, setParticipantId] = useState(""); const [templateId, setTemplateId] = useState(""); const [dueAt, setDueAt] = useState(""); const [deadlineAt, setDeadlineAt] = useState("");
+  const [referenceVersionId, setReferenceVersionId] = useState("");
   const [comparisonMode, setComparisonMode] = useState<"CHECKLIST_ONLY" | "FIXED_ORIGIN">("CHECKLIST_ONLY"); const [recurring, setRecurring] = useState(false); const [frequency, setFrequency] = useState("MONTHLY"); const [timezone] = useState("America/Sao_Paulo"); const [deadlineMinutes, setDeadlineMinutes] = useState("60");
   const [projectLink, setProjectLink] = useState("none"); const [projectName, setProjectName] = useState(""); const [stageLabel, setStageLabel] = useState(""); const [orderedStages, setOrderedStages] = useState(false);
   const [projects, setProjects] = useState<ProjectsQuery["projects"]["nodes"]>([]); const [selectedProjectId, setSelectedProjectId] = useState(""); const [selectedStageId, setSelectedStageId] = useState("");
   useEffect(() => { void graphql<ProjectsQuery, { after: string | null }>(ProjectsDocument, { after: null }).then((data) => setProjects(data.projects.nodes.filter((project) => project.status === "ACTIVE"))).catch(() => setProjects([])); }, []);
   const asset = options.data?.assets.nodes.find((item) => item.id === assetId);
+  const template = options.data?.templates.nodes.find((item) => item.id === templateId);
+  const mediaKind = useTemplateMediaKind(template?.activeVersionId);
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
-  return <form onSubmit={(event) => { event.preventDefault(); const common: Record<string, unknown> = { assetId, participantId, templateId, comparisonMode, clientMutationId: mutationId() }; if (projectLink === "new") { common.createProject = true; common.projectName = projectName; common.orderedStages = orderedStages; common.stages = stageLabel.trim() ? [{ key: "stage-1", label: stageLabel.trim(), plannedAt: null }] : []; } else if (projectLink === "existing") { common.projectId = selectedProjectId; common.stageId = selectedStageId || null; } if (recurring) { onSubmit({ ...common, startsAt: localDateTimeToInstant(dueAt), timezone, rrule: `FREQ=${frequency}`, deadlineMinutes: Number(deadlineMinutes), reminderOffsetsMinutes: [], reminderInstants: [] }); } else { onSubmit({ ...common, dueAt: localDateTimeToInstant(dueAt), deadlineAt: localDateTimeToInstant(deadlineAt), reason: "Criada pelo Painel", reminderInstants: [] }); } }}>
-    <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); }} options={options} required />
+  return <form onSubmit={(event) => { event.preventDefault(); const common: Record<string, unknown> = { assetId, participantId, templateId, comparisonMode, referenceVersionId: comparisonMode === "FIXED_ORIGIN" ? referenceVersionId : null, clientMutationId: mutationId() }; if (projectLink === "new") { common.createProject = true; common.projectName = projectName; common.orderedStages = orderedStages; common.stages = stageLabel.trim() ? [{ key: "stage-1", label: stageLabel.trim(), plannedAt: null }] : []; } else if (projectLink === "existing") { common.projectId = selectedProjectId; common.stageId = selectedStageId || null; } if (recurring) { onSubmit({ ...common, startsAt: localDateTimeToInstant(dueAt), timezone, rrule: `FREQ=${frequency}`, deadlineMinutes: Number(deadlineMinutes), reminderOffsetsMinutes: [], reminderInstants: [] }); } else { onSubmit({ ...common, dueAt: localDateTimeToInstant(dueAt), deadlineAt: localDateTimeToInstant(deadlineAt), reason: "Criada pelo Painel", reminderInstants: [] }); } }}>
+    <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); setReferenceVersionId(""); }} options={options} required />
     <EntityRelationshipField kind="participant" label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={options} required disabled={!assetId} />
-    <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={setTemplateId} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
-    <label>Comparação<select value={comparisonMode} onChange={(event) => setComparisonMode(event.target.value as typeof comparisonMode)}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com fotos de referência do imóvel</option></select></label>
+    <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={(value) => { setTemplateId(value); setReferenceVersionId(""); }} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
+    <label>Comparação<select value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value as typeof comparisonMode); setReferenceVersionId(""); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com {mediaKind === "VIDEO" ? "vídeo" : "fotos"} de referência do imóvel</option></select></label>
+    {comparisonMode === "FIXED_ORIGIN" && <FixedOriginSelector assetId={assetId} mediaKind={mediaKind} value={referenceVersionId} onChange={setReferenceVersionId} />}
     <label><input type="checkbox" checked={recurring} onChange={(event) => setRecurring(event.target.checked)} /> Repetir vistoria</label>
     {recurring ? <><Field label="Primeira vistoria" value={dueAt} onChange={setDueAt} type="datetime-local" required /><label>Frequência<select value={frequency} onChange={(event) => setFrequency(event.target.value)}><option value="WEEKLY">Semanal</option><option value="MONTHLY">Mensal</option><option value="YEARLY">Anual</option></select></label><Field label="Prazo em minutos" value={deadlineMinutes} onChange={setDeadlineMinutes} type="number" required /></> : <><Field label="Vencimento" value={dueAt} onChange={setDueAt} type="datetime-local" required /><Field label="Prazo final" value={deadlineAt} onChange={setDeadlineAt} type="datetime-local" required /></>}
     <label>Projeto<select value={projectLink} onChange={(event) => { setProjectLink(event.target.value); setSelectedProjectId(""); setSelectedStageId(""); }}><option value="none">Sem projeto</option><option value="existing">Adicionar a um projeto existente</option><option value="new">Criar projeto junto</option></select></label>
     {projectLink === "existing" && <><label>Projeto<select required value={selectedProjectId} onChange={(event) => { setSelectedProjectId(event.target.value); setSelectedStageId(""); }}><option value="">Selecione</option>{projects.filter((project) => project.assetId === assetId).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{selectedProject?.stages.length ? <label>Etapa (opcional)<select value={selectedStageId} onChange={(event) => setSelectedStageId(event.target.value)}><option value="">Sem etapa</option>{selectedProject.stages.filter((stage) => !["COMPLETED", "SKIPPED", "CANCELED", "INVALIDATED"].includes(stage.status)).map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select></label> : null}</>}
     {projectLink === "new" && <><Field label="Nome do projeto" value={projectName} onChange={setProjectName} required /><Field label="Primeira etapa (opcional)" value={stageLabel} onChange={setStageLabel} /><label><input type="checkbox" checked={orderedStages} onChange={(event) => setOrderedStages(event.target.checked)} /> Exigir decisão sobre etapas anteriores</label></>}
-    <button type="submit" disabled={busy}>Planejar vistoria</button>
+    <button type="submit" disabled={busy || comparisonMode === "FIXED_ORIGIN" && !referenceVersionId}>Planejar vistoria</button>
   </form>;
 }
 
@@ -244,6 +251,7 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
   if (!detail) return <section className="inspection-workspace"><p role="status">{message}</p></section>;
   const assetName = detail.assetName?.trim() || "Imóvel indisponível";
   const participantName = detail.participantName?.trim() || "Responsável indisponível";
+  const asset = options.data?.assets.nodes.find((item) => item.id === detail.assetId);
   return <section className="inspection-workspace" aria-labelledby="inspection-detail-title">
     <header className="inspection-detail-heading"><div><span className="inspection-record-kicker">{presentInspectionSource(detail.source)}</span><h2 id="inspection-detail-title">{assetName}</h2></div><span className="inspection-status">{presentDashboardStatus(detail.status)}</span></header>
     <dl className="inspection-detail-grid">
@@ -256,20 +264,55 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
       {detail.stateReason && <div className="inspection-detail-reason"><dt>Motivo</dt><dd>{detail.stateReason}</dd></div>}
     </dl>
     {detail.status === "COMPLETED" && <Link className="inspection-report-cta" href={`/reports?inspectionId=${encodeURIComponent(detail.id)}`}>Abrir laudo <span aria-hidden="true">→</span></Link>}
+    <section className="inspection-origin-context" aria-labelledby="inspection-origin-context-title">
+      <h3 id="inspection-origin-context-title">Referência desta vistoria</h3>
+      {detail.comparisonMode === "CHECKLIST_ONLY"
+        ? <p>Esta vistoria foi configurada sem referência de comparação.</p>
+        : detail.comparisonMode === "FIXED_ORIGIN" && detail.referenceVersionId
+          ? <p>Versão {detail.referenceVersionNumber ?? "indisponível"} · {detail.referenceMediaKind === "VIDEO" ? "Vídeo" : detail.referenceMediaKind === "PHOTO" ? "Fotos" : "Modalidade indisponível"} · {detail.referenceIsActive ? "ativa atualmente" : detail.referenceVersionStatus === "SUPERSEDED" ? "substituída; mantida no histórico" : "não está mais ativa"}</p>
+          : <p role="status">Não foi possível recuperar os dados históricos da referência desta vistoria.</p>}
+    </section>
+    {canPromoteOrigin && <section className="inspection-origin-context" aria-labelledby="promote-inspection-origin-title">
+      <h3 id="promote-inspection-origin-title">Usar esta vistoria como origem</h3>
+      {detail.status !== "COMPLETED"
+        ? <p>Após a conclusão da análise, esta vistoria poderá ser definida como origem.</p>
+        : detail.mediaKind === "VIDEO"
+          ? <VideoOriginPromotionAction inspectionId={detail.id} promotionStatus={detail.originPromotionStatus} promotionVersion={detail.promotedOriginVersionNumber} promotionIsActive={detail.promotedOriginIsActive} assetName={assetName} />
+          : <OriginPromotionAction inspection={detail} options={options} assetName={assetName} promotedOriginVersion={detail.promotedOriginVersionNumber} promotedOriginIsActive={detail.promotedOriginIsActive} />}
+    </section>}
+    {canPromoteOrigin && <OriginManagement assetId={detail.assetId} templateVersionId={asset?.templateId ? options.data?.templates.nodes.find((item) => item.id === asset.templateId)?.activeVersionId : undefined} participants={options.data?.participants.nodes.filter((participant) => participant.status === "ACTIVE" && participant.businessUnitId === asset?.businessUnitId).map(({ id, name }) => ({ id, name })) ?? []} />}
     <details className="inspection-technical-details"><summary>Dados do registro</summary><dl><div><dt>ID</dt><dd>{detail.id}</dd></div><div><dt>Versão</dt><dd>{detail.version}</dd></div></dl></details>
-    {canPromoteOrigin && detail.status === "COMPLETED" && <details className="inspection-technical-details"><summary>Fotos de referência do imóvel</summary><OriginPromotionAction inspection={detail} options={options} /></details>}
   </section>;
 }
 
-function OriginPromotionAction({ inspection, options }: { inspection: InspectionsQuery["inspections"]["nodes"][number]; options: FormOptionsState }) {
-  const [promotion, setPromotion] = useState<OriginPromotionQuery["originPromotion"]>(); const [selected, setSelected] = useState<string[]>([]); const [message, setMessage] = useState("Verificando se esta vistoria pode criar a referência do imóvel…"); const [confirmOpen, setConfirmOpen] = useState(false); const [promoting, setPromoting] = useState(false);
-  const load = useCallback(async () => { try { const data = await graphql<OriginPromotionQuery, { inspectionId: string }>(OriginPromotionDocument, { inspectionId: inspection.id }); setPromotion(data.originPromotion); setMessage(data.originPromotion ? "Selecione as fotos que formarão a referência permanente do imóvel." : "Esta vistoria não pode criar uma referência."); } catch { setPromotion(undefined); setMessage("Não foi possível carregar as fotos de referência. Tente novamente."); } }, [inspection.id]);
+function VideoOriginPromotionAction({ inspectionId, promotionStatus, promotionVersion, promotionIsActive, assetName }: { inspectionId: string; promotionStatus?: string | null; promotionVersion?: number | null; promotionIsActive?: boolean | null; assetName: string }) {
+  const [confirmOpen, setConfirmOpen] = useState(false); const [busy, setBusy] = useState(false); const [completedVersion, setCompletedVersion] = useState(promotionVersion); const [message, setMessage] = useState(promotionVersion ? `Versão ${promotionVersion} criada a partir desta vistoria${promotionIsActive ? " e ativa" : "; substituída, preservada no histórico"}.` : promotionStatus ? `Promoção da origem: ${presentDashboardStatus(promotionStatus)}.` : "O vídeo desta vistoria será usado como referência para futuras vistorias.");
+  const promote = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await graphql(PromoteInspectionVideoDocument, { input: { inspectionId, clientMutationId: mutationId() } });
+      const payload = result.promoteInspectionVideo;
+      if (payload.userErrors[0]) throw new Error(payload.userErrors[0].message);
+      setCompletedVersion(payload.version?.versionNumber);
+      setMessage(payload.version ? `Versão ${payload.version.versionNumber} criada a partir desta vistoria e ativada para futuras vistorias.` : "Não foi possível ativar o vídeo como referência.");
+    } catch (error) { setMessage(formatFailure(error)); throw error; }
+    finally { setBusy(false); }
+  };
+  return <section className="origin-promotion"><p role="status" aria-live="polite">{message}</p>{!completedVersion && <button type="button" disabled={busy} onClick={() => setConfirmOpen(true)}>Usar esta vistoria como origem</button>}<ConfirmationDialog isOpen={confirmOpen} onClose={() => setConfirmOpen(false)} title="Usar esta vistoria como origem" target={`Vídeo da vistoria · ${assetName}`} scope="Futuras vistorias deste imóvel" consequence="O banco de frames será usado como referência nas próximas vistorias. Se já houver uma origem ativa, ela será substituída e continuará preservada no histórico." confirmLabel="Usar como origem" onConfirm={promote} /></section>;
+}
+
+function OriginPromotionAction({ inspection, options, assetName, promotedOriginVersion, promotedOriginIsActive }: { inspection: NonNullable<InspectionDetailQuery["inspection"]>; options: FormOptionsState; assetName: string; promotedOriginVersion?: number | null; promotedOriginIsActive?: boolean | null }) {
+  const [promotion, setPromotion] = useState<OriginPromotionQuery["originPromotion"]>(); const [selected, setSelected] = useState<string[]>([]); const [message, setMessage] = useState("Verificando se esta vistoria pode criar a referência do imóvel…"); const [confirmOpen, setConfirmOpen] = useState(false); const [promoting, setPromoting] = useState(false); const [requested, setRequested] = useState(Boolean(inspection.originPromotionStatus));
+  const load = useCallback(async () => { try { const data = await graphql<OriginPromotionQuery, { inspectionId: string }>(OriginPromotionDocument, { inspectionId: inspection.id }); if (!data.originPromotion) { setPromotion(undefined); setSelected([]); setMessage("Esta vistoria não pode criar uma referência."); return; } setPromotion(data.originPromotion); setSelected(data.originPromotion.selectedMediaIds); setMessage("Selecione as fotos que formarão a referência permanente do imóvel."); } catch { setPromotion(undefined); setMessage("Não foi possível carregar as fotos de referência. Tente novamente."); } }, [inspection.id]);
   useEffect(() => { void load(); }, [load]);
   if (!promotion) return <p role="status">{message}</p>;
   const assetVersion = options.data?.assets.nodes.find((asset) => asset.id === inspection.assetId)?.version;
   const toggle = (id: string) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const submit = async () => { if (!assetVersion || selected.length === 0 || promoting) return; setPromoting(true); try { const data = await graphql(PromoteInspectionPhotosDocument, { input: { inspectionId: inspection.id, mediaIds: selected, expectedAssetVersion: assetVersion, clientMutationId: mutationId() } }); const next = data.promoteInspectionPhotos.promotion; setPromotion(next); setMessage(next?.status === "ACTIVE" ? "Referência ativa para as próximas vistorias." : "Referência solicitada. A cópia e ativação continuam em segundo plano."); } catch (error) { const failure = formatFailure(error); setMessage(failure); throw new Error(failure); } finally { setPromoting(false); } };
-  return <section className="origin-promotion"><h3>Fotos de referência</h3><p role="status">{message}</p>{promotion.status === "ACTIVE" ? <p>A referência está ativa para as próximas vistorias.</p> : <>{promotion.failureReason && <p className="warning">{promotion.failureReason}</p>}<div>{promotion.eligibleMedia.map((media) => <label key={media.id}>{media.url && <img src={media.url} alt={media.description} loading="lazy" />}<input type="checkbox" checked={selected.includes(media.id)} onChange={() => toggle(media.id)} /> {media.description}</label>)}</div><button disabled={!assetVersion || selected.length === 0 || promoting} onClick={() => setConfirmOpen(true)}>Usar fotos como referência</button></>}<ConfirmationDialog isOpen={confirmOpen} onClose={() => setConfirmOpen(false)} title="Usar fotos como referência" target={`${selected.length} foto(s) selecionada(s)`} scope="Imóvel desta vistoria" consequence="As fotos serão usadas como referência independente nas próximas vistorias." confirmLabel="Usar como referência" onConfirm={submit} /></section>;
+  const submit = async () => { if (!assetVersion || selected.length === 0 || promoting) return; setPromoting(true); try { const data = await graphql(PromoteInspectionPhotosDocument, { input: { inspectionId: inspection.id, mediaIds: selected, expectedAssetVersion: assetVersion, clientMutationId: mutationId() } }); const payload = data.promoteInspectionPhotos; if (payload.userErrors[0]) throw new Error(payload.userErrors[0].message); const next = payload.promotion; if (next) setPromotion({ ...next, selectedMediaIds: selected }); setRequested(true); setMessage(next?.status === "ACTIVE" ? "Esta vistoria gerou uma origem ativa para futuras vistorias." : "Solicitação registrada. A cópia e ativação continuam em processamento."); } catch (error) { const failure = formatFailure(error); setMessage(failure); throw new Error(failure); } finally { setPromoting(false); } };
+  const canResume = promotion?.status === "FAILED" || promotion?.status === "PENDING" && Boolean(promotion.failureReason);
+  const pendingConfirmation = requested && !canResume;
+  return <section className="origin-promotion"><p role="status" aria-live="polite">{message}</p>{promotion.originVersionId ? <p>Esta vistoria gerou a versão {promotedOriginVersion ?? "registrada"}{promotedOriginIsActive ? ", ativa atualmente." : ", substituída e preservada no histórico."}</p> : <>{promotion.failureReason && <p className="warning">{promotion.failureReason}</p>}<div>{promotion.eligibleMedia.map((media) => <label key={media.id}>{media.url && <img src={media.url} alt={media.description} loading="lazy" />}<input type="checkbox" checked={selected.includes(media.id)} onChange={() => toggle(media.id)} disabled={pendingConfirmation || promotion.status === "PROCESSING"} /> {media.description}</label>)}</div><button disabled={!assetVersion || selected.length === 0 || promoting || promotion.status === "PROCESSING" || pendingConfirmation} onClick={() => setConfirmOpen(true)}>{canResume ? "Retomar promoção com as mesmas fotos" : pendingConfirmation ? "Promoção em andamento" : "Usar fotos selecionadas como origem"}</button></>}<ConfirmationDialog isOpen={confirmOpen} onClose={() => setConfirmOpen(false)} title="Usar fotos desta vistoria como origem" target={`${selected.length} foto(s) · ${assetName}`} scope="Futuras vistorias deste imóvel" consequence="As fotos selecionadas serão usadas como referência nas próximas vistorias. Se já houver uma origem ativa, ela será substituída e continuará preservada no histórico." confirmLabel="Usar como origem" onConfirm={submit} /></section>;
 }
 
 function ProjectsJourney({ canMutate, options }: { canMutate: boolean; options: FormOptionsState }) {

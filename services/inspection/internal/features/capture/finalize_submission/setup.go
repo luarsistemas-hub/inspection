@@ -33,12 +33,20 @@ func Setup(d Dependencies) (capturecore.SubmissionFinalizer, error) {
 func (f finalizer) Finalize(ctx context.Context, tx *gorm.DB, draft database.CaptureDraft, submission database.SubmissionVersion) error {
 	switch draft.Kind {
 	case "ORIGIN":
+		if draft.MediaKind == "VIDEO" {
+			// Video origins require an explicit activation after durable preparation.
+			return nil
+		}
 		_, err := f.origins.ActivateCompletedTx(tx, draft.TenantID, draft.ResponsibilityID)
 		return err
 	case "RECAPTURE":
 		var request database.RecaptureRequest
 		if err := tx.Where("tenant_id=? AND responsibility_id=?", draft.TenantID, draft.ResponsibilityID).First(&request).Error; err != nil {
 			return apperror.New(apperror.NotFound, "responsibility", "recapture request not found")
+		}
+		if draft.MediaKind == "VIDEO" {
+			_, err := f.recapture.ReceiveVideoTx(tx, draft.TenantID, request.ID, draft.ResponsibilityID, submission.ID)
+			return err
 		}
 		_, err := f.recapture.FinalizeTx(tx, draft.TenantID, request.ID, true)
 		return err
@@ -55,7 +63,13 @@ func finalizeInspection(tx *gorm.DB, draft database.CaptureDraft, submission dat
 		return apperror.New(apperror.NotFound, "responsibility", "inspection responsibility not found")
 	}
 	var evidenceCount int64
-	if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND status='READY'", draft.TenantID, draft.ResponsibilityID).Count(&evidenceCount).Error; err != nil {
+	evidence := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=?", draft.TenantID, draft.ResponsibilityID)
+	if draft.MediaKind == "VIDEO" {
+		evidence = evidence.Where("media_kind='VIDEO' AND status IN ?", []string{"RECEIVED", "READY"})
+	} else {
+		evidence = evidence.Where("status='READY'")
+	}
+	if err := evidence.Count(&evidenceCount).Error; err != nil {
 		return err
 	}
 	now := submission.SubmittedAt.UTC()

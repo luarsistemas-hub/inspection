@@ -37,6 +37,9 @@ func TestTask5IT071ToIT100IT141ToIT200IT221ToIT240IT311ToIT320(t *testing.T) {
 	}
 	now := time.Date(2026, time.September, 5, 12, 0, 0, 0, time.UTC)
 	tenantID, assetID, templateID, templateVersionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenantID, TemplateID: templateID, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: json.RawMessage(`{"schemaVersion":1}`), CanonicalDigest: strings.Repeat("a", 64), Status: "PUBLISHED", IdempotencyKey: "template-1", PublishedAt: now, CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
 	delivery := []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "capture@example.com"}}
 	requirements := []capturecore.Requirement{{Key: "overview", Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: 2, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}}
 	origins := origincore.Service{DB: db, Within: within, Now: func() time.Time { return now }}
@@ -163,12 +166,12 @@ func captureDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, schema := range []string{"audit", "messaging", "invitations", "origins", "capture", "media", "recapture", "inspections"} {
+	for _, schema := range []string{"audit", "messaging", "invitations", "origins", "capture", "media", "recapture", "inspections", "templates"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.AuditEvent{}, &database.OutboxIntent{}, &database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.MediaDerivative{}, &database.ScreeningRun{}, &database.RecaptureRequest{}, &database.RecaptureRequirement{}, &database.Inspection{}, &database.Responsibility{}}
+	models := []any{&database.AuditEvent{}, &database.OutboxIntent{}, &database.Invitation{}, &database.ExternalSession{}, &database.ProcessingAcceptance{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.MediaDerivative{}, &database.ScreeningRun{}, &database.RecaptureRequest{}, &database.RecaptureRequirement{}, &database.Inspection{}, &database.Responsibility{}, &database.TemplateVersion{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)

@@ -10,14 +10,72 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/contracts/events"
 	retentioncore "inspection/services/inspection/internal/features/retention/core"
+	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/objectstore"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// HandleDueEvent validates and processes one retention.purge_due.v1 event.
+// It is shared by the worker consumer and integration tests so the tested
+// handler is the same production path.
+func HandleDueEvent(ctx context.Context, tx *gorm.DB, store objectstore.Store, envelope events.RawEnvelope) error {
+	var payload struct {
+		InspectionID identity.ID `json:"inspectionId"`
+	}
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) {
+		return messaging.ErrPermanent
+	}
+	var hold database.LegalHold
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND active", envelope.TenantID, payload.InspectionID).First(&hold).Error; err == nil {
+		return nil
+	} else if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	// Never trust publication as proof that the retention clock elapsed.
+	var inspection database.Inspection
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.InspectionID).First(&inspection).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return messaging.ErrPermanent
+		}
+		return err
+	}
+	policy := retentioncore.DefaultPolicy()
+	var configured database.RetentionPolicy
+	if err := tx.WithContext(ctx).Where("tenant_id=?", envelope.TenantID).Order("version DESC").First(&configured).Error; err == nil {
+		policy.EvidenceReports = time.Duration(configured.EvidenceDays) * 24 * time.Hour
+		policy.Operational = time.Duration(configured.OperationalDays) * 24 * time.Hour
+	} else if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	clock, err := retentioncore.NewClock(retentioncore.EvidenceReports, inspection.UpdatedAt, time.Time{}, policy)
+	if err != nil {
+		return err
+	}
+	if !clock.Eligible(time.Now().UTC()) {
+		return gorm.ErrInvalidData
+	}
+	purge, err := PurgeWithStore(ctx, tx, store, envelope.TenantID, payload.InspectionID, clock)
+	if err != nil {
+		return err
+	}
+	return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: identity.NewID(), Type: "retention.purged.v1", SchemaVersion: 1, OccurredAt: purge.CreatedAt, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"classes": []string{"originals", "parts", "derivatives", "reports", "associations"}}})
+}
+
+// HandlePurgedEvent validates the informational retention.purged.v1 payload.
+func HandlePurgedEvent(_ context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
+	var payload map[string]any
+	if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+		return messaging.ErrPermanent
+	}
+	return nil
+}
 
 // Purge keeps the original public seam for callers that only need database
 // reconciliation. Object-store cleanup is added by PurgeWithStore.
@@ -32,7 +90,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		return database.PurgeRun{}, fmt.Errorf("retention purge: missing identity")
 	}
 	if !clock.Eligible(time.Now().UTC()) {
-		return database.PurgeRun{}, gorm.ErrInvalidData
+		return database.PurgeRun{}, apperror.New(apperror.InvalidState, "retention", "retention period has not elapsed or a legal hold is active")
 	}
 	var completed database.PurgeRun
 	if err := db.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND status='COMPLETED'", tenantID, inspectionID).First(&completed).Error; err == nil {
@@ -64,6 +122,28 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 				mediaIDs = append(mediaIDs, item.ID)
 			}
 		}
+		if err := lockVideoSourcesAndCheckHolds(tx, tenantID, mediaIDs); err != nil {
+			return err
+		}
+		var protectedOriginResponsibilities []identity.ID
+		if len(responsibilityIDs) > 0 {
+			var versions []database.OriginVersion
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id IN ? AND media_kind='VIDEO'", tenantID, responsibilityIDs).Find(&versions).Error; err != nil {
+				return err
+			}
+			for _, version := range versions {
+				var references, holds int64
+				if err := tx.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, version.ID).Count(&references).Error; err != nil {
+					return err
+				}
+				if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND origin_version_id=? AND active=true", tenantID, version.ID).Count(&holds).Error; err != nil {
+					return err
+				}
+				if references > 0 || holds > 0 {
+					protectedOriginResponsibilities = append(protectedOriginResponsibilities, version.ResponsibilityID)
+				}
+			}
+		}
 		var uploadIDs []identity.ID
 		if len(mediaIDs) > 0 {
 			var uploads []database.MultipartUpload
@@ -74,8 +154,27 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 				uploadIDs = append(uploadIDs, upload.ID)
 			}
 		}
+		if err := deletePurgedVideoPlanFrameLinks(tx, tenantID, inspectionID); err != nil {
+			return err
+		}
+		if err := deletePurgedVideoPlanPreparationLinks(tx, tenantID, inspectionID); err != nil {
+			return err
+		}
+		if err := releasePurgedReportReferences(tx, tenantID, inspectionID); err != nil {
+			return err
+		}
 		if store.Client != nil {
+			if err := purgeUnreferencedVideoFrames(ctx, tx, store, tenantID, mediaIDs); err != nil {
+				return err
+			}
+			protectedVideoMediaIDs, err := retainedVideoMediaIDs(tx, tenantID, mediaIDs)
+			if err != nil {
+				return err
+			}
 			for _, item := range media {
+				if _, protected := protectedVideoMediaIDs[item.ID]; protected {
+					continue
+				}
 				if err := deleteObject(ctx, store, item.ObjectKey); err != nil {
 					return err
 				}
@@ -90,7 +189,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 				}
 			}
 			var artifacts []database.ReportArtifact
-			if err := tx.Table("reports.report_artifacts a").Select("a.*").Joins("JOIN reports.report_snapshots s ON s.id=a.snapshot_id AND s.tenant_id=a.tenant_id").Where("a.tenant_id=? AND s.inspection_id=?", tenantID, inspectionID).Find(&artifacts).Error; err != nil {
+			if err := tx.Table("reports.report_artifacts AS a").Select("a.*").Joins("JOIN reports.report_snapshots s ON s.id=a.snapshot_id AND s.tenant_id=a.tenant_id").Where("a.tenant_id=? AND s.inspection_id=?", tenantID, inspectionID).Find(&artifacts).Error; err != nil {
 				return err
 			}
 			for _, artifact := range artifacts {
@@ -134,6 +233,17 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			if err != nil {
 				return err
 			}
+		}
+		if err := deletePurgedVideoPlans(tx, tenantID, inspectionID); err != nil {
+			return err
+		}
+		if store.Client != nil {
+			if err := deleteOrphanVideoPreparations(tx, tenantID, mediaIDs); err != nil {
+				return err
+			}
+		}
+		if err := detachRetainedVideoPreparations(tx, tenantID, mediaIDs); err != nil {
+			return err
 		}
 		for _, item := range []any{
 			&database.UsageRecord{}, &database.LLMCallRecord{}, &database.DashboardInspection{}, &database.ReferenceSnapshot{}, &database.PolicySnapshot{},
@@ -188,10 +298,18 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 					return err
 				}
 			}
-			if err := deleteWhere(&database.MediaObject{}, "tenant_id=? AND responsibility_id IN ?", tenantID, responsibilityIDs); err != nil {
+			if err := deleteWhere(&database.MediaObject{}, "tenant_id=? AND responsibility_id IN ? AND id NOT IN (SELECT media_id FROM media.video_preparation_jobs WHERE tenant_id=?)", tenantID, responsibilityIDs, tenantID); err != nil {
 				return err
 			}
-			if err := deleteWhere(&database.Responsibility{}, "tenant_id=? AND id IN ?", tenantID, responsibilityIDs); err != nil {
+			if len(protectedOriginResponsibilities) > 0 {
+				if err := tx.Model(&database.Responsibility{}).Where("tenant_id=? AND id IN ?", tenantID, protectedOriginResponsibilities).
+					Updates(map[string]any{"inspection_id": identity.ID{}, "participant_id": identity.ID{}, "status": "EXPIRED", "updated_at": time.Now().UTC()}).Error; err != nil {
+					return err
+				}
+				if err := deleteWhere(&database.Responsibility{}, "tenant_id=? AND id IN ? AND id NOT IN ?", tenantID, responsibilityIDs, protectedOriginResponsibilities); err != nil {
+					return err
+				}
+			} else if err := deleteWhere(&database.Responsibility{}, "tenant_id=? AND id IN ?", tenantID, responsibilityIDs); err != nil {
 				return err
 			}
 		}
@@ -218,6 +336,142 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 	return result, nil
 }
 
+func releasePurgedReportReferences(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	var snapshotIDs []identity.ID
+	if err := tx.Model(&database.ReportSnapshot{}).Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).Pluck("id", &snapshotIDs).Error; err != nil {
+		return err
+	}
+	if len(snapshotIDs) > 0 {
+		if err := tx.Where("tenant_id=? AND owner_type='REPORT_SNAPSHOT' AND owner_id IN ?", tenantID, snapshotIDs).Delete(&database.VideoEvidenceReference{}).Error; err != nil {
+			return err
+		}
+	}
+	return tx.Exec(`DELETE FROM media.video_evidence_references
+		WHERE tenant_id = ? AND owner_type = 'VIDEO_PLAN' AND owner_id IN (
+			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error
+}
+
+func deletePurgedVideoPlanFrameLinks(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	return tx.Exec(`DELETE FROM analysis.video_plan_item_frames
+		WHERE tenant_id = ? AND plan_item_id IN (
+			SELECT i.id FROM analysis.video_plan_items i
+			JOIN analysis.video_plans p ON p.tenant_id=i.tenant_id AND p.id=i.plan_id
+			WHERE p.tenant_id = ? AND p.inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error
+}
+
+func deletePurgedVideoPlanPreparationLinks(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	return tx.Exec(`DELETE FROM analysis.video_plan_preparations
+		WHERE tenant_id = ? AND plan_id IN (
+			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error
+}
+
+func deletePurgedVideoPlans(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	if err := tx.Exec(`UPDATE inspections.inspections SET active_video_plan_id = NULL
+		WHERE tenant_id = ? AND id = ?`, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(`UPDATE origins.origin_versions SET video_plan_id = NULL
+		WHERE tenant_id = ? AND video_plan_id IN (
+			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(`DELETE FROM analysis.video_plan_preparations
+		WHERE tenant_id = ? AND plan_id IN (
+			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(`DELETE FROM analysis.video_plan_items
+		WHERE tenant_id = ? AND plan_id IN (
+			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
+		)`, tenantID, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	return tx.Exec("DELETE FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?", tenantID, inspectionID).Error
+}
+
+func purgeUnreferencedVideoFrames(ctx context.Context, tx *gorm.DB, store objectstore.Store, tenantID identity.ID, mediaIDs []identity.ID) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	var preparations []database.VideoPreparationJob
+	if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id IN ?", tenantID, mediaIDs).Find(&preparations).Error; err != nil {
+		return err
+	}
+	for _, preparation := range preparations {
+		var references, retainedOwners, heldOrigins int64
+		if err := tx.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Count(&references).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=? AND owner_type IN ('VIDEO_PLAN','REPORT_SNAPSHOT','ACTIVE_WORK')", tenantID, preparation.ID).Count(&retainedOwners).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND active=true AND origin_version_id IN (SELECT id FROM origins.origin_versions WHERE tenant_id=? AND video_preparation_id=?)", tenantID, tenantID, preparation.ID).Count(&heldOrigins).Error; err != nil {
+			return err
+		}
+		if retainedOwners > 0 {
+			return apperror.New(apperror.InvalidState, "preparationId", "retained video evidence still depends on this frame bank")
+		}
+		if references > 0 || heldOrigins > 0 {
+			continue
+		}
+		var frames []database.VideoFrame
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Find(&frames).Error; err != nil {
+			return err
+		}
+		for _, frame := range frames {
+			if err := deleteObject(ctx, store, frame.ObjectKey); err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Delete(&database.VideoScopeItem{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Delete(&database.VideoFrame{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func deleteOrphanVideoPreparations(tx *gorm.DB, tenantID identity.ID, mediaIDs []identity.ID) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	return tx.Where(`tenant_id=? AND media_id IN ?
+		AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=media.video_preparation_jobs.tenant_id AND r.preparation_id=media.video_preparation_jobs.id)
+		AND NOT EXISTS (SELECT 1 FROM origins.origin_versions ov WHERE ov.tenant_id=media.video_preparation_jobs.tenant_id AND ov.video_preparation_id=media.video_preparation_jobs.id)`, tenantID, mediaIDs).Delete(&database.VideoPreparationJob{}).Error
+}
+
+// detachRetainedVideoPreparations unlinks frame banks kept for an origin or
+// another owner from the submission being purged, so the submission can be
+// deleted while the protected bank survives.
+func detachRetainedVideoPreparations(tx *gorm.DB, tenantID identity.ID, mediaIDs []identity.ID) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	return tx.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND media_id IN ? AND submission_id IS NOT NULL", tenantID, mediaIDs).Update("submission_id", nil).Error
+}
+
+func retainedVideoMediaIDs(tx *gorm.DB, tenantID identity.ID, mediaIDs []identity.ID) (map[identity.ID]struct{}, error) {
+	retained := make(map[identity.ID]struct{})
+	if len(mediaIDs) == 0 {
+		return retained, nil
+	}
+	var ids []identity.ID
+	if err := tx.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND media_id IN ?", tenantID, mediaIDs).Distinct("media_id").Pluck("media_id", &ids).Error; err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		retained[id] = struct{}{}
+	}
+	return retained, nil
+}
+
 // lockInspectionAndCheckLegalHold serializes purge with legal-hold changes.
 // Hold creation and release take the same inspection-row lock, so a hold
 // committed concurrently with purge is observed before any data is deleted.
@@ -231,7 +485,30 @@ func lockInspectionAndCheckLegalHold(tx *gorm.DB, tenantID, inspectionID identit
 		return err
 	}
 	if activeHolds > 0 {
-		return gorm.ErrInvalidData
+		return apperror.New(apperror.InvalidState, "inspectionId", "legal hold prevents retention purge")
+	}
+	return nil
+}
+
+func lockVideoSourcesAndCheckHolds(tx *gorm.DB, tenantID identity.ID, mediaIDs []identity.ID) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	var sources []database.VideoSource
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id IN ?", tenantID, mediaIDs).Order("media_id").Find(&sources).Error; err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if source.Status == "DELETING" {
+			return apperror.New(apperror.InvalidState, "sourceMediaId", "source deletion is already in progress")
+		}
+		held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, source.MediaID)
+		if err != nil {
+			return err
+		}
+		if held {
+			return apperror.New(apperror.InvalidState, "sourceMediaId", "legal hold prevents retention purge")
+		}
 	}
 	return nil
 }
@@ -252,7 +529,7 @@ func deleteByResponsibilities(tx *gorm.DB, model any, tenantID identity.ID, resp
 	case *database.OriginEvidence:
 		return tx.Where("tenant_id=? AND origin_version_id IN (SELECT id FROM origins.origin_versions WHERE tenant_id=? AND responsibility_id IN ?)", tenantID, tenantID, responsibilityIDs).Delete(model).Error
 	case *database.OriginVersion:
-		return tx.Where("tenant_id=? AND responsibility_id IN ?", tenantID, responsibilityIDs).Delete(model).Error
+		return tx.Where("tenant_id=? AND responsibility_id IN ? AND id NOT IN (SELECT owner_id FROM media.video_evidence_references WHERE tenant_id=? AND owner_type='ORIGIN_VERSION')", tenantID, responsibilityIDs, tenantID).Delete(model).Error
 	case *database.RecaptureRequirement:
 		return tx.Where("tenant_id=? AND request_id IN (SELECT id FROM recapture.requests WHERE tenant_id=? AND responsibility_id IN ?)", tenantID, tenantID, responsibilityIDs).Delete(model).Error
 	case *database.RecaptureRequest:

@@ -142,6 +142,90 @@ func TestLifecycleIT101ToIT140IT201ToIT220IT380ToIT382(t *testing.T) {
 	if err != nil || project.Project.Status != projectcore.ProjectActive {
 		t.Fatalf("project reopen failed: %v", err)
 	}
+
+	var templateVersion database.TemplateVersion
+	if err := admin.Where("tenant_id=? AND template_id=?", fixture.tenantID, fixture.templateID).First(&templateVersion).Error; err != nil {
+		t.Fatal(err)
+	}
+	var videoDefinition catalog.TemplateDocument
+	if err := json.Unmarshal(templateVersion.DefinitionJSON, &videoDefinition); err != nil {
+		t.Fatal(err)
+	}
+	videoDefinition.IsVideo = true
+	videoDefinition.Requirements[0].EvidenceKind = "VIDEO"
+	videoJSON, err := json.Marshal(videoDefinition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	videoVersion := templateVersion
+	videoVersion.ID = identity.NewID()
+	videoVersion.VersionNumber++
+	videoVersion.DefinitionJSON = videoJSON
+	videoVersion.CanonicalDigest = "video-admission-test"
+	videoVersion.IdempotencyKey = "video-admission-test-" + videoVersion.ID.String()
+	if err := admin.Model(&database.TemplateVersion{}).Where("tenant_id=? AND id=?", fixture.tenantID, templateVersion.ID).Update("status", "SUPERSEDED").Error; err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := admin.Model(&database.TemplateVersion{}).Where("tenant_id=? AND id=?", fixture.tenantID, templateVersion.ID).Update("status", templateVersion.Status).Error; err != nil {
+			t.Errorf("restore original template version: %v", err)
+		}
+	}()
+	if err := admin.Create(&videoVersion).Error; err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := admin.Model(&database.TemplateVersion{}).Where("tenant_id=? AND id=?", fixture.tenantID, videoVersion.ID).Update("status", "SUPERSEDED").Error; err != nil {
+			t.Errorf("deactivate temporary video template version: %v", err)
+		}
+	}()
+	var template database.Template
+	if err := admin.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.templateID).First(&template).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Model(&database.Template{}).Where("tenant_id=? AND id=?", fixture.tenantID, fixture.templateID).Update("active_version_id", videoVersion.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := admin.Model(&database.Template{}).Where("tenant_id=? AND id=?", fixture.tenantID, fixture.templateID).Update("active_version_id", template.ActiveVersionID).Error; err != nil {
+			t.Errorf("restore active template version: %v", err)
+		}
+	}()
+	var admission database.VideoAdmission
+	if err := admin.First(&admission, "id=1").Error; err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", admission.Enabled).Error; err != nil {
+			t.Errorf("restore video admission: %v", err)
+		}
+	}()
+	if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	var scheduleCount, inspectionCount int64
+	if err := admin.Model(&database.Schedule{}).Where("tenant_id=?", fixture.tenantID).Count(&scheduleCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Model(&database.Inspection{}).Where("tenant_id=?", fixture.tenantID).Count(&inspectionCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schedules.Create(ctx, schedulecore.Input{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: fixture.templateID, RRule: "FREQ=DAILY", Timezone: "UTC", StartsAt: fixture.now, DeadlineMinutes: 60, IdempotencyKey: "video-schedule-disabled"}); errorCode(err) != apperror.IntegrationDisabled {
+		t.Fatalf("disabled VIDEO schedule error=%v, want INTEGRATION_DISABLED", err)
+	}
+	if _, err := inspections.Create(ctx, inspectioncore.CreateInput{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: &fixture.templateID, Source: inspectioncore.SourceManual, SourceKey: "video-inspection-disabled", Reason: "video admission integration", DueAt: fixture.now, DeadlineAt: fixture.now.Add(time.Hour)}); errorCode(err) != apperror.IntegrationDisabled {
+		t.Fatalf("disabled VIDEO inspection error=%v, want INTEGRATION_DISABLED", err)
+	}
+	var afterSchedules, afterInspections int64
+	if err := admin.Model(&database.Schedule{}).Where("tenant_id=?", fixture.tenantID).Count(&afterSchedules).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Model(&database.Inspection{}).Where("tenant_id=?", fixture.tenantID).Count(&afterInspections).Error; err != nil {
+		t.Fatal(err)
+	}
+	if afterSchedules != scheduleCount || afterInspections != inspectionCount {
+		t.Fatalf("disabled VIDEO creates persisted rows: schedules %d->%d inspections %d->%d", scheduleCount, afterSchedules, inspectionCount, afterInspections)
+	}
 }
 
 type lifecycleFixture struct {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -490,8 +491,10 @@ func sameInt32(a, b *int32) bool {
 func (s Service) Get(ctx context.Context, tenantID, assetID identity.ID) (View, error) {
 	var out View
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND id=?", tenantID, assetID).First(&out.Asset).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, assetID).First(&out.Asset).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.New(apperror.NotFound, "assetId", "asset not found")
+		} else if err != nil {
+			return err
 		}
 		return s.load(tx, &out)
 	})

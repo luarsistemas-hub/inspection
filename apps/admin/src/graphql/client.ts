@@ -13,7 +13,7 @@ function logOperationErrors(document: TypedDocumentNode<unknown, never>, errors:
   console.error(`[GraphQL] ${operationLabel} failed`, { errors });
 }
 
-async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variables: V | undefined, signal: AbortSignal | undefined, requiresMembership: boolean): Promise<T> {
+async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variables: V | undefined, signal: AbortSignal | undefined, requiresMembership: boolean, preserveForbidden = false): Promise<T> {
   const token = getAccessToken();
   if (!token) throw { message: "Autenticação necessária", code: "UNAUTHENTICATED" } satisfies GraphQLFailure;
   const membershipId = requiresMembership ? restoreMembershipContext()?.membershipId : undefined;
@@ -26,12 +26,12 @@ async function execute<T, V>(document: TypedDocumentNode<unknown, never>, variab
   if (raw.trimStart().startsWith("{")) { try { body = JSON.parse(raw) as Response<T>; } catch { body = {}; } }
   if (body.errors?.length) logOperationErrors(document, body.errors);
   if (response.status === 401 || response.status === 403) {
-    clearProtectedContext(); clearSession();
+    if (response.status !== 403 || !preserveForbidden) { clearProtectedContext(); clearSession(); }
     throw { message: response.status === 401 ? "Sua sessão expirou. Entre novamente." : "Você não tem permissão para esta operação.", code: response.status === 401 ? "UNAUTHENTICATED" : "FORBIDDEN" } satisfies GraphQLFailure;
   }
   const error = body.errors?.[0];
   if (!response.ok || error) {
-    if (["FORBIDDEN", "UNAUTHENTICATED", "TENANT_INACTIVE"].includes(error?.extensions?.code ?? "")) { clearProtectedContext(); clearSession(); }
+    if (["FORBIDDEN", "UNAUTHENTICATED", "TENANT_INACTIVE"].includes(error?.extensions?.code ?? "") && !(preserveForbidden && error?.extensions?.code === "FORBIDDEN")) { clearProtectedContext(); clearSession(); }
     throw { message: error?.message ?? "Não foi possível concluir a solicitação", code: error?.extensions?.code, field: error?.extensions?.field } satisfies GraphQLFailure;
   }
   if (!body.data) throw { message: "Resposta vazia da API" } satisfies GraphQLFailure;
@@ -44,4 +44,9 @@ export function graphqlIdentity<T, V = unknown>(document: TypedDocumentNode<unkn
 
 export function graphql<T, V = unknown>(document: TypedDocumentNode<unknown, never>, variables?: V, signal?: AbortSignal): Promise<T> {
   return execute<T, V>(document, variables, signal, true);
+}
+
+/** Queries an optional capability without turning a denied capability into a sign-out. */
+export function graphqlOptionalPermission<T, V = unknown>(document: TypedDocumentNode<unknown, never>, variables?: V, signal?: AbortSignal): Promise<T> {
+  return execute<T, V>(document, variables, signal, true, true);
 }

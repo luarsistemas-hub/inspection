@@ -70,13 +70,6 @@ func New(ctx context.Context, cfg Config) (*Harness, error) {
 		}
 	}
 	if cfg.RuntimeDatabaseURL != "" {
-		if cfg.RuntimeDatabasePassword == "" {
-			return nil, errors.New("integration harness: runtime database password is required")
-		}
-		password := strings.ReplaceAll(cfg.RuntimeDatabasePassword, "'", "''")
-		if err := adminDB.Exec("ALTER ROLE inspection_runtime LOGIN PASSWORD '" + password + "'").Error; err != nil {
-			return nil, fmt.Errorf("integration harness configure runtime role: %w", err)
-		}
 		primary, err = database.Open(cfg.RuntimeDatabaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("integration harness runtime database: %w", err)
@@ -134,7 +127,8 @@ func (h *Harness) Close() error {
 			}
 		}
 	}
-	if h.AdminDB != nil && h.AdminDB != h.DB && h.AdminDB != h.MigrationDB {
+	// AdminDB and MigrationDB may share one pool; close each distinct pool once.
+	if h.AdminDB != nil && h.AdminDB != h.DB {
 		if sqlDB, err := h.AdminDB.DB(); err == nil {
 			if err := sqlDB.Close(); err != nil {
 				errs = append(errs, err)

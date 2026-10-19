@@ -86,9 +86,12 @@ func Setup(deps Dependencies) (*Executor, error) {
 	for provider, account := range deps.ProviderAccounts {
 		accounts[provider] = account
 	}
-	channels := make(map[string]bool, len(deps.EnabledChannels))
-	for channel, enabled := range deps.EnabledChannels {
-		channels[channel] = enabled
+	var channels map[string]bool
+	if deps.EnabledChannels != nil {
+		channels = make(map[string]bool, len(deps.EnabledChannels))
+		for channel, enabled := range deps.EnabledChannels {
+			channels[channel] = enabled
+		}
 	}
 	return &Executor{db: deps.DB, gateway: deps.Gateway, catalog: deps.Catalog, now: deps.Now, leaseDuration: deps.LeaseDuration, maxAttempts: deps.MaxAttempts, retryDelays: append([]time.Duration(nil), deps.RetryDelays...), callbackURL: deps.CallbackURL, providerAccounts: accounts, payloads: deps.Payloads, metrics: deps.Metrics, enabledChannels: channels}, nil
 }

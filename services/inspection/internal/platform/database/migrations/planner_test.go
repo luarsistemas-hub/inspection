@@ -35,6 +35,229 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestSealedVideoPlanMigrationFencesFrameMembership(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 57 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "sealed_video_plan_membership" {
+		t.Fatalf("video plan migration=%+v", step)
+	}
+	for _, required := range []string{"analysis.video_plan_items", "analysis.video_plan_item_frames", "FOREIGN KEY(tenant_id,frame_id)", "idx_video_plan_tenant_id ON analysis.video_plans(tenant_id,id)", "idx_video_plan_item_tenant_id ON analysis.video_plan_items(tenant_id,id)", "ENABLE ROW LEVEL SECURITY", "CURRENT_ONLY", "TECHNICAL_FAILURE"} {
+		if !strings.Contains(step.SQL, required) {
+			t.Fatalf("video plan migration missing %q", required)
+		}
+	}
+}
+
+func TestVideoOriginPromotionPinsTheSealedAnalysisPlan(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 58 {
+			continue
+		}
+		if step.Name != "pin_video_origin_to_analysis_plan" || !strings.Contains(step.SQL, "video_plan_id") || !strings.Contains(step.SQL, "REFERENCES analysis.video_plans(tenant_id,id)") {
+			t.Fatalf("video origin plan-lineage migration=%+v", step)
+		}
+		return
+	}
+	t.Fatal("video origin plan-lineage migration missing")
+}
+
+func TestVideoRecaptureReceiptHasASeparateActiveState(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 67 {
+			continue
+		}
+		if step.Name != "persist_received_video_recapture_state" {
+			t.Fatalf("unexpected recapture receipt migration: %+v", step)
+		}
+		for _, required := range []string{"'RECEIVED'", "idx_recapture_one_active", "'REQUESTED','ACCESSED','RECEIVED'"} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("recapture receipt migration missing %q", required)
+			}
+		}
+		return
+	}
+	t.Fatal("video recapture receipt migration missing")
+}
+
+func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 70 {
+			continue
+		}
+		if step.Name != "version_video_preparations_by_profile" {
+			t.Fatalf("unexpected preparation migration: %+v", step)
+		}
+		for _, required := range []string{"DROP CONSTRAINT IF EXISTS video_preparation_jobs_tenant_id_media_id_key", "uq_video_preparation_profile_generation", "profile_digest,generation", "uq_video_preparation_mutation", "client_mutation_id"} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("preparation migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 77 {
+			t.Fatalf("LatestVersion()=%d, want 77", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("video preparation profile-generation migration missing")
+}
+
+func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 72 {
+			continue
+		}
+		if step.Name != "video_plan_preparations_and_carried_results" {
+			t.Fatalf("unexpected video plan preparation migration: %+v", step)
+		}
+		for _, required := range []string{
+			"parent_plan_id uuid", "FOREIGN KEY(tenant_id,parent_plan_id) REFERENCES analysis.video_plans(tenant_id,id)",
+			"carried_result_job_id uuid", "uq_comparison_job_tenant_id ON analysis.comparison_jobs(tenant_id,id)", "REFERENCES analysis.comparison_jobs(tenant_id,id)",
+			"analysis.video_plan_preparations", "PRIMARY KEY(tenant_id,plan_id,preparation_id)",
+			"FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id)",
+			"CHECK(role IN ('MAIN','SUPPLEMENT','ORIGIN'))", "ENABLE ROW LEVEL SECURITY", "GRANT SELECT, INSERT ON analysis.video_plan_preparations",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("video plan preparation migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 77 {
+			t.Fatalf("LatestVersion()=%d, want 77", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("video plan preparation migration missing")
+}
+
+func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 73 {
+			continue
+		}
+		if step.Name != "video_recapture_coverage_jobs" {
+			t.Fatalf("unexpected migration: %+v", step)
+		}
+		for _, required := range []string{"recapture.video_coverage_jobs", "UNIQUE(tenant_id, preparation_id)", "FOREIGN KEY(tenant_id, preparation_id)", "FOREIGN KEY(tenant_id, request_id)", "ENABLE ROW LEVEL SECURITY", "GRANT SELECT, INSERT, UPDATE"} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("coverage migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 77 {
+			t.Fatalf("LatestVersion()=%d, want 77", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("video coverage migration missing")
+}
+
+func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 74 {
+			continue
+		}
+		if step.Name != "scope_video_plan_frame_identity_index" {
+			t.Fatalf("unexpected migration: %+v", step)
+		}
+		for _, required := range []string{
+			"DROP INDEX IF EXISTS analysis.idx_video_plan_frame_tenant_id",
+			"ON analysis.video_plan_item_frames(tenant_id,id)",
+			"DROP INDEX IF EXISTS media.idx_video_evidence_reference_id",
+			"ON media.video_evidence_references(tenant_id,id)",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("identity index migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 77 {
+			t.Fatalf("LatestVersion()=%d, want 77", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("video plan identity index migration missing")
+}
+
+func TestRecaptureUnresolvedMigrationAllowsTerminalGapState(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 75 {
+			continue
+		}
+		if step.Name != "recapture_unresolved_requirements" || !strings.Contains(step.SQL, "'UNRESOLVED'") {
+			t.Fatalf("unexpected unresolved requirement migration: %+v", step)
+		}
+		return
+	}
+	t.Fatal("unresolved requirement migration missing")
+}
+
+func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 76 {
+			continue
+		}
+		if step.Name != "retention_video_purge_delete_grants" {
+			t.Fatalf("unexpected retention purge grant migration: %+v", step)
+		}
+		for _, required := range []string{
+			"GRANT DELETE ON analysis.video_plan_preparations, analysis.video_plan_items, analysis.video_plan_item_frames, analysis.video_plans TO inspection_runtime",
+			"GRANT DELETE ON media.video_preparation_jobs, media.video_scope_items, media.video_frames TO inspection_runtime",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("retention purge migration missing %q", required)
+			}
+		}
+		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
+			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
+		}
+		if LatestVersion() != 77 {
+			t.Fatalf("LatestVersion()=%d, want 77", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("retention video purge grant migration missing")
+}
+
+func TestVideoPlanReanalysisMigrationAddsIdempotencyAndPinnedParent(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 71 {
+			continue
+		}
+		if step.Name != "idempotent_video_plan_reanalysis" {
+			t.Fatalf("unexpected reanalysis migration: %+v", step)
+		}
+		for _, required := range []string{"client_mutation_id", "expected_plan_id", "fk_video_plan_expected_plan", "uq_video_plan_reanalysis_mutation", "inspection_runtime"} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("reanalysis migration missing %q", required)
+			}
+		}
+		return
+	}
+	t.Fatal("video reanalysis migration missing")
+}
+
+func TestScopedRetentionMigrationRekeysRetentionTablesBeforeNullingInspectionScope(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 60 {
+			continue
+		}
+		if step.Name != "scoped_video_retention_holds" {
+			t.Fatalf("unexpected scoped retention migration: %+v", step)
+		}
+		for _, table := range []string{"legal_holds", "deletion_requests"} {
+			dropKey := strings.Index(step.SQL, "ALTER TABLE retention."+table+" DROP CONSTRAINT IF EXISTS "+table+"_pkey")
+			allowScoped := strings.Index(step.SQL, "ALTER TABLE retention."+table+" ALTER COLUMN inspection_id DROP NOT NULL")
+			addKey := strings.Index(step.SQL, "ADD CONSTRAINT "+table+"_pkey PRIMARY KEY (id,tenant_id)")
+			if dropKey < 0 || allowScoped < dropKey || addKey < allowScoped {
+				t.Fatalf("%s key must be rekeyed before making inspection scope nullable: %s", table, step.SQL)
+			}
+		}
+		return
+	}
+	t.Fatal("scoped video retention migration missing")
+}
+
 func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
@@ -60,8 +283,8 @@ func TestLLMCallLedgerMigrationIsVersion40AndTenantScoped(t *testing.T) {
 			t.Fatalf("ledger migration does not contain %q", required)
 		}
 	}
-	if got := LatestVersion(); got != 53 {
-		t.Fatalf("latest version=%d, want 53", got)
+	if LatestVersion() < 40 {
+		t.Fatalf("latest version did not include ledger migration: %d", LatestVersion())
 	}
 }
 
@@ -174,8 +397,8 @@ func TestUsageDailySummaryIndexMigrationScopesUniquenessByTenantAndDay(t *testin
 		if step.Name != "usage_daily_summary_tenant_day_index" || !strings.Contains(step.SQL, "DROP INDEX IF EXISTS usage.idx_usage_daily") || !strings.Contains(step.SQL, "CREATE UNIQUE INDEX idx_usage_daily ON usage.daily_summaries(tenant_id, day)") {
 			t.Fatalf("unexpected usage summary migration: %+v", step)
 		}
-		if got := LatestVersion(); got != 53 {
-			t.Fatalf("latest version=%d, want 53", got)
+		if LatestVersion() < 47 {
+			t.Fatalf("latest version did not include usage summary migration: %d", LatestVersion())
 		}
 		return
 	}
@@ -276,4 +499,25 @@ func TestOnboardingRequestTracksInspectionOncePerSession(t *testing.T) {
 			t.Fatalf("migration does not contain %q", required)
 		}
 	}
+}
+
+func TestVideoMembershipMigrationAddsTenantForeignKeys(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 77 {
+			continue
+		}
+		for _, required := range []string{
+			"FOREIGN KEY(tenant_id,plan_id) REFERENCES analysis.video_plans(tenant_id,id) NOT VALID",
+			"FOREIGN KEY(tenant_id,plan_item_id) REFERENCES analysis.video_plan_items(tenant_id,id) NOT VALID",
+			"ALTER TABLE analysis.video_plan_item_frames ADD CONSTRAINT fk_video_plan_item_frame_frame FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id) NOT VALID",
+			"FOREIGN KEY(tenant_id,preparation_id) REFERENCES media.video_preparation_jobs(tenant_id,id) NOT VALID",
+			"ALTER TABLE media.video_scope_items ADD CONSTRAINT fk_video_scope_frame FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id) NOT VALID",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("video membership migration missing %q", required)
+			}
+		}
+		return
+	}
+	t.Fatal("video membership foreign key migration is not registered")
 }

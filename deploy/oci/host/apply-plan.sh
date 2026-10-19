@@ -19,6 +19,24 @@ PY
 )"
 [[ "$approved_hash" == "$plan_hash" ]] || { echo 'Approved plan hash does not match the reviewed plan.' >&2; exit 1; }
 
+operation="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["operation"])' "$plan_path")"
+block_path=/etc/inspection/deployment-blocked
+if [[ -e "$block_path" ]]; then
+  [[ "$operation" == recovery ]] || { echo 'Deployment is blocked; only a matching recovery plan may run.' >&2; exit 1; }
+  python3 - "$plan_path" "$block_path" <<'PY'
+import json, sys
+plan=json.load(open(sys.argv[1], encoding="utf-8"))
+blocked={}
+for line in open(sys.argv[2], encoding="utf-8"):
+    key, sep, value=line.rstrip("\n").partition("=")
+    if sep: blocked[key]=value
+if plan.get("recoveryOf") != {"deploymentId":blocked.get("DEPLOYMENT_ID"), "planSha256":blocked.get("PLAN_SHA256")}:
+    raise SystemExit("Recovery reference does not match the active deployment block")
+PY
+elif [[ "$operation" == recovery ]]; then
+  echo 'Recovery requires an active deployment block.' >&2; exit 1
+fi
+
 deployment_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["deploymentId"])' "$plan_path")"
 [[ "$deployment_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]] || { echo 'Invalid deployment ID.' >&2; exit 2; }
 targets_file="$(mktemp /run/inspection-targets.XXXXXX)"
@@ -30,19 +48,23 @@ old_block="$(mktemp /run/inspection-block.XXXXXX)"
 cleanup() { rm -f "$targets_file" "$desired_file" "$stage_env" "$old_env" "$old_receipt" "$old_block"; }
 trap cleanup EXIT
 
-python3 - "$plan_path" "$targets_file" "$desired_file" <<'PY'
+python3 - "$plan_path" "$targets_file" "$desired_file" "$release_dir/deploy/oci/components.json" <<'PY'
 import json, re, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
-names = {"api":"inspection-api", "worker":"inspection-worker", "scheduler":"inspection-scheduler", "admin":"admin", "dashboard":"dashboard", "capture":"capture", "onboarding":"onboarding", "keycloak":"keycloak"}
+catalog = json.load(open(sys.argv[4], encoding="utf-8"))["components"]
+names = {name: item["service"] for name, item in catalog.items() if item.get("service")}
+image_keys = {item["image"] for item in catalog.values()} | {"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"}
+if plan.get("schemaVersion") != 2:
+    raise SystemExit("Plan schema v1 is unsupported; regenerate the plan with the current planner")
+if plan.get("operation") not in {"deploy", "rollback", "recovery"}:
+    raise SystemExit("Unsupported deployment operation")
 targets = plan.get("targets")
 if not isinstance(targets, list) or not targets or len(set(targets)) != len(targets):
     raise SystemExit("Invalid target list")
 if set(targets) - set(names) - {"operations"}:
     raise SystemExit("Unknown deployment target")
 images = plan.get("desiredImages")
-keys = {name.upper() + "_IMAGE" for name in ("api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak")}
-keys.update({"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"})
-if not isinstance(images, dict) or set(images) != keys:
+if not isinstance(images, dict) or set(images) != image_keys:
     raise SystemExit("Desired composition is incomplete")
 for key, value in images.items():
     if not isinstance(value, str) or not re.fullmatch(r"[^\s@]+@sha256:[a-f0-9]{64}", value):
@@ -50,8 +72,18 @@ for key, value in images.items():
 with open(sys.argv[2], "w", encoding="ascii") as out:
     out.write("\n".join(names[name] for name in targets if name in names) + "\n")
 with open(sys.argv[3], "w", encoding="ascii") as out:
-    for key in sorted(keys): out.write(f"{key}={images[key]}\n")
+    for key in sorted(image_keys): out.write(f"{key}={images[key]}\n")
 PY
+
+if [[ "$operation" == recovery ]]; then
+  python3 - "$plan_path" "$release_dir/deploy/oci/components.json" <<'PY'
+import json,sys
+plan=json.load(open(sys.argv[1], encoding="utf-8"))
+components=set(json.load(open(sys.argv[2], encoding="utf-8"))["components"])
+if set(plan["targets"]) != components:
+    raise SystemExit("Recovery requires all ten components")
+PY
+fi
 
 # Caddy bind-mounts the Caddyfile from its release directory. Recreate it when
 # the candidate changes that file so the new configuration actually takes effect.
@@ -61,8 +93,23 @@ fi
 
 if [[ -s /etc/inspection/compose.env ]]; then install -m 0600 /etc/inspection/compose.env "$old_env"; else : > "$old_env"; fi
 if [[ -s /etc/inspection/releases/current.env ]]; then install -m 0600 /etc/inspection/releases/current.env "$old_receipt"; else : > "$old_receipt"; fi
-actual_base="$(python3 - "$old_receipt" <<'PY'
+runtime_hash="$(PYTHONPATH="$release_dir/deploy/oci" python3 - "$release_dir" <<'PY'
+import pathlib, sys
+from planner import runtime_config_sha256
+print(runtime_config_sha256(pathlib.Path(sys.argv[1])))
+PY
+)"
+planned_runtime_hash="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("runtimeConfigSha256", ""))' "$plan_path")"
+if [[ -n "$planned_runtime_hash" && "$runtime_hash" != "$planned_runtime_hash" ]]; then
+  echo 'Runtime configuration hash does not match the approved plan.' >&2; exit 1
+fi
+if [[ -z "$planned_runtime_hash" ]]; then
+  echo 'Plan is missing runtimeConfigSha256; regenerate the plan with the current planner.' >&2; exit 1
+fi
+actual_base="$(python3 - "$old_receipt" "$release_dir/deploy/oci/components.json" <<'PY'
 import hashlib, json, sys
+catalog=json.load(open(sys.argv[2], encoding="utf-8"))["components"]
+image_keys={item["image"] for item in catalog.values()} | {"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"}
 values = {}
 for line in open(sys.argv[1], encoding="utf-8"):
     key, sep, value = line.rstrip("\n").partition("=")
@@ -72,7 +119,7 @@ for line in open(sys.argv[1], encoding="utf-8"):
 legacy = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE"}
 if set(values) == legacy:
     for key in ("WORKER_IMAGE", "SCHEDULER_IMAGE", "OPERATIONS_IMAGE"): values[key] = values["API_IMAGE"]
-if values and len(values) not in (13, 14): raise SystemExit("active image receipt is incomplete; synchronize state")
+if values and set(values) not in (image_keys, image_keys-{"VIDEO_WORKER_IMAGE"}, image_keys-{"VIDEO_WORKER_IMAGE", "LITELLM_IMAGE"}): raise SystemExit("active image receipt is incomplete; synchronize state")
 print(hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
 PY
 )"
@@ -145,7 +192,6 @@ PY
   unset keycloak_smtp_server
 fi
 
-block_path=/etc/inspection/deployment-blocked
 had_block=0
 if [[ -e "$block_path" ]]; then
   install -m 0600 "$block_path" "$old_block"
@@ -162,11 +208,22 @@ if grep -qx inspection-worker "$targets_file"; then gateway_selected=1; fi
 changed_images=()
 while IFS= read -r component; do
   [[ -n "$component" ]] || continue
-  key="$(printf '%s_IMAGE' "$component" | tr '[:lower:]' '[:upper:]')"
+  key="$(printf '%s_IMAGE' "$component" | tr '[:lower:]-' '[:upper:]_')"
   value="$(sed -n "s/^${key}=//p" "$desired_file")"
   [[ -n "$value" ]] && changed_images+=("$value")
 done < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["targets"]))' "$plan_path")
-if [[ "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["operations"]["runMigration"]).lower())' "$plan_path")" == true ]]; then
+go_selected=0
+for component in api worker scheduler video-worker operations; do
+  if python3 - "$plan_path" "$component" <<'PY'
+import json,sys
+raise SystemExit(0 if sys.argv[2] in json.load(open(sys.argv[1]))["targets"] else 1)
+PY
+  then go_selected=1; fi
+done
+if [[ "$operation" == recovery ]]; then go_selected=1; fi
+migration=0
+if [[ "$operation" != rollback && "$go_selected" == 1 ]]; then migration=1; fi
+if [[ "$migration" == 1 || "$operation" == rollback ]]; then
   changed_images+=("$(sed -n 's/^OPERATIONS_IMAGE=//p' "$desired_file")")
 fi
 if [[ "$gateway_selected" == 1 ]]; then
@@ -176,7 +233,13 @@ if [[ "$gateway_selected" == 1 ]]; then
 fi
 block() {
   local reason="$1"
-  printf 'DEPLOYMENT_ID=%s\nPLAN_SHA256=%s\nPHASE=%s\nREASON=%s\n' "$deployment_id" "$plan_hash" "$phase" "$reason" > "$block_path"
+  local blocked_id="$deployment_id" blocked_hash="$plan_hash"
+  if [[ "$operation" == recovery && -s "$block_path" ]]; then
+    blocked_id="$(sed -n 's/^DEPLOYMENT_ID=//p' "$block_path" | head -n 1)"
+    blocked_hash="$(sed -n 's/^PLAN_SHA256=//p' "$block_path" | head -n 1)"
+  fi
+  reason="${reason//$'\n'/ }"
+  printf 'DEPLOYMENT_ID=%s\nPLAN_SHA256=%s\nPHASE=%s\nREASON=%s\n' "$blocked_id" "$blocked_hash" "$phase" "$reason" > "$block_path"
   chmod 0600 "$block_path"; chown root:root "$block_path"
 }
 on_exit() {
@@ -201,7 +264,9 @@ on_exit() {
       )
       echo "Deployment diagnostics: $diagnostics (root only)." >&2
     fi
-    if [[ "$migration_started" == 1 ]]; then
+    if [[ "$operation" == recovery ]]; then
+      block "Recovery failed during $phase; original deployment reference preserved."
+    elif [[ "$migration_started" == 1 ]]; then
       block "Deployment failed after database migration started; inspect before recovery."
     elif [[ "$phase" == promoting ]]; then
       block 'Deployment failed while promoting state; reconcile receipts and services before recovery.'
@@ -217,11 +282,7 @@ on_exit() {
       services_recovered=1
       docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}" >/dev/null 2>&1 || services_recovered=0
       if [[ "$gateway_recovered" == 1 && "$services_recovered" == 1 ]]; then
-        if [[ "$had_block" == 1 ]]; then
-          install -o root -g root -m 0600 "$old_block" "$block_path" || block 'Failed to restore the previous deployment block.'
-        else
-          rm -f "$block_path"
-        fi
+        rm -f "$block_path"
         echo 'Previous services recovered; this deployment still failed.' >&2
       else
         block 'Failed to recover selected services after deployment failure.'
@@ -245,21 +306,51 @@ printf '%s' "$ghcr_token" | docker login ghcr.io --username "$ghcr_user" --passw
 unset ghcr_token
 for image in "${changed_images[@]}"; do docker pull "$image"; done
 
+if [[ "$operation" == rollback ]]; then
+  if grep -q '^VIDEO_WORKER_IMAGE=' "$old_receipt" && ! grep -qx 'video-worker' < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["targets"]))' "$plan_path"); then
+    echo 'Rollback target must include video-worker; refusing to leave accepted video work without a worker.' >&2; exit 1
+  fi
+  "${dc[@]}" run --rm --no-deps inspection-schema-check || {
+    echo 'target images do not support the current database schema; this upgrade is one-way, recover by deploying forward' >&2
+    exit 1
+  }
+fi
+
+if [[ "$go_selected" == 1 ]]; then
+  if [[ -s "$old_env" ]]; then
+    "${dc[@]}" up -d --no-recreate --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
+  else
+    phase=dependencies
+    "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
+  fi
+fi
+
 if [[ "$gateway_selected" == 1 ]]; then
   phase=services
   block 'LiteLLM gateway is updating.'
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 litellm
 fi
 
-migration="$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["operations"]["runMigration"]).lower())' "$plan_path")"
+ migration=false
+if [[ "$migration" == 1 ]]; then migration=true; fi
 if [[ "$migration" == true ]]; then
   if [[ "${#compose_services[@]}" -gt 0 ]]; then
     phase=services
     block 'Stopping the coordinated Go services before database migration.'
-    if [[ -s "$old_env" ]]; then
-      docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${compose_services[@]}"
+  if [[ -s "$old_env" ]]; then
+      old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
+      stop_services=()
+      for service in "${compose_services[@]}"; do
+        grep -Fxq "$service" <<< "$old_services" && stop_services+=("$service")
+      done
+      if [[ "${#stop_services[@]}" -gt 0 ]]; then
+        docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"
+        services_stopped=1
+      fi
+    else
+      phase=dependencies
+      "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
     fi
-    services_stopped=1
   fi
   phase=migration
   block 'Coordinated migration is running.'
@@ -272,16 +363,37 @@ if [[ "${#compose_services[@]}" -gt 0 ]]; then
   phase=services
   [[ "$migration_started" == 1 ]] || block 'Selected services are updating.'
   if [[ "$services_stopped" == 0 && -s "$old_env" ]]; then
-    docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${compose_services[@]}"
+    old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
+    stop_services=()
+    for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && stop_services+=("$service"); done
+    if [[ "${#stop_services[@]}" -gt 0 ]]; then docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"; fi
   fi
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}"
-  if [[ "$(python3 -c 'import json,sys; print("keycloak" in json.load(open(sys.argv[1]))["targets"])' "$plan_path")" == True ]]; then
+  phase=smoke
+  if [[ "$operation" == recovery || "$(python3 -c 'import json,sys; print("keycloak" in json.load(open(sys.argv[1]))["targets"])' "$plan_path")" == True ]]; then
     "${dc[@]}" run --rm --no-deps inspection-keycloak-check
     "${dc[@]}" run --rm --no-deps inspection-keycloak-configure
   fi
-  phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" /usr/local/sbin/inspection-smoke
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" "$release_dir/deploy/oci/host/smoke.sh"
 fi
+
+for service in "${compose_services[@]}"; do
+  container_id="$("${dc[@]}" ps -q "$service")"
+  [[ -n "$container_id" ]] || { echo "Updated service has no running container: $service" >&2; exit 1; }
+  image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+  repo_digests="$(docker image inspect --format '{{join .RepoDigests "\n"}}' "$image_id")"
+  approved_image="$(python3 - "$release_dir/deploy/oci/components.json" "$plan_path" "$service" <<'PY'
+import json,sys
+catalog=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
+plan=json.load(open(sys.argv[2], encoding="utf-8"))
+name=next((name for name,item in catalog.items() if item.get("service")==sys.argv[3]), None)
+key=catalog[name]["image"] if name else ("CADDY_IMAGE" if sys.argv[3] == "caddy" else None)
+if key is None: raise SystemExit("service image is missing from the approved catalog")
+print(plan["desiredImages"][key])
+PY
+)"
+  grep -Fxq "$approved_image" <<< "$repo_digests" || { echo "Container digest differs from the approved image for $service." >&2; exit 1; }
+done
 
 phase=promoting
 mkdir -p /etc/inspection/releases
@@ -293,7 +405,9 @@ import json, os, sys
 plan=json.load(open(sys.argv[1], encoding="utf-8"))
 with open(sys.argv[2], "w", encoding="utf-8") as out:
     out.write(f"DEPLOYMENT_ID={plan['deploymentId']}\nPLAN_SHA256={plan['planSha256']}\nSOURCE_SHA={plan.get('sourceSha', '')}\n")
+    out.write(f"RUNTIME_CONFIG_SHA256={plan.get('runtimeConfigSha256', '')}\n")
     for key, value in sorted(plan["desiredImages"].items()): out.write(f"{key}={value}\n")
+    for name, value in sorted(plan.get("componentSources", {}).items()): out.write(f"COMPONENT_SOURCE_{name.upper().replace('-', '_')}={value}\n")
 os.chmod(sys.argv[2], 0o600)
 PY
 if [[ -s /etc/inspection/releases/current.env ]]; then install -m 0600 /etc/inspection/releases/current.env /etc/inspection/releases/previous.env; fi

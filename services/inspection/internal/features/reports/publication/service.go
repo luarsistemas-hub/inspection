@@ -2,6 +2,7 @@ package publication
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -82,12 +83,28 @@ func (s Service) Publish(ctx context.Context, in PublishInput) (database.ReportP
 		return tx.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("tenant_id=? AND client_mutation_id=?", in.TenantID, in.ClientMutationID).First(&out).Error; err == nil {
 				return nil
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
 			}
 			var snap database.ReportSnapshot
-			if err := tx.Where("tenant_id=? AND id=? AND inspection_id=?", in.TenantID, in.SnapshotID, in.InspectionID).First(&snap).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "snapshotId", "final snapshot not found")
+			if err := tx.Where("tenant_id=? AND id=? AND inspection_id=?", in.TenantID, in.SnapshotID, in.InspectionID).First(&snap).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "snapshotId", "report snapshot not found")
+			} else if err != nil {
+				return err
 			}
-			if err := publicationcore.CanPublish(in.Final, "PUBLISHED"); err != nil {
+			var prior database.ReportPublication
+			if err := tx.Where("tenant_id=? AND snapshot_id=?", in.TenantID, in.SnapshotID).First(&prior).Error; err == nil {
+				if prior.Status != publicationcore.Published {
+					return publicationcore.CanPublish(in.Final, prior.Status)
+				}
+				// A snapshot already released remains the authoritative release for
+				// this version; a different mutation key must not create a duplicate.
+				out = prior
+				return nil
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if err := publicationcore.CanPublish(in.Final, ""); err != nil {
 				return err
 			}
 			now := s.clock()
@@ -114,8 +131,10 @@ func (s Service) Invalidate(ctx context.Context, in InvalidateInput) (database.R
 		return out, apperror.New(apperror.Internal, "", "internal error")
 	}
 	err := (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, in.PublicationID).First(&out).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, in.PublicationID).First(&out).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.New(apperror.NotFound, "publicationId", "publication not found")
+		} else if err != nil {
+			return err
 		}
 		status, at, err := publicationcore.Invalidate(out.Status, in.Reason, in.ExpectedVersion, out.Version, s.clock())
 		if err != nil {

@@ -5,10 +5,11 @@ package resolve_reference
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"inspection/libs/identity"
-	"inspection/services/inspection/internal/features/capture/core"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
@@ -20,12 +21,14 @@ import (
 type Query struct {
 	TenantID, AssetID identity.ID
 	VersionID         *identity.ID
+	MediaKind         string
 }
 
 type Result struct {
 	Version      database.OriginVersion
 	Evidence     []Evidence
-	Requirements []core.Requirement
+	VideoScope   []VideoEvidence
+	Requirements []capturecore.Requirement
 }
 
 // Evidence is the public, immutable origin projection used by capture.
@@ -34,6 +37,20 @@ type Evidence struct {
 	Category       string      `json:"category"`
 	Description    string      `json:"description"`
 	AttentionItems []string    `json:"attentionItems"`
+}
+
+// VideoEvidence identifies a retained representative frame and its derived scope.
+type VideoEvidence struct {
+	ScopeItemID          identity.ID `json:"scopeItemId"`
+	FrameID              identity.ID `json:"frameId"`
+	SourceMediaID        identity.ID `json:"sourceMediaId"`
+	PTSMicros            int64       `json:"ptsMicros"`
+	EnvironmentCandidate string      `json:"environmentCandidate"`
+	ComponentLabel       string      `json:"componentLabel"`
+	ViewLabel            string      `json:"viewLabel"`
+	Visibility           string      `json:"visibility"`
+	Gap                  bool        `json:"gap"`
+	Ambiguous            bool        `json:"ambiguous"`
 }
 
 type Dependencies struct {
@@ -60,20 +77,77 @@ func Setup(d Dependencies) error {
 func resolve(tx *gorm.DB, query Query) (Result, error) {
 	var result Result
 	var origin database.Origin
-	if err := tx.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).First(&origin).Error; err != nil || origin.ActiveVersionID == nil {
-		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "active origin is required")
+	if err := tx.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).First(&origin).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return Result{}, err
+	} else if err != nil || origin.ActiveVersionID == nil {
+		return Result{}, apperror.New(apperror.InvalidInput, "referenceVersionId", "active origin is required")
 	}
 	if query.VersionID != nil && *query.VersionID != *origin.ActiveVersionID {
+		var requested database.OriginVersion
+		if err := tx.Where("tenant_id=? AND id=?", query.TenantID, *query.VersionID).Take(&requested).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return Result{}, apperror.New(apperror.NotFound, "", "resource not found")
+			}
+			return Result{}, err
+		}
 		return Result{}, apperror.New(apperror.Conflict, "referenceVersionId", "origin reference is no longer active")
 	}
-	if err := tx.Where("tenant_id=? AND id=? AND status='ACTIVE'", query.TenantID, *origin.ActiveVersionID).First(&result.Version).Error; err != nil {
+	if err := tx.Where("tenant_id=? AND id=? AND status='ACTIVE'", query.TenantID, *origin.ActiveVersionID).First(&result.Version).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "active origin is unavailable")
+	} else if err != nil {
+		return Result{}, err
+	}
+	versionKind := result.Version.MediaKind
+	if versionKind == "" {
+		versionKind = "PHOTO"
+	}
+	if query.MediaKind != "" && query.MediaKind != versionKind {
+		return Result{}, apperror.New(apperror.InvalidInput, "referenceVersionId", "reference modality must match the inspection modality")
+	}
+	if versionKind == "VIDEO" {
+		if result.Version.VideoPreparationID == nil || result.Version.ScopeManifestDigest == "" {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "video origin has no pinned prepared scope")
+		}
+		var prep database.VideoPreparationJob
+		if err := tx.Where("tenant_id=? AND id=? AND status='READY' AND manifest_digest=?", query.TenantID, *result.Version.VideoPreparationID, result.Version.ScopeManifestDigest).Take(&prep).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "video origin preparation is unavailable")
+		} else if err != nil {
+			return Result{}, err
+		}
+		var rows []database.VideoScopeItem
+		if err := tx.Where("tenant_id=? AND preparation_id=?", query.TenantID, prep.ID).Order("created_at,id").Find(&rows).Error; err != nil {
+			return Result{}, err
+		}
+		if len(rows) == 0 {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "video origin has no usable reference scope")
+		}
+		frameIDs := make([]identity.ID, 0, len(rows))
+		for _, item := range rows {
+			frameIDs = append(frameIDs, item.FrameID)
+		}
+		var frames []database.VideoFrame
+		if err := tx.Where("tenant_id=? AND preparation_id=? AND source_media_id=? AND id IN ? AND sha256<>'' AND object_key<>''", query.TenantID, prep.ID, prep.MediaID, frameIDs).Find(&frames).Error; err != nil {
+			return Result{}, err
+		}
+		byID := make(map[identity.ID]database.VideoFrame, len(frames))
+		for _, frame := range frames {
+			byID[frame.ID] = frame
+		}
+		for _, item := range rows {
+			frame, ok := byID[item.FrameID]
+			if !ok {
+				return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "video origin frame lineage is incomplete")
+			}
+			result.VideoScope = append(result.VideoScope, VideoEvidence{ScopeItemID: item.ID, FrameID: frame.ID, SourceMediaID: prep.MediaID, PTSMicros: frame.PTSMicros, EnvironmentCandidate: item.EnvironmentCandidate, ComponentLabel: item.ComponentLabel, ViewLabel: item.ViewLabel, Visibility: item.Visibility, Ambiguous: item.Visibility == "AMBIGUOUS" || item.IdentityStatus == "AMBIGUOUS", Gap: item.Visibility == "OBSCURED" || item.Visibility == "NOT_VISIBLE"})
+		}
+		result.Requirements = []capturecore.Requirement{capturecore.VideoMainRequirement("FIXED_ORIGIN")}
+		return result, nil
 	}
 	var rows []database.OriginEvidence
 	if err := tx.Where("tenant_id=? AND origin_version_id=?", query.TenantID, result.Version.ID).Order("created_at,id").Find(&rows).Error; err != nil {
 		return Result{}, err
 	}
-	if len(rows) == 0 || len(rows) > core.MaxActivePhotos {
+	if len(rows) == 0 || len(rows) > capturecore.MaxActivePhotos {
 		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "origin evidence must fit the capture limit")
 	}
 	for _, item := range rows {
@@ -84,7 +158,7 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 			}
 		}
 		result.Evidence = append(result.Evidence, Evidence{MediaID: item.MediaID, Category: item.Category, Description: item.Description, AttentionItems: attentionItems})
-		result.Requirements = append(result.Requirements, core.Requirement{
+		result.Requirements = append(result.Requirements, capturecore.Requirement{
 			Key:                  "origin:" + item.MediaID.String(),
 			Section:              item.Category,
 			Label:                item.Category,

@@ -108,8 +108,18 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			return nil
 		}
 		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", tenantID, promotion.InspectionID).First(&inspection).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, promotion.InspectionID).First(&inspection).Error; err != nil {
 			return failTx(tx, tenantID, promotion, "inspection unavailable")
+		}
+		if inspection.Status != "COMPLETED" || inspection.MediaKind != "PHOTO" {
+			return failTx(tx, tenantID, promotion, "completed photo inspection is required")
+		}
+		var selectedIDs []identity.ID
+		if err := json.Unmarshal(promotion.SelectedMediaIDs, &selectedIDs); err != nil {
+			return failTx(tx, tenantID, promotion, "invalid photo selection")
+		}
+		if _, err := selectedMedia(tx, tenantID, inspection.ID, selectedIDs); err != nil {
+			return failTx(tx, tenantID, promotion, "selected photo evidence is no longer available")
 		}
 		var asset database.Asset
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, promotion.AssetID).First(&asset).Error; err != nil {

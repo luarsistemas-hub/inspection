@@ -4,11 +4,24 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 runtime_host="${INSPECTION_RUNTIME_HOST:-}"
 package_dir="${INSPECTION_PACKAGE_DIR:-/tmp/inspection-oci-packages}"
+catalog_image_keys="$(python3 - "$root/components.json" <<'PY'
+import json, sys
+catalog=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
+keys={item["image"] for item in catalog.values()} | {"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"}
+print(" ".join(sorted(key for key in keys if key.endswith("_IMAGE"))))
+PY
+)"
+catalog_services="$(python3 - "$root/components.json" <<'PY'
+import json, sys
+catalog=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
+print("|".join(sorted({item["service"] for item in catalog.values() if item.get("service")} | {"caddy", "postgres", "rabbitmq", "dragonfly", "litellm"})))
+PY
+)"
 require_host() { [[ -n "$runtime_host" ]] || { echo "Set INSPECTION_RUNTIME_HOST to the VM public IP or hostname." >&2; exit 2; }; }
 ssh_target() { require_host; if [[ "$runtime_host" == *@* ]]; then printf '%s' "$runtime_host"; else printf 'ubuntu@%s' "$runtime_host"; fi; }
 ssh_host() { ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "$@"; }
 safe_release() { [[ "${1:-}" =~ ^[a-f0-9]{40}$ ]] || { echo "Release must be a 40-character commit SHA." >&2; exit 2; }; }
-usage() { echo "Usage: $0 {validate|package|preflight|bootstrap|secrets refresh|host-tools RELEASE|deploy RELEASE|rollback RELEASE|plan ACTIVE.env CANDIDATE.json TARGETS [PLAN.json]|rollback-plan ACTIVE.env PREVIOUS.env TARGETS PLAN.json|apply PLAN.json SOURCE-BUNDLE.tgz|deployment-status|sync-state [current|previous]|status|cleanup-images|logs SERVICE|restart SERVICE|smoke|stop}"; }
+usage() { echo "Usage: $0 {validate|package|preflight|bootstrap|secrets refresh|host-tools RELEASE|deploy RELEASE|rollback RELEASE|plan ACTIVE.env CANDIDATE.json TARGETS [PLAN.json]|rollback-plan ACTIVE.env PREVIOUS.env TARGETS PLAN.json|recovery-plan BLOCKED.env CANDIDATE.json PLAN.json|apply PLAN.json SOURCE-BUNDLE.tgz|deployment-status|sync-state [current|previous|blocked]|status|cleanup-images|logs SERVICE|restart SERVICE|smoke|stop}"; }
 verify_release() {
   local release="$1" bundle="$2" manifest="$3" checksum="$4"
   python3 "$root/verify-release.py" --release "$release" --bundle "$bundle" --manifest "$manifest" --checksum "$checksum"
@@ -25,8 +38,8 @@ transfer_release() {
     sha256sum --check '$release-bundle.sha256'
     grep -qx \"RELEASE_SHA=$release\" \"\$manifest\"
     grep -qx \"BUNDLE_SHA256=\$(awk 'NR==1 {print \$1}' \"\$checksum\")\" \"\$manifest\"
-    for key in API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE LITELLM_IMAGE; do
-      if [[ "\$key" == WORKER_IMAGE || "\$key" == SCHEDULER_IMAGE || "\$key" == OPERATIONS_IMAGE || "\$key" == LITELLM_IMAGE ]] && ! grep -q "^\$key=" "\$manifest"; then continue; fi
+    for key in $catalog_image_keys; do
+      if [[ \$key == WORKER_IMAGE || \$key == SCHEDULER_IMAGE || \$key == OPERATIONS_IMAGE || \$key == LITELLM_IMAGE || \$key == VIDEO_WORKER_IMAGE ]] && ! grep -q ^\$key= \$manifest; then continue; fi
       value=\$(grep -m1 \"^\$key=\" \"\$manifest\" | cut -d= -f2-)
       [[ \"\$value\" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo \"Invalid digest-pinned image reference: \$key\" >&2; exit 1; }
       [[ \$(grep -c \"^\$key=\" \"\$manifest\") == 1 ]] || { echo \"Duplicate or missing image reference: \$key\" >&2; exit 1; }
@@ -60,17 +73,32 @@ case "${1:-}" in
     mkdir -p "$(dirname "$output")"
     git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
     bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
-    python3 "$root/planner.py" --active "$active" --candidate "$candidate" --targets "$targets" --bundle-sha256 "$bundle_sha" --output "$output"
+    scope=selected; [[ "$targets" != all && "$targets" != changed ]] || { scope="$targets"; targets=""; }
+    python3 "$root/planner.py" --active "$active" --candidate "$candidate" --targets "$targets" --scope "$scope" --repo "$(git rev-parse --show-toplevel)" --bundle-sha256 "$bundle_sha" --output "$output"
     ;;
   rollback-plan)
     active="${2:-}" previous="${3:-}" targets="${4:-}" output="${5:-}"
     [[ -n "$active" && -n "$previous" && -n "$targets" && -n "$output" ]] || { usage; exit 2; }
-    source_sha="$(git rev-parse HEAD)"
+    source_sha="$(sed -n 's/^SOURCE_SHA=//p' "$active" | head -n 1)"
+    [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || { echo 'Active receipt has no valid SOURCE_SHA; automatic rollback is unavailable.' >&2; exit 1; }
     bundle="${output%.json}.source-bundle.tgz"
     mkdir -p "$(dirname "$output")"
     git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
     bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
-    python3 "$root/planner.py" --active "$active" --rollback-from "$previous" --targets "$targets" --source-sha "$source_sha" --bundle-sha256 "$bundle_sha" --output "$output"
+    python3 "$root/planner.py" --active "$active" --rollback-from "$previous" --targets "$targets" --source-sha "$source_sha" --repo "$(git rev-parse --show-toplevel)" --bundle-sha256 "$bundle_sha" --output "$output"
+    ;;
+  recovery-plan)
+    blocked="${2:-}" candidate="${3:-}" output="${4:-}"
+    [[ -s "$blocked" && -s "$candidate" && -n "$output" ]] || { usage; exit 2; }
+    blocked_id="$(sed -n 's/^BLOCKED_DEPLOYMENT_ID=//p' "$blocked" | head -n 1)"
+    blocked_hash="$(sed -n 's/^BLOCKED_PLAN_SHA256=//p' "$blocked" | head -n 1)"
+    [[ "$blocked_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ && "$blocked_hash" =~ ^[a-f0-9]{64}$ ]] || { echo 'Blocked state is missing its recovery reference.' >&2; exit 1; }
+    source_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceSha"])' "$candidate")"
+    bundle="${output%.json}.source-bundle.tgz"
+    mkdir -p "$(dirname "$output")"
+    git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
+    bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
+    python3 "$root/planner.py" --active "$blocked" --candidate "$candidate" --targets '' --scope all --repo "$(git rev-parse --show-toplevel)" --recovery-of "$blocked_id,$blocked_hash" --deployment-id "recovery-$(date -u +%Y%m%d%H%M%S)" --bundle-sha256 "$bundle_sha" --output "$output"
     ;;
   apply)
     plan="${2:-}" bundle="${3:-}"
@@ -90,9 +118,9 @@ PY
     staging="$(mktemp -d /tmp/inspection-plan.XXXXXX)"
     trap 'rm -rf "$staging"' EXIT
     install -m 0600 "$plan" "$staging/plan.json"
-    install -m 0600 "$bundle" "$staging/source-bundle.tgz"
+    install -m 0600 "$bundle" "$staging/bundle.tgz"
     accepted=0
-    tar -czf - -C "$staging" plan.json source-bundle.tgz | ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "apply-plan $deployment_id $plan_hash" || accepted=$?
+    COPYFILE_DISABLE=1 tar -czf - -C "$staging" plan.json bundle.tgz | ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "apply-plan $deployment_id $plan_hash" || accepted=$?
     unknown_count=0
     for attempt in $(seq 1 360); do
       status_json="$(ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "deployment-status $deployment_id" 2>/dev/null || true)"
@@ -114,7 +142,7 @@ PY
     ;;
   sync-state)
     kind="${2:-current}" output="${3:-}"
-    [[ "$kind" == current || "$kind" == previous ]] || { usage; exit 2; }
+    [[ "$kind" == current || "$kind" == previous || "$kind" == blocked ]] || { usage; exit 2; }
     if [[ -n "$output" ]]; then ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "export-state $kind" > "$output"; else ssh -o StrictHostKeyChecking=yes "$(ssh_target)" "export-state $kind"; fi
     ;;
   validate)
@@ -126,8 +154,8 @@ PY
       test -f "$root/$stack/schema.yaml"
       (cd "$root/$stack" && terraform fmt -check -recursive && terraform init -backend=false -input=false && terraform validate)
     done
-    bash -n "$root/ops.sh" "$root"/host/*.sh
-    python3 -m py_compile "$root/verify-release.py"
+    for script in "$root/ops.sh" "$root"/host/*.sh; do bash -n "$script"; done
+    python3 -m py_compile "$root"/*.py "$root"/host/*.py
     docker compose --env-file "$root/compose.env.example" -f "$root/compose.yaml" config --quiet
     ;;
   package)
@@ -201,6 +229,12 @@ PY
       exit 2
     fi
     require_host
+    if [[ "$1" == deploy || "$1" == rollback ]]; then
+      if ssh_host "sudo grep -q '^VIDEO_WORKER_IMAGE=' /etc/inspection/releases/current.env"; then
+        echo 'Legacy deploy/rollback is disabled for video-enabled receipts; use plan/apply.' >&2
+        exit 1
+      fi
+    fi
     bundle="$root/releases/$release-bundle.tgz"
     manifest="$root/releases/$release.env"
     checksum="$root/releases/$release-bundle.sha256"
@@ -217,44 +251,75 @@ PY
     fi
     ;;
   status) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml ps; sudo df -h / /srv/inspection; sudo docker system df; sudo test ! -e /etc/inspection/deployment-blocked || sudo cat /etc/inspection/deployment-blocked; sudo systemctl --no-pager status inspection-secrets-refresh.service' ;;
-  cleanup-images) ssh_host 'sudo bash -s' <<'REMOTE'
+  cleanup-images) ssh_host "sudo bash -s -- $catalog_image_keys" <<'REMOTE'
 set -euo pipefail
-declare -A keep=()
-image_keys=(API_IMAGE WORKER_IMAGE SCHEDULER_IMAGE OPERATIONS_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE LITELLM_IMAGE)
+keep=("")
+image_keys=("")
+for key in "$@"; do [[ "$key" == *_IMAGE ]] && image_keys+=("$key"); done
+known=("${image_keys[@]}")
+contains() {
+  local needle="$1" item
+  shift
+  for item in "$@"; do [[ -n "$item" && "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+component_keys=("")
+infra_keys=(POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE LITELLM_IMAGE)
+for key in "${image_keys[@]}"; do
+  [[ -n "$key" ]] || continue
+  case "$key" in POSTGRES_IMAGE|DRAGONFLY_IMAGE|RABBITMQ_IMAGE|CADDY_IMAGE|LITELLM_IMAGE) ;; *) component_keys+=("$key") ;; esac
+done
+full_count=$((${#component_keys[@]} - 1 + ${#infra_keys[@]}))
+pre_video_count=$((full_count - 1))
+pre_litellm_count=$((full_count - 2))
+legacy_count=10
 for manifest in /etc/inspection/releases/current.env /etc/inspection/releases/previous.env; do
   [[ -s "$manifest" ]] || continue
-  declare -A seen=()
+  seen=("")
   while IFS='=' read -r key reference; do
-    case "$key" in API_IMAGE|WORKER_IMAGE|SCHEDULER_IMAGE|OPERATIONS_IMAGE|KEYCLOAK_IMAGE|ADMIN_IMAGE|DASHBOARD_IMAGE|CAPTURE_IMAGE|ONBOARDING_IMAGE|POSTGRES_IMAGE|DRAGONFLY_IMAGE|RABBITMQ_IMAGE|CADDY_IMAGE|LITELLM_IMAGE) ;;
-      *) continue ;;
-    esac
+    [[ "$key" == *_IMAGE ]] || continue
+    contains "$key" "${known[@]}" || { echo "Unknown image key in $manifest: $key" >&2; exit 1; }
     [[ "$reference" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo "Invalid image reference in $manifest: $key" >&2; exit 1; }
-    [[ -z "${seen[$key]:-}" ]] || { echo "Duplicate image reference in $manifest: $key" >&2; exit 1; }
-    seen["$key"]=1
+    contains "$key" "${seen[@]}" && { echo "Duplicate image reference in $manifest: $key" >&2; exit 1; }
+    seen+=("$key")
     image_id="$(docker image inspect --format '{{.Id}}' "$reference")" || { echo "Required current/previous image is missing: $reference" >&2; exit 1; }
-    keep["$image_id"]=1
+    contains "$image_id" "${keep[@]}" || keep+=("$image_id")
   done < "$manifest"
-  for key in "${image_keys[@]}"; do
-    [[ "$key" == WORKER_IMAGE || "$key" == SCHEDULER_IMAGE || "$key" == OPERATIONS_IMAGE || "$key" == LITELLM_IMAGE ]] && [[ -z "${seen[$key]:-}" ]] && continue
-    [[ "$key" == LITELLM_IMAGE && -z "${seen[$key]:-}" ]] && continue
-    [[ -n "${seen[$key]:-}" ]] || { echo "Missing image reference in $manifest: $key" >&2; exit 1; }
+  image_count=$((${#seen[@]} - 1))
+  valid=0
+  for omitted in '' VIDEO_WORKER_IMAGE 'VIDEO_WORKER_IMAGE LITELLM_IMAGE'; do
+    expected=("")
+    for key in "${image_keys[@]}"; do
+      [[ -n "$key" ]] || continue
+      [[ " $omitted " == *" $key "* ]] || expected+=("$key")
+    done
+    if (( image_count == ${#expected[@]} - 1 )); then
+      matches=1
+      for key in "${expected[@]}"; do [[ -n "$key" ]] || continue; contains "$key" "${seen[@]}" || matches=0; done
+      (( matches == 1 )) && valid=1
+    fi
   done
-  for key in "${image_keys[@]}"; do
-    [[ -n "${seen[$key]:-}" ]] || { echo "Missing image reference in $manifest: $key" >&2; exit 1; }
-  done
+  if (( image_count == legacy_count )); then
+    legacy=(API_IMAGE KEYCLOAK_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE POSTGRES_IMAGE DRAGONFLY_IMAGE RABBITMQ_IMAGE CADDY_IMAGE)
+    matches=1
+    for key in "${legacy[@]}"; do contains "$key" "${seen[@]}" || matches=0; done
+    (( matches == 1 )) && valid=1
+  fi
+  (( valid == 1 )) || { echo "Image manifest is incomplete: $manifest" >&2; exit 1; }
   unset seen
 done
-[[ "${#keep[@]}" -gt 0 ]] || { echo 'No current release manifest found; refusing image cleanup.' >&2; exit 1; }
-mapfile -t image_ids < <(docker image ls --no-trunc --quiet | sort -u)
+(( ${#keep[@]} > 1 )) || { echo 'No current release manifest found; refusing image cleanup.' >&2; exit 1; }
+image_ids=()
+while IFS= read -r image_id; do [[ -n "$image_id" ]] && image_ids+=("$image_id"); done < <(docker image ls --no-trunc --quiet | sort -u)
 for image_id in "${image_ids[@]}"; do
-  [[ -n "${keep[$image_id]:-}" ]] && continue
+  contains "$image_id" "${keep[@]}" && continue
   if [[ -n "$(docker ps --all --quiet --filter "ancestor=$image_id")" ]]; then continue; fi
   docker image rm "$image_id"
 done
 REMOTE
     ;;
   logs) service="${2:-}"; [[ "$service" =~ ^[a-z0-9_-]+$ ]] || { usage; exit 2; }; ssh_host "sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml logs --tail=200 $service" ;;
-  restart) service="${2:-}"; [[ "$service" =~ ^(caddy|inspection-api|inspection-worker|inspection-scheduler|admin|dashboard|capture|onboarding|keycloak|postgres|rabbitmq|dragonfly)$ ]] || { usage; exit 2; }; ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service" ;;
+  restart) service="${2:-}"; [[ "$service" =~ ^($catalog_services)$ ]] || { usage; exit 2; }; ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service" ;;
   smoke) ssh_host 'sudo /usr/local/sbin/inspection-smoke' ;;
   stop) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml stop' ;;
   *) usage; exit 2 ;;

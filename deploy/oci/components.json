@@ -1,21 +1,22 @@
 {
   "schemaVersion": 1,
   "components": {
-    "api": {"kind": "go", "command": "inspection-api", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
-    "worker": {"kind": "go", "command": "inspection-worker", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
-    "scheduler": {"kind": "go", "command": "inspection-scheduler", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
-    "operations": {"kind": "go-tools", "commands": ["inspection-migrate", "inspection-prompt-seed", "inspection-seed", "inspection-schema-check", "inspection-keycloak-check"], "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
-    "admin": {"kind": "frontend", "paths": ["apps/admin/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
-    "dashboard": {"kind": "frontend", "paths": ["apps/dashboard/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
-    "capture": {"kind": "frontend", "paths": ["apps/capture/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
-    "onboarding": {"kind": "frontend", "paths": ["apps/onboarding/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs", "scripts/design-system/"]},
-    "keycloak": {"kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/keycloak/configure-realm.sh", "deploy/keycloak/inspection-realm.json", "deploy/oci/keycloak-realm.json", "deploy/oci/Dockerfile.keycloak"]}
+    "api": {"service": "inspection-api", "image": "API_IMAGE", "kind": "go", "command": "inspection-api", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "worker": {"service": "inspection-worker", "image": "WORKER_IMAGE", "kind": "go", "command": "inspection-worker", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "scheduler": {"service": "inspection-scheduler", "image": "SCHEDULER_IMAGE", "kind": "go", "command": "inspection-scheduler", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "video-worker": {"service": "inspection-video-worker", "image": "VIDEO_WORKER_IMAGE", "kind": "go", "command": "inspection-video-worker", "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "operations": {"service": null, "image": "OPERATIONS_IMAGE", "kind": "go-tools", "commands": ["inspection-migrate", "inspection-prompt-seed", "inspection-seed", "inspection-schema-check", "inspection-keycloak-check"], "paths": ["services/inspection/", "libs/", "go.mod", "go.sum", "go.work", "go.work.sum"]},
+    "admin": {"service": "admin", "image": "ADMIN_IMAGE", "kind": "frontend", "paths": ["apps/admin/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs"]},
+    "dashboard": {"service": "dashboard", "image": "DASHBOARD_IMAGE", "kind": "frontend", "paths": ["apps/dashboard/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs"]},
+    "capture": {"service": "capture", "image": "CAPTURE_IMAGE", "kind": "frontend", "paths": ["apps/capture/", "packages/inspection-design-system/", "scripts/prepare-design-system.mjs"]},
+    "onboarding": {"service": "onboarding", "image": "ONBOARDING_IMAGE", "kind": "frontend", "paths": ["apps/onboarding/", "packages/inspection-design-system/", "packages/inspection-address/", "scripts/prepare-design-system.mjs"]},
+    "keycloak": {"service": "keycloak", "image": "KEYCLOAK_IMAGE", "kind": "keycloak", "paths": ["deploy/keycloak/themes/", "deploy/keycloak/configure-realm.sh", "deploy/keycloak/inspection-realm.json", "deploy/oci/keycloak-realm.json", "deploy/oci/Dockerfile.keycloak"]}
   },
   "sharedRules": [
     {"paths": ["deploy/oci/Caddyfile"], "components": ["capture"]},
     {"paths": ["deploy/oci/litellm-config.yaml"], "components": ["worker"]},
-    {"paths": ["services/inspection/schema.graphqls", "services/inspection/internal/graphql/"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding"]},
-    {"paths": [".dockerignore", "deploy/oci/compose.yaml", "deploy/oci/components.json", "deploy/oci/affected.py", "deploy/oci/Go.Dockerfile", "deploy/oci/base-images.lock", ".github/workflows/build-images.yml"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak"]}
+    {"paths": ["services/inspection/schema.graphqls", "services/inspection/internal/platform/graphql/"], "components": ["api", "worker", "scheduler", "operations", "admin", "dashboard", "capture", "onboarding"]},
+    {"paths": [".dockerignore", "deploy/oci/compose.yaml", "deploy/oci/components.json", "deploy/oci/affected.py", "deploy/oci/Go.Dockerfile", "deploy/oci/base-images.lock", ".github/workflows/build-images.yml"], "components": ["api", "worker", "scheduler", "video-worker", "operations", "admin", "dashboard", "capture", "onboarding", "keycloak"]}
   ],
   "ignoredPaths": ["docs/", "deploy/docker-compose.yml", ".compozy/", ".github/", "deploy/oci/runtime/", "deploy/oci/foundation/", "deploy/oci/host/", "deploy/oci/tests/", "deploy/oci/ops.sh", "deploy/oci/verify-release.py", "deploy/oci/vault_secrets.py", "deploy/oci/affected.py", "deploy/oci/planner.py", "deploy/oci/compose.env.example", "deploy/oci/readme.md", "deploy/oci/secrets.map.example", "README.md", "LICENSE", ".gitignore"]
 }

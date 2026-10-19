@@ -18,4 +18,4 @@ PY
 )"
 [[ "$actual" == "$plan_hash" ]] || { echo 'Supervised plan hash mismatch.' >&2; exit 1; }
 export INSPECTION_APPROVED_PLAN_SHA256="$plan_hash"
-/usr/local/sbin/inspection-apply-plan "$job_dir/plan.json" "$release_dir"
+"$release_dir/deploy/oci/host/apply-plan.sh" "$job_dir/plan.json" "$release_dir"

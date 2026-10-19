@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -84,8 +86,8 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 	if strings.TrimSpace(in.RequirementKey) == "" {
 		return database.MediaObject{}, apperror.New(apperror.InvalidInput, "requirementKey", "requirement is required")
 	}
-	if in.CaptureSource != "CAMERA" && in.CaptureSource != "GALLERY" {
-		return database.MediaObject{}, apperror.New(apperror.InvalidInput, "captureSource", "capture source must be CAMERA or GALLERY")
+	if in.CaptureSource != "CAMERA" && in.CaptureSource != "GALLERY" && in.CaptureSource != "FILE" {
+		return database.MediaObject{}, apperror.New(apperror.InvalidInput, "captureSource", "capture source is invalid")
 	}
 	capturedAtProvided := !in.CapturedAt.IsZero()
 	if !capturedAtProvided {
@@ -112,6 +114,10 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if err := json.Unmarshal(draft.PolicyPayload, &snapshot); err != nil {
 			return err
 		}
+		if draft.MediaKind != "VIDEO" && in.CaptureSource == "FILE" {
+			return apperror.New(apperror.InvalidInput, "captureSource", "file capture is only available for video")
+		}
+		gallerySource := in.CaptureSource == "GALLERY" || in.CaptureSource == "FILE"
 		policy := GPSPolicy{Required: snapshot.Required && !s.DisableRequiredGPS, AllowGallery: snapshot.AllowGallery, GeofenceMeters: snapshot.GeofenceMeters}
 		if snapshot.Latitude != nil && snapshot.Longitude != nil {
 			lat, lon := float64(*snapshot.Latitude)/1e6, float64(*snapshot.Longitude)/1e6
@@ -124,7 +130,7 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if decision.Blocked {
 			return apperror.New(apperror.InvalidState, "gps", "required GPS must be accurate within the guided window")
 		}
-		if in.CaptureSource == "GALLERY" {
+		if gallerySource {
 			decision.Flags = append(decision.Flags, "GALLERY_SOURCE")
 		}
 		flags, _ := json.Marshal(decision.Flags)
@@ -140,6 +146,12 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 				selected = r
 			}
 		}
+		if draft.MediaKind == "VIDEO" && (in.RequirementKey == "video:main" || in.RequirementKey == "video:supplement") {
+			owned = true
+			selected = Requirement{Key: in.RequirementKey, CaptureSourcePolicy: "CAMERA_DEFAULT"}
+		} else if draft.MediaKind == "VIDEO" && !strings.HasPrefix(in.RequirementKey, "video:") {
+			return apperror.New(apperror.InvalidInput, "requirementKey", "video evidence requires a video requirement")
+		}
 		if !owned && (draft.Kind == "RECAPTURE" || !strings.HasPrefix(in.RequirementKey, "extra:")) {
 			return apperror.New(apperror.Forbidden, "requirementKey", "requirement is outside this responsibility")
 		}
@@ -149,16 +161,24 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if err := ValidateDescription(in.Description, strings.HasPrefix(in.RequirementKey, "extra:")); err != nil {
 			return err
 		}
-		if in.CaptureSource == "GALLERY" && (!policy.AllowGallery || selected.CaptureSourcePolicy == "CAMERA_ONLY") {
+		if gallerySource && (!policy.AllowGallery || selected.CaptureSourcePolicy == "CAMERA_ONLY") {
 			return apperror.New(apperror.InvalidInput, "captureSource", "gallery capture is not allowed")
 		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND responsibility_id=?", in.TenantID, in.MediaID, in.ResponsibilityID).First(&out).Error; err != nil {
-			return apperror.New(apperror.NotFound, "mediaId", "media not found")
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "mediaId", "media not found")
+			}
+			return err
 		}
-		if out.Status != "READY" && out.Status != "SCREENED" {
+		if out.Status != "READY" && out.Status != "SCREENED" && !(draft.MediaKind == "VIDEO" && out.MediaKind == "VIDEO" && out.Status == "RECEIVED") {
 			return apperror.New(apperror.InvalidState, "mediaId", "media verification and screening are pending")
 		}
-		if out.RequirementKey != "" {
+		if draft.MediaKind == "VIDEO" && (out.MediaKind != "VIDEO" || out.VideoAttemptID == nil) {
+			return apperror.New(apperror.InvalidInput, "mediaId", "video evidence is required")
+		}
+		// Video upload reserves its requirement key before capture metadata is saved.
+		// CapturedAt is written only by SaveMetadata and distinguishes that reservation.
+		if out.RequirementKey != "" && out.CapturedAt != nil {
 			if metadataMatches(out, in, reading, device, capturedAtProvided) {
 				return nil
 			}
@@ -364,6 +384,66 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		}
 		if draft.Status != "OPEN" {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+		}
+		if draft.MediaKind == "VIDEO" {
+			var acceptance database.ProcessingAcceptance
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND video_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).First(&acceptance).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "consent", "video processing acceptance is required")
+			}
+			var media []database.MediaObject
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status IN ?", tenantID, responsibilityID, []string{"video:main", "video:supplement"}, []string{"RECEIVED", "VERIFIED", "SCREENED", "READY"}).Find(&media).Error; err != nil {
+				return err
+			}
+			if len(media) != 1 || media[0].VideoAttemptID == nil {
+				return apperror.New(apperror.InvalidState, "media", "one confirmed video receipt is required before submission")
+			}
+			var attempt database.VideoAttempt
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND id=? AND status='RECEIVED'", tenantID, responsibilityID, *media[0].VideoAttemptID).First(&attempt).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "media", "one confirmed video receipt is required before submission")
+			}
+			payload, _ := json.Marshal(map[string]any{"mediaKind": "VIDEO", "mediaId": media[0].ID, "attemptId": media[0].VideoAttemptID, "preparationStatus": "PENDING_VALIDATION", "complete": true, "requiresAttention": false})
+			digest := sha256.Sum256(payload)
+			now := s.now()
+			var previousVersions int64
+			if err := tx.Model(&database.SubmissionVersion{}).Where("tenant_id=? AND draft_id=?", tenantID, draft.ID).Count(&previousVersions).Error; err != nil {
+				return err
+			}
+			result = database.SubmissionVersion{ID: identity.NewID(), TenantID: tenantID, DraftID: draft.ID, ResponsibilityID: responsibilityID, VersionNumber: int(previousVersions) + 1, Complete: true, RequiresAttention: false, Payload: payload, PayloadDigest: hex.EncodeToString(digest[:]), SubmittedAt: now}
+			if err := tx.Create(&result).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&draft).Updates(map[string]any{"status": "SUBMITTED", "version": draft.Version + 1, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			var job database.VideoPreparationJob
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", tenantID, media[0].ID).Order("created_at DESC, id DESC").Take(&job).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				job = database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: media[0].ID, SubmissionID: &result.ID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: video.DefaultProfile().Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+				if err := tx.Create(&job).Error; err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			} else if job.SubmissionID == nil {
+				if err := tx.Model(&job).Update("submission_id", result.ID).Error; err != nil {
+					return err
+				}
+			} else if *job.SubmissionID != result.ID {
+				return apperror.New(apperror.Conflict, "mediaId", "video preparation is linked to another submission")
+			}
+			if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND responsibility_id=? AND revoked_at IS NULL", tenantID, responsibilityID).Update("revoked_at", now).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", tenantID, responsibilityID).Updates(map[string]any{"status": "COMPLETED", "revoked_at": now}).Error; err != nil {
+				return err
+			}
+			eventID := identity.NewID()
+			if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.video_submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: responsibilityID, CorrelationID: "capture-video-submit-" + result.ID.String(), Payload: map[string]any{"draftId": draft.ID, "responsibilityId": responsibilityID, "submissionId": result.ID, "mediaId": media[0].ID, "preparationStatus": "PENDING_VALIDATION"}}); err != nil {
+				return err
+			}
+			if s.Finalizer != nil {
+				return s.Finalizer.Finalize(ctx, tx, draft, result)
+			}
+			return nil
 		}
 		var acceptance int64
 		if err := tx.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=? AND photo_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).Count(&acceptance).Error; err != nil || acceptance != 1 {

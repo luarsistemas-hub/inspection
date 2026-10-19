@@ -3,6 +3,8 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -36,8 +38,34 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 		requirements = append(requirements, &graphql1.ReportRequirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: optional(value.Instructions), Coverage: optional(value.Coverage), ImpossibilityReason: optional(value.ImpossibilityReason), NoRelevantChange: value.NoRelevantChange, AnalysisMode: value.AnalysisMode, AnalysisStatus: value.AnalysisStatus})
 	}
 	evidence := make([]*graphql1.ReportEvidence, 0, len(snapshot.Evidence))
+	labels := make(map[string]string, len(snapshot.Requirements))
+	for _, requirement := range snapshot.Requirements {
+		labels[requirement.Key] = requirement.Label
+	}
 	for _, value := range snapshot.Evidence {
-		evidence = append(evidence, &graphql1.ReportEvidence{ID: value.ID, RequirementKey: value.RequirementKey, Role: value.Role, Description: optional(value.Description), CaptureSource: optional(value.CaptureSource), CapturedAt: optional(value.CapturedAt), DisplayDigest: optional(value.DisplayDigest), Availability: reportAvailability(value.Availability), Flags: value.Flags})
+		var timestamp *int
+		if value.TimestampMS != nil {
+			v := int(*value.TimestampMS)
+			timestamp = &v
+		}
+		var pts, frameID, preparationID, sourceID, planID *string
+		if value.PTSMicros != nil {
+			v := fmt.Sprintf("%d", *value.PTSMicros)
+			pts = &v
+		}
+		if value.FrameID != "" {
+			frameID = optional(value.FrameID)
+		}
+		if value.PreparationID != "" {
+			preparationID = optional(value.PreparationID)
+		}
+		if value.SourceMediaID != "" {
+			sourceID = optional(value.SourceMediaID)
+		}
+		if snapshot.VideoPlanID != "" && value.EvidenceKind == "VIDEO_FRAME" {
+			planID = optional(snapshot.VideoPlanID)
+		}
+		evidence = append(evidence, &graphql1.ReportEvidence{ID: value.ID, RequirementKey: value.RequirementKey, Role: value.Role, Description: optional(value.Description), CaptureSource: optional(value.CaptureSource), CapturedAt: optional(value.CapturedAt), DisplayDigest: optional(value.DisplayDigest), Availability: reportAvailability(value.Availability), SourceAvailability: optional(value.SourceAvailability), EvidenceKind: optional(value.EvidenceKind), FrameID: frameID, TimestampMs: timestamp, PtsMicros: pts, PreparationID: preparationID, PlanID: planID, SourceMediaID: sourceID, Component: optional(labels[value.RequirementKey]), Label: optional(labels[value.RequirementKey]), Flags: value.Flags})
 	}
 	findings := make([]*graphql1.ReportFinding, 0, len(snapshot.Findings))
 	for _, value := range snapshot.Findings {
@@ -47,7 +75,7 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	for _, value := range snapshot.Timeline {
 		timeline = append(timeline, &graphql1.ReportTimelineEntry{StageID: value.StageID, Classification: optional(value.Classification), Status: value.Status, Position: value.Position})
 	}
-	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Evidence: evidence, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
 }
 
 func optional(value string) *string {
@@ -64,8 +92,28 @@ func reportAvailability(value string) string {
 }
 
 func hydrateReportMedia(ctx context.Context, db *gorm.DB, store objectstore.Store, tenantID identity.ID, report *graphql1.Report) error {
+	canonical, err := json.Marshal(report.CanonicalJSON)
+	if err != nil {
+		return err
+	}
+	var snapshot reportcore.Snapshot
+	if err := json.Unmarshal(canonical, &snapshot); err != nil {
+		return err
+	}
+	videoEvidence := make(map[string]reportcore.Evidence, len(snapshot.Evidence))
+	for _, item := range snapshot.Evidence {
+		if item.EvidenceKind == "VIDEO_FRAME" {
+			videoEvidence[item.ID] = item
+		}
+	}
 	return withTask06Tenant(ctx, db, tenantID, func(tx *gorm.DB) error {
-		for _, evidence := range report.Evidence {
+		for _, evidence := range report.Evidence.Nodes {
+			if pinned, ok := videoEvidence[evidence.ID]; ok {
+				if err := hydrateVideoFrame(ctx, tx, tenantID, report.ID, evidence, pinned); err != nil {
+					return err
+				}
+				continue
+			}
 			if evidence.Availability != "AVAILABLE" {
 				continue
 			}
@@ -92,6 +140,43 @@ func hydrateReportMedia(ctx context.Context, db *gorm.DB, store objectstore.Stor
 		}
 		return nil
 	})
+}
+
+func hydrateVideoFrame(ctx context.Context, tx *gorm.DB, tenantID identity.ID, snapshotID string, view *graphql1.ReportEvidence, pinned reportcore.Evidence) error {
+	frameID, err := identity.ParseID(pinned.FrameID)
+	if err != nil {
+		view.Availability = "MISSING"
+		return nil
+	}
+	var frame database.VideoFrame
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, frameID).Take(&frame).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			view.Availability = "MISSING"
+			return nil
+		}
+		return err
+	}
+	if pinned.ID != pinned.FrameID || frame.SourceMediaID.String() != pinned.SourceMediaID || frame.PreparationID.String() != pinned.PreparationID || !strings.EqualFold(frame.SHA256, pinned.FrameDigest) || !strings.EqualFold(frame.SHA256, pinned.DisplayDigest) {
+		view.Availability = "MISSING"
+		return nil
+	}
+	view.Availability = "AVAILABLE"
+	url := fmt.Sprintf("/media/video-evidence/%s?snapshotId=%s", frameID, snapshotID)
+	view.URL = &url
+	var source database.VideoSource
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", tenantID, frame.SourceMediaID).Take(&source).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			view.SourceAvailability = optional("MISSING")
+			return nil
+		}
+		return err
+	}
+	availability := "AVAILABLE"
+	if source.Status == "EXPIRED" || source.Status == "DELETING" || source.OriginalDeletedAt != nil || source.SourceExpiryAt != nil && !source.SourceExpiryAt.After(time.Now().UTC()) {
+		availability = "EXPIRED"
+	}
+	view.SourceAvailability = &availability
+	return nil
 }
 
 func mapRetentionPolicy(row database.RetentionPolicy) *graphql1.RetentionPolicy {

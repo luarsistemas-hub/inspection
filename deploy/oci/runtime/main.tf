@@ -255,6 +255,20 @@ resource "oci_monitoring_alarm" "disk_critical" {
   body                  = "Inspection data volume has exceeded 90% usage; protect database integrity and free capacity safely."
 }
 
+resource "oci_monitoring_alarm" "graphql_latency" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-graphql-p95-latency-high"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "GraphQLRequestP95Seconds[1m]{instanceId = \"${oci_core_instance.runtime.id}\", component = \"api\"}.mean() > ${var.graphql_request_p95_threshold_seconds}"
+  severity              = "WARNING"
+  pending_duration      = "PT10M"
+  resolution            = "1m"
+  body                  = "Inspection GraphQL API p95 request latency has exceeded its configured threshold for 10 minutes."
+}
+
 resource "oci_monitoring_alarm" "heartbeat" {
   compartment_id        = var.compartment_ocid
   destinations          = [var.alert_topic_ocid]
@@ -267,6 +281,76 @@ resource "oci_monitoring_alarm" "heartbeat" {
   pending_duration      = "PT1M"
   resolution            = "1m"
   body                  = "Inspection host heartbeat has been absent for five minutes."
+}
+
+resource "oci_monitoring_alarm" "video_queue_age" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-queue-over-30m"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoOldestRunnableAgeSeconds[1m]{instanceId = \"${oci_core_instance.runtime.id}\"}.max() > 1800"
+  severity              = "WARNING"
+  pending_duration      = "PT5M"
+  resolution            = "1m"
+  body                  = "The oldest runnable video job has been waiting over 30 minutes."
+}
+
+resource "oci_monitoring_alarm" "video_scratch_low" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-scratch-under-8-gib"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoScratchFreeBytes[1m]{instanceId = \"${oci_core_instance.runtime.id}\"}.min() < 8589934592"
+  severity              = "CRITICAL"
+  pending_duration      = "PT1M"
+  resolution            = "1m"
+  body                  = "Video worker scratch space is below 8 GiB."
+}
+
+resource "oci_monitoring_alarm" "video_source_expiry_lag" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-source-expiry-over-15m"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoExpirationLagSeconds[1m]{instanceId = \"${oci_core_instance.runtime.id}\"}.max() > 900"
+  severity              = "WARNING"
+  pending_duration      = "PT5M"
+  resolution            = "1m"
+  body                  = "A video source has exceeded its expiry deadline by more than 15 minutes."
+}
+
+resource "oci_monitoring_alarm" "video_provider_configuration_failures" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-provider-configuration-failures"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoProviderConfigFailures15m[1m]{instanceId = \"${oci_core_instance.runtime.id}\"}.max() > 3"
+  severity              = "CRITICAL"
+  pending_duration      = "PT1M"
+  resolution            = "1m"
+  body                  = "More than three terminal video provider authentication/configuration failures occurred within 15 minutes."
+}
+
+resource "oci_monitoring_alarm" "video_work_heartbeat_missing" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-work-heartbeat-over-120s"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoWorkHeartbeatAgeSeconds[1m]{instanceId = \"${oci_core_instance.runtime.id}\", component = \"video-worker\"}.max() > 120"
+  severity              = "CRITICAL"
+  pending_duration      = "PT1M"
+  resolution            = "1m"
+  body                  = "No video work heartbeat has been observed for more than 120 seconds."
 }
 
 output "instance_ocid" { value = oci_core_instance.runtime.id }

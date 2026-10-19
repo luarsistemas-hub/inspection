@@ -1,5 +1,5 @@
 // Callback and activation are intentionally excluded: neither is a safe destination after login.
-const ownedPrefixes = ["/", "/overview", "/tenants/", "/organization", "/access", "/catalogs", "/assets", "/governance", "/audit", "/prompts", "/llm-usage"];
+const ownedPrefixes = ["/", "/overview", "/tenants/", "/organization", "/access", "/catalogs", "/assets", "/templates/", "/video/", "/governance", "/audit", "/prompts", "/llm-usage"];
 
 export function safeAdminPath(value: string | null | undefined, fallback = "/organization"): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return fallback;

@@ -32,6 +32,78 @@ type Task06Fixture struct {
 type Task06FixtureOptions struct {
 	InspectionStatus string
 	RequirementKey   string
+	ComparisonMode   string
+}
+
+// VideoOriginFixture is a ready, active VIDEO origin with retained frame scope.
+type VideoOriginFixture struct {
+	TenantID, AssetID, ResponsibilityID, OriginID, OriginVersionID identity.ID
+	MediaID, PreparationID, FrameID, ScopeItemID                   identity.ID
+}
+
+// VideoOriginFixtureOptions controls the origin activation state for tests
+// which need to exercise draft activation.
+type VideoOriginFixtureOptions struct {
+	Active bool
+}
+
+// SeedVideoOriginFixture creates a VIDEO origin whose retained frames are
+// stored in MinIO and whose scope is attached to the frame.
+func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOriginFixtureOptions) (VideoOriginFixture, error) {
+	if h == nil || h.DB == nil || h.Store.Client == nil || h.Store.Bucket == "" {
+		return VideoOriginFixture{}, fmt.Errorf("integration harness: database and object store are required")
+	}
+	base, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{InspectionStatus: "COMPLETED"})
+	if err != nil {
+		return VideoOriginFixture{}, err
+	}
+	f := VideoOriginFixture{TenantID: base.TenantID, AssetID: base.AssetID, ResponsibilityID: identity.NewID(), OriginID: identity.NewID(), OriginVersionID: identity.NewID(), MediaID: identity.NewID(), PreparationID: identity.NewID(), FrameID: identity.NewID(), ScopeItemID: identity.NewID()}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	frameBytes := fixturePNG()
+	frameDigest := digest(frameBytes)
+	frameKey := "tenant/" + f.TenantID.String() + "/video-frames/" + f.FrameID.String() + ".jpg"
+	if err := h.Store.Client.Put(ctx, h.Store.Bucket, frameKey, bytes.NewReader(frameBytes), int64(len(frameBytes)), "image/png"); err != nil {
+		return VideoOriginFixture{}, fmt.Errorf("seed video origin frame object: %w", err)
+	}
+	err = h.WithinTenant(ctx, f.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&database.Responsibility{ID: f.ResponsibilityID, TenantID: f.TenantID, InspectionID: base.InspectionID, ParticipantID: base.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "ORIGIN", MediaKind: "VIDEO", TemplateVersionID: base.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[{"key":"video:main","label":"Vídeo principal","evidenceKind":"VIDEO","required":true,"minimumCount":1,"maximumCount":1}]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		status := "DRAFT"
+		activated := (*time.Time)(nil)
+		activeVersion := (*identity.ID)(nil)
+		if options.Active {
+			status = "ACTIVE"
+			activated = &now
+			activeVersion = &f.OriginVersionID
+		}
+		if err := tx.Create(&database.Origin{ID: f.OriginID, TenantID: f.TenantID, AssetID: f.AssetID, ActiveVersionID: activeVersion, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: "tenant/" + f.TenantID.String() + "/media/" + f.MediaID.String(), ContentType: "video/mp4", SHA256: frameDigest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoPreparationJob{ID: f.PreparationID, TenantID: f.TenantID, MediaID: f.MediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: frameDigest, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.OriginVersion{ID: f.OriginVersionID, TenantID: f.TenantID, OriginID: f.OriginID, VersionNumber: 1, ResponsibilityID: f.ResponsibilityID, Status: status, MediaKind: "VIDEO", VideoPreparationID: &f.PreparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "video-origin-fixture-" + f.OriginVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: activated}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: f.TenantID, MediaID: f.MediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoFrame{ID: f.FrameID, TenantID: f.TenantID, SourceMediaID: f.MediaID, PreparationID: f.PreparationID, PTSMicros: 0, SHA256: frameDigest, ObjectKey: frameKey, Width: 1, Height: 1, Role: "BASELINE", Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.VideoScopeItem{ID: f.ScopeItemID, TenantID: f.TenantID, PreparationID: f.PreparationID, FrameID: f.FrameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error
+	})
+	if err != nil {
+		return VideoOriginFixture{}, fmt.Errorf("seed video origin fixture: %w", err)
+	}
+	return f, nil
 }
 
 func (o Task06FixtureOptions) normalized() Task06FixtureOptions {
@@ -40,6 +112,9 @@ func (o Task06FixtureOptions) normalized() Task06FixtureOptions {
 	}
 	if o.RequirementKey == "" {
 		o.RequirementKey = "room-1"
+	}
+	if o.ComparisonMode == "" {
+		o.ComparisonMode = "FIXED_ORIGIN"
 	}
 	return o
 }
@@ -117,9 +192,13 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err != nil {
 			return err
 		}
-		if err := tx.Create(&database.AnalysisPromptSnapshot{ID: f.PromptSnapshotID, AnalysisType: analysisprompt.RealEstate, DefinitionJSON: promptJSON, CanonicalDigest: promptDigest, CreatedAt: createdAt}).Error; err != nil {
+		var promptSnapshot database.AnalysisPromptSnapshot
+		if err := tx.Where("analysis_type = ? AND canonical_digest = ?", analysisprompt.RealEstate, promptDigest).
+			Attrs(database.AnalysisPromptSnapshot{ID: f.PromptSnapshotID, AnalysisType: analysisprompt.RealEstate, DefinitionJSON: promptJSON, CanonicalDigest: promptDigest, CreatedAt: createdAt}).
+			FirstOrCreate(&promptSnapshot).Error; err != nil {
 			return err
 		}
+		f.PromptSnapshotID = promptSnapshot.ID
 		if err := tx.Create(&database.Asset{ID: f.AssetID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, SegmentVersionID: f.SegmentVersionID, TemplateID: &f.TemplateID, Name: "Task 06 asset", ExternalKey: "task06-asset", Address: "Test address", GeofenceMeters: 150, PolicyOverrides: json.RawMessage(`{}`), Status: "ACTIVE", Version: 1, IdempotencyKey: "task06-asset", CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
@@ -141,7 +220,11 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.Responsibility{ID: f.ResponsibilityID, TenantID: f.TenantID, InspectionID: f.InspectionID, ParticipantID: f.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: f.TenantID, InspectionID: f.InspectionID, ComparisonMode: "FIXED_ORIGIN", Payload: json.RawMessage(`{}`), CreatedAt: createdAt}).Error; err != nil {
+		referencePayload := json.RawMessage(`{}`)
+		if options.ComparisonMode == "CURRENT_ONLY" {
+			referencePayload = json.RawMessage(`{"comparisonMode":"CURRENT_ONLY"}`)
+		}
+		if err := tx.Create(&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: f.TenantID, InspectionID: f.InspectionID, ComparisonMode: options.ComparisonMode, Payload: referencePayload, CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.PolicySnapshot{ID: identity.NewID(), TenantID: f.TenantID, InspectionID: f.InspectionID, SchemaVersion: 1, Payload: json.RawMessage(`{}`), CanonicalDigest: digest([]byte(`{}`)), CreatedAt: createdAt}).Error; err != nil {
@@ -163,7 +246,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: mediaKey, ContentType: mediaContentType, SHA256: mediaDigest, SizeBytes: int64(len(mediaBytes)), Status: "READY", IdempotencyKey: "task06-media", RequirementKey: options.RequirementKey, Description: "Fixture evidence", CaptureSource: "CAMERA", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaDerivative{ID: f.DerivativeID, TenantID: f.TenantID, MediaID: f.MediaID, ObjectKey: derivativeKey, Kind: "NORMALIZED", SHA256: mediaDigest, CreatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.MediaDerivative{ID: f.DerivativeID, TenantID: f.TenantID, MediaID: f.MediaID, ObjectKey: derivativeKey, Kind: "NORMALIZED", SHA256: mediaDigest, ContentType: mediaContentType, Width: 1, Height: 1, SizeBytes: int64(len(mediaBytes)), CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.CaptureDraft{ID: f.DraftID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", TemplateVersionID: f.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: templateJSON, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {

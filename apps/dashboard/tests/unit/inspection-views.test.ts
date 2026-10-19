@@ -12,7 +12,16 @@ import {
 } from "@/features/dashboard/inspection-views";
 
 function inspection(id: string, status: string, dueAt: string): InspectionRecord {
-  return { id, assetId: "asset", participantId: "participant", projectId: null, stageId: null, source: "MANUAL", sourceReason: null, stateReason: null, status, evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1, assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio" };
+  return {
+    id, assetId: "asset", participantId: "participant", projectId: null, stageId: null,
+    source: "MANUAL", sourceReason: null, stateReason: null, status, mediaKind: "PHOTO",
+    comparisonMode: "CHECKLIST_ONLY", referenceVersionId: null, referenceVersionNumber: null,
+    referenceMediaKind: null, referenceVersionStatus: null, referenceIsActive: null,
+    originPromotionStatus: null, originPromotionFailure: null, promotedOriginVersionId: null,
+    promotedOriginVersionNumber: null, promotedOriginMediaKind: null, promotedOriginIsActive: null,
+    evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1,
+    assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio",
+  };
 }
 
 describe("Inspection views", () => {

@@ -2,6 +2,7 @@ package resolvers
 
 import (
 	"context"
+	"errors"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -15,7 +16,10 @@ import (
 func authorizeReportInspection(ctx context.Context, db *gorm.DB, meta requestctx.Metadata, inspectionID identity.ID) error {
 	return withTask06Tenant(ctx, db, meta.TenantID, func(tx *gorm.DB) error {
 		var inspection database.Inspection
-		if err := tx.Where("id=?", inspectionID).Take(&inspection).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND id=?", meta.TenantID, inspectionID).Take(&inspection).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "", "not found")
+			}
 			return err
 		}
 		if hasRole(meta, auth.TenantAdmin) {

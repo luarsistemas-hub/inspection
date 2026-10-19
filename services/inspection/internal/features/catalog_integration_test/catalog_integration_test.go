@@ -281,6 +281,249 @@ func TestCatalogSlicesIT021ToIT070(t *testing.T) {
 	assertTenantIsolation(t, admin, bus, ctx, asset.Asset.ID)
 }
 
+func TestVideoTemplateGraphQLTransportIT381ToIT388(t *testing.T) {
+	adminDSN, runtimeDSN := os.Getenv("INSPECTION_TEST_DATABASE_URL"), os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL")
+	if adminDSN == "" || runtimeDSN == "" {
+		t.Skip("video template GraphQL integration requires INSPECTION_TEST_DATABASE_URL and INSPECTION_TEST_RUNTIME_DATABASE_URL")
+	}
+	admin, err := gorm.Open(postgres.Open(adminDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (database.Migrator{DB: admin}).Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	runtimeDB, err := gorm.Open(postgres.Open(runtimeDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantID, identityID, membershipID, viewerIdentityID, viewerMembershipID, customerViewerIdentityID, customerViewerMembershipID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	for _, row := range []any{
+		&database.Tenant{ID: tenantID, TenantID: tenantID, Name: "Video template tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.Membership{ID: membershipID, TenantID: tenantID, IdentityID: identityID, Issuer: "test", Subject: identityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.Membership{ID: viewerMembershipID, TenantID: tenantID, IdentityID: viewerIdentityID, Issuer: "test", Subject: viewerIdentityID.String(), Role: auth.Viewer, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.Membership{ID: customerViewerMembershipID, TenantID: tenantID, IdentityID: customerViewerIdentityID, Issuer: "test", Subject: customerViewerIdentityID.String(), Role: auth.CustomerViewer, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := admin.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identityID, MembershipID: membershipID, TenantID: tenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "video-template-graphql", StartedAt: now})
+	bus := mediator.New()
+	authorizer := auth.Authorizer{Store: auth.GORMMembershipStore{DB: runtimeDB}}
+	for _, setup := range []func() error{
+		func() error {
+			return segmentpublish.Setup(segmentpublish.Dependencies{DB: runtimeDB, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return segmentactivate.Setup(segmentactivate.Dependencies{DB: runtimeDB, Bus: bus, Authorizer: authorizer})
+		},
+		func() error { return segmentresolve.Setup(segmentresolve.Dependencies{DB: runtimeDB, Bus: bus}) },
+		func() error {
+			return templatepublish.Setup(templatepublish.Dependencies{DB: runtimeDB, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return templateactivate.Setup(templateactivate.Dependencies{DB: runtimeDB, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
+			return templatelist.Setup(templatelist.Dependencies{DB: runtimeDB, Bus: bus, Authorizer: authorizer})
+		},
+		func() error { return templateresolve.Setup(templateresolve.Dependencies{DB: runtimeDB, Bus: bus}) },
+	} {
+		if err := setup(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	segmentSchema := []byte(`{"type":"object","properties":{"kind":{"type":"string"}},"required":["kind"],"additionalProperties":false}`)
+	segmentRaw, err := bus.Send(ctx, segmentpublish.Command{TenantID: tenantID, Key: "video-property", Name: "Video property", IdempotencyKey: "segment-" + tenantID.String(), SchemaJSON: segmentSchema, UISchemaJSON: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	segment := segmentRaw.(segmentcore.View)
+	if _, err := bus.Send(ctx, segmentactivate.Command{TenantID: tenantID, VersionID: segment.Version.ID, ExpectedVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	definition := catalog.TemplateDocument{SchemaVersion: 1, SegmentVersionID: segment.Version.ID.String(), ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: catalog.ChecklistOnly, Requirements: []catalog.CaptureRequirement{{Key: "overview", Section: "general", Label: "Overview", EvidenceKind: "VIDEO", MinimumCount: 1, MaximumCount: 1, Required: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}}, AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GeofenceMeters: 150, AllowGallery: true}}
+	definitionJSON, err := json.Marshal(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var definitionMap map[string]any
+	if err := json.Unmarshal(definitionJSON, &definitionMap); err != nil {
+		t.Fatal(err)
+	}
+	definitionMap["isVideo"] = true
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: runtimeDB}}))
+	server.SetErrorPresenter(graph.PresentError)
+	publishQuery := `mutation($input:PublishTemplateVersionInput!){publishTemplateVersion(input:$input){version{id isVideo mediaKind} userErrors{code}}}`
+	body := graphqlRequest(t, server, ctx, publishQuery, map[string]any{"input": map[string]any{"key": "video-" + tenantID.String(), "name": "Video", "definition": definitionMap, "clientMutationId": "publish-" + tenantID.String()}})
+	var published struct {
+		Data struct {
+			Payload struct {
+				Version struct {
+					ID        string `json:"id"`
+					IsVideo   bool   `json:"isVideo"`
+					MediaKind string `json:"mediaKind"`
+				} `json:"version"`
+			} `json:"publishTemplateVersion"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &published); err != nil || published.Data.Payload.Version.ID == "" || !published.Data.Payload.Version.IsVideo || published.Data.Payload.Version.MediaKind != "VIDEO" {
+		t.Fatalf("published version did not expose immutable VIDEO modality: %s (decode error: %v)", body, err)
+	}
+	versionID := published.Data.Payload.Version.ID
+	activateQuery := `mutation($input:ActivateTemplateVersionInput!){activateTemplateVersion(input:$input){version{id status mediaKind}}}`
+	publishVideoVersion := func(name, mutationID string) string {
+		body := graphqlRequest(t, server, ctx, publishQuery, map[string]any{"input": map[string]any{"key": "video-" + tenantID.String(), "name": name, "definition": definitionMap, "clientMutationId": mutationID}})
+		var result struct {
+			Data struct {
+				Payload struct {
+					Version struct {
+						ID string `json:"id"`
+					} `json:"version"`
+				} `json:"publishTemplateVersion"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(body), &result); err != nil || result.Data.Payload.Version.ID == "" {
+			t.Fatalf("could not publish %s template version: %s (decode error: %v)", name, body, err)
+		}
+		return result.Data.Payload.Version.ID
+	}
+	body = graphqlRequest(t, server, ctx, activateQuery, map[string]any{"input": map[string]any{"versionId": versionID, "expectedVersion": 1, "clientMutationId": "activate-" + tenantID.String()}})
+	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"mediaKind":"VIDEO"`) {
+		t.Fatalf("VIDEO version activation failed: %s", body)
+	}
+	body = graphqlRequest(t, server, ctx, `query($id:ID!){templateVersion(id:$id){id isVideo mediaKind}}`, map[string]any{"id": versionID})
+	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"isVideo":true`) || !strings.Contains(body, `"mediaKind":"VIDEO"`) {
+		t.Fatalf("template query did not retain VIDEO modality: %s", body)
+	}
+	secondVersionID := publishVideoVersion("Video version two", "publish-video-two-"+tenantID.String())
+	body = graphqlRequest(t, server, ctx, activateQuery, map[string]any{"input": map[string]any{"versionId": secondVersionID, "expectedVersion": 2, "clientMutationId": "activate-video-two-" + tenantID.String()}})
+	if strings.Contains(body, `"errors"`) {
+		t.Fatalf("second VIDEO version activation failed: %s", body)
+	}
+	thirdVersionID := publishVideoVersion("Video version three", "publish-video-three-"+tenantID.String())
+	body = graphqlRequest(t, server, ctx, activateQuery, map[string]any{"input": map[string]any{"versionId": thirdVersionID, "expectedVersion": 3, "clientMutationId": "activate-video-three-" + tenantID.String()}})
+	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"mediaKind":"VIDEO"`) {
+		t.Fatalf("VIDEO template activation at expectedVersion 3 failed: %s", body)
+	}
+	body = graphqlRequest(t, server, ctx, `query($id:ID!){templateVersion(id:$id){id isVideo mediaKind}}`, map[string]any{"id": thirdVersionID})
+	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"isVideo":true`) || !strings.Contains(body, `"mediaKind":"VIDEO"`) {
+		t.Fatalf("third template version did not preserve VIDEO modality: %s", body)
+	}
+	fourthVersionID := publishVideoVersion("Video version four", "publish-video-four-"+tenantID.String())
+	body = graphqlRequest(t, server, ctx, activateQuery, map[string]any{"input": map[string]any{"versionId": fourthVersionID, "expectedVersion": 3, "clientMutationId": "stale-activate-" + tenantID.String()}})
+	if !strings.Contains(body, "CONFLICT") || strings.Contains(body, `"version":{`) {
+		t.Fatalf("stale template activation returned success-shaped data: %s", body)
+	}
+	foreignTenantID, foreignIdentityID, foreignMembershipID := identity.NewID(), identity.NewID(), identity.NewID()
+	for _, row := range []any{
+		&database.Tenant{ID: foreignTenantID, TenantID: foreignTenantID, Name: "Foreign video template tenant", Language: "pt-BR", DefaultTimezone: "UTC", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+		&database.Membership{ID: foreignMembershipID, TenantID: foreignTenantID, IdentityID: foreignIdentityID, Issuer: "test", Subject: foreignIdentityID.String(), Role: auth.TenantAdmin, Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := admin.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	foreignCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: foreignTenantID, Principal: requestctx.Principal{IdentityID: foreignIdentityID, MembershipID: foreignMembershipID, TenantID: foreignTenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "video-template-foreign", StartedAt: now})
+	foreignSegmentRaw, err := bus.Send(foreignCtx, segmentpublish.Command{TenantID: foreignTenantID, Key: "foreign-video-property", Name: "Foreign video property", IdempotencyKey: "foreign-segment-" + foreignTenantID.String(), SchemaJSON: segmentSchema, UISchemaJSON: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignSegment := foreignSegmentRaw.(segmentcore.View)
+	if _, err := bus.Send(foreignCtx, segmentactivate.Command{TenantID: foreignTenantID, VersionID: foreignSegment.Version.ID, ExpectedVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	foreignDefinition := definition
+	foreignDefinition.SegmentVersionID = foreignSegment.Version.ID.String()
+	foreignDefinitionJSON, err := json.Marshal(foreignDefinition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foreignDefinitionMap map[string]any
+	if err := json.Unmarshal(foreignDefinitionJSON, &foreignDefinitionMap); err != nil {
+		t.Fatal(err)
+	}
+	foreignDefinitionMap["isVideo"] = true
+	foreignTemplateRaw, err := bus.Send(foreignCtx, templatepublish.Command{TenantID: foreignTenantID, Key: "foreign-video-" + foreignTenantID.String(), Name: "Foreign video", DefinitionJSON: foreignDefinitionJSON, IdempotencyKey: "foreign-template-" + foreignTenantID.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignTemplate := foreignTemplateRaw.(templatecore.View)
+	foreignVersionID := foreignTemplate.Version.ID.String()
+	for _, tc := range []struct {
+		name, query string
+		variables   map[string]any
+	}{
+		{"foreign read", `query($id:ID!){templateVersion(id:$id){id}}`, map[string]any{"id": foreignVersionID}},
+		{"foreign activation", activateQuery, map[string]any{"input": map[string]any{"versionId": foreignVersionID, "expectedVersion": 1, "clientMutationId": "foreign-activate-" + tenantID.String()}}},
+		{"foreign segment association", publishQuery, map[string]any{"input": map[string]any{"key": "foreign-segment-association-" + tenantID.String(), "name": "Foreign segment association", "definition": foreignDefinitionMap, "clientMutationId": "foreign-segment-association-" + tenantID.String()}}},
+	} {
+		body = graphqlRequest(t, server, ctx, tc.query, tc.variables)
+		if !strings.Contains(body, "NOT_FOUND") || strings.Contains(body, foreignVersionID) || strings.Contains(body, foreignSegment.Version.ID.String()) || strings.Contains(body, `"version":{`) {
+			t.Fatalf("tenant A %s exposed or associated tenant B data: %s", tc.name, body)
+		}
+	}
+	body = graphqlRequest(t, server, ctx, `query { templates { nodes { id key } } }`, nil)
+	if strings.Contains(body, "foreign-video-"+foreignTenantID.String()) || strings.Contains(body, foreignVersionID) {
+		t.Fatalf("tenant A template list exposed tenant B data: %s", body)
+	}
+	for _, tc := range []struct {
+		name, query string
+		variables   map[string]any
+	}{
+		{"publish", publishQuery, map[string]any{"input": map[string]any{"key": "unauth-" + tenantID.String(), "name": "Unauth", "definition": definitionMap, "clientMutationId": "unauth-" + tenantID.String()}}},
+		{"activate", activateQuery, map[string]any{"input": map[string]any{"versionId": versionID, "expectedVersion": 2, "clientMutationId": "unauth-activate-" + tenantID.String()}}},
+		{"templates", `query { templates { nodes { id } } }`, nil},
+		{"templateVersion", `query($id:ID!){templateVersion(id:$id){id}}`, map[string]any{"id": versionID}},
+	} {
+		body = graphqlRequest(t, server, context.Background(), tc.query, tc.variables)
+		if !strings.Contains(body, "UNAUTHENTICATED") || strings.Contains(body, `"publishTemplateVersion":{`) || strings.Contains(body, `"activateTemplateVersion":{`) || strings.Contains(body, `"templateVersion":{`) || strings.Contains(body, `"templates":{`) {
+			t.Fatalf("unauthenticated %s operation was accepted: %s", tc.name, body)
+		}
+	}
+	status, body := graphqlRequestStatus(t, server, ctx, `query { templates(tenantId:"00000000-0000-0000-0000-000000000002") { nodes { id } } }`, nil)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(body, "Unknown argument") || !strings.Contains(body, `"data":null`) {
+		t.Fatalf("template tenant selector was not rejected by schema validation: %s", body)
+	}
+	viewerCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: viewerIdentityID, MembershipID: viewerMembershipID, TenantID: tenantID, Roles: []string{auth.Viewer}}, CorrelationID: "video-template-viewer", StartedAt: now})
+	for _, tc := range []struct {
+		name, query string
+		variables   map[string]any
+	}{
+		{"publish", publishQuery, map[string]any{"input": map[string]any{"key": "forbidden-" + tenantID.String(), "name": "Forbidden", "definition": definitionMap, "clientMutationId": "forbidden-" + tenantID.String()}}},
+		{"activate", activateQuery, map[string]any{"input": map[string]any{"versionId": versionID, "expectedVersion": 2, "clientMutationId": "forbidden-activate-" + tenantID.String()}}},
+	} {
+		body = graphqlRequest(t, server, viewerCtx, tc.query, tc.variables)
+		if !strings.Contains(body, "FORBIDDEN") || strings.Contains(body, `"version":{`) {
+			t.Fatalf("viewer %s operation was not rejected: %s", tc.name, body)
+		}
+	}
+	customerViewerCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: customerViewerIdentityID, MembershipID: customerViewerMembershipID, TenantID: tenantID, Roles: []string{auth.CustomerViewer}}, CorrelationID: "video-template-customer-viewer", StartedAt: now})
+	for _, tc := range []struct {
+		name, query string
+		variables   map[string]any
+	}{
+		{"templates", `query { templates { nodes { id } } }`, nil},
+		{"templateVersion", `query($id:ID!){templateVersion(id:$id){id}}`, map[string]any{"id": versionID}},
+	} {
+		body = graphqlRequest(t, server, customerViewerCtx, tc.query, tc.variables)
+		if !strings.Contains(body, "FORBIDDEN") || strings.Contains(body, `"templates":{`) || strings.Contains(body, `"templateVersion":{`) {
+			t.Fatalf("customer viewer read through %s: %s", tc.name, body)
+		}
+	}
+	invalidDefinition := make(map[string]any, len(definitionMap))
+	for key, value := range definitionMap {
+		invalidDefinition[key] = value
+	}
+	invalidDefinition["isVideo"] = "yes"
+	body = graphqlRequest(t, server, ctx, publishQuery, map[string]any{"input": map[string]any{"key": "invalid-" + tenantID.String(), "name": "Invalid", "definition": invalidDefinition, "clientMutationId": "invalid-" + tenantID.String()}})
+	if !strings.Contains(body, "INVALID_INPUT") || strings.Contains(body, `"version":{`) {
+		t.Fatalf("invalid modality input returned success-shaped template data: %s", body)
+	}
+}
+
 func TestCatalogSetupsRequireDependencies(t *testing.T) {
 	setups := []func() error{
 		func() error { return participantupsert.Setup(participantupsert.Dependencies{}) },
@@ -359,15 +602,21 @@ func assertTenantIsolation(t *testing.T, admin *gorm.DB, bus *mediator.Bus, pare
 
 func graphqlRequest(t *testing.T, server http.Handler, ctx context.Context, query string, variables map[string]any) string {
 	t.Helper()
+	status, body := graphqlRequestStatus(t, server, ctx, query, variables)
+	if status != http.StatusOK {
+		t.Fatalf("GraphQL status %d: %s", status, body)
+	}
+	return body
+}
+
+func graphqlRequestStatus(t *testing.T, server http.Handler, ctx context.Context, query string, variables map[string]any) (int, string) {
+	t.Helper()
 	payload, _ := json.Marshal(map[string]any{"query": query, "variables": variables})
 	request := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(payload)).WithContext(ctx)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("GraphQL status %d: %s", response.Code, response.Body.String())
-	}
-	return response.Body.String()
+	return response.Code, response.Body.String()
 }
 
 func apperrorCode(err error) apperror.Code {

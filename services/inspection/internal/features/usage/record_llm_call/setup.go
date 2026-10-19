@@ -48,9 +48,15 @@ func (l ledger) Start(ctx context.Context, start llm.CallStart) error {
 	if err != nil {
 		return llm.NewError(llm.CodeLedgerPersistence, 0, err)
 	}
-	inspectionID, err := parseID("inspection", start.InspectionID)
-	if err != nil {
-		return llm.NewError(llm.CodeLedgerPersistence, 0, err)
+	var inspectionID *identity.ID
+	if start.InspectionID != "" {
+		parsed, parseErr := parseID("inspection", start.InspectionID)
+		if parseErr != nil {
+			return llm.NewError(llm.CodeLedgerPersistence, 0, parseErr)
+		}
+		inspectionID = &parsed
+	} else if start.ComparisonMode != "VIDEO_SCOPE" {
+		return llm.NewError(llm.CodeLedgerPersistence, 0, fmt.Errorf("missing inspection identifier"))
 	}
 	executionID, err := parseID("execution", start.ExecutionID)
 	if err != nil {

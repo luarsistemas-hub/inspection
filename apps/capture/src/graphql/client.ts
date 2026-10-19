@@ -2,6 +2,7 @@ import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { getOperationAST, print } from "graphql";
 import {
   AcceptProcessingDocument,
+  BeginVideoCaptureDocument,
   CompleteMediaUploadDocument,
   CreateMediaUploadDocument,
   DeclareCaptureImpossibilityDocument,
@@ -13,7 +14,9 @@ import {
   SaveCaptureMetadataDocument,
   SubmitCaptureDocument,
   SubmitRecaptureDocument,
-  VerifyInvitationOtpDocument
+  VerifyInvitationOtpDocument,
+  VideoPreparationDocument,
+  VideoUploadStatusDocument
 } from "@/graphql/generated";
 import { clearCaptureCsrfToken, getCaptureCsrfToken } from "@/auth/capture-session";
 
@@ -68,6 +71,9 @@ export const captureOperations = {
   exchange: RequestInvitationOtpDocument,
   verifyOtp: VerifyInvitationOtpDocument,
   accept: AcceptProcessingDocument,
+  beginVideo: BeginVideoCaptureDocument,
+  videoStatus: VideoUploadStatusDocument,
+  videoPreparation: VideoPreparationDocument,
   revoke: RevokeInvitationDocument,
   bootstrap: ExternalCaptureBootstrapDocument,
   createUpload: CreateMediaUploadDocument,

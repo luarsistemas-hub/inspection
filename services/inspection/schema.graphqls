@@ -27,6 +27,8 @@ type Query {
   inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
   report(inspectionId: ID!, version: Int): Report
+  videoPreparationEvidence(preparationId: ID!, first: Int = 25, after: String): VideoPreparationEvidenceConnection!
+  videoPreparations(status: [String!], first: Int = 25, after: String): VideoPreparationConnection!
   reports(first: Int = 25, after: String, search: String, classification: String): ReportConnection!
   reportDownload(snapshotId: ID!, kind: String = "PDF"): ReportDownload
   dashboardSummary(projectId: ID, businessUnitId: ID): DashboardSummary!
@@ -48,6 +50,10 @@ type Query {
   llmUsage(filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsage!
   llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
+  videoPolicy: VideoPolicy!
+  videoAdmission: VideoAdmission!
+  videoUploadStatus(mediaId: ID!): VideoUploadStatus!
+  videoPreparation(mediaId: ID!): VideoPreparationStatus!
 }
 
 type OnboardingOption { value: String!, label: String! }
@@ -111,7 +117,9 @@ type Mutation {
   inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
+  closeOriginInvitation(input: CloseOriginInvitationInput!): OriginVersionPayload!
   promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
+  promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload!
   createSchedule(input: CreateScheduleInput!): SchedulePayload!
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
   cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
@@ -126,6 +134,12 @@ type Mutation {
   closeProject(input: ProjectTransitionInput!): ProjectPayload!
   reopenProject(input: ReopenProjectInput!): ProjectPayload!
   acceptProcessing(input: AcceptProcessingInput!): CapturePayload!
+  beginVideoCapture(input: BeginVideoCaptureInput!): VideoAttemptPayload!
+  configureVideoPolicy(input: ConfigureVideoPolicyInput!): VideoPolicyPayload!
+  retryVideoPreparation(input: RetryVideoPreparationInput!): VideoPreparationPayload!
+  reprocessVideoPreparation(input: ReprocessVideoPreparationInput!): VideoPreparationPayload!
+  reanalyzeVideoInspection(input: ReanalyzeVideoInspectionInput!): ReanalyzeVideoInspectionPayload!
+  configureVideoAdmission(input: ConfigureVideoAdmissionInput!): VideoAdmissionPayload!
   createMediaUpload(input: CreateMediaUploadInput!): MediaUploadPayload!
   presignMediaParts(input: PresignMediaPartsInput!): PresignedPartsPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
@@ -171,7 +185,7 @@ type SegmentDefinition { id: ID! key: String! name: String! activeVersionId: ID 
 type SegmentDefinitionVersion { id: ID! definitionId: ID! versionNumber: Int! schemaVersion: Int! schema: JSON! uiSchema: JSON! canonicalDigest: String! status: String! publishedAt: String! }
 type SegmentDefinitionConnection { nodes: [SegmentDefinition!]! pageInfo: PageInfo! }
 type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeVersionId: ID version: Int! }
-type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! canonicalDigest: String! status: String! publishedAt: String! }
+type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! isVideo: Boolean! mediaKind: String! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
 enum CaptureComparisonMode { CHECKLIST_ONLY FIXED_ORIGIN }
@@ -181,14 +195,14 @@ type PostalAddress { countryCode: String! postalCode: String! street: String! nu
 type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
-type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! supersedesId: ID activatedAt: String }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
 type OriginPromotionMedia { id: ID! description: String! url: String }
-type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID eligibleMedia: [OriginPromotionMedia!]! }
+type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 enum InspectionStatusGroup { PLANNING EXECUTION COMPLETED CLOSED }
-type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
+type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
@@ -209,12 +223,27 @@ type CaptureRequirement {
   impossibilityAllowed: Boolean!
 }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
-type CaptureReferenceItem { mediaId: ID! requirementKey: String! description: String! availability: String! imageUrl: String imageUrlExpiresAt: String }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID status: String! confirmationOnly: Boolean! kind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
-type Media { id: ID! status: String! requirementKey: String description: String captureSource: String flags: [String!]! replacesMediaId: ID }
+type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
+type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
+type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
+type VideoAttemptPayload { attempt: VideoAttempt userErrors: [UserError!]! clientMutationId: String! }
+type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason: String }
+type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
+type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
+type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
+type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
+type VideoPreparationConnection { nodes: [VideoPreparationStatus!]! pageInfo: PageInfo! }
+input RetryVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! clientMutationId: String! }
+input ReprocessVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! profileDigest: String! clientMutationId: String! }
+type VideoPreparationPayload { preparation: VideoPreparationStatus userErrors: [UserError!]! clientMutationId: String! }
+input ReanalyzeVideoInspectionInput { inspectionId: ID! expectedPlanId: ID! clientMutationId: String! }
+type ReanalyzeVideoInspectionPayload { planId: ID userErrors: [UserError!]! clientMutationId: String! generation: Int }
+type Media { id: ID! status: String! mediaKind: String! preparationStatus: String requirementKey: String description: String captureSource: String flags: [String!]! replacesMediaId: ID }
 type MediaUpload { mediaId: ID! uploadId: String! expiresAt: String! partSizeBytes: Int! }
 type PresignedPart { partNumber: Int! url: String! expiresAt: String! }
-type Submission { id: ID! complete: Boolean! requiresAttention: Boolean! submittedAt: String! }
+type Submission { id: ID! complete: Boolean! requiresAttention: Boolean! preparationPending: Boolean! submittedAt: String! }
 type Recapture { id: ID! responsibilityId: ID! status: String! deadlineAt: String }
 type ReportAssetContext { id: ID! name: String! externalKey: String! address: String! }
 type ReportParticipantContext { id: ID! name: String! }
@@ -222,10 +251,11 @@ type ReportTemplateContext { id: ID! name: String! version: Int! }
 type ReportInspectionContext { projectId: ID stageId: ID stageLabel: String dueAt: String submittedAt: String generatedAt: String! }
 type ReportContext { asset: ReportAssetContext! participant: ReportParticipantContext! template: ReportTemplateContext! inspection: ReportInspectionContext! }
 type ReportRequirement { key: String! section: String! label: String! instructions: String coverage: String impossibilityReason: String noRelevantChange: Boolean analysisMode: String! analysisStatus: String! }
-type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! flags: [String!]! url: String }
+type ReportEvidence { id: ID! requirementKey: String! role: String! description: String captureSource: String capturedAt: String displayDigest: String availability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String label: String flags: [String!]! url: String }
+type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence: [ReportEvidence!]! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
@@ -238,8 +268,10 @@ type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: S
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
 type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! }
 enum EvidenceMode { SIMPLE ADVANCED }
-type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! flags: [String!]! url: String }
+type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
+type VideoPreparationEvidenceItem { kind: String! id: ID! frameId: ID preparationId: ID sourceMediaId: ID ptsMicros: String timestampMs: Int component: String label: String environment: String view: String role: String }
+type VideoPreparationEvidenceConnection { nodes: [VideoPreparationEvidenceItem!]! pageInfo: PageInfo! }
 type RecipientNotification { id: ID! kind: String! title: String! body: String! resourceKind: String! resourceId: ID createdAt: String! readAt: String action: String! context: JSON! priority: String! dueAt: String }
 type RecipientNotificationConnection { nodes: [RecipientNotification!]! pageInfo: PageInfo! unreadCount: Int! }
 type NotificationPreferencesPayload { userErrors: [UserError!]! clientMutationId: String! }
@@ -430,7 +462,9 @@ input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutation
 input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
 input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
+input CloseOriginInvitationInput { versionId: ID! reason: String! clientMutationId: String! }
 input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
+input PromoteInspectionVideoInput { inspectionId: ID! clientMutationId: String! }
 input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
@@ -439,14 +473,17 @@ input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! client
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
 input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
-input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
+input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
 input AddExceptionalStageInput { projectId: ID! expectedVersion: Int! key: String! label: String! reason: String! plannedAt: String clientMutationId: String! }
 input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! clientMutationId: String! }
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
-input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
-input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! clientMutationId: String! }
+input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
+input BeginVideoCaptureInput { acquisitionSource: String! replacesMediaId: ID clientMutationId: String! }
+input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! expectedVersion: Int! clientMutationId: String! }
+input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
+input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }
 input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clientMutationId: String! }
@@ -460,8 +497,8 @@ input UpdateTriageCaseInput { inspectionId: ID! expectedVersion: Int! action: Tr
 input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
 input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
 input ConfigureRetentionPolicyInput { evidenceDays: Int! operationalDays: Int! securityDays: Int clientMutationId: String! }
-input RecordDeletionRequestInput { inspectionId: ID! reason: String clientMutationId: String! }
-input LegalHoldInput { inspectionId: ID! reason: String! clientMutationId: String! }
+input RecordDeletionRequestInput { inspectionId: ID sourceMediaId: ID originVersionId: ID reason: String clientMutationId: String! }
+input LegalHoldInput { inspectionId: ID sourceMediaId: ID originVersionId: ID reason: String! clientMutationId: String! }
 input ConfigurePublicationPolicyInput { mode: String! expectedVersion: Int! clientMutationId: String! }
 input PublishReportInput { inspectionId: ID! snapshotId: ID! clientMutationId: String! }
 input InvalidateReportPublicationInput { publicationId: ID! reason: String! expectedVersion: Int! clientMutationId: String! }

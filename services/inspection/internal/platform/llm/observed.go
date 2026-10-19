@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"inspection/libs/identity"
@@ -100,6 +101,14 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	}
 	if g.Metrics != nil {
 		g.Metrics.LLMCallFinished(g.Mode, request.Mode, request.ModelAlias, outcome, duration, result.TransportDelivered, result.InputTokens, result.OutputTokens, result.CachedInputTokens, len(request.Images), result.RequestBodyBytes)
+		if request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH" || request.Mode == "VIDEO_VERIFY" {
+			purpose := map[string]string{"VIDEO_SCOPE": "scope", "VIDEO_MATCH": "matching", "VIDEO_VERIFY": "verification"}[request.Mode]
+			g.Metrics.VideoGateway(purpose, outcome, result.InputTokens, result.OutputTokens)
+			var gatewayError *Error
+			if errors.As(err, &gatewayError) && (gatewayError.Code == CodeAuthentication || gatewayError.Code == CodeIntegrationDisabled || gatewayError.HTTPStatus >= 400 && gatewayError.HTTPStatus < 500 && gatewayError.HTTPStatus != 429) {
+				g.Metrics.VideoProviderConfigFailure(purpose)
+			}
+		}
 	}
 	endEvent := observability.EventFromContext(ctx, "llm_call_finished", level, "llm", outcome, code)
 	endEvent.CallID = callID

@@ -13,6 +13,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,7 +33,8 @@ import (
 const rendererVersion = 1
 
 var (
-	errPermanentPDF = errors.New("permanent report PDF error")
+	errPermanentPDF   = errors.New("permanent report PDF error")
+	errFrameIntegrity = errors.New("FRAME_INTEGRITY_FAILED")
 	// errNotPublished means this attempt lost its reservation or the job was
 	// canceled (for example by retention); the produced object was discarded.
 	errNotPublished = errors.New("report PDF attempt not published")
@@ -54,17 +56,21 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 	}
 	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		var payload struct {
-			SnapshotID identity.ID `json:"snapshotId"`
+			InspectionID identity.ID `json:"inspectionId"`
+			SnapshotID   identity.ID `json:"snapshotId"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.SnapshotID == (identity.ID{}) {
+		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) || payload.SnapshotID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
 		var snapshot database.ReportSnapshot
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.SnapshotID).First(&snapshot).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
+				return nil // A retained outbox event may arrive after snapshot purge.
 			}
 			return err
+		}
+		if snapshot.InspectionID != payload.InspectionID {
+			return messaging.ErrPermanent
 		}
 		if snapshot.PDFRenderVersion != rendererVersion {
 			return nil
@@ -104,9 +110,13 @@ type Executor struct {
 }
 
 // SetupExecutor validates worker dependencies and retry/lease limits.
-func SetupExecutor(db *gorm.DB, store objectstore.Store, limits Limits, now func() time.Time, metrics ...*observability.Metrics) (*Executor, error) {
+func SetupExecutor(db *gorm.DB, store objectstore.Store, limits Limits, now func() time.Time, dashboardOrigin string, metrics ...*observability.Metrics) (*Executor, error) {
 	if db == nil || store.Client == nil {
 		return nil, fmt.Errorf("reports/render_pdf: missing database or private object store")
+	}
+	validatedOrigin, err := validateDashboardOrigin(dashboardOrigin)
+	if err != nil {
+		return nil, err
 	}
 	if limits.Timeout <= 0 || limits.LeaseDuration <= limits.Timeout || limits.PollInterval <= 0 || limits.MaxAttempts != len(limits.RetryDelays)+1 || limits.MaxEvidence <= 0 || limits.MaxPages <= 0 || limits.MaxImageBytes <= 0 || limits.MaxPDFBytes <= 0 {
 		return nil, fmt.Errorf("reports/render_pdf: invalid worker limits")
@@ -118,7 +128,19 @@ func SetupExecutor(db *gorm.DB, store objectstore.Store, limits Limits, now func
 	if len(metrics) > 0 {
 		observer = metrics[0]
 	}
-	return &Executor{db: db, store: store, renderer: MarotoRenderer{MaxEvidence: limits.MaxEvidence, MaxPages: limits.MaxPages, MaxImageBytes: limits.MaxImageBytes, MaxPDFBytes: limits.MaxPDFBytes}, now: now, limits: limits, metrics: observer}, nil
+	return &Executor{db: db, store: store, renderer: MarotoRenderer{DashboardOrigin: validatedOrigin, MaxEvidence: limits.MaxEvidence, MaxPages: limits.MaxPages, MaxImageBytes: limits.MaxImageBytes, MaxPDFBytes: limits.MaxPDFBytes}, now: now, limits: limits, metrics: observer}, nil
+}
+
+func validateDashboardOrigin(origin string) (string, error) {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("reports/render_pdf: invalid dashboard origin")
+	}
+	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
 type reservation struct {
@@ -171,7 +193,13 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 		return fail(err, !errors.Is(err, gorm.ErrRecordNotFound))
 	}
 	var value reportcore.Snapshot
-	if err := json.Unmarshal(snapshot.CanonicalJSON, &value); err != nil || reportcore.Validate(value) != nil {
+	if err := json.Unmarshal(snapshot.CanonicalJSON, &value); err != nil {
+		return fail(errPermanentPDF, false)
+	}
+	if err := validateVideoEvidence(value); err != nil {
+		return fail(err, false)
+	}
+	if reportcore.Validate(value) != nil {
 		return fail(errPermanentPDF, false)
 	}
 	_, canonicalDigest, err := reportcore.CanonicalJSON(value)
@@ -183,11 +211,19 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 		return fail(err, false)
 	}
 	value = projected
+	if err := overlaySourceAvailability(workCtx, e.db, reserved.job.TenantID, &value, e.now().UTC()); err != nil {
+		return fail(err, true)
+	}
 	stageStarted := e.now()
 	assets, err := e.loadDisplayAssets(workCtx, reserved.job.TenantID, value)
 	e.observeStage("images", stageStarted)
 	if err != nil {
-		return fail(err, !errors.Is(err, errPermanentPDF))
+		return fail(err, !errors.Is(err, errPermanentPDF) && !errors.Is(err, errFrameIntegrity))
+	}
+	// Recheck source state after image I/O so expiry racing with asset loading
+	// is reflected in this render's availability notice.
+	if err := overlaySourceAvailability(workCtx, e.db, reserved.job.TenantID, &value, e.now().UTC()); err != nil {
+		return fail(err, true)
 	}
 	stageStarted = e.now()
 	data, err := e.renderer.Render(workCtx, PDFDocument{SnapshotID: snapshot.ID.String(), Version: snapshot.VersionNumber, Snapshot: value, Internal: internal}, assets)
@@ -233,6 +269,66 @@ func (e *Executor) RunDue(ctx context.Context) (bool, error) {
 	}
 	slog.InfoContext(ctx, "report_pdf_job_completed", append(attrs, "durationMs", e.now().Sub(started).Milliseconds(), "bytes", len(data), "pages", pages)...)
 	return true, nil
+}
+
+func validateVideoEvidence(snapshot reportcore.Snapshot) error {
+	for _, item := range snapshot.Evidence {
+		if item.EvidenceKind != "VIDEO_FRAME" {
+			continue
+		}
+		if item.FrameID == "" || item.FrameID != item.ID || item.SourceMediaID == "" || item.PreparationID == "" || item.TimestampMS == nil || *item.TimestampMS < 0 || len(item.FrameDigest) != 64 {
+			return errFrameIntegrity
+		}
+	}
+	return nil
+}
+
+// overlaySourceAvailability reads current source state into the render-only
+// copy. The stored canonical JSON and its digest remain immutable.
+func overlaySourceAvailability(ctx context.Context, db *gorm.DB, tenantID identity.ID, snapshot *reportcore.Snapshot, now time.Time) error {
+	ids := make([]identity.ID, 0)
+	seen := make(map[identity.ID]struct{})
+	for _, item := range snapshot.Evidence {
+		if item.EvidenceKind != "VIDEO_FRAME" {
+			continue
+		}
+		id, err := identity.ParseID(item.SourceMediaID)
+		if err != nil {
+			return errFrameIntegrity
+		}
+		if _, ok := seen[id]; !ok {
+			ids = append(ids, id)
+			seen[id] = struct{}{}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var sources []database.VideoSource
+	if err := db.WithContext(ctx).Where("tenant_id=? AND media_id IN ?", tenantID, ids).Find(&sources).Error; err != nil {
+		return err
+	}
+	byMedia := make(map[identity.ID]database.VideoSource, len(sources))
+	for _, source := range sources {
+		byMedia[source.MediaID] = source
+	}
+	for i := range snapshot.Evidence {
+		item := &snapshot.Evidence[i]
+		if item.EvidenceKind != "VIDEO_FRAME" {
+			continue
+		}
+		id, _ := identity.ParseID(item.SourceMediaID)
+		source, ok := byMedia[id]
+		switch {
+		case !ok:
+			item.SourceAvailability = "MISSING"
+		case source.Status == "EXPIRED" || source.Status == "DELETING" || source.OriginalDeletedAt != nil || source.SourceExpiryAt != nil && !source.SourceExpiryAt.After(now):
+			item.SourceAvailability = "EXPIRED"
+		default:
+			item.SourceAvailability = "AVAILABLE"
+		}
+	}
+	return nil
 }
 
 func (e *Executor) observeOutcome(audience, outcome string) {
@@ -367,6 +463,23 @@ func (e *Executor) loadDisplayAssets(ctx context.Context, tenantID identity.ID, 
 	for _, derivative := range derivatives {
 		byID[derivative.MediaID] = derivative
 	}
+	videoIDs := make([]identity.ID, 0)
+	for _, item := range snapshot.Evidence {
+		if item.EvidenceKind == "VIDEO_FRAME" && item.Availability != "MISSING" {
+			id, _ := identity.ParseID(item.ID)
+			videoIDs = append(videoIDs, id)
+		}
+	}
+	framesByID := make(map[identity.ID]database.VideoFrame, len(videoIDs))
+	if len(videoIDs) > 0 {
+		var frames []database.VideoFrame
+		if err := e.db.WithContext(ctx).Where("tenant_id=? AND id IN ?", tenantID, videoIDs).Find(&frames).Error; err != nil {
+			return nil, err
+		}
+		for _, frame := range frames {
+			framesByID[frame.ID] = frame
+		}
+	}
 	assets := make(pdf.AssetBundle, len(ids))
 	var totalBytes int64
 	for _, item := range snapshot.Evidence {
@@ -378,12 +491,39 @@ func (e *Executor) loadDisplayAssets(ctx context.Context, tenantID identity.ID, 
 		}
 		mediaID, _ := identity.ParseID(item.ID)
 		assetName := "evidence-" + item.ID + ".jpg"
+		if _, alreadyRead := assets[assetName]; alreadyRead {
+			continue
+		}
+		if item.EvidenceKind == "VIDEO_FRAME" {
+			frame, ok := framesByID[mediaID]
+			if !ok || frame.ID.String() != item.FrameID || frame.SourceMediaID.String() != item.SourceMediaID || frame.PreparationID.String() != item.PreparationID || frame.SHA256 == "" || !strings.EqualFold(frame.SHA256, item.FrameDigest) || !strings.EqualFold(frame.SHA256, item.DisplayDigest) {
+				return nil, errFrameIntegrity
+			}
+			data, err := e.store.Read(ctx, frame.ObjectKey)
+			if errors.Is(err, objectstore.ErrNotFound) || errors.Is(err, objectstore.ErrInvalid) {
+				return nil, errFrameIntegrity
+			}
+			if err != nil {
+				return nil, err
+			}
+			totalBytes += int64(len(data))
+			if totalBytes > e.limits.MaxImageBytes {
+				return nil, errPermanentPDF
+			}
+			sum := sha256.Sum256(data)
+			if !strings.EqualFold(hex.EncodeToString(sum[:]), frame.SHA256) {
+				return nil, errFrameIntegrity
+			}
+			config, _, err := image.DecodeConfig(bytes.NewReader(data))
+			if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 40_000_000 || (frame.Width > 0 && config.Width != frame.Width) || (frame.Height > 0 && config.Height != frame.Height) || (frame.SizeBytes > 0 && int64(len(data)) != frame.SizeBytes) {
+				return nil, errFrameIntegrity
+			}
+			assets[assetName] = data
+			continue
+		}
 		derivative, ok := byID[mediaID]
 		if !ok {
 			assets[assetName] = nil
-			continue
-		}
-		if _, alreadyRead := assets[assetName]; alreadyRead {
 			continue
 		}
 		data, err := e.store.Read(ctx, derivative.ObjectKey)
@@ -576,6 +716,9 @@ func emitReadyStatus(tx *gorm.DB, envelope events.RawEnvelope, snapshot database
 func errorCode(err error) string {
 	if err == nil {
 		return ""
+	}
+	if errors.Is(err, errFrameIntegrity) {
+		return "FRAME_INTEGRITY_FAILED"
 	}
 	if errors.Is(err, errPermanentPDF) {
 		return "document_invalid_or_limit_exceeded"
