@@ -316,4 +316,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE: ${{ needs.resolve.outputs.candidate }}
           SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
-        run: gh release create "$CANDIDATE" candidate.json --target "$SOURCE_SHA" --title "$CANDIDATE" --notes "Digest-pinned component candidate for $SOURCE_SHA. This candidate is unique to workflow run ${{ github.run_id }} / attempt ${{ github.run_attempt }}."
+        # The candidate manifest records the source SHA; the release tag points to the default branch.
+        run: gh release create "$CANDIDATE" candidate.json --title "$CANDIDATE" --notes "Digest-pinned component candidate for $SOURCE_SHA. This candidate is unique to workflow run ${{ github.run_id }} / attempt ${{ github.run_attempt }}."

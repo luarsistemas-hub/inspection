@@ -285,4 +285,5 @@ jobs:
           grep -qx "DEPLOYMENT_ID=$DEPLOYMENT_ID" active.env
           grep -qx "PLAN_SHA256=$PLAN_SHA" active.env
           test "$(grep -c '_IMAGE=' active.env)" -eq 15
-          gh release create "state-$DEPLOYMENT_ID" active.env --repo "${GITHUB_REPOSITORY}" --target "${{ needs.plan.outputs.source_sha }}" --title "state-$DEPLOYMENT_ID" --notes "Host-verified active composition after applying plan $PLAN_SHA."
+          # The receipt records the deployed source SHA; the release tag points to the default branch.
+          gh release create "state-$DEPLOYMENT_ID" active.env --repo "${GITHUB_REPOSITORY}" --title "state-$DEPLOYMENT_ID" --notes "Host-verified active composition after applying plan $PLAN_SHA."
