@@ -17,5 +17,10 @@ print(actual)
 PY
 )"
 [[ "$actual" == "$plan_hash" ]] || { echo 'Supervised plan hash mismatch.' >&2; exit 1; }
+static_installer=/usr/local/sbin/inspection-install-host-tools
+installer_tmp="$static_installer.new.$$"
+install -o root -g root -m 0755 "$release_dir/deploy/oci/host/install-host-tools.sh" "$installer_tmp"
+mv -f "$installer_tmp" "$static_installer"
 export INSPECTION_APPROVED_PLAN_SHA256="$plan_hash"
-"$release_dir/deploy/oci/host/apply-plan.sh" "$job_dir/plan.json" "$release_dir"
+# Release archives are extracted with mode 0600; always invoke their scripts through bash.
+bash "$release_dir/deploy/oci/host/apply-plan.sh" "$job_dir/plan.json" "$release_dir"

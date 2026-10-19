@@ -267,6 +267,7 @@ resource "oci_monitoring_alarm" "graphql_latency" {
   pending_duration      = "PT10M"
   resolution            = "1m"
   body                  = "Inspection GraphQL API p95 request latency has exceeded its configured threshold for 10 minutes."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "heartbeat" {
@@ -281,6 +282,7 @@ resource "oci_monitoring_alarm" "heartbeat" {
   pending_duration      = "PT1M"
   resolution            = "1m"
   body                  = "Inspection host heartbeat has been absent for five minutes."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "video_queue_age" {
@@ -295,6 +297,7 @@ resource "oci_monitoring_alarm" "video_queue_age" {
   pending_duration      = "PT5M"
   resolution            = "1m"
   body                  = "The oldest runnable video job has been waiting over 30 minutes."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "video_scratch_low" {
@@ -309,6 +312,7 @@ resource "oci_monitoring_alarm" "video_scratch_low" {
   pending_duration      = "PT1M"
   resolution            = "1m"
   body                  = "Video worker scratch space is below 8 GiB."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "video_source_expiry_lag" {
@@ -323,6 +327,7 @@ resource "oci_monitoring_alarm" "video_source_expiry_lag" {
   pending_duration      = "PT5M"
   resolution            = "1m"
   body                  = "A video source has exceeded its expiry deadline by more than 15 minutes."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "video_provider_configuration_failures" {
@@ -337,6 +342,7 @@ resource "oci_monitoring_alarm" "video_provider_configuration_failures" {
   pending_duration      = "PT1M"
   resolution            = "1m"
   body                  = "More than three terminal video provider authentication/configuration failures occurred within 15 minutes."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 resource "oci_monitoring_alarm" "video_work_heartbeat_missing" {
@@ -351,6 +357,37 @@ resource "oci_monitoring_alarm" "video_work_heartbeat_missing" {
   pending_duration      = "PT1M"
   resolution            = "1m"
   body                  = "No video work heartbeat has been observed for more than 120 seconds."
+  message_format        = "ONS_OPTIMIZED"
+}
+
+resource "oci_monitoring_alarm" "video_metrics_scrape_failed" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-video-metrics-scrape-failed"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "VideoMetricsScrapeOk[1m]{instanceId = \"${oci_core_instance.runtime.id}\", component = \"video-worker\"}.min() < 1"
+  severity              = "CRITICAL"
+  pending_duration      = "PT1M"
+  resolution            = "1m"
+  body                  = "Video worker or scheduler metrics collection failed while video is deployed."
+  message_format        = "ONS_OPTIMIZED"
+}
+
+resource "oci_monitoring_alarm" "api_metrics_scrape_failed" {
+  compartment_id        = var.compartment_ocid
+  destinations          = [var.alert_topic_ocid]
+  display_name          = "inspection-api-metrics-scrape-failed"
+  is_enabled            = true
+  metric_compartment_id = var.compartment_ocid
+  namespace             = "inspection_host"
+  query                 = "ApiMetricsScrapeOk[1m]{instanceId = \"${oci_core_instance.runtime.id}\", component = \"api\"}.min() < 1"
+  severity              = "CRITICAL"
+  pending_duration      = "PT1M"
+  resolution            = "1m"
+  body                  = "Inspection API metrics collection failed."
+  message_format        = "ONS_OPTIMIZED"
 }
 
 output "instance_ocid" { value = oci_core_instance.runtime.id }

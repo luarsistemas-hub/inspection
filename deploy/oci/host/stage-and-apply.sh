@@ -39,7 +39,7 @@ plan_path=root/"plan.json"; bundle_path=root/"bundle.tgz"
 plan=json.loads(plan_path.read_text(encoding="utf-8"))
 if plan.get("schemaVersion") != 2:
     raise SystemExit("Plan schema v1 is unsupported; regenerate the plan with the current planner")
-if plan.get("operation") not in {"deploy", "rollback"}:
+if plan.get("operation") not in {"deploy", "rollback", "recovery"}:
     raise SystemExit("Unsupported deployment operation")
 claimed=plan.pop("planSha256", None)
 actual=hashlib.sha256(json.dumps(plan,sort_keys=True,separators=(",",":")).encode()).hexdigest()

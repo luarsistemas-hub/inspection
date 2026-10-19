@@ -42,10 +42,11 @@ def canonical_hash(value: object) -> str:
 def runtime_config_sha256(root: Path) -> str:
     """Hash runtime configuration files in stable path order."""
     root = root.resolve()
-    if not (root / "deploy/oci/compose.yaml").is_file():
+    required = [root / "deploy/oci" / name for name in
+                ("compose.yaml", "Caddyfile", "litellm-config.yaml", "keycloak-realm.json")]
+    if any(not path.is_file() for path in required) or not (root / "deploy/keycloak").is_dir():
         raise ValueError("runtime configuration source is incomplete")
-    files = [root / "deploy/oci" / name for name in
-             ("compose.yaml", "Caddyfile", "litellm-config.yaml", "keycloak-realm.json")]
+    files = list(required)
     keycloak = root / "deploy/keycloak"
     if keycloak.exists():
         files.extend(path for path in keycloak.rglob("*") if path.is_file() and "themes" not in path.relative_to(keycloak).parts)
@@ -236,7 +237,8 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str] | No
         raise ValueError("unsupported deployment operation")
     if operation == "recovery" and (set(targets) != set(COMPONENTS) or not isinstance(recovery_of, dict) or set(recovery_of) != {"deploymentId", "planSha256"}):
         raise ValueError("recovery requires the complete composition and blocked deployment reference")
-    runtime_hash = runtime_config_sha256(repo) if repo is not None else None
+    config_root = repo or Path(__file__).resolve().parents[2]
+    runtime_hash = runtime_config_sha256(config_root)
     if operation == "recovery":
         runtime_hash = runtime_hash or candidate.get("runtimeConfigSha256")
         if not isinstance(runtime_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", runtime_hash):
@@ -298,6 +300,7 @@ def create_rollback_plan(active: dict[str, str], previous: dict[str, str], targe
         "expectedActiveStateSha256": canonical_hash(active),
         "targets": targets,
         "desiredImages": desired,
+        "rollbackTargetHasVideoWorker": "VIDEO_WORKER_IMAGE" in previous,
         **({"componentSources": component_sources} if component_sources is not None else {}),
         "operations": {"runMigration": False, "runSeed": False},
         "compatibility": {"databaseChange": "none", "contractChange": "recovery"},

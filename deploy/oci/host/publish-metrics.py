@@ -17,8 +17,9 @@ from oci.monitoring.models import Datapoint, MetricData, PostMetricDataDetails
 METADATA_URL = "http://169.254.169.254/opc/v2/instance/"
 VIDEO_METRICS_URL = "http://127.0.0.1:8091/metrics"
 SCHEDULER_METRICS_URL = "http://127.0.0.1:8092/metrics"
-API_METRICS_URL = "http://127.0.0.1:8080/metrics"
-# F5.8 will publish the video-worker container on host loopback port 8091.
+API_METRICS_URL = "http://127.0.0.1:8093/metrics"
+RECEIPT_PATH = Path(os.environ.get("INSPECTION_RELEASE_RECEIPT_PATH", "/etc/inspection/releases/current.env"))
+METRICS_TOKEN_PATH = Path("/etc/inspection/secrets.d/INSPECTION_METRICS_TOKEN")
 PROVIDER_STATE_PATH = Path("/var/lib/inspection/video-provider-failures.json")
 API_HISTOGRAM_STATE_PATH = Path("/var/lib/inspection/api-http-histogram.json")
 
@@ -40,20 +41,36 @@ def used_percent(path):
 
 def video_metrics():
     result = {}
-    scratch_path = "/var/lib/docker/volumes/inspection_inspection_video_scratch/_data"
-    if os.path.isdir(scratch_path):
-        values = os.statvfs(scratch_path)
-        result["VideoScratchFreeBytes"] = values.f_bavail * values.f_frsize
+    receipt = {}
     try:
-        token_path = Path("/etc/inspection/secrets.d/INSPECTION_METRICS_TOKEN")
-        token = token_path.read_text().strip()
-    except (OSError, ValueError):
+        for line in RECEIPT_PATH.read_text().splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                receipt[key] = value
+    except OSError:
+        receipt = {}
+    if not receipt.get("VIDEO_WORKER_IMAGE"):
         return result
-    result.update({"VideoOldestRunnableAgeSeconds": 0.0, "VideoExpirationLagSeconds": 0.0, "VideoWorkHeartbeatAgeSeconds": 1e9})
+
+    scratch_path = "/srv/inspection/video-scratch"
+    scratch_ok = False
+    if os.path.isdir(scratch_path):
+        try:
+            values = os.statvfs(scratch_path)
+            result["VideoScratchFreeBytes"] = values.f_bavail * values.f_frsize
+            scratch_ok = True
+        except OSError:
+            pass
+    try:
+        token = METRICS_TOKEN_PATH.read_text().strip()
+    except (OSError, ValueError):
+        return {**result, "VideoMetricsScrapeOk": 0.0}
     provider_failures = 0.0
     heartbeat_timestamp = 0.0
     video_worker_scraped = False
     scheduler_scraped = False
+    queue_age_seen = False
+    expiry_lag_seen = False
     for endpoint in (VIDEO_METRICS_URL, SCHEDULER_METRICS_URL):
         try:
             request = urllib.request.Request(endpoint, headers={"Authorization": f"Bearer {token}"})
@@ -71,20 +88,24 @@ def video_metrics():
                 name, value = match.groups()
                 numeric = float(value)
                 if name == "inspection_video_oldest_runnable_age_seconds":
-                    result["VideoOldestRunnableAgeSeconds"] = max(result["VideoOldestRunnableAgeSeconds"], numeric)
+                    result["VideoOldestRunnableAgeSeconds"] = max(result.get("VideoOldestRunnableAgeSeconds", 0.0), numeric)
+                    queue_age_seen = True
                 elif name == "inspection_video_expiration_lag_seconds":
-                    result["VideoExpirationLagSeconds"] = max(result["VideoExpirationLagSeconds"], numeric)
+                    result["VideoExpirationLagSeconds"] = max(result.get("VideoExpirationLagSeconds", 0.0), numeric)
+                    expiry_lag_seen = True
                 elif name == "inspection_video_provider_config_failures_total":
                     provider_failures += numeric
                 elif name == "inspection_video_work_heartbeat_timestamp_seconds":
                     heartbeat_timestamp = max(heartbeat_timestamp, numeric)
-    if not scheduler_scraped:
-        result["VideoExpirationLagSeconds"] = 1e9
+    scrape_ok = video_worker_scraped and scheduler_scraped and scratch_ok
+    result["VideoMetricsScrapeOk"] = 1.0 if scrape_ok else 0.0
     if video_worker_scraped:
         result["VideoWorkHeartbeatAgeSeconds"] = max(0.0, time.time() - heartbeat_timestamp) if heartbeat_timestamp else 1e9
         result["VideoProviderConfigFailures15m"] = provider_failure_window(provider_failures)
-    else:
-        result["VideoOldestRunnableAgeSeconds"] = 1e9
+    if not queue_age_seen:
+        result.pop("VideoOldestRunnableAgeSeconds", None)
+    if not expiry_lag_seen:
+        result.pop("VideoExpirationLagSeconds", None)
     return result
 
 
@@ -139,11 +160,16 @@ def graphql_request_p95(token):
 
 def api_metrics():
     try:
-        token = Path("/etc/inspection/secrets.d/INSPECTION_METRICS_TOKEN").read_text().strip()
+        token = METRICS_TOKEN_PATH.read_text().strip()
+        request = urllib.request.Request(API_METRICS_URL, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = response.read().decode("utf-8")
+        if "inspection_http_request_duration_seconds_bucket" not in body:
+            return {"ApiMetricsScrapeOk": 0.0}
         value = graphql_request_p95(token)
     except (OSError, ValueError):
-        return {}
-    return {} if value is None else {"GraphQLRequestP95Seconds": value}
+        return {"ApiMetricsScrapeOk": 0.0}
+    return {"ApiMetricsScrapeOk": 1.0, **({} if value is None else {"GraphQLRequestP95Seconds": value})}
 
 
 def provider_failure_window(current):

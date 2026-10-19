@@ -13,16 +13,33 @@ target="$root/$version"
 install -d -o root -g root -m 0750 "$root"
 rm -rf "$staging"
 install -d -o root -g root -m 0750 "$staging"
-for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh; do
+for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py; do
   install -o root -g root -m 0755 "$source_dir/$name" "$staging/$name"
-  bash -n "$staging/$name"
+  case "$name" in
+    *.sh) bash -n "$staging/$name" ;;
+  esac
 done
 install -o root -g root -m 0644 "$source_dir/../components.json" "$staging/components.json"
+install -o root -g root -m 0644 "$source_dir/component-catalog.sh" "$staging/component-catalog.sh"
+chmod 0755 "$staging/component-catalog.sh"
 if [[ -e "$target" ]]; then
-  for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh; do
-    cmp -s "$staging/$name" "$target/$name" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
+  for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py; do
+    if [[ -e "$target/$name" ]]; then
+      cmp -s "$staging/$name" "$target/$name" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
+    else
+      install -o root -g root -m 0755 "$staging/$name" "$target/$name"
+    fi
   done
-  cmp -s "$staging/components.json" "$target/components.json" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
+  if [[ -e "$target/components.json" ]]; then
+    cmp -s "$staging/components.json" "$target/components.json" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
+  else
+    install -o root -g root -m 0644 "$staging/components.json" "$target/components.json"
+  fi
+  if [[ -e "$target/component-catalog.sh" ]]; then
+    cmp -s "$staging/component-catalog.sh" "$target/component-catalog.sh" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
+  else
+    install -o root -g root -m 0755 "$staging/component-catalog.sh" "$target/component-catalog.sh"
+  fi
   rm -rf "$staging"
 else
   mv "$staging" "$target"

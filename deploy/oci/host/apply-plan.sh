@@ -6,6 +6,13 @@ release_dir="${2:-}"
 approved_hash="${INSPECTION_APPROVED_PLAN_SHA256:-}"
 [[ -s "$plan_path" && -d "$release_dir/deploy/oci" ]] || { echo 'Plan or candidate bundle is missing.' >&2; exit 2; }
 [[ "$(id -u)" == 0 ]] || { echo 'Run the deployment executor with sudo.' >&2; exit 2; }
+catalog_helper="$release_dir/deploy/oci/host/component-catalog.sh"
+[[ -s "$catalog_helper" ]] || { echo 'Component catalog resolver is missing from the candidate release.' >&2; exit 1; }
+# shellcheck source=deploy/oci/host/component-catalog.sh
+source "$catalog_helper"
+INSPECTION_COMPONENT_CATALOG="${INSPECTION_COMPONENT_CATALOG:-$release_dir/deploy/oci/components.json}"
+inspection_resolve_component_catalog "$(readlink -f "${BASH_SOURCE[0]}")"
+catalog_path="$INSPECTION_RESOLVED_COMPONENT_CATALOG"
 
 plan_hash="$(python3 - "$plan_path" <<'PY'
 import hashlib, json, sys
@@ -39,16 +46,30 @@ fi
 
 deployment_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["deploymentId"])' "$plan_path")"
 [[ "$deployment_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]] || { echo 'Invalid deployment ID.' >&2; exit 2; }
+update_recovery_preflight_block() {
+  result=$?
+  trap - EXIT
+  set +e
+  rm -f "${targets_file:-}" "${desired_file:-}" "${stage_env:-}" "${old_env:-}" "${old_receipt:-}"
+  if [[ "$result" -ne 0 && "$operation" == recovery && -s "$block_path" ]]; then
+    blocked_id="$(sed -n 's/^DEPLOYMENT_ID=//p' "$block_path" | head -n 1)"
+    blocked_hash="$(sed -n 's/^PLAN_SHA256=//p' "$block_path" | head -n 1)"
+    printf 'DEPLOYMENT_ID=%s\nPLAN_SHA256=%s\nPHASE=preflight\nREASON=Recovery preflight failed; inspect the recovery plan and diagnostics.\n' "$blocked_id" "$blocked_hash" > "$block_path"
+    chmod 0600 "$block_path"
+    chown root:root "$block_path"
+  fi
+  exit "$result"
+}
+if [[ "$operation" == recovery ]]; then trap update_recovery_preflight_block EXIT; fi
 targets_file="$(mktemp /run/inspection-targets.XXXXXX)"
 desired_file="$(mktemp /run/inspection-images.XXXXXX)"
 stage_env="$(mktemp /etc/inspection/.compose.env.plan.XXXXXX)"
 old_env="$(mktemp /run/inspection-compose-env.XXXXXX)"
 old_receipt="$(mktemp /run/inspection-active-state.XXXXXX)"
-old_block="$(mktemp /run/inspection-block.XXXXXX)"
-cleanup() { rm -f "$targets_file" "$desired_file" "$stage_env" "$old_env" "$old_receipt" "$old_block"; }
+cleanup() { rm -f "$targets_file" "$desired_file" "$stage_env" "$old_env" "$old_receipt"; }
 trap cleanup EXIT
 
-python3 - "$plan_path" "$targets_file" "$desired_file" "$release_dir/deploy/oci/components.json" <<'PY'
+python3 - "$plan_path" "$targets_file" "$desired_file" "$catalog_path" <<'PY'
 import json, re, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 catalog = json.load(open(sys.argv[4], encoding="utf-8"))["components"]
@@ -106,7 +127,14 @@ fi
 if [[ -z "$planned_runtime_hash" ]]; then
   echo 'Plan is missing runtimeConfigSha256; regenerate the plan with the current planner.' >&2; exit 1
 fi
-actual_base="$(python3 - "$old_receipt" "$release_dir/deploy/oci/components.json" <<'PY'
+if [[ "$operation" == rollback ]]; then
+  active_runtime_hash="$(sed -n 's/^RUNTIME_CONFIG_SHA256=//p' "$old_receipt" | head -n 1)"
+  [[ -n "$active_runtime_hash" && "$active_runtime_hash" == "$planned_runtime_hash" ]] || {
+    echo 'Automatic rollback is unavailable because the executor runtime configuration does not match the active receipt; create a corrective plan.' >&2
+    exit 1
+  }
+fi
+actual_base="$(python3 - "$old_receipt" "$catalog_path" <<'PY'
 import hashlib, json, sys
 catalog=json.load(open(sys.argv[2], encoding="utf-8"))["components"]
 image_keys={item["image"] for item in catalog.values()} | {"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"}
@@ -192,11 +220,6 @@ PY
   unset keycloak_smtp_server
 fi
 
-had_block=0
-if [[ -e "$block_path" ]]; then
-  install -m 0600 "$block_path" "$old_block"
-  had_block=1
-fi
 phase=preflight
 migration_started=0
 services_stopped=0
@@ -221,6 +244,9 @@ PY
   then go_selected=1; fi
 done
 if [[ "$operation" == recovery ]]; then go_selected=1; fi
+if [[ "$operation" == rollback && "$go_selected" == 1 && -s "$old_receipt" && "$(grep -c '^VIDEO_WORKER_IMAGE=' "$old_receipt")" -gt 0 && "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1])).get("rollbackTargetHasVideoWorker", False)).lower())' "$plan_path")" != true ]]; then
+  echo 'Rollback target has no video-worker image; refusing to leave accepted video work without a worker.' >&2; exit 1
+fi
 migration=0
 if [[ "$operation" != rollback && "$go_selected" == 1 ]]; then migration=1; fi
 if [[ "$migration" == 1 || "$operation" == rollback ]]; then
@@ -230,6 +256,11 @@ if [[ "$gateway_selected" == 1 ]]; then
   gateway_image="$(sed -n 's/^LITELLM_IMAGE=//p' "$desired_file")"
   old_gateway_image="$(sed -n 's/^LITELLM_IMAGE=//p' "$old_env")"
   [[ "$gateway_image" == "$old_gateway_image" ]] || changed_images+=("$gateway_image")
+fi
+if [[ ! -s "$old_env" ]]; then
+  for key in POSTGRES_IMAGE RABBITMQ_IMAGE DRAGONFLY_IMAGE KEYCLOAK_IMAGE LITELLM_IMAGE; do
+    changed_images+=("$(sed -n "s/^${key}=//p" "$desired_file")")
+  done
 fi
 block() {
   local reason="$1"
@@ -247,7 +278,7 @@ on_exit() {
   trap - EXIT
   set +e
   docker logout ghcr.io >/dev/null 2>&1 || true
-  if [[ "$result" -ne 0 && "$phase" != preflight ]]; then
+  if [[ "$result" -ne 0 && ( "$phase" != preflight || "$operation" == recovery ) ]]; then
     # Recovery recreates containers, deleting their logs. Retain them privately first.
     diagnostics="/var/lib/inspection-deploy/jobs/$deployment_id/diagnostics"
     if install -d -o root -g root -m 0700 "$diagnostics"; then
@@ -265,7 +296,18 @@ on_exit() {
       echo "Deployment diagnostics: $diagnostics (root only)." >&2
     fi
     if [[ "$operation" == recovery ]]; then
-      block "Recovery failed during $phase; original deployment reference preserved."
+      if [[ "$migration_started" == 0 && "$phase" != promoting && -s "$old_env" && "${#compose_services[@]}" -gt 0 ]]; then
+        old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
+        recover_services=()
+        for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && recover_services+=("$service"); done
+        if [[ "${#recover_services[@]}" -gt 0 ]] && docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1; then
+          block "Recovery failed before migrations; previous services were restored; inspect diagnostics."
+        else
+          block "Recovery failed before migrations and previous services could not be restored; inspect diagnostics."
+        fi
+      else
+        block "Recovery failed during $phase; original deployment reference preserved."
+      fi
     elif [[ "$migration_started" == 1 ]]; then
       block "Deployment failed after database migration started; inspect before recovery."
     elif [[ "$phase" == promoting ]]; then
@@ -280,7 +322,12 @@ on_exit() {
         fi
       fi
       services_recovered=1
-      docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}" >/dev/null 2>&1 || services_recovered=0
+      old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
+      recover_services=()
+      for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && recover_services+=("$service"); done
+      if [[ "${#recover_services[@]}" -gt 0 ]]; then
+        docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1 || services_recovered=0
+      fi
       if [[ "$gateway_recovered" == 1 && "$services_recovered" == 1 ]]; then
         rm -f "$block_path"
         echo 'Previous services recovered; this deployment still failed.' >&2
@@ -298,6 +345,7 @@ trap on_exit EXIT
 
 "${dc[@]}" config --quiet
 if grep -qx caddy "$targets_file"; then
+  changed_images+=("$(sed -n 's/^CADDY_IMAGE=//p' "$desired_file")")
   "${dc[@]}" run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 fi
 ghcr_user="$(cat /etc/inspection/secrets.d/GHCR_USERNAME)"
@@ -305,24 +353,26 @@ ghcr_token="$(cat /etc/inspection/secrets.d/GHCR_READ_TOKEN)"
 printf '%s' "$ghcr_token" | docker login ghcr.io --username "$ghcr_user" --password-stdin >/dev/null
 unset ghcr_token
 for image in "${changed_images[@]}"; do docker pull "$image"; done
+video_image="$(sed -n 's/^VIDEO_WORKER_IMAGE=//p' "$desired_file")"
+if [[ -n "$video_image" ]]; then
+  docker image inspect "$video_image" >/dev/null 2>&1 || docker pull "$video_image"
+  prepare_upgrade="$release_dir/deploy/oci/host/prepare-upgrade.sh"
+  [[ -s "$prepare_upgrade" ]] || { echo 'Video host upgrade preparation script is missing from the candidate release.' >&2; exit 1; }
+  bash "$prepare_upgrade" "$video_image"
+fi
+
+if [[ -s "$old_env" ]]; then
+  "${dc[@]}" up -d --no-recreate --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
+elif [[ "$go_selected" == 1 ]]; then
+  phase=dependencies
+  "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
+fi
 
 if [[ "$operation" == rollback ]]; then
-  if grep -q '^VIDEO_WORKER_IMAGE=' "$old_receipt" && ! grep -qx 'video-worker' < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["targets"]))' "$plan_path"); then
-    echo 'Rollback target must include video-worker; refusing to leave accepted video work without a worker.' >&2; exit 1
-  fi
   "${dc[@]}" run --rm --no-deps inspection-schema-check || {
     echo 'target images do not support the current database schema; this upgrade is one-way, recover by deploying forward' >&2
     exit 1
   }
-fi
-
-if [[ "$go_selected" == 1 ]]; then
-  if [[ -s "$old_env" ]]; then
-    "${dc[@]}" up -d --no-recreate --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
-  else
-    phase=dependencies
-    "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
-  fi
 fi
 
 if [[ "$gateway_selected" == 1 ]]; then
@@ -331,13 +381,11 @@ if [[ "$gateway_selected" == 1 ]]; then
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 litellm
 fi
 
- migration=false
-if [[ "$migration" == 1 ]]; then migration=true; fi
-if [[ "$migration" == true ]]; then
+if [[ "$migration" == 1 ]]; then
   if [[ "${#compose_services[@]}" -gt 0 ]]; then
     phase=services
     block 'Stopping the coordinated Go services before database migration.'
-  if [[ -s "$old_env" ]]; then
+    if [[ -s "$old_env" ]]; then
       old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
       stop_services=()
       for service in "${compose_services[@]}"; do
@@ -347,9 +395,6 @@ if [[ "$migration" == true ]]; then
         docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"
         services_stopped=1
       fi
-    else
-      phase=dependencies
-      "${dc[@]}" up -d --wait --wait-timeout 300 postgres rabbitmq dragonfly keycloak litellm
     fi
   fi
   phase=migration
@@ -374,7 +419,7 @@ if [[ "${#compose_services[@]}" -gt 0 ]]; then
     "${dc[@]}" run --rm --no-deps inspection-keycloak-check
     "${dc[@]}" run --rm --no-deps inspection-keycloak-configure
   fi
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" "$release_dir/deploy/oci/host/smoke.sh"
+  INSPECTION_COMPONENT_CATALOG="$catalog_path" INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" INSPECTION_COMPOSE_ENV="$stage_env" bash "$release_dir/deploy/oci/host/smoke.sh"
 fi
 
 for service in "${compose_services[@]}"; do
@@ -382,7 +427,7 @@ for service in "${compose_services[@]}"; do
   [[ -n "$container_id" ]] || { echo "Updated service has no running container: $service" >&2; exit 1; }
   image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
   repo_digests="$(docker image inspect --format '{{join .RepoDigests "\n"}}' "$image_id")"
-  approved_image="$(python3 - "$release_dir/deploy/oci/components.json" "$plan_path" "$service" <<'PY'
+  approved_image="$(python3 - "$catalog_path" "$plan_path" "$service" <<'PY'
 import json,sys
 catalog=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
 plan=json.load(open(sys.argv[2], encoding="utf-8"))
@@ -416,5 +461,8 @@ current_link=/opt/inspection/current
 temporary_link="${current_link}.new.$$"
 ln -s "$release_dir/deploy/oci" "$temporary_link"
 mv -Tf "$temporary_link" "$current_link"
+metrics_temporary="/usr/local/sbin/.inspection-publish-metrics.new.$$"
+install -o root -g root -m 0755 "$release_dir/deploy/oci/host/publish-metrics.py" "$metrics_temporary"
+mv -f "$metrics_temporary" /usr/local/sbin/inspection-publish-metrics
 rm -f "$block_path"
 echo "Deployment $deployment_id applied; plan $plan_hash."

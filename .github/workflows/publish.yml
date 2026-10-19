@@ -16,7 +16,7 @@ on:
         required: true
         default: deploy
         type: choice
-        options: [deploy, rollback]
+        options: [deploy, rollback, recovery]
       candidate_id:
         description: Candidate release tag produced by Build OCI candidates
         required: false
@@ -58,22 +58,44 @@ jobs:
       source_sha: ${{ steps.plan.outputs.source_sha }}
       targets: ${{ steps.plan.outputs.targets }}
     steps:
+      - name: Connect to blocked-state endpoint for recovery planning
+        if: inputs.operation == 'recovery'
+        env:
+          WIREGUARD_CONFIG: ${{ secrets.OCI_WIREGUARD_CLIENT_CONF }}
+          DEPLOY_HOST: ${{ secrets.OCI_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.OCI_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.OCI_DEPLOY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OCI_DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$WIREGUARD_CONFIG" && -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_KEY" && -n "$KNOWN_HOSTS" ]]
+          sudo apt-get update -qq
+          sudo apt-get install -y wireguard-tools
+          umask 077
+          printf '%s\n' "$WIREGUARD_CONFIG" | sudo tee /etc/wireguard/inspection.conf >/dev/null
+          sudo chmod 0600 /etc/wireguard/inspection.conf
+          sudo wg-quick up inspection
+          printf '%s\n' "$DEPLOY_KEY" > deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > known_hosts
+          chmod 0600 deploy_key known_hosts
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$PWD/known_hosts" -i "$PWD/deploy_key")
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" 'export-state blocked' > "$RUNNER_TEMP/blocked.env"
       - name: Validate request and resolve current state
         id: state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
           OPERATION: ${{ inputs.operation }}
-          CANDIDATE_ID: ${{ inputs.candidate_id }}
           SCOPE: ${{ inputs.scope }}
           TARGETS: ${{ inputs.targets }}
           ROLLBACK_TO: ${{ inputs.deployment_id }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
         run: |
           set -euo pipefail
           active_tag="$(gh release list --repo "$REPOSITORY" --limit 100 --json tagName,publishedAt | jq -r '[.[] | select(.tagName | startswith("state-"))] | max_by(.publishedAt) | .tagName // "none"')"
-          if [[ "$OPERATION" == deploy ]]; then
+          if [[ "$OPERATION" == deploy || "$OPERATION" == recovery ]]; then
             [[ "$CANDIDATE_ID" =~ ^candidate-[0-9]+-[0-9]+$ ]] || { echo 'candidate_id must identify a registered candidate release.' >&2; exit 2; }
-            [[ -n "$TARGETS" || "$SCOPE" != selected ]] || { echo 'scope=selected requires targets.' >&2; exit 2; }
+            [[ -n "$TARGETS" || "$SCOPE" != selected || "$OPERATION" == recovery ]] || { echo 'scope=selected requires targets.' >&2; exit 2; }
             source_tag="$CANDIDATE_ID"
           else
             [[ "$ROLLBACK_TO" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,100}$ ]] || { echo 'deployment_id must identify the state to restore.' >&2; exit 2; }
@@ -93,6 +115,10 @@ jobs:
           ACTIVE_TAG: ${{ steps.state.outputs.active_tag }}
           SOURCE_TAG: ${{ steps.state.outputs.source_tag }}
           OPERATION: ${{ inputs.operation }}
+          DEPLOY_HOST: ${{ secrets.OCI_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.OCI_DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.OCI_DEPLOY_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.OCI_DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           inputs_dir="$RUNNER_TEMP/inspection-publish-inputs"
@@ -103,13 +129,14 @@ jobs:
           else
             : > "$inputs_dir/current.env"
           fi
-          if [[ "$OPERATION" == deploy ]]; then
+          if [[ "$OPERATION" == deploy || "$OPERATION" == recovery ]]; then
             gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern candidate.json --dir "$inputs_dir"
             source_sha="$(jq -er '.sourceSha' "$inputs_dir/candidate.json")"
+            if [[ "$OPERATION" == recovery ]]; then cp "$RUNNER_TEMP/blocked.env" "$inputs_dir/blocked.env"; fi
           else
             gh release download "$SOURCE_TAG" --repo "$REPOSITORY" --pattern active.env --dir "$inputs_dir"
             mv "$inputs_dir/active.env" "$inputs_dir/rollback.env"
-            source_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+            source_sha="$(sed -n 's/^SOURCE_SHA=//p' "$inputs_dir/current.env" | head -n 1)"
           fi
           [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]]
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
@@ -142,9 +169,13 @@ jobs:
             esac
             planner_args=(--active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --candidate "$RUNNER_TEMP/inspection-publish-inputs/candidate.json" --targets "$targets" --scope "$SCOPE" --repo "$GITHUB_WORKSPACE" --deployment-id "deploy-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json)
             python3 deploy/oci/planner.py "${planner_args[@]}"
-          else
+          elif [[ "$OPERATION" == rollback ]]; then
             [[ -n "$TARGETS_INPUT" ]] || { echo 'Rollback requires explicit targets.' >&2; exit 2; }
-            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --rollback-from "$RUNNER_TEMP/inspection-publish-inputs/rollback.env" --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --bundle-sha256 "$bundle_sha" --output plan.json
+            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/current.env" --rollback-from "$RUNNER_TEMP/inspection-publish-inputs/rollback.env" --targets "$TARGETS_INPUT" --deployment-id "rollback-$RUN_ID-$RUN_ATTEMPT" --source-sha "$SOURCE_SHA" --repo "$GITHUB_WORKSPACE" --bundle-sha256 "$bundle_sha" --output plan.json
+          else
+            blocked_id="$(sed -n 's/^BLOCKED_DEPLOYMENT_ID=//p' "$RUNNER_TEMP/inspection-publish-inputs/blocked.env" | head -n 1)"
+            blocked_hash="$(sed -n 's/^BLOCKED_PLAN_SHA256=//p' "$RUNNER_TEMP/inspection-publish-inputs/blocked.env" | head -n 1)"
+            python3 deploy/oci/planner.py --active "$RUNNER_TEMP/inspection-publish-inputs/blocked.env" --candidate "$RUNNER_TEMP/inspection-publish-inputs/candidate.json" --targets '' --scope all --repo "$GITHUB_WORKSPACE" --recovery-of "$blocked_id,$blocked_hash" --deployment-id "recovery-$RUN_ID-$RUN_ATTEMPT" --bundle-sha256 "$bundle_sha" --output plan.json
           fi
           jq -r '.deploymentId, .planSha256, (.targets | join(",")), .sourceSha' plan.json > plan-fields.txt
           deployment_id="$(sed -n '1p' plan-fields.txt)"

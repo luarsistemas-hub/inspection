@@ -46,12 +46,14 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(plan["desiredImages"]["ADMIN_IMAGE"], self.candidate["components"]["admin"]["image"])
         self.assertEqual(plan["desiredImages"]["WORKER_IMAGE"], self.active["WORKER_IMAGE"])
         self.assertFalse(plan["operations"]["runMigration"])
+        self.assertFalse(plan["operations"]["runSeed"])
         self.assertEqual(plan["componentSources"]["admin"], "a" * 40)
 
     def test_database_change_requires_coordinated_processes(self):
         with patch.object(planner, "infer_compatibility", return_value={"databaseChange":"required", "contractChange":"compatible"}):
             plan = planner.create_plan(self.active, self.candidate, ["api"], active_sources=self.sources)
         self.assertTrue(plan["operations"]["runMigration"])
+        self.assertTrue(plan["operations"]["runSeed"])
         self.assertEqual(set(plan["targets"]), planner.GO_COMPONENTS)
 
     def test_first_deploy_requires_full_composition(self):
@@ -75,23 +77,55 @@ class PlannerTests(unittest.TestCase):
 
     def test_rollback_changes_only_requested_component_and_never_migrates(self):
         previous = {key: value.replace("d" * 64, "f" * 64) for key, value in self.active.items()}
-        plan = planner.create_rollback_plan(self.active, previous, ["worker"], "rollback-17")
+        config_hash = "9" * 64
+        plan = planner.create_rollback_plan(self.active, previous, ["worker"], "rollback-17", "a" * 40,
+            runtime_config_sha=config_hash, active_runtime_config_sha=config_hash)
         self.assertEqual(plan["desiredImages"]["WORKER_IMAGE"], previous["WORKER_IMAGE"])
-        self.assertEqual(plan["desiredImages"]["API_IMAGE"], self.active["API_IMAGE"])
+        self.assertEqual(plan["desiredImages"]["API_IMAGE"], previous["API_IMAGE"])
+        self.assertEqual(set(plan["targets"]), planner.GO_COMPONENTS)
         self.assertFalse(plan["operations"]["runMigration"])
 
     def test_rollback_preserves_component_origins_and_omits_incomplete_origins(self):
         previous = {key: value.replace("d" * 64, "f" * 64) for key, value in self.active.items()}
         old_sources = {name: "a" * 40 for name in planner.COMPONENTS}
         active_sources = {name: "b" * 40 for name in planner.COMPONENTS}
-        plan = planner.create_rollback_plan(self.active, previous, ["worker"], active_sources=active_sources, previous_sources=old_sources)
+        config_hash = "9" * 64
+        plan = planner.create_rollback_plan(self.active, previous, ["worker"], source_sha="a"*40,
+            active_sources=active_sources, previous_sources=old_sources, runtime_config_sha=config_hash,
+            active_runtime_config_sha=config_hash)
         self.assertEqual(plan["componentSources"]["worker"], "a" * 40)
         self.assertEqual(plan["componentSources"]["admin"], "b" * 40)
         # Missing any origin omits the whole map, keeping later compatibility conservative.
         incomplete = dict(old_sources)
         incomplete.pop("admin")
-        plan = planner.create_rollback_plan(self.active, previous, ["worker"], active_sources=active_sources, previous_sources=incomplete)
+        plan = planner.create_rollback_plan(self.active, previous, ["worker"], source_sha="a"*40,
+            active_sources=active_sources, previous_sources=incomplete, runtime_config_sha=config_hash,
+            active_runtime_config_sha=config_hash)
         self.assertNotIn("componentSources", plan)
+
+    def test_rollback_requires_matching_config_hash_and_video_target(self):
+        previous = dict(self.active)
+        with self.assertRaisesRegex(ValueError, "matching runtime configuration"):
+            planner.create_rollback_plan(self.active, previous, ["admin"], source_sha="a"*40,
+                runtime_config_sha="1"*64, active_runtime_config_sha="2"*64)
+        no_video = {key:value for key,value in previous.items() if key != "VIDEO_WORKER_IMAGE"}
+        with self.assertRaisesRegex(ValueError, "no video-worker"):
+            planner.create_rollback_plan(self.active, no_video, ["worker"], source_sha="a"*40,
+                runtime_config_sha="1"*64, active_runtime_config_sha="1"*64)
+
+    def test_runtime_config_hash_is_stable_and_ignores_themes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory)
+            (root/"deploy/oci").mkdir(parents=True)
+            (root/"deploy/keycloak/themes/example").mkdir(parents=True)
+            (root/"deploy/oci/compose.yaml").write_text("services: {}\n")
+            (root/"deploy/oci/Caddyfile").write_text(":80 {}\n")
+            (root/"deploy/oci/litellm-config.yaml").write_text("model_list: []\n")
+            (root/"deploy/oci/keycloak-realm.json").write_text("{}\n")
+            (root/"deploy/keycloak/realm.json").write_text("{}\n")
+            first=planner.runtime_config_sha256(root)
+            (root/"deploy/keycloak/themes/example/theme.css").write_text("changed")
+            self.assertEqual(first, planner.runtime_config_sha256(root))
 
     def test_first_gateway_deployment_requires_worker_and_tracks_image(self):
         old_active = {key: value for key, value in self.active.items() if key != "LITELLM_IMAGE"}
@@ -115,6 +149,9 @@ class PlannerTests(unittest.TestCase):
             go_plan = planner.create_plan(self.active, self.candidate, ["video-worker"], active_sources=self.sources)
         self.assertEqual(set(all_plan["targets"]), set(planner.COMPONENTS))
         self.assertEqual(set(go_plan["targets"]), planner.GO_COMPONENTS)
+        self.assertTrue(go_plan["operations"]["runMigration"])
+        self.assertTrue(go_plan["operations"]["runSeed"])
+        self.assertTrue(all_plan["operations"]["runMigration"])
 
     def test_changed_scope_associates_litellm_digest_change_with_worker(self):
         for component, key in planner.IMAGE_KEYS.items():
@@ -138,7 +175,10 @@ class PlannerTests(unittest.TestCase):
                 subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
                 subprocess.run(["git", "-C", str(repo), "commit", "-qm", "change"], check=True)
                 return subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-            origin = commit("base", "A")
+            origin = commit("deploy/oci/compose.yaml", "services: {}\n")
+            commit("deploy/keycloak/realm.json", "{}\n")
+            for name, value in (("Caddyfile", ":80 {}\n"), ("litellm-config.yaml", "model_list: []\n"), ("keycloak-realm.json", "{}\n")):
+                commit("deploy/oci/" + name, value)
             commit("services/inspection/internal/platform/database/migrations/v77.sql", "migration")
             current = commit("services/inspection/schema.graphqls", "schema")
             candidate = dict(self.candidate, sourceSha=current)

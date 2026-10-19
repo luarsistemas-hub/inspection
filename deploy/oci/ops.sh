@@ -72,9 +72,12 @@ case "${1:-}" in
     bundle="${output%.json}.source-bundle.tgz"
     mkdir -p "$(dirname "$output")"
     git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
+    executor_root="$(mktemp -d /tmp/inspection-plan-source.XXXXXX)"
+    trap 'rm -rf "$executor_root"' EXIT
+    git archive --format=tar "$source_sha" deploy/oci deploy/keycloak | tar -xf - -C "$executor_root"
     bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
     scope=selected; [[ "$targets" != all && "$targets" != changed ]] || { scope="$targets"; targets=""; }
-    python3 "$root/planner.py" --active "$active" --candidate "$candidate" --targets "$targets" --scope "$scope" --repo "$(git rev-parse --show-toplevel)" --bundle-sha256 "$bundle_sha" --output "$output"
+    python3 "$root/planner.py" --active "$active" --candidate "$candidate" --targets "$targets" --scope "$scope" --repo "$executor_root" --bundle-sha256 "$bundle_sha" --output "$output"
     ;;
   rollback-plan)
     active="${2:-}" previous="${3:-}" targets="${4:-}" output="${5:-}"
@@ -84,8 +87,11 @@ case "${1:-}" in
     bundle="${output%.json}.source-bundle.tgz"
     mkdir -p "$(dirname "$output")"
     git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
+    executor_root="$(mktemp -d /tmp/inspection-plan-source.XXXXXX)"
+    trap 'rm -rf "$executor_root"' EXIT
+    git archive --format=tar "$source_sha" deploy/oci deploy/keycloak | tar -xf - -C "$executor_root"
     bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
-    python3 "$root/planner.py" --active "$active" --rollback-from "$previous" --targets "$targets" --source-sha "$source_sha" --repo "$(git rev-parse --show-toplevel)" --bundle-sha256 "$bundle_sha" --output "$output"
+    python3 "$root/planner.py" --active "$active" --rollback-from "$previous" --targets "$targets" --source-sha "$source_sha" --repo "$executor_root" --bundle-sha256 "$bundle_sha" --output "$output"
     ;;
   recovery-plan)
     blocked="${2:-}" candidate="${3:-}" output="${4:-}"
@@ -97,8 +103,11 @@ case "${1:-}" in
     bundle="${output%.json}.source-bundle.tgz"
     mkdir -p "$(dirname "$output")"
     git archive --format=tar.gz --output="$bundle" "$source_sha" deploy/oci deploy/keycloak
+    executor_root="$(mktemp -d /tmp/inspection-plan-source.XXXXXX)"
+    trap 'rm -rf "$executor_root"' EXIT
+    git archive --format=tar "$source_sha" deploy/oci deploy/keycloak | tar -xf - -C "$executor_root"
     bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
-    python3 "$root/planner.py" --active "$blocked" --candidate "$candidate" --targets '' --scope all --repo "$(git rev-parse --show-toplevel)" --recovery-of "$blocked_id,$blocked_hash" --deployment-id "recovery-$(date -u +%Y%m%d%H%M%S)" --bundle-sha256 "$bundle_sha" --output "$output"
+    python3 "$root/planner.py" --active "$blocked" --candidate "$candidate" --targets '' --scope all --repo "$executor_root" --recovery-of "$blocked_id,$blocked_hash" --deployment-id "recovery-$(date -u +%Y%m%d%H%M%S)" --bundle-sha256 "$bundle_sha" --output "$output"
     ;;
   apply)
     plan="${2:-}" bundle="${3:-}"

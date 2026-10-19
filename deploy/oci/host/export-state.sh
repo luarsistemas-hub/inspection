@@ -14,7 +14,18 @@ fi
 receipt="/etc/inspection/releases/${kind/blocked/current}.env"
 [[ -s "$receipt" ]] || { echo "No $kind deployment receipt is available." >&2; exit 1; }
 script_path="$(readlink -f "${BASH_SOURCE[0]}")"
-catalog="$(dirname "$script_path")/components.json"
+script_dir="$(dirname "$script_path")"
+catalog_helper="$script_dir/component-catalog.sh"
+if [[ ! -s "$catalog_helper" ]]; then
+  host_tools_version="$(basename "$script_dir")"
+  releases_root="${INSPECTION_RELEASES_ROOT:-/opt/inspection/releases}"
+  [[ "$host_tools_version" =~ ^[a-f0-9]{40}$ ]] && catalog_helper="$releases_root/$host_tools_version/deploy/oci/host/component-catalog.sh"
+fi
+[[ -s "$catalog_helper" ]] || { echo "Component catalog resolver is missing for host script: $script_path" >&2; exit 1; }
+# shellcheck source=deploy/oci/host/component-catalog.sh
+source "$catalog_helper"
+inspection_resolve_component_catalog "$script_path"
+catalog="$INSPECTION_RESOLVED_COMPONENT_CATALOG"
 python3 - "$receipt" "$catalog" "$kind" "$block" <<'PY'
 import json, re, sys
 kind=sys.argv[3]

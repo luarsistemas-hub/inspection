@@ -112,7 +112,7 @@ if [[ "$mode" == --rollback ]]; then
   phase=rollback_starting
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}"
   phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" "$release_dir/deploy/oci/host/smoke.sh"
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" bash "$release_dir/deploy/oci/host/smoke.sh"
 else
   phase=app_stopping
   write_block
@@ -132,7 +132,7 @@ else
   write_block
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}"
   phase=smoke
-  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" "$release_dir/deploy/oci/host/smoke.sh"
+  INSPECTION_COMPOSE_FILE="$release_dir/deploy/oci/compose.yaml" bash "$release_dir/deploy/oci/host/smoke.sh"
 fi
 
 phase=promoting

@@ -5,7 +5,6 @@ source /etc/inspection/public.env
 compose_file="${INSPECTION_COMPOSE_FILE:-/opt/inspection/current/compose.yaml}"
 compose_env="${INSPECTION_COMPOSE_ENV:-/etc/inspection/compose.env}"
 compose=(docker compose --env-file "$compose_env" -f "$compose_file")
-export COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}video"
 deadline=$((SECONDS + 300))
 
 retry_http() {
@@ -46,7 +45,18 @@ retry_storage_cors() {
 }
 
 script_path="$(readlink -f "${BASH_SOURCE[0]}")"
-catalog="$(dirname "$script_path")/components.json"
+script_dir="$(dirname "$script_path")"
+catalog_helper="$script_dir/component-catalog.sh"
+if [[ ! -s "$catalog_helper" ]]; then
+  host_tools_version="$(basename "$script_dir")"
+  releases_root="${INSPECTION_RELEASES_ROOT:-/opt/inspection/releases}"
+  [[ "$host_tools_version" =~ ^[a-f0-9]{40}$ ]] && catalog_helper="$releases_root/$host_tools_version/deploy/oci/host/component-catalog.sh"
+fi
+[[ -s "$catalog_helper" ]] || { echo "Component catalog resolver is missing for host script: $script_path" >&2; exit 1; }
+# shellcheck source=deploy/oci/host/component-catalog.sh
+source "$catalog_helper"
+inspection_resolve_component_catalog "$script_path"
+catalog="$INSPECTION_RESOLVED_COMPONENT_CATALOG"
 compose_services="$("${compose[@]}" config --services)"
 compose_environment="$("${compose[@]}" config --environment)"
 service_output="$(python3 - "$catalog" "$compose_services" "$compose_environment" <<'PY'
@@ -80,6 +90,22 @@ for service in "${services[@]}"; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id")"
   [[ "$health" == healthy ]] || { echo "Compose service is not healthy: $service ($health)" >&2; exit 1; }
 done
+if printf '%s\n' "${services[@]}" | grep -Fxq inspection-video-worker; then
+  "${compose[@]}" exec -T inspection-video-worker ffmpeg -version >/dev/null
+  "${compose[@]}" exec -T inspection-video-worker ffprobe -version >/dev/null
+  "${compose[@]}" exec -T inspection-video-worker sh -eu -c 'f=/var/lib/inspection-video-scratch/.smoke-$$; : > "$f"; rm -f "$f"'
+  retry_http 'video worker readiness' http://127.0.0.1:8091/readyz
+  metrics_token="$(cat /etc/inspection/secrets.d/INSPECTION_METRICS_TOKEN)"
+  [[ -n "$metrics_token" ]] || { echo 'Metrics token is missing.' >&2; exit 1; }
+  video_metrics_body=''
+  while (( SECONDS < deadline )); do
+    video_metrics_body="$(curl --fail --silent --show-error --max-time 10 --header "Authorization: Bearer ${metrics_token}" http://127.0.0.1:8091/metrics 2>/dev/null || true)"
+    if grep -Eq '^inspection_video_[a-zA-Z0-9_]*(\{|[[:space:]])' <<< "$video_metrics_body"; then break; fi
+    sleep 3
+  done
+  unset metrics_token
+  grep -Eq '^inspection_video_[a-zA-Z0-9_]*(\{|[[:space:]])' <<< "$video_metrics_body" || { echo 'Video worker authenticated metrics smoke check failed.' >&2; exit 1; }
+fi
 id="$("${compose[@]}" ps -q caddy)"
 [[ -n "$id" ]] && [[ "$(docker inspect --format '{{.State.Status}}' "$id")" == running ]] || { echo "Caddy is not running" >&2; exit 1; }
 

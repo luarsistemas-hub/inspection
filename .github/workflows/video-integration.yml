@@ -1,0 +1,342 @@
+name: video-integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Candidate commit SHA reachable from main
+        required: true
+        type: string
+      base_sha:
+        description: Production commit before video support
+        required: false
+        default: b4e9412209202cad7a280097e3d45e99e30b8560
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-integration-${{ github.ref }}-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  go-integration:
+    name: Go video integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: inspection
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d inspection"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4.1.3-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: inspection
+          RABBITMQ_DEFAULT_PASS: inspection
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      llm-wiremock:
+        image: wiremock/wiremock:3.13.1
+        ports: ["18080:8080"]
+        volumes:
+          - ${{ github.workspace }}/deploy/wiremock/litellm:/home/wiremock/mappings:ro
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:8080/__admin/health"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - name: Validate input SHAs
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be 40 hexadecimal characters" >&2; exit 1; }
+          [[ "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "base_sha must be 40 hexadecimal characters" >&2; exit 1; }
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Require candidate reachable from main
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" FETCH_HEAD || { echo "source_sha is not reachable from main" >&2; exit 1; }
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.26.5
+          cache: true
+      - name: Install media tools and PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes awscli curl ffmpeg postgresql-client
+          ffmpeg -version
+          ffprobe -version
+      - name: Create database roles and bucket
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          export POSTGRES_USER=postgres POSTGRES_DB=inspection PGHOST=localhost PGPORT=5432 PGPASSWORD=postgres
+          export KEYCLOAK_DB_PASSWORD=keycloak-ci
+          export INSPECTION_RUNTIME_PASSWORD=inspection-runtime-ci
+          export INSPECTION_WORKER_PASSWORD=inspection-worker-ci
+          export INSPECTION_MIGRATOR_PASSWORD=inspection-migrator-ci
+          export INSPECTION_DISPATCHER_PASSWORD=inspection-dispatcher-ci
+          bash deploy/oci/ci/create-test-roles.sh
+          docker run --detach --name video-ci-minio --publish 9000:9000 \
+            --env RUSTFS_VOLUMES=/data --env RUSTFS_ADDRESS=0.0.0.0:9000 \
+            --env RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001 --env RUSTFS_CONSOLE_ENABLE=true \
+            --env RUSTFS_ACCESS_KEY=inspection --env RUSTFS_SECRET_KEY=inspection-local-secret \
+            --env RUSTFS_OBS_LOGGER_LEVEL=error rustfs/rustfs:1.0.1 /data
+          attempt=0
+          while (( attempt < 60 )); do
+            attempt=$((attempt + 1))
+            curl --fail --silent http://localhost:9000/health >/dev/null && break
+            sleep 2
+          done
+          curl --fail --silent http://localhost:9000/health >/dev/null
+          export AWS_ACCESS_KEY_ID=inspection AWS_SECRET_ACCESS_KEY=inspection-local-secret AWS_DEFAULT_REGION=us-east-1
+          aws --endpoint-url http://localhost:9000 s3api head-bucket --bucket inspection-private 2>/dev/null || aws --endpoint-url http://localhost:9000 s3api create-bucket --bucket inspection-private
+      - name: Run required video integration tests
+        env:
+          INSPECTION_ENV: test
+          INSPECTION_TEST_AUTH_ENABLED: "true"
+          INSPECTION_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable
+          INSPECTION_TEST_MIGRATION_DATABASE_URL: postgres://inspection_migrator:inspection-migrator-ci@localhost:5432/inspection?sslmode=disable
+          INSPECTION_TEST_RUNTIME_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-ci@localhost:5432/inspection?sslmode=disable
+          INSPECTION_TEST_WORKER_DATABASE_URL: postgres://inspection_worker:inspection-worker-ci@localhost:5432/inspection?sslmode=disable
+          INSPECTION_TEST_DISPATCHER_DATABASE_URL: postgres://inspection_dispatcher:inspection-dispatcher-ci@localhost:5432/inspection?sslmode=disable
+          INSPECTION_TEST_RABBITMQ_URL: amqp://inspection:inspection@localhost:5672/
+          INSPECTION_TEST_MINIO_ENDPOINT: localhost:9000
+          INSPECTION_TEST_MINIO_ACCESS_KEY: inspection
+          INSPECTION_TEST_MINIO_SECRET_KEY: inspection-local-secret
+          INSPECTION_TEST_MINIO_BUCKET: inspection-private
+          INSPECTION_TEST_LITELLM_URL: http://localhost:18080
+          INSPECTION_TEST_MIGRATE: "false"
+          INSPECTION_TEST_TIMEOUT: 3m
+          INSPECTION_ALLOWED_ORIGINS: http://localhost:3000
+          INSPECTION_OIDC_ISSUER: http://localhost:8081/realms/inspection
+          INSPECTION_OIDC_AUDIENCES: inspection-api
+          INSPECTION_SUPER_ADMIN_ISSUER: ci
+          INSPECTION_SUPER_ADMIN_SUBJECT: ci
+          INSPECTION_SUPER_ADMIN_PASSWORD: ci
+        run: |
+          set -euo pipefail
+          export INSPECTION_MIGRATION_DATABASE_URL="$INSPECTION_TEST_MIGRATION_DATABASE_URL"
+          export INSPECTION_DATABASE_URL="$INSPECTION_TEST_DATABASE_URL"
+          go run ./services/inspection/cmd/inspection-migrate
+          required=(
+            TestTask05VideoMultipartRecoveryIT119IT127
+            TestVV_IT_147PreparationExecutorTransitionsReceivedExtractingReady
+            TestVV_IT_246InterruptedSupplementExtractionKeepsRC1PendingAndResumesCheckpoint
+            TestCancelledDecodeCleansTempAndRemainsRecoverableIT597
+            TestVV_IT_574PinnedVideoGenerationProducesOneReportLifecycleTransition
+            TestVV_IT_540_541_542_543_544_545_546_547SourceHTTPContract
+            TestVV_IT_289InterruptedPlaybackRetryResumesAndKeepsStills
+            TestVV_IT_515RetentionMutationsPreserveOneExplicitVideoScope
+            TestExpirySerializesPlaybackLeaseAndLegalHoldIT604
+            TestVV_IT_354PhotoAnalysisCompletesWithVideoWorkerStopped
+            TestVV_IT_370PhotoReportCompletesWhileVideoAdmissionIsDisabled
+            TestVideoQueueMigrationPreservesAcceptedMessages
+          )
+          printf -v required_regex '%s|' "${required[@]}"
+          regex="^(${required_regex%|})$"
+          required_args=()
+          for test_name in "${required[@]}"; do required_args+=(--required "$test_name"); done
+          go test -json -tags=integration -count=1 -timeout=45m -run "$regex" \
+            ./services/inspection/internal/integration/harness \
+            ./services/inspection/internal/features/media/prepare_video \
+            ./services/inspection/internal/features/media/read_video_evidence \
+            ./services/inspection/internal/features/analysis/schedule_video_plan \
+            ./services/inspection/internal/platform/graphql/resolvers \
+            ./services/inspection/cmd/inspection-video-worker \
+            | tee /tmp/video-go-test.json \
+            | python3 deploy/oci/ci/require_no_skips.py "${required_args[@]}"
+      - name: Capture service diagnostics on failure
+        if: failure()
+        run: |
+          docker ps -a > /tmp/video-services.txt
+          docker ps -a --no-trunc >> /tmp/video-services.txt
+          while read -r container_id; do
+            name="$(docker inspect --format '{{.Name}}' "$container_id" | sed 's#^/##')"
+            docker logs "$container_id" > "/tmp/video-${name}.log" 2>&1 || true
+          done < <(docker ps -aq)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: video-go-integration-diagnostics
+          path: |
+            /tmp/video-services.txt
+            /tmp/video-go-test.json
+            /tmp/video-*.log
+          if-no-files-found: ignore
+
+  capture-e2e:
+    name: Capture video Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Require candidate reachable from main
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/capture/package-lock.json
+      - name: Install Capture dependencies and Chromium
+        working-directory: apps/capture
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run video recording and recorder failure specs
+        working-directory: apps/capture
+        env:
+          CI: "true"
+          PLAYWRIGHT_OUTPUT_DIR: test-results/video-integration
+        run: npm run test:e2e -- --project=desktop-chrome --reporter=html tests/e2e/video-capture.spec.ts tests/e2e/video-recorder-failures.spec.ts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: capture-video-playwright-report
+          path: |
+            apps/capture/playwright-report
+            apps/capture/test-results/video-integration
+          if-no-files-found: ignore
+
+  upgrade-rehearsal:
+    name: Pre-video schema upgrade rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: inspection
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d inspection"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+      - name: Validate SHAs and candidate ancestry
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ && "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          git fetch --no-tags origin main "$BASE_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          git cat-file -e "$BASE_SHA^{commit}"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: 1.26.5
+          cache: true
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Create production and candidate worktrees
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/video-base "$BASE_SHA"
+          git worktree add --detach /tmp/video-candidate "$SOURCE_SHA"
+      - name: Migrate base schema, then upgrade candidate twice
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          PGPASSWORD: postgres
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/inspection?sslmode=disable
+          MIGRATOR_DATABASE_URL: postgres://inspection_migrator:inspection-migrator-ci@localhost:5432/inspection?sslmode=disable
+          RUNTIME_DATABASE_URL: postgres://inspection_runtime:inspection-runtime-ci@localhost:5432/inspection?sslmode=disable
+          KEYCLOAK_DB_PASSWORD: keycloak-ci
+          INSPECTION_RUNTIME_PASSWORD: inspection-runtime-ci
+          INSPECTION_WORKER_PASSWORD: inspection-worker-ci
+          INSPECTION_MIGRATOR_PASSWORD: inspection-migrator-ci
+          INSPECTION_DISPATCHER_PASSWORD: inspection-dispatcher-ci
+          POSTGRES_USER: postgres
+          POSTGRES_DB: inspection
+        run: |
+          set -euo pipefail
+          export PGHOST=localhost PGPORT=5432 PGPASSWORD=postgres
+          bash deploy/oci/ci/create-test-roles.sh
+          cat > /tmp/latest-version.go <<'EOF'
+          package main
+          import (
+            "fmt"
+            "inspection/services/inspection/internal/platform/database/migrations"
+          )
+          func main() { fmt.Print(migrations.LatestVersion()) }
+          EOF
+          cat > /tmp/upgrade-check.sql <<'SQL'
+          SELECT version FROM platform.schema_migrations ORDER BY version DESC LIMIT 1;
+          SQL
+          cd /tmp/video-base
+          cp /tmp/latest-version.go services/inspection/cmd/inspection-migrate/ci_latest_version.go
+          base_latest="$(go run ./services/inspection/cmd/inspection-migrate/ci_latest_version.go)"
+          rm services/inspection/cmd/inspection-migrate/ci_latest_version.go
+          export INSPECTION_ENV=local
+          export INSPECTION_ALLOWED_ORIGINS=http://localhost:3000
+          export INSPECTION_OIDC_ISSUER=http://localhost:8081/realms/inspection
+          export INSPECTION_OIDC_AUDIENCES=inspection-api
+          export INSPECTION_SUPER_ADMIN_ISSUER=ci INSPECTION_SUPER_ADMIN_SUBJECT=ci INSPECTION_SUPER_ADMIN_PASSWORD=ci
+          export INSPECTION_MIGRATION_DATABASE_URL="$MIGRATOR_DATABASE_URL"
+          export INSPECTION_DATABASE_URL="$DATABASE_URL"
+          export INSPECTION_RUNTIME_DATABASE_URL="$RUNTIME_DATABASE_URL"
+          go run ./services/inspection/cmd/inspection-migrate
+          base_actual="$(psql "$DATABASE_URL" -Atf /tmp/upgrade-check.sql)"
+          [[ "$base_actual" == "$base_latest" ]] || { echo "base schema version $base_actual did not match base migration catalog $base_latest" >&2; exit 1; }
+          cd /tmp/video-candidate
+          cp /tmp/latest-version.go services/inspection/cmd/inspection-migrate/ci_latest_version.go
+          candidate_latest="$(go run ./services/inspection/cmd/inspection-migrate/ci_latest_version.go)"
+          rm services/inspection/cmd/inspection-migrate/ci_latest_version.go
+          export INSPECTION_MIGRATION_DATABASE_URL="$MIGRATOR_DATABASE_URL" INSPECTION_DATABASE_URL="$DATABASE_URL"
+          export INSPECTION_RUNTIME_DATABASE_URL="$RUNTIME_DATABASE_URL"
+          go run ./services/inspection/cmd/inspection-migrate
+          go run ./services/inspection/cmd/inspection-migrate
+          go run ./services/inspection/cmd/inspection-prompt-seed
+          go run ./services/inspection/cmd/inspection-schema-check
+          candidate_actual="$(psql "$DATABASE_URL" -Atf /tmp/upgrade-check.sql)"
+          [[ "$candidate_actual" == "$candidate_latest" ]] || { echo "upgraded schema version $candidate_actual did not match migrations.LatestVersion() $candidate_latest" >&2; exit 1; }
+          admission="$(psql "$DATABASE_URL" -Atc 'SELECT enabled FROM platform.video_admission WHERE id=1')"
+          [[ "$admission" == f ]] || { echo "video admission must remain disabled after upgrade (got $admission)" >&2; exit 1; }
+          echo "Upgrade rehearsal passed: $base_actual -> $candidate_actual; migration repeated successfully; video admission disabled."
+      - name: Capture PostgreSQL diagnostics on failure
+        if: failure()
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d inspection -c 'select version, name, applied_at from platform.schema_migrations order by version' > /tmp/upgrade-schema.log 2>&1 || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: video-upgrade-rehearsal-diagnostics
+          path: /tmp/upgrade-schema.log
+          if-no-files-found: ignore

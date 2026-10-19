@@ -11,7 +11,7 @@ RELEASE = "a" * 40
 
 
 class DeployReleaseTests(unittest.TestCase):
-    def run_scenario(self, mode="deploy", failure=""):
+    def run_scenario(self, mode="deploy", failure="", video_enabled=False):
         root = pathlib.Path(tempfile.mkdtemp(prefix="inspection-deploy-test-"))
         for relative in (
             "etc/inspection/releases", "etc/inspection/secrets.d", "run/lock",
@@ -22,12 +22,18 @@ class DeployReleaseTests(unittest.TestCase):
         previous = root / "opt/inspection/releases/previous/deploy/oci"
         candidate = root / "opt/inspection/releases" / RELEASE / "deploy/oci"
         candidate.mkdir(parents=True)
+        (candidate / "host").mkdir()
+        (candidate / "host/smoke.sh").write_text('#!/bin/bash\n[ "$FAILURE" != smoke ]\n')
+        (candidate / "host/smoke.sh").chmod(0o755)
         (previous / "compose.yaml").write_text("name: inspection\n")
         (candidate / "compose.yaml").write_text("name: inspection\n")
         (root / "opt/inspection/current").symlink_to(previous)
         (root / "etc/inspection/public.env").write_text("ADMIN_ORIGIN=https://example.test\n")
         (root / "etc/inspection/compose.env").write_text("OLD=1\n")
-        (root / "etc/inspection/releases/current.env").write_text("OLD=1\n")
+        current_receipt = "OLD=1\n"
+        if video_enabled:
+            current_receipt += "VIDEO_WORKER_IMAGE=ghcr.io/example/inspection-video-worker@sha256:" + "a"*64 + "\n"
+        (root / "etc/inspection/releases/current.env").write_text(current_receipt)
         (root / f"etc/inspection/releases/{RELEASE}.env").write_text(f"RELEASE_SHA={RELEASE}\n")
         (root / "etc/inspection/secrets.d/GHCR_USERNAME").write_text("qa\n")
         (root / "etc/inspection/secrets.d/GHCR_READ_TOKEN").write_text("fake\n")
@@ -52,7 +58,7 @@ if [[ "$FAILURE" == rollback_stop && "$*" == *' stop inspection-api inspection-w
 exit 0
 """)
         executable("usr/local/sbin/inspection-secrets-refresh", "#!/bin/sh\nexit 0\n")
-        executable("usr/local/sbin/inspection-smoke", "#!/bin/sh\n[ \"$FAILURE\" != smoke ]\n")
+        executable("usr/local/sbin/inspection-smoke", "#!/bin/sh\nexit 0\n")
 
         script = SOURCE.read_text()
         for prefix in ("/etc/inspection", "/opt/inspection", "/usr/local/sbin", "/run/"):
@@ -69,7 +75,7 @@ exit 0
         if mode == "rollback":
             args.append("--rollback")
         result = subprocess.run(args, env=env, text=True, capture_output=True)
-        trace = (root / "trace.log").read_text().splitlines()
+        trace = (root / "trace.log").read_text().splitlines() if (root / "trace.log").exists() else []
         return root, result, trace
 
     def test_preflight_failure_preserves_previous_release(self):
@@ -117,6 +123,12 @@ exit 0
         self.assertFalse(any("inspection-migrate" in line or "inspection-prompt-seed" in line for line in trace))
         self.assertFalse((root / "etc/inspection/deployment-blocked").exists())
         self.assertEqual((root / "etc/inspection/releases/previous.env").read_text(), "OLD=1\n")
+
+    def test_legacy_commands_refuse_video_enabled_receipt(self):
+        _, result, trace = self.run_scenario(video_enabled=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("use plan/apply", result.stderr)
+        self.assertFalse(any("docker" in line for line in trace))
 
 
 if __name__ == "__main__":
