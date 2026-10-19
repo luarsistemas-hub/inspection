@@ -57,6 +57,7 @@ func TestVV_IT_147PreparationExecutorTransitionsReceivedExtractingReady(t *testi
 	}
 	t.Cleanup(func() { _ = h.Close() })
 	fixture := seedPreparationFixture(t, h, syntheticH264Clip(t), "video/mp4", "CURRENT", "CAMERA")
+	deferUnrelatedPreparationJobs(t, h, fixture, fixture.now.Add(48*time.Hour))
 	var initial database.VideoPreparationJob
 	if err := h.WithinTenant(ctx, fixture.tenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.preparationID).Take(&initial).Error
@@ -72,14 +73,49 @@ func TestVV_IT_147PreparationExecutorTransitionsReceivedExtractingReady(t *testi
 		handled bool
 		err     error
 	}
-	done := make(chan runResult, 1)
-	go func() { handled, runErr := executor.RunDue(ctx); done <- runResult{handled: handled, err: runErr} }()
-	select {
-	case <-decoder.entered:
-	case result := <-done:
-		t.Fatalf("RunDue returned before reaching extraction: handled=%t err=%v", result.handled, result.err)
-	case <-time.After(20 * time.Second):
-		t.Fatal("preparation never reached extraction")
+	var done chan runResult
+	reachedExtraction := false
+	timeout := time.NewTimer(20 * time.Second)
+	defer timeout.Stop()
+	for attempt := 1; attempt <= 32; attempt++ {
+		decoder.entered = make(chan struct{})
+		decoder.release = make(chan struct{})
+		decoder.calls = 0
+		done = make(chan runResult, 1)
+		go func(result chan<- runResult) {
+			handled, runErr := executor.RunDue(ctx)
+			result <- runResult{handled: handled, err: runErr}
+		}(done)
+		select {
+		case <-decoder.entered:
+			var current database.VideoPreparationJob
+			if err := h.WithinTenant(ctx, fixture.tenantID, func(tx *gorm.DB) error {
+				return tx.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.preparationID).Take(&current).Error
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if current.Status == "PROCESSING" && current.Phase == "EXTRACTING" {
+				reachedExtraction = true
+				break
+			}
+			close(decoder.release)
+			result := <-done
+			if result.err != nil || !result.handled {
+				t.Fatalf("RunDue handling unrelated job: handled=%t err=%v", result.handled, result.err)
+			}
+		case result := <-done:
+			if result.err != nil || !result.handled {
+				t.Fatalf("RunDue returned before reaching fixture extraction: handled=%t err=%v", result.handled, result.err)
+			}
+		case <-timeout.C:
+			t.Fatal("preparation never reached extraction")
+		}
+		if reachedExtraction {
+			break
+		}
+	}
+	if !reachedExtraction {
+		t.Fatal("RunDue did not reach the fixture preparation after 32 jobs")
 	}
 	var extracting database.VideoPreparationJob
 	if err := h.WithinTenant(ctx, fixture.tenantID, func(tx *gorm.DB) error {

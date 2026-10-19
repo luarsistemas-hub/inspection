@@ -162,7 +162,8 @@ jobs:
           regex="^(${required_regex%|})$"
           required_args=()
           for test_name in "${required[@]}"; do required_args+=(--required "$test_name"); done
-          go test -json -tags=integration -count=1 -timeout=45m -run "$regex" \
+          # These packages share the integration database and preparation queues.
+          go test -p 1 -json -tags=integration -count=1 -timeout=45m -run "$regex" \
             ./services/inspection/internal/integration/harness \
             ./services/inspection/internal/features/media/prepare_video \
             ./services/inspection/internal/features/media/read_video_evidence \
