@@ -72,6 +72,7 @@ import (
 	projectcore "inspection/services/inspection/internal/features/projects/core"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
+	recapturereplacement "inspection/services/inspection/internal/features/recapture/request_video_replacement"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
 	listreports "inspection/services/inspection/internal/features/reports/list_reports"
 	"inspection/services/inspection/internal/features/reports/publication"
@@ -1774,6 +1775,37 @@ func (r *mutationResolver) RequestRecapture(ctx context.Context, input graphql1.
 	return &graphql1.RecapturePayload{Recapture: &graphql1.Recapture{ID: created.RequestID.String(), ResponsibilityID: created.ResponsibilityID.String(), Status: created.Status, DeadlineAt: &input.DeadlineAt}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// RequestVideoReplacement is the resolver for the requestVideoReplacement field.
+func (r *mutationResolver) RequestVideoReplacement(ctx context.Context, input graphql1.RequestVideoReplacementInput) (*graphql1.VideoReplacementPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	mediaID, err := identity.ParseID(input.MediaID)
+	if err != nil {
+		return nil, invalidID("mediaId")
+	}
+	deadline, err := time.Parse(time.RFC3339, input.DeadlineAt)
+	if err != nil {
+		return nil, graphql1Error("deadlineAt")
+	}
+	raw, err := r.Bus.Send(ctx, recapturereplacement.Command{Input: recapturecore.VideoReplacementInput{TenantID: meta.TenantID, InspectionID: inspectionID, MediaID: mediaID, DeadlineAt: deadline, Reason: input.Reason, IdempotencyKey: input.ClientMutationID}})
+	if err != nil {
+		code, _, _ := apperror.Public(err)
+		switch code {
+		case apperror.InvalidInput, apperror.InvalidState, apperror.Conflict:
+			return &graphql1.VideoReplacementPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+		}
+		return nil, err
+	}
+	created := raw.(recapturecore.VideoReplacementResult)
+	return &graphql1.VideoReplacementPayload{Replacement: &graphql1.VideoReplacement{ID: created.ID.String(), ResponsibilityID: created.ResponsibilityID.String(), Status: created.Status, DeadlineAt: created.DeadlineAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
 // UpdateTriageCase is the resolver for the updateTriageCase field.
 func (r *mutationResolver) UpdateTriageCase(ctx context.Context, input graphql1.UpdateTriageCaseInput) (*graphql1.TriageCasePayload, error) {
 	return r.updateTriageCase(ctx, input)
@@ -1845,9 +1877,60 @@ func (r *mutationResolver) DeclareSensitiveDetectionFalsePositive(ctx context.Co
 			}
 			return nil, err
 		}
+		resumeVideo := false
+		if media.Status == "SCREENED" {
+			var inspection database.Inspection
+			if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+				return tx.Table("inspections.inspections i").Select("i.*").Joins("JOIN inspections.responsibilities r ON r.tenant_id=i.tenant_id AND r.inspection_id=i.id").Where("i.tenant_id=? AND r.id=?", meta.TenantID, media.ResponsibilityID).Take(&inspection).Error
+			}); err != nil {
+				return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
+			}
+			if r.Authorizer.Store != nil || r.Authorizer.Scopes != nil {
+				if _, authErr := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "INSPECTION", ID: inspection.ID}, true); authErr != nil {
+					return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
+				}
+			} else if !inPrincipalScope(meta.Principal, inspection.BusinessUnitID) {
+				return nil, apperror.New(apperror.NotFound, "mediaId", "media not found")
+			}
+			var draft database.CaptureDraft
+			if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+				return tx.Where("tenant_id=? AND responsibility_id=?", meta.TenantID, media.ResponsibilityID).Take(&draft).Error
+			}); err != nil {
+				return nil, err
+			}
+			resumeVideo = media.MediaKind == "VIDEO" && draft.Status == "SUBMITTED"
+		}
+		if resumeVideo {
+			rawStatus, statusErr := r.Bus.Ask(ctx, mediavideoprep.Query{TenantID: meta.TenantID, MediaID: mediaID})
+			if statusErr != nil {
+				return nil, statusErr
+			}
+			if !rawStatus.(mediavideoprep.Status).SourceAvailable {
+				return sensitiveFalsePositiveFailure(apperror.New(apperror.SourceUnavailable, "mediaId", "Vídeo original indisponível"), input.ClientMutationID)
+			}
+		}
+		if media.Status == "SCREENED" {
+			objectKey := media.ObjectKey
+			if media.MediaKind == "PHOTO" {
+				var derivative database.MediaDerivative
+				if err := withTask06Tenant(ctx, r.DB, meta.TenantID, func(tx *gorm.DB) error {
+					return tx.Where("tenant_id=? AND media_id=? AND kind='DISPLAY'", meta.TenantID, mediaID).Take(&derivative).Error
+				}); err != nil {
+					return sensitiveFalsePositiveFailure(apperror.New(apperror.SourceUnavailable, "mediaId", "Original indisponível"), input.ClientMutationID)
+				}
+				objectKey = derivative.ObjectKey
+			}
+			if r.Store.Client == nil {
+				return sensitiveFalsePositiveFailure(apperror.New(apperror.SourceUnavailable, "mediaId", "Original indisponível"), input.ClientMutationID)
+			}
+			_, headErr := r.Store.Client.Head(ctx, r.Store.Bucket, objectKey)
+			if headErr != nil {
+				return sensitiveFalsePositiveFailure(apperror.New(apperror.SourceUnavailable, "mediaId", "Original indisponível"), input.ClientMutationID)
+			}
+		}
 		raw, err := r.Bus.Send(ctx, mediafalsepositive.Command{TenantID: meta.TenantID, ResponsibilityID: media.ResponsibilityID, MediaID: mediaID, Reason: input.Reason})
 		if err != nil {
-			return nil, err
+			return sensitiveFalsePositiveFailure(err, input.ClientMutationID)
 		}
 		return &graphql1.MediaPayload{Media: mapMedia(raw.(database.MediaObject)), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 	}
@@ -2672,7 +2755,11 @@ func (r *queryResolver) Inspections(ctx context.Context, first *int, after *stri
 	}
 	nodes := make([]*graphql1.Inspection, 0, len(result.Items))
 	for _, row := range result.Items {
-		nodes = append(nodes, mapInspection(row))
+		node := mapInspection(row)
+		if node.Attention != nil {
+			r.fillAttention(ctx, meta.TenantID, row.Inspection.ID, node.Attention)
+		}
+		nodes = append(nodes, node)
 	}
 	return &graphql1.InspectionConnection{Nodes: nodes, PageInfo: pageInfo(result.EndCursor, result.HasNextPage)}, nil
 }
@@ -2691,10 +2778,24 @@ func (r *queryResolver) Inspection(ctx context.Context, id string) (*graphql1.In
 	if err != nil {
 		return nil, err
 	}
-	return mapInspection(view), nil
+	result := mapInspection(view)
+	if result.Attention != nil {
+		r.fillAttention(ctx, meta.TenantID, view.Inspection.ID, result.Attention)
+	}
+	return result, nil
 }
 
-// SensitiveContentScreeningBypassed is the resolver for the sensitiveContentScreeningBypassed field.
+// SensitiveMediaReviews is the resolver for the sensitiveMediaReviews field.
+func (r *queryResolver) SensitiveMediaReviews(ctx context.Context, first *int, after *string) (*graphql1.SensitiveMediaReviewConnection, error) {
+	return r.sensitiveMediaReviews(ctx, first, after)
+}
+
+// SensitiveMediaOriginal is the resolver for the sensitiveMediaOriginal field.
+func (r *queryResolver) SensitiveMediaOriginal(ctx context.Context, mediaID string) (*graphql1.SensitiveMediaOriginal, error) {
+	return r.sensitiveMediaOriginal(ctx, mediaID)
+}
+
+// SensitiveContentScreeningBypassed reports whether any worker has disabled screening.
 func (r *queryResolver) SensitiveContentScreeningBypassed(ctx context.Context) (bool, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
@@ -3888,6 +3989,16 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 		response.RecaptureRequestID = &requestID
 		deadline := request.DeadlineAt.UTC().Format(time.RFC3339Nano)
 		response.RecaptureDeadlineAt = &deadline
+	}
+	if view.Draft.Kind == "VIDEO_REPLACEMENT" {
+		var replacement database.VideoReplacement
+		if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&replacement).Error
+		}); err != nil {
+			return nil, err
+		}
+		deadline := replacement.DeadlineAt.UTC().Format(time.RFC3339Nano)
+		response.ReplacementDeadlineAt = &deadline
 	}
 	if view.ConfirmationOnly {
 		response.Status = "CONFIRMED"

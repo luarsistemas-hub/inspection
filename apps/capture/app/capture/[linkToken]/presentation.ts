@@ -98,3 +98,10 @@ export function presentUploadProgress(progress: { phase: string; percent: number
   if (progress.phase === "complete") return "Upload concluído";
   return "Não foi possível concluir; retome o envio";
 }
+
+export function presentReplacementNotice(deadlineAt?: string | null): string {
+  const base = "Precisamos de uma nova gravação. O vídeo anterior não pôde ser analisado.";
+  const deadline = deadlineAt ? new Date(deadlineAt) : undefined;
+  if (!deadline || Number.isNaN(deadline.getTime())) return base;
+  return `${base} Envie até ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(deadline)}.`;
+}

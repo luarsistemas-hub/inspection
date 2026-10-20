@@ -47,7 +47,13 @@ export async function installFakeGetUserMedia(page: Page, options: FakeGetUserMe
         if (config.captureConstraints) {
           (window as typeof window & { captureConstraints?: MediaStreamConstraints }).captureConstraints = constraints;
         }
-        return canvas.captureStream(30);
+        const stream = canvas.captureStream(30);
+        (window as typeof window & { lastCameraStream?: MediaStream }).lastCameraStream = stream;
+        for (const track of stream.getTracks()) {
+          const stop = track.stop.bind(track);
+          track.stop = () => { (window as typeof window & { cameraTrackStops?: number }).cameraTrackStops = ((window as typeof window & { cameraTrackStops?: number }).cameraTrackStops ?? 0) + 1; stop(); };
+        }
+        return stream;
       };
     }
 

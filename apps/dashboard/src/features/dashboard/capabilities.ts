@@ -9,5 +9,7 @@ export function composeCapabilities(identity: Pick<DashboardIdentity, "roles" | 
   const customer = identity.roles.includes("CUSTOMER_VIEWER"); const viewer = customer || identity.roles.includes("VIEWER"); const superAdmin = isSuperAdmin(identity); const manager = identity.roles.includes("MANAGER") || superAdmin;
   const canPromoteOrigin = manager || identity.roles.includes("TENANT_ADMIN");
   if (customer) return { audience: "customer", canMutate: false, canPublish: false, canPromoteOrigin: false, canUseAdmin: false, canManageTriage: false, links: customerLinks, home: "Imóveis e projetos compartilhados" };
-  return { audience: "internal", canMutate: !viewer, canPublish: manager, canPromoteOrigin, canUseAdmin: superAdmin, canManageTriage: manager || identity.roles.includes("TENANT_ADMIN"), links: viewerLinks, home: manager ? "Trabalho prioritário no seu escopo" : viewer ? "Acompanhamento somente leitura" : "Seu trabalho operacional" };
+  const canManageTriage = manager || identity.roles.includes("TENANT_ADMIN");
+  const links = canManageTriage ? [...viewerLinks, ["Revisão de privacidade", "/privacy-review"] as [string, string]] : viewerLinks;
+  return { audience: "internal", canMutate: !viewer, canPublish: manager, canPromoteOrigin, canUseAdmin: superAdmin, canManageTriage, links, home: manager ? "Trabalho prioritário no seu escopo" : viewer ? "Acompanhamento somente leitura" : "Seu trabalho operacional" };
 }

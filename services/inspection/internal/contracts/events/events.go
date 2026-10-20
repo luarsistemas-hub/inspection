@@ -180,7 +180,7 @@ func DefaultRegistry() *Registry {
 		"participant.channel_verified.v1", "origin.invitation_requested.v1", "inspection.created.v1",
 		"origin.promotion_requested.v1",
 		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1", "media.received.v1",
-		"capture.submitted.v1", "capture.video_submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1",
+		"capture.submitted.v1", "capture.video_submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1", "video_replacement.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.video_comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
 		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
 	} {

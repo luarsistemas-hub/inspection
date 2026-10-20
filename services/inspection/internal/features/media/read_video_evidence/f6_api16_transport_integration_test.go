@@ -102,7 +102,7 @@ func TestVV_IT_170_532_533_534_535_536_538FrameHTTPContract(t *testing.T) {
 	}
 
 	if err := h.WithinTenant(ctx, a.TenantID, func(tx *gorm.DB) error {
-		return tx.Model(&database.VideoSource{}).Where("tenant_id=? AND media_id=?", a.TenantID, a.MediaID).Update("screening_status", "PENDING").Error
+		return tx.Model(&database.VideoSource{}).Where("tenant_id=? AND media_id=?", a.TenantID, a.MediaID).Update("screening_status", "BLOCKED").Error
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -27,6 +27,7 @@ import (
 	recordinapp "inspection/services/inspection/internal/features/notifications/record_in_app"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
+	expirereplacement "inspection/services/inspection/internal/features/recapture/expire_video_replacement"
 	processdeadline "inspection/services/inspection/internal/features/recapture/process_deadline"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
 	generatesnapshot "inspection/services/inspection/internal/features/reports/generate_snapshot"
@@ -54,7 +55,7 @@ import (
 // workerQueueDefinitions are the durable queues of the ordinary worker and
 // the event each one receives. Video condition requests are deliberately
 // absent: they belong to the dedicated video worker queue.
-var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
 
 // ordinaryQueueContracts drops the dedicated video condition queue: the
 // ordinary worker declares it for topology but never consumes video payloads.
@@ -199,6 +200,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	replacementDeadlineHandler, err := expirereplacement.Setup(expirereplacement.Dependencies{Now: time.Now})
+	if err != nil {
+		return err
+	}
 	requestJobs, err := requestcomparisons.Setup(requestcomparisons.Dependencies{Now: time.Now})
 	if err != nil {
 		return err
@@ -316,13 +321,14 @@ func run() error {
 			}
 			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "ARCHIVED", Body: "Vistoria cancelada ou invalidada.", CreatedAt: now}).Error
 		},
-		"origin.invitation_requested.v1": invitationHandler,
-		"origin.promotion_requested.v1":  promotionHandler,
-		"media.upload_completed.v1":      uploadCompletedHandler,
-		"media.verified.v1":              mediaHandler,
-		"recapture.deadline_reached.v1":  deadlineHandler,
-		"recapture.requested.v1":         inAppNotification,
-		"capture.submitted.v1":           requestJobs,
+		"origin.invitation_requested.v1":        invitationHandler,
+		"origin.promotion_requested.v1":         promotionHandler,
+		"media.upload_completed.v1":             uploadCompletedHandler,
+		"media.verified.v1":                     mediaHandler,
+		"recapture.deadline_reached.v1":         deadlineHandler,
+		"video_replacement.deadline_reached.v1": replacementDeadlineHandler,
+		"recapture.requested.v1":                inAppNotification,
+		"capture.submitted.v1":                  requestJobs,
 		"recapture.completed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 			if err := requestJobs(ctx, tx, envelope); err != nil {
 				return err

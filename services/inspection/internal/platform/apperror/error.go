@@ -15,6 +15,7 @@ const (
 	RateLimited              Code = "RATE_LIMITED"
 	SessionExpired           Code = "SESSION_EXPIRED"
 	DependencyUnavailable    Code = "DEPENDENCY_UNAVAILABLE"
+	SourceUnavailable        Code = "SOURCE_UNAVAILABLE"
 	IntegrationDisabled      Code = "INTEGRATION_DISABLED"
 	UnsupportedSchemaVersion Code = "UNSUPPORTED_SCHEMA_VERSION"
 	Internal                 Code = "INTERNAL"

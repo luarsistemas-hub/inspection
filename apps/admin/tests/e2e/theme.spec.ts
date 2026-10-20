@@ -9,7 +9,7 @@ test("Cobalto themes stay readable and within the viewport on the administrative
   const appearance = page.getByRole("button", { name: "Ativar tema escuro" });
   await expect(appearance).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  const axe = await new AxeBuilder({ page: page as never }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
 
   for (const width of [320, 360, 768, 1024, 1440]) {

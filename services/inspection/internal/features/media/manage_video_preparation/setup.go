@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	mediacore "inspection/services/inspection/internal/features/media/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -68,11 +69,15 @@ type Dependencies struct {
 	Bus        *mediator.Bus
 	Authorizer auth.Authorizer
 	Within     func(context.Context, identity.ID, func(*gorm.DB) error) error
+	Now        func() time.Time
 }
 
 func Setup(d Dependencies) error {
 	if d.DB == nil || d.Bus == nil {
 		return fmt.Errorf("slice media/manage_video_preparation: missing dependency")
+	}
+	if d.Now == nil {
+		d.Now = time.Now
 	}
 	if err := d.Bus.RegisterQuery(Query{}, func(ctx context.Context, raw any) (any, error) {
 		q := raw.(Query)
@@ -103,7 +108,7 @@ func Setup(d Dependencies) error {
 		if _, err := d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, nil, true); err != nil {
 			return nil, err
 		}
-		return retry(ctx, d.DB, d.Within, c)
+		return retry(ctx, d.DB, d.Within, c, d.Now)
 	}); err != nil {
 		return err
 	}
@@ -112,7 +117,7 @@ func Setup(d Dependencies) error {
 		if _, err := d.Authorizer.Authorize(ctx, c.TenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager}, nil, true); err != nil {
 			return nil, err
 		}
-		return reprocess(ctx, d.DB, d.Within, c)
+		return reprocess(ctx, d.DB, d.Within, c, d.Now)
 	})
 }
 
@@ -177,80 +182,30 @@ func load(ctx context.Context, db *gorm.DB, within func(context.Context, identit
 	return status, err
 }
 
-func retry(ctx context.Context, db *gorm.DB, within func(context.Context, identity.ID, func(*gorm.DB) error) error, c RetryCommand) (Status, error) {
+func retry(ctx context.Context, db *gorm.DB, within func(context.Context, identity.ID, func(*gorm.DB) error) error, c RetryCommand, clock func() time.Time) (Status, error) {
 	if c.TenantID == (identity.ID{}) || c.MediaID == (identity.ID{}) || c.MutationID == "" || c.ExpectedPreparationVersion < 1 {
 		return Status{}, apperror.New(apperror.InvalidInput, "input", "invalid preparation retry")
 	}
 	meta, _ := requestctx.FromContext(ctx)
 	var status Status
 	err := runWithin(ctx, db, within, c.TenantID, func(tx *gorm.DB) error {
-		var job database.VideoPreparationJob
-		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", c.TenantID, c.MediaID).Order("created_at DESC, id DESC").Take(&job).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperror.New(apperror.NotFound, "mediaId", "video preparation not found")
-		} else if err != nil {
+		job, err := mediacore.RetryFailedPreparation(tx.WithContext(ctx), c.TenantID, c.MediaID, c.ExpectedPreparationVersion, clock())
+		if err != nil {
 			return err
 		}
-		if job.PreparationVersion != c.ExpectedPreparationVersion {
-			return apperror.New(apperror.Conflict, "expectedPreparationVersion", "video preparation has changed")
-		}
-		if job.Status != "FAILED" {
-			return apperror.New(apperror.InvalidState, "mediaId", "video preparation cannot be retried")
-		}
-		var source database.VideoSource
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", c.TenantID, c.MediaID).Take(&source).Error; err == nil {
-			if source.Status == "DELETING" || (source.Status == "EXPIRED" && source.FirstFrameReadyAt == nil) {
-				return apperror.New(apperror.InvalidState, "mediaId", "video source is no longer available; capture a replacement video")
-			}
-			if source.ScreeningStatus == "BLOCKED" {
-				return apperror.New(apperror.InvalidState, "mediaId", "video source is blocked pending review")
-			}
-			if source.Status == "EXPIRED" {
-				var frameCount int64
-				if err := tx.WithContext(ctx).Model(&database.VideoFrame{}).Where("tenant_id=? AND preparation_id=?", c.TenantID, job.ID).Count(&frameCount).Error; err != nil {
-					return err
-				}
-				if source.FirstFrameReadyAt == nil || frameCount == 0 || (source.ScreeningStatus != "APPROVED" && source.ScreeningStatus != "DISABLED") {
-					return apperror.New(apperror.InvalidState, "mediaId", "video source is no longer available; capture a replacement video")
-				}
-			}
-		} else if err != gorm.ErrRecordNotFound {
-			return err
-		} else {
-			var media database.MediaObject
-			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", c.TenantID, c.MediaID).Take(&media).Error; err != nil {
-				return err
-			}
-			if media.ObjectKey == "" || media.Status == "EXPIRED" || media.Status == "DELETED" || media.Status == "REJECTED" {
-				return apperror.New(apperror.InvalidState, "mediaId", "video source is no longer available; capture a replacement video")
-			}
-		}
-		now := time.Now().UTC()
-		nextVersion := c.ExpectedPreparationVersion + 1
-		result := tx.WithContext(ctx).Model(&job).Where("tenant_id=? AND id=? AND preparation_version=? AND status='FAILED'", c.TenantID, job.ID, c.ExpectedPreparationVersion).
-			Updates(map[string]any{"status": "QUEUED", "preparation_version": nextVersion, "attempts": 0, "next_attempt_at": now, "lease_token": nil, "lease_expires_at": nil, "heartbeat_at": nil, "error_code": ""})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return apperror.New(apperror.Conflict, "expectedPreparationVersion", "video preparation has changed")
-		}
-		if err := resumeBlockedPlans(tx, c.TenantID, job.ID, job.ID); err != nil {
-			return err
-		}
+		now := clock().UTC()
 		if meta.Principal.IdentityID != (identity.ID{}) {
 			if err := tx.WithContext(ctx).Create(&database.AuditEvent{ID: identity.NewID(), TenantID: c.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.preparation_retried", TargetType: "media", TargetID: c.MediaID.String(), Outcome: "ACCEPTED", CorrelationID: meta.CorrelationID, OccurredAt: now}).Error; err != nil {
 				return err
 			}
 		}
-		job.Status, job.PreparationVersion, job.Attempts = "QUEUED", nextVersion, 0
-		job.ErrorCode, job.NextAttemptAt = "", now
 		status = Status{MediaID: c.MediaID, PreparationID: job.ID, Status: job.Status, Stage: job.Phase, PreparationVersion: job.PreparationVersion, Attempts: job.Attempts, ProcessedFrames: job.ProcessedFrames, SourceAvailable: true}
 		return nil
 	})
 	return status, err
 }
 
-func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, identity.ID, func(*gorm.DB) error) error, c ReprocessCommand) (Status, error) {
+func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, identity.ID, func(*gorm.DB) error) error, c ReprocessCommand, clock func() time.Time) (Status, error) {
 	if c.TenantID == (identity.ID{}) || c.MediaID == (identity.ID{}) || c.MutationID == "" || len(c.MutationID) > 128 || c.ExpectedPreparationVersion < 1 {
 		return Status{}, apperror.New(apperror.InvalidInput, "input", "invalid video preparation reprocess request")
 	}
@@ -325,7 +280,7 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		if err := tx.WithContext(ctx).Model(&database.VideoPreparationJob{}).Select("COALESCE(MAX(generation), 0)").Where("tenant_id=? AND media_id=? AND profile_digest=?", c.TenantID, c.MediaID, c.ProfileDigest).Scan(&lastGeneration).Error; err != nil {
 			return err
 		}
-		now := time.Now().UTC()
+		now := clock().UTC()
 		anchor := sourceJob.FirstReadyAt
 		if anchor == nil {
 			anchor = source.FirstFrameReadyAt
@@ -334,7 +289,7 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		if err := tx.WithContext(ctx).Create(&job).Error; err != nil {
 			return err
 		}
-		if err := resumeBlockedPlans(tx, c.TenantID, sourceJob.ID, job.ID); err != nil {
+		if err := resumeBlockedPlans(tx, c.TenantID, sourceJob.ID, job.ID, now); err != nil {
 			return err
 		}
 		if meta.Principal.IdentityID != (identity.ID{}) {
@@ -348,13 +303,13 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 	return status, err
 }
 
-func resumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPreparationID identity.ID) error {
+func resumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPreparationID identity.ID, now time.Time) error {
 	var plans []database.VideoPlan
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND status='BLOCKED' AND (current_preparation_id=? OR origin_preparation_id=?)", tenantID, previousPreparationID, previousPreparationID).Find(&plans).Error; err != nil {
 		return err
 	}
 	for _, plan := range plans {
-		updates := map[string]any{"status": "BUILDING", "next_attempt_at": time.Now().UTC(), "attempts": 0, "error_code": "", "lease_token": nil, "lease_until": nil}
+		updates := map[string]any{"status": "BUILDING", "next_attempt_at": now.UTC(), "attempts": 0, "error_code": "", "lease_token": nil, "lease_until": nil}
 		if plan.CurrentPreparationID == previousPreparationID {
 			updates["current_preparation_id"] = nextPreparationID
 		}
@@ -364,7 +319,7 @@ func resumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPrepar
 		if err := tx.Model(&database.VideoPlan{}).Where("tenant_id=? AND id=? AND status='BLOCKED'", tenantID, plan.ID).Updates(updates).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status IN ('REVIEW_REQUIRED','PROCESSING_FAILED')", tenantID, plan.InspectionID).Update("status", "ANALYZING").Error; err != nil {
+		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status IN ('REVIEW_REQUIRED','PROCESSING_FAILED')", tenantID, plan.InspectionID).Updates(map[string]any{"status": "ANALYZING", "updated_at": now.UTC(), "version": gorm.Expr("version + 1")}).Error; err != nil {
 			return err
 		}
 	}

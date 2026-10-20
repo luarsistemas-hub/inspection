@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -198,3 +200,52 @@ func TestConfigLLMModeContracts(t *testing.T) {
 		t.Fatal("unknown LLM mode accepted")
 	}
 }
+
+func TestSensitiveContentBypassMatrixThroughLoad(t *testing.T) {
+	const skip, legacy = "INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION", "INSPECTION_IMAGE_VALIDATION_ENABLED"
+	cases := []struct {
+		name         string
+		skip, legacy *string
+		wantSource   string
+		wantErr      bool
+	}{
+		{"defaults keep screening on", nil, nil, "", false},
+		{"skip false and legacy true", ptr("false"), ptr("true"), "", false},
+		{"skip true bypasses", ptr("true"), nil, skip, false},
+		{"skip true wins over legacy false", ptr("true"), ptr("false"), skip, false},
+		{"legacy false still bypasses", nil, ptr("false"), legacy, false},
+		{"legacy false with skip false still bypasses", ptr("false"), ptr("false"), legacy, false},
+		{"legacy invalid falls back to screening on", nil, ptr("maybe"), "", false},
+		{"skip invalid prevents startup", ptr("maybe"), nil, "", true},
+		{"skip invalid prevents startup even with legacy false", ptr("maybe"), ptr("false"), "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for key, value := range map[string]*string{skip: tc.skip, legacy: tc.legacy} {
+				if value == nil {
+					t.Setenv(key, "")
+					os.Unsetenv(key)
+					continue
+				}
+				t.Setenv(key, *value)
+			}
+			// Load also validates unrelated required settings this test does not provide,
+			// so only the bypass parsing error is significant here.
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), skip+" must be a boolean") {
+					t.Fatalf("Load error = %v, want boolean parsing error for %s", err, skip)
+				}
+				return
+			}
+			if err != nil && strings.Contains(err.Error(), "must be a boolean") {
+				t.Fatalf("valid bypass configuration rejected: %v", err)
+			}
+			if got := cfg.SensitiveContentBypassSource(); got != tc.wantSource {
+				t.Fatalf("bypass source = %q, want %q", got, tc.wantSource)
+			}
+		})
+	}
+}
+
+func ptr(value string) *string { return &value }

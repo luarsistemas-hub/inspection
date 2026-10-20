@@ -292,6 +292,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 		if err := deleteWhere(&database.Delivery{}, "tenant_id=? AND inspection_id=?", tenantID, inspectionID); err != nil {
 			return err
 		}
+		if err := deleteWhere(&database.VideoReplacement{}, "tenant_id=? AND inspection_id=?", tenantID, inspectionID); err != nil {
+			return err
+		}
 		if len(responsibilityIDs) > 0 {
 			for _, model := range []any{&database.RequirementAnswer{}, &database.SubmissionVersion{}, &database.CaptureDraft{}, &database.RecaptureRequirement{}, &database.RecaptureRequest{}, &database.OriginEvidence{}, &database.OriginVersion{}, &database.ProcessingAcceptance{}, &database.ExternalSession{}, &database.OTPChallenge{}, &database.Invitation{}} {
 				if err := deleteByResponsibilities(tx, model, tenantID, responsibilityIDs); err != nil {

@@ -104,6 +104,59 @@ func TestPreparedDigestMismatchMarksBuildingPlanFailed(t *testing.T) {
 	}
 }
 
+func TestTerminalPreparationBlocksPlanAndInspection(t *testing.T) {
+	for _, scenario := range []struct {
+		name, code, expectedInspectionStatus string
+		err                                  error
+	}{
+		{name: "sensitive", code: "SENSITIVE_CONTENT", expectedInspectionStatus: "REVIEW_REQUIRED", err: errSensitivePreparation},
+		{name: "technical", code: "PREPARATION_FAILED", expectedInspectionStatus: "PROCESSING_FAILED", err: errPreparationFailed},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			db := schedulePlanTestDB(t)
+			tenantID, inspectionID := identity.NewID(), identity.NewID()
+			plan := database.VideoPlan{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, SubmissionID: identity.NewID(), CurrentPreparationID: identity.NewID(), Generation: 1, Status: "BUILDING", Attempts: 1, NextAttemptAt: time.Now().UTC(), LeaseToken: idPtr(identity.NewID())}
+			if err := insertVideoPlan(db, plan); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Exec("UPDATE analysis.video_plans SET inspection_id=? WHERE id=?", inspectionID, plan.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Exec("INSERT INTO inspections.inspections (id,tenant_id,status,version) VALUES (?,?,?,?)", inspectionID, tenantID, "ANALYZING", 7).Error; err != nil {
+				t.Fatal(err)
+			}
+			scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}, Now: time.Now, Within: sqliteWithin(db)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := scheduler.finishFailure(context.Background(), plan, *plan.LeaseToken, scenario.err); err != nil {
+				t.Fatal(err)
+			}
+			var got database.VideoPlan
+			if err := db.Where("id=?", plan.ID).Take(&got).Error; err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != "BLOCKED" || got.ErrorCode != scenario.code || got.LeaseToken != nil {
+				t.Fatalf("plan state = %+v", got)
+			}
+			var status string
+			if err := db.Table("inspections.inspections").Select("status").Where("id=?", inspectionID).Scan(&status).Error; err != nil {
+				t.Fatal(err)
+			}
+			if status != scenario.expectedInspectionStatus {
+				t.Fatalf("inspection status = %q, want %q", status, scenario.expectedInspectionStatus)
+			}
+			var inspectionVersion int
+			if err := db.Table("inspections.inspections").Select("version").Where("id=?", inspectionID).Scan(&inspectionVersion).Error; err != nil {
+				t.Fatal(err)
+			}
+			if inspectionVersion != 8 {
+				t.Fatalf("inspection version=%d, want 8", inspectionVersion)
+			}
+		})
+	}
+}
+
 func TestPreparedBeforeReadyIsDeferredWithoutPlan(t *testing.T) {
 	db := schedulePlanTestDB(t)
 	tenant, preparationID, mediaID := identity.NewID(), identity.NewID(), identity.NewID()
@@ -347,7 +400,7 @@ func schedulePlanTestDB(t *testing.T) *gorm.DB {
 		"CREATE TABLE media.media_objects (id TEXT, tenant_id TEXT, responsibility_id TEXT, media_kind TEXT)",
 		"CREATE TABLE capture.submission_versions (id TEXT, tenant_id TEXT, draft_id TEXT, responsibility_id TEXT, version_number INTEGER, complete NUMERIC, payload BLOB, payload_digest TEXT, submitted_at DATETIME)",
 		"CREATE TABLE capture.capture_drafts (id TEXT, tenant_id TEXT, responsibility_id TEXT, kind TEXT, media_kind TEXT)",
-		"CREATE TABLE inspections.inspections (id TEXT, tenant_id TEXT, asset_id TEXT, media_kind TEXT)",
+		"CREATE TABLE inspections.inspections (id TEXT, tenant_id TEXT, asset_id TEXT, media_kind TEXT, status TEXT, version INTEGER NOT NULL DEFAULT 1, updated_at DATETIME)",
 		"CREATE TABLE inspections.responsibilities (id TEXT, tenant_id TEXT, inspection_id TEXT)",
 		"CREATE TABLE inspections.reference_snapshots (id TEXT, tenant_id TEXT, inspection_id TEXT, reference_version_id TEXT, comparison_mode TEXT, payload BLOB, created_at DATETIME)",
 		"CREATE TABLE analysis.video_plans (id TEXT, tenant_id TEXT, inspection_id TEXT, submission_id TEXT, parent_plan_id TEXT, reference_version_id TEXT, origin_preparation_id TEXT, current_preparation_id TEXT, generation INTEGER, plan_digest TEXT, status TEXT, lease_token TEXT, lease_until DATETIME, attempts INTEGER, next_attempt_at DATETIME, error_code TEXT, client_mutation_id TEXT, expected_plan_id TEXT, sealed_at DATETIME, created_at DATETIME, UNIQUE(tenant_id,submission_id,generation))",
@@ -367,6 +420,41 @@ func createPlanRows(t *testing.T, db *gorm.DB, tenant, submissionID, preparation
 	}
 	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,submission_id,current_preparation_id,generation,status,plan_digest,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)", identity.NewID(), tenant, submissionID, preparationID, 1, status, "", time.Now()).Error; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReplacementDraftBuildsPlanWhileRecaptureDraftDoesNot(t *testing.T) {
+	for _, tc := range []struct {
+		kind      string
+		wantPlans int
+	}{{"VIDEO_REPLACEMENT", 1}, {"RECAPTURE", 0}} {
+		t.Run(tc.kind, func(t *testing.T) {
+			db := schedulePlanTestDB(t)
+			tenant, submissionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID()
+			seedReadySubmission(t, db, tenant, submissionID, preparationID)
+			responsibilityID := lookupResponsibility(t, db)
+			if err := db.Exec("INSERT INTO capture.capture_drafts (id,tenant_id,responsibility_id,kind,media_kind) VALUES (?,?,?,?,?)", identity.NewID(), tenant, responsibilityID, tc.kind, "VIDEO").Error; err != nil {
+				t.Fatal(err)
+			}
+			scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, _ := json.Marshal(videoSubmitted{DraftID: identity.NewID(), SubmissionID: submissionID, ResponsibilityID: responsibilityID, MediaID: lookupMedia(t, db), PreparationStatus: "READY"})
+			if err := scheduler.Handle(context.Background(), db, eventsEnvelope("capture.video_submitted.v1", payload, tenant)); err != nil {
+				t.Fatal(err)
+			}
+			var plans []database.VideoPlan
+			if err := db.Find(&plans).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(plans) != tc.wantPlans {
+				t.Fatalf("%s draft produced %d plans, want %d", tc.kind, len(plans), tc.wantPlans)
+			}
+			if tc.wantPlans == 1 && (plans[0].Generation != 1 || plans[0].Status != "BUILDING") {
+				t.Fatalf("replacement plan must start a fresh generation: %+v", plans[0])
+			}
+		})
 	}
 }
 

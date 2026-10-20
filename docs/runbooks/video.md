@@ -8,6 +8,8 @@ O `inspection-video-worker` é um serviço separado do worker geral. Ele consome
 
 O worker publica progresso por etapa e checkpoints duráveis. Cada execução usa lease com token de fencing: a configuração padrão é lease de 120 segundos, heartbeat de 30 segundos e polling de 2 segundos. Um worker antigo que perdeu o lease não pode publicar resultado. A fila RabbitMQ acelera o despertar, mas o estado durável no banco é a fonte para recuperação.
 
+A triagem de conteúdo sensível fica ativa por padrão. `INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION=true` desativa somente essa detecção em fotos e vídeos; formato, integridade e duração continuam validados. `INSPECTION_IMAGE_VALIDATION_ENABLED=false` também ativa o bypass por compatibilidade. Valores inválidos na nova variável impedem a inicialização. Os workers registram a configuração efetiva em `platform.worker_runtime_settings`; o aviso de inicialização identifica qual variável habilitou o bypass. A mudança vale para novas mídias e não libera itens já bloqueados.
+
 ## Saúde, métricas e alertas
 
 No ambiente local, `./scripts/local.sh up` sobe a stack com o worker de vídeo por padrão. `INSPECTION_VIDEO_WORKER=0 ./scripts/local.sh up` deixa o worker fora para cenários PHOTO. O Compose local o coloca no profile `video`, publica apenas em loopback na porta configurável `INSPECTION_VIDEO_WORKER_PORT` (padrão 8091) e expõe `GET /health`. O `/health` do worker é um sinal de processo, não comprova sozinho conectividade com todas as dependências.

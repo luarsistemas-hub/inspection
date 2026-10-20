@@ -2057,7 +2057,8 @@ CREATE TABLE IF NOT EXISTS platform.worker_runtime_settings (
   source_variable varchar(96) NOT NULL DEFAULT '',
   reported_at timestamptz NOT NULL DEFAULT now()
 );
-GRANT SELECT, INSERT, UPDATE ON platform.worker_runtime_settings TO inspection_runtime, inspection_worker;
+GRANT USAGE ON SCHEMA platform TO inspection_runtime;
+GRANT SELECT, INSERT, UPDATE ON platform.worker_runtime_settings TO inspection_runtime;
 
 WITH terminal_preparations AS (
   SELECT p.tenant_id, p.id, p.inspection_id,
@@ -2075,9 +2076,36 @@ WHERE p.tenant_id=t.tenant_id AND p.id=t.id;
 
 UPDATE inspections.inspections i
 SET status=CASE WHEN p.error_code='SENSITIVE_CONTENT' THEN 'REVIEW_REQUIRED' ELSE 'PROCESSING_FAILED' END,
-    updated_at=now()
+    updated_at=now(), version=i.version + 1
 FROM analysis.video_plans p
 WHERE p.tenant_id=i.tenant_id AND p.inspection_id=i.id AND p.status='BLOCKED' AND i.status='ANALYZING';
+
+CREATE TABLE IF NOT EXISTS inspections.video_replacements (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  inspection_id uuid NOT NULL,
+  media_id uuid NOT NULL,
+  responsibility_id uuid NOT NULL,
+  invitation_id uuid NOT NULL,
+  deadline_at timestamptz NOT NULL,
+  reason varchar(2000) NOT NULL,
+  status varchar(20) NOT NULL,
+  idempotency_key varchar(128) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_video_replacement_idempotency UNIQUE (tenant_id,idempotency_key),
+  CONSTRAINT chk_video_replacement_status CHECK (status IN ('REQUESTED','SUBMITTED','EXPIRED','CANCELED'))
+);
+CREATE INDEX IF NOT EXISTS idx_video_replacement_deadline ON inspections.video_replacements(status,deadline_at);
+CREATE INDEX IF NOT EXISTS idx_video_replacement_inspection ON inspections.video_replacements(tenant_id,inspection_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_video_replacement_active ON inspections.video_replacements(tenant_id,inspection_id) WHERE status='REQUESTED';
+ALTER TABLE inspections.video_replacements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inspections.video_replacements FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON inspections.video_replacements USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON inspections.video_replacements TO inspection_runtime;
+
+ALTER TABLE capture.capture_drafts DROP CONSTRAINT IF EXISTS chk_capture_draft_kind;
+ALTER TABLE capture.capture_drafts ADD CONSTRAINT chk_capture_draft_kind CHECK (kind IN ('ORIGIN','INSPECTION','RECAPTURE','VIDEO_REPLACEMENT'));
 
 CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
   p_now timestamptz,
@@ -2097,7 +2125,7 @@ AS $$
   WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
   UNION
   SELECT i.tenant_id FROM inspections.inspections i
-  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING','REPLACEMENT_PENDING') AND i.deadline_at<=p_deadline_before
+  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
 $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;

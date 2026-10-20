@@ -1128,6 +1128,24 @@ type Responsibility struct {
 	UpdatedAt     time.Time
 }
 
+// VideoReplacement records a same-inspection replacement invitation and its independent deadline.
+type VideoReplacement struct {
+	ID               identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID         identity.ID `gorm:"type:uuid;not null;index;uniqueIndex:uq_video_replacement_idempotency,priority:1"`
+	InspectionID     identity.ID `gorm:"type:uuid;not null;index"`
+	MediaID          identity.ID `gorm:"type:uuid;not null"`
+	ResponsibilityID identity.ID `gorm:"type:uuid;not null"`
+	InvitationID     identity.ID `gorm:"type:uuid;not null"`
+	DeadlineAt       time.Time   `gorm:"not null;index"`
+	Reason           string      `gorm:"size:2000;not null"`
+	Status           string      `gorm:"size:20;not null;index"`
+	IdempotencyKey   string      `gorm:"size:128;not null;uniqueIndex:uq_video_replacement_idempotency,priority:2"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (VideoReplacement) TableName() string { return "inspections.video_replacements" }
+
 func (Responsibility) TableName() string { return "inspections.responsibilities" }
 
 type PolicySnapshot struct {
@@ -1606,7 +1624,7 @@ func Models() []any {
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
 		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{},
 		&MediaObject{}, &MultipartUpload{}, &UploadPart{}, &MediaDerivative{}, &ScreeningRun{}, &VideoPolicy{}, &VideoAdmission{}, &VideoAttempt{}, &VideoPreparationJob{}, &VideoSource{}, &VideoFrame{}, &VideoEvidenceReference{}, &VideoSourceLease{}, &VideoScopeItem{},
-		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{},
+		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{}, &VideoReplacement{},
 		&Delivery{}, &ChannelAttempt{}, &NotificationAttempt{}, &NotificationPayload{}, &NotificationRecipient{}, &ProviderCallback{},
 		&Schedule{}, &OccurrenceMaterialization{}, &ReminderPlan{},
 		&Inspection{}, &Responsibility{}, &PolicySnapshot{}, &ReferenceSnapshot{},

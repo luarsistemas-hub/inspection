@@ -483,20 +483,21 @@ type DisableMembershipInput struct {
 }
 
 type ExternalCapture struct {
-	ResponsibilityID    string                  `json:"responsibilityId"`
-	RecaptureRequestID  *string                 `json:"recaptureRequestId,omitempty"`
-	RecaptureDeadlineAt *string                 `json:"recaptureDeadlineAt,omitempty"`
-	Status              string                  `json:"status"`
-	ConfirmationOnly    bool                    `json:"confirmationOnly"`
-	Kind                string                  `json:"kind"`
-	MediaKind           string                  `json:"mediaKind"`
-	TemplateVersionID   string                  `json:"templateVersionId"`
-	Reference           map[string]any          `json:"reference"`
-	ReferenceItems      []*CaptureReferenceItem `json:"referenceItems"`
-	Policy              map[string]any          `json:"policy"`
-	Requirements        []*CaptureRequirement   `json:"requirements"`
-	Answers             []*CaptureAnswer        `json:"answers"`
-	DisclosureVersion   string                  `json:"disclosureVersion"`
+	ResponsibilityID      string                  `json:"responsibilityId"`
+	RecaptureRequestID    *string                 `json:"recaptureRequestId,omitempty"`
+	RecaptureDeadlineAt   *string                 `json:"recaptureDeadlineAt,omitempty"`
+	ReplacementDeadlineAt *string                 `json:"replacementDeadlineAt,omitempty"`
+	Status                string                  `json:"status"`
+	ConfirmationOnly      bool                    `json:"confirmationOnly"`
+	Kind                  string                  `json:"kind"`
+	MediaKind             string                  `json:"mediaKind"`
+	TemplateVersionID     string                  `json:"templateVersionId"`
+	Reference             map[string]any          `json:"reference"`
+	ReferenceItems        []*CaptureReferenceItem `json:"referenceItems"`
+	Policy                map[string]any          `json:"policy"`
+	Requirements          []*CaptureRequirement   `json:"requirements"`
+	Answers               []*CaptureAnswer        `json:"answers"`
+	DisclosureVersion     string                  `json:"disclosureVersion"`
 }
 
 type ExternalSessionPayload struct {
@@ -1556,6 +1557,14 @@ type RequestRecaptureInput struct {
 	ClientMutationID string                `json:"clientMutationId"`
 }
 
+type RequestVideoReplacementInput struct {
+	InspectionID     string `json:"inspectionId"`
+	MediaID          string `json:"mediaId"`
+	DeadlineAt       string `json:"deadlineAt"`
+	Reason           string `json:"reason"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type ResendInternalUserInvitationInput struct {
 	MembershipID     string `json:"membershipId"`
 	ClientMutationID string `json:"clientMutationId"`
@@ -1706,6 +1715,30 @@ type SensitiveFalsePositiveInput struct {
 	MediaID          string `json:"mediaId"`
 	Reason           string `json:"reason"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type SensitiveMediaOriginal struct {
+	MediaID   string             `json:"mediaId"`
+	MediaKind SensitiveMediaKind `json:"mediaKind"`
+	URL       string             `json:"url"`
+	ExpiresAt string             `json:"expiresAt"`
+}
+
+type SensitiveMediaReview struct {
+	MediaID         string             `json:"mediaId"`
+	InspectionID    string             `json:"inspectionId"`
+	AssetName       string             `json:"assetName"`
+	ParticipantName string             `json:"participantName"`
+	MediaKind       SensitiveMediaKind `json:"mediaKind"`
+	RequirementKey  string             `json:"requirementKey"`
+	BlockedAt       string             `json:"blockedAt"`
+	Submitted       bool               `json:"submitted"`
+	SourceAvailable bool               `json:"sourceAvailable"`
+}
+
+type SensitiveMediaReviewConnection struct {
+	Nodes    []*SensitiveMediaReview `json:"nodes"`
+	PageInfo *PageInfo               `json:"pageInfo"`
 }
 
 type SetAdminInitialPasswordInput struct {
@@ -2107,6 +2140,19 @@ type VideoReceivedPart struct {
 	PartNumber int    `json:"partNumber"`
 	Etag       string `json:"etag"`
 	SizeBytes  int    `json:"sizeBytes"`
+}
+
+type VideoReplacement struct {
+	ID               string `json:"id"`
+	ResponsibilityID string `json:"responsibilityId"`
+	Status           string `json:"status"`
+	DeadlineAt       string `json:"deadlineAt"`
+}
+
+type VideoReplacementPayload struct {
+	Replacement      *VideoReplacement `json:"replacement,omitempty"`
+	UserErrors       []*UserError      `json:"userErrors"`
+	ClientMutationID string            `json:"clientMutationId"`
 }
 
 type VideoUploadStatus struct {
@@ -2559,6 +2605,61 @@ func (e *LLMUsageCostState) UnmarshalJSON(b []byte) error {
 }
 
 func (e LLMUsageCostState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type SensitiveMediaKind string
+
+const (
+	SensitiveMediaKindPhoto SensitiveMediaKind = "PHOTO"
+	SensitiveMediaKindVideo SensitiveMediaKind = "VIDEO"
+)
+
+var AllSensitiveMediaKind = []SensitiveMediaKind{
+	SensitiveMediaKindPhoto,
+	SensitiveMediaKindVideo,
+}
+
+func (e SensitiveMediaKind) IsValid() bool {
+	switch e {
+	case SensitiveMediaKindPhoto, SensitiveMediaKindVideo:
+		return true
+	}
+	return false
+}
+
+func (e SensitiveMediaKind) String() string {
+	return string(e)
+}
+
+func (e *SensitiveMediaKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SensitiveMediaKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SensitiveMediaKind", str)
+	}
+	return nil
+}
+
+func (e SensitiveMediaKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *SensitiveMediaKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e SensitiveMediaKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

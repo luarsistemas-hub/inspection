@@ -22,6 +22,8 @@ go run github.com/99designs/gqlgen@v0.17.95 generate
 
 Somente o migrador altera schema. Runtime usa `inspection_runtime`; worker usa `inspection_worker`.
 
+`INSPECTION_SKIP_SENSITIVE_CONTENT_VALIDATION` desativa apenas a detecção de conteúdo sensível, mantendo as demais validações. O padrão é `false`; valores fora de `true/false/1/0/yes/no/on/off` impedem a inicialização. Consulte o [runbook operacional de vídeo](../../docs/runbooks/video.md) para detalhes do bypass e da configuração efetiva dos workers.
+
 O migrador só cria o prompt de análise quando ele não existe; alterações em
 `internal/features/analysis/prompt/default_system_prompt.go` não chegam a
 ambientes já seedados. Para publicá-las, rode `inspection-prompt-seed -replace`

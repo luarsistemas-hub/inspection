@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { installFakeGetUserMedia } from "./support/get-user-media";
+import { startVideoRecording } from "./support/video-capture";
 import { installRuntimeGuards } from "./support/runtime";
 
 type MailSummary = { ID: string; Subject: string; To: Array<{ Address: string }> };
@@ -131,15 +132,15 @@ test.describe("authenticated Capture against the local stack", () => {
     const assertRuntimeClean = installRuntimeGuards(page);
     await installCanvasCamera(page);
     await authenticateVideoCapture(page, request);
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     expect(await page.evaluate(() => (window as typeof window & { captureConstraints?: MediaStreamConstraints }).captureConstraints?.audio)).toBe(false);
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
     await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
     await page.getByRole("button", { name: "Descartar e gravar novamente" }).click();
-    await page.getByRole("button", { name: "Começar gravação" }).click();
+    await startVideoRecording(page);
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
     await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
@@ -157,8 +158,8 @@ test.describe("authenticated Capture against the local stack", () => {
     page.on("request", (outgoing) => {
       if (outgoing.url().endsWith("/graphql") && String(outgoing.postDataJSON()?.query ?? "").includes("CreateMediaUpload")) uploadCreates += 1;
     });
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     await context.clearCookies();
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
@@ -180,8 +181,8 @@ test.describe("authenticated Capture against the local stack", () => {
     page.on("request", (outgoing) => {
       if (outgoing.url().endsWith("/graphql") && String(outgoing.postDataJSON()?.query ?? "").includes("CreateMediaUpload")) createUploadRequests += 1;
     });
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     await page.waitForTimeout(1200);
     await context.setOffline(true);
     await expect(page.getByText("Sem conexão.", { exact: false })).toBeVisible();
@@ -220,8 +221,8 @@ test.describe("authenticated Capture against the local stack", () => {
     test.setTimeout(120_000);
     await installCanvasCamera(page);
     const inviteURL = await authenticateVideoCapture(page, request);
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
     await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
@@ -271,8 +272,8 @@ test.describe("authenticated Capture against the local stack", () => {
     });
     await installCanvasCamera(page, true);
     await authenticateVideoCapture(page, request);
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     await page.waitForTimeout(35_000);
     await context.setOffline(true);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
@@ -356,7 +357,7 @@ test.describe("authenticated Capture against the local stack", () => {
     await authenticateVideoCapture(page, request);
     await expect(page.getByText("Abra o convite no Safari ou Chrome atualizado do aparelho", { exact: false })).toBeVisible();
     await expect(page.getByText("A gravação não continua em segundo plano", { exact: false })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Começar gravação" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Abrir câmera" })).toBeDisabled();
     await assertRuntimeClean();
   });
 
@@ -385,9 +386,9 @@ test.describe("authenticated Capture against the local stack", () => {
       try {
         await installCanvasCamera(capture);
         await authenticateVideoCapture(capture, request);
-        await expect(capture.getByText("O tempo máximo é 10:00", { exact: false })).toBeVisible();
-        await capture.getByRole("button", { name: "Começar gravação" }).click();
-        await expect(capture.getByText(/Gravando 00:00 \/ 10:00/)).toBeVisible();
+        await expect(capture.getByText("O tempo máximo autorizado é 10:00", { exact: false })).toBeVisible();
+        await startVideoRecording(capture);
+        await expect(capture.getByRole("timer").filter({ hasText: "00:00 / 10:00" })).toBeVisible();
         await capture.getByRole("button", { name: "Parar e revisar" }).click();
       } finally { await capture.close(); }
     } finally {
@@ -458,8 +459,8 @@ test.describe("authenticated Capture against the local stack", () => {
     await installCanvasCamera(page);
     await authenticateVideoCapture(page, request);
 
-    await page.getByRole("button", { name: "Começar gravação" }).click();
-    await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+    await startVideoRecording(page);
+    await expect(page.getByText(/00:/)).toBeVisible();
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "Parar e revisar" }).click();
     await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();

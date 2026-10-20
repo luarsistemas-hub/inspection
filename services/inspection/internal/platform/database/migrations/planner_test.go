@@ -35,6 +35,33 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestSensitiveReviewMigrationReconcilesTerminalPreparationGenerically(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 78 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "sensitive_review_and_recoverable_video_plans" {
+		t.Fatalf("migration=%+v", step)
+	}
+	for _, required := range []string{"chk_inspection_status", "'REVIEW_REQUIRED'", "'PROCESSING_FAILED'", "'REPLACEMENT_PENDING'", "chk_video_plan_status", "'BLOCKED'", "current_p.status IN ('FAILED','CANCELED')", "origin_p.status IN ('FAILED','CANCELED')", "current_p.error_code", "origin_p.error_code", "i.status='ANALYZING'", "version=i.version + 1", "platform.worker_runtime_settings", "GRANT USAGE ON SCHEMA platform TO inspection_runtime", "GRANT SELECT, INSERT, UPDATE ON platform.worker_runtime_settings TO inspection_runtime"} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration is missing reconciliation rule %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "TO inspection_runtime, inspection_worker") {
+		t.Fatal("migration must not assume the inspection_worker role exists")
+	}
+	if strings.Contains(step.SQL, "'REPLACEMENT_PENDING') AND i.deadline_at") {
+		t.Fatal("replacement deadline processing must not reuse inspections.deadline_at")
+	}
+	if strings.Contains(step.SQL, "bcc7699a-c1ed-4210-b26d-45b271d6ee80") || strings.Contains(step.SQL, "5ab5c36c-7ddc-4ba5-800a-b3e9e75aaa59") {
+		t.Fatal("migration must not encode local inspection identifiers")
+	}
+}
+
 func TestSealedVideoPlanMigrationFencesFrameMembership(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {

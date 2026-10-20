@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ReplacementRequest } from "./replacement-request";
 import { beginPKCE, endDashboardSSO } from "@/auth/pkce";
 import { clearSession, getIDToken, getMembershipId, getProtectedStateGeneration, selectMembership, setIdentity, type DashboardIdentity } from "@/auth/session";
 import { clearVideoPlaybackSession } from "@/auth/video-playback-session";
@@ -14,6 +15,8 @@ import { FormDialog } from "@/features/dashboard/form-dialog";
 import { ReportsJourney } from "@/features/dashboard/reports-journey";
 import { FocusDetail } from "@/features/dashboard/focus-detail";
 import { TriageJourney } from "@/features/dashboard/triage-journey";
+import { PrivacyReviewJourney } from "@/features/dashboard/privacy-review-journey";
+import { InspectionVideoPreparationDocument, RetryInspectionVideoPreparationDocument } from "@/graphql/generated";
 import { ConfirmationDialog } from "@/features/dashboard/confirmation-dialog";
 import { useNotifications } from "@/features/notifications/use-notifications";
 import { deliveryPresentation } from "@/features/notifications/delivery-status";
@@ -31,7 +34,7 @@ import { localDateTimeToInstant } from "./datetime";
 import { CustomerReportVisual, ReportVisual } from "./report-visual";
 import { FixedOriginSelector, OriginManagement, useTemplateMediaKind } from "./origin-controls";
 
-type Page = "Início" | "Agenda de vistorias" | "Vistorias" | "Projetos e etapas" | "Triagem" | "Laudos" | "Portfólio" | "Notificações";
+type Page = "Início" | "Agenda de vistorias" | "Vistorias" | "Projetos e etapas" | "Triagem" | "Revisão de privacidade" | "Laudos" | "Portfólio" | "Notificações";
 const desktopNavigationStorageKey = "inspection.dashboard.navigation-collapsed";
 
 export function DashboardShell({ section }: { section: Page }) {
@@ -128,7 +131,7 @@ export function DashboardShell({ section }: { section: Page }) {
   const itemFor = ([label, href]: [string, string]): AdaptiveNavigationItem => ({
     href,
     label,
-    icon: href === "/tenants/current" ? "layout-dashboard" : href === "/schedules" ? "calendar" : href === "/inspections" ? "clipboard-check" : href === "/projects" ? "folder-kanban" : href === "/portfolio" ? "building-2" : href === "/triage" ? "search" : href === "/reports" ? "file-text" : "bell",
+    icon: href === "/tenants/current" ? "layout-dashboard" : href === "/schedules" ? "calendar" : href === "/inspections" ? "clipboard-check" : href === "/projects" ? "folder-kanban" : href === "/portfolio" ? "building-2" : href === "/triage" ? "search" : href === "/privacy-review" ? "shield-check" : href === "/reports" ? "file-text" : "bell",
     badge: href === "/notifications" && notifications.unreadCount > 0 ? notifications.unreadCount : undefined,
   });
   const primaryItems = capability.links.filter(([, href]) => primaryHrefs.includes(href)).map(itemFor);
@@ -151,6 +154,7 @@ function OperationsDashboard({ section, capability, reportsRefreshKey, operation
   if (section === "Projetos e etapas") return <ProjectsJourney canMutate={capability.canMutate} options={formOptions} />;
   if (section === "Laudos") return <ReportsJourney canPublish={capability.canPublish} refreshKey={reportsRefreshKey} />;
   if (section === "Triagem") return <TriageJourney capability={capability} />;
+  if (section === "Revisão de privacidade") return capability.canManageTriage ? <PrivacyReviewJourney /> : <p role="alert">Acesso negado.</p>;
   if (section === "Notificações") return null;
   return <HomeJourney refreshKey={operationalRefreshKey} />;
 }
@@ -247,14 +251,29 @@ function InspectionForm({ onSubmit, options, busy }: { onSubmit: (input: Record<
 
 function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; canPromoteOrigin: boolean; options: FormOptionsState }) {
   const [message, setMessage] = useState("Carregando detalhes da vistoria…"); const [detail, setDetail] = useState<InspectionDetailQuery["inspection"]>(); const detailRequest = useRef(0);
-  useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id]);
+  const [retryBusy, setRetryBusy] = useState(false); const [reloadKey, setReloadKey] = useState(0);
+  const reloadDetail = () => setReloadKey((value) => value + 1);
+  useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id, reloadKey]);
   if (!detail) return <section className="inspection-workspace"><p role="status">{message}</p></section>;
   const assetName = detail.assetName?.trim() || "Imóvel indisponível";
   const participantName = detail.participantName?.trim() || "Responsável indisponível";
   const asset = options.data?.assets.nodes.find((item) => item.id === detail.assetId);
+  async function retryPreparation() {
+    const mediaId = detail?.attention?.mediaId;
+    if (!mediaId) return;
+    setRetryBusy(true); setMessage("");
+    try {
+      const prep = await graphql(InspectionVideoPreparationDocument, { mediaId });
+      if (!prep.videoPreparation?.retryable) throw new Error("A preparação não pode ser repetida agora.");
+      const result = await graphql(RetryInspectionVideoPreparationDocument, { input: { mediaId, expectedPreparationVersion: prep.videoPreparation.preparationVersion, clientMutationId: crypto.randomUUID() } });
+      if (result.retryVideoPreparation.userErrors.length) throw new Error(result.retryVideoPreparation.userErrors.map((item) => item.message).join(" "));
+      setMessage("Nova tentativa de preparação iniciada.");
+    } catch (error) { setMessage((error as Error).message || "Não foi possível repetir a preparação."); }
+    finally { setRetryBusy(false); }
+  }
   return <section className="inspection-workspace" aria-labelledby="inspection-detail-title">
     <header className="inspection-detail-heading"><div><span className="inspection-record-kicker">{presentInspectionSource(detail.source)}</span><h2 id="inspection-detail-title">{assetName}</h2></div><span className="inspection-status">{presentDashboardStatus(detail.status)}</span></header>
-    {detail.attention && <section className="inspection-origin-context" role="status"><h3>{detail.attention.kind === "PRIVACY_REVIEW" ? "Revisão de privacidade necessária" : detail.attention.kind === "PREPARATION_FAILED" ? "Falha na preparação" : "Nova gravação solicitada"}</h3><p>{detail.attention.kind === "PRIVACY_REVIEW" ? "A vistoria aguarda a revisão da mídia pelo gestor." : detail.attention.kind === "PREPARATION_FAILED" ? "A preparação do vídeo falhou. Um gestor pode tentar processá-lo novamente ou solicitar outra gravação." : `Aguardando nova gravação${detail.attention.replacementDeadlineAt ? ` até ${formatInspectionDate(detail.attention.replacementDeadlineAt)}` : ""}.`}</p></section>}
+    {detail.attention && <section className="inspection-origin-context" role="status"><h3>{detail.attention.kind === "PRIVACY_REVIEW" ? "Revisão de privacidade necessária" : detail.attention.kind === "PREPARATION_FAILED" ? "Falha na preparação" : "Nova gravação solicitada"}</h3><p>{detail.attention.kind === "PRIVACY_REVIEW" ? <>A vistoria aguarda a revisão da mídia pelo gestor. {detail.attention.mediaId && <Link href={`/privacy-review?mediaId=${encodeURIComponent(detail.attention.mediaId)}`}>Abrir revisão</Link>}</> : detail.attention.kind === "PREPARATION_FAILED" ? "A preparação do vídeo falhou. Um gestor pode tentar processá-lo novamente ou solicitar outra gravação." : `Aguardando nova gravação${detail.attention.replacementDeadlineAt ? ` até ${formatInspectionDate(detail.attention.replacementDeadlineAt)}` : ""}.`}</p>{detail.attention.kind === "PREPARATION_FAILED" && canPromoteOrigin && <button type="button" disabled={retryBusy} onClick={() => void retryPreparation()}>{retryBusy ? "Iniciando…" : "Tentar preparação novamente"}</button>}{detail.attention.kind !== "REPLACEMENT_REQUESTED" && detail.attention.mediaId && canPromoteOrigin && <ReplacementRequest inspectionId={detail.id} mediaId={detail.attention.mediaId} onRequested={() => void reloadDetail()} />}</section>}
     <dl className="inspection-detail-grid">
       <div><dt>Responsável</dt><dd>{participantName}</dd></div>
       <div><dt>Endereço</dt><dd>{detail.assetAddress?.trim() || "Endereço indisponível"}</dd></div>

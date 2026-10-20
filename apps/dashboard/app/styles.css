@@ -47,6 +47,19 @@ main > section > .actions h1 { margin: 0; }
 .notification-card--list > :not(.notification-card-actions) { grid-column: 1 / -1; }
 .notification-card[data-read="false"] { border-inline-start: 4px solid var(--inspection-brand); }
 .notification-card[data-priority="attention"] { border-block-start: 3px solid var(--inspection-warning); }
+.privacy-review-page { display: grid; gap: 1rem; }
+.privacy-review-page > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.privacy-review-page h2 { margin: 0; }
+.privacy-review-page header p { margin-block: .4rem 0; color: var(--inspection-muted); }
+.privacy-review-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.privacy-review-list > li { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--inspection-border); border-radius: .75rem; }
+.privacy-review-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem 1rem; }
+.privacy-review-meta time { color: var(--inspection-muted); }
+.privacy-review-actions { display: flex; align-items: flex-end; gap: .75rem; flex-wrap: wrap; }
+.privacy-review-actions label { display: grid; flex: 1 1 18rem; gap: .35rem; }
+.privacy-original-viewer { display: grid; justify-items: center; gap: .75rem; max-block-size: 75vh; overflow: auto; }
+.privacy-original-viewer :is(img, video) { max-inline-size: 100%; max-block-size: 65vh; object-fit: contain; }
+@media (max-width: 680px) { .privacy-review-page > header { flex-direction: column; } .privacy-review-meta { grid-template-columns: 1fr; } }
 .notification-card-heading { display: flex; min-inline-size: 0; align-items: center; justify-content: space-between; gap: var(--inspection-space-2); }
 .notification-card-heading h3 { min-inline-size: 0; margin: 0; font-family: var(--inspection-font-sans); font-size: 1rem; line-height: 1.3; }
 .notification-card > p { margin: 0; }

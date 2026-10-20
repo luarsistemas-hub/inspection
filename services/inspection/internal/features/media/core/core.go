@@ -750,6 +750,27 @@ func (s Service) DeclareFalsePositive(ctx context.Context, tenantID, responsibil
 		if err := tx.Model(&media).Updates(map[string]any{"status": mediaStatus, "flags": flags}).Error; err != nil {
 			return err
 		}
+		if media.MediaKind == "VIDEO" && draft.Status == "SUBMITTED" {
+			var responsibility database.Responsibility
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).Take(&responsibility).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
+			var inspection database.Inspection
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", tenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil || inspection.Status != "REVIEW_REQUIRED" {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
+			var job database.VideoPreparationJob
+			if err := tx.Where("tenant_id=? AND media_id=?", tenantID, mediaID).Order("created_at DESC, id DESC").Take(&job).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "mediaId", "video preparation is unavailable")
+			}
+			if job.Status == "FAILED" {
+				if _, err := RetryFailedPreparation(tx, tenantID, mediaID, job.PreparationVersion, now); err != nil {
+					return err
+				}
+			} else if job.Status != "QUEUED" && job.Status != "RUNNING" {
+				return apperror.New(apperror.InvalidState, "mediaId", "video preparation cannot be resumed")
+			}
+		}
 		actorID := responsibilityID
 		correlationID := "media-false-positive-" + mediaID.String()
 		if meta, ok := requestctx.FromContext(ctx); ok && meta.Principal.Internal && meta.Principal.IdentityID != (identity.ID{}) {

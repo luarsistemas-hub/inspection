@@ -52,6 +52,8 @@ func (f finalizer) Finalize(ctx context.Context, tx *gorm.DB, draft database.Cap
 		return err
 	case "INSPECTION":
 		return finalizeInspection(tx, draft, submission)
+	case "VIDEO_REPLACEMENT":
+		return f.recapture.FinalizeVideoReplacementTx(tx, draft, submission)
 	default:
 		return apperror.New(apperror.InvalidState, "capture", "unsupported capture responsibility")
 	}

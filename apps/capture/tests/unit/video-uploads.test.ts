@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { appendVideoChunk, loadVideoDraft, saveVideoDraft, type VideoDraft } from "@/pwa/video-drafts";
 import { refreshVideoReceipt, uploadVideoDraft } from "@/pwa/video-uploads";
 
+const videoBlob = (parts: string[], options?: BlobPropertyBag): Blob => new NodeBlob(parts, options) as unknown as Blob;
 const draft = (id: string): VideoDraft => ({ id, responsibilityId: "r", kind: "INSPECTION", source: "CAMERA", contentType: "video/webm", maxDurationSeconds: 900, maxBytes: 1 << 30, expiresAt: "2099-01-01T00:00:00Z", state: "CONFIRMED", chunkCount: 3, sizeBytes: 3, sha256: "a".repeat(64), mediaId: `media-${id}`, uploadId: `upload-${id}`, partSizeBytes: 1, parts: [{ number: 1, etag: "etag-1" }] });
 
 async function prepare(item: VideoDraft) {
-  for (let sequence = 0; sequence < 3; sequence += 1) await appendVideoChunk(item.id, sequence, new NodeBlob(["abc"[sequence]]));
+  for (let sequence = 0; sequence < 3; sequence += 1) await appendVideoChunk(item.id, sequence, videoBlob(["abc"[sequence]]));
   await saveVideoDraft(item);
 }
 

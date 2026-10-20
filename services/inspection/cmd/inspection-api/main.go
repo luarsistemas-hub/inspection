@@ -61,6 +61,7 @@ import (
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
 	mediareadvideo "inspection/services/inspection/internal/features/media/read_video_evidence"
 	mediareconcile "inspection/services/inspection/internal/features/media/reconcile_upload"
+	mediareview "inspection/services/inspection/internal/features/media/review_sensitive_media"
 	receivemetastatus "inspection/services/inspection/internal/features/notifications/receive_meta_status"
 	receivetwiliostatus "inspection/services/inspection/internal/features/notifications/receive_twilio_status"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
@@ -98,6 +99,7 @@ import (
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recaptureexpire "inspection/services/inspection/internal/features/recapture/expire_request"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
+	recapturereplacement "inspection/services/inspection/internal/features/recapture/request_video_replacement"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
 	publication "inspection/services/inspection/internal/features/reports/publication"
 	schedulecancel "inspection/services/inspection/internal/features/schedules/cancel_schedule"
@@ -462,7 +464,13 @@ func run() error {
 			return mediafalsepositive.Setup(mediafalsepositive.Dependencies{DB: db, Bus: bus, Service: mediaService})
 		},
 		func() error {
+			return mediareview.Setup(mediareview.Dependencies{DB: db, Store: mediaStore, Bus: bus, Authorizer: authorizer})
+		},
+		func() error {
 			return recapturerequest.Setup(recapturerequest.Dependencies{DB: db, Bus: bus, Service: recaptureService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
+		},
+		func() error {
+			return recapturereplacement.Setup(recapturereplacement.Dependencies{DB: db, Bus: bus, Service: recaptureService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
 		},
 		func() error {
 			return recaptureexpire.Setup(recaptureexpire.Dependencies{Bus: bus, Service: recaptureService})

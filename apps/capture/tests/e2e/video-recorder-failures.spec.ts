@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installFakeGetUserMedia } from "./support/get-user-media";
+import { startVideoRecording } from "./support/video-capture";
 import { installRuntimeGuards } from "./support/runtime";
 
 test.use({ serviceWorkers: "block" });
@@ -31,7 +32,7 @@ async function openCameraOnlyVideoInvite(page: Page, rooms: string[] = []): Prom
 }
 
 async function installSyntheticRecorder(page: Page): Promise<void> {
-  await installFakeGetUserMedia(page, { kind: "tracks" });
+  await installFakeGetUserMedia(page, { kind: "canvas", width: 320, height: 180 });
   await page.addInitScript(() => {
     Object.defineProperty(window, "MediaRecorder", { configurable: true, value: class {
       static isTypeSupported() { return true; }
@@ -56,13 +57,13 @@ test("IT-107 disables recording when no MediaRecorder MIME type is supported", a
   await openCameraOnlyVideoInvite(page);
   await expect(page.getByText("Este navegador não oferece um formato de gravação compatível", { exact: false })).toBeVisible();
   await expect(page.getByText("Abra o convite no Safari ou Chrome atualizado", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Começar gravação" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Abrir câmera" })).toBeDisabled();
 });
 
 test("IT-110 shows camera permission recovery without a photo fallback", async ({ page }) => {
   await installFakeGetUserMedia(page, { kind: "permission-denied" });
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
+  await page.getByRole("button", { name: "Abrir câmera" }).click();
   await expect(page.getByText("Câmera bloqueada. Libere o acesso nas configurações do navegador", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: /foto|galeria|escolher vídeo/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
@@ -71,7 +72,7 @@ test("IT-110 shows camera permission recovery without a photo fallback", async (
 test("IT-140 keeps camera-only admission invalid after NotReadableError", async ({ page }) => {
   await installFakeGetUserMedia(page, { kind: "not-readable" });
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
+  await page.getByRole("button", { name: "Abrir câmera" }).click();
   await expect(page.getByText("A câmera está ocupada ou indisponível. Feche outros aplicativos e tente novamente.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /escolher vídeo/i })).toHaveCount(0);
   await expect(page.locator('input[type="file"][accept^="video/"]')).toHaveCount(0);
@@ -79,7 +80,7 @@ test("IT-140 keeps camera-only admission invalid after NotReadableError", async 
 });
 
 test("IT-108 refuses an empty finalized recording", async ({ page }) => {
-  await installFakeGetUserMedia(page, { kind: "tracks" });
+  await installFakeGetUserMedia(page, { kind: "canvas", width: 320, height: 180 });
   await page.addInitScript(() => {
     Object.defineProperty(window, "MediaRecorder", { configurable: true, value: class {
       static isTypeSupported() { return true; }
@@ -92,10 +93,10 @@ test("IT-108 refuses an empty finalized recording", async ({ page }) => {
     } });
   });
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
-  await expect(page.getByText("A gravação não contém vídeo utilizável", { exact: false })).toBeVisible();
+  await expect(page.getByText("A gravação foi interrompida antes de salvar qualquer trecho", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
   await expect(page.getByText("Gravação incompleta; não há recuperação garantida")).toBeVisible();
 });
@@ -116,8 +117,8 @@ test("IT-106 stops at the wall-clock limit after irregular MediaRecorder chunks"
     Object.assign(window, { advanceRecorderClock: (milliseconds: number) => { offset += milliseconds; } });
   });
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   for (const elapsed of [1_237, 18_041, 411_002]) {
     await page.evaluate((milliseconds) => (window as typeof window & { advanceRecorderClock(milliseconds: number): void }).advanceRecorderClock(milliseconds), elapsed);
     await page.evaluate(() => {
@@ -147,8 +148,8 @@ test("IT-094 stops current-only capture at 15:00 and makes no whole-property cov
   await openCameraOnlyVideoInvite(page);
   await expect(page.getByText("Sem comparação histórica nesta captura. O resultado descreverá apenas o que for visível no vídeo.", { exact: true })).toBeVisible();
   await expect(page.getByText("O limite de tempo não comprova cobertura de todo o imóvel.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.evaluate(() => (window as typeof window & { advanceRecorderClock(milliseconds: number): void }).advanceRecorderClock(900_001));
   await expect(page.getByText("O limite desta gravação foi atingido. Revise o vídeo antes de confirmar o envio.")).toBeVisible();
   await expect(page.getByText("15:00 de até 15:00.", { exact: false })).toBeVisible();
@@ -169,8 +170,8 @@ test("IT-116 keeps one continuous preview and timer across twenty guided rooms",
   await openCameraOnlyVideoInvite(page, rooms);
   await expect(page.getByRole("heading", { name: "Referência de origem" })).toBeVisible();
   for (const room of rooms) await expect(page.getByRole("listitem").filter({ hasText: room }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.evaluate(() => (window as typeof window & { advanceRecorderClock(): void }).advanceRecorderClock());
   await expect(page.getByText("15:00 de até 15:00.", { exact: false })).toBeVisible();
   await expect(page.locator("video")).toHaveCount(1);
@@ -182,16 +183,16 @@ test("IT-112 keeps an interrupted draft incomplete until a new take is finalized
   const assertRuntimeClean = installRuntimeGuards(page);
   await installSyntheticRecorder(page);
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.evaluate(() => (window as typeof window & { syntheticRecorder: { stopUnexpectedly(): void } }).syntheticRecorder.stopUnexpectedly());
   await expect(page.getByText("Gravação incompleta; não há recuperação garantida")).toBeVisible();
   await openCameraOnlyVideoInvite(page);
   await expect(page.getByText("Gravação incompleta; não há recuperação garantida")).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
   await page.getByRole("button", { name: "Descartar e gravar novamente" }).click();
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
   const preview = page.locator("video");
   await expect(preview).toBeVisible();
@@ -216,10 +217,10 @@ test("IT-121 never claims local save when the final IndexedDB write aborts", asy
     };
   });
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
-  await expect(page.getByRole("button", { name: "Começar gravação" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Abrir câmera" })).toBeVisible();
   await expect(page.getByText("Salva localmente; envio pendente")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
   await openCameraOnlyVideoInvite(page);
@@ -232,8 +233,8 @@ test("IT-123 does not claim recovery after the browser deletes the local draft d
   const assertRuntimeClean = installRuntimeGuards(page);
   await installSyntheticRecorder(page);
   await openCameraOnlyVideoInvite(page);
-  await page.getByRole("button", { name: "Começar gravação" }).click();
-  await expect(page.getByText(/Gravando 00:/)).toBeVisible();
+  await startVideoRecording(page);
+  await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
   await expect(page.getByText("Salva localmente; envio pendente")).toBeVisible();
   await page.evaluate(async () => {

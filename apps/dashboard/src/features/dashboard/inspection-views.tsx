@@ -78,11 +78,14 @@ export function persistInspectionView(membershipId: string | undefined, view: In
 }
 
 export function getInspectionColumn(status: string): InspectionColumnKey {
-	return inspectionColumns.find((column) => column.statuses.some((candidate) => candidate === status))?.key ?? "pendencias";
+  const known = inspectionColumns.find((column) => column.statuses.some((candidate) => candidate === status));
+  if (known) return known.key;
+  if (["REVIEW_REQUIRED", "PROCESSING_FAILED", "REPLACEMENT_PENDING"].includes(status)) return "pendencias";
+  return "execucao";
 }
 
 export function groupInspectionsByStatus(inspections: InspectionRecord[]): Record<InspectionColumnKey, InspectionRecord[]> {
-	const groups: Record<InspectionColumnKey, InspectionRecord[]> = { planejamento: [], execucao: [], pendencias: [], concluidas: [], encerradas: [] };
+  const groups: Record<InspectionColumnKey, InspectionRecord[]> = { planejamento: [], execucao: [], pendencias: [], concluidas: [], encerradas: [] };
   for (const inspection of inspections) groups[getInspectionColumn(inspection.status)].push(inspection);
   return groups;
 }

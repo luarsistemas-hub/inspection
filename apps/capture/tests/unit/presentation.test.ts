@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presentCaptureSource, presentCaptureStatus, presentMediaFeedback, presentMediaStatus, presentRequirementLabel, presentRequirementSection, presentSubmissionBlock, presentUploadFailure } from "../../app/capture/[linkToken]/presentation";
+import { presentCaptureSource, presentCaptureStatus, presentMediaFeedback, presentMediaStatus, presentReplacementNotice, presentRequirementLabel, presentRequirementSection, presentSubmissionBlock, presentUploadFailure } from "../../app/capture/[linkToken]/presentation";
 
 describe("capture presenters", () => {
   it("localizes legacy requirements and dynamic states", () => {
@@ -32,5 +32,18 @@ describe("capture presenters", () => {
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 2, allRequirementsSatisfied: false })).toBe("2 imagens foram bloqueadas pela análise automática. Tire outras fotos ou aguarde a revisão do gestor.");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: false })).toContain("Ainda não há evidências válidas");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: true })).toBe("");
+  });
+});
+
+describe("replacement notice", () => {
+  it("asks for a new recording without technical codes and shows the deadline", () => {
+    const text = presentReplacementNotice("2026-10-22T15:00:00Z");
+    expect(text).toContain("Precisamos de uma nova gravação.");
+    expect(text).toContain("Envie até 22 de outubro de 2026");
+    expect(text).not.toMatch(/SENSITIVE|BLOCKED|PREPARATION|REPLACEMENT/);
+  });
+  it("omits the deadline when it is missing or invalid", () => {
+    expect(presentReplacementNotice()).toBe("Precisamos de uma nova gravação. O vídeo anterior não pôde ser analisado.");
+    expect(presentReplacementNotice("invalid")).toBe(presentReplacementNotice(null));
   });
 });

@@ -37,6 +37,11 @@ func TestNotificationsAreIdempotentAndPaginateEveryDueInspection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, status := range []string{"REVIEW_REQUIRED", "PROCESSING_FAILED", "REPLACEMENT_PENDING"} {
+		if err := db.Exec("INSERT INTO inspections.inspections (id, tenant_id, asset_id, business_unit_id, status, deadline_at) VALUES (?, ?, ?, ?, ?, ?)", identity.NewID(), tenantID, assetID, unitID, status, now).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	operation, err := Setup(Dependencies{
 		DB: db,
 		Within: func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {

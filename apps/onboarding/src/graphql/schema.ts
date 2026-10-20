@@ -530,6 +530,7 @@ export type ExternalCapture = {
   recaptureRequestId: Maybe<Scalars['ID']['output']>;
   reference: Scalars['JSON']['output'];
   referenceItems: Array<CaptureReferenceItem>;
+  replacementDeadlineAt: Maybe<Scalars['String']['output']>;
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -585,6 +586,7 @@ export type Inspection = {
   assetExternalKey: Maybe<Scalars['String']['output']>;
   assetId: Scalars['ID']['output'];
   assetName: Maybe<Scalars['String']['output']>;
+  attention: Maybe<InspectionAttention>;
   businessUnitId: Scalars['ID']['output'];
   comparisonMode: Maybe<Scalars['String']['output']>;
   deadlineAt: Scalars['String']['output'];
@@ -616,6 +618,19 @@ export type Inspection = {
   templateVersionId: Scalars['ID']['output'];
   version: Scalars['Int']['output'];
 };
+
+export type InspectionAttention = {
+  __typename?: 'InspectionAttention';
+  kind: InspectionAttentionKind;
+  mediaId: Maybe<Scalars['ID']['output']>;
+  replacementDeadlineAt: Maybe<Scalars['String']['output']>;
+  since: Scalars['String']['output'];
+};
+
+export type InspectionAttentionKind =
+  | 'PREPARATION_FAILED'
+  | 'PRIVACY_REVIEW'
+  | 'REPLACEMENT_REQUESTED';
 
 export type InspectionConnection = {
   __typename?: 'InspectionConnection';
@@ -653,6 +668,7 @@ export type InspectionPayload = {
 };
 
 export type InspectionStatusGroup =
+  | 'ATTENTION'
   | 'CLOSED'
   | 'COMPLETED'
   | 'EXECUTION'
@@ -951,6 +967,7 @@ export type Mutation = {
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
   requestRecapture: RecapturePayload;
+  requestVideoReplacement: VideoReplacementPayload;
   resendInternalUserInvitation: MembershipPayload;
   retryVideoPreparation: VideoPreparationPayload;
   revokeInvitation: InvitationPayload;
@@ -1259,6 +1276,11 @@ export type MutationRequestOnboardingOtpArgs = {
 
 export type MutationRequestRecaptureArgs = {
   input: RequestRecaptureInput;
+};
+
+
+export type MutationRequestVideoReplacementArgs = {
+  input: RequestVideoReplacementInput;
 };
 
 
@@ -1912,6 +1934,9 @@ export type Query = {
   schedules: ScheduleConnection;
   segmentDefinitionVersion: Maybe<SegmentDefinitionVersion>;
   segmentDefinitions: SegmentDefinitionConnection;
+  sensitiveContentScreeningBypassed: Scalars['Boolean']['output'];
+  sensitiveMediaOriginal: Maybe<SensitiveMediaOriginal>;
+  sensitiveMediaReviews: SensitiveMediaReviewConnection;
   templateVersion: Maybe<TemplateVersion>;
   templates: TemplateConnection;
   tenant: Maybe<Tenant>;
@@ -2136,6 +2161,17 @@ export type QuerySegmentDefinitionsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QuerySensitiveMediaOriginalArgs = {
+  mediaId: Scalars['ID']['input'];
+};
+
+
+export type QuerySensitiveMediaReviewsArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -2510,6 +2546,14 @@ export type RequestRecaptureInput = {
   items: Array<RecaptureItemInput>;
 };
 
+export type RequestVideoReplacementInput = {
+  clientMutationId: Scalars['String']['input'];
+  deadlineAt: Scalars['String']['input'];
+  inspectionId: Scalars['ID']['input'];
+  mediaId: Scalars['ID']['input'];
+  reason: Scalars['String']['input'];
+};
+
 export type ResendInternalUserInvitationInput = {
   clientMutationId: Scalars['String']['input'];
   membershipId: Scalars['ID']['input'];
@@ -2674,6 +2718,37 @@ export type SensitiveFalsePositiveInput = {
   clientMutationId: Scalars['String']['input'];
   mediaId: Scalars['ID']['input'];
   reason: Scalars['String']['input'];
+};
+
+export type SensitiveMediaKind =
+  | 'PHOTO'
+  | 'VIDEO';
+
+export type SensitiveMediaOriginal = {
+  __typename?: 'SensitiveMediaOriginal';
+  expiresAt: Scalars['String']['output'];
+  mediaId: Scalars['ID']['output'];
+  mediaKind: SensitiveMediaKind;
+  url: Scalars['String']['output'];
+};
+
+export type SensitiveMediaReview = {
+  __typename?: 'SensitiveMediaReview';
+  assetName: Scalars['String']['output'];
+  blockedAt: Scalars['String']['output'];
+  inspectionId: Scalars['ID']['output'];
+  mediaId: Scalars['ID']['output'];
+  mediaKind: SensitiveMediaKind;
+  participantName: Scalars['String']['output'];
+  requirementKey: Scalars['String']['output'];
+  sourceAvailable: Scalars['Boolean']['output'];
+  submitted: Scalars['Boolean']['output'];
+};
+
+export type SensitiveMediaReviewConnection = {
+  __typename?: 'SensitiveMediaReviewConnection';
+  nodes: Array<SensitiveMediaReview>;
+  pageInfo: PageInfo;
 };
 
 export type SetAdminInitialPasswordInput = {
@@ -3128,6 +3203,21 @@ export type VideoReceivedPart = {
   etag: Scalars['String']['output'];
   partNumber: Scalars['Int']['output'];
   sizeBytes: Scalars['Int']['output'];
+};
+
+export type VideoReplacement = {
+  __typename?: 'VideoReplacement';
+  deadlineAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  responsibilityId: Scalars['ID']['output'];
+  status: Scalars['String']['output'];
+};
+
+export type VideoReplacementPayload = {
+  __typename?: 'VideoReplacementPayload';
+  clientMutationId: Scalars['String']['output'];
+  replacement: Maybe<VideoReplacement>;
+  userErrors: Array<UserError>;
 };
 
 export type VideoUploadStatus = {

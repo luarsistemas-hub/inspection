@@ -26,6 +26,8 @@ type Query {
   project(id: ID!): Project
   inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
+  sensitiveMediaReviews(first: Int = 25, after: String): SensitiveMediaReviewConnection!
+  sensitiveMediaOriginal(mediaId: ID!): SensitiveMediaOriginal
   sensitiveContentScreeningBypassed: Boolean!
   report(inspectionId: ID!, version: Int): Report
   videoPreparationEvidence(preparationId: ID!, first: Int = 25, after: String): VideoPreparationEvidenceConnection!
@@ -148,6 +150,7 @@ type Mutation {
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
+  requestVideoReplacement(input: RequestVideoReplacementInput!): VideoReplacementPayload!
   updateTriageCase(input: UpdateTriageCaseInput!): TriageCasePayload!
   submitRecapture(input: SubmitRecaptureInput!): RecapturePayload!
   declareSensitiveDetectionFalsePositive(input: SensitiveFalsePositiveInput!): MediaPayload!
@@ -207,6 +210,10 @@ enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQ
 type InspectionAttention { kind: InspectionAttentionKind! mediaId: ID replacementDeadlineAt: String since: String! }
 type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String attention: InspectionAttention }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
+enum SensitiveMediaKind { PHOTO VIDEO }
+type SensitiveMediaReview { mediaId: ID! inspectionId: ID! assetName: String! participantName: String! mediaKind: SensitiveMediaKind! requirementKey: String! blockedAt: String! submitted: Boolean! sourceAvailable: Boolean! }
+type SensitiveMediaReviewConnection { nodes: [SensitiveMediaReview!]! pageInfo: PageInfo! }
+type SensitiveMediaOriginal { mediaId: ID! mediaKind: SensitiveMediaKind! url: String! expiresAt: String! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
 type Project { id: ID! name: String! orderedStages: Boolean! businessUnitId: ID! assetId: ID! status: String! version: Int! stages: [ProjectStage!]! transitions: [StageTransition!]! }
@@ -227,7 +234,7 @@ type CaptureRequirement {
 }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
 type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
@@ -496,6 +503,7 @@ input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String!
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
+input RequestVideoReplacementInput { inspectionId: ID! mediaId: ID! deadlineAt: String! reason: String! clientMutationId: String! }
 input UpdateTriageCaseInput { inspectionId: ID! expectedVersion: Int! action: TriageCaseAction! assigneeId: ID body: String disposition: TriageDisposition clientMutationId: String! }
 input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
 input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
@@ -536,5 +544,7 @@ type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! 
 type MediaPayload { media: Media userErrors: [UserError!]! clientMutationId: String! }
 type SubmissionPayload { submission: Submission userErrors: [UserError!]! clientMutationId: String! }
 type RecapturePayload { recapture: Recapture userErrors: [UserError!]! clientMutationId: String! }
+type VideoReplacement { id: ID! responsibilityId: ID! status: String! deadlineAt: String! }
+type VideoReplacementPayload { replacement: VideoReplacement userErrors: [UserError!]! clientMutationId: String! }
 type RetentionPolicyPayload { policy: RetentionPolicy userErrors: [UserError!]! clientMutationId: String! }
 type RetentionMutationPayload { status: String! requestId: ID userErrors: [UserError!]! clientMutationId: String! }

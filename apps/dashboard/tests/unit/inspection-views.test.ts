@@ -20,7 +20,7 @@ function inspection(id: string, status: string, dueAt: string): InspectionRecord
     originPromotionStatus: null, originPromotionFailure: null, promotedOriginVersionId: null,
     promotedOriginVersionNumber: null, promotedOriginMediaKind: null, promotedOriginIsActive: null,
     evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1,
-    assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio",
+    assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio", attention: null,
   };
 }
 
@@ -73,7 +73,7 @@ describe("Inspection views", () => {
   it("keeps an unknown status visible with a legible fallback", () => {
     const groups = groupInspectionsByStatus([inspection("unknown", "FUTURE_STATUS", "2026-09-10T10:00:00Z")]);
 
-    expect(groups.pendencias.map(({ id }) => id)).toEqual(["unknown"]);
+    expect(groups.execucao.map(({ id }) => id)).toEqual(["unknown"]);
     expect(formatInspectionStatus("INVITED")).toBe("Convite enviado");
     expect(formatInspectionStatus("FUTURE_STATUS")).toBe("Situação não reconhecida");
     expect(formatInspectionStatus("")).toBe("Situação não reconhecida");

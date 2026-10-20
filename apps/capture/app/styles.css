@@ -274,3 +274,39 @@ hr { inline-size: 100%; border: 0; border-block-start: 1px solid var(--inspectio
 .capture-reference-nav--list li { flex: none; min-inline-size: 0; }
 .capture-reference-nav--list li button { min-block-size: 3rem; }
 .capture-reference-nav--list .capture-reference-nav__name { white-space: normal; overflow-wrap: anywhere; }
+
+.capture-camera-shell { min-block-size: 100dvh; padding: max(.5rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
+.capture-camera-workspace { display: flex; flex-direction: column; inline-size: min(100%, 76rem); min-block-size: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.capture-camera-intro { flex: 0 0 auto; margin-block-end: .35rem; text-align: start; }
+.capture-camera-intro .capture-utility-bar { margin-block-end: .25rem; }
+.capture-camera-intro h1 { font-size: 1rem; }
+.capture-camera-card.capture-card { display: flex; flex: 1 0 auto; flex-direction: column; gap: .75rem; inline-size: 100%; min-inline-size: 0; padding: clamp(.75rem, 2vw, 1.25rem); }
+.capture-camera-title { font-size: 1rem; }
+.capture-camera-layout { display: grid; flex: 1 0 auto; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-block-size: 0; }
+.capture-camera-preview { display: grid; place-items: center; min-inline-size: 0; min-block-size: min(42dvh, 28rem); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-bg); }
+.capture-camera-preview video { display: block; inline-size: 100%; block-size: 100%; min-block-size: inherit; max-block-size: 68dvh; border-radius: inherit; background: var(--inspection-bg); object-fit: contain; }
+.capture-camera-controls { display: flex; flex-direction: column; align-items: stretch; gap: .55rem; min-inline-size: 0; }
+.capture-camera-controls > p { margin: 0; color: var(--inspection-muted); }
+.capture-camera-controls button, .capture-camera-card .capture-actions button { min-block-size: 3rem; }
+.capture-camera-references { max-block-size: 30dvh; overflow-y: auto; border-block-start: 1px solid var(--inspection-border); color: var(--inspection-ink); }
+.capture-camera-references summary { min-block-size: 3rem; padding-block: .7rem; cursor: pointer; }
+.capture-camera-references[open] { padding-block-end: .5rem; }
+.capture-camera-live { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+@media (min-width: 48rem) and (orientation: landscape) {
+  .capture-camera-workspace { min-block-size: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .capture-camera-layout { grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem); align-items: stretch; }
+  .capture-camera-preview { min-block-size: min(68dvh, 42rem); }
+  .capture-camera-controls { justify-content: center; }
+}
+@media (max-height: 34rem) and (orientation: landscape) {
+  .capture-camera-workspace { min-block-size: auto; }
+  .capture-camera-layout { grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem); }
+  .capture-camera-preview { min-block-size: 55dvh; }
+  .capture-camera-preview video { max-block-size: 70dvh; }
+  .capture-camera-references { max-block-size: 15dvh; }
+}
+@media (min-width: 64rem) {
+  .capture-camera-layout { grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem); }
+  .capture-camera-preview { min-block-size: 62dvh; }
+  .capture-camera-controls { justify-content: center; }
+}

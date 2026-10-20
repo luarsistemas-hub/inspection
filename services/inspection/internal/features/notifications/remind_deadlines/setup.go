@@ -32,7 +32,7 @@ func Setup(deps Dependencies) (func(context.Context, identity.ID, time.Time) err
 			var cursorID identity.ID
 			for {
 				var inspections []database.Inspection
-				query := tx.Where("tenant_id=? AND status IN ? AND deadline_at<=?", tenantID, []string{"PLANNED", "INVITED", "IN_PROGRESS", "SUBMITTED", "ANALYZING", "REPLACEMENT_PENDING"}, now.UTC().Add(24*time.Hour))
+				query := tx.Where("tenant_id=? AND status IN ? AND deadline_at<=?", tenantID, []string{"PLANNED", "INVITED", "IN_PROGRESS", "SUBMITTED", "ANALYZING"}, now.UTC().Add(24*time.Hour))
 				if !cursorDeadline.IsZero() {
 					query = query.Where("deadline_at>? OR (deadline_at=? AND id>?)", cursorDeadline, cursorDeadline, cursorID)
 				}

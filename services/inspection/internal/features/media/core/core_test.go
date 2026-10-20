@@ -1,9 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"image"
+	"image/png"
 	"io"
 	"strings"
 	"testing"
@@ -187,4 +190,83 @@ func (failingModel) Bytes() []byte { return []byte("failing-model") }
 func code(err error) apperror.Code {
 	value, _, _ := apperror.Public(err)
 	return value
+}
+
+func newScreeningFixture(t *testing.T, detector sensitivecontent.Detector, status string) (Service, *gorm.DB, identity.ID, identity.ID) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"media", "messaging"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, model := range []any{&database.MediaObject{}, &database.ScreeningRun{}, &database.OutboxIntent{}} {
+		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
+			t.Fatal(err)
+		}
+	}
+	tenantID, mediaID := identity.NewID(), identity.NewID()
+	if err := db.Create(&database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: identity.NewID(), ObjectKey: "private/original", ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 1, Status: status}).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := Service{DB: db, Detector: detector, Now: func() time.Time { return time.Unix(100, 0).UTC() }, Within: func(_ context.Context, _ identity.ID, fn func(*gorm.DB) error) error { return fn(db) }}
+	return service, db, tenantID, mediaID
+}
+
+func TestDisabledDetectorRecordsPhotoScreeningAsDisabledAndReleasesMedia(t *testing.T) {
+	service, db, tenantID, mediaID := newScreeningFixture(t, sensitivecontent.NewDisabledDetector(), "VERIFIED")
+	// Format and integrity checks stay active: undecodable bytes are still rejected.
+	if _, err := service.Screen(context.Background(), tenantID, mediaID, []byte("not-an-image")); code(err) != apperror.DependencyUnavailable {
+		t.Fatalf("bypass accepted undecodable bytes: %v", err)
+	}
+	run, err := service.Screen(context.Background(), tenantID, mediaID, validPNG(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "DISABLED" {
+		t.Fatalf("bypassed photo screening recorded as %q, want DISABLED", run.Status)
+	}
+	var media database.MediaObject
+	if err := db.Where("id=?", mediaID).Take(&media).Error; err != nil || media.Status != "READY" {
+		t.Fatalf("bypassed photo must be ready: %+v %v", media, err)
+	}
+	var outbox database.OutboxIntent
+	if err := db.Where("tenant_id=?", tenantID).Take(&outbox).Error; err != nil || !strings.Contains(string(outbox.Payload), `"status":"DISABLED"`) {
+		t.Fatalf("screened event must report DISABLED: %s %v", outbox.Payload, err)
+	}
+}
+
+func TestDisabledDetectorDoesNotUnblockAlreadyBlockedMedia(t *testing.T) {
+	service, db, tenantID, mediaID := newScreeningFixture(t, sensitivecontent.NewDisabledDetector(), "SCREENED")
+	if err := db.Create(&database.ScreeningRun{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, Status: "BLOCKED", Regions: json.RawMessage(`[{"kind":"FACE"}]`), CreatedAt: time.Unix(50, 0).UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	run, err := service.Screen(context.Background(), tenantID, mediaID, validPNG(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "BLOCKED" {
+		t.Fatalf("bypass changed an existing block to %q", run.Status)
+	}
+	var media database.MediaObject
+	if err := db.Where("id=?", mediaID).Take(&media).Error; err != nil || media.Status != "SCREENED" {
+		t.Fatalf("blocked media was released by the bypass: %+v %v", media, err)
+	}
+	var runs int64
+	db.Model(&database.ScreeningRun{}).Where("media_id=?", mediaID).Count(&runs)
+	if runs != 1 {
+		t.Fatalf("bypass added %d screening runs to blocked media", runs-1)
+	}
+}
+
+func validPNG(t *testing.T) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, image.NewNRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
 }

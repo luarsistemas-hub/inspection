@@ -256,20 +256,21 @@ type ComplexityRoot struct {
 	}
 
 	ExternalCapture struct {
-		Answers             func(childComplexity int) int
-		ConfirmationOnly    func(childComplexity int) int
-		DisclosureVersion   func(childComplexity int) int
-		Kind                func(childComplexity int) int
-		MediaKind           func(childComplexity int) int
-		Policy              func(childComplexity int) int
-		RecaptureDeadlineAt func(childComplexity int) int
-		RecaptureRequestID  func(childComplexity int) int
-		Reference           func(childComplexity int) int
-		ReferenceItems      func(childComplexity int) int
-		Requirements        func(childComplexity int) int
-		ResponsibilityID    func(childComplexity int) int
-		Status              func(childComplexity int) int
-		TemplateVersionID   func(childComplexity int) int
+		Answers               func(childComplexity int) int
+		ConfirmationOnly      func(childComplexity int) int
+		DisclosureVersion     func(childComplexity int) int
+		Kind                  func(childComplexity int) int
+		MediaKind             func(childComplexity int) int
+		Policy                func(childComplexity int) int
+		RecaptureDeadlineAt   func(childComplexity int) int
+		RecaptureRequestID    func(childComplexity int) int
+		Reference             func(childComplexity int) int
+		ReferenceItems        func(childComplexity int) int
+		ReplacementDeadlineAt func(childComplexity int) int
+		Requirements          func(childComplexity int) int
+		ResponsibilityID      func(childComplexity int) int
+		Status                func(childComplexity int) int
+		TemplateVersionID     func(childComplexity int) int
 	}
 
 	ExternalSessionPayload struct {
@@ -590,6 +591,7 @@ type ComplexityRoot struct {
 		RequestInvitationOtp                   func(childComplexity int, input RequestInvitationOtpInput) int
 		RequestOnboardingOtp                   func(childComplexity int, input RequestOnboardingOtpInput) int
 		RequestRecapture                       func(childComplexity int, input RequestRecaptureInput) int
+		RequestVideoReplacement                func(childComplexity int, input RequestVideoReplacementInput) int
 		ResendInternalUserInvitation           func(childComplexity int, input ResendInternalUserInvitationInput) int
 		RetryVideoPreparation                  func(childComplexity int, input RetryVideoPreparationInput) int
 		RevokeInvitation                       func(childComplexity int, input RevokeInvitationInput) int
@@ -1007,6 +1009,8 @@ type ComplexityRoot struct {
 		SegmentDefinitionVersion          func(childComplexity int, id string) int
 		SegmentDefinitions                func(childComplexity int, search *string, first *int, after *string) int
 		SensitiveContentScreeningBypassed func(childComplexity int) int
+		SensitiveMediaOriginal            func(childComplexity int, mediaID string) int
+		SensitiveMediaReviews             func(childComplexity int, first *int, after *string) int
 		TemplateVersion                   func(childComplexity int, id string) int
 		Templates                         func(childComplexity int, search *string, first *int, after *string) int
 		Tenant                            func(childComplexity int) int
@@ -1342,6 +1346,30 @@ type ComplexityRoot struct {
 		VersionNumber   func(childComplexity int) int
 	}
 
+	SensitiveMediaOriginal struct {
+		ExpiresAt func(childComplexity int) int
+		MediaID   func(childComplexity int) int
+		MediaKind func(childComplexity int) int
+		URL       func(childComplexity int) int
+	}
+
+	SensitiveMediaReview struct {
+		AssetName       func(childComplexity int) int
+		BlockedAt       func(childComplexity int) int
+		InspectionID    func(childComplexity int) int
+		MediaID         func(childComplexity int) int
+		MediaKind       func(childComplexity int) int
+		ParticipantName func(childComplexity int) int
+		RequirementKey  func(childComplexity int) int
+		SourceAvailable func(childComplexity int) int
+		Submitted       func(childComplexity int) int
+	}
+
+	SensitiveMediaReviewConnection struct {
+		Nodes    func(childComplexity int) int
+		PageInfo func(childComplexity int) int
+	}
+
 	StageTransition struct {
 		FromState  func(childComplexity int) int
 		ID         func(childComplexity int) int
@@ -1614,6 +1642,19 @@ type ComplexityRoot struct {
 		SizeBytes  func(childComplexity int) int
 	}
 
+	VideoReplacement struct {
+		DeadlineAt       func(childComplexity int) int
+		ID               func(childComplexity int) int
+		ResponsibilityID func(childComplexity int) int
+		Status           func(childComplexity int) int
+	}
+
+	VideoReplacementPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Replacement      func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	VideoUploadStatus struct {
 		ConfirmedParts func(childComplexity int) int
 		ExpiresAt      func(childComplexity int) int
@@ -1697,6 +1738,7 @@ type MutationResolver interface {
 	DeclareCaptureImpossibility(ctx context.Context, input DeclareCaptureImpossibilityInput) (*CapturePayload, error)
 	SubmitCapture(ctx context.Context, input SubmitCaptureInput) (*SubmissionPayload, error)
 	RequestRecapture(ctx context.Context, input RequestRecaptureInput) (*RecapturePayload, error)
+	RequestVideoReplacement(ctx context.Context, input RequestVideoReplacementInput) (*VideoReplacementPayload, error)
 	UpdateTriageCase(ctx context.Context, input UpdateTriageCaseInput) (*TriageCasePayload, error)
 	SubmitRecapture(ctx context.Context, input SubmitRecaptureInput) (*RecapturePayload, error)
 	DeclareSensitiveDetectionFalsePositive(ctx context.Context, input SensitiveFalsePositiveInput) (*MediaPayload, error)
@@ -1736,6 +1778,8 @@ type QueryResolver interface {
 	Project(ctx context.Context, id string) (*Project, error)
 	Inspections(ctx context.Context, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) (*InspectionConnection, error)
 	Inspection(ctx context.Context, id string) (*Inspection, error)
+	SensitiveMediaReviews(ctx context.Context, first *int, after *string) (*SensitiveMediaReviewConnection, error)
+	SensitiveMediaOriginal(ctx context.Context, mediaID string) (*SensitiveMediaOriginal, error)
 	SensitiveContentScreeningBypassed(ctx context.Context) (bool, error)
 	Report(ctx context.Context, inspectionID string, version *int) (*Report, error)
 	VideoPreparationEvidence(ctx context.Context, preparationID string, first *int, after *string) (*VideoPreparationEvidenceConnection, error)
@@ -2754,6 +2798,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.ReferenceItems(childComplexity), true
+	case "ExternalCapture.replacementDeadlineAt":
+		if e.ComplexityRoot.ExternalCapture.ReplacementDeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.ReplacementDeadlineAt(childComplexity), true
 	case "ExternalCapture.requirements":
 		if e.ComplexityRoot.ExternalCapture.Requirements == nil {
 			break
@@ -4609,6 +4659,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestRecapture(childComplexity, args["input"].(RequestRecaptureInput)), true
+	case "Mutation.requestVideoReplacement":
+		if e.ComplexityRoot.Mutation.RequestVideoReplacement == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestVideoReplacement_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestVideoReplacement(childComplexity, args["input"].(RequestVideoReplacementInput)), true
 	case "Mutation.resendInternalUserInvitation":
 		if e.ComplexityRoot.Mutation.ResendInternalUserInvitation == nil {
 			break
@@ -6661,6 +6722,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.SensitiveContentScreeningBypassed(childComplexity), true
+	case "Query.sensitiveMediaOriginal":
+		if e.ComplexityRoot.Query.SensitiveMediaOriginal == nil {
+			break
+		}
+
+		args, err := ec.field_Query_sensitiveMediaOriginal_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SensitiveMediaOriginal(childComplexity, args["mediaId"].(string)), true
+	case "Query.sensitiveMediaReviews":
+		if e.ComplexityRoot.Query.SensitiveMediaReviews == nil {
+			break
+		}
+
+		args, err := ec.field_Query_sensitiveMediaReviews_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.SensitiveMediaReviews(childComplexity, args["first"].(*int), args["after"].(*string)), true
 	case "Query.templateVersion":
 		if e.ComplexityRoot.Query.TemplateVersion == nil {
 			break
@@ -8108,6 +8191,99 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.SegmentDefinitionVersion.VersionNumber(childComplexity), true
 
+	case "SensitiveMediaOriginal.expiresAt":
+		if e.ComplexityRoot.SensitiveMediaOriginal.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaOriginal.ExpiresAt(childComplexity), true
+	case "SensitiveMediaOriginal.mediaId":
+		if e.ComplexityRoot.SensitiveMediaOriginal.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaOriginal.MediaID(childComplexity), true
+	case "SensitiveMediaOriginal.mediaKind":
+		if e.ComplexityRoot.SensitiveMediaOriginal.MediaKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaOriginal.MediaKind(childComplexity), true
+	case "SensitiveMediaOriginal.url":
+		if e.ComplexityRoot.SensitiveMediaOriginal.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaOriginal.URL(childComplexity), true
+
+	case "SensitiveMediaReview.assetName":
+		if e.ComplexityRoot.SensitiveMediaReview.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.AssetName(childComplexity), true
+	case "SensitiveMediaReview.blockedAt":
+		if e.ComplexityRoot.SensitiveMediaReview.BlockedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.BlockedAt(childComplexity), true
+	case "SensitiveMediaReview.inspectionId":
+		if e.ComplexityRoot.SensitiveMediaReview.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.InspectionID(childComplexity), true
+	case "SensitiveMediaReview.mediaId":
+		if e.ComplexityRoot.SensitiveMediaReview.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.MediaID(childComplexity), true
+	case "SensitiveMediaReview.mediaKind":
+		if e.ComplexityRoot.SensitiveMediaReview.MediaKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.MediaKind(childComplexity), true
+	case "SensitiveMediaReview.participantName":
+		if e.ComplexityRoot.SensitiveMediaReview.ParticipantName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.ParticipantName(childComplexity), true
+	case "SensitiveMediaReview.requirementKey":
+		if e.ComplexityRoot.SensitiveMediaReview.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.RequirementKey(childComplexity), true
+	case "SensitiveMediaReview.sourceAvailable":
+		if e.ComplexityRoot.SensitiveMediaReview.SourceAvailable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.SourceAvailable(childComplexity), true
+	case "SensitiveMediaReview.submitted":
+		if e.ComplexityRoot.SensitiveMediaReview.Submitted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReview.Submitted(childComplexity), true
+
+	case "SensitiveMediaReviewConnection.nodes":
+		if e.ComplexityRoot.SensitiveMediaReviewConnection.Nodes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReviewConnection.Nodes(childComplexity), true
+	case "SensitiveMediaReviewConnection.pageInfo":
+		if e.ComplexityRoot.SensitiveMediaReviewConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SensitiveMediaReviewConnection.PageInfo(childComplexity), true
+
 	case "StageTransition.fromState":
 		if e.ComplexityRoot.StageTransition.FromState == nil {
 			break
@@ -9179,6 +9355,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.VideoReceivedPart.SizeBytes(childComplexity), true
 
+	case "VideoReplacement.deadlineAt":
+		if e.ComplexityRoot.VideoReplacement.DeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacement.DeadlineAt(childComplexity), true
+	case "VideoReplacement.id":
+		if e.ComplexityRoot.VideoReplacement.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacement.ID(childComplexity), true
+	case "VideoReplacement.responsibilityId":
+		if e.ComplexityRoot.VideoReplacement.ResponsibilityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacement.ResponsibilityID(childComplexity), true
+	case "VideoReplacement.status":
+		if e.ComplexityRoot.VideoReplacement.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacement.Status(childComplexity), true
+
+	case "VideoReplacementPayload.clientMutationId":
+		if e.ComplexityRoot.VideoReplacementPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacementPayload.ClientMutationID(childComplexity), true
+	case "VideoReplacementPayload.replacement":
+		if e.ComplexityRoot.VideoReplacementPayload.Replacement == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacementPayload.Replacement(childComplexity), true
+	case "VideoReplacementPayload.userErrors":
+		if e.ComplexityRoot.VideoReplacementPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoReplacementPayload.UserErrors(childComplexity), true
+
 	case "VideoUploadStatus.confirmedParts":
 		if e.ComplexityRoot.VideoUploadStatus.ConfirmedParts == nil {
 			break
@@ -9289,6 +9509,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputRequestInvitationOtpInput,
 		ec.unmarshalInputRequestOnboardingOtpInput,
 		ec.unmarshalInputRequestRecaptureInput,
+		ec.unmarshalInputRequestVideoReplacementInput,
 		ec.unmarshalInputResendInternalUserInvitationInput,
 		ec.unmarshalInputRetryVideoPreparationInput,
 		ec.unmarshalInputRevokeInvitationInput,
@@ -9416,6 +9637,8 @@ type Query {
   project(id: ID!): Project
   inspections(first: Int = 25, after: String, history: Boolean = false, search: String, statusGroup: InspectionStatusGroup): InspectionConnection!
   inspection(id: ID!): Inspection
+  sensitiveMediaReviews(first: Int = 25, after: String): SensitiveMediaReviewConnection!
+  sensitiveMediaOriginal(mediaId: ID!): SensitiveMediaOriginal
   sensitiveContentScreeningBypassed: Boolean!
   report(inspectionId: ID!, version: Int): Report
   videoPreparationEvidence(preparationId: ID!, first: Int = 25, after: String): VideoPreparationEvidenceConnection!
@@ -9538,6 +9761,7 @@ type Mutation {
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
+  requestVideoReplacement(input: RequestVideoReplacementInput!): VideoReplacementPayload!
   updateTriageCase(input: UpdateTriageCaseInput!): TriageCasePayload!
   submitRecapture(input: SubmitRecaptureInput!): RecapturePayload!
   declareSensitiveDetectionFalsePositive(input: SensitiveFalsePositiveInput!): MediaPayload!
@@ -9597,6 +9821,10 @@ enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQ
 type InspectionAttention { kind: InspectionAttentionKind! mediaId: ID replacementDeadlineAt: String since: String! }
 type Inspection { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! analysisPromptSnapshotId: ID! projectId: ID stageId: ID source: String! sourceReason: String stateReason: String status: String! mediaKind: String! comparisonMode: String referenceVersionId: ID referenceVersionNumber: Int referenceMediaKind: String referenceVersionStatus: String referenceIsActive: Boolean originPromotionStatus: String originPromotionFailure: String promotedOriginVersionId: ID promotedOriginVersionNumber: Int promotedOriginMediaKind: String promotedOriginIsActive: Boolean evidenceCount: Int! dueAt: String! deadlineAt: String! reminderInstants: [String!]! version: Int! assetName: String assetAddress: String assetExternalKey: String participantName: String attention: InspectionAttention }
 type InspectionConnection { nodes: [Inspection!]! pageInfo: PageInfo! }
+enum SensitiveMediaKind { PHOTO VIDEO }
+type SensitiveMediaReview { mediaId: ID! inspectionId: ID! assetName: String! participantName: String! mediaKind: SensitiveMediaKind! requirementKey: String! blockedAt: String! submitted: Boolean! sourceAvailable: Boolean! }
+type SensitiveMediaReviewConnection { nodes: [SensitiveMediaReview!]! pageInfo: PageInfo! }
+type SensitiveMediaOriginal { mediaId: ID! mediaKind: SensitiveMediaKind! url: String! expiresAt: String! }
 type ProjectStage { id: ID! key: String! label: String! kind: String! position: Int! status: String! plannedAt: String reason: String inspectionIds: [ID!]! version: Int! }
 type StageTransition { id: ID! stageId: ID fromState: String toState: String! reason: String occurredAt: String! }
 type Project { id: ID! name: String! orderedStages: Boolean! businessUnitId: ID! assetId: ID! status: String! version: Int! stages: [ProjectStage!]! transitions: [StageTransition!]! }
@@ -9617,7 +9845,7 @@ type CaptureRequirement {
 }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
 type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
@@ -9886,6 +10114,7 @@ input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String!
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
+input RequestVideoReplacementInput { inspectionId: ID! mediaId: ID! deadlineAt: String! reason: String! clientMutationId: String! }
 input UpdateTriageCaseInput { inspectionId: ID! expectedVersion: Int! action: TriageCaseAction! assigneeId: ID body: String disposition: TriageDisposition clientMutationId: String! }
 input SubmitRecaptureInput { requestId: ID! confirmIncomplete: Boolean! clientMutationId: String! }
 input SensitiveFalsePositiveInput { mediaId: ID! reason: String! clientMutationId: String! }
@@ -9926,6 +10155,8 @@ type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! 
 type MediaPayload { media: Media userErrors: [UserError!]! clientMutationId: String! }
 type SubmissionPayload { submission: Submission userErrors: [UserError!]! clientMutationId: String! }
 type RecapturePayload { recapture: Recapture userErrors: [UserError!]! clientMutationId: String! }
+type VideoReplacement { id: ID! responsibilityId: ID! status: String! deadlineAt: String! }
+type VideoReplacementPayload { replacement: VideoReplacement userErrors: [UserError!]! clientMutationId: String! }
 type RetentionPolicyPayload { policy: RetentionPolicy userErrors: [UserError!]! clientMutationId: String! }
 type RetentionMutationPayload { status: String! requestId: ID userErrors: [UserError!]! clientMutationId: String! }
 `, BuiltIn: false},
@@ -10382,6 +10613,8 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_recaptureRequestId(ctx, field)
 	case "recaptureDeadlineAt":
 		return ec.fieldContext_ExternalCapture_recaptureDeadlineAt(ctx, field)
+	case "replacementDeadlineAt":
+		return ec.fieldContext_ExternalCapture_replacementDeadlineAt(ctx, field)
 	case "status":
 		return ec.fieldContext_ExternalCapture_status(ctx, field)
 	case "confirmationOnly":
@@ -12268,6 +12501,54 @@ func (ec *executionContext) childFields_SegmentDefinitionVersion(ctx context.Con
 	return nil, fmt.Errorf("no field named %q was found under type SegmentDefinitionVersion", field.Name)
 }
 
+func (ec *executionContext) childFields_SensitiveMediaOriginal(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "mediaId":
+		return ec.fieldContext_SensitiveMediaOriginal_mediaId(ctx, field)
+	case "mediaKind":
+		return ec.fieldContext_SensitiveMediaOriginal_mediaKind(ctx, field)
+	case "url":
+		return ec.fieldContext_SensitiveMediaOriginal_url(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_SensitiveMediaOriginal_expiresAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type SensitiveMediaOriginal", field.Name)
+}
+
+func (ec *executionContext) childFields_SensitiveMediaReview(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "mediaId":
+		return ec.fieldContext_SensitiveMediaReview_mediaId(ctx, field)
+	case "inspectionId":
+		return ec.fieldContext_SensitiveMediaReview_inspectionId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_SensitiveMediaReview_assetName(ctx, field)
+	case "participantName":
+		return ec.fieldContext_SensitiveMediaReview_participantName(ctx, field)
+	case "mediaKind":
+		return ec.fieldContext_SensitiveMediaReview_mediaKind(ctx, field)
+	case "requirementKey":
+		return ec.fieldContext_SensitiveMediaReview_requirementKey(ctx, field)
+	case "blockedAt":
+		return ec.fieldContext_SensitiveMediaReview_blockedAt(ctx, field)
+	case "submitted":
+		return ec.fieldContext_SensitiveMediaReview_submitted(ctx, field)
+	case "sourceAvailable":
+		return ec.fieldContext_SensitiveMediaReview_sourceAvailable(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type SensitiveMediaReview", field.Name)
+}
+
+func (ec *executionContext) childFields_SensitiveMediaReviewConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "nodes":
+		return ec.fieldContext_SensitiveMediaReviewConnection_nodes(ctx, field)
+	case "pageInfo":
+		return ec.fieldContext_SensitiveMediaReviewConnection_pageInfo(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type SensitiveMediaReviewConnection", field.Name)
+}
+
 func (ec *executionContext) childFields_StageTransition(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -12810,6 +13091,32 @@ func (ec *executionContext) childFields_VideoReceivedPart(ctx context.Context, f
 		return ec.fieldContext_VideoReceivedPart_sizeBytes(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type VideoReceivedPart", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoReplacement(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_VideoReplacement_id(ctx, field)
+	case "responsibilityId":
+		return ec.fieldContext_VideoReplacement_responsibilityId(ctx, field)
+	case "status":
+		return ec.fieldContext_VideoReplacement_status(ctx, field)
+	case "deadlineAt":
+		return ec.fieldContext_VideoReplacement_deadlineAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoReplacement", field.Name)
+}
+
+func (ec *executionContext) childFields_VideoReplacementPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "replacement":
+		return ec.fieldContext_VideoReplacementPayload_replacement(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_VideoReplacementPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_VideoReplacementPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type VideoReplacementPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_VideoUploadStatus(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -13736,6 +14043,20 @@ func (ec *executionContext) field_Mutation_requestRecapture_args(ctx context.Con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (RequestRecaptureInput, error) {
 			return ec.unmarshalNRequestRecaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestRecaptureInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_requestVideoReplacement_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RequestVideoReplacementInput, error) {
+			return ec.unmarshalNRequestVideoReplacementInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestVideoReplacementInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -14899,6 +15220,42 @@ func (ec *executionContext) field_Query_segmentDefinitions_args(ctx context.Cont
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_sensitiveMediaOriginal_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "mediaId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mediaId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_sensitiveMediaReviews_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
 	return args, nil
 }
 
@@ -18938,6 +19295,29 @@ func (ec *executionContext) _ExternalCapture_recaptureDeadlineAt(ctx context.Con
 	)
 }
 func (ec *executionContext) fieldContext_ExternalCapture_recaptureDeadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ExternalCapture_replacementDeadlineAt(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_replacementDeadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplacementDeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_replacementDeadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -26969,6 +27349,50 @@ func (ec *executionContext) fieldContext_Mutation_requestRecapture(ctx context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_requestVideoReplacement(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestVideoReplacement(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestVideoReplacement(ctx, fc.Args["input"].(RequestVideoReplacementInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *VideoReplacementPayload) graphql.Marshaler {
+			return ec.marshalNVideoReplacementPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoReplacementPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestVideoReplacement(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoReplacementPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestVideoReplacement_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_updateTriageCase(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34129,6 +34553,94 @@ func (ec *executionContext) fieldContext_Query_inspection(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_sensitiveMediaReviews(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_sensitiveMediaReviews(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SensitiveMediaReviews(ctx, fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *SensitiveMediaReviewConnection) graphql.Marshaler {
+			return ec.marshalNSensitiveMediaReviewConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReviewConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_sensitiveMediaReviews(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SensitiveMediaReviewConnection(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_sensitiveMediaReviews_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_sensitiveMediaOriginal(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_sensitiveMediaOriginal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().SensitiveMediaOriginal(ctx, fc.Args["mediaId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *SensitiveMediaOriginal) graphql.Marshaler {
+			return ec.marshalOSensitiveMediaOriginal2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaOriginal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_sensitiveMediaOriginal(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SensitiveMediaOriginal(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_sensitiveMediaOriginal_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_sensitiveContentScreeningBypassed(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -40607,6 +41119,369 @@ func (ec *executionContext) fieldContext_SegmentDefinitionVersion_publishedAt(_ 
 	return graphql.NewScalarFieldContext("SegmentDefinitionVersion", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _SensitiveMediaOriginal_mediaId(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaOriginal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaOriginal_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaOriginal_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaOriginal", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaOriginal_mediaKind(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaOriginal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaOriginal_mediaKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v SensitiveMediaKind) graphql.Marshaler {
+			return ec.marshalNSensitiveMediaKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaOriginal_mediaKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaOriginal", field, false, false, errors.New("field of type SensitiveMediaKind does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaOriginal_url(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaOriginal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaOriginal_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaOriginal_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaOriginal", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaOriginal_expiresAt(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaOriginal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaOriginal_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaOriginal_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaOriginal", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_mediaId(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_inspectionId(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_assetName(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_participantName(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_participantName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ParticipantName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_participantName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_mediaKind(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_mediaKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v SensitiveMediaKind) graphql.Marshaler {
+			return ec.marshalNSensitiveMediaKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_mediaKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type SensitiveMediaKind does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_requirementKey(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_blockedAt(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_blockedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BlockedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_blockedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_submitted(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_submitted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Submitted, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_submitted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReview_sourceAvailable(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReview) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReview_sourceAvailable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceAvailable, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReview_sourceAvailable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SensitiveMediaReview", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _SensitiveMediaReviewConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReviewConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReviewConnection_nodes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Nodes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*SensitiveMediaReview) graphql.Marshaler {
+			return ec.marshalNSensitiveMediaReview2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReviewᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReviewConnection_nodes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SensitiveMediaReviewConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SensitiveMediaReview(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SensitiveMediaReviewConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *SensitiveMediaReviewConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SensitiveMediaReviewConnection_pageInfo(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PageInfo) graphql.Marshaler {
+			return ec.marshalNPageInfo2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPageInfo(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SensitiveMediaReviewConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SensitiveMediaReviewConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PageInfo(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _StageTransition_id(ctx context.Context, field graphql.CollectedField, obj *StageTransition) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44872,6 +45747,185 @@ func (ec *executionContext) _VideoReceivedPart_sizeBytes(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_VideoReceivedPart_sizeBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("VideoReceivedPart", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoReplacement_id(ctx context.Context, field graphql.CollectedField, obj *VideoReplacement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacement_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacement_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoReplacement", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _VideoReplacement_responsibilityId(ctx context.Context, field graphql.CollectedField, obj *VideoReplacement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacement_responsibilityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResponsibilityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacement_responsibilityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoReplacement", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _VideoReplacement_status(ctx context.Context, field graphql.CollectedField, obj *VideoReplacement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacement_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacement_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoReplacement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoReplacement_deadlineAt(ctx context.Context, field graphql.CollectedField, obj *VideoReplacement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacement_deadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacement_deadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoReplacement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _VideoReplacementPayload_replacement(ctx context.Context, field graphql.CollectedField, obj *VideoReplacementPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacementPayload_replacement(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Replacement, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *VideoReplacement) graphql.Marshaler {
+			return ec.marshalOVideoReplacement2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoReplacement(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacementPayload_replacement(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoReplacementPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_VideoReplacement(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoReplacementPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *VideoReplacementPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacementPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacementPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "VideoReplacementPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _VideoReplacementPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *VideoReplacementPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoReplacementPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoReplacementPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoReplacementPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _VideoUploadStatus_mediaId(ctx context.Context, field graphql.CollectedField, obj *VideoUploadStatus) (ret graphql.Marshaler) {
@@ -49667,6 +50721,64 @@ func (ec *executionContext) unmarshalInputRequestRecaptureInput(ctx context.Cont
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRequestVideoReplacementInput(ctx context.Context, obj any) (RequestVideoReplacementInput, error) {
+	var it RequestVideoReplacementInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "mediaId", "deadlineAt", "reason", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "mediaId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mediaId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MediaID = data
+		case "deadlineAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deadlineAt"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DeadlineAt = data
+		case "reason":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Reason = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputResendInternalUserInvitationInput(ctx context.Context, obj any) (ResendInternalUserInvitationInput, error) {
 	var it ResendInternalUserInvitationInput
 	if obj == nil {
@@ -52446,6 +53558,11 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "replacementDeadlineAt":
+			out.Values[i] = ec._ExternalCapture_replacementDeadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "status":
 			out.Values[i] = ec._ExternalCapture_status(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -54692,6 +55809,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "requestRecapture":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_requestRecapture(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requestVideoReplacement":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestVideoReplacement(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -57882,6 +59006,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "sensitiveMediaReviews":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_sensitiveMediaReviews(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "sensitiveMediaOriginal":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_sensitiveMediaOriginal(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "sensitiveContentScreeningBypassed":
 			field := field
 
@@ -60831,6 +61999,180 @@ func (ec *executionContext) _SegmentDefinitionVersion(ctx context.Context, sel a
 	return out
 }
 
+var sensitiveMediaOriginalImplementors = []string{"SensitiveMediaOriginal"}
+
+func (ec *executionContext) _SensitiveMediaOriginal(ctx context.Context, sel ast.SelectionSet, obj *SensitiveMediaOriginal) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, sensitiveMediaOriginalImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SensitiveMediaOriginal")
+		case "mediaId":
+			out.Values[i] = ec._SensitiveMediaOriginal_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaKind":
+			out.Values[i] = ec._SensitiveMediaOriginal_mediaKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._SensitiveMediaOriginal_url(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._SensitiveMediaOriginal_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var sensitiveMediaReviewImplementors = []string{"SensitiveMediaReview"}
+
+func (ec *executionContext) _SensitiveMediaReview(ctx context.Context, sel ast.SelectionSet, obj *SensitiveMediaReview) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, sensitiveMediaReviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SensitiveMediaReview")
+		case "mediaId":
+			out.Values[i] = ec._SensitiveMediaReview_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inspectionId":
+			out.Values[i] = ec._SensitiveMediaReview_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetName":
+			out.Values[i] = ec._SensitiveMediaReview_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "participantName":
+			out.Values[i] = ec._SensitiveMediaReview_participantName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaKind":
+			out.Values[i] = ec._SensitiveMediaReview_mediaKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requirementKey":
+			out.Values[i] = ec._SensitiveMediaReview_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blockedAt":
+			out.Values[i] = ec._SensitiveMediaReview_blockedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "submitted":
+			out.Values[i] = ec._SensitiveMediaReview_submitted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceAvailable":
+			out.Values[i] = ec._SensitiveMediaReview_sourceAvailable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var sensitiveMediaReviewConnectionImplementors = []string{"SensitiveMediaReviewConnection"}
+
+func (ec *executionContext) _SensitiveMediaReviewConnection(ctx context.Context, sel ast.SelectionSet, obj *SensitiveMediaReviewConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, sensitiveMediaReviewConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SensitiveMediaReviewConnection")
+		case "nodes":
+			out.Values[i] = ec._SensitiveMediaReviewConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._SensitiveMediaReviewConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var stageTransitionImplementors = []string{"StageTransition"}
 
 func (ec *executionContext) _StageTransition(ctx context.Context, sel ast.SelectionSet, obj *StageTransition) graphql.Marshaler {
@@ -62761,6 +64103,107 @@ func (ec *executionContext) _VideoReceivedPart(ctx context.Context, sel ast.Sele
 			}
 		case "sizeBytes":
 			out.Values[i] = ec._VideoReceivedPart_sizeBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoReplacementImplementors = []string{"VideoReplacement"}
+
+func (ec *executionContext) _VideoReplacement(ctx context.Context, sel ast.SelectionSet, obj *VideoReplacement) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoReplacementImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoReplacement")
+		case "id":
+			out.Values[i] = ec._VideoReplacement_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "responsibilityId":
+			out.Values[i] = ec._VideoReplacement_responsibilityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._VideoReplacement_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deadlineAt":
+			out.Values[i] = ec._VideoReplacement_deadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var videoReplacementPayloadImplementors = []string{"VideoReplacementPayload"}
+
+func (ec *executionContext) _VideoReplacementPayload(ctx context.Context, sel ast.SelectionSet, obj *VideoReplacementPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, videoReplacementPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("VideoReplacementPayload")
+		case "replacement":
+			out.Values[i] = ec._VideoReplacementPayload_replacement(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._VideoReplacementPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._VideoReplacementPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -65293,6 +66736,11 @@ func (ec *executionContext) unmarshalNRequestRecaptureInput2inspectionᚋservice
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNRequestVideoReplacementInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestVideoReplacementInput(ctx context.Context, v any) (RequestVideoReplacementInput, error) {
+	res, err := ec.unmarshalInputRequestVideoReplacementInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {
 	res, err := ec.unmarshalInputResendInternalUserInvitationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -65519,6 +66967,52 @@ func (ec *executionContext) marshalNSegmentDefinitionPayload2ᚖinspectionᚋser
 func (ec *executionContext) unmarshalNSensitiveFalsePositiveInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveFalsePositiveInput(ctx context.Context, v any) (SensitiveFalsePositiveInput, error) {
 	res, err := ec.unmarshalInputSensitiveFalsePositiveInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNSensitiveMediaKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaKind(ctx context.Context, v any) (SensitiveMediaKind, error) {
+	var res SensitiveMediaKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNSensitiveMediaKind2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaKind(ctx context.Context, sel ast.SelectionSet, v SensitiveMediaKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNSensitiveMediaReview2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReviewᚄ(ctx context.Context, sel ast.SelectionSet, v []*SensitiveMediaReview) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSensitiveMediaReview2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReview(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSensitiveMediaReview2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReview(ctx context.Context, sel ast.SelectionSet, v *SensitiveMediaReview) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SensitiveMediaReview(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNSensitiveMediaReviewConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaReviewConnection(ctx context.Context, sel ast.SelectionSet, v *SensitiveMediaReviewConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SensitiveMediaReviewConnection(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNSetAdminInitialPasswordInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSetAdminInitialPasswordInput(ctx context.Context, v any) (SetAdminInitialPasswordInput, error) {
@@ -66150,6 +67644,16 @@ func (ec *executionContext) marshalNVideoReceivedPart2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._VideoReceivedPart(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNVideoReplacementPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoReplacementPayload(ctx context.Context, sel ast.SelectionSet, v *VideoReplacementPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._VideoReplacementPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNVideoUploadStatus2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoUploadStatus(ctx context.Context, sel ast.SelectionSet, v *VideoUploadStatus) graphql.Marshaler {
@@ -66791,6 +68295,13 @@ func (ec *executionContext) marshalOSegmentDefinitionVersion2ᚖinspectionᚋser
 	return ec._SegmentDefinitionVersion(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOSensitiveMediaOriginal2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSensitiveMediaOriginal(ctx context.Context, sel ast.SelectionSet, v *SensitiveMediaOriginal) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._SensitiveMediaOriginal(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -66937,6 +68448,13 @@ func (ec *executionContext) marshalOVideoPreparationStatus2ᚖinspectionᚋservi
 		return graphql.Null
 	}
 	return ec._VideoPreparationStatus(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOVideoReplacement2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoReplacement(ctx context.Context, sel ast.SelectionSet, v *VideoReplacement) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._VideoReplacement(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

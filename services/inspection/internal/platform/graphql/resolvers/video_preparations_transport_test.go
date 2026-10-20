@@ -9,10 +9,12 @@ import (
 
 	"inspection/libs/identity"
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
+	mediareview "inspection/services/inspection/internal/features/media/review_sensitive_media"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
+	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/requestctx"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -98,6 +100,32 @@ func TestInternalReviewerCanDeclareVideoFalsePositive(t *testing.T) {
 	response := executeTask06GraphQL(t, server, `mutation { declareSensitiveDetectionFalsePositive(input:{mediaId:"`+mediaID.String()+`",reason:"Review cleared the flag",clientMutationId:"internal-review"}) { media { id } userErrors { code } clientMutationId } }`, ctx)
 	if strings.Contains(response, `"errors"`) || !strings.Contains(response, mediaID.String()) || !called {
 		t.Fatalf("internal review failed: %s called=%v", response, called)
+	}
+}
+
+func TestSensitiveMediaReviewQueriesRejectNonReviewers(t *testing.T) {
+	db := task06ResolverDB(t)
+	bus := mediator.New()
+	if err := mediareview.Setup(mediareview.Dependencies{DB: db, Store: objectstore.Store{Bucket: "test", Client: reportMediaClient{}}, Bus: bus, Authorizer: auth.Authorizer{}}); err != nil {
+		t.Fatal(err)
+	}
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: db, Bus: bus}}))
+	server.SetErrorPresenter(graph.PresentError)
+	for _, role := range []string{auth.Employee, auth.CustomerViewer, auth.Viewer} {
+		t.Run(role, func(t *testing.T) {
+			tenantID := identity.NewID()
+			ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Internal: true, Roles: []string{role}}})
+			response := executeTask06GraphQL(t, server, `query { sensitiveMediaReviews { nodes { mediaId } } }`, ctx)
+			if !strings.Contains(response, `"code":"FORBIDDEN"`) {
+				t.Fatalf("role %s read privacy queue: %s", role, response)
+			}
+		})
+	}
+	tenantID := identity.NewID()
+	external := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: identity.NewID(), TenantID: tenantID, Roles: []string{auth.Manager}}})
+	response := executeTask06GraphQL(t, server, `query { sensitiveMediaReviews { nodes { mediaId } } }`, external)
+	if !strings.Contains(response, `"code":"FORBIDDEN"`) {
+		t.Fatalf("external participant read privacy queue: %s", response)
 	}
 }
 

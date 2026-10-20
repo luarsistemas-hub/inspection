@@ -541,7 +541,7 @@ func (s *Scheduler) finishFailure(ctx context.Context, job database.VideoPlan, t
 			if result.RowsAffected != 1 {
 				return fmt.Errorf("%w while recording failure", ErrLeaseLost)
 			}
-			result = tx.WithContext(ctx).Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status='ANALYZING'", job.TenantID, job.InspectionID).Update("status", inspectionStatus)
+			result = tx.WithContext(ctx).Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status='ANALYZING'", job.TenantID, job.InspectionID).Updates(map[string]any{"status": inspectionStatus, "version": gorm.Expr("version + 1"), "updated_at": now})
 			return result.Error
 		})
 	} else if errors.Is(cause, errDeferred) {

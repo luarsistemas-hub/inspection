@@ -15,6 +15,7 @@
     "recapture.requested.v1",
     "recapture.completed.v1",
     "recapture.deadline_reached.v1",
+    "video_replacement.deadline_reached.v1",
     "analysis.comparison_requested.v1",
     "analysis.video_comparison_requested.v1",
     "analysis.comparison_completed.v1",
