@@ -93,6 +93,12 @@ validate_llm_mode() {
   esac
 }
 
+reload_live_gateway() {
+  if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
+    compose up -d --no-deps --force-recreate --wait litellm
+  fi
+}
+
 wait_http() {
   local url="$1" label="$2" timeout="${INSPECTION_STARTUP_TIMEOUT:-180}" start now
   start="$(date +%s)"
@@ -161,6 +167,7 @@ case "${1:-help}" in
       fi
     fi
     compose up -d --build --remove-orphans
+    reload_live_gateway
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/healthz" "API"
     wait_http "http://localhost:${INSPECTION_API_PORT:-8080}/readyz" "API pronta"
     wait_http "http://localhost:${INSPECTION_ADMIN_PORT:-3000}/" "Admin"
@@ -174,6 +181,7 @@ case "${1:-help}" in
   infra)
     require_base; [[ -f "$env_file" ]] || init; load_env; validate_llm_mode
     compose up -d postgres redis minio rabbitmq mailpit twilio-fake meta-fake "$(llm_service)" keycloak minio-setup inspection-bootstrap inspection-migrate inspection-runtime-bootstrap inspection-prompt-seed keycloak-super-admin-bootstrap
+    reload_live_gateway
     wait_service_completion inspection-bootstrap
     wait_service_completion inspection-migrate
     wait_service_completion inspection-runtime-bootstrap

@@ -316,7 +316,7 @@ on_exit() {
       gateway_recovered=1
       if [[ "$gateway_selected" == 1 ]]; then
         if [[ -n "$old_gateway_image" ]]; then
-          docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 litellm >/dev/null 2>&1 || gateway_recovered=0
+          docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --force-recreate --wait --wait-timeout 300 litellm >/dev/null 2>&1 || gateway_recovered=0
         else
           "${dc[@]}" stop litellm >/dev/null 2>&1 || true
         fi
@@ -378,7 +378,7 @@ fi
 if [[ "$gateway_selected" == 1 ]]; then
   phase=services
   block 'LiteLLM gateway is updating.'
-  "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 litellm
+  "${dc[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 300 litellm
 fi
 
 if [[ "$migration" == 1 ]]; then

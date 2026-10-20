@@ -246,7 +246,7 @@ exit 0
     def test_gateway_is_started_before_worker_and_stopped_on_failure(self):
         _, result, trace, block = self.scenario(failure="services")
         self.assertEqual(result.returncode, 1, result.stderr)
-        start = next(i for i, line in enumerate(trace) if "up -d --no-deps --wait --wait-timeout 300 litellm" in line)
+        start = next(i for i, line in enumerate(trace) if "up -d --no-deps --force-recreate --wait --wait-timeout 300 litellm" in line)
         worker = next(i for i, line in enumerate(trace) if "up -d --no-deps --wait --wait-timeout 300 inspection-api inspection-worker" in line)
         self.assertLess(start, worker)
         self.assertTrue(block.exists())
