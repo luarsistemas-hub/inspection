@@ -4,7 +4,8 @@ const cameraPhases = new Set(["opening", "ready", "starting", "recording", "fina
 
 /** The local list stays hidden while the camera is in use, so the take being recorded is never shown as incomplete or discardable. */
 export function visibleDrafts(drafts: VideoDraft[], phase: string): VideoDraft[] {
-  return cameraPhases.has(phase) ? [] : drafts;
+  if (cameraPhases.has(phase)) return [];
+  return drafts.some((draft) => draft.state === "READY") ? drafts.filter((draft) => draft.state !== "READY") : drafts;
 }
 
 export function captureErrorMessage(error: unknown): string {

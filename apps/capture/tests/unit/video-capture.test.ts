@@ -1,12 +1,13 @@
 import "fake-indexeddb/auto";
 import { Blob as NodeBlob } from "node:buffer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { appendVideoChunk, finalizeVideoDraft, listVideoDrafts, loadVideoDraft, openVideoDatabase, readVideoChunk, saveVideoDraft, videoChunks, type VideoDraft } from "@/pwa/video-drafts";
+import { appendVideoChunk, finalizeVideoDraft, listVideoDrafts, loadVideoDraft, openVideoDatabase, readVideoChunk, resetVideoDraft, saveVideoDraft, videoChunks, type VideoDraft } from "@/pwa/video-drafts";
 import { hashVideoBlobs } from "@/pwa/video-hash";
 import { startVideoRecorder } from "@/pwa/video-recorder";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MutedVideoPreview } from "../../app/capture/[linkToken]/video-capture";
+import { visibleDrafts } from "@/pwa/video-capture-state";
 
 const videoBlob = (parts: string[], options?: BlobPropertyBag): Blob => new NodeBlob(parts, options) as unknown as Blob;
 const draft = (id: string): VideoDraft => ({ id, responsibilityId: "r", kind: "INSPECTION", source: "CAMERA", contentType: "video/webm", maxDurationSeconds: 900, maxBytes: 1 << 30, expiresAt: "2099-01-01T00:00:00Z", state: "INCOMPLETE", chunkCount: 0, sizeBytes: 0, parts: [] });
@@ -81,6 +82,19 @@ describe("C03 video capture", () => {
     expect(Object.prototype.toString.call(restored)).toBe("[object Blob]");
     expect(restored?.type).toBe("video/mp4");
     expect(await restored?.text()).toBe("legacy-data");
+  });
+
+  it("keeps an admitted attempt after discarding its video and removes the old chunks", async () => {
+    const item = { ...draft("discarded-retry"), state: "SAVED" as const, contentType: "video/webm", chunkCount: 1, sizeBytes: 5, sha256: "digest" };
+    await saveVideoDraft(item);
+    await appendVideoChunk(item.id, 0, videoBlob(["video"]));
+
+    const ready = await resetVideoDraft(item);
+
+    expect(ready).toMatchObject({ id: item.id, state: "READY", chunkCount: 0, sizeBytes: 0 });
+    expect(await readVideoChunk(item.id, 0)).toBeUndefined();
+    expect(await loadVideoDraft(item.id)).toMatchObject({ id: item.id, state: "READY" });
+    expect(visibleDrafts(await listVideoDrafts(item.responsibilityId), "idle")).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: item.id })]));
   });
 
   it("UT-011 does not mark a draft SAVED when its final transaction aborts", async () => {

@@ -106,7 +106,7 @@ test("IT-075 authenticated V1 guidance shows O1 kitchen and bathroom stills", as
   await expect(page.getByRole("img", { name: "Referência: Banheiro · Lavatório" })).toBeVisible();
 });
 
-test("@camera-focus E2E-008 records, previews and submits one continuous video (IT-102, IT-104, IT-105, IT-111, IT-113, IT-114)", async ({ page }) => {
+test("@camera-focus E2E-008 records, previews and submits one continuous video (IT-102, IT-104, IT-105, IT-111, IT-113, IT-114)", async ({ page, browserName }) => {
   let received = false;
   let mediaCreates = 0;
   let recorderAdmissions = 0;
@@ -134,7 +134,7 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
     if (query.includes("beginVideoCapture")) { recorderAdmissions += 1; return respond({ beginVideoCapture: { attempt: { id: "attempt-1", kind: "CURRENT", acquisitionSource: "CAMERA", maxDurationSeconds: 900, maxBytes: 1073741824, policyVersion: 1, admittedAt: "2026-10-15T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z", status: "ACTIVE" }, userErrors: [] } }); }
     if (query.includes("videoUploadStatus")) return respond({ videoUploadStatus: { mediaId: "media-1", status: received ? "RECEIVED" : "UPLOADING", expiresAt: "2099-01-01T00:00:00Z", receivedParts: [], confirmedParts: [], missingParts: [1] } });
     if (query.includes("createMediaUpload")) { mediaCreates += 1; return respond({ createMediaUpload: { upload: { mediaId: "media-1", uploadId: "upload-1", expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 5 * 1024 * 1024 }, userErrors: [] } }); }
-    if (query.includes("presignMediaParts")) return respond({ presignMediaParts: { parts: [{ partNumber: 1, url: "http://localhost:3113/upload-part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } });
+    if (query.includes("presignMediaParts")) return respond({ presignMediaParts: { parts: [{ partNumber: 1, url: `http://localhost:${process.env.PLAYWRIGHT_PORT ?? "3113"}/upload-part`, expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } });
     if (query.includes("completeMediaUpload")) { received = true; return respond({ completeMediaUpload: { media: { id: "media-1", status: "RECEIVED" }, userErrors: [] } }); }
     if (query.includes("saveCaptureMetadata")) return respond({ saveCaptureMetadata: { media: { id: "media-1", status: "RECEIVED", replacesMediaId: null }, userErrors: [] } });
     if (query.includes("submitCapture")) { submitted += 1; return respond({ submitCapture: { submission: { id: "submission-1", complete: true, requiresAttention: false, submittedAt: "2026-10-15T00:00:00Z" }, userErrors: [] } }); }
@@ -179,6 +179,8 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   await expect(page.getByRole("button", { name: "Iniciar gravação" })).toBeEnabled();
   await page.evaluate(() => { const element = document.activeElement; if (element instanceof HTMLElement) element.blur(); });
   for (let index = 0; index < 8 && !(await page.getByRole("button", { name: "Iniciar gravação" }).evaluate((button) => button === document.activeElement)); index += 1) await page.keyboard.press("Tab");
+  // WebKit skips buttons when tabbing by default, so only its keyboard activation is checked.
+  if (browserName === "webkit") await page.getByRole("button", { name: "Iniciar gravação" }).focus();
   await expect(page.getByRole("button", { name: "Iniciar gravação" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByText(/00:/)).toBeVisible();
@@ -191,6 +193,8 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   await page.waitForTimeout(900);
   await page.evaluate(() => { const element = document.activeElement; if (element instanceof HTMLElement) element.blur(); });
   for (let index = 0; index < 8 && !(await page.getByRole("button", { name: "Parar e revisar" }).evaluate((button) => button === document.activeElement)); index += 1) await page.keyboard.press("Tab");
+  // WebKit skips buttons when tabbing by default, so only its keyboard activation is checked.
+  if (browserName === "webkit") await page.getByRole("button", { name: "Parar e revisar" }).focus();
   await expect(page.getByRole("button", { name: "Parar e revisar" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
@@ -216,7 +220,8 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   await page.getByRole("button", { name: "Descartar e gravar novamente" }).click();
   await startVideoRecording(page);
   await page.waitForTimeout(1200);
-  await page.evaluate(() => (window as typeof window & { lastCameraStream?: MediaStream }).lastCameraStream?.getVideoTracks()[0]?.stop());
+  // A lost camera is signalled to the page by the track "ended" event; the recorder must still flush and save what it has.
+  await page.evaluate(() => (window as typeof window & { lastCameraStream?: MediaStream }).lastCameraStream?.getVideoTracks()[0]?.dispatchEvent(new Event("ended")));
   await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
   expect(mediaCreates).toBe(0);
@@ -227,7 +232,7 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   expect(recorderAdmissions).toBe(1);
   expect(partPuts).toBe(1);
   await page.getByRole("button", { name: "Confirmar vistoria" }).click();
-  await expect(page.getByText("Vistoria enviada.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Envio confirmado.", { exact: false }).last()).toBeVisible();
   expect(submitted).toBe(1);
 });
 

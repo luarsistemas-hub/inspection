@@ -5,7 +5,7 @@ import { Alert, Button, Card, ProductIdentity, Status, ThemeSelector } from "@in
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
 import { captureOperations, graphql } from "@/graphql/client";
 import { throwOnUserErrors } from "@/pwa/mutation-errors";
-import { appendVideoChunk, discardVideoDraft, finalizeVideoDraft, listVideoDrafts, loadVideoDraft, saveVideoDraft, type VideoDraft, videoChunks } from "@/pwa/video-drafts";
+import { appendVideoChunk, finalizeVideoDraft, listVideoDrafts, loadVideoDraft, resetVideoDraft, saveVideoDraft, type VideoDraft, videoChunks } from "@/pwa/video-drafts";
 import { startVideoRecorder, supportedVideoMime, type VideoRecorderSession } from "@/pwa/video-recorder";
 import { attachPreview, canOpenCamera, openCameraCancellable, playPreview, releaseCamera } from "@/pwa/camera-session";
 import { acquireScreenWakeLock } from "@/pwa/wake-lock";
@@ -190,17 +190,19 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
   };
   const admit = async (source: "CAMERA" | "FILE"): Promise<VideoDraft> => {
     const replacesMediaId = current?.mediaId && blockedVideoStatuses.has(current.preparationStatus ?? "") && !needsSensitiveReview(current.preparationStatus) ? current.mediaId : undefined;
-    const reusable = admitted.current;
-    if (!replacesMediaId && reusable && reusable.source === source && Date.parse(reusable.expiresAt) > Date.now()) {
+    const localDrafts = admitted.current ? [] : await listVideoDrafts(responsibilityId);
+    const reusable = admitted.current ?? localDrafts.filter((draft) => draft.source === source && !draft.mediaId && ["READY", "INCOMPLETE", "UNSAVED"].includes(draft.state) && Date.parse(draft.expiresAt) > Date.now()).sort((left, right) => Date.parse(right.expiresAt) - Date.parse(left.expiresAt))[0];
+    if (!replacesMediaId && reusable && reusable.source === source && !reusable.mediaId && Date.parse(reusable.expiresAt) > Date.now()) {
       const bootstrap = (await graphql(captureOperations.bootstrap)).externalCapture;
       if (bootstrap.responsibilityId !== responsibilityId || bootstrap.status !== "OPEN") throw new Error("Este convite não permite mais gravações. Solicite uma nova autorização.");
       const persisted = await loadVideoDraft(reusable.id);
-      if (persisted && persisted.state !== "INCOMPLETE" && persisted.state !== "UNSAVED") throw new Error("Revise ou conclua o vídeo salvo antes de iniciar outra gravação.");
-      if (persisted) {
-        await discardVideoDraft(persisted);
-        setDrafts((items) => items.filter((item) => item.id !== persisted.id));
-      }
-      return { ...reusable, state: "INCOMPLETE", chunkCount: 0, sizeBytes: 0, sha256: undefined, parts: [], mediaId: undefined, uploadId: undefined };
+      if (persisted && !["READY", "INCOMPLETE", "UNSAVED"].includes(persisted.state)) throw new Error("Revise ou conclua o vídeo salvo antes de iniciar outra gravação.");
+      const ready = persisted ? await resetVideoDraft(persisted) : reusable;
+      const restarted: VideoDraft = { ...ready, state: "INCOMPLETE" };
+      await saveVideoDraft(restarted);
+      admitted.current = restarted;
+      setDrafts((items) => [...items.filter((item) => item.id !== restarted.id), restarted]);
+      return restarted;
     }
     const result = await graphql(captureOperations.beginVideo, { input: { acquisitionSource: source, replacesMediaId: replacesMediaId ?? null, clientMutationId: crypto.randomUUID() } });
     throwOnUserErrors(result.beginVideoCapture);
@@ -208,6 +210,8 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
     if (!attempt) throw new Error("O servidor não autorizou uma tentativa de vídeo.");
     const draft: VideoDraft = { id: attempt.id, responsibilityId, kind, source, contentType: "", maxDurationSeconds: attempt.maxDurationSeconds, maxBytes: attempt.maxBytes, expiresAt: attempt.expiresAt, state: "INCOMPLETE", chunkCount: 0, sizeBytes: 0, replacesMediaId, parts: [] };
     admitted.current = draft;
+    await saveVideoDraft(draft);
+    setDrafts((items) => [...items.filter((item) => item.id !== draft.id), draft]);
     return draft;
   };
   const start = async () => {
@@ -278,7 +282,7 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
   const discard = async (candidate = current) => {
     if (!candidate || busy) return;
     setBusy(true);
-    try { admitted.current = candidate; await discardVideoDraft(candidate); setDrafts((items) => items.filter((item) => item.id !== candidate.id)); setCurrent(undefined); setPreviewURL(undefined); setStoppedAtLimit(false); setPhase("idle"); setNotice("Vídeo descartado. Você pode gravar novamente dentro da tentativa autorizada."); }
+    try { const ready = await resetVideoDraft(candidate); admitted.current = ready; setDrafts((items) => [...items.filter((item) => item.id !== ready.id), ready]); setCurrent(undefined); setPreviewURL(undefined); setStoppedAtLimit(false); setPhase("idle"); setNotice("Vídeo descartado. Você pode gravar novamente dentro da tentativa autorizada."); }
     catch (error) { setNotice(message(error)); } finally { setBusy(false); }
   };
   const resume = async (draft: VideoDraft) => {
@@ -314,23 +318,24 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
   const cameraMode = ["opening", "ready", "starting", "recording", "finalizing"].includes(phase);
   const liveMessage = phase === "opening" ? "Abrindo câmera." : phase === "ready" ? "Câmera pronta. Ainda não está gravando." : phase === "starting" ? "Preparando gravação." : phase === "recording" ? "Gravando." : phase === "finalizing" ? "Finalizando vídeo…" : phase === "preview" ? "Vídeo salvo neste dispositivo. Revise antes de enviar." : phase === "uploading" ? "Enviando vídeo." : phase === "received" ? "Vídeo recebido." : phase === "submitted" ? "Envio confirmado." : "";
   const references = kind === "RECAPTURE" && referenceItems.length > 0 ? <section aria-labelledby="recapture-items-heading"><h3 id="recapture-items-heading">Itens a complementar</h3>{recaptureDeadlineAt && <p>Prazo: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short" }).format(new Date(recaptureDeadlineAt))}</p>}<p>Grave um único vídeo mostrando os itens solicitados.</p><ul>{referenceItems.map((item) => <li key={`${item.requirementKey}:${item.evidenceId ?? item.mediaId}`}><strong>{item.description || [item.environment, item.component].filter(Boolean).join(" · ")}</strong>{item.view ? <span> · {item.view}</span> : null}{item.reason ? <p>Motivo: {item.reason}</p> : null}{item.imageUrl && item.availability === "AVAILABLE" ? <img src={item.imageUrl} alt={`Imagem de referência: ${item.description}`} loading="lazy" style={{ display: "block", maxWidth: 180 }} /> : <p>Imagem de referência indisponível.</p>}</li>)}</ul></section> : scope === "comparison" ? <section><h3>Referência de origem</h3><p>Use os ambientes e componentes abaixo como orientação. Grave um só vídeo; não é necessário criar um clipe por item.</p><ul>{referenceItems.map((item) => <li key={item.requirementKey}><strong>{item.environment || item.description}</strong>{item.component ? ` · ${item.component}` : ""}{item.ambiguous ? " · identidade incerta" : ""}{item.gap ? " · vista incompleta na origem" : ""}{item.imageUrl && <img src={item.imageUrl} alt={`Referência: ${item.description}`} loading="lazy" style={{ display: "block", maxWidth: 180 }} />}</li>)}</ul></section> : <p>Sem comparação histórica nesta captura. O resultado descreverá apenas o que for visível no vídeo.</p>;
-  const readyToRecord = Boolean(videoRef.current && videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0 && cameraStream?.getVideoTracks().some((track) => track.readyState === "live"));
+  const readyToRecord = previewReady && !previewBlocked && Boolean(cameraStream?.getVideoTracks().some((track) => track.readyState === "live"));
   return <main className={`capture-shell ${cameraMode ? "capture-camera-shell" : ""}`}><RegisterServiceWorker /><div className={`capture-workspace ${cameraMode ? "capture-camera-workspace" : ""}`}>
     <header className={`capture-intro ${cameraMode ? "capture-camera-intro" : ""}`}><div className="capture-utility-bar"><ProductIdentity product="Capture" />{!cameraMode && <ThemeSelector />}</div><h1>{kind === "ORIGIN" ? "Registrar vídeo de origem" : kind === "RECAPTURE" ? "Registrar complemento em vídeo" : kind === "VIDEO_REPLACEMENT" ? "Gravar a vistoria novamente" : "Registrar vistoria em vídeo"}</h1></header>
     <Card className={`capture-card capture-card--wide ${cameraMode ? "capture-camera-card" : ""}`}>
       {!cameraMode && <><h2>Um vídeo contínuo</h2><p>Filme devagar, mantenha a câmera estável, mostre os ambientes com boa luz e aproxime detalhes importantes. O tempo máximo autorizado é {clock(current?.maxDurationSeconds ?? drafts[0]?.maxDurationSeconds ?? policyLimit)}. O limite de tempo não comprova cobertura de todo o imóvel.</p>{kind === "VIDEO_REPLACEMENT" && <p role="status">{presentReplacementNotice(recaptureDeadlineAt)}</p>}{references}</>}
       {cameraMode && <h2 className="capture-camera-title">{phase === "recording" ? "Gravação em andamento" : "Câmera em foco"}</h2>}
-      {cameraMode && <div className="capture-camera-layout"><div className="capture-camera-preview"><video ref={videoRef} autoPlay muted playsInline onPlaying={(event) => { const video = event.currentTarget; const live = cameraStream?.getVideoTracks().some((track) => track.readyState === "live"); setPreviewReady(video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0 && Boolean(live)); }} onLoadedMetadata={(event) => { const video = event.currentTarget; setPreviewReady(video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0 && Boolean(cameraStream?.getVideoTracks().some((track) => track.readyState === "live"))); }} /></div><div className="capture-camera-controls">
+      {cameraMode && <div className="capture-camera-layout"><div className="capture-camera-preview"><video ref={videoRef} autoPlay muted playsInline onPlaying={(event) => { const video = event.currentTarget; const live = cameraStream?.getVideoTracks().some((track) => track.readyState === "live"); setPreviewReady(video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0 && Boolean(live)); }} onPause={() => setPreviewReady(false)} /></div><div className="capture-camera-controls">
         {phase === "ready" && <><p>Câmera pronta · ainda não está gravando</p>{previewBlocked && <Button variant="secondary" onClick={() => { if (videoRef.current) void playPreview(videoRef.current).then((result) => setPreviewBlocked(result === "blocked")); }}>Ativar prévia</Button>}<Button disabled={busy || !readyToRecord} onClick={() => void start()}>Iniciar gravação</Button><Button variant="secondary" disabled={busy} onClick={() => { generation.current += 1; releaseCamera(cameraStream); cameraStreamRef.current = undefined; setCameraStream(undefined); setPreviewReady(false); setPhase("idle"); }}>Fechar câmera</Button></>}
         {phase === "opening" && <p>Abrindo câmera…</p>}
         {phase === "starting" && <p>Preparando gravação…</p>}
-        {phase === "recording" && <><strong>Gravando</strong><p role="timer">{clock(elapsed)} / {clock(current?.maxDurationSeconds ?? 900)}</p><p>Sem áudio · Filme devagar e mantenha a câmera estável.</p><Button disabled={busy} onClick={() => void finish()}>Parar e revisar</Button></>}
+        {phase === "recording" && <><strong>Gravando</strong><p role="timer">{clock(elapsed)} / {clock(current?.maxDurationSeconds ?? 900)}</p><p>Sem áudio · Filme devagar e mantenha a câmera estável.</p><p className="capture-camera-interruption-note">Mantenha esta página aberta. Se você sair ou bloquear a tela, tentaremos finalizar o vídeo; o navegador pode interromper a gravação antes que ela seja salva.</p><Button disabled={busy} onClick={() => void finish()}>Parar e revisar</Button></>}
         {phase === "finalizing" && <p>Finalizando vídeo…</p>}
         <details className="capture-camera-references"><summary>Ver referências</summary>{references}</details>
       </div></div>}
       <div className="capture-camera-live" role="status" aria-live="polite">{liveMessage}</div>
       {!online && <Alert tone="warning">Sem conexão. Uma gravação só fica recuperável após finalização e salvamento neste dispositivo; o envio exige conexão e autorização vigente.</Alert>}
-      {(!supportedMime || !canOpenCamera()) && <Alert tone="warning">Este navegador não oferece uma câmera ou formato de gravação compatível. Abra o convite no Safari ou Chrome atualizado do aparelho. A gravação não continua em segundo plano; fechar o navegador antes de finalizar pode perder o vídeo.</Alert>}
+      {!supportedMime && <Alert tone="warning">Este navegador não oferece um formato de gravação compatível. Abra o convite no Safari ou Chrome atualizado do aparelho. A gravação não continua em segundo plano; fechar o navegador antes de finalizar pode perder o vídeo.</Alert>}
+      {supportedMime && !canOpenCamera() && <Alert tone="warning">Este navegador não oferece acesso à câmera. Abra o convite no Safari ou Chrome atualizado do aparelho.</Alert>}
       {phase === "idle" && <>{cameraMode && <p>Filme devagar, mantenha a câmera estável, mostre os ambientes com boa luz e aproxime detalhes importantes. O tempo máximo autorizado é {clock(current?.maxDurationSeconds ?? drafts[0]?.maxDurationSeconds ?? policyLimit)}.</p>}<div className="capture-actions"><Button disabled={busy || !supportedMime || !canOpenCamera() || drafts.some((item) => ["SAVED", "CONFIRMED", "RECEIVED"].includes(item.state))} onClick={() => void open()}>Abrir câmera</Button>{allowFile && <><Button variant="secondary" disabled={busy} onClick={() => fileInput.current?.click()}>Escolher vídeo permitido</Button><input ref={fileInput} type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(event) => void importFile(event)} /></>}</div></>}
       {phase === "preview" && current && <div><h3>Revise a gravação</h3>{stoppedAtLimit && <Alert tone="warning">O limite desta gravação foi atingido. Revise o vídeo antes de confirmar o envio.</Alert>}{previewURL && <MutedVideoPreview src={previewURL} onCanPlay={(event) => { if (event.currentTarget.duration <= current.maxDurationSeconds) setPlayable(true); }} onLoadedMetadata={(event) => { if (event.currentTarget.duration > current.maxDurationSeconds) { setPlayable(false); setNotice("Este vídeo excede o limite da tentativa. Grave novamente."); } }} onError={() => { setPlayable(false); setNotice("Este dispositivo não conseguiu reproduzir o vídeo. Grave novamente em um navegador compatível."); }} />}<p>{clock(elapsed)} de até {clock(current.maxDurationSeconds)}. O vídeo só será enviado após sua confirmação.</p><div className="capture-actions"><Button variant="secondary" disabled={busy} onClick={() => void discard()}>Descartar e gravar novamente</Button><Button disabled={!playable || busy || !online} onClick={() => void resume(current)}>Confirmar e enviar</Button></div></div>}
       {phase === "uploading" && <p>Enviando vídeo: {completedParts} de {totalParts || "…"} partes recebidas. Mantenha esta página aberta enquanto o envio estiver em andamento.</p>}

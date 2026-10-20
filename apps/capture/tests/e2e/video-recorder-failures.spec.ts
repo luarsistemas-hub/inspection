@@ -194,6 +194,7 @@ test("IT-112 keeps an interrupted draft incomplete until a new take is finalized
   await startVideoRecording(page);
   await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
+  await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
   const preview = page.locator("video");
   await expect(preview).toBeVisible();
   await preview.evaluate((node) => {
@@ -203,6 +204,26 @@ test("IT-112 keeps an interrupted draft incomplete until a new take is finalized
   });
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
   await assertRuntimeClean();
+});
+
+test("reuses the admitted attempt after a discarded recording and page reload", async ({ page }) => {
+  let admissions = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/graphql") && request.postData()?.includes("beginVideoCapture")) admissions += 1;
+  });
+  await installSyntheticRecorder(page);
+  await openCameraOnlyVideoInvite(page);
+  await startVideoRecording(page);
+  await expect(page.getByRole("button", { name: "Parar e revisar" })).toBeVisible();
+  await page.getByRole("button", { name: "Parar e revisar" }).click();
+  await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
+  await page.getByRole("button", { name: "Descartar e gravar novamente" }).click();
+  await expect(page.getByRole("button", { name: "Abrir câmera" })).toBeVisible();
+
+  await openCameraOnlyVideoInvite(page);
+  await startVideoRecording(page);
+  await expect(page.getByRole("button", { name: "Parar e revisar" })).toBeVisible();
+  expect(admissions).toBe(1);
 });
 
 test("IT-121 never claims local save when the final IndexedDB write aborts", async ({ page }) => {

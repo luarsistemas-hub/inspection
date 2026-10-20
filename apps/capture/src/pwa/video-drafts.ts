@@ -1,4 +1,4 @@
-export type VideoDraftState = "INCOMPLETE" | "UNSAVED" | "SAVED" | "CONFIRMED" | "RECEIVED";
+export type VideoDraftState = "READY" | "INCOMPLETE" | "UNSAVED" | "SAVED" | "CONFIRMED" | "RECEIVED";
 export type VideoPart = { number: number; etag?: string };
 export type VideoDraft = {
   id: string;
@@ -138,5 +138,18 @@ export async function discardVideoDraft(draft: VideoDraft): Promise<void> {
     const request = tx.objectStore(chunksStore).openCursor(IDBKeyRange.bound([draft.id, 0], [draft.id, Number.MAX_SAFE_INTEGER]));
     request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
     await transactionDone(tx);
+  } finally { db.close(); }
+}
+
+export async function resetVideoDraft(draft: VideoDraft): Promise<VideoDraft> {
+  const ready: VideoDraft = { ...draft, state: "READY", contentType: "", chunkCount: 0, sizeBytes: 0, sha256: undefined, parts: [], mediaId: undefined, uploadId: undefined, partSizeBytes: undefined, metadataSaved: undefined, preparationStatus: undefined };
+  const db = await openVideoDatabase();
+  try {
+    const tx = db.transaction([draftsStore, chunksStore], "readwrite");
+    tx.objectStore(draftsStore).put(ready);
+    const request = tx.objectStore(chunksStore).openCursor(IDBKeyRange.bound([draft.id, 0], [draft.id, Number.MAX_SAFE_INTEGER]));
+    request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
+    await transactionDone(tx);
+    return ready;
   } finally { db.close(); }
 }
