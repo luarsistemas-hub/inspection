@@ -65,6 +65,16 @@ class AffectedTests(unittest.TestCase):
         self.assertFalse(affected.matches("deploy/docker-compose.yml", catalog["components"]["keycloak"]["paths"]))
         self.assertTrue(affected.matches("deploy/docker-compose.yml", catalog["ignoredPaths"]))
 
+    def test_root_environment_example_is_ignored_for_image_selection(self):
+        catalog = json.loads(affected.CATALOG.read_text())
+        self.assertTrue(affected.matches(".env.example", catalog["ignoredPaths"]))
+        with patch.object(affected, "git", return_value=".env.example"), patch.object(
+            affected, "go_inputs", return_value=set()
+        ):
+            result = affected.resolve("base", "head")
+
+        self.assertEqual(result["targets"], [])
+
     def test_go_dependency_walk_finds_api_command(self):
         files = affected.go_inputs("api", "inspection-api")
         self.assertIn("services/inspection/cmd/inspection-api/main.go", files)
