@@ -4,10 +4,17 @@ model_list:
     litellm_params:
       model: gemini/gemini-3.6-flash
       api_key: os.environ/LLM_API_KEY
+  - model_name: inspection-video-preparation
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/LLM_API_KEY
+  - model_name: inspection-video-matching
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/LLM_API_KEY
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 
 #gemini-3-flash-preview
 #gemini/gemini-3.6-flash
-

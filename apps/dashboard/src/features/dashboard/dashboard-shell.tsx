@@ -251,7 +251,7 @@ function InspectionForm({ onSubmit, options, busy }: { onSubmit: (input: Record<
 
 function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; canPromoteOrigin: boolean; options: FormOptionsState }) {
   const [message, setMessage] = useState("Carregando detalhes da vistoria…"); const [detail, setDetail] = useState<InspectionDetailQuery["inspection"]>(); const detailRequest = useRef(0);
-  const [retryBusy, setRetryBusy] = useState(false); const [reloadKey, setReloadKey] = useState(0);
+  const [retryBusy, setRetryBusy] = useState(false); const [retryMessage, setRetryMessage] = useState(""); const [reloadKey, setReloadKey] = useState(0);
   const reloadDetail = () => setReloadKey((value) => value + 1);
   useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id, reloadKey]);
   if (!detail) return <section className="inspection-workspace"><p role="status">{message}</p></section>;
@@ -260,19 +260,21 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
   const asset = options.data?.assets.nodes.find((item) => item.id === detail.assetId);
   async function retryPreparation() {
     const mediaId = detail?.attention?.mediaId;
-    if (!mediaId) return;
-    setRetryBusy(true); setMessage("");
+    if (!mediaId) { setRetryMessage("A mídia desta vistoria não está disponível para nova tentativa."); return; }
+    setRetryBusy(true); setRetryMessage("");
     try {
       const prep = await graphql(InspectionVideoPreparationDocument, { mediaId });
       if (!prep.videoPreparation?.retryable) throw new Error("A preparação não pode ser repetida agora.");
       const result = await graphql(RetryInspectionVideoPreparationDocument, { input: { mediaId, expectedPreparationVersion: prep.videoPreparation.preparationVersion, clientMutationId: crypto.randomUUID() } });
       if (result.retryVideoPreparation.userErrors.length) throw new Error(result.retryVideoPreparation.userErrors.map((item) => item.message).join(" "));
-      setMessage("Nova tentativa de preparação iniciada.");
-    } catch (error) { setMessage((error as Error).message || "Não foi possível repetir a preparação."); }
+      setRetryMessage("Nova tentativa de preparação iniciada.");
+      reloadDetail();
+    } catch (error) { setRetryMessage((error as Error).message || "Não foi possível repetir a preparação."); }
     finally { setRetryBusy(false); }
   }
   return <section className="inspection-workspace" aria-labelledby="inspection-detail-title">
     <header className="inspection-detail-heading"><div><span className="inspection-record-kicker">{presentInspectionSource(detail.source)}</span><h2 id="inspection-detail-title">{assetName}</h2></div><span className="inspection-status">{presentDashboardStatus(detail.status)}</span></header>
+    {retryMessage && <p role="status">{retryMessage}</p>}
     {detail.attention && <section className="inspection-origin-context" role="status"><h3>{detail.attention.kind === "PRIVACY_REVIEW" ? "Revisão de privacidade necessária" : detail.attention.kind === "PREPARATION_FAILED" ? "Falha na preparação" : "Nova gravação solicitada"}</h3><p>{detail.attention.kind === "PRIVACY_REVIEW" ? <>A vistoria aguarda a revisão da mídia pelo gestor. {detail.attention.mediaId && <Link href={`/privacy-review?mediaId=${encodeURIComponent(detail.attention.mediaId)}`}>Abrir revisão</Link>}</> : detail.attention.kind === "PREPARATION_FAILED" ? "A preparação do vídeo falhou. Um gestor pode tentar processá-lo novamente ou solicitar outra gravação." : `Aguardando nova gravação${detail.attention.replacementDeadlineAt ? ` até ${formatInspectionDate(detail.attention.replacementDeadlineAt)}` : ""}.`}</p>{detail.attention.kind === "PREPARATION_FAILED" && canPromoteOrigin && <button type="button" disabled={retryBusy} onClick={() => void retryPreparation()}>{retryBusy ? "Iniciando…" : "Tentar preparação novamente"}</button>}{detail.attention.kind !== "REPLACEMENT_REQUESTED" && detail.attention.mediaId && canPromoteOrigin && <ReplacementRequest inspectionId={detail.id} mediaId={detail.attention.mediaId} onRequested={() => void reloadDetail()} />}</section>}
     <dl className="inspection-detail-grid">
       <div><dt>Responsável</dt><dd>{participantName}</dd></div>

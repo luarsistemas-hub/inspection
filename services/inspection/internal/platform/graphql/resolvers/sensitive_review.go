@@ -26,11 +26,17 @@ func (r *queryResolver) attentionMediaID(ctx context.Context, tenantID, inspecti
 	if r.DB == nil {
 		return nil
 	}
-	var mediaID identity.ID
+	var media struct {
+		ID string `gorm:"column:media_id"`
+	}
 	err := withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
-		return tx.Table("analysis.video_plans vp").Select("vj.media_id").Joins("JOIN media.video_preparation_jobs vj ON vj.tenant_id=vp.tenant_id AND vj.id=vp.current_preparation_id").Where("vp.tenant_id=? AND vp.inspection_id=? AND vp.status='BLOCKED'", tenantID, inspectionID).Order("vp.created_at DESC").Limit(1).Scan(&mediaID).Error
+		return tx.Table("analysis.video_plans vp").Select("vj.media_id").Joins("JOIN media.video_preparation_jobs vj ON vj.tenant_id=vp.tenant_id AND vj.id=vp.current_preparation_id").Where("vp.tenant_id=? AND vp.inspection_id=? AND vp.status='BLOCKED'", tenantID, inspectionID).Order("vp.created_at DESC").Limit(1).Scan(&media).Error
 	})
-	if err != nil || mediaID == (identity.ID{}) {
+	if err != nil || media.ID == "" {
+		return nil
+	}
+	mediaID, err := identity.ParseID(media.ID)
+	if err != nil {
 		return nil
 	}
 	value := mediaID.String()
