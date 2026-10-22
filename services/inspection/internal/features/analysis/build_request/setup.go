@@ -21,6 +21,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
 	"inspection/services/inspection/internal/platform/objectstore"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 )
@@ -391,7 +392,7 @@ func loadVideoFrameImage(ctx context.Context, tx *gorm.DB, store objectstore.Sto
 	}
 	if len(scopes) == 1 {
 		image.VisibilityKnown = true
-		image.Visible = scopes[0].Visibility == "VISIBLE"
+		image.Visible = scopes[0].Visibility == video.VisibilityVisible
 	}
 	return image, nil
 }

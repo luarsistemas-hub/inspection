@@ -14,6 +14,7 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/observability"
+	"inspection/services/inspection/internal/platform/video"
 )
 
 var ErrInvalidPlan = errors.New("video analysis plan is invalid")
@@ -305,7 +306,7 @@ func usableComponentFrames(frames []Frame) ([]Frame, string) {
 	flagged := make([]Frame, 0)
 	labelled := 0
 	for _, frame := range frames {
-		if frame.IdentityStatus == "AMBIGUOUS" || frame.Visibility == "OBSCURED" || frame.Quality == "LOW_QUALITY" {
+		if frame.IdentityStatus == "AMBIGUOUS" || frame.Visibility == video.VisibilityObscured || frame.Quality == "LOW_QUALITY" {
 			flagged = append(flagged, frame)
 			continue
 		}
@@ -327,7 +328,7 @@ func namedGapReason(frames []Frame) string {
 		}
 	}
 	for _, frame := range frames {
-		if frame.Visibility == "OBSCURED" {
+		if frame.Visibility == video.VisibilityObscured {
 			return "OBSTRUCTED_VIEW"
 		}
 	}

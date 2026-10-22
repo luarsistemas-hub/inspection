@@ -230,19 +230,9 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 		if err := tx.Save(&challenge).Error; err != nil {
 			return err
 		}
-		if err := verifyInvitedEmail(tx, invitation, now); err != nil {
+		if err := confirmResponsibleAccess(ctx, tx, invitation, now); err != nil {
 			return err
 		}
-		if err := tx.Model(&database.Responsibility{}).
-			Where("tenant_id=? AND id=? AND status='PENDING'", tenantID, invitation.ResponsibilityID).
-			Updates(map[string]any{"status": "ACCESSED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
-			return err
-		}
-		var responsibility database.Responsibility
-		if err := tx.Where("tenant_id=? AND id=?", tenantID, invitation.ResponsibilityID).First(&responsibility).Error; err != nil {
-			return err
-		}
-		observability.LogResponsibleAccessConfirmed(ctx, tenantID, responsibility.InspectionID, responsibility.ID, responsibility.Version)
 		token, err := security.NewScopedToken(invitation.TenantID)
 		if err != nil {
 			return err
@@ -270,11 +260,42 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 	return result, rejection
 }
 
-func verifyInvitedEmail(tx *gorm.DB, invitation database.Invitation, now time.Time) error {
+// confirmResponsibleAccess records the first access of an inspection
+// responsible. Origin captures have no inspection responsibility: their
+// invitation uses the synthetic id owned by the origin version and its capture
+// draft, so only that draft is required for them.
+func confirmResponsibleAccess(ctx context.Context, tx *gorm.DB, invitation database.Invitation, now time.Time) error {
+	var responsibilities []database.Responsibility
+	if err := tx.Where("tenant_id=? AND id=?", invitation.TenantID, invitation.ResponsibilityID).Limit(1).Find(&responsibilities).Error; err != nil {
+		return err
+	}
+	if len(responsibilities) == 0 {
+		var origins int64
+		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=? AND kind='ORIGIN'", invitation.TenantID, invitation.ResponsibilityID).Count(&origins).Error; err != nil {
+			return err
+		}
+		if origins != 1 {
+			return safeInvitationError(gorm.ErrRecordNotFound)
+		}
+		return nil
+	}
+	if err := verifyInvitedEmail(tx, invitation, responsibilities[0], now); err != nil {
+		return err
+	}
+	if err := tx.Model(&database.Responsibility{}).
+		Where("tenant_id=? AND id=? AND status='PENDING'", invitation.TenantID, invitation.ResponsibilityID).
+		Updates(map[string]any{"status": "ACCESSED", "version": gorm.Expr("version + 1"), "updated_at": now}).Error; err != nil {
+		return err
+	}
 	var responsibility database.Responsibility
 	if err := tx.Where("tenant_id=? AND id=?", invitation.TenantID, invitation.ResponsibilityID).First(&responsibility).Error; err != nil {
 		return err
 	}
+	observability.LogResponsibleAccessConfirmed(ctx, invitation.TenantID, responsibility.InspectionID, responsibility.ID, responsibility.Version)
+	return nil
+}
+
+func verifyInvitedEmail(tx *gorm.DB, invitation database.Invitation, responsibility database.Responsibility, now time.Time) error {
 	var intents []DeliveryIntent
 	if err := json.Unmarshal(invitation.DeliveryIntents, &intents); err != nil {
 		return err

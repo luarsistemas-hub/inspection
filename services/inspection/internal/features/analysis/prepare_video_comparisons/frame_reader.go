@@ -8,6 +8,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 )
@@ -39,12 +40,8 @@ func (r DBFrameReader) LoadPreparationFrames(ctx context.Context, tenantID, prep
 		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, job.MediaID).Take(&media).Error; err != nil {
 			return err
 		}
-		var responsibility database.Responsibility
-		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, media.ResponsibilityID).Take(&responsibility).Error; err != nil {
-			return err
-		}
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil {
+		assetID, err := mediaAssetID(tx, tenantID, media.ResponsibilityID)
+		if err != nil {
 			return err
 		}
 		var frames []database.VideoFrame
@@ -69,7 +66,7 @@ func (r DBFrameReader) LoadPreparationFrames(ctx context.Context, tenantID, prep
 		}
 		result = make([]Frame, 0, len(frames))
 		for _, row := range frames {
-			frame := Frame{ID: row.ID, TenantID: tenantID, AssetID: inspection.AssetID, PreparationID: preparationID, Generation: job.Generation, Digest: row.SHA256, PTS: row.PTSMicros, Quality: row.Quality}
+			frame := Frame{ID: row.ID, TenantID: tenantID, AssetID: assetID, PreparationID: preparationID, Generation: job.Generation, Digest: row.SHA256, PTS: row.PTSMicros, Quality: row.Quality}
 			if scope, ok := scopes[row.ID]; ok {
 				frame.Environment = scope.EnvironmentCandidate
 				frame.Component = scope.ID.String()
@@ -77,11 +74,36 @@ func (r DBFrameReader) LoadPreparationFrames(ctx context.Context, tenantID, prep
 				frame.View = scope.ViewLabel
 				frame.Visibility = scope.Visibility
 				frame.IdentityStatus = scope.IdentityStatus
-				frame.Visible = scope.Visibility == "VISIBLE"
+				frame.Visible = scope.Visibility == video.VisibilityVisible
 			}
 			result = append(result, frame)
 		}
 		return nil
 	})
 	return result, err
+}
+
+// mediaAssetID resolves the asset a preparation's source media belongs to. An
+// inspection capture reaches it through its responsibility; an origin capture
+// has no inspection responsibility, so it reaches it through its origin version.
+func mediaAssetID(tx *gorm.DB, tenantID, responsibilityID identity.ID) (identity.ID, error) {
+	var responsibilities []database.Responsibility
+	if err := tx.Where("tenant_id = ? AND id = ?", tenantID, responsibilityID).Limit(1).Find(&responsibilities).Error; err != nil {
+		return identity.ID{}, err
+	}
+	if len(responsibilities) == 1 {
+		var inspection database.Inspection
+		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, responsibilities[0].InspectionID).Take(&inspection).Error; err != nil {
+			return identity.ID{}, err
+		}
+		return inspection.AssetID, nil
+	}
+	var origins []database.Origin
+	if err := tx.Where("tenant_id = ? AND id IN (?)", tenantID, tx.Model(&database.OriginVersion{}).Select("origin_id").Where("tenant_id = ? AND responsibility_id = ?", tenantID, responsibilityID)).Limit(1).Find(&origins).Error; err != nil {
+		return identity.ID{}, err
+	}
+	if len(origins) != 1 {
+		return identity.ID{}, fmt.Errorf("%w: preparation media has no inspection or origin owner", ErrInvalidPlan)
+	}
+	return origins[0].AssetID, nil
 }

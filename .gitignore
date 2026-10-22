@@ -23,6 +23,7 @@ node_modules/
 # Playwright artifacts from local e2e runs.
 **/test-results/
 **/playwright-report/
+/apps/dashboard/tests/fixtures/video/*.mp4
 
 # Go command binaries generated at the repository root.
 /inspection-worker

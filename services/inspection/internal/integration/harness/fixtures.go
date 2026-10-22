@@ -13,6 +13,7 @@ import (
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 )
@@ -98,7 +99,7 @@ func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOrigi
 		if err := tx.Create(&database.VideoFrame{ID: f.FrameID, TenantID: f.TenantID, SourceMediaID: f.MediaID, PreparationID: f.PreparationID, PTSMicros: 0, SHA256: frameDigest, ObjectKey: frameKey, Width: 1, Height: 1, Role: "BASELINE", Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.VideoScopeItem{ID: f.ScopeItemID, TenantID: f.TenantID, PreparationID: f.PreparationID, FrameID: f.FrameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error
+		return tx.Create(&database.VideoScopeItem{ID: f.ScopeItemID, TenantID: f.TenantID, PreparationID: f.PreparationID, FrameID: f.FrameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: video.VisibilityVisible, IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error
 	})
 	if err != nil {
 		return VideoOriginFixture{}, fmt.Errorf("seed video origin fixture: %w", err)

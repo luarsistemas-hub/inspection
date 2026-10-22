@@ -19,7 +19,7 @@ func sqliteFrameReaderDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, schema := range []string{"media", "inspections"} {
+	for _, schema := range []string{"media", "inspections", "origins"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -29,6 +29,8 @@ func sqliteFrameReaderDB(t *testing.T) *gorm.DB {
 		"CREATE TABLE media.media_objects (id TEXT, tenant_id TEXT, responsibility_id TEXT)",
 		"CREATE TABLE inspections.responsibilities (id TEXT, tenant_id TEXT, inspection_id TEXT)",
 		"CREATE TABLE inspections.inspections (id TEXT, tenant_id TEXT, asset_id TEXT)",
+		"CREATE TABLE origins.origins (id TEXT, tenant_id TEXT, asset_id TEXT)",
+		"CREATE TABLE origins.origin_versions (id TEXT, tenant_id TEXT, origin_id TEXT, responsibility_id TEXT)",
 		"CREATE TABLE media.video_frames (id TEXT, tenant_id TEXT, source_media_id TEXT, preparation_id TEXT, pts_us INTEGER, sha256 TEXT, object_key TEXT, size_bytes INTEGER, quality TEXT)",
 		"CREATE TABLE media.video_scope_items (id TEXT, tenant_id TEXT, preparation_id TEXT, frame_id TEXT, environment_candidate TEXT, component_label TEXT, view_label TEXT, visibility TEXT, identity_status TEXT, landmarks BLOB, created_at DATETIME)",
 	} {
@@ -87,5 +89,40 @@ func TestDBFrameReaderLoadsReadyTenantFramesAndRejectsWrongScopeOrState(t *testi
 	}
 	if _, err := reader.LoadPreparationFrames(context.Background(), tenant, prep); !errors.Is(err, ErrInvalidPlan) {
 		t.Fatalf("non-ready preparation should be rejected: %v", err)
+	}
+}
+
+func TestDBFrameReaderResolvesAssetOfOriginMediaWithoutInspectionResponsibility(t *testing.T) {
+	db := sqliteFrameReaderDB(t)
+	tenant := testID("origin-reader-tenant")
+	prep, mediaID, responsibilityID := testID("origin-reader-prep"), testID("origin-reader-media"), testID("origin-reader-responsibility")
+	originID, assetID, frameID := testID("origin-reader-origin"), testID("origin-reader-asset"), testID("origin-reader-frame")
+	for _, statement := range []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO media.video_preparation_jobs VALUES (?, ?, ?, 'READY', ?, 1)", []any{prep.String(), tenant.String(), mediaID.String(), digest}},
+		{"INSERT INTO media.media_objects VALUES (?, ?, ?)", []any{mediaID.String(), tenant.String(), responsibilityID.String()}},
+		{"INSERT INTO origins.origins VALUES (?, ?, ?)", []any{originID.String(), tenant.String(), assetID.String()}},
+		{"INSERT INTO origins.origin_versions VALUES (?, ?, ?, ?)", []any{testID("origin-reader-version").String(), tenant.String(), originID.String(), responsibilityID.String()}},
+		{"INSERT INTO media.video_frames VALUES (?, ?, ?, ?, 1, ?, 'video/frame', 9, '')", []any{frameID.String(), tenant.String(), mediaID.String(), prep.String(), digest}},
+	} {
+		if err := db.Exec(statement.sql, statement.args...).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	within := func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
+		return db.WithContext(ctx).Transaction(fn)
+	}
+	reader := DBFrameReader{DB: db, Within: within}
+	frames, err := reader.LoadPreparationFrames(context.Background(), tenant, prep)
+	if err != nil || len(frames) != 1 || frames[0].AssetID != assetID {
+		t.Fatalf("origin frames did not resolve the origin asset: frames=%+v err=%v", frames, err)
+	}
+	if err := db.Exec("DELETE FROM origins.origin_versions").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.LoadPreparationFrames(context.Background(), tenant, prep); !errors.Is(err, ErrInvalidPlan) {
+		t.Fatalf("media without an inspection or origin owner must be a permanent plan error, got %v", err)
 	}
 }

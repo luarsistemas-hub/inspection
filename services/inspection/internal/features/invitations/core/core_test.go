@@ -283,6 +283,42 @@ func TestIT369IT383IT385InvitationSessionFlow(t *testing.T) {
 		t.Fatalf("exact expiry accepted: %v", err)
 	}
 }
+func TestVerifyOTPAcceptsOriginInvitationWithoutInspectionResponsibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		valid      bool
+	}{{"origin draft", "ORIGIN", true}, {"dangling responsibility", "INSPECTION", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, token := invitationDB(t)
+			if err := db.Exec(`DELETE FROM inspections.responsibilities`).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Exec(`UPDATE capture.capture_drafts SET kind=?`, tc.kind).Error; err != nil {
+				t.Fatal(err)
+			}
+			now := time.Unix(1000, 0).UTC()
+			notifier := &notifierStub{}
+			service := Service{DB: db, Pepper: []byte("01234567890123456789012345678901"), Limits: &limitsStub{allowed: true}, Notifier: notifier, Clock: func() time.Time { return now }, Within: testWithin(db)}
+			if err := service.RequestOTP(context.Background(), token); err != nil {
+				t.Fatal(err)
+			}
+			session, err := service.VerifyOTP(context.Background(), token, notifier.code)
+			if !tc.valid {
+				if appCode(err) != apperror.InvalidInput {
+					t.Fatalf("dangling responsibility accepted: %v", err)
+				}
+				return
+			}
+			if err != nil || session.Token == "" {
+				t.Fatalf("origin invitation rejected: %v", err)
+			}
+			if responsibility, err := service.ValidateSession(context.Background(), session.Token, session.CSRF); err != nil || responsibility != session.ResponsibilityID {
+				t.Fatalf("origin session: %v %v", responsibility, err)
+			}
+		})
+	}
+}
+
 func TestIT384IT595ImmediateRevocation(t *testing.T) {
 	db, token := invitationDB(t)
 	now := time.Unix(1000, 0).UTC()

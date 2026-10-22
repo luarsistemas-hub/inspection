@@ -11,7 +11,8 @@
     "codegen": "graphql-codegen --config codegen.ts",
     "codegen:check": "npm run codegen && git diff --exit-code -- src/graphql/generated.ts src/graphql/schema.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:video-live": "INSPECTION_E2E_VIDEO_LIVE=true playwright test --config=playwright.video-live.config.ts"
   },
   "dependencies": {
     "@inspection/design-system": "file:../../packages/inspection-design-system",

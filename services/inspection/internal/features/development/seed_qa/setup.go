@@ -21,6 +21,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/security"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -309,7 +310,7 @@ func SetupFixedOriginVideo(ctx context.Context, db *gorm.DB, issuer, minioEndpoi
 			if err := tx.Create(&database.VideoFrame{ID: frameID, TenantID: membership.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: int64(i) * 500_000, SHA256: frameDigest, ObjectKey: frameKeys[i], Width: 1, Height: 1, Role: "BASELINE", Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: membership.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: labels[i][0], ComponentLabel: labels[i][1], ViewLabel: labels[i][2], Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
+			if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: membership.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: labels[i][0], ComponentLabel: labels[i][1], ViewLabel: labels[i][2], Visibility: video.VisibilityVisible, IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
 				return err
 			}
 		}

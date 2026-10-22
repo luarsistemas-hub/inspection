@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -14,7 +15,9 @@ const (
 	scopeBatchOverlap   = 2
 	maxScopeLabelRunes  = 120
 	maxScopeItems       = 200
-	selectionVersion    = 1
+	// maxKnownEnvironments bounds the labels carried into later scope prompts.
+	maxKnownEnvironments = 32
+	selectionVersion     = 1
 )
 
 // Candidate is a frame retained during the bounded per-second selection pass.
@@ -86,6 +89,12 @@ func SelectFrames(candidates []Candidate, lowQualityBelow float64) []SelectedFra
 	return result
 }
 
+// Visibility values recorded for a scope observation.
+const (
+	VisibilityVisible  = "VISIBLE"
+	VisibilityObscured = "OBSCURED"
+)
+
 // ScopeObservation is a model label bound to an existing screened frame id.
 type ScopeObservation struct {
 	FrameID, EnvironmentCandidate, ComponentLabel, ViewLabel, Visibility string
@@ -93,7 +102,9 @@ type ScopeObservation struct {
 	IdentityStatus                                                       string `json:"identityStatus,omitempty"`
 }
 
-// ValidateScope rejects hallucinated frame membership and overlarge or unsafe labels.
+// ValidateScope rejects hallucinated frame membership and overlarge or unsafe
+// labels. It normalizes each observation's visibility in place to
+// VisibilityVisible or VisibilityObscured.
 func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolved []string) error {
 	allowed := make(map[string]struct{}, len(frameIDs))
 	for _, id := range frameIDs {
@@ -115,7 +126,8 @@ func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolve
 		}
 		seen[id] = struct{}{}
 	}
-	for _, item := range observations {
+	for i := range observations {
+		item := &observations[i]
 		if _, ok := allowed[item.FrameID]; !ok {
 			return fmt.Errorf("%w: frame outside request", ErrModelOutputInvalid)
 		}
@@ -123,7 +135,8 @@ func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolve
 			return fmt.Errorf("%w: repeated frame", ErrModelOutputInvalid)
 		}
 		seen[item.FrameID] = struct{}{}
-		for _, label := range []string{item.EnvironmentCandidate, item.ComponentLabel, item.ViewLabel, item.Visibility} {
+		item.Visibility = normalizeVisibility(item.Visibility)
+		for _, label := range []string{item.EnvironmentCandidate, item.ComponentLabel, item.ViewLabel} {
 			if !validSceneLabel(label) {
 				return fmt.Errorf("%w: invalid scene label", ErrModelOutputInvalid)
 			}
@@ -143,18 +156,34 @@ func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolve
 	return nil
 }
 
+// normalizeVisibility accepts the schema value and common model synonyms for a
+// clear view. Any other value is treated as obscured, the conservative state
+// that downstream analysis reports as a named gap.
+func normalizeVisibility(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case VisibilityVisible, "FULL_VIEW", "FULLY_VISIBLE", "CLEAR_VIEW":
+		return VisibilityVisible
+	default:
+		return VisibilityObscured
+	}
+}
+
 // DiscoverScope validates each bounded response and retries malformed output once.
-// It returns no partial scope when any batch remains invalid.
-func DiscoverScope(ctx context.Context, frames []string, invoke func(context.Context, []string) ([]ScopeObservation, []string, error)) ([]ScopeObservation, error) {
+// It returns no partial scope when any batch remains invalid. Each call receives
+// the distinct environment labels accepted from earlier batches, so the model
+// can keep naming a continuing room consistently across batch boundaries.
+func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context.Context, batch, knownEnvironments []string) ([]ScopeObservation, []string, error)) ([]ScopeObservation, error) {
 	if invoke == nil {
 		return nil, fmt.Errorf("video: missing scope gateway")
 	}
 	var all []ScopeObservation
+	var known []string
+	knownKeys := map[string]struct{}{}
 	for _, batch := range ScopeBatches(frames) {
 		var accepted []ScopeObservation
 		valid := false
 		for attempt := 0; attempt < 2; attempt++ {
-			observations, unresolved, err := invoke(ctx, batch)
+			observations, unresolved, err := invoke(ctx, batch, slices.Clone(known))
 			if err != nil {
 				if errors.Is(err, ErrResourceLimit) {
 					return nil, err
@@ -174,6 +203,15 @@ func DiscoverScope(ctx context.Context, frames []string, invoke func(context.Con
 		if !valid {
 			return nil, ErrModelOutputInvalid
 		}
+		for _, observation := range accepted {
+			label := strings.TrimSpace(observation.EnvironmentCandidate)
+			key := strings.ToLower(label)
+			if _, ok := knownKeys[key]; ok || len(known) == maxKnownEnvironments {
+				continue
+			}
+			knownKeys[key] = struct{}{}
+			known = append(known, label)
+		}
 		all = append(all, accepted...)
 	}
 	return all, nil
@@ -187,9 +225,25 @@ func ConsolidateScope(frameIDs []string, observations []ScopeObservation) ([]Sco
 	for i, id := range frameIDs {
 		positions[id] = i
 	}
-	ordered := append([]ScopeObservation(nil), observations...)
+	ordered := make([]ScopeObservation, 0, len(observations))
+	frameIndexes := make(map[string]int, len(observations))
+	for _, observation := range observations {
+		if _, ok := positions[observation.FrameID]; !ok {
+			return nil, ErrModelOutputInvalid
+		}
+		// Adjacent batches share two frames and describe them in independent
+		// model calls. Keep the earlier description unless only the later one
+		// saw the component clearly.
+		if index, ok := frameIndexes[observation.FrameID]; ok {
+			if ordered[index].Visibility != VisibilityVisible && observation.Visibility == VisibilityVisible {
+				ordered[index] = observation
+			}
+			continue
+		}
+		frameIndexes[observation.FrameID] = len(ordered)
+		ordered = append(ordered, observation)
+	}
 	sort.SliceStable(ordered, func(i, j int) bool { return positions[ordered[i].FrameID] < positions[ordered[j].FrameID] })
-	seenFrames := make(map[string]ScopeObservation, len(ordered))
 	grouped := make([]ScopeObservation, 0, min(len(ordered), maxScopeItems))
 	groupEnvironments := make([]string, 0, min(len(ordered), maxScopeItems))
 	groupIndexes := make(map[string]int)
@@ -197,16 +251,6 @@ func ConsolidateScope(frameIDs []string, observations []ScopeObservation) ([]Sco
 	previousEnvironment := ""
 	environmentOccurrences := 0
 	for _, observation := range ordered {
-		if _, ok := positions[observation.FrameID]; !ok {
-			return nil, ErrModelOutputInvalid
-		}
-		if earlier, ok := seenFrames[observation.FrameID]; ok {
-			if earlier.EnvironmentCandidate != observation.EnvironmentCandidate || earlier.ComponentLabel != observation.ComponentLabel || earlier.ViewLabel != observation.ViewLabel || earlier.Visibility != observation.Visibility || strings.Join(earlier.Landmarks, "\x00") != strings.Join(observation.Landmarks, "\x00") {
-				return nil, ErrModelOutputInvalid
-			}
-			continue
-		}
-		seenFrames[observation.FrameID] = observation
 		environment := strings.ToLower(strings.TrimSpace(observation.EnvironmentCandidate))
 		if environment != previousEnvironment {
 			environmentOccurrences++
@@ -219,7 +263,7 @@ func ConsolidateScope(frameIDs []string, observations []ScopeObservation) ([]Sco
 		}
 		key := strings.ToLower(strings.TrimSpace(observation.ComponentLabel)) + "\x00" + strings.ToLower(strings.TrimSpace(observation.ViewLabel)) + "\x00" + strings.ToLower(strings.Join(observation.Landmarks, "\x00"))
 		if index, ok := groupIndexes[key]; ok {
-			if grouped[index].Visibility != "VISIBLE" && observation.Visibility == "VISIBLE" {
+			if grouped[index].Visibility != VisibilityVisible && observation.Visibility == VisibilityVisible {
 				grouped[index] = observation
 			}
 			continue

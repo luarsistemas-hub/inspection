@@ -14,6 +14,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 )
@@ -138,7 +139,7 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 			if !ok {
 				return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "video origin frame lineage is incomplete")
 			}
-			result.VideoScope = append(result.VideoScope, VideoEvidence{ScopeItemID: item.ID, FrameID: frame.ID, SourceMediaID: prep.MediaID, PTSMicros: frame.PTSMicros, EnvironmentCandidate: item.EnvironmentCandidate, ComponentLabel: item.ComponentLabel, ViewLabel: item.ViewLabel, Visibility: item.Visibility, Ambiguous: item.Visibility == "AMBIGUOUS" || item.IdentityStatus == "AMBIGUOUS", Gap: item.Visibility == "OBSCURED" || item.Visibility == "NOT_VISIBLE"})
+			result.VideoScope = append(result.VideoScope, VideoEvidence{ScopeItemID: item.ID, FrameID: frame.ID, SourceMediaID: prep.MediaID, PTSMicros: frame.PTSMicros, EnvironmentCandidate: item.EnvironmentCandidate, ComponentLabel: item.ComponentLabel, ViewLabel: item.ViewLabel, Visibility: item.Visibility, Ambiguous: item.IdentityStatus == "AMBIGUOUS", Gap: item.Visibility == video.VisibilityObscured})
 		}
 		result.Requirements = []capturecore.Requirement{capturecore.VideoMainRequirement("FIXED_ORIGIN")}
 		return result, nil

@@ -20,10 +20,10 @@ export async function loginAsLocalAdmin(page: Page, returnTo: string): Promise<v
   await page.goto(returnTo);
   const signIn = page.getByRole("button", { name: "Entrar no Painel" });
   const navigation = page.getByRole("navigation", { name: "Painel" });
-  await Promise.race([signIn.waitFor({ state: "visible" }), navigation.waitFor({ state: "visible" })]);
+  await expect.poll(async () => await signIn.isVisible() || await navigation.isVisible(), { timeout: 15_000 }).toBe(true);
   if (await signIn.isVisible()) await signIn.click();
   const username = page.locator("#username");
-  await Promise.race([username.waitFor({ state: "visible" }), navigation.waitFor({ state: "visible" })]);
+  await expect.poll(async () => await username.isVisible() || await navigation.isVisible(), { timeout: 15_000 }).toBe(true);
   if (await username.isVisible()) {
     await username.fill(process.env.INSPECTION_E2E_USERNAME ?? "admin");
     await page.locator("#password").fill(process.env.INSPECTION_E2E_PASSWORD ?? "admin");
