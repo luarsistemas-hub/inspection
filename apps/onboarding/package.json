@@ -16,7 +16,7 @@
   "dependencies": {
     "@inspection/address": "file:../../packages/inspection-address",
     "@inspection/design-system": "file:../../packages/inspection-design-system",
-    "next": "15.5.25",
+    "next": "15.5.28",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },
@@ -32,7 +32,7 @@
     "@types/react": "19.1.10",
     "@types/react-dom": "19.1.7",
     "eslint": "9.36.0",
-    "eslint-config-next": "15.5.12",
+    "eslint-config-next": "15.5.28",
     "graphql": "^16.11.0",
     "jsdom": "26.1.0",
     "typescript": "5.9.2",
