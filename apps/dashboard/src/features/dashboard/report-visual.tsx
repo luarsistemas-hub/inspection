@@ -45,7 +45,7 @@ export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, do
 export function CustomerReportVisual({ report, evidence, onMediaError }: { report: CustomerReport; evidence: CustomerEvidenceQuery["customerEvidence"]["nodes"]; onMediaError?: () => void }) {
   return <article className="report-visual report-visual--customer">
     <CustomerReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} />
-    <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, availability: item.mediaAvailability }))} findings={[]} onMediaError={onMediaError} />
+    <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, availability: item.mediaAvailability }))} findings={[]} hasReferenceInReport={evidence.some((item) => item.role === "REFERENCE")} onMediaError={onMediaError} />
   </article>;
 }
 
@@ -61,16 +61,20 @@ const UNMATCHED_SECTION = "\u0000unmatched";
 const UNMATCHED_LABEL = "Evidências adicionais";
 
 function ReportSections({ requirements, evidence, findings, onMediaError }: { requirements: InternalReport["requirements"]; evidence: InternalReport["evidence"]["nodes"]; findings: InternalReport["findings"]; onMediaError?: () => void }) {
-  const { sections, counts, unmatched } = useMemo(() => {
+  const hasReferenceInReport = evidence.some((item) => item.role === "REFERENCE");
+  const { sections, counts, unmatched, defaultSection } = useMemo(() => {
     const names = [...new Set(requirements.map((requirement) => requirement.section))];
     const unmatchedItems = unmatchedReportEvidence(requirements, evidence);
     const countBySection = new Map<string, number>();
     for (const requirement of requirements) countBySection.set(requirement.section, (countBySection.get(requirement.section) ?? 0) + 1);
     if (unmatchedItems.length) countBySection.set(UNMATCHED_SECTION, unmatchedItems.length);
-    return { sections: unmatchedItems.length ? [...names, UNMATCHED_SECTION] : names, counts: countBySection, unmatched: unmatchedItems };
+    const sectionByKey = new Map(requirements.map((requirement) => [requirement.key, requirement.section]));
+    const sectionsWithEvidence = new Set(evidence.map((item) => sectionByKey.get(item.requirementKey)));
+    const defaultSection = names.find((section) => sectionsWithEvidence.has(section)) ?? (unmatchedItems.length ? UNMATCHED_SECTION : names[0] ?? "");
+    return { sections: unmatchedItems.length ? [...names, UNMATCHED_SECTION] : names, counts: countBySection, unmatched: unmatchedItems, defaultSection };
   }, [requirements, evidence]);
-  const [requestedSection, setRequestedSection] = useState(sections[0] ?? "");
-  const activeSection = sections.includes(requestedSection) ? requestedSection : sections[0] ?? "";
+  const [requestedSection, setRequestedSection] = useState(defaultSection);
+  const activeSection = sections.includes(requestedSection) ? requestedSection : defaultSection;
   const showUnmatched = activeSection === UNMATCHED_SECTION;
   const visibleRequirements = useMemo(() => requirements.filter((requirement) => requirement.section === activeSection), [requirements, activeSection]);
   const visibleEvidence = useMemo(() => {
@@ -79,7 +83,7 @@ function ReportSections({ requirements, evidence, findings, onMediaError }: { re
     return evidence.filter((item) => keys.has(item.requirementKey));
   }, [showUnmatched, unmatched, visibleRequirements, evidence]);
 
-  if (!sections.length) return <ReportEvidence requirements={requirements} evidence={evidence} findings={findings} onMediaError={onMediaError} />;
+  if (!sections.length) return <ReportEvidence requirements={requirements} evidence={evidence} findings={findings} hasReferenceInReport={hasReferenceInReport} onMediaError={onMediaError} />;
 
   return <div className="report-workspace">
     {sections.length > 1 && <nav className="report-section-nav" aria-label="Ambientes do laudo">
@@ -88,15 +92,15 @@ function ReportSections({ requirements, evidence, findings, onMediaError }: { re
     </nav>}
     <div className="report-section-content">
       {showUnmatched
-        ? <ReportEvidence requirements={[]} evidence={visibleEvidence} findings={[]} onMediaError={onMediaError} />
-        : <ReportEvidence requirements={visibleRequirements} evidence={visibleEvidence} findings={findings} onMediaError={onMediaError} />}
+        ? <ReportEvidence requirements={[]} evidence={visibleEvidence} findings={[]} hasReferenceInReport={hasReferenceInReport} onMediaError={onMediaError} />
+        : <ReportEvidence requirements={visibleRequirements} evidence={visibleEvidence} findings={findings} hasReferenceInReport={hasReferenceInReport} onMediaError={onMediaError} />}
     </div>
   </div>;
 }
 
 type ReportEvidenceItem = { id: string; requirementKey: string; role: string; description?: string | null; capturedAt?: string | null; flags: string[]; availability: string; sourceAvailability?: string | null; url?: string | null; evidenceKind?: string | null; frameId?: string | null; timestampMs?: number | null; ptsMicros?: string | null; sourceMediaId?: string | null; component?: string | null; label?: string | null };
 
-function ReportEvidence({ requirements, evidence, findings, onMediaError }: { requirements: Array<{ key: string; section: string; label: string; instructions?: string | null; noRelevantChange?: boolean | null; analysisMode: string; analysisStatus: string }>; evidence: ReportEvidenceItem[]; findings: Array<{ category?: string; title: string; description: string; severity: string; recommendedAction: string; evidenceIds: string[] }>; onMediaError?: () => void }) {
+function ReportEvidence({ requirements, evidence, findings, hasReferenceInReport, onMediaError }: { requirements: Array<{ key: string; section: string; label: string; instructions?: string | null; noRelevantChange?: boolean | null; analysisMode: string; analysisStatus: string }>; evidence: ReportEvidenceItem[]; findings: Array<{ category?: string; title: string; description: string; severity: string; recommendedAction: string; evidenceIds: string[] }>; hasReferenceInReport: boolean; onMediaError?: () => void }) {
   const unmatched = unmatchedReportEvidence(requirements, evidence);
   const unmatchedReference = unmatched.filter((item) => item.role === "REFERENCE");
   const unmatchedCurrent = unmatched.filter((item) => item.role !== "REFERENCE");
@@ -109,7 +113,7 @@ function ReportEvidence({ requirements, evidence, findings, onMediaError }: { re
       return <section className="report-requirement" key={requirement.key}>
         <header className="report-requirement-heading"><div><span>{requirement.section}</span><h3>{requirement.label}</h3>{requirement.instructions && <p>{requirement.instructions}</p>}</div><small>{presentAnalysisStatus(requirement.analysisStatus)}{related.length === 0 && requirement.analysisMode === "COMPARE_ORIGIN_CURRENT" && requirement.noRelevantChange !== null && <> · {presentNoRelevantChange(requirement.noRelevantChange)}</>}</small></header>
         <div className={`report-requirement-body${related.length ? "" : " report-requirement-body--without-findings"}`}>
-          {requirement.analysisMode === "CURRENT_ONLY" && <p className="report-no-baseline">Esta análise mostra apenas a condição observada agora; não há referência histórica para comparar.</p>}
+          {requirement.analysisMode === "CURRENT_ONLY" && <p className="report-no-baseline">{hasReferenceInReport ? "A origem existe neste laudo, mas não há comparação concluída para este requisito." : "Esta análise mostra apenas a condição observada agora; não há referência histórica para comparar."}</p>}
           {related.length > 0 && <section className="report-findings" aria-label={`Constatações de ${requirement.label}`}>{related.map((finding) => <article key={`${finding.title}-${finding.description}`}><span>{presentFindingCategory(finding.category)} · {finding.severity}</span><h4>{finding.title}</h4><p>{finding.description}</p><p><strong>Ação recomendada</strong> · {finding.recommendedAction}</p></article>)}</section>}
           <div className="report-comparison">{reference.length > 0 && <EvidenceColumn title="Referência" items={reference} onMediaError={onMediaError} />}<EvidenceColumn title={reference.length > 0 ? "Vistoria atual" : "Fotos da vistoria"} items={current} onMediaError={onMediaError} /></div>
           {related.length === 0 && requirement.analysisStatus === "COMPLETED" && <p className="report-no-findings">Nenhuma constatação foi registrada; isso não confirma a ausência de problemas.</p>}
@@ -130,7 +134,7 @@ export function unmatchedReportEvidence<T extends { requirementKey: string }>(re
 
 function EvidenceColumn({ title, items, onMediaError }: { title: string; items: ReportEvidenceItem[]; onMediaError?: () => void }) {
   const videoEvidence = items.some(isVideoEvidence);
-  return <section className="report-evidence-column"><h4>{videoEvidence ? (title === "Referência" ? "ORIGEM" : "ATUAL") : title}</h4>{items.length ? <div className="report-image-grid">{items.map((item) => <figure key={`${item.id}:${item.url ?? ""}`}>{item.availability === "AVAILABLE" && item.url ? <EvidenceImage url={item.url} alt={item.description ? `${title}: ${item.description}` : title} onMediaError={onMediaError} /> : <div className="report-image-missing">Imagem indisponível</div>}{isVideoEvidence(item) && <VideoEvidencePlayer item={item} onMediaError={onMediaError} /> }<figcaption>{item.description ?? item.label ?? "Sem descrição"}{(item.component || item.timestampMs !== null && item.timestampMs !== undefined || item.frameId) && <small>{[item.component, formatVideoTime(item.timestampMs), item.frameId ? `Frame ${shortFrameId(item.frameId)}` : undefined].filter(Boolean).join(" · ")}</small>}{item.ptsMicros && <small>PTS {formatVideoTime(Number(item.ptsMicros) / 1000)}</small>}{item.capturedAt && <small>{new Date(item.capturedAt).toLocaleString("pt-BR")}</small>}{(item.sourceAvailability === "EXPIRED" || item.sourceAvailability === "MISSING") && isVideoEvidence(item) && <small>Vídeo original expirado; frame preservado.</small>}{item.flags.length > 0 && <small>{item.flags.join(" · ")}</small>}</figcaption></figure>)}</div> : <p className="report-empty">Nenhuma imagem para esta etapa.</p>}</section>;
+  return <section className="report-evidence-column"><h4>{videoEvidence ? (title === "Referência" ? "ORIGEM" : "ATUAL") : title}</h4>{items.length ? <div className="report-image-grid">{items.map((item) => <figure key={`${item.id}:${item.url ?? ""}`}>{item.availability === "AVAILABLE" && item.url ? <EvidenceImage url={item.url} alt={item.description ? `${title}: ${item.description}` : title} onMediaError={onMediaError} /> : <div className="report-image-missing">Imagem indisponível</div>}{isVideoEvidence(item) && <VideoEvidencePlayer item={item} onMediaError={onMediaError} /> }<figcaption>{item.description ?? item.label ?? "Sem descrição"}{(item.component || item.timestampMs !== null && item.timestampMs !== undefined || item.frameId) && <small>{[item.component, formatVideoTime(item.timestampMs), item.frameId ? `Frame ${shortFrameId(item.frameId)}` : undefined].filter(Boolean).join(" · ")}</small>}{item.ptsMicros && <small>PTS {formatVideoTime(Number(item.ptsMicros) / 1000)}</small>}{item.capturedAt && <small>{new Date(item.capturedAt).toLocaleString("pt-BR")}</small>}{(item.sourceAvailability === "EXPIRED" || item.sourceAvailability === "MISSING") && isVideoEvidence(item) && <small>Vídeo original expirado; frame preservado.</small>}{item.flags.length > 0 && <small>{item.flags.join(" · ")}</small>}</figcaption></figure>)}</div> : <p className="report-empty">Nenhuma evidência associada a este requisito.</p>}</section>;
 }
 
 function isVideoEvidence(item: ReportEvidenceItem): boolean { return item.evidenceKind === "VIDEO_FRAME" && Boolean(item.sourceMediaId); }

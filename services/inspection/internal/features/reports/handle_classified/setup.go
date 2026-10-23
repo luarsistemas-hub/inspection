@@ -134,23 +134,16 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				}
 			}
 		}
-		var jobs []database.ComparisonJob
 		var videoPlanID *identity.ID
-		jobQuery := tx.Where("tenant_id=? AND inspection_id=?", envelope.TenantID, payload.InspectionID)
 		if inspection.MediaKind == "VIDEO" {
 			plan, err := resolveClassifiedVideoPlan(tx, envelope.TenantID, payload.InspectionID, payload.VideoPlanID)
 			if err != nil {
 				return err
 			}
 			videoPlanID = &plan.ID
-			jobs, err = loadReportVideoPlanJobs(ctx, tx, envelope.TenantID, payload.InspectionID, plan.ID)
-			if err != nil {
-				return err
-			}
-		} else {
-			jobQuery = jobQuery.Where("id IN (SELECT DISTINCT ON (requirement_key) id FROM analysis.comparison_jobs WHERE tenant_id=? AND inspection_id=? ORDER BY requirement_key, created_at DESC, id DESC)", envelope.TenantID, payload.InspectionID)
 		}
-		if err := jobQuery.Order("requirement_key ASC,video_core_group ASC").Find(&jobs).Error; err != nil {
+		jobs, err := loadClassifiedJobs(ctx, tx, envelope.TenantID, payload.InspectionID, videoPlanID)
+		if err != nil {
 			return err
 		}
 		for _, job := range jobs {
@@ -204,27 +197,6 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				return err
 			}
 			if inspection.MediaKind == "VIDEO" {
-				if videoPlanID == nil {
-					return messaging.ErrPermanent
-				}
-				itemID := identity.ID{}
-				if job.VideoPlanID != nil && *job.VideoPlanID == *videoPlanID && job.VideoPlanItemID != nil {
-					itemID = *job.VideoPlanItemID
-				} else {
-					var carriedItem database.VideoPlanItem
-					if err := tx.Where("tenant_id=? AND plan_id=? AND carried_result_job_id=?", envelope.TenantID, *videoPlanID, job.ID).Take(&carriedItem).Error; err != nil {
-						return messaging.ErrPermanent
-					}
-					if job.VideoPlanItemID == nil {
-						return messaging.ErrPermanent
-					}
-					itemID = *job.VideoPlanItemID
-				}
-				videoEvidence, err := reportVideoPlanEvidence(ctx, tx, envelope.TenantID, itemID)
-				if err != nil {
-					return err
-				}
-				evidence = append(evidence, videoEvidence...)
 				continue
 			}
 			var answer database.RequirementAnswer
@@ -262,6 +234,12 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 					return err
 				}
 				evidence = append(evidence, item)
+			}
+		}
+		if videoPlanID != nil {
+			evidence, err = reportAllVideoPlanEvidence(ctx, tx, envelope.TenantID, *videoPlanID, jobs)
+			if err != nil {
+				return err
 			}
 		}
 		context, requirements, referenceEvidence, err := reportSnapshotContext(ctx, tx, envelope.TenantID, inspection, reference, envelope.OccurredAt)
@@ -438,6 +416,40 @@ func reportVideoPlanEvidence(ctx context.Context, tx *gorm.DB, tenantID, planIte
 	return evidence, nil
 }
 
+// reportAllVideoPlanEvidence pins the frames of every plan item, including
+// gaps without a comparison job. Carried items resolve their frames through
+// jobs already validated against the plan lineage.
+func reportAllVideoPlanEvidence(ctx context.Context, tx *gorm.DB, tenantID, planID identity.ID, jobs []database.ComparisonJob) ([]reportcore.Evidence, error) {
+	var items []database.VideoPlanItem
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=?", tenantID, planID).Order("requirement_key ASC").Find(&items).Error; err != nil {
+		return nil, err
+	}
+	carriedItems := make(map[identity.ID]*identity.ID, len(jobs))
+	for _, job := range jobs {
+		carriedItems[job.ID] = job.VideoPlanItemID
+	}
+	var evidence []reportcore.Evidence
+	for _, item := range items {
+		sourceItemID := item.ID
+		if item.CarriedResultJobID != nil {
+			carriedItemID := carriedItems[*item.CarriedResultJobID]
+			if carriedItemID == nil {
+				return nil, messaging.ErrPermanent
+			}
+			sourceItemID = *carriedItemID
+		}
+		frames, err := reportVideoPlanEvidence(ctx, tx, tenantID, sourceItemID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range frames {
+			frames[i].RequirementKey = item.RequirementKey
+		}
+		evidence = append(evidence, frames...)
+	}
+	return evidence, nil
+}
+
 func loadReportVideoPlanJobs(ctx context.Context, tx *gorm.DB, tenantID, inspectionID, planID identity.ID) ([]database.ComparisonJob, error) {
 	var jobs []database.ComparisonJob
 	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND video_plan_id=?", tenantID, inspectionID, planID).Order("requirement_key ASC,video_core_group ASC").Find(&jobs).Error; err != nil {
@@ -484,6 +496,17 @@ func loadReportVideoPlanJobs(ctx context.Context, tx *gorm.DB, tenantID, inspect
 		jobs = append(jobs, carried)
 	}
 	return jobs, nil
+}
+
+func loadClassifiedJobs(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, videoPlanID *identity.ID) ([]database.ComparisonJob, error) {
+	if videoPlanID != nil {
+		return loadReportVideoPlanJobs(ctx, tx, tenantID, inspectionID, *videoPlanID)
+	}
+	var jobs []database.ComparisonJob
+	err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).
+		Where("id IN (SELECT DISTINCT ON (requirement_key) id FROM analysis.comparison_jobs WHERE tenant_id=? AND inspection_id=? ORDER BY requirement_key, created_at DESC, id DESC)", tenantID, inspectionID).
+		Order("requirement_key ASC,video_core_group ASC").Find(&jobs).Error
+	return jobs, err
 }
 
 func reportVideoFrameEvidence(item database.VideoPlanItem, membership database.VideoPlanItemFrame, frame database.VideoFrame, source database.VideoSource) reportcore.Evidence {

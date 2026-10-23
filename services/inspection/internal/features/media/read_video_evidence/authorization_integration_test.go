@@ -276,7 +276,6 @@ func TestCustomerSnapshotFrameRequiresPublicationAndExactEvidence(t *testing.T) 
 	}{{"unpublished", unpublishedID, frameID, http.StatusNotFound}, {"unrelated snapshot", unrelatedID, frameID, http.StatusNotFound}, {"frame absent from published snapshot", publishedID, otherFrameID, http.StatusNotFound}, {"published matching frame", publishedID, frameID, http.StatusOK}} {
 		t.Run(item.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodHead, "/media/video-evidence/"+item.frame.String()+"?snapshotId="+item.snapshot.String(), nil)
-			request = request.WithContext(requestctx.WithMetadata(request.Context(), metadata))
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, request)
 			if response.Code != item.status {
@@ -285,7 +284,6 @@ func TestCustomerSnapshotFrameRequiresPublicationAndExactEvidence(t *testing.T) 
 		})
 	}
 	request := httptest.NewRequest(http.MethodHead, "/media/video-evidence/"+frameID.String()+"?responsibilityId="+fixture.ResponsibilityID.String(), nil)
-	request = request.WithContext(requestctx.WithMetadata(request.Context(), metadata))
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {

@@ -12,6 +12,7 @@ import (
 	buildplan "inspection/services/inspection/internal/features/analysis/prepare_video_comparisons"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
+	"inspection/services/inspection/internal/platform/observability"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -79,6 +80,86 @@ func TestSetupValidatesDependencies(t *testing.T) {
 	}
 	if _, err := Setup(valid); err != nil {
 		t.Fatalf("valid setup: %v", err)
+	}
+}
+
+func TestPlanRunContextSuppliesLedgerCorrelationForReanalysis(t *testing.T) {
+	job := database.VideoPlan{ID: identity.NewID(), TenantID: identity.NewID(), InspectionID: identity.NewID(), Generation: 3, Attempts: 2}
+	lease := identity.NewID()
+	correlation := observability.CorrelationFromContext(planRunContext(context.Background(), job, lease))
+	if correlation.EventID != job.ID.String() || correlation.CorrelationID != job.ID.String() || correlation.TenantID != job.TenantID.String() || correlation.JobID != job.ID.String() || correlation.InspectionID != job.InspectionID.String() || correlation.ExecutionID != lease.String() || correlation.Attempt != job.Attempts || correlation.ReplayGeneration != job.Generation {
+		t.Fatalf("reanalysis is missing ledger correlation: %+v", correlation)
+	}
+}
+
+func TestBuildRenewsPlanLeaseWhileModelIsRunning(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	tenant, planID, token := identity.NewID(), identity.NewID(), identity.NewID()
+	lease := 60 * time.Millisecond
+	initialUntil := time.Now().UTC().Add(lease)
+	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,status,lease_token,lease_until) VALUES (?,?,?,?,?)", planID, tenant, "BUILDING", token, initialUntil).Error; err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	wantErr := errors.New("model stopped")
+	scheduler := &Scheduler{now: time.Now, lease: lease, within: sqliteWithin(db), build: func(ctx context.Context, _ buildplan.PlanRequest) (buildplan.Plan, error) {
+		close(started)
+		select {
+		case <-release:
+			return buildplan.Plan{}, wantErr
+		case <-ctx.Done():
+			return buildplan.Plan{}, ctx.Err()
+		}
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- scheduler.buildWithLease(ctx, database.VideoPlan{ID: planID, TenantID: tenant}, token, buildplan.PlanRequest{})
+	}()
+	<-started
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var row database.VideoPlan
+		if err := db.Where("id=?", planID).Take(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		if row.LeaseUntil != nil && row.LeaseUntil.After(initialUntil.Add(5*time.Millisecond)) {
+			close(release)
+			if err := <-done; !errors.Is(err, wantErr) {
+				t.Fatalf("build error = %v, want model error", err)
+			}
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("plan lease was not renewed while the model was running")
+}
+
+func TestBuildStopsWhenPlanLeaseIsLost(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	tenant, planID := identity.NewID(), identity.NewID()
+	lease := 30 * time.Millisecond
+	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,status,lease_token,lease_until) VALUES (?,?,?,?,?)", planID, tenant, "BUILDING", identity.NewID(), time.Now().UTC().Add(lease)).Error; err != nil {
+		t.Fatal(err)
+	}
+	scheduler := &Scheduler{now: time.Now, lease: lease, within: sqliteWithin(db), build: func(ctx context.Context, _ buildplan.PlanRequest) (buildplan.Plan, error) {
+		<-ctx.Done()
+		return buildplan.Plan{}, ctx.Err()
+	}}
+	err = scheduler.buildWithLease(context.Background(), database.VideoPlan{ID: planID, TenantID: tenant}, identity.NewID(), buildplan.PlanRequest{})
+	if !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("build error = %v, want lost lease", err)
 	}
 }
 

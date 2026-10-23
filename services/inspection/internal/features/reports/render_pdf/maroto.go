@@ -65,6 +65,7 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 	if !document.Internal && len(document.Snapshot.Findings) > 0 {
 		return nil, fmt.Errorf("report PDF: customer document contains internal findings")
 	}
+	document.Snapshot = core.LocalizeVideoPresentation(document.Snapshot)
 	maxEvidence, maxPages := r.MaxEvidence, r.MaxPages
 	maxImageBytes, maxPDFBytesLimit := r.MaxImageBytes, r.MaxPDFBytes
 	if maxEvidence <= 0 {

@@ -60,17 +60,20 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if err := jobQuery.Order("requirement_key ASC,video_core_group ASC").Find(&jobs).Error; err != nil {
 			return err
 		}
+		var videoGapFacts []analysis.ComparisonFacts
 		if inspection.MediaKind == "VIDEO" {
-			var itemCount int
-			jobs, itemCount, err = loadVideoPlanJobs(ctx, tx, envelope.TenantID, payload.InspectionID, activeVideoPlan)
+			jobs, _, err = loadVideoPlanJobs(ctx, tx, envelope.TenantID, payload.InspectionID, activeVideoPlan)
 			if err != nil {
 				return err
 			}
-			if len(jobs) == 0 && itemCount == 0 {
-				return messaging.ErrPermanent
+			// A plan made only of named gaps has no comparison job, yet it is
+			// still a terminal result that must be classified.
+			videoGapFacts, err = unprocessedVideoPlanFacts(ctx, tx, envelope.TenantID, activeVideoPlan, jobs)
+			if err != nil {
+				return err
 			}
 		}
-		if len(jobs) == 0 {
+		if len(jobs) == 0 && len(videoGapFacts) == 0 {
 			return messaging.ErrPermanent
 		}
 		for _, job := range jobs {
@@ -174,6 +177,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			}
 			facts = append(facts, fact)
 		}
+		facts = append(facts, videoGapFacts...)
 		if inspection.StageID != nil {
 			var stage database.ProjectStage
 			if err := tx.Where("tenant_id=? AND id=?", envelope.TenantID, *inspection.StageID).First(&stage).Error; err == nil && stage.Status == "SKIPPED" {
@@ -221,6 +225,25 @@ func hasPendingVideoRecapture(ctx context.Context, tx *gorm.DB, tenantID, inspec
 	var count int64
 	err := tx.WithContext(ctx).Model(&database.RecaptureRequest{}).Where("tenant_id=? AND inspection_id=? AND status IN ('REQUESTED','ACCESSED','RECEIVED')", tenantID, inspectionID).Count(&count).Error
 	return count > 0, err
+}
+
+func unprocessedVideoPlanFacts(ctx context.Context, tx *gorm.DB, tenantID, planID identity.ID, jobs []database.ComparisonJob) ([]analysis.ComparisonFacts, error) {
+	represented := make(map[string]bool, len(jobs))
+	for _, job := range jobs {
+		represented[job.RequirementKey] = true
+	}
+	var items []database.VideoPlanItem
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND outcome IN ?", tenantID, planID, []string{"INCONCLUSIVE", "TECHNICAL_FAILURE"}).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	facts := make([]analysis.ComparisonFacts, 0, len(items))
+	for _, item := range items {
+		if represented[item.RequirementKey] {
+			continue
+		}
+		facts = append(facts, analysis.ComparisonFacts{Terminal: true, Inconclusive: item.Outcome == "INCONCLUSIVE", TechnicalFailure: item.Outcome == "TECHNICAL_FAILURE"})
+	}
+	return facts, nil
 }
 
 func loadVideoPlanJobs(ctx context.Context, tx *gorm.DB, tenantID, inspectionID, planID identity.ID) ([]database.ComparisonJob, int, error) {

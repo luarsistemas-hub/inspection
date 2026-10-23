@@ -227,7 +227,9 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 					reason = named
 				}
 				if reason != "" {
-					plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Inconclusive, Reason: reason, OriginFrames: frameIDs(componentOrigin), CurrentFrames: frameIDs(componentCurrent), InputDigest: componentDigest(componentOrigin, componentCurrent)})
+					originFrames := framesForComponent(comparisonOrigin, component.ID)
+					currentFrames := scopedFramesForComponent(componentCurrent, component.ID, expectedOrigin)
+					plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Inconclusive, Reason: reason, OriginFrames: frameIDs(originFrames), CurrentFrames: frameIDs(currentFrames), InputDigest: componentDigest(originFrames, currentFrames)})
 					continue
 				}
 				componentCurrent = usableCurrent
@@ -266,7 +268,7 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 						}
 					}
 					originFrames := framesForComponent(comparisonOrigin, component.ID)
-					currentFrames := framesForComponent(current, component.ID)
+					currentFrames := scopedFramesForComponent(componentCurrent, component.ID, expectedOrigin)
 					plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Inconclusive, Reason: reason, OriginFrames: frameIDs(originFrames), CurrentFrames: frameIDs(currentFrames), InputDigest: componentDigest(originFrames, currentFrames)})
 					continue
 				}
@@ -341,17 +343,29 @@ func namedGapReason(frames []Frame) string {
 }
 
 func matchingFramesForComponent(frames []Frame, componentID identity.ID, expected []Frame) []Frame {
+	return selectFramesForComponent(frames, componentID, expected, true)
+}
+
+func scopedFramesForComponent(frames []Frame, componentID identity.ID, expected []Frame) []Frame {
+	return selectFramesForComponent(frames, componentID, expected, false)
+}
+
+func selectFramesForComponent(frames []Frame, componentID identity.ID, expected []Frame, includeUnlabelled bool) []Frame {
 	result := make([]Frame, 0)
 	labels := make(map[string]bool, len(expected))
 	for _, frame := range expected {
-		labels[frame.ComponentLabel+"\x00"+frame.View] = true
+		labels[normalizedScopeLabel(frame.ComponentLabel)+"\x00"+normalizedScopeLabel(frame.View)] = true
 	}
 	for _, frame := range frames {
-		if frame.Component == componentID.String() || frame.ComponentLabel == "" || labels[frame.ComponentLabel+"\x00"+frame.View] {
+		if frame.Component == componentID.String() || includeUnlabelled && frame.ComponentLabel == "" || frame.ComponentLabel != "" && labels[normalizedScopeLabel(frame.ComponentLabel)+"\x00"+normalizedScopeLabel(frame.View)] {
 			result = append(result, frame)
 		}
 	}
 	return result
+}
+
+func normalizedScopeLabel(value string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(strings.ToLower(value))), " ")
 }
 
 // validateLoadedBank rejects frame-reader scope violations before any matcher
@@ -388,7 +402,7 @@ func missingExpectedView(componentID identity.ID, origin, current []Frame) bool 
 		}
 		expected = true
 		for _, candidate := range current {
-			if candidate.ComponentLabel == reference.ComponentLabel {
+			if normalizedScopeLabel(candidate.ComponentLabel) == normalizedScopeLabel(reference.ComponentLabel) {
 				return false
 			}
 		}

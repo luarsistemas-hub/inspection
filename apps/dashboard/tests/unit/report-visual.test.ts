@@ -62,6 +62,32 @@ describe("Report evidence presentation", () => {
     expect(document.querySelector(".report-visual")?.textContent).not.toContain("ORIGEM");
   });
 
+  it("opens the section with report images when an earlier requirement has no evidence", async () => {
+    const report = {
+      id: "report-video", version: 1, classification: "ATTENTION", advisory: "Análise atual.",
+      context: { asset: { name: "Imóvel QA", address: "Rua QA", externalKey: "ASSET-1" }, participant: { name: "QA" }, template: { name: "Padrão", version: 1 }, inspection: { stageLabel: null } },
+      requirements: [
+        { key: "video:main", section: "vistoria", label: "Vídeo principal", instructions: null, noRelevantChange: null, analysisMode: "CURRENT_ONLY", analysisStatus: "PENDING" },
+        { key: "video:door", section: "Vídeo", label: "Porta", instructions: null, noRelevantChange: null, analysisMode: "CURRENT_ONLY", analysisStatus: "COMPLETED" },
+      ],
+      evidence: { nodes: [{ id: "frame-1", requirementKey: "video:door", role: "REFERENCE", description: "Porta", capturedAt: null, flags: [], availability: "AVAILABLE", url: "/frame-1.png", evidenceKind: "VIDEO_FRAME", frameId: "frame-1", timestampMs: 1000, sourceMediaId: "origin-video", component: null, ptsMicros: null, label: null, sourceAvailability: null }], pageInfo: { endCursor: null, hasNextPage: false } },
+      findings: [],
+    } as unknown as ComponentProps<typeof ReportVisual>["report"];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => { root.render(createElement(ReportVisual, { report, onDownload: () => {} })); });
+
+    expect(host.querySelector('.report-section-nav button[aria-pressed="true"]')?.textContent).toContain("Vídeo");
+    expect(host.querySelector('.report-image-grid img')?.getAttribute("src")).toBe("/frame-1.png");
+    expect(host.querySelector(".report-evidence-column h4")?.textContent).toBe("ORIGEM");
+    expect(host.querySelector(".report-no-baseline")?.textContent).toContain("A origem existe neste laudo");
+    const emptySection = [...host.querySelectorAll(".report-section-nav button")].find((button) => button.textContent?.includes("vistoria"));
+    await act(async () => { emptySection?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(host.querySelector(".report-empty")?.textContent).toBe("Nenhuma evidência associada a este requisito.");
+    expect(host.querySelector(".report-no-baseline")?.textContent).toContain("A origem existe neste laudo");
+    await act(async () => { root.unmount(); });
+  });
+
   it("IT-204 opens the V2 before/after report section without an origin column", async () => {
     const report = {
       id: "report-v2", version: 2, classification: "ATTENTION", advisory: "Análise atual.",

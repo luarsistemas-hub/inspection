@@ -73,6 +73,31 @@ func TestUT058SourceExpiryOverlaysAvailabilityWithoutChangingSnapshot(t *testing
 	}
 }
 
+func TestMapReportPresentsExistingVideoLabelsInPortuguese(t *testing.T) {
+	snapshot := reportcore.Snapshot{
+		VideoPlanID:  "plan-1",
+		Requirements: []reportcore.Requirement{{Key: "video:fireplace", Section: "Vídeo", Label: "living_room — fireplace", Instructions: "Para recaptura: filme living_room — fireplace, mostrando a vista front_view."}},
+		Evidence:     []reportcore.Evidence{{ID: "frame-1", RequirementKey: "video:fireplace", EvidenceKind: "VIDEO_FRAME"}},
+	}
+	canonical, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := mapReport(database.ReportSnapshot{ID: identity.NewID(), InspectionID: identity.NewID(), CanonicalJSON: canonical})
+	if got := view.Requirements[0].Label; got != "Sala de estar — Lareira" {
+		t.Fatalf("report label = %q", got)
+	}
+	if got := *view.Requirements[0].Instructions; got != "Para recaptura: filme Sala de estar — Lareira, mostrando a vista frontal." {
+		t.Fatalf("report instructions = %q", got)
+	}
+	if got := *view.Evidence.Nodes[0].Component; got != "Sala de estar — Lareira" {
+		t.Fatalf("evidence component = %q", got)
+	}
+	if got := view.CanonicalJSON["requirements"].([]any)[0].(map[string]any)["label"]; got != "living_room — fireplace" {
+		t.Fatalf("canonical label = %q", got)
+	}
+}
+
 func TestHydrateReportMediaSignsAvailableDisplayDerivative(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

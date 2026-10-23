@@ -157,9 +157,10 @@ func assertTask07Statements(t *testing.T, snapshot reportcore.Snapshot, html str
 	if len(snapshot.ScopeStatements) != len(want) {
 		t.Fatalf("scope statements=%q, want %q", snapshot.ScopeStatements, want)
 	}
+	presented := reportcore.LocalizeVideoPresentation(snapshot)
 	for i, statement := range want {
-		if snapshot.ScopeStatements[i] != statement || !strings.Contains(html, statement) {
-			t.Fatalf("scope statement %d=%q (in HTML: %t), want %q", i, snapshot.ScopeStatements[i], strings.Contains(html, statement), statement)
+		if snapshot.ScopeStatements[i] != statement || !strings.Contains(html, presented.ScopeStatements[i]) {
+			t.Fatalf("scope statement %d=%q (in HTML: %t), want %q", i, snapshot.ScopeStatements[i], strings.Contains(html, presented.ScopeStatements[i]), statement)
 		}
 	}
 }

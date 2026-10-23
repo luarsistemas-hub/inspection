@@ -343,10 +343,71 @@ func (s *Scheduler) RunDue(ctx context.Context) (bool, error) {
 	if planErr != nil {
 		return true, s.finishFailure(ctx, job, token, planErr)
 	}
-	if _, err = s.build(ctx, *plan); err != nil {
+	if err = s.buildWithLease(ctx, job, token, *plan); err != nil {
 		return true, s.finishFailure(ctx, job, token, err)
 	}
 	return true, nil
+}
+
+func (s *Scheduler) buildWithLease(ctx context.Context, job database.VideoPlan, token identity.ID, request buildplan.PlanRequest) error {
+	buildCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		interval := max(s.lease/3, time.Millisecond)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-buildCtx.Done():
+				done <- nil
+				return
+			case <-ticker.C:
+				until := s.now().UTC().Add(s.lease)
+				err := s.within(buildCtx, job.TenantID, func(tx *gorm.DB) error {
+					result := tx.WithContext(buildCtx).Model(&database.VideoPlan{}).
+						Where("tenant_id=? AND id=? AND status='BUILDING' AND lease_token=?", job.TenantID, job.ID, token).
+						Update("lease_until", until)
+					if result.Error != nil {
+						return result.Error
+					}
+					if result.RowsAffected != 1 {
+						return ErrLeaseLost
+					}
+					return nil
+				})
+				if err != nil {
+					// A renewal interrupted by our own cancellation is not a lost lease.
+					if buildCtx.Err() != nil {
+						err = nil
+					}
+					done <- err
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	_, buildErr := s.build(planRunContext(buildCtx, job, token), request)
+	cancel()
+	leaseErr := <-done
+	if buildErr != nil && leaseErr != nil {
+		return leaseErr
+	}
+	return buildErr
+}
+
+func planRunContext(ctx context.Context, job database.VideoPlan, leaseToken identity.ID) context.Context {
+	correlation := observability.CorrelationFromContext(ctx)
+	// A leased reanalysis has no incoming event. The plan is its durable trigger.
+	correlation.EventID = job.ID.String()
+	correlation.CorrelationID = job.ID.String()
+	correlation.TenantID = job.TenantID.String()
+	correlation.JobID = job.ID.String()
+	correlation.InspectionID = job.InspectionID.String()
+	correlation.ExecutionID = leaseToken.String()
+	correlation.Attempt = job.Attempts
+	correlation.ReplayGeneration = job.Generation
+	return observability.WithCorrelation(ctx, correlation)
 }
 
 func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, inspection database.Inspection, submission database.SubmissionVersion, reference, originPreparation *identity.ID, token identity.ID) (*buildplan.PlanRequest, error) {

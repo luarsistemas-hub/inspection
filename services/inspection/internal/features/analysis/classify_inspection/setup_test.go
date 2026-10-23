@@ -9,12 +9,91 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	analysis "inspection/services/inspection/internal/features/analysis/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestUnprocessedVideoPlanGapsKeepClassificationAtAttention(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE analysis.video_plan_items (id TEXT, tenant_id TEXT, plan_id TEXT, requirement_key TEXT, outcome TEXT)").Error; err != nil {
+		t.Fatal(err)
+	}
+	tenant, plan := identity.NewID(), identity.NewID()
+	for _, key := range []string{"video:with-job", "video:without-job"} {
+		if err := db.Exec("INSERT INTO analysis.video_plan_items (id,tenant_id,plan_id,requirement_key,outcome) VALUES (?,?,?,?,?)", identity.NewID(), tenant, plan, key, "INCONCLUSIVE").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	jobs := []database.ComparisonJob{{RequirementKey: "video:with-job"}}
+	gaps, err := unprocessedVideoPlanFacts(context.Background(), db, tenant, plan, jobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) != 1 || !gaps[0].Inconclusive || analysis.Classify(append([]analysis.ComparisonFacts{{Terminal: true}}, gaps...)).Classification != analysis.ClassificationAttention {
+		t.Fatalf("unprocessed video gap did not require attention: %+v", gaps)
+	}
+}
+
+func TestVideoPlanWithOnlyGapsIsClassifiedAsAttention(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"inspections", "analysis", "recapture", "messaging"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE inspections.inspections (id text PRIMARY KEY, tenant_id text NOT NULL, media_kind text NOT NULL, status text NOT NULL, active_video_plan_id text, analysis_prompt_snapshot_id text, updated_at datetime, version integer NOT NULL DEFAULT 1)`,
+		`CREATE TABLE analysis.video_plans (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, parent_plan_id text, status text NOT NULL, generation integer NOT NULL)`,
+		`CREATE TABLE analysis.video_plan_items (id text PRIMARY KEY, tenant_id text NOT NULL, plan_id text NOT NULL, carried_result_job_id text, requirement_key text, outcome text)`,
+		`CREATE TABLE analysis.comparison_jobs (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, video_plan_id text, requirement_key text, video_core_group integer, status text NOT NULL, updated_at datetime)`,
+		`CREATE TABLE analysis.classification_runs (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, prompt_snapshot_id text, video_plan_id text, classification text, reason_codes text, created_at datetime)`,
+		`CREATE TABLE recapture.requests (id text PRIMARY KEY, tenant_id text NOT NULL, inspection_id text NOT NULL, status text NOT NULL)`,
+		`CREATE TABLE messaging.outbox (id text PRIMARY KEY, tenant_id text, type text, schema_version integer, payload blob, correlation_id text, causation_id text, status text, attempts integer, next_attempt_at datetime, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenantID, inspectionID, planID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Exec(`INSERT INTO inspections.inspections (id,tenant_id,media_kind,status,active_video_plan_id,analysis_prompt_snapshot_id) VALUES (?,?,?,?,?,?)`, inspectionID, tenantID, "VIDEO", "ANALYZING", planID, identity.NewID()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,status,generation) VALUES (?,?,?,?,?)`, planID, tenantID, inspectionID, "SEALED", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`INSERT INTO analysis.video_plan_items (id,tenant_id,plan_id,requirement_key,outcome) VALUES (?,?,?,?,?)`, identity.NewID(), tenantID, planID, "video:kitchen", "INCONCLUSIVE").Error; err != nil {
+		t.Fatal(err)
+	}
+	handler, err := Setup(Dependencies{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]identity.ID{"inspectionId": inspectionID})
+	envelope := events.RawEnvelope{ID: identity.NewID(), TenantID: tenantID, CorrelationID: identity.NewID().String(), Payload: payload}
+	if err := db.Transaction(func(tx *gorm.DB) error { return handler(context.Background(), tx, envelope) }); err != nil {
+		t.Fatalf("gap-only video plan was not classified: %v", err)
+	}
+	var classification string
+	if err := db.Table("analysis.classification_runs").Select("classification").Where("tenant_id=? AND inspection_id=? AND video_plan_id=?", tenantID, inspectionID, planID).Scan(&classification).Error; err != nil {
+		t.Fatal(err)
+	}
+	if classification != analysis.ClassificationAttention {
+		t.Fatalf("gap-only video plan classification = %q, want %q", classification, analysis.ClassificationAttention)
+	}
+}
 
 func TestLateG1CompletionCannotClassifyActiveG2UT049(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})

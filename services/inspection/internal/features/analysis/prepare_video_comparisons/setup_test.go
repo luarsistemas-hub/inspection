@@ -440,6 +440,31 @@ func TestVerifierUncertainSealsInconclusiveItemUT041(t *testing.T) {
 	}
 }
 
+func TestCurrentFrameWithEquivalentScopeLabelRemainsInInconclusiveItem(t *testing.T) {
+	plan, frames := matchedPlan()
+	component := plan.Items[0].ComponentID
+	frames[0].Component, frames[0].ComponentLabel, frames[0].View = component.String(), "fireplace", "front_view"
+	frames[1].Component, frames[1].ComponentLabel, frames[1].View = testID("current-scope").String(), "fireplace", "front view"
+	unscopedOrigin := frames[0]
+	unscopedOrigin.ID, unscopedOrigin.Component, unscopedOrigin.ComponentLabel = testID("unscoped-origin"), "", ""
+	unscopedCurrent := frames[1]
+	unscopedCurrent.ID, unscopedCurrent.Component, unscopedCurrent.ComponentLabel = testID("unscoped-current"), "", ""
+	pair := plan.Items[0].CoreGroups[0][0]
+	reader := fakeFrames{values: map[identity.ID][]Frame{*plan.OriginPreparationID: {frames[0], unscopedOrigin}, plan.CurrentPreparationID: {frames[1], unscopedCurrent}}}
+	writer := &fakeWriter{}
+	build, err := Setup(Dependencies{Frames: reader, Matcher: proposerStub{pair}, Verifier: verifierStub{{ComponentID: component, OriginFrameID: pair.OriginFrameID, CurrentFrameID: pair.CurrentFrameID, Decision: Uncertain}}, Plans: writer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := build(context.Background(), PlanRequest{Plan: plan, Components: []Component{{ID: component}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 || result.Items[0].Outcome != Inconclusive || result.Items[0].Reason != "NO_VERIFIED_CORRESPONDENCE" || len(result.Items[0].OriginFrames) != 1 || result.Items[0].OriginFrames[0] != frames[0].ID || len(result.Items[0].CurrentFrames) != 1 || result.Items[0].CurrentFrames[0] != frames[1].ID {
+		t.Fatalf("current frame lost from inconclusive comparison: %+v", result.Items)
+	}
+}
+
 func TestSevenUniqueImagesBecomeExplicitLimitItemUT043(t *testing.T) {
 	plan, base := matchedPlan()
 	component := plan.Items[0].ComponentID

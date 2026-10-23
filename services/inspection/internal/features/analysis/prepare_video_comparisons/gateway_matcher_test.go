@@ -34,6 +34,16 @@ func TestNewGatewayMatcherAcceptsStoreFrameImagesAndRejectsIncompleteDependencie
 	}
 }
 
+func TestMatchPromptSuppliesOriginComponentID(t *testing.T) {
+	component := testID("prompt-origin-component")
+	origin := Frame{ID: testID("prompt-origin-frame"), Component: component.String()}
+	current := Frame{ID: testID("prompt-current-frame"), Component: testID("prompt-current-component").String()}
+	prompt := matchPrompt([]Frame{origin}, []Frame{current}, nil, false, false)
+	if !strings.Contains(prompt, origin.ID.String()+" (componentId="+component.String()+")") || !strings.Contains(prompt, current.ID.String()) || !strings.Contains(prompt, "copy componentId from its origin frame") {
+		t.Fatalf("matching prompt must identify the origin component for each frame: %s", prompt)
+	}
+}
+
 func TestGatewayMatcherBatchesAtMostTwelveFramesPerSideAndSetsVideoMatchMode(t *testing.T) {
 	component := testID("batch-component")
 	origin, current := make([]Frame, 13), make([]Frame, 14)

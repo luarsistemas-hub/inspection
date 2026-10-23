@@ -193,6 +193,7 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 	if !ok || metadata.TenantID == (identity.ID{}) || metadata.Principal.IdentityID == (identity.ID{}) {
 		return access{}, http.StatusUnauthorized
 	}
+	r = r.WithContext(requestctx.WithMetadata(r.Context(), metadata))
 	snapshotText, responsibilityText := r.URL.Query().Get("snapshotId"), r.URL.Query().Get("responsibilityId")
 	if (snapshotText == "") == (responsibilityText == "") {
 		return access{}, http.StatusNotFound

@@ -37,7 +37,9 @@ func TestVV_IT_195CurrentOnlyObstructedSinkHasNamedReportGap(t *testing.T) {
 	if requirement.AnalysisStatus != "INCONCLUSIVE" || requirement.Label != "kitchen — sink" || requirement.Coverage != "Visão de kitchen — sink obstruída no vídeo atual; isto não indica ausência do item." {
 		t.Fatalf("obstructed sink report requirement = %+v", requirement)
 	}
-	assertTask07HasReportText(t, html, requirement.Coverage, "Para recaptura: filme kitchen — sink sem objetos na frente, mostrando toda a área.")
+	shown := reportcore.LocalizeVideoPresentation(snapshot)
+	presented := task07NamedRequirement(t, shown.Requirements, requirement.Key)
+	assertTask07HasReportText(t, html, presented.Label, presented.Coverage, presented.Instructions)
 }
 
 func TestVV_IT_209NamedBlurredObstructedAndAmbiguousReportGaps(t *testing.T) {
@@ -119,7 +121,9 @@ func TestVV_IT_209NamedBlurredObstructedAndAmbiguousReportGaps(t *testing.T) {
 		if requirement.AnalysisStatus != "INCONCLUSIVE" || requirement.Label != want.label || requirement.Coverage != want.coverage || requirement.Instructions != want.instruction {
 			t.Errorf("named gap %s = %+v, want label=%q coverage=%q instructions=%q", componentID, requirement, want.label, want.coverage, want.instruction)
 		}
-		assertTask07HasReportText(t, html, want.label, want.coverage, want.instruction)
+		shown := reportcore.LocalizeVideoPresentation(snapshot)
+		presented := task07NamedRequirement(t, shown.Requirements, requirement.Key)
+		assertTask07HasReportText(t, html, presented.Label, presented.Coverage, presented.Instructions)
 	}
 }
 

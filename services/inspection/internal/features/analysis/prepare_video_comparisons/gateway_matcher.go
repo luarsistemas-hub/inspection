@@ -18,7 +18,7 @@ import (
 )
 
 const matchModelAlias = "inspection-video-matching"
-const matchPromptDigest = "video-match-v1"
+const matchPromptDigest = "video-match-v2"
 const DefaultMaxCalls = 512
 
 var ErrMatchBudgetExhausted = errors.New("MATCH_BUDGET_EXHAUSTED")
@@ -303,7 +303,14 @@ func matchPrompt(o, c []Frame, pairs []Pair, verify, environment bool) string {
 	if verify {
 		phase = "independently verify only these proposed candidates"
 	}
-	return fmt.Sprintf("%s. Origin frame IDs: %v. Current frame IDs: %v. Proposed pairs: %v", phase, frameStringIDs(o), frameStringIDs(c), pairs)
+	if environment {
+		return fmt.Sprintf("%s. Origin frame IDs: %v. Current frame IDs: %v. Proposed pairs: %v", phase, frameStringIDs(o), frameStringIDs(c), pairs)
+	}
+	originFrames := make([]string, len(o))
+	for i, frame := range o {
+		originFrames[i] = frame.ID.String() + " (componentId=" + frame.Component + ")"
+	}
+	return fmt.Sprintf("%s. For every pair, copy componentId from its origin frame. Origin frames: %v. Current frame IDs: %v. Proposed pairs: %v", phase, originFrames, frameStringIDs(c), pairs)
 }
 
 func frameStringIDs(frames []Frame) []string {
