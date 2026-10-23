@@ -20,13 +20,14 @@ var videoComponentNames = map[string]string{
 	"countertop": "Bancada", "door": "Porta", "fireplace": "Lareira",
 	"floor": "Piso", "furniture": "Móvel", "mirror": "Espelho",
 	"shower": "Chuveiro", "sink": "Pia", "stove": "Fogão",
-	"toilet": "Vaso sanitário", "wall": "Parede", "window": "Janela",
+	"stone_accent_wall": "Parede de destaque em pedra",
+	"toilet":            "Vaso sanitário", "wall": "Parede", "window": "Janela",
 }
 
 var videoViewNames = map[string]string{
 	"close_up": "aproximada", "detail": "de detalhe", "front": "frontal",
 	"front_view": "frontal", "side": "lateral", "side_view": "lateral",
-	"wide": "ampla", "wide_view": "ampla",
+	"wall_and_corner": "parede e canto", "wide": "ampla", "wide_view": "ampla",
 }
 
 // LocalizeVideoPresentation returns a display copy of a video report. Its

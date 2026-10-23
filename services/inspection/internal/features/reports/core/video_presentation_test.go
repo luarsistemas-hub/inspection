@@ -57,3 +57,30 @@ func TestVideoEnvironmentKeepsRoomNumber(t *testing.T) {
 		t.Fatalf("view with spaces = %q", got)
 	}
 }
+
+func TestLocalizeVideoPresentationTranslatesStoneAccentWall(t *testing.T) {
+	snapshot := Snapshot{
+		VideoPlanID: "plan-1",
+		Requirements: []Requirement{{
+			Key:          "video:stone-accent-wall",
+			Label:        "living_room — stone_accent_wall",
+			Instructions: "Para recaptura: filme living_room — stone_accent_wall de perto, com boa luz e sem obstrução, mostrando a vista wall_and_corner.",
+			Coverage:     "Visão de living_room — stone_accent_wall obstruída no vídeo atual.",
+		}},
+	}
+
+	localized := LocalizeVideoPresentation(snapshot)
+	requirement := localized.Requirements[0]
+	if requirement.Label != "Sala de estar — Parede de destaque em pedra" {
+		t.Fatalf("video label = %q", requirement.Label)
+	}
+	if !strings.Contains(requirement.Instructions, "Sala de estar — Parede de destaque em pedra") || !strings.HasSuffix(requirement.Instructions, "mostrando a vista parede e canto.") {
+		t.Fatalf("video instructions = %q", requirement.Instructions)
+	}
+	if requirement.Coverage != "Visão de Sala de estar — Parede de destaque em pedra obstruída no vídeo atual." {
+		t.Fatalf("video coverage = %q", requirement.Coverage)
+	}
+	if snapshot.Requirements[0].Label != "living_room — stone_accent_wall" {
+		t.Fatal("canonical snapshot mutated")
+	}
+}
