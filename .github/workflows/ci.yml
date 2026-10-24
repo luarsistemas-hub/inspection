@@ -26,8 +26,8 @@ jobs:
         with:
           go-version: 1.26.5
           cache: true
-      - run: go run github.com/99designs/gqlgen@v0.17.95 generate
-        working-directory: services/inspection
+      - name: Generate GraphQL contracts
+        run: ./scripts/generate-graphql-contracts.sh
       - run: git diff --exit-code
       - run: test -z "$(gofmt -l services/inspection libs)"
       - run: go test ./...

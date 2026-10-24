@@ -7,7 +7,12 @@
 ```sh
 ./scripts/local.sh init|up|infra|migrate|status|logs [serviço]|down [-v]
 ./scripts/dev.sh api|worker|scheduler|admin|dashboard|capture|all
+./scripts/generate-graphql-contracts.sh
 ```
+
+Execute `generate-graphql-contracts.sh` após alterar o schema ou os documentos
+GraphQL dos frontends e inclua os arquivos gerados no commit. A CI executa o
+mesmo comando e verifica se o repositório continua sem diferenças.
 
 `./scripts/local.sh down` preserva os volumes; `./scripts/local.sh down -v` também os remove. `verify.sh`, `smoke.sh`, `security-smoke.sh`, `load-smoke.sh` e `validate-compozy-tasks.sh` continuam disponíveis para CI e diagnóstico. `parity-gate.sh` sobe uma stack isolada, executa os testes autenticados, gera evidência redigida e valida o inventário legado antes de desmontar os volumes. Os scripts de startup não removem volumes nem criam binários no repositório.
 

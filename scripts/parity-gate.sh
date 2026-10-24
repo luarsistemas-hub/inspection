@@ -14,7 +14,7 @@ node scripts/lib/design-system-migration.mjs prerequisites --repository "$worksp
 export INSPECTION_SCHEMA_HASH="$(node -e 'const fs=require("node:fs"); const c=require("node:crypto"); process.stdout.write(c.createHash("sha256").update(fs.readFileSync("services/inspection/schema.graphqls")).digest("hex"))')"
 ./scripts/local.sh up
 ./scripts/local.sh seed
-(cd services/inspection && go run github.com/99designs/gqlgen@v0.17.95 generate)
+./scripts/generate-graphql-contracts.sh
 git diff --exit-code -- services/inspection/internal/platform/graphql services/inspection/operation-manifest.json
 go test ./...
 go vet ./...

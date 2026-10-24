@@ -48,7 +48,7 @@ func TestOperationManifestIT001(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(payload, append(generatedPayload, '\n')) {
-		t.Fatal("IT-001: operation manifest is stale; run go run ./cmd/graphqlcontractmanifest from services/inspection")
+		t.Fatal("IT-001: operation manifest is stale; run ./scripts/generate-graphql-contracts.sh")
 	}
 }
 

@@ -17,8 +17,12 @@ Para saúde, métricas, operações de preparação, retenção e recuperação 
 go test ./...
 go vet ./...
 go build ./...
-go run github.com/99designs/gqlgen@v0.17.95 generate
 ```
+
+Após alterar o schema ou os documentos GraphQL de qualquer frontend, execute
+`../../scripts/generate-graphql-contracts.sh` a partir deste diretório e inclua
+os arquivos gerados no commit. O comando atualiza o código do gqlgen e
+`operation-manifest.json`; a CI executa o mesmo comando e rejeita diferenças.
 
 Somente o migrador altera schema. Runtime usa `inspection_runtime`; worker usa `inspection_worker`.
 

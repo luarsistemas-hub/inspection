@@ -10,8 +10,8 @@ node scripts/lib/design-system-migration.mjs validate \
   --inventory docs/design-system/migration-inventory.json \
   --evidence docs/design-system/accessibility-evidence.json
 
-(cd services/inspection && go run github.com/99designs/gqlgen@v0.17.95 generate --config gqlgen.yml)
-git diff --exit-code -- services/inspection/internal/platform/graphql
+./scripts/generate-graphql-contracts.sh
+git diff --exit-code -- services/inspection/internal/platform/graphql services/inspection/operation-manifest.json
 test -z "$(gofmt -l services/inspection libs)"
 go test ./...
 go vet ./...
