@@ -3,7 +3,10 @@ const cookieLifetimeSeconds = 10 * 60;
 
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  return origin !== null && origin === new URL(request.url).origin;
+  const url = new URL(request.url);
+  // Standalone Next.js uses its bind address in request.url inside Docker.
+  const host = request.headers.get("host") ?? url.host;
+  return origin !== null && origin === `${url.protocol}//${host}`;
 }
 
 function cookieOptions(request: Request, name: string, value: string, maxAge: number): string {

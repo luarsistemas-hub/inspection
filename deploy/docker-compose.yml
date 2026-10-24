@@ -473,6 +473,7 @@ services:
     ports:
       - "${INSPECTION_DASHBOARD_PORT:-3002}:3002"
     environment:
+      INSPECTION_INTERNAL_API_URL: http://inspection-api:8080
       NEXT_PUBLIC_INSPECTION_API_URL: ${NEXT_PUBLIC_INSPECTION_API_URL:-http://localhost:${INSPECTION_API_PORT:-8080}/graphql}
       NEXT_PUBLIC_OIDC_AUTHORIZE_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/auth
       NEXT_PUBLIC_OIDC_TOKEN_URL: http://localhost:8081/realms/inspection/protocol/openid-connect/token

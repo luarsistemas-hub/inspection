@@ -337,24 +337,8 @@ main > section > .actions h1 { margin: 0; }
 .report-visual:not(.report-visual--customer) { gap: var(--inspection-space-3); padding: var(--inspection-space-4) var(--inspection-space-5); border: 0; border-block-start: 1px solid var(--inspection-border); }
 .report-visual-actions { align-items: center; font-size: .82rem; color: var(--inspection-muted); }
 .report-visual-actions button { min-block-size: 2.35rem; padding: var(--inspection-space-1) var(--inspection-space-3); font-size: .82rem; }
-.report-workspace { display: grid; grid-template-columns: minmax(9.5rem, 12.5rem) minmax(0, 1fr); align-items: start; gap: var(--inspection-space-5); }
-.report-section-nav { position: sticky; inset-block-start: var(--inspection-space-3); display: grid; align-content: start; gap: var(--inspection-space-1); padding-inline-end: var(--inspection-space-3); border-inline-end: 1px solid var(--inspection-border); }
-.report-section-nav > span { margin: 0 0 var(--inspection-space-2); color: var(--inspection-muted); font: .7rem/1.4 var(--inspection-font-mono); letter-spacing: .04em; text-transform: uppercase; }
-.report-section-nav > button { display: flex; justify-content: space-between; align-items: center; gap: var(--inspection-space-2); min-block-size: 2.45rem; padding: var(--inspection-space-1) var(--inspection-space-2); border: 0; border-radius: var(--inspection-radius); background: transparent; color: var(--inspection-ink); font-size: .88rem; font-weight: 500; text-align: start; }
-.report-section-nav > button[aria-pressed="true"] { background: var(--inspection-surface-container); color: var(--inspection-brand-strong); }
-.report-section-nav > button small { color: var(--inspection-muted); font-size: .75rem; }
-.report-section-content { min-inline-size: 0; }
-.report-section-content .report-requirements { gap: var(--inspection-space-4); }
-.report-section-content .report-requirement { padding-block-start: 0; border-block-start: 0; }
-.report-section-content .report-requirement + .report-requirement { padding-block-start: var(--inspection-space-4); border-block-start: 1px solid var(--inspection-border); }
-.report-section-content .report-requirement > header > span { display: none; }
-.report-section-content .report-requirement > header { margin-block-end: var(--inspection-space-3); }
 @media (max-width: 37.5rem) {
   .report-visual { padding: var(--inspection-space-3); }
-  .report-workspace { grid-template-columns: minmax(0, 1fr); gap: var(--inspection-space-3); }
-  .report-section-nav { position: static; display: flex; align-items: center; gap: var(--inspection-space-1); overflow-x: auto; padding: 0 0 var(--inspection-space-2); border-inline-end: 0; border-block-end: 1px solid var(--inspection-border); }
-  .report-section-nav > span { flex: 0 0 auto; margin: 0 var(--inspection-space-1) 0 0; }
-  .report-section-nav > button { flex: 0 0 auto; min-block-size: 2.6rem; white-space: nowrap; }
 }
 ol, ul { margin: 0; padding-inline-start: 1.25rem; }
 li { padding-block: var(--inspection-space-2); }
