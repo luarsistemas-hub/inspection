@@ -74,7 +74,7 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 			&database.VideoPreparationJob{ID: originPreparation, TenantID: fixture.TenantID, MediaID: originMedia, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now},
 			&database.VideoPreparationJob{ID: mainPreparation, TenantID: fixture.TenantID, MediaID: mainMedia, SubmissionID: &mainSubmission, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now},
 			&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, ActiveVersionID: &originVersionID, Version: 1, CreatedAt: now, UpdatedAt: now},
-			&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: originResponsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &originPreparation, IdempotencyKey: "it237-origin-version", CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now},
+			&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &originResponsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &originPreparation, IdempotencyKey: "it237-origin-version", CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now},
 		} {
 			if err := tx.Create(row).Error; err != nil {
 				return err

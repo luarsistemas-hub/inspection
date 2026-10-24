@@ -338,7 +338,7 @@ func createRetentionLockTables(db *gorm.DB) error {
 	if err := db.Exec(`CREATE TABLE inspections.inspections (
 		id text PRIMARY KEY, tenant_id text NOT NULL, business_unit_id text NOT NULL,
 		asset_id text NOT NULL, participant_id text NOT NULL, template_id text NOT NULL,
-		 template_version_id text NOT NULL, analysis_prompt_snapshot_id text NOT NULL,
+		 template_version_id text NOT NULL, analysis_prompt_snapshot_id text NOT NULL, inventory_prompt_snapshot_id text,
 		project_id text, stage_id text, source text NOT NULL, source_key text NOT NULL, media_kind text NOT NULL DEFAULT 'PHOTO',
 		source_reason text, state_reason text, status text NOT NULL, active_video_plan_id text,
 		evidence_count integer NOT NULL DEFAULT 0, due_at datetime NOT NULL,

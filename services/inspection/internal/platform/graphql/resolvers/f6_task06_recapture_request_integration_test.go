@@ -285,7 +285,7 @@ func openRecaptureResponsibility(t *testing.T, fx api10Fixture, responsibilityTe
 		t.Fatal(err)
 	}
 	invitation := database.Invitation{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}
-	for _, row := range []any{&invitation, &database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}, &database.ProcessingAcceptance{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: responsibilityID, DisclosureVersion: invitationcore.PrivacyDisclosureVersion, PhotoProcessing: true, VideoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}} {
+	for _, row := range []any{&invitation, &database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}, &database.ProcessingAcceptance{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: responsibilityID, DisclosureVersion: invitationcore.PrivacyDisclosureVersion, PhotoProcessing: true, VideoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}} {
 		if err := fx.h.AdminDB.Create(row).Error; err != nil {
 			t.Fatal(err)
 		}

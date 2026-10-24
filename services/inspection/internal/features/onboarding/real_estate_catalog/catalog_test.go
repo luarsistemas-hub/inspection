@@ -1,6 +1,10 @@
 package real_estate_catalog
 
-import "testing"
+import (
+	"testing"
+
+	templatecatalog "inspection/services/inspection/internal/features/templates/catalog"
+)
 
 func TestResolveSupportedDefinition(t *testing.T) {
 	got, err := Resolve("real_estate")
@@ -98,6 +102,33 @@ func TestCuratedTemplateLeavesComparisonChoiceToInspection(t *testing.T) {
 	refs := templateRefs{}
 	if err := ValidateTemplates(refs); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOnboardingPublishesV2ButKeepsLegacyConsumerTemplateV1(t *testing.T) {
+	refs := templateRefs{}
+	for label, documents := range map[string]map[string]templatecatalog.TemplateDocument{
+		"published v2":     TemplateDocuments("production"),
+		"legacy active v1": LegacyTemplateDocuments("production"),
+	} {
+		document, ok := documents[ChecklistTemplateKey]
+		if !ok {
+			t.Fatalf("%s document missing", label)
+		}
+		payload, _, err := templatecatalog.CanonicalJSON(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiled, err := templatecatalog.Compile(payload, refs)
+		if err != nil {
+			t.Fatalf("%s document did not compile: %v", label, err)
+		}
+		if label == "published v2" && compiled.Document.SchemaVersion != templatecatalog.EnvironmentSchemaVersion {
+			t.Fatalf("published onboarding template schemaVersion=%d", compiled.Document.SchemaVersion)
+		}
+		if label == "legacy active v1" && (compiled.Document.SchemaVersion != TemplateSchema || len(compiled.Document.Requirements) == 0) {
+			t.Fatalf("legacy onboarding template is not capturable v1: %+v", compiled.Document)
+		}
 	}
 }
 

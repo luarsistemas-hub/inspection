@@ -43,7 +43,7 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 		if err := db.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).Take(&origin).Error; err != nil {
 			t.Fatal(err)
 		}
-		oldVersion := database.OriginVersion{ID: oldID, TenantID: query.TenantID, OriginID: origin.ID, VersionNumber: 0, ResponsibilityID: identity.NewID(), Status: "INVALIDATED", IdempotencyKey: "origin-old", CreatedAt: time.Now().UTC()}
+		oldVersion := database.OriginVersion{ID: oldID, TenantID: query.TenantID, OriginID: origin.ID, VersionNumber: 0, ResponsibilityID: identity.Ptr(identity.NewID()), Status: "INVALIDATED", IdempotencyKey: "origin-old", CreatedAt: time.Now().UTC()}
 		if err := db.Create(&oldVersion).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -117,7 +117,7 @@ func TestVideoOriginCannotBePinnedWhilePreparationIsDiscoveringIT056(t *testing.
 	tenantID, assetID, originID, versionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Now().UTC()
 	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
-	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest-discovering", IdempotencyKey: "video-origin-discovering", CreatedAt: now, ActivatedAt: &now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.Ptr(identity.NewID()), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest-discovering", IdempotencyKey: "video-origin-discovering", CreatedAt: now, ActivatedAt: &now}
 	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: tenantID, MediaID: identity.NewID(), Status: "PROCESSING", Phase: "DISCOVERING", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, CreatedAt: now}
 	for _, row := range []any{&origin, &version, &preparation} {
 		if err := db.Create(row).Error; err != nil {
@@ -150,7 +150,7 @@ func TestVideoOriginUsesOneMediaRequirementAndKeepsScopeProjection(t *testing.T)
 	mediaID, frameID, scopeID := identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Now().UTC()
 	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
-	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest", IdempotencyKey: "video-origin", CreatedAt: now, ActivatedAt: &now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.Ptr(identity.NewID()), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: "manifest", IdempotencyKey: "video-origin", CreatedAt: now, ActivatedAt: &now}
 	preparation := database.VideoPreparationJob{ID: preparationID, TenantID: tenantID, MediaID: mediaID, Status: "READY", ManifestDigest: "manifest", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, CreatedAt: now}
 	frame := database.VideoFrame{ID: frameID, TenantID: tenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 1200000, SHA256: "digest", ObjectKey: "frame.jpg", CreatedAt: now}
 	scope := database.VideoScopeItem{ID: scopeID, TenantID: tenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front view", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: []byte(`[]`), CreatedAt: now}
@@ -195,7 +195,7 @@ func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.I
 	tenantID, assetID, originID, versionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Date(2026, time.September, 5, 12, 0, 0, 0, time.UTC)
 	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}
-	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", IdempotencyKey: "origin", CreatedAt: now, ActivatedAt: &now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.Ptr(identity.NewID()), Status: "ACTIVE", IdempotencyKey: "origin", CreatedAt: now, ActivatedAt: &now}
 	if err := db.Create(&origin).Error; err != nil {
 		t.Fatal(err)
 	}

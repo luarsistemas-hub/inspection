@@ -75,7 +75,7 @@ func TestReplayOriginSubmitCaptureReturnsSameSubmissionIDIT040(t *testing.T) {
 	if err := h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.TenantID, InvitationID: invitationID, ResponsibilityID: fixture.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expiresAt, CreatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &fixture.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expiresAt, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()

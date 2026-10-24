@@ -297,7 +297,8 @@ func (TemplateVersion) TableName() string { return "templates.template_versions"
 // Revision is strictly an optimistic-concurrency token.
 type AnalysisPrompt struct {
 	ID              identity.ID     `gorm:"type:uuid;primaryKey"`
-	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex"`
+	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex:uq_analysis_prompt_task,priority:1"`
+	Task            string          `gorm:"size:32;not null;default:FINDINGS;uniqueIndex:uq_analysis_prompt_task,priority:2"`
 	DefinitionJSON  json.RawMessage `gorm:"type:jsonb;not null"`
 	CanonicalDigest string          `gorm:"size:64;not null"`
 	Revision        int64           `gorm:"not null;default:1"`
@@ -311,9 +312,10 @@ func (AnalysisPrompt) TableName() string { return "analysis.prompts" }
 // AnalysisPromptSnapshot is immutable content addressed state pinned by an inspection.
 type AnalysisPromptSnapshot struct {
 	ID              identity.ID     `gorm:"type:uuid;primaryKey"`
-	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex:idx_analysis_prompt_snapshot_digest,priority:1"`
+	AnalysisType    string          `gorm:"size:64;not null;uniqueIndex:uq_analysis_prompt_snapshot_task_digest,priority:1"`
+	Task            string          `gorm:"size:32;not null;default:FINDINGS;uniqueIndex:uq_analysis_prompt_snapshot_task_digest,priority:2"`
 	DefinitionJSON  json.RawMessage `gorm:"type:jsonb;not null"`
-	CanonicalDigest string          `gorm:"size:64;not null;uniqueIndex:idx_analysis_prompt_snapshot_digest,priority:2"`
+	CanonicalDigest string          `gorm:"size:64;not null;uniqueIndex:uq_analysis_prompt_snapshot_task_digest,priority:3"`
 	CreatedAt       time.Time       `gorm:"not null"`
 }
 
@@ -480,17 +482,18 @@ type AssetAssignment struct {
 func (AssetAssignment) TableName() string { return "assets.asset_assignments" }
 
 type Invitation struct {
-	ID                identity.ID     `gorm:"type:uuid;primaryKey"`
-	TenantID          identity.ID     `gorm:"type:uuid;not null;index:idx_invitation_tenant_responsibility,priority:1"`
-	ResponsibilityID  identity.ID     `gorm:"type:uuid;not null;index:idx_invitation_tenant_responsibility,priority:2"`
-	TokenHash         []byte          `gorm:"type:bytea;size:32;not null;uniqueIndex"`
-	PreviousTokenHash []byte          `gorm:"type:bytea;size:32;index"`
-	DeliveryIntents   json.RawMessage `gorm:"type:jsonb;not null"`
-	IdempotencyKey    string          `gorm:"size:200;not null;default:'';index"`
-	Status            string          `gorm:"size:20;not null;index"`
-	ExpiresAt         time.Time       `gorm:"not null;index"`
-	RevokedAt         *time.Time
-	CreatedAt         time.Time
+	ID                   identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID             identity.ID     `gorm:"type:uuid;not null;index:idx_invitation_tenant_responsibility,priority:1"`
+	ResponsibilityID     identity.ID     `gorm:"type:uuid;not null;index:idx_invitation_tenant_responsibility,priority:2"`
+	ReviewerMembershipID *identity.ID    `gorm:"type:uuid"`
+	TokenHash            []byte          `gorm:"type:bytea;size:32;not null;uniqueIndex"`
+	PreviousTokenHash    []byte          `gorm:"type:bytea;size:32;index"`
+	DeliveryIntents      json.RawMessage `gorm:"type:jsonb;not null"`
+	IdempotencyKey       string          `gorm:"size:200;not null;default:'';index"`
+	Status               string          `gorm:"size:20;not null;index"`
+	ExpiresAt            time.Time       `gorm:"not null;index"`
+	RevokedAt            *time.Time
+	CreatedAt            time.Time
 }
 
 func (Invitation) TableName() string { return "invitations.invitations" }
@@ -511,15 +514,17 @@ type OTPChallenge struct {
 func (OTPChallenge) TableName() string { return "invitations.otp_challenges" }
 
 type ExternalSession struct {
-	ID               identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID         identity.ID `gorm:"type:uuid;not null;index:idx_session_responsibility,priority:1"`
-	InvitationID     identity.ID `gorm:"type:uuid;not null;index"`
-	ResponsibilityID identity.ID `gorm:"type:uuid;not null;index:idx_session_responsibility,priority:2"`
-	SessionDigest    []byte      `gorm:"type:bytea;size:32;not null;uniqueIndex"`
-	CSRFDigest       []byte      `gorm:"type:bytea;size:32;not null"`
-	ExpiresAt        time.Time   `gorm:"not null;index"`
-	RevokedAt        *time.Time
-	CreatedAt        time.Time
+	ID                       identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID                 identity.ID  `gorm:"type:uuid;not null;index:idx_session_responsibility,priority:1"`
+	InvitationID             *identity.ID `gorm:"type:uuid;index"`
+	ResponsibilityID         *identity.ID `gorm:"type:uuid;index:idx_session_responsibility,priority:2"`
+	Kind                     string       `gorm:"size:16;not null;default:CAPTURE"`
+	CounterpartyInvitationID *identity.ID `gorm:"type:uuid;index"`
+	SessionDigest            []byte       `gorm:"type:bytea;size:32;not null;uniqueIndex"`
+	CSRFDigest               []byte       `gorm:"type:bytea;size:32;not null"`
+	ExpiresAt                time.Time    `gorm:"not null;index"`
+	RevokedAt                *time.Time
+	CreatedAt                time.Time
 }
 
 func (ExternalSession) TableName() string { return "invitations.external_sessions" }
@@ -551,22 +556,30 @@ type Origin struct {
 func (Origin) TableName() string { return "origins.origins" }
 
 type OriginVersion struct {
-	ID                  identity.ID  `gorm:"type:uuid;primaryKey"`
-	TenantID            identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_version,priority:1;uniqueIndex:idx_origin_invite_idempotency,priority:1"`
-	OriginID            identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_version,priority:2"`
-	VersionNumber       int          `gorm:"not null;uniqueIndex:idx_origin_version,priority:3"`
-	ResponsibilityID    identity.ID  `gorm:"type:uuid;not null;uniqueIndex"`
-	SupersedesID        *identity.ID `gorm:"type:uuid"`
-	Status              string       `gorm:"size:20;not null;index"`
-	MediaKind           string       `gorm:"size:8;not null;default:PHOTO"`
-	VideoPreparationID  *identity.ID `gorm:"type:uuid"`
-	VideoPlanID         *identity.ID `gorm:"type:uuid"`
-	ScopeManifestDigest string       `gorm:"size:64;not null;default:''"`
-	IdempotencyKey      string       `gorm:"size:200;not null;uniqueIndex:idx_origin_invite_idempotency,priority:2"`
-	CreatedAt           time.Time
-	SubmittedAt         *time.Time
-	ActivatedAt         *time.Time
-	InvalidatedAt       *time.Time
+	ID                      identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID                identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_version,priority:1;uniqueIndex:idx_origin_invite_idempotency,priority:1"`
+	OriginID                identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_origin_version,priority:2"`
+	VersionNumber           int          `gorm:"not null;uniqueIndex:idx_origin_version,priority:3"`
+	ResponsibilityID        *identity.ID `gorm:"type:uuid;uniqueIndex"`
+	Purpose                 *string      `gorm:"size:40"`
+	Source                  string       `gorm:"size:32;not null;default:CAPTURE"`
+	SourceInspectionID      *identity.ID `gorm:"type:uuid"`
+	SourceVersionID         *identity.ID `gorm:"type:uuid"`
+	HasInventory            bool         `gorm:"not null;default:false"`
+	DraftState              *string      `gorm:"size:16"`
+	ActivatedByMembershipID *identity.ID `gorm:"type:uuid"`
+	DiscardedAt             *time.Time
+	SupersedesID            *identity.ID `gorm:"type:uuid"`
+	Status                  string       `gorm:"size:20;not null;index"`
+	MediaKind               string       `gorm:"size:8;not null;default:PHOTO"`
+	VideoPreparationID      *identity.ID `gorm:"type:uuid"`
+	VideoPlanID             *identity.ID `gorm:"type:uuid"`
+	ScopeManifestDigest     string       `gorm:"size:64;not null;default:''"`
+	IdempotencyKey          string       `gorm:"size:200;not null;uniqueIndex:idx_origin_invite_idempotency,priority:2"`
+	CreatedAt               time.Time
+	SubmittedAt             *time.Time
+	ActivatedAt             *time.Time
+	InvalidatedAt           *time.Time
 }
 
 func (OriginVersion) TableName() string { return "origins.origin_versions" }
@@ -638,14 +651,15 @@ func (MediaObject) TableName() string { return "media.media_objects" }
 
 // VideoPolicy stores tenant-owned limits; missing rows use the product defaults.
 type VideoPolicy struct {
-	TenantID             identity.ID `gorm:"type:uuid;primaryKey"`
-	MaxDurationMinutes   int         `gorm:"not null;default:15"`
-	OriginRetentionDays  int         `gorm:"not null;default:30"`
-	CurrentRetentionDays int         `gorm:"not null;default:5"`
-	Version              int64       `gorm:"not null;default:1"`
-	LastMutationID       string      `gorm:"size:200;not null;default:''"`
-	LastPayloadDigest    string      `gorm:"size:64;not null;default:''"`
-	UpdatedAt            time.Time   `gorm:"not null"`
+	TenantID                        identity.ID `gorm:"type:uuid;primaryKey"`
+	MaxDurationMinutes              int         `gorm:"not null;default:15"`
+	OriginRetentionDays             int         `gorm:"not null;default:30"`
+	CurrentRetentionDays            int         `gorm:"not null;default:30"`
+	SupersededBaselineRetentionDays int         `gorm:"not null;default:365"`
+	Version                         int64       `gorm:"not null;default:1"`
+	LastMutationID                  string      `gorm:"size:200;not null;default:''"`
+	LastPayloadDigest               string      `gorm:"size:64;not null;default:''"`
+	UpdatedAt                       time.Time   `gorm:"not null"`
 }
 
 func (VideoPolicy) TableName() string { return "media.video_policies" }
@@ -670,6 +684,7 @@ type VideoAttempt struct {
 	TenantID           identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_attempt_key,priority:1"`
 	ResponsibilityID   identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_attempt_key,priority:2"`
 	Kind               string      `gorm:"size:16;not null"`
+	RequirementKey     *string     `gorm:"size:200"`
 	PolicyVersion      int64       `gorm:"not null"`
 	MaxDurationSeconds int         `gorm:"not null"`
 	MaxBytes           int64       `gorm:"not null"`
@@ -686,28 +701,32 @@ func (VideoAttempt) TableName() string { return "capture.video_attempts" }
 
 // VideoPreparationJob durably records that a received source awaits validation.
 type VideoPreparationJob struct {
-	ID                 identity.ID  `gorm:"type:uuid;primaryKey"`
-	TenantID           identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_video_job_profile_generation,priority:1"`
-	MediaID            identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_video_job_profile_generation,priority:2"`
-	SubmissionID       *identity.ID `gorm:"type:uuid"`
-	Status             string       `gorm:"size:16;not null;default:QUEUED;index:idx_video_job_due,priority:1"`
-	Phase              string       `gorm:"size:32;not null;default:RECEIVED"`
-	PreparationVersion int          `gorm:"not null;default:1"`
-	Generation         int          `gorm:"not null;default:1;uniqueIndex:idx_video_job_profile_generation,priority:4"`
-	Attempts           int          `gorm:"not null;default:0"`
-	NextAttemptAt      time.Time    `gorm:"not null;index:idx_video_job_due,priority:2"`
-	LeaseToken         *identity.ID `gorm:"type:uuid"`
-	LeaseExpiresAt     *time.Time   `gorm:"index"`
-	HeartbeatAt        *time.Time
-	ProcessedFrames    int    `gorm:"not null;default:0"`
-	SourceSHA256       string `gorm:"size:64;not null;default:''"`
-	ProfileDigest      string `gorm:"size:64;not null;default:'';uniqueIndex:idx_video_job_profile_generation,priority:3"`
-	ClientMutationID   string `gorm:"size:128;not null;default:''"`
-	ManifestDigest     string `gorm:"size:64;not null;default:''"`
-	PendingObjectKeys  []byte `gorm:"type:jsonb;not null;default:'[]'"`
-	ErrorCode          string `gorm:"size:64;not null;default:''"`
-	FirstReadyAt       *time.Time
-	CreatedAt          time.Time `gorm:"not null;index:idx_video_job_due,priority:3"`
+	ID                   identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID             identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_video_job_profile_generation,priority:1"`
+	MediaID              identity.ID  `gorm:"type:uuid;not null;uniqueIndex:idx_video_job_profile_generation,priority:2"`
+	SubmissionID         *identity.ID `gorm:"type:uuid"`
+	RequirementKey       *string      `gorm:"size:200"`
+	Status               string       `gorm:"size:16;not null;default:QUEUED;index:idx_video_job_due,priority:1"`
+	Phase                string       `gorm:"size:32;not null;default:RECEIVED"`
+	PreparationVersion   int          `gorm:"not null;default:1"`
+	Generation           int          `gorm:"not null;default:1;uniqueIndex:idx_video_job_profile_generation,priority:4"`
+	Attempts             int          `gorm:"not null;default:0"`
+	NextAttemptAt        time.Time    `gorm:"not null;index:idx_video_job_due,priority:2"`
+	LeaseToken           *identity.ID `gorm:"type:uuid"`
+	LeaseExpiresAt       *time.Time   `gorm:"index"`
+	HeartbeatAt          *time.Time
+	ProcessedFrames      int    `gorm:"not null;default:0"`
+	FramesSampled        int    `gorm:"not null;default:0"`
+	FramesRetained       int    `gorm:"not null;default:0"`
+	FramesRepresentative int    `gorm:"not null;default:0"`
+	SourceSHA256         string `gorm:"size:64;not null;default:''"`
+	ProfileDigest        string `gorm:"size:64;not null;default:'';uniqueIndex:idx_video_job_profile_generation,priority:3"`
+	ClientMutationID     string `gorm:"size:128;not null;default:''"`
+	ManifestDigest       string `gorm:"size:64;not null;default:''"`
+	PendingObjectKeys    []byte `gorm:"type:jsonb;not null;default:'[]'"`
+	ErrorCode            string `gorm:"size:64;not null;default:''"`
+	FirstReadyAt         *time.Time
+	CreatedAt            time.Time `gorm:"not null;index:idx_video_job_due,priority:3"`
 }
 
 func (VideoPreparationJob) TableName() string { return "media.video_preparation_jobs" }
@@ -732,6 +751,7 @@ type VideoSource struct {
 	FirstFrameReadyAt       *time.Time
 	RetentionDays           *int
 	SourceExpiryAt          *time.Time
+	RetentionAnchor         string       `gorm:"size:24;not null;default:FIXED"`
 	Status                  string       `gorm:"size:16;not null;default:RETAINED;index"`
 	DeleteLeaseToken        *identity.ID `gorm:"type:uuid"`
 	DeleteLeaseUntil        *time.Time
@@ -744,18 +764,19 @@ func (VideoSource) TableName() string { return "media.video_sources" }
 
 // VideoFrame is retained derived evidence, never a participant media upload.
 type VideoFrame struct {
-	ID            identity.ID `gorm:"type:uuid;primaryKey;uniqueIndex:idx_video_frame_tenant_id,priority:2"`
-	TenantID      identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_tenant_id,priority:1"`
-	SourceMediaID identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_lineage,priority:1"`
-	PreparationID identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_lineage,priority:2"`
-	PTSMicros     int64       `gorm:"column:pts_us;not null;uniqueIndex:idx_video_frame_lineage,priority:3"`
-	SHA256        string      `gorm:"size:64;not null"`
-	ObjectKey     string      `gorm:"size:1000;not null;uniqueIndex"`
-	Width, Height int
-	Role          string `gorm:"size:16;not null;default:BASELINE"`
-	Quality       string `gorm:"size:32;not null;default:''"`
-	SizeBytes     int64  `gorm:"not null;default:0"`
-	CreatedAt     time.Time
+	ID             identity.ID `gorm:"type:uuid;primaryKey;uniqueIndex:idx_video_frame_tenant_id,priority:2"`
+	TenantID       identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_tenant_id,priority:1"`
+	SourceMediaID  identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_lineage,priority:1"`
+	PreparationID  identity.ID `gorm:"type:uuid;not null;uniqueIndex:idx_video_frame_lineage,priority:2"`
+	PTSMicros      int64       `gorm:"column:pts_us;not null;uniqueIndex:idx_video_frame_lineage,priority:3"`
+	SHA256         string      `gorm:"size:64;not null"`
+	ObjectKey      string      `gorm:"size:1000;not null;uniqueIndex"`
+	Width, Height  int
+	Role           string `gorm:"size:16;not null;default:BASELINE"`
+	Representative bool   `gorm:"not null;default:false"`
+	Quality        string `gorm:"size:32;not null;default:''"`
+	SizeBytes      int64  `gorm:"not null;default:0"`
+	CreatedAt      time.Time
 }
 
 func (VideoFrame) TableName() string { return "media.video_frames" }
@@ -1088,31 +1109,32 @@ type ReminderPlan struct {
 func (ReminderPlan) TableName() string { return "schedules.reminder_plans" }
 
 type Inspection struct {
-	ID                       identity.ID     `gorm:"type:uuid;primaryKey"`
-	TenantID                 identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_inspection_source,priority:1;index:idx_inspections_cursor,priority:1"`
-	BusinessUnitID           identity.ID     `gorm:"type:uuid;not null;index:idx_inspections_scope,priority:2"`
-	AssetID                  identity.ID     `gorm:"type:uuid;not null;index:idx_inspections_scope,priority:3"`
-	ParticipantID            identity.ID     `gorm:"type:uuid;not null"`
-	TemplateID               identity.ID     `gorm:"type:uuid;not null"`
-	TemplateVersionID        identity.ID     `gorm:"type:uuid;not null"`
-	AnalysisPromptSnapshotID identity.ID     `gorm:"type:uuid"`
-	ProjectID                *identity.ID    `gorm:"type:uuid;index"`
-	StageID                  *identity.ID    `gorm:"type:uuid;index"`
-	Source                   string          `gorm:"size:20;not null;uniqueIndex:idx_inspection_source,priority:2"`
-	SourceKey                string          `gorm:"size:300;not null;uniqueIndex:idx_inspection_source,priority:3"`
-	SourceReason             string          `gorm:"size:2000"`
-	StateReason              string          `gorm:"size:2000"`
-	Status                   string          `gorm:"size:24;not null;index"`
-	MediaKind                string          `gorm:"size:8;not null;default:PHOTO"`
-	ActiveVideoPlanID        *identity.ID    `gorm:"type:uuid"`
-	EvidenceCount            int             `gorm:"not null;default:0"`
-	DueAt                    time.Time       `gorm:"not null"`
-	DeadlineAt               time.Time       `gorm:"not null"`
-	ReminderInstants         json.RawMessage `gorm:"type:jsonb;not null"`
-	ContextSnapshot          json.RawMessage `gorm:"type:jsonb;not null"`
-	Version                  int64           `gorm:"not null;default:1"`
-	CreatedAt                time.Time       `gorm:"not null;index:idx_inspections_cursor,priority:2"`
-	UpdatedAt                time.Time
+	ID                        identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID                  identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_inspection_source,priority:1;index:idx_inspections_cursor,priority:1"`
+	BusinessUnitID            identity.ID     `gorm:"type:uuid;not null;index:idx_inspections_scope,priority:2"`
+	AssetID                   identity.ID     `gorm:"type:uuid;not null;index:idx_inspections_scope,priority:3"`
+	ParticipantID             identity.ID     `gorm:"type:uuid;not null"`
+	TemplateID                identity.ID     `gorm:"type:uuid;not null"`
+	TemplateVersionID         identity.ID     `gorm:"type:uuid;not null"`
+	AnalysisPromptSnapshotID  identity.ID     `gorm:"type:uuid"`
+	InventoryPromptSnapshotID *identity.ID    `gorm:"type:uuid"`
+	ProjectID                 *identity.ID    `gorm:"type:uuid;index"`
+	StageID                   *identity.ID    `gorm:"type:uuid;index"`
+	Source                    string          `gorm:"size:20;not null;uniqueIndex:idx_inspection_source,priority:2"`
+	SourceKey                 string          `gorm:"size:300;not null;uniqueIndex:idx_inspection_source,priority:3"`
+	SourceReason              string          `gorm:"size:2000"`
+	StateReason               string          `gorm:"size:2000"`
+	Status                    string          `gorm:"size:24;not null;index"`
+	MediaKind                 string          `gorm:"size:8;not null;default:PHOTO"`
+	ActiveVideoPlanID         *identity.ID    `gorm:"type:uuid"`
+	EvidenceCount             int             `gorm:"not null;default:0"`
+	DueAt                     time.Time       `gorm:"not null"`
+	DeadlineAt                time.Time       `gorm:"not null"`
+	ReminderInstants          json.RawMessage `gorm:"type:jsonb;not null"`
+	ContextSnapshot           json.RawMessage `gorm:"type:jsonb;not null"`
+	Version                   int64           `gorm:"not null;default:1"`
+	CreatedAt                 time.Time       `gorm:"not null;index:idx_inspections_cursor,priority:2"`
+	UpdatedAt                 time.Time
 }
 
 func (Inspection) TableName() string { return "inspections.inspections" }
@@ -1288,11 +1310,12 @@ func (VideoPlanItem) TableName() string { return "analysis.video_plan_items" }
 
 // VideoPlanPreparation records the preparation banks pinned by a video plan.
 type VideoPlanPreparation struct {
-	TenantID      identity.ID `gorm:"type:uuid;primaryKey"`
-	PlanID        identity.ID `gorm:"type:uuid;primaryKey"`
-	PreparationID identity.ID `gorm:"type:uuid;primaryKey"`
-	Role          string      `gorm:"size:16;not null"`
-	CreatedAt     time.Time
+	TenantID       identity.ID `gorm:"type:uuid;primaryKey"`
+	PlanID         identity.ID `gorm:"type:uuid;primaryKey"`
+	PreparationID  identity.ID `gorm:"type:uuid;primaryKey"`
+	Role           string      `gorm:"size:16;not null"`
+	RequirementKey *string     `gorm:"size:200"`
+	CreatedAt      time.Time
 }
 
 func (VideoPlanPreparation) TableName() string { return "analysis.video_plan_preparations" }
@@ -1314,6 +1337,189 @@ type VideoCoverageJob struct {
 }
 
 func (VideoCoverageJob) TableName() string { return "recapture.video_coverage_jobs" }
+
+// InventoryEnvironment is one named environment in an inventory version.
+type InventoryEnvironment struct {
+	ID                 identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID           identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_environment_identity,priority:1"`
+	OriginVersionID    identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_environment_identity,priority:2"`
+	IdentityID         identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_environment_identity,priority:3"`
+	TypeCode           string      `gorm:"size:40;not null"`
+	Name               string      `gorm:"size:80;not null"`
+	Expected           bool        `gorm:"not null"`
+	AddedDuringCapture bool        `gorm:"not null;default:false"`
+	RequirementKey     *string     `gorm:"size:200"`
+	Decision           string      `gorm:"size:16;not null;default:PENDING"`
+	Position           int         `gorm:"not null;default:0"`
+	Version            int         `gorm:"not null;default:1"`
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+func (InventoryEnvironment) TableName() string { return "origins.inventory_environments" }
+
+// InventoryItem is a versioned asset item and its review state.
+type InventoryItem struct {
+	ID              identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID        identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:1"`
+	OriginVersionID identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:2"`
+	EnvironmentID   identity.ID `gorm:"type:uuid;not null;index"`
+	IdentityID      identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:3"`
+	TypeCode        string      `gorm:"size:40;not null"`
+	Name            string      `gorm:"size:80;not null"`
+	Material        *string     `gorm:"size:200"`
+	Color           *string     `gorm:"size:100"`
+	Quantity        *int
+	Condition       string  `gorm:"size:24;not null"`
+	Observation     string  `gorm:"size:24;not null;default:OBSERVED"`
+	Limitation      *string `gorm:"size:200"`
+	ConfidenceBps   *int
+	Origin          string          `gorm:"size:16;not null;default:AI"`
+	Declared        bool            `gorm:"not null;default:false"`
+	Decision        string          `gorm:"size:16;not null;default:PENDING"`
+	RejectionReason *string         `gorm:"size:32"`
+	RejectionText   *string         `gorm:"size:500"`
+	Suggested       json.RawMessage `gorm:"type:jsonb"`
+	MergedIntoID    *identity.ID    `gorm:"type:uuid"`
+	DecidedBy       *identity.ID    `gorm:"type:uuid"`
+	DecidedAt       *time.Time
+	Version         int `gorm:"not null;default:1"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (InventoryItem) TableName() string { return "origins.inventory_items" }
+
+// InventoryItemEvidence ties an item to a photo or retained video frame.
+type InventoryItemEvidence struct {
+	ID        identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID  identity.ID     `gorm:"type:uuid;not null;index"`
+	ItemID    identity.ID     `gorm:"type:uuid;not null;index"`
+	Kind      string          `gorm:"size:16;not null"`
+	MediaID   identity.ID     `gorm:"type:uuid;not null"`
+	FrameID   *identity.ID    `gorm:"type:uuid"`
+	Region    json.RawMessage `gorm:"type:jsonb"`
+	Position  int             `gorm:"not null;default:0"`
+	CreatedAt time.Time
+}
+
+func (InventoryItemEvidence) TableName() string { return "origins.inventory_item_evidence" }
+
+// InventoryDecision is an append-only audit entry for inventory changes.
+type InventoryDecision struct {
+	ID                identity.ID     `gorm:"type:uuid;primaryKey"`
+	TenantID          identity.ID     `gorm:"type:uuid;not null;index"`
+	OriginVersionID   identity.ID     `gorm:"type:uuid;not null;index"`
+	TargetType        string          `gorm:"size:16;not null"`
+	TargetID          identity.ID     `gorm:"type:uuid;not null"`
+	Action            string          `gorm:"size:24;not null"`
+	Before            json.RawMessage `gorm:"type:jsonb"`
+	After             json.RawMessage `gorm:"type:jsonb"`
+	Reason            *string         `gorm:"size:500"`
+	ActorMembershipID *identity.ID    `gorm:"type:uuid"`
+	OccurredAt        time.Time       `gorm:"not null"`
+	CreatedAt         time.Time
+}
+
+func (InventoryDecision) TableName() string { return "origins.inventory_decisions" }
+
+// BaselinePolicy contains tenant-specific counterparty response deadlines.
+type BaselinePolicy struct {
+	TenantID                 identity.ID `gorm:"type:uuid;primaryKey"`
+	ContestationDeadlineDays int         `gorm:"not null;default:5"`
+	Version                  int64       `gorm:"not null;default:1"`
+	UpdatedAt                time.Time
+}
+
+func (BaselinePolicy) TableName() string { return "origins.baseline_policies" }
+
+// CounterpartyInvitation records one tokenless-in-storage baseline response flow.
+type CounterpartyInvitation struct {
+	ID                  identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID            identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_counterparty_participant,priority:1"`
+	OriginVersionID     identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_counterparty_participant,priority:2"`
+	ParticipantID       identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_counterparty_participant,priority:3"`
+	TokenHash           []byte      `gorm:"type:bytea;not null;uniqueIndex"`
+	OTPHash             []byte      `gorm:"type:bytea"`
+	OTPExpiresAt        *time.Time
+	OTPAttempts         int             `gorm:"not null;default:0"`
+	Channels            json.RawMessage `gorm:"type:jsonb;not null;default:'[]'"`
+	DeadlineAt          time.Time       `gorm:"not null"`
+	Response            string          `gorm:"size:16;not null;default:PENDING"`
+	Statement           *string         `gorm:"size:4000"`
+	RespondedAt         *time.Time
+	Resolution          string       `gorm:"size:16;not null;default:OPEN"`
+	ResolutionReason    *string      `gorm:"size:500"`
+	ResolvedBy          *identity.ID `gorm:"type:uuid"`
+	ResolvedAt          *time.Time
+	AdjustmentVersionID *identity.ID `gorm:"type:uuid"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+func (CounterpartyInvitation) TableName() string { return "origins.counterparty_invitations" }
+
+// InventoryJob leases one inventory analysis task.
+type InventoryJob struct {
+	ID                    identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID              identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:1"`
+	InspectionID          identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:2"`
+	OriginVersionID       identity.ID  `gorm:"type:uuid;not null"`
+	Kind                  string       `gorm:"size:16;not null;uniqueIndex:uq_inventory_job_input,priority:3"`
+	RequirementKey        string       `gorm:"size:200;not null;uniqueIndex:uq_inventory_job_input,priority:4"`
+	EnvironmentIdentityID *identity.ID `gorm:"type:uuid"`
+	Status                string       `gorm:"size:16;not null;default:PENDING;index"`
+	Attempts              int          `gorm:"not null;default:0"`
+	NextAttemptAt         time.Time    `gorm:"not null;index"`
+	LeaseToken            *identity.ID `gorm:"type:uuid"`
+	LeaseUntil            *time.Time
+	ErrorCode             *string      `gorm:"size:64"`
+	PromptSnapshotID      *identity.ID `gorm:"type:uuid"`
+	InputDigest           *string      `gorm:"size:64"`
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
+func (InventoryJob) TableName() string { return "analysis.inventory_jobs" }
+
+// InventoryEvidencePair stores a proposed or confirmed cross-time evidence match.
+type InventoryEvidencePair struct {
+	ID             identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID       identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_pair_identity,priority:1"`
+	JobID          identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_pair_identity,priority:2"`
+	ItemIdentityID identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_pair_identity,priority:3"`
+	OriginKind     string       `gorm:"size:16;not null"`
+	OriginMediaID  identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_pair_identity,priority:4"`
+	OriginFrameID  *identity.ID `gorm:"type:uuid;uniqueIndex:uq_inventory_pair_identity,priority:5"`
+	CurrentKind    string       `gorm:"size:16;not null"`
+	CurrentMediaID identity.ID  `gorm:"type:uuid;not null"`
+	CurrentFrameID *identity.ID `gorm:"type:uuid"`
+	Decision       string       `gorm:"size:20;not null"`
+	Confirmed      bool         `gorm:"not null;default:false"`
+	Reason         *string      `gorm:"size:300"`
+	CreatedAt      time.Time
+}
+
+func (InventoryEvidencePair) TableName() string { return "analysis.inventory_evidence_pairs" }
+
+// InventoryItemResult stores one evaluated baseline item per inventory job.
+type InventoryItemResult struct {
+	ID              identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID        identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_result_item,priority:1"`
+	JobID           identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_result_item,priority:2"`
+	InspectionID    identity.ID  `gorm:"type:uuid;not null"`
+	ItemIdentityID  *identity.ID `gorm:"type:uuid;uniqueIndex:uq_inventory_result_item,priority:3"`
+	Status          string       `gorm:"size:24;not null"`
+	ConditionBefore *string      `gorm:"size:24"`
+	ConditionAfter  *string      `gorm:"size:24"`
+	ReasonCode      *string      `gorm:"size:32"`
+	Description     *string      `gorm:"size:500"`
+	OutsideTypeCode *string      `gorm:"size:40"`
+	OutsideName     *string      `gorm:"size:80"`
+	CreatedAt       time.Time
+}
+
+func (InventoryItemResult) TableName() string { return "analysis.inventory_item_results" }
 
 // VideoPlanItemFrame provides tenant-fenced relational membership for a plan item.
 type VideoPlanItemFrame struct {
@@ -1346,6 +1552,9 @@ func (AnalysisRun) TableName() string { return "analysis.analysis_runs" }
 
 type FindingRecord struct {
 	ID, TenantID, AnalysisRunID                              identity.ID     `gorm:"type:uuid;primaryKey"`
+	ComparisonJobID                                          *identity.ID    `gorm:"type:uuid"`
+	InventoryJobID                                           *identity.ID    `gorm:"type:uuid"`
+	ItemIdentityID                                           *identity.ID    `gorm:"type:uuid"`
 	Category                                                 string          `gorm:"size:2000;not null"`
 	Title, Description, Severity, Quality, RecommendedAction string          `gorm:"size:2000;not null"`
 	Confidence                                               float64         `gorm:"not null"`
@@ -1370,6 +1579,7 @@ type ReportSnapshot struct {
 	ProjectID                                    *identity.ID    `gorm:"type:uuid"`
 	VideoPlanID                                  *identity.ID    `gorm:"type:uuid"`
 	Mode, Classification, JSONDigest, HTMLDigest string          `gorm:"size:64;not null"`
+	SchemaVersion                                int             `gorm:"not null;default:1"`
 	VersionNumber                                int             `gorm:"not null"`
 	PDFRenderVersion                             int             `gorm:"not null;default:0"`
 	PublicationPolicyVersion                     int64           `gorm:"not null;default:0"`
@@ -1622,14 +1832,14 @@ func Models() []any {
 		&UserInvitation{}, &UserInvitationOTP{},
 		&Asset{}, &AssetAttributeVersion{}, &AssetAssignment{},
 		&Invitation{}, &OTPChallenge{}, &ExternalSession{}, &ProcessingAcceptance{},
-		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{},
+		&Origin{}, &OriginVersion{}, &OriginEvidence{}, &OriginPromotion{}, &InventoryEnvironment{}, &InventoryItem{}, &InventoryItemEvidence{}, &InventoryDecision{}, &BaselinePolicy{}, &CounterpartyInvitation{},
 		&MediaObject{}, &MultipartUpload{}, &UploadPart{}, &MediaDerivative{}, &ScreeningRun{}, &VideoPolicy{}, &VideoAdmission{}, &VideoAttempt{}, &VideoPreparationJob{}, &VideoSource{}, &VideoFrame{}, &VideoEvidenceReference{}, &VideoSourceLease{}, &VideoScopeItem{},
 		&CaptureDraft{}, &RequirementAnswer{}, &SubmissionVersion{}, &RecaptureRequest{}, &RecaptureRequirement{}, &VideoReplacement{},
 		&Delivery{}, &ChannelAttempt{}, &NotificationAttempt{}, &NotificationPayload{}, &NotificationRecipient{}, &ProviderCallback{},
 		&Schedule{}, &OccurrenceMaterialization{}, &ReminderPlan{},
 		&Inspection{}, &Responsibility{}, &PolicySnapshot{}, &ReferenceSnapshot{},
 		&Project{}, &ProjectStage{}, &StageTransition{},
-		&ComparisonJob{}, &VideoPlan{}, &VideoPlanItem{}, &VideoPlanItemFrame{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
+		&ComparisonJob{}, &InventoryJob{}, &InventoryEvidencePair{}, &InventoryItemResult{}, &VideoPlan{}, &VideoPlanItem{}, &VideoPlanItemFrame{}, &AnalysisRun{}, &FindingRecord{}, &ClassificationRun{},
 		&ReportSnapshot{}, &ReportArtifact{}, &RetentionPolicy{},
 		&PublicationPolicy{}, &ReportPublication{}, &RecipientChannel{}, &RecipientNotification{},
 		&DashboardInspection{}, &TriageCase{}, &TriageCaseEvent{}, &UsageRecord{}, &LLMCallRecord{}, &UsageDailySummary{},

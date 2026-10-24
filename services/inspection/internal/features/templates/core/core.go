@@ -91,7 +91,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 			return err
 		}
 		meta, _ := requestctx.FromContext(ctx)
-		version := database.TemplateVersion{ID: identity.NewID(), TenantID: tenantID, TemplateID: template.ID, VersionNumber: int(count) + 1, SchemaVersion: 1, DefinitionJSON: compiled.Canonical, CanonicalDigest: compiled.Digest, Status: "PUBLISHED", IdempotencyKey: idempotencyKey, PublishedAt: now, CreatedBy: meta.Principal.IdentityID}
+		version := database.TemplateVersion{ID: identity.NewID(), TenantID: tenantID, TemplateID: template.ID, VersionNumber: int(count) + 1, SchemaVersion: compiled.Document.SchemaVersion, DefinitionJSON: compiled.Canonical, CanonicalDigest: compiled.Digest, Status: "PUBLISHED", IdempotencyKey: idempotencyKey, PublishedAt: now, CreatedBy: meta.Principal.IdentityID}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}
@@ -124,6 +124,12 @@ func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, 
 				return apperror.New(apperror.Conflict, "version", "another version is active")
 			}
 			return nil
+		}
+		// Every consumer of the active version (inspection creation, schedules,
+		// origin invitations, reports) still reads v1 requirements. Environment
+		// capture (task 03) lifts this gate once those paths understand v2.
+		if out.Version.SchemaVersion >= catalog.EnvironmentSchemaVersion {
+			return apperror.New(apperror.InvalidState, "versionId", "environment capture templates cannot be activated yet")
 		}
 		r := tx.Model(&database.Template{}).Where("tenant_id=? AND id=? AND version=?", tenantID, out.Version.TemplateID, expectedVersion).Updates(map[string]any{"active_version_id": versionID, "version": expectedVersion + 1, "updated_at": time.Now().UTC()})
 		if r.Error != nil {

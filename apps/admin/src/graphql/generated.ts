@@ -11,6 +11,11 @@ export type ActivateTemplateVersionInput = {
   versionId: string | number;
 };
 
+export type AnalysisPromptTask =
+  | 'FINDINGS'
+  | 'INVENTORY_CATALOG'
+  | 'INVENTORY_COMPARE';
+
 export type AnalysisType =
   | 'REAL_ESTATE';
 
@@ -199,6 +204,7 @@ export type UpdateAnalysisPromptInput = {
   clientMutationId: string;
   expectedRevision: number;
   systemPrompt: string;
+  task: AnalysisPromptTask | null | undefined;
 };
 
 export type UpdateAssetInput = {

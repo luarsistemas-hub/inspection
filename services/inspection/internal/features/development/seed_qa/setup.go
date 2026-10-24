@@ -93,7 +93,8 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		return "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
 	}
 	var promptSnapshot database.AnalysisPromptSnapshot
-	if err := db.WithContext(ctx).Where("analysis_type = ?", analysisprompt.RealEstate).Order("created_at ASC").First(&promptSnapshot).Error; err != nil {
+	promptSnapshot, err = findFindingsPromptSnapshot(ctx, db)
+	if err != nil {
 		return "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
 	}
 
@@ -221,6 +222,12 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, nil
 }
 
+func findFindingsPromptSnapshot(ctx context.Context, db *gorm.DB) (database.AnalysisPromptSnapshot, error) {
+	var snapshot database.AnalysisPromptSnapshot
+	err := db.WithContext(ctx).Where("analysis_type = ? AND task = ?", analysisprompt.RealEstate, analysisprompt.Findings).Order("created_at ASC").First(&snapshot).Error
+	return snapshot, err
+}
+
 // SetupOriginVideoInvite adds a disposable VIDEO ORIGIN invitation to the
 // tenant selected by the local QA admin onboarding.
 func SetupOriginVideoInvite(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (string, error) {
@@ -296,13 +303,15 @@ func SetupFixedOriginVideo(ctx context.Context, db *gorm.DB, issuer, minioEndpoi
 		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: membership.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: frameDigest, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: membership.TenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		retentionDays := 30
+		expiresAt := now.Add(time.Duration(retentionDays) * 24 * time.Hour)
+		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: membership.TenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, RetentionDays: &retentionDays, SourceExpiryAt: &expiresAt, RetentionAnchor: "FIXED", Status: "RETAINED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: membership.TenantID, AssetID: ids.asset, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: membership.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "qa-fixed-origin-" + versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: membership.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "qa-fixed-origin-" + versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		labels := [][3]string{{"kitchen", "sink", "wide"}, {"bathroom", "shower", "wide"}}

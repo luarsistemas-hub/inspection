@@ -21,6 +21,16 @@ func TestChecklistOnlyRejectsTemplateWithMandatoryFixedOrigin(t *testing.T) {
 	}
 }
 
+func TestInspectionRejectsV2TemplateUntilEnvironmentCaptureTask03(t *testing.T) {
+	if err := validateTemplateCaptureVersion(catalog.TemplateDocument{SchemaVersion: 1}); err != nil {
+		t.Fatalf("legacy template rejected: %v", err)
+	}
+	err := validateTemplateCaptureVersion(catalog.TemplateDocument{SchemaVersion: 2})
+	if !apperror.Is(err, apperror.InvalidState) {
+		t.Fatalf("schema v2 error=%v, want explicit INVALID_STATE", err)
+	}
+}
+
 func TestInspectionCaptureRequirementsUseSingleVideoSlotAndPreservePhotoRequirements(t *testing.T) {
 	video := inspectionCaptureRequirements("VIDEO", "FIXED_ORIGIN", []capturecore.Requirement{{Key: "video:" + identity.NewID().String(), EvidenceKind: "VIDEO_FRAME"}})
 	if len(video) != 1 || video[0].Key != "video:main" || video[0].EvidenceKind != "VIDEO" || video[0].MinimumMedia != 1 || video[0].MaximumMedia != 1 || video[0].ComparisonTarget != "FIXED_ORIGIN" {

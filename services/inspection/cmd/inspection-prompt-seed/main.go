@@ -20,6 +20,7 @@ func main() {
 
 func run(ctx context.Context) error {
 	replace := flag.Bool("replace", false, "replace the current REAL_ESTATE prompt with the embedded default")
+	task := flag.String("task", "FINDINGS", "analysis prompt task: FINDINGS, INVENTORY_CATALOG, or INVENTORY_COMPARE")
 	flag.Parse()
 	cfg, err := config.Load()
 	if err != nil {
@@ -33,5 +34,5 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return seedprompt.Run(ctx, seedprompt.Dependencies{DB: db, Replace: *replace})
+	return seedprompt.Run(ctx, seedprompt.Dependencies{DB: db, Replace: *replace, Task: *task})
 }

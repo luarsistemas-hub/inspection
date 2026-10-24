@@ -32,6 +32,83 @@ func TestInspectionPurgePreservesFrameBankPromotedToActiveOrigin(t *testing.T) {
 	}
 }
 
+func TestInspectionPurgePreservesPhotoEvidenceOfActiveInventoryAndDeletesDiscardedEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		version     string
+		wantPresent bool
+	}{{name: "active baseline", version: "ACTIVE", wantPresent: true}, {name: "discarded draft", version: "DISCARDED", wantPresent: false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			h, err := harness.NewFromEnv(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = h.Close() })
+			fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now().UTC().Truncate(time.Microsecond)
+			originID, versionID, environmentID, itemID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+			purpose := "INVENTORY_UPDATE"
+			if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+				if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, ActiveVersionID: func() *identity.ID {
+					if tc.version == "ACTIVE" {
+						return &versionID
+					}
+					return nil
+				}(), CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+					return err
+				}
+				if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, Purpose: &purpose, Source: "COMPARATIVE_INSPECTION", SourceInspectionID: &fixture.InspectionID, HasInventory: true, Status: tc.version, IdempotencyKey: "purge-photo-inventory-" + versionID.String(), CreatedAt: now, ActivatedAt: func() *time.Time {
+					if tc.version == "ACTIVE" {
+						return &now
+					}
+					return nil
+				}()}).Error; err != nil {
+					return err
+				}
+				if err := tx.Create(&database.InventoryEnvironment{ID: environmentID, TenantID: fixture.TenantID, OriginVersionID: versionID, IdentityID: identity.NewID(), TypeCode: "LIVING_ROOM", Name: "Sala", Decision: "ACCEPTED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+					return err
+				}
+				if err := tx.Create(&database.InventoryItem{ID: itemID, TenantID: fixture.TenantID, OriginVersionID: versionID, EnvironmentID: environmentID, IdentityID: identity.NewID(), TypeCode: "SOFA", Name: "Sofá", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+					return err
+				}
+				return tx.Create(&database.InventoryItemEvidence{ID: identity.NewID(), TenantID: fixture.TenantID, ItemID: itemID, Kind: "PHOTO", MediaID: fixture.MediaID, CreatedAt: now}).Error
+			}); err != nil {
+				t.Fatal(err)
+			}
+			clock := retentioncore.Clock{Class: retentioncore.EvidenceReports, StartsAt: now.Add(-time.Hour), DueAt: now.Add(-time.Minute)}
+			adminDB := h.MigrationDB
+			if adminDB == nil {
+				adminDB = h.AdminDB
+			}
+			if _, err := PurgeWithStore(ctx, adminDB, h.Store, fixture.TenantID, fixture.InspectionID, clock); err != nil {
+				t.Fatalf("PurgeWithStore() error: %v", err)
+			}
+			reader, _, openErr := (objectstore.VideoStore{Store: h.Store}).Open(ctx, "tenant/"+fixture.TenantID.String()+"/media/"+fixture.MediaID.String())
+			if reader != nil {
+				_ = reader.Close()
+			}
+			var mediaRows, evidenceRows int64
+			if err := adminDB.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Count(&mediaRows).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := adminDB.Model(&database.InventoryItemEvidence{}).Where("tenant_id=? AND item_id=?", fixture.TenantID, itemID).Count(&evidenceRows).Error; err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantPresent {
+				if openErr != nil || mediaRows != 1 || evidenceRows != 1 {
+					t.Fatalf("active baseline photo evidence lost: objectErr=%v mediaRows=%d evidenceRows=%d", openErr, mediaRows, evidenceRows)
+				}
+			} else if openErr == nil || mediaRows != 0 || evidenceRows != 0 {
+				t.Fatalf("discarded photo evidence retained: objectErr=%v mediaRows=%d evidenceRows=%d", openErr, mediaRows, evidenceRows)
+			}
+		})
+	}
+}
+
 func runVideoPurgeIntegration(t *testing.T, promote bool) struct {
 	frameRows    int64
 	objectExists bool
@@ -90,7 +167,7 @@ func runVideoPurgeIntegration(t *testing.T, promote bool) struct {
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, ActiveVersionID: &versionID, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "purge-video-origin-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "purge-video-origin-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&database.VideoEvidenceReference{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: preparationID, OwnerType: "ORIGIN_VERSION", OwnerID: versionID, CreatedAt: now}).Error; err != nil {

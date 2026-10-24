@@ -89,7 +89,7 @@ func TestVV_IT_335PurgeRefusesBankReferencedByReportUntilReleased(t *testing.T) 
 		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: digest, ManifestDigest: digest, PendingObjectKeys: []byte(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "SUPERSEDED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "it335-origin-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "SUPERSEDED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "it335-origin-" + versionID.String(), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.VideoFrame{ID: identity.NewID(), TenantID: fixture.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: digest, ObjectKey: key, Width: 2, Height: 2, Role: "BASELINE", SizeBytes: 5, CreatedAt: now}).Error; err != nil {

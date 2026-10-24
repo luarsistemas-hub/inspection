@@ -32,12 +32,13 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 	photoOriginID, videoOriginID, photoID, pendingPhotoID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	queuedID, queuedMediaID, queuedJobID := identity.NewID(), identity.NewID(), identity.NewID()
 	readyID, readyMediaID, readyJobID, frameID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	photoResp, pendingPhotoResponsibility, queuedResponsibility, readyResponsibility := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	manifest := strings.Repeat("a", 64)
 	versions := []database.OriginVersion{
-		{ID: photoID, TenantID: tenantID, OriginID: photoOriginID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "photo", CreatedAt: now},
-		{ID: pendingPhotoID, TenantID: tenantID, OriginID: photoOriginID, VersionNumber: 2, ResponsibilityID: identity.NewID(), Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "photo-pending", CreatedAt: now},
-		{ID: queuedID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "queued", CreatedAt: now},
-		{ID: readyID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 2, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &readyJobID, ScopeManifestDigest: manifest, IdempotencyKey: "ready", CreatedAt: now},
+		{ID: photoID, TenantID: tenantID, OriginID: photoOriginID, VersionNumber: 1, ResponsibilityID: identity.Ptr(photoResp), Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "photo", CreatedAt: now},
+		{ID: pendingPhotoID, TenantID: tenantID, OriginID: photoOriginID, VersionNumber: 2, ResponsibilityID: identity.Ptr(pendingPhotoResponsibility), Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "photo-pending", CreatedAt: now},
+		{ID: queuedID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 1, ResponsibilityID: identity.Ptr(queuedResponsibility), Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "queued", CreatedAt: now},
+		{ID: readyID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 2, ResponsibilityID: identity.Ptr(readyResponsibility), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &readyJobID, ScopeManifestDigest: manifest, IdempotencyKey: "ready", CreatedAt: now},
 	}
 	for _, origin := range []database.Origin{
 		{ID: photoOriginID, TenantID: tenantID, ActiveVersionID: &photoID, Version: 2, CreatedAt: now, UpdatedAt: now},
@@ -52,8 +53,7 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pendingPhotoResponsibility, queuedResponsibility, readyResponsibility := versions[1].ResponsibilityID, versions[2].ResponsibilityID, versions[3].ResponsibilityID
-	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: versions[0].ResponsibilityID, Kind: "ORIGIN", MediaKind: "PHOTO", TemplateVersionID: identity.NewID(), ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "SUBMITTED"}).Error; err != nil {
+	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: photoResp, Kind: "ORIGIN", MediaKind: "PHOTO", TemplateVersionID: identity.NewID(), ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "SUBMITTED"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: pendingPhotoResponsibility, Kind: "ORIGIN", MediaKind: "PHOTO", TemplateVersionID: identity.NewID(), ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "IN_PROGRESS"}).Error; err != nil {

@@ -238,7 +238,7 @@ func TestVV_IT_175SupersededP1StaysProtectedWhileRPT1ReferencesIt(t *testing.T) 
 		if err := tx.Create(&responsibility).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: v2, TenantID: fixture.TenantID, OriginID: fixture.OriginID, VersionNumber: 2, ResponsibilityID: responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &p2, ScopeManifestDigest: v1.ScopeManifestDigest, IdempotencyKey: "it175-v2-" + v2.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: v2, TenantID: fixture.TenantID, OriginID: fixture.OriginID, VersionNumber: 2, ResponsibilityID: &responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &p2, ScopeManifestDigest: v1.ScopeManifestDigest, IdempotencyKey: "it175-v2-" + v2.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&database.Origin{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.OriginID).Update("active_version_id", v2).Error; err != nil {

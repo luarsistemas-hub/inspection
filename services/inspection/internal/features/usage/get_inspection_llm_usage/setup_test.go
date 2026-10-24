@@ -81,7 +81,7 @@ func usageQueryDB(t *testing.T) *gorm.DB {
 	if err := db.Exec(`CREATE TABLE inspections.inspections (
 		id blob PRIMARY KEY, tenant_id blob NOT NULL, business_unit_id blob NOT NULL, asset_id blob NOT NULL,
 		participant_id blob NOT NULL, template_id blob NOT NULL, template_version_id blob NOT NULL,
-		analysis_prompt_snapshot_id blob, project_id blob, stage_id blob, source text NOT NULL,
+		analysis_prompt_snapshot_id blob, inventory_prompt_snapshot_id blob, project_id blob, stage_id blob, source text NOT NULL,
 		source_key text NOT NULL, source_reason text, state_reason text, status text NOT NULL, media_kind text NOT NULL DEFAULT 'PHOTO', active_video_plan_id blob,
 		evidence_count integer NOT NULL DEFAULT 0, due_at datetime, deadline_at datetime,
 		reminder_instants blob NOT NULL, context_snapshot blob NOT NULL, version integer NOT NULL DEFAULT 1,

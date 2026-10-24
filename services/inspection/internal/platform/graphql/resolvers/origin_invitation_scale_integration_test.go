@@ -131,7 +131,7 @@ func TestExternalCaptureIdentifiesOnlyRequestedAssetAcrossHundredOriginInvitesIT
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: x42.invitationID, ResponsibilityID: x42.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, CreatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: identity.Ptr(x42.invitationID), ResponsibilityID: &x42.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()

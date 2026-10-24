@@ -46,6 +46,21 @@ import (
 	inspectionget "inspection/services/inspection/internal/features/inspections/get"
 	inspectioninvalidate "inspection/services/inspection/internal/features/inspections/invalidate"
 	inspectionlist "inspection/services/inspection/internal/features/inspections/list"
+	inventoryactivate "inspection/services/inspection/internal/features/inventory/activate_version"
+	inventoryadd "inspection/services/inspection/internal/features/inventory/add_item"
+	inventorybaseline "inspection/services/inspection/internal/features/inventory/baseline"
+	inventorybulk "inspection/services/inspection/internal/features/inventory/bulk_accept_environment"
+	inventorycore "inspection/services/inspection/internal/features/inventory/core"
+	inventorydecide "inspection/services/inspection/internal/features/inventory/decide_items"
+	inventorydiscard "inspection/services/inspection/internal/features/inventory/discard_draft"
+	inventorydraft "inspection/services/inspection/internal/features/inventory/draft"
+	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
+	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
+	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
+	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
+	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
+	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
+	inventoryupsertenv "inspection/services/inspection/internal/features/inventory/upsert_environment"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
@@ -140,6 +155,7 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 	process "inspection/services/inspection/internal/platform/runtime"
 	"inspection/services/inspection/internal/platform/security"
+	"inspection/services/inspection/internal/platform/tenanttx"
 	"inspection/services/inspection/internal/platform/testfailure"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -247,6 +263,7 @@ func run() error {
 		return err
 	}
 	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer, DisableRequiredGPS: cfg.Stage != "production"}
+	inventoryService := inventorycore.Service{DB: db, Within: tenanttx.Runner{DB: db}.Within, Retention: inventorycore.NoopRetentionTransition{}, Counterparties: inventorycore.NoopCounterpartyInviter{}}
 	postalLookupService := &postallookup.Service{}
 	setups := []func() error{
 		func() error { return postallookup.Setup(bus, postalLookupService) },
@@ -431,6 +448,20 @@ func run() error {
 		func() error {
 			return originpromotevideo.Setup(originpromotevideo.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
+		func() error { return inventorydecide.Setup(bus, inventoryService) },
+		func() error { return inventorybulk.Setup(bus, inventoryService) },
+		func() error { return inventoryadd.Setup(bus, inventoryService) },
+		func() error { return inventorymerge.Setup(bus, inventoryService) },
+		func() error { return inventorysplit.Setup(bus, inventoryService) },
+		func() error { return inventoryupsertenv.Setup(bus, inventoryService) },
+		func() error { return inventoryremoveenv.Setup(bus, inventoryService) },
+		func() error { return inventoryactivate.Setup(bus, inventoryService) },
+		func() error { return inventorydiscard.Setup(bus, inventoryService) },
+		func() error { return inventoryrequest.Setup(bus, inventoryService) },
+		func() error { return inventorystart.Setup(bus, inventoryService) },
+		func() error { return inventorydraft.Setup(bus, inventoryService) },
+		func() error { return inventorybaseline.Setup(bus, inventoryService) },
+		func() error { return inventorytrail.Setup(bus, inventoryService) },
 		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})
 		},

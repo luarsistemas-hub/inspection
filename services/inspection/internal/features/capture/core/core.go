@@ -21,18 +21,22 @@ const (
 )
 
 type Requirement struct {
-	Key                  string
-	Section              string
-	Label                string
-	Instructions         string
-	EvidenceKind         string
-	Required             bool
-	ImpossibilityAllowed bool
-	MinimumMedia         int
-	MaximumMedia         int
-	DescriptionRequired  bool
-	CaptureSourcePolicy  string
-	ComparisonTarget     string
+	Key                   string
+	Section               string
+	Label                 string
+	Instructions          string
+	EvidenceKind          string
+	Required              bool
+	ImpossibilityAllowed  bool
+	MinimumMedia          int
+	MaximumMedia          int
+	DescriptionRequired   bool
+	CaptureSourcePolicy   string
+	ComparisonTarget      string
+	EnvironmentIdentityID string `json:"environmentIdentityId,omitempty"`
+	EnvironmentTypeCode   string `json:"environmentTypeCode,omitempty"`
+	EnvironmentName       string `json:"environmentName,omitempty"`
+	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
 }
 
 // VideoMainRequirement returns the canonical participant upload slot for a video capture.

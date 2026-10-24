@@ -46,7 +46,7 @@ func TestPermittedVideoOriginImpossibilityProducesNoUsableVersionIT033(t *testin
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.ResponsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it033-impossible", CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.ResponsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it033-impossible", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestActivateSubmittedVideoOriginWithoutMediaReturnsInvalidStateIT035(t *tes
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it035-no-media", CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it035-no-media", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

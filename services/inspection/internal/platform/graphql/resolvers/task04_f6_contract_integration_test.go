@@ -51,7 +51,7 @@ func TestVV_IT_078CreateVideoInspectionRejectsForeignAssetAndPhotoOrigins(t *tes
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: fx.seed.TenantID, AssetID: assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "it078-asset-y-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error
+			return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "it078-asset-y-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -150,7 +150,7 @@ func seedSecondVideoOrigin(t *testing.T, fx fixedOriginGraphQLFixture, originOne
 		if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: fx.seed.TenantID, PreparationID: prepID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: o1.OriginID, VersionNumber: o1.VersionNumber + 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "it073-o2-" + versionID.String(), CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: o1.OriginID, VersionNumber: o1.VersionNumber + 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "it073-o2-" + versionID.String(), CreatedAt: now}).Error
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -107,7 +107,7 @@ func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, conte
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "SUBMITTED", MediaKind: "VIDEO", IdempotencyKey: "fixture-origin-" + originID.String(), CreatedAt: now, SubmittedAt: &now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "SUBMITTED", MediaKind: "VIDEO", IdempotencyKey: "fixture-origin-" + originID.String(), CreatedAt: now, SubmittedAt: &now}).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&database.CaptureDraft{ID: draftID, TenantID: fixture.TenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", MediaKind: "VIDEO", TemplateVersionID: fixture.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {

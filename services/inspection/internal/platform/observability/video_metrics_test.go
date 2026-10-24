@@ -49,4 +49,17 @@ func TestVideoMetricsExposeOnlyBoundedLabels(t *testing.T) {
 	}
 }
 
+func TestInventoryAnalysisMetricsUseTaskPurposes(t *testing.T) {
+	m := NewMetrics()
+	m.AnalysisGateway("inventory_catalog", "success", int64ptr(8), int64ptr(3))
+	m.AnalysisGateway("untrusted-secret", "success", nil, nil)
+	got := m.Prometheus()
+	if !strings.Contains(got, `inspection_analysis_gateway_requests_total{purpose="inventory_catalog",status="success"} 1`) {
+		t.Fatalf("inventory metric missing: %s", got)
+	}
+	if strings.Contains(got, "untrusted-secret") {
+		t.Fatalf("unbounded purpose leaked: %s", got)
+	}
+}
+
 func int64ptr(value int64) *int64 { return &value }

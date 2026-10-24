@@ -73,10 +73,10 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 	now := s.now()
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var session database.ExternalSession
-		if err := tx.Where("tenant_id = ? AND session_digest = ?", tenantID, sessionHash[:]).First(&session).Error; err != nil || !security.Active(now, session.ExpiresAt, session.RevokedAt) {
+		if err := tx.Where("tenant_id = ? AND session_digest = ? AND kind='CAPTURE'", tenantID, sessionHash[:]).First(&session).Error; err != nil || !security.Active(now, session.ExpiresAt, session.RevokedAt) || !isCaptureSession(session) {
 			return apperror.New(apperror.SessionExpired, "", "session expired")
 		}
-		if err := activeInvitation(tx, tenantID, session.InvitationID, now); err != nil {
+		if err := activeInvitation(tx, tenantID, *session.InvitationID, now); err != nil {
 			return err
 		}
 		proof, proofErr := security.CSRFProof(sessionHash, csrf, s.Pepper)
@@ -104,7 +104,7 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 				return err
 			}
 		}
-		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: session.ResponsibilityID, DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: consent.PhotoProcessing, VideoProcessing: consent.VideoProcessing, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
+		row := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: *session.ResponsibilityID, DisclosureVersion: PrivacyDisclosureVersion, PhotoProcessing: consent.PhotoProcessing, VideoProcessing: consent.VideoProcessing, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
 		return tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "responsibility_id"}}, DoUpdates: clause.AssignmentColumns([]string{"disclosure_version", "photo_processing", "video_processing", "ai_analysis", "gps_use", "accepted_at"})}).Create(&row).Error
 	})
 }
@@ -247,7 +247,8 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 			return err
 		}
 		expires := now.Add(security.SessionTTL)
-		row := database.ExternalSession{ID: identity.NewID(), TenantID: invitation.TenantID, InvitationID: invitation.ID, ResponsibilityID: invitation.ResponsibilityID, SessionDigest: sessionHash[:], CSRFDigest: csrfHash[:], ExpiresAt: expires, CreatedAt: now}
+		invitationID, responsibilityID := invitation.ID, invitation.ResponsibilityID
+		row := database.ExternalSession{ID: identity.NewID(), TenantID: invitation.TenantID, InvitationID: &invitationID, ResponsibilityID: &responsibilityID, Kind: "CAPTURE", SessionDigest: sessionHash[:], CSRFDigest: csrfHash[:], ExpiresAt: expires, CreatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
@@ -352,10 +353,13 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 	now := s.now()
 	var row database.ExternalSession
 	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND session_digest = ?", tenantID, hash[:]).First(&row).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND session_digest = ? AND kind='CAPTURE'", tenantID, hash[:]).First(&row).Error; err != nil {
 			return err
 		}
-		return activeInvitation(tx, tenantID, row.InvitationID, now)
+		if !isCaptureSession(row) {
+			return apperror.New(apperror.SessionExpired, "", "session expired")
+		}
+		return activeInvitation(tx, tenantID, *row.InvitationID, now)
 	})
 	if err != nil {
 		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
@@ -367,7 +371,13 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 	if err != nil || len(row.CSRFDigest) != 32 || !security.Equal(proof, bytes32(row.CSRFDigest)) {
 		return identity.ID{}, apperror.New(apperror.Forbidden, "csrf", "invalid request proof")
 	}
-	return row.ResponsibilityID, nil
+	return *row.ResponsibilityID, nil
+}
+
+// isCaptureSession reports whether a session carries both capture owners.
+// Counterparty sessions never authorize capture operations.
+func isCaptureSession(session database.ExternalSession) bool {
+	return session.Kind == "CAPTURE" && session.InvitationID != nil && session.ResponsibilityID != nil
 }
 
 func activeInvitation(tx *gorm.DB, tenantID, invitationID identity.ID, now time.Time) error {
@@ -390,7 +400,7 @@ func (s Service) ValidateCaptureRead(ctx context.Context, token, csrf string) (i
 	}
 	var session database.ExternalSession
 	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id=? AND session_digest=?", tenantID, hash[:]).First(&session).Error; err != nil || !s.now().Before(session.ExpiresAt) {
+		if err := tx.Where("tenant_id=? AND session_digest=? AND kind='CAPTURE'", tenantID, hash[:]).First(&session).Error; err != nil || !s.now().Before(session.ExpiresAt) || !isCaptureSession(session) {
 			return apperror.New(apperror.SessionExpired, "", "session expired")
 		}
 		proof, err := security.CSRFProof(hash, csrf, s.Pepper)
@@ -403,7 +413,10 @@ func (s Service) ValidateCaptureRead(ctx context.Context, token, csrf string) (i
 		}
 		return nil
 	})
-	return session.ResponsibilityID, err
+	if err != nil {
+		return identity.ID{}, err
+	}
+	return *session.ResponsibilityID, nil
 }
 
 func (s Service) now() time.Time {

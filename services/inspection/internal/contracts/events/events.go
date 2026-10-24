@@ -56,6 +56,43 @@ type InspectionClassifiedPayload struct {
 	ReasonCodes         []string     `json:"reasonCodes"`
 }
 
+// CaptureVideoSubmittedV2Payload lists the environment clips in an immutable submission.
+type CaptureVideoSubmittedV2Payload struct {
+	InspectionID        identity.ID        `json:"inspectionId"`
+	ResponsibilityID    identity.ID        `json:"responsibilityId"`
+	SubmissionVersionID identity.ID        `json:"submissionVersionId"`
+	Clips               []CaptureVideoClip `json:"clips"`
+}
+
+// CaptureVideoClip identifies one submitted environment clip.
+type CaptureVideoClip struct {
+	RequirementKey string      `json:"requirementKey"`
+	MediaID        identity.ID `json:"mediaId"`
+}
+
+// InventoryJobRequestedPayload announces a due inventory analysis job.
+type InventoryJobRequestedPayload struct {
+	JobID        identity.ID `json:"jobId"`
+	InspectionID identity.ID `json:"inspectionId"`
+}
+
+// InventoryDraftReadyPayload announces that a baseline draft can be reviewed.
+type InventoryDraftReadyPayload struct {
+	OriginVersionID identity.ID `json:"originVersionId"`
+}
+
+// InventoryVersionActivatedPayload announces a newly active baseline version.
+type InventoryVersionActivatedPayload struct {
+	OriginVersionID identity.ID `json:"originVersionId"`
+}
+
+// CounterpartyRespondedPayload announces a counterparty response. Statements,
+// tokens and OTPs never travel in the event.
+type CounterpartyRespondedPayload struct {
+	CounterpartyInvitationID identity.ID `json:"counterpartyInvitationId"`
+	OriginVersionID          identity.ID `json:"originVersionId"`
+}
+
 type Registry struct {
 	mu      sync.RWMutex
 	version map[string]int
@@ -122,7 +159,70 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 			return RawEnvelope{}, fmt.Errorf("%w: inspection classified payload", ErrInvalidEnvelope)
 		}
 	}
+	if envelope.Type == "capture.video_submitted.v2" {
+		var payload CaptureVideoSubmittedV2Payload
+		if err := decodePayload(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) || payload.ResponsibilityID == (identity.ID{}) || payload.SubmissionVersionID == (identity.ID{}) || len(payload.Clips) == 0 {
+			return RawEnvelope{}, fmt.Errorf("%w: capture video submitted payload", ErrInvalidEnvelope)
+		}
+		for _, clip := range payload.Clips {
+			if clip.RequirementKey == "" || clip.MediaID == (identity.ID{}) {
+				return RawEnvelope{}, fmt.Errorf("%w: capture video clip", ErrInvalidEnvelope)
+			}
+		}
+		keys, media := map[string]bool{}, map[identity.ID]bool{}
+		for _, clip := range payload.Clips {
+			if keys[clip.RequirementKey] || media[clip.MediaID] {
+				return RawEnvelope{}, fmt.Errorf("%w: duplicate capture video clip", ErrInvalidEnvelope)
+			}
+			keys[clip.RequirementKey], media[clip.MediaID] = true, true
+		}
+	}
+	if valid, ok := inventoryPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {
+		return RawEnvelope{}, fmt.Errorf("%w: %s payload", ErrInvalidEnvelope, envelope.Type)
+	}
 	return envelope, nil
+}
+
+// inventoryPayloadValidators accept only the documented id fields; any other
+// key (an OTP, a token, a statement) makes the payload invalid.
+var inventoryPayloadValidators = map[string]func(json.RawMessage) bool{
+	"inventory.job_requested.v1": func(raw json.RawMessage) bool {
+		var payload InventoryJobRequestedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.JobID, payload.InspectionID)
+	},
+	"inventory.draft_ready.v1": func(raw json.RawMessage) bool {
+		var payload InventoryDraftReadyPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.OriginVersionID)
+	},
+	"inventory.version_activated.v1": func(raw json.RawMessage) bool {
+		var payload InventoryVersionActivatedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.OriginVersionID)
+	},
+	"counterparty.responded.v1": func(raw json.RawMessage) bool {
+		var payload CounterpartyRespondedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.CounterpartyInvitationID, payload.OriginVersionID)
+	},
+}
+
+func nonZeroIDs(ids ...identity.ID) bool {
+	for _, id := range ids {
+		if id == (identity.ID{}) {
+			return false
+		}
+	}
+	return true
+}
+
+func decodePayload(data []byte, target any) error {
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err := d.Decode(target); err != nil {
+		return err
+	}
+	if d.More() {
+		return fmt.Errorf("trailing payload data")
+	}
+	return nil
 }
 
 func validDigest(value string) bool {
@@ -182,10 +282,12 @@ func DefaultRegistry() *Registry {
 		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1", "media.received.v1",
 		"capture.submitted.v1", "capture.video_submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1", "video_replacement.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.video_comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
+		"inventory.job_requested.v1", "inventory.draft_ready.v1", "inventory.version_activated.v1", "counterparty.responded.v1",
 		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",
 	} {
 		_ = r.Register(name, 1)
 	}
 	_ = r.Register("notification.delivery_requested.v2", 2)
+	_ = r.Register("capture.video_submitted.v2", 2)
 	return r
 }

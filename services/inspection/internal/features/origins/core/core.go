@@ -69,11 +69,14 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 	err = s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		var existing database.OriginVersion
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", in.TenantID, in.IdempotencyKey).First(&existing).Error; err == nil {
+			if existing.ResponsibilityID == nil {
+				return apperror.New(apperror.InvalidState, "responsibility", "origin version has no capture responsibility")
+			}
 			var invite database.Invitation
-			if err := tx.Where("tenant_id=? AND responsibility_id=?", in.TenantID, existing.ResponsibilityID).First(&invite).Error; err != nil {
+			if err := tx.Where("tenant_id=? AND responsibility_id=?", in.TenantID, *existing.ResponsibilityID).First(&invite).Error; err != nil {
 				return err
 			}
-			out.OriginID, out.VersionID, out.ResponsibilityID, out.InvitationID = existing.OriginID, existing.ID, existing.ResponsibilityID, invite.ID
+			out.OriginID, out.VersionID, out.ResponsibilityID, out.InvitationID = existing.OriginID, existing.ID, *existing.ResponsibilityID, invite.ID
 			out.LinkToken = ""
 			return nil
 		} else if err != gorm.ErrRecordNotFound {
@@ -106,20 +109,21 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND origin_id=?", in.TenantID, origin.ID).Count(&count).Error; err != nil {
 			return err
 		}
-		version := database.OriginVersion{ID: identity.NewID(), TenantID: in.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: identity.NewID(), SupersedesID: origin.ActiveVersionID, Status: "DRAFT", IdempotencyKey: in.IdempotencyKey, CreatedAt: now}
+		responsibilityID := identity.NewID()
+		version := database.OriginVersion{ID: identity.NewID(), TenantID: in.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "DRAFT", IdempotencyKey: in.IdempotencyKey, CreatedAt: now}
 		version.MediaKind = definition.MediaKind()
-		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: version.ResponsibilityID, Kind: "ORIGIN", MediaKind: definition.MediaKind(), TemplateVersionID: in.TemplateVersionID, ReferencePayload: defaultJSON(in.Reference), PolicyPayload: defaultJSON(in.Policy), Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
-		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: version.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.ExpiresAt, CreatedAt: now}
+		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", MediaKind: definition.MediaKind(), TemplateVersionID: in.TemplateVersionID, ReferencePayload: defaultJSON(in.Reference), PolicyPayload: defaultJSON(in.Policy), Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
+		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.ExpiresAt, CreatedAt: now}
 		for _, row := range []any{&version, &draft, &invite} {
 			if err := tx.Create(row).Error; err != nil {
 				return err
 			}
 		}
 		eventID := identity.NewID()
-		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "origin.invitation_requested.v1", SchemaVersion: 1, OccurredAt: now, TenantID: in.TenantID, AggregateID: origin.ID, CorrelationID: "origin-invite-" + version.ID.String(), Payload: map[string]any{"originId": origin.ID, "originVersionId": version.ID, "responsibilityId": version.ResponsibilityID}}); err != nil {
+		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "origin.invitation_requested.v1", SchemaVersion: 1, OccurredAt: now, TenantID: in.TenantID, AggregateID: origin.ID, CorrelationID: "origin-invite-" + version.ID.String(), Payload: map[string]any{"originId": origin.ID, "originVersionId": version.ID, "responsibilityId": responsibilityID}}); err != nil {
 			return err
 		}
-		out.OriginID, out.VersionID, out.ResponsibilityID, out.InvitationID = origin.ID, version.ID, version.ResponsibilityID, invite.ID
+		out.OriginID, out.VersionID, out.ResponsibilityID, out.InvitationID = origin.ID, version.ID, responsibilityID, invite.ID
 		return nil
 	})
 	return out, err
@@ -271,6 +275,11 @@ func (s Service) Invalidate(ctx context.Context, tenantID, versionID identity.ID
 
 func releaseOriginReference(tx *gorm.DB, tenantID, versionID identity.ID) error {
 	return tx.Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, versionID).Delete(&database.VideoEvidenceReference{}).Error
+}
+
+// ReleaseOriginReference removes retained-video ownership references for a superseded version.
+func ReleaseOriginReference(tx *gorm.DB, tenantID, versionID identity.ID) error {
+	return releaseOriginReference(tx, tenantID, versionID)
 }
 
 func defaultJSON(v json.RawMessage) json.RawMessage {

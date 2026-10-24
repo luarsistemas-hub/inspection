@@ -72,7 +72,7 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, CorrelationID: "video-policy-test"})
 	response := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }`, ctx)
-	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":5`, `"version":1`} {
+	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"version":1`} {
 		if !strings.Contains(response, expected) {
 			t.Fatalf("default policy response missing %s: %s", expected, response)
 		}
@@ -452,7 +452,7 @@ func TestVideoPolicyGraphQLUsesRealTenantSliceAndCapabilities(t *testing.T) {
 	server.SetErrorPresenter(graph.PresentError)
 	adminCtx := policyTransportContext(tenantA, adminID)
 	initial := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }`, adminCtx)
-	for _, value := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":5`, `"version":1`} {
+	for _, value := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"version":1`} {
 		if !strings.Contains(initial, value) {
 			t.Fatalf("default policy missing %s: %s", value, initial)
 		}

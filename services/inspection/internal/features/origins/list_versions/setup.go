@@ -31,6 +31,7 @@ type Result struct {
 	HasNextPage bool
 }
 type Details struct {
+	OriginRevision     int
 	PreparationStatus  *string
 	CaptureSubmitted   bool
 	Selectable         bool
@@ -162,7 +163,9 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 	photoIDs := make([]identity.ID, 0, len(versions))
 	for _, version := range versions {
 		details[version.ID] = Details{}
-		responsibilityIDs = append(responsibilityIDs, version.ResponsibilityID)
+		if version.ResponsibilityID != nil {
+			responsibilityIDs = append(responsibilityIDs, *version.ResponsibilityID)
+		}
 		originIDs = append(originIDs, version.OriginID)
 		if version.MediaKind != "VIDEO" {
 			photoIDs = append(photoIDs, version.ID)
@@ -212,10 +215,17 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 		return nil, err
 	}
 	activeByOrigin := make(map[identity.ID]identity.ID, len(origins))
+	revisionByOrigin := make(map[identity.ID]int, len(origins))
 	for _, origin := range origins {
+		revisionByOrigin[origin.ID] = int(origin.Version)
 		if origin.ActiveVersionID != nil {
 			activeByOrigin[origin.ID] = *origin.ActiveVersionID
 		}
+	}
+	for _, version := range versions {
+		detail := details[version.ID]
+		detail.OriginRevision = revisionByOrigin[version.OriginID]
+		details[version.ID] = detail
 	}
 	mediaByResponsibility := make(map[identity.ID]database.MediaObject, len(media))
 	for _, row := range media {
@@ -239,14 +249,19 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 	}
 	for _, version := range versions {
 		item := details[version.ID]
-		item.CaptureSubmitted = draftSubmittedByResponsibility[version.ResponsibilityID]
+		if version.ResponsibilityID != nil {
+			item.CaptureSubmitted = draftSubmittedByResponsibility[*version.ResponsibilityID]
+		}
 		details[version.ID] = item
 		if version.MediaKind != "VIDEO" {
 			item.Selectable = version.Status == "ACTIVE" && activeByOrigin[version.OriginID] == version.ID && photoCount[version.ID] > 0 && photoCount[version.ID] <= 6
 			details[version.ID] = item
 			continue
 		}
-		mediaRow, hasMedia := mediaByResponsibility[version.ResponsibilityID]
+		mediaRow, hasMedia := database.MediaObject{}, false
+		if version.ResponsibilityID != nil {
+			mediaRow, hasMedia = mediaByResponsibility[*version.ResponsibilityID]
+		}
 		prepID, hasPrep := prepByVersion[version.ID]
 		if !hasPrep && hasMedia {
 			prepID = mediaRow.ID
@@ -309,7 +324,10 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 		if version.MediaKind != "VIDEO" {
 			continue
 		}
-		mediaRow, hasMedia := mediaByResponsibility[version.ResponsibilityID]
+		mediaRow, hasMedia := database.MediaObject{}, false
+		if version.ResponsibilityID != nil {
+			mediaRow, hasMedia = mediaByResponsibility[*version.ResponsibilityID]
+		}
 		prepID := prepByVersion[version.ID]
 		if prepID == (identity.ID{}) && hasMedia {
 			prepID = mediaRow.ID
@@ -340,7 +358,7 @@ func mediaIDsForVersions(versions []database.OriginVersion, media []database.Med
 	ids := make([]identity.ID, 0, len(media))
 	for _, row := range media {
 		for _, version := range versions {
-			if version.ResponsibilityID == row.ResponsibilityID && version.MediaKind == "VIDEO" {
+			if version.ResponsibilityID != nil && *version.ResponsibilityID == row.ResponsibilityID && version.MediaKind == "VIDEO" {
 				ids = append(ids, row.ID)
 				break
 			}

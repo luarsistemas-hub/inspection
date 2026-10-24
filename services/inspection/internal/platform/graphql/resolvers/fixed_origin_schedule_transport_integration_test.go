@@ -351,7 +351,7 @@ func seedFixedVideoOrigin(t *testing.T, fx fixedOriginGraphQLFixture) identity.I
 		if err := tx.Create(&database.VideoPreparationJob{ID: prepID, TenantID: fx.seed.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, SourceSHA256: digest, ManifestDigest: digest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "vv-it-448-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "vv-it-448-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fx.seed.TenantID, AssetID: fx.seed.AssetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -413,7 +413,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: seed.TenantID, AssetID: seed.AssetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it454-photo-origin", CreatedAt: now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it454-photo-origin", CreatedAt: now}).Error; err != nil {
 				return err
 			}
 			return tx.Create(&database.OriginEvidence{ID: identity.NewID(), TenantID: seed.TenantID, OriginVersionID: versionID, MediaID: seed.MediaID, Category: "ROOM", Description: "Existing photo baseline", AttentionItems: json.RawMessage("[]"), CreatedAt: now}).Error

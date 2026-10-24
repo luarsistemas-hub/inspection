@@ -308,7 +308,7 @@ func TestVV_IT_205LaterComparativeV3KeepsV2ReportWithoutReferenceComparison(t *t
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.tenantID, AssetID: fixture.assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &fixture.currentPreparation, IdempotencyKey: "vv-it-205-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &fixture.currentPreparation, IdempotencyKey: "vv-it-205-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: fixture.tenantID, InspectionID: v3, ReferenceVersionID: &versionID, ComparisonMode: "FIXED_ORIGIN", Payload: []byte(`{"comparisonMode":"FIXED_ORIGIN"}`), CreatedAt: now}).Error

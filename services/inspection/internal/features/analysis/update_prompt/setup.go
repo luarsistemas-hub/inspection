@@ -22,6 +22,7 @@ import (
 type Command struct {
 	TenantID                   identity.ID
 	AnalysisType, SystemPrompt string
+	Task                       string
 	ExpectedRevision           int64
 	ClientMutationID           string
 }
@@ -31,6 +32,7 @@ type Dependencies struct {
 	Authorizer                          auth.Authorizer
 	SuperAdminIssuer, SuperAdminSubject string
 	Now                                 func() time.Time
+	Within                              func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
 func Setup(d Dependencies) error {
@@ -49,33 +51,52 @@ func Setup(d Dependencies) error {
 		if !prompt.IsKnownType(c.AnalysisType) {
 			return nil, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 		}
-		definition := prompt.DefaultDefinition()
+		if c.Task == "" {
+			c.Task = string(prompt.Findings)
+		}
+		if !prompt.IsKnownTask(c.Task) {
+			return nil, apperror.New(apperror.InvalidInput, "task", "unknown analysis task")
+		}
+		definition := prompt.DefaultDefinitionForTask(c.Task)
 		definition.SystemPrompt = strings.TrimSpace(c.SystemPrompt)
-		canonical, digest, err := prompt.Canonicalize(definition)
+		canonical, digest, err := prompt.CanonicalizeTask(c.Task, definition)
 		if err != nil {
 			return nil, apperror.New(apperror.InvalidInput, "systemPrompt", "invalid system prompt")
 		}
 		var out database.AnalysisPrompt
-		err = (tenanttx.Runner{DB: d.DB}).Within(ctx, c.TenantID, func(tx *gorm.DB) error {
-			var current database.AnalysisPrompt
-			if err := tx.WithContext(ctx).Where("analysis_type=?", c.AnalysisType).First(&current).Error; err != nil {
-				return err
-			}
-			if current.Revision != c.ExpectedRevision {
-				return apperror.New(apperror.Conflict, "expectedRevision", "stale analysis prompt revision")
-			}
+		within := d.Within
+		if within == nil {
+			within = (tenanttx.Runner{DB: d.DB}).Within
+		}
+		err = within(ctx, c.TenantID, func(tx *gorm.DB) error {
 			meta, _ := requestctx.FromContext(ctx)
-			result := tx.WithContext(ctx).Model(&database.AnalysisPrompt{}).Where("analysis_type=? AND revision=?", c.AnalysisType, c.ExpectedRevision).Updates(map[string]any{"definition_json": canonical, "canonical_digest": digest, "revision": c.ExpectedRevision + 1, "updated_by": principal.IdentityID, "updated_at": d.Now().UTC()})
-			if result.Error != nil {
-				return result.Error
+			var oldDigest string
+			var updateErr error
+			out, oldDigest, updateErr = updateTaskPrompt(ctx, tx, c.AnalysisType, c.Task, c.ExpectedRevision, canonical, digest, principal.IdentityID, d.Now().UTC())
+			if updateErr != nil {
+				return updateErr
 			}
-			if result.RowsAffected != 1 {
-				return apperror.New(apperror.Conflict, "expectedRevision", "stale analysis prompt revision")
-			}
-			out = database.AnalysisPrompt{ID: current.ID, AnalysisType: c.AnalysisType, DefinitionJSON: canonical, CanonicalDigest: digest, Revision: c.ExpectedRevision + 1, UpdatedBy: principal.IdentityID, CreatedAt: current.CreatedAt, UpdatedAt: d.Now().UTC()}
-			event := database.AuditEvent{ID: identity.NewID(), TenantID: c.TenantID, ActorID: meta.Principal.IdentityID, Action: "GLOBAL_ANALYSIS_PROMPT_UPDATED", TargetType: "ANALYSIS_PROMPT", TargetID: c.AnalysisType, Outcome: "SUCCESS", Reason: fmt.Sprintf("digest:%s->%s", current.CanonicalDigest, digest), CorrelationID: requestctx.IdempotencyKey(ctx, c.ClientMutationID), OccurredAt: d.Now().UTC()}
+			event := database.AuditEvent{ID: identity.NewID(), TenantID: c.TenantID, ActorID: meta.Principal.IdentityID, Action: "GLOBAL_ANALYSIS_PROMPT_UPDATED", TargetType: "ANALYSIS_PROMPT", TargetID: c.AnalysisType + ":" + c.Task, Outcome: "SUCCESS", Reason: fmt.Sprintf("digest:%s->%s", oldDigest, digest), CorrelationID: requestctx.IdempotencyKey(ctx, c.ClientMutationID), OccurredAt: d.Now().UTC()}
 			return tx.Create(&event).Error
 		})
 		return out, err
 	})
+}
+
+func updateTaskPrompt(ctx context.Context, tx *gorm.DB, analysisType, task string, expectedRevision int64, definition []byte, digest string, updatedBy identity.ID, now time.Time) (database.AnalysisPrompt, string, error) {
+	var current database.AnalysisPrompt
+	if err := tx.WithContext(ctx).Where("analysis_type=? AND task=?", analysisType, task).First(&current).Error; err != nil {
+		return database.AnalysisPrompt{}, "", err
+	}
+	if current.Revision != expectedRevision {
+		return database.AnalysisPrompt{}, "", apperror.New(apperror.Conflict, "expectedRevision", "stale analysis prompt revision")
+	}
+	result := tx.WithContext(ctx).Model(&database.AnalysisPrompt{}).Where("analysis_type=? AND task=? AND revision=?", analysisType, task, expectedRevision).Updates(map[string]any{"definition_json": definition, "canonical_digest": digest, "revision": expectedRevision + 1, "updated_by": updatedBy, "updated_at": now})
+	if result.Error != nil {
+		return database.AnalysisPrompt{}, "", result.Error
+	}
+	if result.RowsAffected != 1 {
+		return database.AnalysisPrompt{}, "", apperror.New(apperror.Conflict, "expectedRevision", "stale analysis prompt revision")
+	}
+	return database.AnalysisPrompt{ID: current.ID, AnalysisType: analysisType, Task: task, DefinitionJSON: definition, CanonicalDigest: digest, Revision: expectedRevision + 1, UpdatedBy: updatedBy, CreatedAt: current.CreatedAt, UpdatedAt: now}, current.CanonicalDigest, nil
 }

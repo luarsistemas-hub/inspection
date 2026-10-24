@@ -127,7 +127,7 @@ func TestInviteOriginCaptureAuthenticatedOperatorCreatesScopedInvitationIT030(t 
 		if err := tx.Where("tenant_id=? AND id=?", seed.TenantID, version.OriginID).Take(&origin).Error; err != nil {
 			return err
 		}
-		if invitation.Status != "ACTIVE" || invitation.ResponsibilityID != version.ResponsibilityID || version.Status != "DRAFT" || draft.Kind != "ORIGIN" || origin.AssetID != seed.AssetID {
+		if invitation.Status != "ACTIVE" || version.ResponsibilityID == nil || invitation.ResponsibilityID != *version.ResponsibilityID || version.Status != "DRAFT" || draft.Kind != "ORIGIN" || origin.AssetID != seed.AssetID {
 			t.Errorf("invitation scope mismatch: invitation=%+v version=%+v draft=%+v origin=%+v", invitation, version, draft, origin)
 		}
 		var otherAssetOrigins int64

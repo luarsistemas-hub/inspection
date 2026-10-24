@@ -18,6 +18,14 @@ type AcceptProcessingInput struct {
 	ClientMutationID  string `json:"clientMutationId"`
 }
 
+type ActivateBaselineVersionInput struct {
+	OriginVersionID            string   `json:"originVersionId"`
+	Purpose                    string   `json:"purpose"`
+	ExpectedOriginVersion      int      `json:"expectedOriginVersion"`
+	CounterpartyParticipantIds []string `json:"counterpartyParticipantIds"`
+	ClientMutationID           string   `json:"clientMutationId"`
+}
+
 type ActivateSegmentDefinitionInput struct {
 	VersionID        string `json:"versionId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
@@ -40,14 +48,30 @@ type AddExceptionalStageInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type AddInventoryItemInput struct {
+	OriginVersionID  string                    `json:"originVersionId"`
+	EnvironmentID    string                    `json:"environmentId"`
+	TypeCode         string                    `json:"typeCode"`
+	Name             string                    `json:"name"`
+	Material         *string                   `json:"material,omitempty"`
+	Color            *string                   `json:"color,omitempty"`
+	Quantity         *int                      `json:"quantity,omitempty"`
+	Condition        *string                   `json:"condition,omitempty"`
+	Observation      *string                   `json:"observation,omitempty"`
+	Limitation       *string                   `json:"limitation,omitempty"`
+	Evidence         []*InventoryEvidenceInput `json:"evidence"`
+	ClientMutationID string                    `json:"clientMutationId"`
+}
+
 type AnalysisPrompt struct {
-	AnalysisType         AnalysisType `json:"analysisType"`
-	SystemPrompt         string       `json:"systemPrompt"`
-	ModelAlias           string       `json:"modelAlias"`
-	MinimumConfidenceBps int          `json:"minimumConfidenceBps"`
-	CanonicalDigest      string       `json:"canonicalDigest"`
-	Revision             int          `json:"revision"`
-	UpdatedAt            string       `json:"updatedAt"`
+	AnalysisType         AnalysisType       `json:"analysisType"`
+	Task                 AnalysisPromptTask `json:"task"`
+	SystemPrompt         string             `json:"systemPrompt"`
+	ModelAlias           string             `json:"modelAlias"`
+	MinimumConfidenceBps int                `json:"minimumConfidenceBps"`
+	CanonicalDigest      string             `json:"canonicalDigest"`
+	Revision             int                `json:"revision"`
+	UpdatedAt            string             `json:"updatedAt"`
 }
 
 type AnalysisPromptPayload struct {
@@ -150,10 +174,29 @@ type AuditEventConnection struct {
 	PageInfo *PageInfo     `json:"pageInfo"`
 }
 
+type BaselineInventory struct {
+	HasInventory bool                    `json:"hasInventory"`
+	Version      *OriginVersion          `json:"version,omitempty"`
+	Environments []*InventoryEnvironment `json:"environments"`
+}
+
 type BeginVideoCaptureInput struct {
 	AcquisitionSource string  `json:"acquisitionSource"`
 	ReplacesMediaID   *string `json:"replacesMediaId,omitempty"`
 	ClientMutationID  string  `json:"clientMutationId"`
+}
+
+type BulkAcceptInventoryEnvironmentInput struct {
+	OriginVersionID      string `json:"originVersionId"`
+	EnvironmentID        string `json:"environmentId"`
+	MinimumConfidenceBps *int   `json:"minimumConfidenceBps,omitempty"`
+	ClientMutationID     string `json:"clientMutationId"`
+}
+
+type BulkAcceptInventoryEnvironmentPayload struct {
+	AcceptedCount    int          `json:"acceptedCount"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
 }
 
 type BusinessUnit struct {
@@ -298,6 +341,13 @@ type ConfigureVideoPolicyInput struct {
 type ContactInput struct {
 	Channel string `json:"channel"`
 	Value   string `json:"value"`
+}
+
+type ContestationSummary struct {
+	Pending      int `json:"pending"`
+	Acknowledged int `json:"acknowledged"`
+	Contested    int `json:"contested"`
+	NoResponse   int `json:"noResponse"`
 }
 
 type CorrectInspectionResponsibleEmailInput struct {
@@ -469,6 +519,12 @@ type DashboardSummary struct {
 	Invalidated int `json:"invalidated"`
 }
 
+type DecideInventoryItemsInput struct {
+	OriginVersionID  string                    `json:"originVersionId"`
+	Decisions        []*InventoryDecisionInput `json:"decisions"`
+	ClientMutationID string                    `json:"clientMutationId"`
+}
+
 type DeclareCaptureImpossibilityInput struct {
 	RequirementKey   string `json:"requirementKey"`
 	Reason           string `json:"reason"`
@@ -479,6 +535,11 @@ type DeclareCaptureImpossibilityInput struct {
 type DisableMembershipInput struct {
 	MembershipID     string `json:"membershipId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type DiscardBaselineDraftInput struct {
+	OriginVersionID  string `json:"originVersionId"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -650,6 +711,144 @@ type InvalidateReportPublicationInput struct {
 	Reason           string `json:"reason"`
 	ExpectedVersion  int    `json:"expectedVersion"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type InventoryCounts struct {
+	Included    int `json:"included"`
+	Rejected    int `json:"rejected"`
+	NotReviewed int `json:"notReviewed"`
+}
+
+type InventoryDecisionInput struct {
+	ItemID          string                   `json:"itemId"`
+	Action          string                   `json:"action"`
+	ExpectedVersion int                      `json:"expectedVersion"`
+	Patch           *InventoryItemPatchInput `json:"patch,omitempty"`
+	Reason          *string                  `json:"reason,omitempty"`
+	ReasonText      *string                  `json:"reasonText,omitempty"`
+}
+
+type InventoryDraft struct {
+	Version      *OriginVersion          `json:"version"`
+	Environments []*InventoryEnvironment `json:"environments"`
+	Progress     *InventoryProgress      `json:"progress"`
+	ReadOnly     bool                    `json:"readOnly"`
+	NoticeCode   *string                 `json:"noticeCode,omitempty"`
+	Warnings     []string                `json:"warnings"`
+}
+
+type InventoryEnvironment struct {
+	ID                 string           `json:"id"`
+	IdentityID         string           `json:"identityId"`
+	TypeCode           string           `json:"typeCode"`
+	Name               string           `json:"name"`
+	Expected           bool             `json:"expected"`
+	AddedDuringCapture bool             `json:"addedDuringCapture"`
+	RequirementKey     *string          `json:"requirementKey,omitempty"`
+	Decision           string           `json:"decision"`
+	Position           int              `json:"position"`
+	Items              []*InventoryItem `json:"items"`
+}
+
+type InventoryEnvironmentPayload struct {
+	Environment      *InventoryEnvironment `json:"environment,omitempty"`
+	UserErrors       []*UserError          `json:"userErrors"`
+	ClientMutationID string                `json:"clientMutationId"`
+}
+
+type InventoryEvidence struct {
+	ID           string         `json:"id"`
+	Kind         string         `json:"kind"`
+	MediaID      string         `json:"mediaId"`
+	FrameID      *string        `json:"frameId,omitempty"`
+	Region       map[string]any `json:"region,omitempty"`
+	Position     int            `json:"position"`
+	Availability string         `json:"availability"`
+}
+
+type InventoryEvidenceInput struct {
+	Kind    string         `json:"kind"`
+	MediaID string         `json:"mediaId"`
+	FrameID *string        `json:"frameId,omitempty"`
+	Region  map[string]any `json:"region,omitempty"`
+}
+
+type InventoryItem struct {
+	ID              string               `json:"id"`
+	IdentityID      string               `json:"identityId"`
+	EnvironmentID   string               `json:"environmentId"`
+	TypeCode        string               `json:"typeCode"`
+	Name            string               `json:"name"`
+	Material        *string              `json:"material,omitempty"`
+	Color           *string              `json:"color,omitempty"`
+	Quantity        *int                 `json:"quantity,omitempty"`
+	Condition       string               `json:"condition"`
+	Observation     string               `json:"observation"`
+	Limitation      *string              `json:"limitation,omitempty"`
+	ConfidenceBps   *int                 `json:"confidenceBps,omitempty"`
+	Origin          string               `json:"origin"`
+	Declared        bool                 `json:"declared"`
+	Decision        string               `json:"decision"`
+	RejectionReason *string              `json:"rejectionReason,omitempty"`
+	RejectionText   *string              `json:"rejectionText,omitempty"`
+	Suggested       map[string]any       `json:"suggested,omitempty"`
+	Version         int                  `json:"version"`
+	Evidence        []*InventoryEvidence `json:"evidence"`
+}
+
+type InventoryItemPatchInput struct {
+	EnvironmentID *string `json:"environmentId,omitempty"`
+	TypeCode      *string `json:"typeCode,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Material      *string `json:"material,omitempty"`
+	Color         *string `json:"color,omitempty"`
+	Quantity      *int    `json:"quantity,omitempty"`
+	Condition     *string `json:"condition,omitempty"`
+	Observation   *string `json:"observation,omitempty"`
+	Limitation    *string `json:"limitation,omitempty"`
+}
+
+type InventoryItemPayload struct {
+	Item             *InventoryItem `json:"item,omitempty"`
+	UserErrors       []*UserError   `json:"userErrors"`
+	ClientMutationID string         `json:"clientMutationId"`
+}
+
+type InventoryItemsPayload struct {
+	Items             []*InventoryItem `json:"items"`
+	EmptyEnvironments []string         `json:"emptyEnvironments"`
+	UserErrors        []*UserError     `json:"userErrors"`
+	ClientMutationID  string           `json:"clientMutationId"`
+}
+
+type InventoryProgress struct {
+	Decided int `json:"decided"`
+	Pending int `json:"pending"`
+}
+
+type InventorySplitPartInput struct {
+	Name        string   `json:"name"`
+	TypeCode    string   `json:"typeCode"`
+	Condition   *string  `json:"condition,omitempty"`
+	EvidenceIds []string `json:"evidenceIds"`
+}
+
+type InventoryTrail struct {
+	Suggestions        []*InventoryTrailEntry `json:"suggestions"`
+	Decisions          []*InventoryTrailEntry `json:"decisions"`
+	CounterpartyEvents []*InventoryTrailEntry `json:"counterpartyEvents"`
+}
+
+type InventoryTrailEntry struct {
+	ID                string         `json:"id"`
+	TargetType        string         `json:"targetType"`
+	TargetID          string         `json:"targetId"`
+	Action            string         `json:"action"`
+	Before            map[string]any `json:"before,omitempty"`
+	After             map[string]any `json:"after,omitempty"`
+	Reason            *string        `json:"reason,omitempty"`
+	ActorMembershipID *string        `json:"actorMembershipId,omitempty"`
+	OccurredAt        string         `json:"occurredAt"`
 }
 
 type InvitationOtpPayload struct {
@@ -824,6 +1023,13 @@ type MembershipPayload struct {
 	Membership       *Membership  `json:"membership,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type MergeInventoryItemsInput struct {
+	OriginVersionID     string   `json:"originVersionId"`
+	ItemIds             []string `json:"itemIds"`
+	ResultEnvironmentID *string  `json:"resultEnvironmentId,omitempty"`
+	ClientMutationID    string   `json:"clientMutationId"`
 }
 
 type Mutation struct {
@@ -1015,20 +1221,28 @@ type OriginPromotionPayload struct {
 }
 
 type OriginVersion struct {
-	ID                  string  `json:"id"`
-	OriginID            string  `json:"originId"`
-	VersionNumber       int     `json:"versionNumber"`
-	Status              string  `json:"status"`
-	MediaKind           string  `json:"mediaKind"`
-	VideoPreparationID  *string `json:"videoPreparationId,omitempty"`
-	PreparationStatus   *string `json:"preparationStatus,omitempty"`
-	CaptureSubmitted    bool    `json:"captureSubmitted"`
-	Selectable          bool    `json:"selectable"`
-	SourceAvailability  *string `json:"sourceAvailability,omitempty"`
-	LimitedCoverage     bool    `json:"limitedCoverage"`
-	ScopeManifestDigest *string `json:"scopeManifestDigest,omitempty"`
-	SupersedesID        *string `json:"supersedesId,omitempty"`
-	ActivatedAt         *string `json:"activatedAt,omitempty"`
+	ID                  string               `json:"id"`
+	OriginID            string               `json:"originId"`
+	VersionNumber       int                  `json:"versionNumber"`
+	OriginRevision      int                  `json:"originRevision"`
+	Status              string               `json:"status"`
+	MediaKind           string               `json:"mediaKind"`
+	VideoPreparationID  *string              `json:"videoPreparationId,omitempty"`
+	PreparationStatus   *string              `json:"preparationStatus,omitempty"`
+	CaptureSubmitted    bool                 `json:"captureSubmitted"`
+	Selectable          bool                 `json:"selectable"`
+	SourceAvailability  *string              `json:"sourceAvailability,omitempty"`
+	LimitedCoverage     bool                 `json:"limitedCoverage"`
+	ScopeManifestDigest *string              `json:"scopeManifestDigest,omitempty"`
+	SupersedesID        *string              `json:"supersedesId,omitempty"`
+	ActivatedAt         *string              `json:"activatedAt,omitempty"`
+	ActivatedBy         *string              `json:"activatedBy,omitempty"`
+	Purpose             *string              `json:"purpose,omitempty"`
+	Source              *string              `json:"source,omitempty"`
+	HasInventory        bool                 `json:"hasInventory"`
+	DraftState          *string              `json:"draftState,omitempty"`
+	Counts              *InventoryCounts     `json:"counts,omitempty"`
+	ContestationSummary *ContestationSummary `json:"contestationSummary,omitempty"`
 }
 
 type OriginVersionConnection struct {
@@ -1043,6 +1257,7 @@ type OriginVersionInput struct {
 
 type OriginVersionPayload struct {
 	Version          *OriginVersion `json:"version,omitempty"`
+	Warnings         []string       `json:"warnings,omitempty"`
 	UserErrors       []*UserError   `json:"userErrors"`
 	ClientMutationID string         `json:"clientMutationId"`
 }
@@ -1358,6 +1573,13 @@ type RegisterAssetInput struct {
 	ClientMutationID string      `json:"clientMutationId"`
 }
 
+type RemoveInventoryEnvironmentInput struct {
+	OriginVersionID      string `json:"originVersionId"`
+	EnvironmentID        string `json:"environmentId"`
+	ConfirmItemExclusion bool   `json:"confirmItemExclusion"`
+	ClientMutationID     string `json:"clientMutationId"`
+}
+
 type ReopenProjectInput struct {
 	ProjectID        string `json:"projectId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
@@ -1548,6 +1770,11 @@ type RequestOnboardingOtpInput struct {
 	Email            string  `json:"email"`
 	TurnstileToken   *string `json:"turnstileToken,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
+}
+
+type RequestOriginCatalogingInput struct {
+	AssetID          string `json:"assetId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type RequestRecaptureInput struct {
@@ -1761,6 +1988,14 @@ type SkipProjectStageInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type SplitInventoryItemInput struct {
+	OriginVersionID  string                     `json:"originVersionId"`
+	ItemID           string                     `json:"itemId"`
+	ExpectedVersion  int                        `json:"expectedVersion"`
+	Parts            []*InventorySplitPartInput `json:"parts"`
+	ClientMutationID string                     `json:"clientMutationId"`
+}
+
 type StageTransition struct {
 	ID         string  `json:"id"`
 	StageID    *string `json:"stageId,omitempty"`
@@ -1768,6 +2003,11 @@ type StageTransition struct {
 	ToState    string  `json:"toState"`
 	Reason     *string `json:"reason,omitempty"`
 	OccurredAt string  `json:"occurredAt"`
+}
+
+type StartBaselineDraftFromInspectionInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type StartProjectStageInput struct {
@@ -1940,10 +2180,11 @@ type TriageWorkspace struct {
 }
 
 type UpdateAnalysisPromptInput struct {
-	AnalysisType     AnalysisType `json:"analysisType"`
-	SystemPrompt     string       `json:"systemPrompt"`
-	ExpectedRevision int          `json:"expectedRevision"`
-	ClientMutationID string       `json:"clientMutationId"`
+	AnalysisType     AnalysisType        `json:"analysisType"`
+	Task             *AnalysisPromptTask `json:"task,omitempty"`
+	SystemPrompt     string              `json:"systemPrompt"`
+	ExpectedRevision int                 `json:"expectedRevision"`
+	ClientMutationID string              `json:"clientMutationId"`
 }
 
 type UpdateAssetInput struct {
@@ -1989,6 +2230,15 @@ type UpsertBusinessUnitInput struct {
 	ExpectedVersion       *int    `json:"expectedVersion,omitempty"`
 	ExpectedTenantVersion *int    `json:"expectedTenantVersion,omitempty"`
 	ClientMutationID      string  `json:"clientMutationId"`
+}
+
+type UpsertInventoryEnvironmentInput struct {
+	OriginVersionID  string  `json:"originVersionId"`
+	EnvironmentID    *string `json:"environmentId,omitempty"`
+	TypeCode         string  `json:"typeCode"`
+	Name             string  `json:"name"`
+	Expected         bool    `json:"expected"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type UpsertParticipantInput struct {
@@ -2162,6 +2412,63 @@ type VideoUploadStatus struct {
 	ReceivedParts  []int                `json:"receivedParts"`
 	ConfirmedParts []*VideoReceivedPart `json:"confirmedParts"`
 	MissingParts   []int                `json:"missingParts"`
+}
+
+type AnalysisPromptTask string
+
+const (
+	AnalysisPromptTaskFindings         AnalysisPromptTask = "FINDINGS"
+	AnalysisPromptTaskInventoryCatalog AnalysisPromptTask = "INVENTORY_CATALOG"
+	AnalysisPromptTaskInventoryCompare AnalysisPromptTask = "INVENTORY_COMPARE"
+)
+
+var AllAnalysisPromptTask = []AnalysisPromptTask{
+	AnalysisPromptTaskFindings,
+	AnalysisPromptTaskInventoryCatalog,
+	AnalysisPromptTaskInventoryCompare,
+}
+
+func (e AnalysisPromptTask) IsValid() bool {
+	switch e {
+	case AnalysisPromptTaskFindings, AnalysisPromptTaskInventoryCatalog, AnalysisPromptTaskInventoryCompare:
+		return true
+	}
+	return false
+}
+
+func (e AnalysisPromptTask) String() string {
+	return string(e)
+}
+
+func (e *AnalysisPromptTask) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AnalysisPromptTask(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AnalysisPromptTask", str)
+	}
+	return nil
+}
+
+func (e AnalysisPromptTask) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AnalysisPromptTask) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AnalysisPromptTask) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type AnalysisType string

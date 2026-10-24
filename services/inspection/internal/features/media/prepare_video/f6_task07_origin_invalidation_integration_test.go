@@ -71,7 +71,10 @@ func TestVV_IT_057InvalidatedDuringDiscoveryStaysInvalidatedAfterCompletion(t *t
 		t.Fatalf("preparation status=%s code=%s, want READY", job.Status, job.ErrorCode)
 	}
 	// Completion activation must refuse the invalidated version.
-	if _, err := origins.ActivateCompleted(ctx, fixture.tenantID, o1.ResponsibilityID); !apperror.Is(err, apperror.InvalidState) {
+	if o1.ResponsibilityID == nil {
+		t.Fatal("origin version lost its responsibility")
+	}
+	if _, err := origins.ActivateCompleted(ctx, fixture.tenantID, *o1.ResponsibilityID); !apperror.Is(err, apperror.InvalidState) {
 		t.Fatalf("completion activation of invalidated O1 err=%v, want INVALID_STATE", err)
 	}
 	var after database.OriginVersion

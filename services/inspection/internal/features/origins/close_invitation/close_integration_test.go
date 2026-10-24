@@ -49,13 +49,13 @@ func TestCloseOriginRevokesStaleSessionAndPreventsSubmit(t *testing.T) {
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "close-it042-origin", CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "close-it042-origin", CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Invitation{ID: invitationID, TenantID: fixture.TenantID, ResponsibilityID: responsibilityID, TokenHash: make([]byte, 32), DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.ExternalSession{ID: sessionID, TenantID: fixture.TenantID, InvitationID: invitationID, ResponsibilityID: responsibilityID, SessionDigest: make([]byte, 32), CSRFDigest: make([]byte, 32), ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error
+		return tx.Create(&database.ExternalSession{ID: sessionID, TenantID: fixture.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &responsibilityID, SessionDigest: make([]byte, 32), CSRFDigest: make([]byte, 32), ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

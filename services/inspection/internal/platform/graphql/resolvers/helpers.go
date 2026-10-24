@@ -581,7 +581,18 @@ func mapOriginVersion(row database.OriginVersion, details *originlist.Details) *
 	if details != nil {
 		preparationStatus, sourceAvailability, captureSubmitted, selectable = details.PreparationStatus, details.SourceAvailability, details.CaptureSubmitted, details.Selectable
 	}
-	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated}
+	var purpose, draftState *string
+	if row.Purpose != nil {
+		purpose = row.Purpose
+	}
+	if row.DraftState != nil {
+		draftState = row.DraftState
+	}
+	revision := 0
+	if details != nil {
+		revision = details.OriginRevision
+	}
+	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: revision, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated, ActivatedBy: optionalID(row.ActivatedByMembershipID), Purpose: purpose, Source: optional(row.Source), HasInventory: row.HasInventory, DraftState: draftState}
 }
 
 func (r *Resolver) projectOriginVersion(ctx context.Context, tenantID identity.ID, row database.OriginVersion) (*graphql1.OriginVersion, error) {
@@ -700,7 +711,15 @@ func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {
 		MinimumConfidenceBPS int    `json:"minimumConfidenceBps"`
 	}
 	_ = json.Unmarshal(row.DefinitionJSON, &definition)
-	return &graphql1.AnalysisPrompt{AnalysisType: graphql1.AnalysisType(row.AnalysisType), SystemPrompt: definition.SystemPrompt, ModelAlias: definition.ModelAlias, MinimumConfidenceBps: definition.MinimumConfidenceBPS, CanonicalDigest: row.CanonicalDigest, Revision: int(row.Revision), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)}
+	return &graphql1.AnalysisPrompt{AnalysisType: graphql1.AnalysisType(row.AnalysisType), Task: graphql1.AnalysisPromptTask(row.Task), SystemPrompt: definition.SystemPrompt, ModelAlias: definition.ModelAlias, MinimumConfidenceBps: definition.MinimumConfidenceBPS, CanonicalDigest: row.CanonicalDigest, Revision: int(row.Revision), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)}
+}
+
+// analysisPromptTask maps the optional GraphQL task; an omitted task is FINDINGS.
+func analysisPromptTask(task *graphql1.AnalysisPromptTask) string {
+	if task == nil {
+		return string(graphql1.AnalysisPromptTaskFindings)
+	}
+	return string(*task)
 }
 
 func mapProject(view projectcore.View) *graphql1.Project {

@@ -109,7 +109,7 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		}
 		var policy database.VideoPolicy
 		if err := tx.Where("tenant_id=?", cmd.TenantID).First(&policy).Error; err == gorm.ErrRecordNotFound {
-			policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: 5, Version: 1}
+			policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: 30, SupersededBaselineRetentionDays: 365, Version: 1}
 		} else if err != nil {
 			return err
 		}

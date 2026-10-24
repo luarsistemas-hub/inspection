@@ -236,7 +236,7 @@ func TestVV_IT_125ReauthenticatedResumeCannotAccessRevokedPersistedUpload(t *tes
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: fixture.invitationID, ResponsibilityID: fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(fixture.invitationID), ResponsibilityID: &fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	response := executeAPI03WithCredentialsValue(t, fixture, `query { externalCapture { responsibilityId status } }`, requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf})

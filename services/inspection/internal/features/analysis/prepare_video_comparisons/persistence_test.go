@@ -47,7 +47,7 @@ func TestDBPlanWriterRecordsG1PreparationRolesIdempotently(t *testing.T) {
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("CREATE TABLE analysis.video_plan_preparations (tenant_id text NOT NULL, plan_id text NOT NULL, preparation_id text NOT NULL, role text NOT NULL, created_at datetime, PRIMARY KEY(tenant_id,plan_id,preparation_id))").Error; err != nil {
+	if err := db.Exec("CREATE TABLE analysis.video_plan_preparations (tenant_id text NOT NULL, plan_id text NOT NULL, preparation_id text NOT NULL, role text NOT NULL, requirement_key text, created_at datetime, PRIMARY KEY(tenant_id,plan_id,preparation_id))").Error; err != nil {
 		t.Fatal(err)
 	}
 	tenant, planID := identity.NewID(), identity.NewID()

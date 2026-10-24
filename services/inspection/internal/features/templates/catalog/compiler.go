@@ -11,23 +11,35 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	inventorycore "inspection/services/inspection/internal/features/inventory/vocabulary"
 )
 
 const (
-	SchemaVersion      = 1
-	MaxNameCodePoints  = 200
-	MaxTextCodePoints  = 2000
-	MaxTemplateBytes   = 1 << 20
-	MaxSections        = 100
-	MaxRequirements    = 200
-	MaxStages          = 100
-	MaxAssetsPerTenant = 100000
-	MaxInspections     = 1000000
-	MaxActivePhotos    = 200
-	MaxOriginalBytes   = 20 << 20
-	DefaultGeofence    = 150
-	MinGeofence        = 25
-	MaxGeofence        = 10000
+	SchemaVersion            = 1
+	LegacySchemaVersion      = SchemaVersion
+	EnvironmentSchemaVersion = 2
+	MaxNameCodePoints        = 200
+	MaxTextCodePoints        = 2000
+	MaxTemplateBytes         = 1 << 20
+	MaxSections              = 100
+	MaxRequirements          = 200
+	MaxStages                = 100
+	MaxAssetsPerTenant       = 100000
+	MaxInspections           = 1000000
+	MaxActivePhotos          = 200
+	MaxOriginalBytes         = 20 << 20
+	DefaultGeofence          = 150
+	MinGeofence              = 25
+	MaxGeofence              = 10000
+	// Environment capture limits for schemaVersion 2 (ADR-020).
+	EnvironmentsLayout             = "ENVIRONMENTS"
+	MaxEnvironments                = inventorycore.MaxEnvironments
+	MaxEnvironmentPhotos           = 20
+	MaxEnvironmentClips            = 3
+	MaxItemsPerEnvironment         = inventorycore.MaxItemsPerEnvironment
+	MaxItemsPerInventory           = inventorycore.MaxItemsPerVersion
+	MaxEnvironmentInspectionPhotos = MaxEnvironments * MaxEnvironmentPhotos
 )
 
 type ComparisonMode string
@@ -60,15 +72,29 @@ type Policy struct {
 	AllowGallery   bool `json:"allowGallery"`
 }
 
+// EnvironmentCapture contains limits for environment-guided capture.
+type EnvironmentCapture struct {
+	Photo struct {
+		Minimum int `json:"minimum"`
+		Maximum int `json:"maximum"`
+	} `json:"photo"`
+	Video struct {
+		MaximumClips int `json:"maximumClips"`
+	} `json:"video"`
+}
+
 type TemplateDocument struct {
-	SchemaVersion         int                  `json:"schemaVersion"`
-	IsVideo               bool                 `json:"isVideo,omitempty"`
-	SegmentVersionID      string               `json:"segmentVersionId"`
-	ParticipantRoles      []string             `json:"participantRoles"`
-	DefaultComparisonMode ComparisonMode       `json:"defaultComparisonMode"`
-	Requirements          []CaptureRequirement `json:"requirements"`
-	AnalysisType          string               `json:"analysisType"`
-	Policy                Policy               `json:"policy"`
+	SchemaVersion             int                  `json:"schemaVersion"`
+	IsVideo                   bool                 `json:"isVideo,omitempty"`
+	SegmentVersionID          string               `json:"segmentVersionId"`
+	ParticipantRoles          []string             `json:"participantRoles"`
+	DefaultComparisonMode     ComparisonMode       `json:"defaultComparisonMode"`
+	Requirements              []CaptureRequirement `json:"requirements,omitempty"`
+	CaptureLayout             string               `json:"captureLayout,omitempty"`
+	EnvironmentCapture        *EnvironmentCapture  `json:"environmentCapture,omitempty"`
+	SuggestedEnvironmentTypes []string             `json:"suggestedEnvironmentTypes,omitempty"`
+	AnalysisType              string               `json:"analysisType"`
+	Policy                    Policy               `json:"policy"`
 }
 
 // MediaKind returns the fixed modality declared by this template version.
@@ -145,14 +171,54 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	if err := decoder.Decode(&doc); err != nil {
 		return Compiled{}, fmt.Errorf("invalid template document: %w", err)
 	}
-	if doc.SchemaVersion != SchemaVersion {
+	if doc.SchemaVersion != LegacySchemaVersion && doc.SchemaVersion != EnvironmentSchemaVersion {
 		return Compiled{}, fmt.Errorf("unsupported schema version")
 	}
 	if refs == nil || !refs.SegmentExists(doc.SegmentVersionID) || !refs.AnalysisTypeExists(doc.AnalysisType) {
 		return Compiled{}, fmt.Errorf("unknown semantic reference")
 	}
-	if len(doc.Requirements) == 0 || len(doc.Requirements) > MaxRequirements {
+	if doc.SchemaVersion == LegacySchemaVersion && (len(doc.Requirements) == 0 || len(doc.Requirements) > MaxRequirements) {
 		return Compiled{}, fmt.Errorf("capture requirements must contain 1..%d entries", MaxRequirements)
+	}
+	if doc.SchemaVersion == LegacySchemaVersion && (doc.CaptureLayout != "" || doc.EnvironmentCapture != nil || len(doc.SuggestedEnvironmentTypes) > 0) {
+		return Compiled{}, fmt.Errorf("environment capture fields are not allowed for schemaVersion 1")
+	}
+	if doc.SchemaVersion == EnvironmentSchemaVersion {
+		if len(doc.Requirements) > 0 {
+			return Compiled{}, fmt.Errorf("requirements are not allowed for schemaVersion 2")
+		}
+		if doc.CaptureLayout != EnvironmentsLayout {
+			return Compiled{}, fmt.Errorf("captureLayout must be ENVIRONMENTS")
+		}
+		if doc.EnvironmentCapture == nil {
+			doc.EnvironmentCapture = DefaultEnvironmentCapture()
+		}
+		limits := doc.EnvironmentCapture
+		if limits.Photo.Minimum == 0 {
+			limits.Photo.Minimum = 1
+		}
+		if limits.Photo.Maximum == 0 {
+			limits.Photo.Maximum = MaxEnvironmentPhotos
+		}
+		if limits.Video.MaximumClips == 0 {
+			limits.Video.MaximumClips = MaxEnvironmentClips
+		}
+		if limits.Photo.Minimum < 1 || limits.Photo.Minimum > limits.Photo.Maximum || limits.Photo.Maximum > MaxEnvironmentPhotos || limits.Video.MaximumClips < 1 || limits.Video.MaximumClips > MaxEnvironmentClips {
+			return Compiled{}, fmt.Errorf("environmentCapture limits are out of range")
+		}
+		if len(doc.SuggestedEnvironmentTypes) > MaxEnvironments {
+			return Compiled{}, fmt.Errorf("suggestedEnvironmentTypes exceeds %d entries", MaxEnvironments)
+		}
+		seenTypes := map[string]bool{}
+		for _, code := range doc.SuggestedEnvironmentTypes {
+			if !inventorycore.IsEnvironmentType(code) {
+				return Compiled{}, fmt.Errorf("suggestedEnvironmentTypes contains unknown type %q", code)
+			}
+			if seenTypes[code] {
+				return Compiled{}, fmt.Errorf("suggestedEnvironmentTypes contains duplicate type")
+			}
+			seenTypes[code] = true
+		}
 	}
 	if len(doc.ParticipantRoles) == 0 {
 		return Compiled{}, fmt.Errorf("at least one participant role is required")
@@ -186,6 +252,13 @@ func Compile(payload []byte, refs References) (Compiled, error) {
 	}
 	sum := sha256.Sum256(canonical)
 	return Compiled{Canonical: canonical, Digest: hex.EncodeToString(sum[:]), Document: doc}, nil
+}
+
+// DefaultEnvironmentCapture returns the ADR-020 default limits for schemaVersion 2.
+func DefaultEnvironmentCapture() *EnvironmentCapture {
+	value := &EnvironmentCapture{}
+	value.Photo.Minimum, value.Photo.Maximum, value.Video.MaximumClips = 1, MaxEnvironmentPhotos, MaxEnvironmentClips
+	return value
 }
 
 func validateRequirement(r CaptureRequirement) error {

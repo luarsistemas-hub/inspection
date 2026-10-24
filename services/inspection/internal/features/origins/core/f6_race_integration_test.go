@@ -42,7 +42,7 @@ func TestConcurrentAuthorizedOriginInvitationsKeepDistinctDraftsAndActiveVersion
 		if err := tx.Create(&database.Origin{ID: activeID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, ActiveVersionID: &activeResponsibility, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: activeResponsibility, TenantID: fixture.TenantID, OriginID: activeID, VersionNumber: 1, ResponsibilityID: identity.NewID(), Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it038-active", CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: activeResponsibility, TenantID: fixture.TenantID, OriginID: activeID, VersionNumber: 1, ResponsibilityID: func() *identity.ID { v := identity.NewID(); return &v }(), Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it038-active", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

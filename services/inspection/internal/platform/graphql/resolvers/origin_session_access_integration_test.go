@@ -130,7 +130,7 @@ func newOriginSessionAccessFixture(t *testing.T, scenario string) originSessionA
 	if err := h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	session := database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: invitationID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, RevokedAt: revokedAt, CreatedAt: now}
+	session := database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, RevokedAt: revokedAt, CreatedAt: now}
 	if err := h.AdminDB.Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}

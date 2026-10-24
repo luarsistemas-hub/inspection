@@ -475,7 +475,7 @@ func TestVV_IT_424VideoCaptureAndRecaptureSubmissionJourney(t *testing.T) {
 	if err := fixture.harness.AdminDB.Create(&database.Invitation{ID: invitationID, TenantID: fixture.tenantID, ResponsibilityID: newResponsibilityID, TokenHash: hash[:], DeliveryIntents: []byte(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: invitationID, ResponsibilityID: newResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &newResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	fixture.credentials = requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf}

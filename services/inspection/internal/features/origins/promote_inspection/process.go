@@ -144,7 +144,7 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			return err
 		}
 		responsibilityID, versionID := identity.NewID(), identity.NewID()
-		version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", IdempotencyKey: "promotion:" + promotion.ID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
+		version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", IdempotencyKey: "promotion:" + promotion.ID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}

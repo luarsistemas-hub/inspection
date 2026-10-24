@@ -61,6 +61,9 @@ func Setup(d Dependencies) error {
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", command.TenantID, command.VersionID).First(&version).Error; err != nil {
 				return apperror.New(apperror.NotFound, "versionId", "origin version not found")
 			}
+			if version.ResponsibilityID == nil {
+				return apperror.New(apperror.InvalidState, "versionId", "origin version has no capture responsibility")
+			}
 			var origin database.Origin
 			if err := tx.Where("tenant_id=? AND id=?", command.TenantID, version.OriginID).First(&origin).Error; err != nil {
 				return apperror.New(apperror.NotFound, "versionId", "origin version not found")

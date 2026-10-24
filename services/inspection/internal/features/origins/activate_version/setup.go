@@ -58,6 +58,9 @@ func Setup(d Dependencies) error {
 		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 			return nil, err
 		}
-		return d.Service.ActivateCompleted(ctx, command.TenantID, version.ResponsibilityID)
+		if version.ResponsibilityID == nil {
+			return nil, apperror.New(apperror.InvalidState, "versionId", "origin version has no capture responsibility")
+		}
+		return d.Service.ActivateCompleted(ctx, command.TenantID, *version.ResponsibilityID)
 	})
 }

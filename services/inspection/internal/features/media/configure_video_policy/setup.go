@@ -23,7 +23,7 @@ import (
 const (
 	DefaultDurationMinutes = 15
 	DefaultOriginDays      = 30
-	DefaultCurrentDays     = 5
+	DefaultCurrentDays     = 30
 	MaxDurationMinutes     = 60
 	MaxRetentionDays       = 36500
 )
@@ -82,7 +82,7 @@ func errorsJoin(first, second error) error {
 }
 
 func Defaults(tenantID identity.ID) database.VideoPolicy {
-	return database.VideoPolicy{TenantID: tenantID, MaxDurationMinutes: DefaultDurationMinutes, OriginRetentionDays: DefaultOriginDays, CurrentRetentionDays: DefaultCurrentDays, Version: 1}
+	return database.VideoPolicy{TenantID: tenantID, MaxDurationMinutes: DefaultDurationMinutes, OriginRetentionDays: DefaultOriginDays, CurrentRetentionDays: DefaultCurrentDays, SupersededBaselineRetentionDays: 365, Version: 1}
 }
 
 func Validate(maxDuration, originDays, currentDays int) error {
@@ -155,7 +155,7 @@ func configure(ctx context.Context, db *gorm.DB, within func(context.Context, id
 			return apperror.New(apperror.Conflict, "expectedVersion", "video policy has changed")
 		}
 		now := time.Now().UTC()
-		policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: cmd.MaxDurationMinutes, OriginRetentionDays: cmd.OriginRetentionDays, CurrentRetentionDays: cmd.CurrentRetentionDays, Version: current.Version + 1, LastMutationID: cmd.MutationID, LastPayloadDigest: digest, UpdatedAt: now}
+		policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: cmd.MaxDurationMinutes, OriginRetentionDays: cmd.OriginRetentionDays, CurrentRetentionDays: cmd.CurrentRetentionDays, SupersededBaselineRetentionDays: current.SupersededBaselineRetentionDays, Version: current.Version + 1, LastMutationID: cmd.MutationID, LastPayloadDigest: digest, UpdatedAt: now}
 		if err := tx.Save(&policy).Error; err != nil {
 			return err
 		}

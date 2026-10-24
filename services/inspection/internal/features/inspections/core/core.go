@@ -163,6 +163,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
 		return View{}, fmt.Errorf("decode template snapshot: %w", err)
 	}
+	if err := validateTemplateCaptureVersion(document); err != nil {
+		return View{}, err
+	}
 	comparisonMode := document.DefaultComparisonMode
 	if in.ComparisonMode != "" {
 		comparisonMode = in.ComparisonMode
@@ -295,6 +298,13 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		return View{}, err
 	}
 	return out, nil
+}
+
+func validateTemplateCaptureVersion(document catalog.TemplateDocument) error {
+	if document.SchemaVersion >= catalog.EnvironmentSchemaVersion {
+		return apperror.New(apperror.InvalidState, "templateVersion", "environment capture is not available yet")
+	}
+	return nil
 }
 
 func inspectionCaptureRequirements(mediaKind, comparisonTarget string, requirements []capturecore.Requirement) []capturecore.Requirement {

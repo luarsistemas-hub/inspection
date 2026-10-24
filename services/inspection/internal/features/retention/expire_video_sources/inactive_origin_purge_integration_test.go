@@ -50,7 +50,7 @@ func TestInactiveOriginPurgeDeletesUnreferencedFrameBank(t *testing.T) {
 		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: strings.Repeat("a", 64), ManifestDigest: strings.Repeat("a", 64), PendingObjectKeys: []byte(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.ResponsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "inactive-origin-purge-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.ResponsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "inactive-origin-purge-" + versionID.String(), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.VideoFrame{ID: frameID, TenantID: fixture.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: strings.Repeat("a", 64), ObjectKey: key, Width: 2, Height: 2, Role: "BASELINE", SizeBytes: 5, CreatedAt: now}).Error
@@ -138,7 +138,7 @@ func TestInactiveOriginPurgePreservesFrameBanksReferencedByRetainedEvidence(t *t
 			if item.ownerType == "VIDEO_PLAN" {
 				versionNumber = 2
 			}
-			if err := tx.Create(&database.OriginVersion{ID: item.versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: versionNumber, ResponsibilityID: item.responsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &item.preparationID, IdempotencyKey: "inactive-origin-ref-" + item.versionID.String(), CreatedAt: now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: item.versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: versionNumber, ResponsibilityID: &item.responsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &item.preparationID, IdempotencyKey: "inactive-origin-ref-" + item.versionID.String(), CreatedAt: now}).Error; err != nil {
 				return err
 			}
 			frame := database.VideoFrame{ID: identity.NewID(), TenantID: fixture.TenantID, SourceMediaID: item.mediaID, PreparationID: item.preparationID, PTSMicros: 0, SHA256: strings.Repeat("b", 64), ObjectKey: item.key, Width: 2, Height: 2, Role: "BASELINE", SizeBytes: 5, CreatedAt: now}

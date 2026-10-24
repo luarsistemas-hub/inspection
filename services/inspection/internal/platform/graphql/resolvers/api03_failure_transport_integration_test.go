@@ -129,7 +129,7 @@ func newAPI03FailureFixture(t *testing.T, operation string) api03FailureFixture 
 	now := time.Now().UTC()
 	invitationID := identity.NewID()
 	invitation := database.Invitation{ID: invitationID, TenantID: seed.TenantID, ResponsibilityID: seed.ResponsibilityID, TokenHash: sessionHash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}
-	session := database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: invitationID, ResponsibilityID: seed.ResponsibilityID, SessionDigest: sessionHash[:], CSRFDigest: csrfProof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}
+	session := database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &seed.ResponsibilityID, SessionDigest: sessionHash[:], CSRFDigest: csrfProof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	if err := h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}

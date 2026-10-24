@@ -168,6 +168,18 @@ func (m *Metrics) VideoGateway(purpose, outcome string, inputTokens, outputToken
 	}
 }
 
+// AnalysisGateway records bounded request and token totals by analysis task.
+func (m *Metrics) AnalysisGateway(purpose, outcome string, inputTokens, outputTokens *int64) {
+	purpose = safeAnalysisPurpose(purpose)
+	m.counter("inspection_analysis_gateway_requests_total", map[string]string{"purpose": purpose, "status": safeVideoStatus(outcome)}, 1)
+	if inputTokens != nil {
+		m.counter("inspection_analysis_gateway_tokens_total", map[string]string{"purpose": purpose, "direction": "input"}, float64(*inputTokens))
+	}
+	if outputTokens != nil {
+		m.counter("inspection_analysis_gateway_tokens_total", map[string]string{"purpose": purpose, "direction": "output"}, float64(*outputTokens))
+	}
+}
+
 // VideoQueue publishes bounded database aggregate observations.
 func (m *Metrics) VideoQueue(stage, status string, depth int64, oldestAge time.Duration) {
 	labels := map[string]string{"stage": safeVideoStage(stage), "status": safeVideoStatus(status)}
@@ -261,6 +273,15 @@ func safeVideoStatus(value string) string {
 func safeVideoPurpose(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "scope", "matching", "verification":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "other"
+	}
+}
+
+func safeAnalysisPurpose(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "inventory_catalog", "inventory_match", "inventory_compare":
 		return strings.ToLower(strings.TrimSpace(value))
 	default:
 		return "other"

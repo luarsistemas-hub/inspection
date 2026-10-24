@@ -54,7 +54,7 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", tenantID, key).First(&existing).Error; err == nil {
 			// A retry of an older session may find its version already superseded
 			// by a newer onboarding for the same asset; it still belongs to that session.
-			if (existing.Status != "ACTIVE" && existing.Status != "SUPERSEDED") || existing.ResponsibilityID != sessionID {
+			if (existing.Status != "ACTIVE" && existing.Status != "SUPERSEDED") || existing.ResponsibilityID == nil || *existing.ResponsibilityID != sessionID {
 				return apperror.New(apperror.InvalidState, "referencePhotos", "origin is unavailable")
 			}
 			versionID = existing.ID
@@ -98,7 +98,7 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 			Select("COALESCE(MAX(version_number), 0)").Scan(&lastVersion).Error; err != nil {
 			return err
 		}
-		version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: origin.ID, VersionNumber: lastVersion + 1, ResponsibilityID: sessionID, SupersedesID: supersedes, Status: "ACTIVE", IdempotencyKey: key, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
+		version := database.OriginVersion{ID: identity.NewID(), TenantID: tenantID, OriginID: origin.ID, VersionNumber: lastVersion + 1, ResponsibilityID: &sessionID, SupersedesID: supersedes, Status: "ACTIVE", IdempotencyKey: key, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}

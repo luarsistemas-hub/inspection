@@ -408,7 +408,7 @@ func seedAPI06DraftVersion(t *testing.T, fx api06Fixture) identity.ID {
 		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND origin_id=?", fx.seed.TenantID, origin.ID).Count(&count).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "vv-api06-" + versionID.String(), CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "vv-api06-" + versionID.String(), CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func prepareAPI06OriginCapture(t *testing.T, fx api06Fixture, versionID identity
 		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, version.ResponsibilityID).Updates(map[string]any{"kind": "ORIGIN", "media_kind": "VIDEO", "status": draftStatus}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fx.seed.TenantID, ResponsibilityID: version.ResponsibilityID, ObjectKey: "vv-api06/" + mediaID.String() + ".mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 10, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "vv-api06-" + mediaID.String(), AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fx.seed.TenantID, ResponsibilityID: *version.ResponsibilityID, ObjectKey: "vv-api06/" + mediaID.String() + ".mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 10, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "vv-api06-" + mediaID.String(), AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		preparation := database.VideoPreparationJob{ID: preparationID, TenantID: fx.seed.TenantID, MediaID: mediaID, Status: preparationStatus, Phase: preparationStatus, PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: digest, PendingObjectKeys: []byte(`[]`), CreatedAt: now}

@@ -50,7 +50,7 @@ func TestActivateOriginDuringExtractionReturnsInvalidStateIT041(t *testing.T) {
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.ResponsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it041-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.ResponsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it041-" + versionID.String(), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Status: "PROCESSING", Phase: "EXTRACTING", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, PendingObjectKeys: json.RawMessage(`[]`), CreatedAt: now}).Error

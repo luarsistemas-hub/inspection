@@ -175,6 +175,14 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 				WHERE ov.tenant_id=? AND ov.media_kind='VIDEO' AND ov.status IN ('INVALIDATED','SUPERSEDED')
 				AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=ov.tenant_id AND r.preparation_id=ov.video_preparation_id)
 				AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active=true)
+				AND EXISTS (SELECT 1 FROM media.video_frames f WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id)
+				AND NOT EXISTS (
+					SELECT 1 FROM media.video_frames f
+					JOIN origins.inventory_item_evidence e ON e.tenant_id=f.tenant_id AND e.frame_id=f.id
+					JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id
+					JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+					WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id AND v.status IN ('DRAFT','ACTIVE')
+				)
 			)`, tenantID, tenantID).Order("id").Limit(limit).Find(&preparations).Error
 	})
 	if err != nil {
@@ -206,6 +214,26 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 			if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Find(&frames).Error; err != nil {
 				return err
 			}
+			if len(frames) > 0 {
+				var referencedFrames int64
+				if err := tx.Table("origins.inventory_item_evidence e").
+					Joins("JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id").
+					Joins("JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id").
+					Where("e.tenant_id=? AND e.frame_id IN ? AND v.status IN ('DRAFT','ACTIVE')", tenantID, frameIDs(frames)).Count(&referencedFrames).Error; err != nil {
+					return err
+				}
+				if referencedFrames > 0 {
+					return nil
+				}
+				if err := tx.Exec(`DELETE FROM origins.inventory_item_evidence e
+					USING origins.inventory_items i, origins.origin_versions v
+					WHERE e.tenant_id=? AND e.frame_id IN ?
+					AND i.tenant_id=e.tenant_id AND i.id=e.item_id
+					AND v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+					AND v.status NOT IN ('DRAFT','ACTIVE')`, tenantID, frameIDs(frames)).Error; err != nil {
+					return err
+				}
+			}
 			for _, frame := range frames {
 				if err := e.deps.Store.Delete(ctx, frame.ObjectKey); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
 					return err
@@ -217,7 +245,7 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 			if err := tx.Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Delete(&database.VideoFrame{}).Error; err != nil {
 				return err
 			}
-			purged = true
+			purged = len(frames) > 0
 			return nil
 		})
 		if err != nil {
@@ -228,6 +256,14 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 		}
 	}
 	return completed, nil
+}
+
+func frameIDs(frames []database.VideoFrame) []identity.ID {
+	ids := make([]identity.ID, 0, len(frames))
+	for _, frame := range frames {
+		ids = append(ids, frame.ID)
+	}
+	return ids
 }
 
 type claim struct {

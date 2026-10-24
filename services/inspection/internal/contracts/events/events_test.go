@@ -3,6 +3,7 @@ package events
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,61 @@ func TestUT041RegistryRejectsUnsafeContracts(t *testing.T) {
 	if _, err := DefaultRegistry().Validate(make([]byte, MaxPayloadBytes+1)); !errors.Is(err, ErrInvalidEnvelope) {
 		t.Fatalf("expected size error: %v", err)
 	}
+}
+
+func TestInventoryEventContracts_IT039(t *testing.T) {
+	valid := map[string]map[string]any{
+		"inventory.job_requested.v1":     {"jobId": identity.NewID(), "inspectionId": identity.NewID()},
+		"inventory.draft_ready.v1":       {"originVersionId": identity.NewID()},
+		"inventory.version_activated.v1": {"originVersionId": identity.NewID()},
+		"counterparty.responded.v1":      {"counterpartyInvitationId": identity.NewID(), "originVersionId": identity.NewID()},
+	}
+	for eventType, goodPayload := range valid {
+		t.Run(eventType, func(t *testing.T) {
+			payload := map[string]any{}
+			for key, value := range goodPayload {
+				payload[key] = value
+			}
+			raw := eventJSON(t, eventType, payload)
+			if _, err := DefaultRegistry().Validate(raw); err != nil {
+				t.Fatalf("registered id-only payload rejected: %v", err)
+			}
+			payload["otp"] = "123456"
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, payload)); !errors.Is(err, ErrInvalidEnvelope) {
+				t.Fatalf("secret field accepted: %v", err)
+			}
+			if _, err := DefaultRegistry().Validate(eventJSON(t, eventType, map[string]any{})); !errors.Is(err, ErrInvalidEnvelope) {
+				t.Fatalf("payload missing required id accepted: %v", err)
+			}
+		})
+	}
+	t.Run("v2 capture clips payload", func(t *testing.T) {
+		payload := CaptureVideoSubmittedV2Payload{InspectionID: identity.NewID(), ResponsibilityID: identity.NewID(), SubmissionVersionID: identity.NewID(), Clips: []CaptureVideoClip{{RequirementKey: "env:room", MediaID: identity.NewID()}}}
+		raw := eventJSON(t, "capture.video_submitted.v2", payload)
+		if _, err := DefaultRegistry().Validate(raw); err != nil {
+			t.Fatal(err)
+		}
+		payload.Clips = append(payload.Clips, payload.Clips[0])
+		if _, err := DefaultRegistry().Validate(eventJSON(t, "capture.video_submitted.v2", payload)); !errors.Is(err, ErrInvalidEnvelope) {
+			t.Fatalf("duplicate clip accepted: %v", err)
+		}
+	})
+}
+
+func eventJSON(t *testing.T, eventType string, payload any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"id": identity.NewID(), "type": eventType, "schemaVersion": eventVersion(eventType), "occurredAt": time.Now().UTC(), "tenantId": identity.NewID(), "correlationId": "it039", "payload": payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func eventVersion(eventType string) int {
+	if strings.HasSuffix(eventType, ".v2") {
+		return 2
+	}
+	return 1
 }
 
 func TestNotificationDeliveryV2IsReferenceOnly(t *testing.T) {

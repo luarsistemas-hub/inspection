@@ -484,7 +484,7 @@ func newTask04PlanFixtureWithOriginStatus(t *testing.T, includeBathroom, include
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: f.tenantID, AssetID: f.assetID, ActiveVersionID: &f.originVersionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: f.originVersionID, TenantID: f.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: originResponsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &f.originPreparation, ScopeManifestDigest: digest, IdempotencyKey: "f6-origin-version-" + f.originVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: f.originVersionID, TenantID: f.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &originResponsibility, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &f.originPreparation, ScopeManifestDigest: digest, IdempotencyKey: "f6-origin-version-" + f.originVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 				return err
 			}
 			originFrame := identity.NewID()

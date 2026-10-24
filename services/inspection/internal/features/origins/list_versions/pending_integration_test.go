@@ -58,7 +58,7 @@ func TestSubmittedVideoOriginListsPendingAndUnselectable(t *testing.T) {
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it032-origin", CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it032-origin", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

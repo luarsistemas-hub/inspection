@@ -307,16 +307,15 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 	}
 	templates := templatecore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}
-	documents := onboardingcatalog.TemplateDocuments(s.Stage)
-	templatesByKey := make(map[string]database.Template, len(documents))
-	for key, document := range documents {
+	legacyDocuments := onboardingcatalog.LegacyTemplateDocuments(s.Stage)
+	templatesByKey := make(map[string]database.Template, len(legacyDocuments))
+	for key, document := range legacyDocuments {
 		document.SegmentVersionID = segmentView.Version.ID.String()
 		payload, err := json.Marshal(document)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
-		templateName := "Primeira vistoria do imóvel"
-		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v4", payload)
+		templateView, err := templates.Publish(ctx, tenantID, key, "Primeira vistoria do imóvel", "onboarding:template:"+key+":v4", payload)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
@@ -325,6 +324,19 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
 		templatesByKey[key] = templateView.Template
+	}
+	// The schemaVersion 2 document is published as the newest version but stays
+	// inactive: templates/core refuses to activate it until environment capture
+	// ships (task 03), so onboarding keeps running on the active v1 version.
+	for key, document := range onboardingcatalog.TemplateDocuments(s.Stage) {
+		document.SegmentVersionID = segmentView.Version.ID.String()
+		payload, err := json.Marshal(document)
+		if err != nil {
+			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
+		}
+		if _, err := templates.Publish(ctx, tenantID, key, "Primeira vistoria do imóvel", "onboarding:template:"+key+":v5", payload); err != nil {
+			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
+		}
 	}
 	_ = actorID
 	_ = mode

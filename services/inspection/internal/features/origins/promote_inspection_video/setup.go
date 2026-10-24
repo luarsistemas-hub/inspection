@@ -123,7 +123,8 @@ func Setup(d Dependencies) error {
 				return err
 			}
 			versionID := identity.NewID()
-			promoted = database.OriginVersion{ID: versionID, TenantID: command.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: media.ResponsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparation.ID, VideoPlanID: &analysisPlan.ID, ScopeManifestDigest: preparation.ManifestDigest, IdempotencyKey: idempotency, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
+			responsibilityID := media.ResponsibilityID
+			promoted = database.OriginVersion{ID: versionID, TenantID: command.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparation.ID, VideoPlanID: &analysisPlan.ID, ScopeManifestDigest: preparation.ManifestDigest, IdempotencyKey: idempotency, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 			if err := tx.Create(&promoted).Error; err != nil {
 				return err
 			}

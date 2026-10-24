@@ -104,7 +104,7 @@ func TestTask5IT071ToIT100IT141ToIT200IT221ToIT240IT311ToIT320(t *testing.T) {
 	if err := db.Create(&acceptance).Error; err != nil {
 		t.Fatal(err)
 	}
-	session := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: invited.InvitationID, ResponsibilityID: invited.ResponsibilityID, SessionDigest: bytes.Repeat([]byte{1}, 32), CSRFDigest: bytes.Repeat([]byte{2}, 32), ExpiresAt: now.Add(time.Hour), CreatedAt: now}
+	session := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.Ptr(invited.InvitationID), ResponsibilityID: identity.Ptr(invited.ResponsibilityID), Kind: "CAPTURE", SessionDigest: bytes.Repeat([]byte{1}, 32), CSRFDigest: bytes.Repeat([]byte{2}, 32), ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	if err := db.Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}

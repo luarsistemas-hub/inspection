@@ -127,7 +127,7 @@ func TestVV_IT_186ActivationDuringAnalysisKeepsPinnedO1Frame(t *testing.T) {
 		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=?", f.tenantID, f.originVersionID).Update("status", "SUPERSEDED").Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: newerVersion, TenantID: f.tenantID, OriginID: origin.ID, VersionNumber: 2, ResponsibilityID: newResponsibility.ID, SupersedesID: &f.originVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &newer.ID, ScopeManifestDigest: newer.ManifestDigest, IdempotencyKey: "f6-it186-o2-" + newerVersion.String(), CreatedAt: time.Now().UTC(), SubmittedAt: ptrTask04(time.Now().UTC()), ActivatedAt: ptrTask04(time.Now().UTC())}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: newerVersion, TenantID: f.tenantID, OriginID: origin.ID, VersionNumber: 2, ResponsibilityID: &newResponsibility.ID, SupersedesID: &f.originVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &newer.ID, ScopeManifestDigest: newer.ManifestDigest, IdempotencyKey: "f6-it186-o2-" + newerVersion.String(), CreatedAt: time.Now().UTC(), SubmittedAt: ptrTask04(time.Now().UTC()), ActivatedAt: ptrTask04(time.Now().UTC())}).Error; err != nil {
 			return err
 		}
 		return tx.Model(&database.Origin{}).Where("tenant_id=? AND id=?", f.tenantID, origin.ID).Updates(map[string]any{"active_version_id": newerVersion, "version": 2}).Error

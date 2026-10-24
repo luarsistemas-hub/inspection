@@ -126,6 +126,7 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			return err
 		}
 		var protectedOriginResponsibilities []identity.ID
+		protectedInventoryMediaIDs := make(map[identity.ID]struct{})
 		if len(responsibilityIDs) > 0 {
 			var versions []database.OriginVersion
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id IN ? AND media_kind='VIDEO'", tenantID, responsibilityIDs).Find(&versions).Error; err != nil {
@@ -140,8 +141,41 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 					return err
 				}
 				if references > 0 || holds > 0 {
-					protectedOriginResponsibilities = append(protectedOriginResponsibilities, version.ResponsibilityID)
+					if version.ResponsibilityID != nil {
+						protectedOriginResponsibilities = append(protectedOriginResponsibilities, *version.ResponsibilityID)
+					}
 				}
+			}
+		}
+		var inventoryMediaIDs []identity.ID
+		if len(mediaIDs) > 0 {
+			if err := tx.Raw(`SELECT DISTINCT e.media_id
+				FROM origins.inventory_item_evidence e
+				JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id
+				JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+				WHERE e.tenant_id=? AND v.status<>'DISCARDED' AND e.media_id IN ?`, tenantID, mediaIDs).Scan(&inventoryMediaIDs).Error; err != nil {
+				return err
+			}
+		}
+		if len(inventoryMediaIDs) > 0 {
+			for _, mediaID := range inventoryMediaIDs {
+				protectedInventoryMediaIDs[mediaID] = struct{}{}
+				for _, item := range media {
+					if item.ID == mediaID {
+						protectedOriginResponsibilities = append(protectedOriginResponsibilities, item.ResponsibilityID)
+						break
+					}
+				}
+			}
+		}
+		if len(mediaIDs) > 0 {
+			if err := tx.Exec(`DELETE FROM origins.inventory_item_evidence e
+				USING origins.inventory_items i, origins.origin_versions v
+				WHERE e.tenant_id=? AND e.media_id IN ?
+				AND i.tenant_id=e.tenant_id AND i.id=e.item_id
+				AND v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+				AND v.status='DISCARDED'`, tenantID, mediaIDs).Error; err != nil {
+				return err
 			}
 		}
 		var uploadIDs []identity.ID
@@ -172,11 +206,15 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 				return err
 			}
 			for _, item := range media {
-				if _, protected := protectedVideoMediaIDs[item.ID]; protected {
-					continue
+				_, protectedVideo := protectedVideoMediaIDs[item.ID]
+				_, protectedInventory := protectedInventoryMediaIDs[item.ID]
+				if !protectedVideo && !protectedInventory {
+					if err := deleteObject(ctx, store, item.ObjectKey); err != nil {
+						return err
+					}
 				}
-				if err := deleteObject(ctx, store, item.ObjectKey); err != nil {
-					return err
+				if protectedVideo {
+					continue
 				}
 				var derivatives []database.MediaDerivative
 				if err := tx.Where("tenant_id=? AND media_id=?", tenantID, item.ID).Find(&derivatives).Error; err != nil {
@@ -233,6 +271,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			if err != nil {
 				return err
 			}
+		}
+		if err := purgeInventoryAnalysis(tx, tenantID, inspectionID); err != nil {
+			return err
 		}
 		if err := deletePurgedVideoPlans(tx, tenantID, inspectionID); err != nil {
 			return err
@@ -301,7 +342,15 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 					return err
 				}
 			}
-			if err := deleteWhere(&database.MediaObject{}, "tenant_id=? AND responsibility_id IN ? AND id NOT IN (SELECT media_id FROM media.video_preparation_jobs WHERE tenant_id=?)", tenantID, responsibilityIDs, tenantID); err != nil {
+			if len(protectedInventoryMediaIDs) > 0 {
+				protectedIDs := make([]identity.ID, 0, len(protectedInventoryMediaIDs))
+				for id := range protectedInventoryMediaIDs {
+					protectedIDs = append(protectedIDs, id)
+				}
+				if err := deleteWhere(&database.MediaObject{}, "tenant_id=? AND responsibility_id IN ? AND id NOT IN (SELECT media_id FROM media.video_preparation_jobs WHERE tenant_id=?) AND id NOT IN ?", tenantID, responsibilityIDs, tenantID, protectedIDs); err != nil {
+					return err
+				}
+			} else if err := deleteWhere(&database.MediaObject{}, "tenant_id=? AND responsibility_id IN ? AND id NOT IN (SELECT media_id FROM media.video_preparation_jobs WHERE tenant_id=?)", tenantID, responsibilityIDs, tenantID); err != nil {
 				return err
 			}
 			if len(protectedOriginResponsibilities) > 0 {
@@ -369,6 +418,30 @@ func deletePurgedVideoPlanPreparationLinks(tx *gorm.DB, tenantID, inspectionID i
 		WHERE tenant_id = ? AND plan_id IN (
 			SELECT id FROM analysis.video_plans WHERE tenant_id = ? AND inspection_id = ?
 		)`, tenantID, tenantID, inspectionID).Error
+}
+
+// purgeInventoryAnalysis removes the inspection's inventory analysis rows and
+// detaches baseline versions created from it: an activated baseline outlives
+// the inspection that cataloged it.
+func purgeInventoryAnalysis(tx *gorm.DB, tenantID, inspectionID identity.ID) error {
+	jobs := "SELECT id FROM analysis.inventory_jobs WHERE tenant_id = ? AND inspection_id = ?"
+	for _, statement := range []string{
+		"DELETE FROM analysis.inventory_item_results WHERE tenant_id = ? AND job_id IN (" + jobs + ")",
+		"DELETE FROM analysis.inventory_evidence_pairs WHERE tenant_id = ? AND job_id IN (" + jobs + ")",
+		"DELETE FROM analysis.findings WHERE tenant_id = ? AND inventory_job_id IN (" + jobs + ")",
+	} {
+		if err := tx.Exec(statement, tenantID, tenantID, inspectionID).Error; err != nil {
+			return err
+		}
+	}
+	if err := tx.Exec(`DELETE FROM analysis.inventory_item_results WHERE tenant_id = ? AND inspection_id = ?`, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(`DELETE FROM analysis.inventory_jobs WHERE tenant_id = ? AND inspection_id = ?`, tenantID, inspectionID).Error; err != nil {
+		return err
+	}
+	return tx.Exec(`UPDATE origins.origin_versions SET source_inspection_id = NULL
+		WHERE tenant_id = ? AND source_inspection_id = ?`, tenantID, inspectionID).Error
 }
 
 func deletePurgedVideoPlans(tx *gorm.DB, tenantID, inspectionID identity.ID) error {

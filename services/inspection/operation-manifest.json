@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "84bea51a83527ac296db5ccf4a2eae084bcf56202780777df4baf90398f32290",
+  "schemaSha256": "68de922c47a73d9852a4b7029564acfdc49c84f261f294a51b6250d8c49cc8f3",
   "capabilities": [
     {
       "root": "Query.me",
@@ -293,6 +293,34 @@
       "owner": "Admin",
       "persona": "administrative user",
       "journey": "Tenant operators filter durable video preparations by status and page stage, attempts, safe errors, retryability, and source availability.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.baselineVersions",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Internal operators browse purpose-bearing inventory versions, activation state, counts, and contestation summary for one asset.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.inventoryDraft",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Internal reviewers inspect grouped draft items, evidence availability, progress, and read-only state.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.baselineInventory",
+      "owner": "Dashboard; customer Dashboard",
+      "persona": "customer viewer",
+      "journey": "Internal users read the full baseline while customer viewers receive only the allowlisted projection.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.inventoryTrail",
+      "owner": "Dashboard audit",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Auditors inspect append-only item decisions, activation, and counterparty events.",
       "evidence": "IT-001"
     },
     {
@@ -790,6 +818,83 @@
       "owner": "Admin",
       "persona": "administrative user",
       "journey": "Close a draft origin invitation by version, revoke scoped access, and preserve audit history.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.decideInventoryItems",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Employees, managers, and tenant administrators decide draft items with optimistic item versions and an audit trail.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.bulkAcceptInventoryEnvironment",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers accept pending items that meet the environment confidence threshold.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.addInventoryItem",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers add a declared or evidence-backed item to a draft environment.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.mergeInventoryItems",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers merge duplicate items while preserving evidence lineage.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.splitInventoryItem",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers split an item into separately reviewed parts.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.upsertInventoryEnvironment",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers create or edit expected inventory environments.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.removeInventoryEnvironment",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers remove an environment after confirming item exclusion.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.activateBaselineVersion",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers activate a purpose-bearing baseline and supersede the previous version.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.discardBaselineDraft",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers discard a draft while preserving its audit history.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.requestOriginCataloging",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers request a catalog draft from an existing legacy origin.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.startBaselineDraftFromInspection",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Reviewers start a draft from a completed comparative inspection.",
       "evidence": "IT-001"
     },
     {

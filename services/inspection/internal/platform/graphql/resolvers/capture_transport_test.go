@@ -290,8 +290,8 @@ func captureSessionFixture(t *testing.T, tenantID, responsibilityID identity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	row := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.NewID(), ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
-	invitation := database.Invitation{ID: row.InvitationID, TenantID: tenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt}
+	row := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.Ptr(identity.NewID()), ResponsibilityID: identity.Ptr(responsibilityID), Kind: "CAPTURE", SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
+	invitation := database.Invitation{ID: *row.InvitationID, TenantID: tenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt}
 	if err := db.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}

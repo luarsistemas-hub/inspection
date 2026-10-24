@@ -104,8 +104,21 @@ func TestVV_IT_581PurgeDueOutboxRabbitInboxDeduplicates(t *testing.T) {
 		runDone <- (messaging.RabbitConsumer{Channel: consumeChannel, Contract: contract, Handler: consumer, ConsumerName: queueName}).Run(ctx)
 	}()
 	dispatcher := messaging.Dispatcher{DB: h.MigrationDB, Publisher: h.Publisher}
-	if count, err := dispatcher.Dispatch(ctx); err != nil || count != 1 {
-		t.Fatalf("outbox dispatch count=%d err=%v; want 1", count, err)
+	var dispatched bool
+	for attempt := 0; attempt < 100; attempt++ {
+		if _, err := dispatcher.Dispatch(ctx); err != nil {
+			t.Fatalf("outbox dispatch: %v", err)
+		}
+		var intent database.OutboxIntent
+		if err := h.MigrationDB.Where("tenant_id=? AND id=? AND status='PUBLISHED'", fixture.TenantID, envelope.ID).Take(&intent).Error; err == nil {
+			dispatched = true
+			break
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("read dispatched retention event: %v", err)
+		}
+	}
+	if !dispatched {
+		t.Fatal("retention event was not dispatched after draining earlier outbox rows")
 	}
 	duplicate, err := json.Marshal(envelope)
 	if err != nil {

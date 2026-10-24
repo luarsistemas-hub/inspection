@@ -60,6 +60,8 @@ func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOrigi
 	}
 	f := VideoOriginFixture{TenantID: base.TenantID, AssetID: base.AssetID, ResponsibilityID: identity.NewID(), OriginID: identity.NewID(), OriginVersionID: identity.NewID(), MediaID: identity.NewID(), PreparationID: identity.NewID(), FrameID: identity.NewID(), ScopeItemID: identity.NewID()}
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	retentionDays := 30
+	expiresAt := now.Add(time.Duration(retentionDays) * 24 * time.Hour)
 	frameBytes := fixturePNG()
 	frameDigest := digest(frameBytes)
 	frameKey := "tenant/" + f.TenantID.String() + "/video-frames/" + f.FrameID.String() + ".jpg"
@@ -90,10 +92,11 @@ func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOrigi
 		if err := tx.Create(&database.VideoPreparationJob{ID: f.PreparationID, TenantID: f.TenantID, MediaID: f.MediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: frameDigest, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: f.OriginVersionID, TenantID: f.TenantID, OriginID: f.OriginID, VersionNumber: 1, ResponsibilityID: f.ResponsibilityID, Status: status, MediaKind: "VIDEO", VideoPreparationID: &f.PreparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "video-origin-fixture-" + f.OriginVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: activated}).Error; err != nil {
+		responsibilityID := f.ResponsibilityID
+		if err := tx.Create(&database.OriginVersion{ID: f.OriginVersionID, TenantID: f.TenantID, OriginID: f.OriginID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: status, MediaKind: "VIDEO", VideoPreparationID: &f.PreparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "video-origin-fixture-" + f.OriginVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: activated}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: f.TenantID, MediaID: f.MediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: f.TenantID, MediaID: f.MediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, RetentionDays: &retentionDays, SourceExpiryAt: &expiresAt, RetentionAnchor: "FIXED", Status: "RETAINED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.VideoFrame{ID: f.FrameID, TenantID: f.TenantID, SourceMediaID: f.MediaID, PreparationID: f.PreparationID, PTSMicros: 0, SHA256: frameDigest, ObjectKey: frameKey, Width: 1, Height: 1, Role: "BASELINE", Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
@@ -194,8 +197,8 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 			return err
 		}
 		var promptSnapshot database.AnalysisPromptSnapshot
-		if err := tx.Where("analysis_type = ? AND canonical_digest = ?", analysisprompt.RealEstate, promptDigest).
-			Attrs(database.AnalysisPromptSnapshot{ID: f.PromptSnapshotID, AnalysisType: analysisprompt.RealEstate, DefinitionJSON: promptJSON, CanonicalDigest: promptDigest, CreatedAt: createdAt}).
+		if err := tx.Where("analysis_type = ? AND task = ? AND canonical_digest = ?", analysisprompt.RealEstate, analysisprompt.Findings, promptDigest).
+			Attrs(database.AnalysisPromptSnapshot{ID: f.PromptSnapshotID, AnalysisType: analysisprompt.RealEstate, Task: string(analysisprompt.Findings), DefinitionJSON: promptJSON, CanonicalDigest: promptDigest, CreatedAt: createdAt}).
 			FirstOrCreate(&promptSnapshot).Error; err != nil {
 			return err
 		}

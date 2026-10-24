@@ -146,9 +146,9 @@ func TemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument
 	allowGallery := stage != "" && !strings.EqualFold(strings.TrimSpace(stage), "production")
 	base := func() templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
-			SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
+			SchemaVersion: templatecatalog.EnvironmentSchemaVersion, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
-			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+			CaptureLayout: templatecatalog.EnvironmentsLayout, EnvironmentCapture: templatecatalog.DefaultEnvironmentCapture(), SuggestedEnvironmentTypes: []string{"LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "LAUNDRY", "BALCONY", "OTHER"},
 			AnalysisType: "REAL_ESTATE",
 			Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: allowGallery},
 		}
@@ -156,16 +156,31 @@ func TemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument
 	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: base()}
 }
 
-// ValidateTemplates compiles both curated documents against the supplied
-// segment and analysis-type references before they are published.
+// LegacyTemplateDocuments returns the v1 onboarding template used by the
+// existing inspection and capture flow until environment capture is enabled.
+func LegacyTemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument {
+	allowGallery := stage != "" && !strings.EqualFold(strings.TrimSpace(stage), "production")
+	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: {
+		SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
+		ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
+		Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+		AnalysisType: "REAL_ESTATE",
+		Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: allowGallery},
+	}}
+}
+
+// ValidateTemplates compiles the legacy and schemaVersion 2 documents against
+// the supplied segment and analysis-type references before they are published.
 func ValidateTemplates(refs templatecatalog.References) error {
-	for key, document := range TemplateDocuments("production") {
-		payload, _, err := templatecatalog.CanonicalJSON(document)
-		if err != nil {
-			return fmt.Errorf("template %s: canonicalize: %w", key, err)
-		}
-		if _, err := templatecatalog.Compile(payload, refs); err != nil {
-			return fmt.Errorf("template %s: %w", key, err)
+	for _, documents := range []map[string]templatecatalog.TemplateDocument{LegacyTemplateDocuments("production"), TemplateDocuments("production")} {
+		for key, document := range documents {
+			payload, _, err := templatecatalog.CanonicalJSON(document)
+			if err != nil {
+				return fmt.Errorf("template %s v%d: canonicalize: %w", key, document.SchemaVersion, err)
+			}
+			if _, err := templatecatalog.Compile(payload, refs); err != nil {
+				return fmt.Errorf("template %s v%d: %w", key, document.SchemaVersion, err)
+			}
 		}
 	}
 	return nil

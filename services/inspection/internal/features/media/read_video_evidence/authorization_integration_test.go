@@ -160,7 +160,7 @@ func TestResponsibilitySessionCannotReadAnotherResponsibilityOriginFrameIT081(t 
 	if err := h.AdminDB.Create(&database.Invitation{ID: invitationID, TenantID: origin.TenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: expires, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: origin.TenantID, InvitationID: invitationID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, CreatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: origin.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expires, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	invitations := invitationcore.Service{DB: h.DB, Pepper: pepper}

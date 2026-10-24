@@ -72,7 +72,7 @@ func seedGuidanceOrigin(t *testing.T, fx fixedOriginGraphQLFixture, originID ide
 				return err
 			}
 		}
-		if err := tx.Create(&database.OriginVersion{ID: o.versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: version, ResponsibilityID: responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &o.preparationID, ScopeManifestDigest: digest, IdempotencyKey: "guidance-v" + strconv.Itoa(version) + "-" + o.versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: o.versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: version, ResponsibilityID: &responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &o.preparationID, ScopeManifestDigest: digest, IdempotencyKey: "guidance-v" + strconv.Itoa(version) + "-" + o.versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		return tx.Model(&database.Origin{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, originID).Updates(map[string]any{"active_version_id": o.versionID, "version": version}).Error
@@ -156,7 +156,7 @@ func newGuidanceCaptureSession(t *testing.T, fx fixedOriginGraphQLFixture, inspe
 	invitation := database.Invitation{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: responsibility.ID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	rows := []any{
 		&invitation,
-		&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: responsibility.ID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now},
+		&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &responsibility.ID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now},
 	}
 	var accepted int64
 	if err := fx.h.AdminDB.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, responsibility.ID).Count(&accepted).Error; err != nil {
