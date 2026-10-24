@@ -261,7 +261,7 @@ func (d Dependencies) load(ctx context.Context, query Query) ([]Item, error) {
 				if !found || !scoped {
 					continue
 				}
-				item := Item{MediaID: frame.ID, EvidenceID: frame.ID, SourceMediaID: selected.OriginalMediaID, TimestampMS: frame.PTSMicros / 1000, RequirementKey: selected.RequirementKey, Description: scope.EnvironmentCandidate + " · " + scope.ComponentLabel, Reason: selected.Reason, Environment: scope.EnvironmentCandidate, Component: scope.ComponentLabel, View: scope.ViewLabel, Availability: "UNAVAILABLE"}
+				item := Item{MediaID: frame.ID, EvidenceID: frame.ID, SourceMediaID: selected.OriginalMediaID, TimestampMS: frame.PTSMicros / 1000, RequirementKey: selected.RequirementKey, Description: scopeDescription(scope), Reason: selected.Reason, Environment: scope.EnvironmentCandidate, Component: scope.ComponentLabel, View: scope.ViewLabel, Availability: "UNAVAILABLE"}
 				if frame.TenantID == query.TenantID {
 					item.Availability = "AVAILABLE"
 					item.ImageURL = fmt.Sprintf("/media/video-evidence/%s?responsibilityId=%s", frame.ID, query.ResponsibilityID)
@@ -336,4 +336,14 @@ func (d Dependencies) load(ctx context.Context, query Query) ([]Item, error) {
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+// scopeDescription names a scope item for the operator, preferring the
+// Portuguese display names over the canonical matching labels.
+func scopeDescription(scope database.VideoScopeItem) string {
+	environment, component := scope.EnvironmentDisplayName, scope.ComponentDisplayName
+	if environment == "" || component == "" {
+		environment, component = scope.EnvironmentCandidate, scope.ComponentLabel
+	}
+	return environment + " · " + component
 }

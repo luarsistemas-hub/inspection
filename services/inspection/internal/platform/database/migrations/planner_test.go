@@ -124,8 +124,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 78 {
-			t.Fatalf("LatestVersion()=%d, want 78", LatestVersion())
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
 		}
 		return
 	}
@@ -151,8 +151,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 78 {
-			t.Fatalf("LatestVersion()=%d, want 78", LatestVersion())
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
 		}
 		return
 	}
@@ -172,8 +172,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 78 {
-			t.Fatalf("LatestVersion()=%d, want 78", LatestVersion())
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
 		}
 		return
 	}
@@ -198,8 +198,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 78 {
-			t.Fatalf("LatestVersion()=%d, want 78", LatestVersion())
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
 		}
 		return
 	}
@@ -238,12 +238,37 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 78 {
-			t.Fatalf("LatestVersion()=%d, want 78", LatestVersion())
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
 		}
 		return
 	}
 	t.Fatal("retention video purge grant migration missing")
+}
+
+func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.T) {
+	for _, step := range Foundation() {
+		if step.Version != 79 {
+			continue
+		}
+		if step.Name != "video_scope_display_names_pt_br" || !step.Compatible {
+			t.Fatalf("unexpected display-name migration: %+v", step)
+		}
+		for _, required := range []string{
+			"environment_display_name varchar(120)",
+			"component_display_name varchar(120)",
+			"view_display_name varchar(120)",
+		} {
+			if !strings.Contains(step.SQL, required) {
+				t.Fatalf("display-name migration missing %q", required)
+			}
+		}
+		if LatestVersion() != 79 {
+			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		}
+		return
+	}
+	t.Fatal("video scope display-name migration missing")
 }
 
 func TestVideoPlanReanalysisMigrationAddsIdempotencyAndPinnedParent(t *testing.T) {

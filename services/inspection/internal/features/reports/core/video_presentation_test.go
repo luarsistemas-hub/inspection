@@ -28,8 +28,8 @@ func TestLocalizeVideoPresentationKeepsCanonicalLabels(t *testing.T) {
 	if got := localized.ScopeStatements[0]; !strings.Contains(got, "Sala de estar — Lareira") {
 		t.Fatalf("scope statement = %q", got)
 	}
-	if localized.Requirements[1].Label != snapshot.Requirements[1].Label || localized.Requirements[2].Label != snapshot.Requirements[2].Label {
-		t.Fatal("unknown or non-video label changed")
+	if localized.Requirements[1].Label != "Ambiente não identificado 1 — Componente não identificado" || localized.Requirements[2].Label != snapshot.Requirements[2].Label {
+		t.Fatal("unknown video or non-video label was not handled")
 	}
 	if snapshot.Requirements[0].Label != "living_room — fireplace" || strings.Contains(snapshot.Requirements[0].Instructions, "frontal") || strings.Contains(snapshot.ScopeStatements[0], "Sala de estar") {
 		t.Fatal("canonical snapshot mutated")
@@ -50,11 +50,34 @@ func TestVideoHTMLUsesPortuguesePresentation(t *testing.T) {
 }
 
 func TestVideoEnvironmentKeepsRoomNumber(t *testing.T) {
-	if got := localizeVideoLabel("bedroom_2 — window"); got != "Quarto 2 — Janela" {
+	if got := localizeVideoLabel("bedroom_2 — window", map[string]string{}); got != "Quarto 2 — Janela" {
 		t.Fatalf("numbered room = %q", got)
 	}
 	if got := localizeVideoGuidanceView("Para recaptura: filme Quarto 2 — Janela, mostrando a vista front view."); got != "Para recaptura: filme Quarto 2 — Janela, mostrando a vista frontal." {
 		t.Fatalf("view with spaces = %q", got)
+	}
+}
+
+func TestLocalizeUnknownVideoEnvironmentsWithPortugueseFallback(t *testing.T) {
+	snapshot := Snapshot{VideoPlanID: "plan", Requirements: []Requirement{
+		{Key: "video:a", Label: "outdoor_kitchen — sink"},
+		{Key: "video:b", Label: "atelier — fixture"},
+		{Key: "video:c", Label: "custom_room — door"},
+	}}
+	localized := LocalizeVideoPresentation(snapshot)
+	want := []string{"Área gourmet — Pia", "Ambiente não identificado 1 — Componente não identificado", "Ambiente não identificado 2 — Porta"}
+	for i, requirement := range localized.Requirements {
+		if requirement.Label != want[i] {
+			t.Fatalf("requirement %s label = %q, want %q", requirement.Key, requirement.Label, want[i])
+		}
+	}
+}
+
+func TestLocalizedVideoLabelsArePreserved(t *testing.T) {
+	snapshot := Snapshot{VideoPlanID: "plan", Requirements: []Requirement{{Key: "video:outdoor", Label: "Cozinha externa — Churrasqueira", PresentationLocalized: true}}}
+	got := LocalizeVideoPresentation(snapshot).Requirements[0].Label
+	if got != "Cozinha externa — Churrasqueira" {
+		t.Fatalf("LLM display label = %q", got)
 	}
 }
 

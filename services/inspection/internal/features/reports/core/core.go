@@ -75,15 +75,16 @@ type InspectionContext struct {
 // Requirement preserves the labels that make a captured image meaningful to
 // a reader even when its source template changes later.
 type Requirement struct {
-	Key                 string `json:"key"`
-	Section             string `json:"section"`
-	Label               string `json:"label"`
-	Instructions        string `json:"instructions,omitempty"`
-	Coverage            string `json:"coverage,omitempty"`
-	ImpossibilityReason string `json:"impossibilityReason,omitempty"`
-	NoRelevantChange    *bool  `json:"noRelevantChange"`
-	AnalysisMode        string `json:"analysisMode"`
-	AnalysisStatus      string `json:"analysisStatus"`
+	Key                   string `json:"key"`
+	Section               string `json:"section"`
+	Label                 string `json:"label"`
+	PresentationLocalized bool   `json:"presentationLocalized,omitempty"`
+	Instructions          string `json:"instructions,omitempty"`
+	Coverage              string `json:"coverage,omitempty"`
+	ImpossibilityReason   string `json:"impossibilityReason,omitempty"`
+	NoRelevantChange      *bool  `json:"noRelevantChange"`
+	AnalysisMode          string `json:"analysisMode"`
+	AnalysisStatus        string `json:"analysisStatus"`
 }
 
 // Finding is an immutable, neutral observation included in the internal

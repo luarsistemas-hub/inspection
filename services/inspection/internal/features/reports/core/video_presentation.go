@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,10 +10,14 @@ import (
 var videoEnvironmentNames = map[string]string{
 	"bathroom": "Banheiro", "bedroom": "Quarto", "dining_room": "Sala de jantar",
 	"entrance": "Entrada", "garage": "Garagem", "hall": "Corredor",
-	"hallway": "Corredor", "kitchen": "Cozinha", "laundry_room": "Lavanderia",
+	"hallway": "Corredor", "kitchen": "Cozinha", "laundry_room": "Lavanderia", "outdoor_kitchen": "Área gourmet",
 	"living_room": "Sala de estar", "office": "Escritório", "outdoor_area": "Área externa",
 	"patio": "Pátio", "service_area": "Área de serviço", "storage_room": "Depósito",
 	"terrace": "Terraço", "balcony": "Varanda",
+	"área_gourmet": "Área gourmet", "área_externa": "Área externa", "banheiro": "Banheiro",
+	"cozinha": "Cozinha", "escritório": "Escritório", "garagem": "Garagem", "lavanderia": "Lavanderia",
+	"quarto": "Quarto", "sacada": "Sacada", "sala": "Sala", "sala_de_estar": "Sala de estar",
+	"sala_de_jantar": "Sala de jantar", "varanda": "Varanda",
 }
 
 var videoComponentNames = map[string]string{
@@ -22,12 +27,15 @@ var videoComponentNames = map[string]string{
 	"shower": "Chuveiro", "sink": "Pia", "stove": "Fogão",
 	"stone_accent_wall": "Parede de destaque em pedra",
 	"toilet":            "Vaso sanitário", "wall": "Parede", "window": "Janela",
+	"pia": "Pia", "parede": "Parede", "janela": "Janela", "lareira": "Lareira",
+	"componente_sem_identificação": "Componente sem identificação",
 }
 
 var videoViewNames = map[string]string{
 	"close_up": "aproximada", "detail": "de detalhe", "front": "frontal",
 	"front_view": "frontal", "side": "lateral", "side_view": "lateral",
 	"wall_and_corner": "parede e canto", "wide": "ampla", "wide_view": "ampla",
+	"frontal": "frontal", "lateral": "lateral", "aproximada": "aproximada", "ampla": "ampla",
 }
 
 // LocalizeVideoPresentation returns a display copy of a video report. Its
@@ -38,13 +46,17 @@ func LocalizeVideoPresentation(snapshot Snapshot) Snapshot {
 	}
 	snapshot.Requirements = append([]Requirement(nil), snapshot.Requirements...)
 	labels := make(map[string]string, len(snapshot.Requirements))
+	unknownEnvironments := make(map[string]string)
 	for i := range snapshot.Requirements {
 		requirement := &snapshot.Requirements[i]
 		if !strings.HasPrefix(requirement.Key, "video:") {
 			continue
 		}
 		original := requirement.Label
-		requirement.Label = localizeVideoLabel(original)
+		if requirement.PresentationLocalized {
+			continue
+		}
+		requirement.Label = localizeVideoLabel(original, unknownEnvironments)
 		if original != "" {
 			requirement.Instructions = strings.ReplaceAll(requirement.Instructions, original, requirement.Label)
 			requirement.Coverage = strings.ReplaceAll(requirement.Coverage, original, requirement.Label)
@@ -74,12 +86,28 @@ func LocalizeVideoPresentation(snapshot Snapshot) Snapshot {
 	return snapshot
 }
 
-func localizeVideoLabel(value string) string {
+func localizeVideoLabel(value string, unknownEnvironments map[string]string) string {
 	parts := strings.SplitN(value, " — ", 2)
 	if len(parts) != 2 {
-		return localizeVideoTerm(value, videoComponentNames)
+		return localizeVideoTerm(value, videoComponentNames, "Componente não identificado")
 	}
-	return localizeVideoTerm(parts[0], videoEnvironmentNames) + " — " + localizeVideoTerm(parts[1], videoComponentNames)
+	roomKey := normalizeVideoTerm(parts[0])
+	room, known := lookupVideoTerm(parts[0], videoEnvironmentNames)
+	if !known {
+		room = unknownEnvironments[roomKey]
+		if room == "" {
+			room = fmt.Sprintf("Ambiente não identificado %d", len(unknownEnvironments)+1)
+			unknownEnvironments[roomKey] = room
+		}
+	}
+	return room + " — " + localizeVideoTerm(parts[1], videoComponentNames, "Componente não identificado")
+}
+
+// LocalizeVideoView returns the Portuguese name of a known video view, or an
+// empty string when the view has no known translation.
+func LocalizeVideoView(value string) string {
+	translated, _ := lookupVideoTerm(value, videoViewNames)
+	return translated
 }
 
 func localizeVideoGuidanceView(instructions string) string {
@@ -89,21 +117,32 @@ func localizeVideoGuidanceView(instructions string) string {
 		return instructions
 	}
 	start := index + len(marker)
-	return instructions[:start] + localizeVideoTerm(instructions[start:len(instructions)-1], videoViewNames) + "."
+	return instructions[:start] + localizeVideoTerm(instructions[start:len(instructions)-1], videoViewNames, "não identificada") + "."
 }
 
-func localizeVideoTerm(value string, names map[string]string) string {
-	key := strings.ToLower(strings.TrimSpace(value))
-	key = strings.ReplaceAll(strings.ReplaceAll(key, "-", "_"), " ", "_")
-	if translated, ok := names[key]; ok {
+func localizeVideoTerm(value string, names map[string]string, fallback string) string {
+	if translated, ok := lookupVideoTerm(value, names); ok {
 		return translated
+	}
+	return fallback
+}
+
+func lookupVideoTerm(value string, names map[string]string) (string, bool) {
+	key := normalizeVideoTerm(value)
+	if translated, ok := names[key]; ok {
+		return translated, true
 	}
 	if separator := strings.LastIndexByte(key, '_'); separator > 0 {
 		if translated, ok := names[key[:separator]]; ok {
 			if number, err := strconv.Atoi(key[separator+1:]); err == nil && number > 0 {
-				return translated + " " + strconv.Itoa(number)
+				return translated + " " + strconv.Itoa(number), true
 			}
 		}
 	}
-	return value
+	return "", false
+}
+
+func normalizeVideoTerm(value string) string {
+	key := strings.ToLower(strings.TrimSpace(value))
+	return strings.ReplaceAll(strings.ReplaceAll(key, "-", "_"), " ", "_")
 }

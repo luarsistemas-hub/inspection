@@ -97,9 +97,23 @@ const (
 
 // ScopeObservation is a model label bound to an existing screened frame id.
 type ScopeObservation struct {
-	FrameID, EnvironmentCandidate, ComponentLabel, ViewLabel, Visibility string
-	Landmarks                                                            []string
-	IdentityStatus                                                       string `json:"identityStatus,omitempty"`
+	FrameID                string   `json:"frameId"`
+	EnvironmentCandidate   string   `json:"environmentCandidate"`
+	ComponentLabel         string   `json:"componentLabel"`
+	ViewLabel              string   `json:"viewLabel"`
+	EnvironmentDisplayName string   `json:"environmentDisplayName,omitempty"`
+	ComponentDisplayName   string   `json:"componentDisplayName,omitempty"`
+	ViewDisplayName        string   `json:"viewDisplayName,omitempty"`
+	Visibility             string   `json:"visibility"`
+	Landmarks              []string `json:"landmarks"`
+	IdentityStatus         string   `json:"identityStatus,omitempty"`
+}
+
+// KnownEnvironment carries stable matching identity and its Portuguese label
+// into later model batches.
+type KnownEnvironment struct {
+	Candidate   string `json:"candidate"`
+	DisplayName string `json:"displayName"`
 }
 
 // ValidateScope rejects hallucinated frame membership and overlarge or unsafe
@@ -136,7 +150,13 @@ func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolve
 		}
 		seen[item.FrameID] = struct{}{}
 		item.Visibility = normalizeVisibility(item.Visibility)
-		for _, label := range []string{item.EnvironmentCandidate, item.ComponentLabel, item.ViewLabel} {
+		item.EnvironmentDisplayName = normalizeDisplayName(item.EnvironmentDisplayName, item.EnvironmentCandidate)
+		item.ComponentDisplayName = normalizeDisplayName(item.ComponentDisplayName, item.ComponentLabel)
+		item.ViewDisplayName = normalizeDisplayName(item.ViewDisplayName, item.ViewLabel)
+		for _, label := range []string{item.EnvironmentCandidate, item.ComponentLabel, item.ViewLabel, item.EnvironmentDisplayName, item.ComponentDisplayName, item.ViewDisplayName} {
+			if label == "" {
+				continue
+			}
 			if !validSceneLabel(label) {
 				return fmt.Errorf("%w: invalid scene label", ErrModelOutputInvalid)
 			}
@@ -156,6 +176,23 @@ func ValidateScope(frameIDs []string, observations []ScopeObservation, unresolve
 	return nil
 }
 
+func normalizeDisplayName(displayName, canonical string) string {
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" || strings.Contains(displayName, "_") || !validSceneLabel(displayName) {
+		return ""
+	}
+	normalize := func(value string) string {
+		value = strings.ToLower(strings.TrimSpace(value))
+		value = strings.ReplaceAll(value, "-", " ")
+		value = strings.ReplaceAll(value, "_", " ")
+		return strings.Join(strings.Fields(value), " ")
+	}
+	if normalize(displayName) == normalize(canonical) {
+		return ""
+	}
+	return displayName
+}
+
 // normalizeVisibility accepts the schema value and common model synonyms for a
 // clear view. Any other value is treated as obscured, the conservative state
 // that downstream analysis reports as a named gap.
@@ -172,13 +209,13 @@ func normalizeVisibility(value string) string {
 // It returns no partial scope when any batch remains invalid. Each call receives
 // the distinct environment labels accepted from earlier batches, so the model
 // can keep naming a continuing room consistently across batch boundaries.
-func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context.Context, batch, knownEnvironments []string) ([]ScopeObservation, []string, error)) ([]ScopeObservation, error) {
+func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context.Context, batch []string, knownEnvironments []KnownEnvironment) ([]ScopeObservation, []string, error)) ([]ScopeObservation, error) {
 	if invoke == nil {
 		return nil, fmt.Errorf("video: missing scope gateway")
 	}
 	var all []ScopeObservation
-	var known []string
-	knownKeys := map[string]struct{}{}
+	var known []KnownEnvironment
+	knownKeys := map[string]int{}
 	for _, batch := range ScopeBatches(frames) {
 		var accepted []ScopeObservation
 		valid := false
@@ -203,14 +240,25 @@ func DiscoverScope(ctx context.Context, frames []string, invoke func(ctx context
 		if !valid {
 			return nil, ErrModelOutputInvalid
 		}
-		for _, observation := range accepted {
+		for i := range accepted {
+			observation := &accepted[i]
 			label := strings.TrimSpace(observation.EnvironmentCandidate)
 			key := strings.ToLower(label)
-			if _, ok := knownKeys[key]; ok || len(known) == maxKnownEnvironments {
+			if index, ok := knownKeys[key]; ok {
+				// The first display name accepted for an environment is the
+				// canonical one; the prompt asks for reuse but cannot enforce it.
+				if known[index].DisplayName == "" {
+					known[index].DisplayName = observation.EnvironmentDisplayName
+				} else {
+					observation.EnvironmentDisplayName = known[index].DisplayName
+				}
 				continue
 			}
-			knownKeys[key] = struct{}{}
-			known = append(known, label)
+			if len(known) == maxKnownEnvironments {
+				continue
+			}
+			knownKeys[key] = len(known)
+			known = append(known, KnownEnvironment{Candidate: label, DisplayName: observation.EnvironmentDisplayName})
 		}
 		all = append(all, accepted...)
 	}

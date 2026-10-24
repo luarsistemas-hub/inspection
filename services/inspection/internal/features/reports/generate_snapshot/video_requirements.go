@@ -51,10 +51,15 @@ func VideoPlanRequirements(ctx context.Context, tx *gorm.DB, tenantID identity.I
 			return nil, nil, err
 		}
 		label := unidentifiedVideoComponent
+		presentationLocalized := false
+		viewLabel := ""
 		if found {
-			label = VideoScopeLabel(scope)
+			label, presentationLocalized = VideoScopeDisplayLabel(scope)
+			if viewLabel = scope.ViewDisplayName; viewLabel == "" {
+				viewLabel = report.LocalizeVideoView(scope.ViewLabel)
+			}
 		}
-		requirement := report.Requirement{Key: item.RequirementKey, Section: "Vídeo", Label: label, Coverage: item.Reason, AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "PENDING"}
+		requirement := report.Requirement{Key: item.RequirementKey, Section: "Vídeo", Label: label, PresentationLocalized: presentationLocalized, Coverage: item.Reason, AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "PENDING"}
 		if hasReference && item.Outcome == "MATCHED" {
 			requirement.AnalysisMode = "COMPARE_ORIGIN_CURRENT"
 		}
@@ -65,7 +70,7 @@ func VideoPlanRequirements(ctx context.Context, tx *gorm.DB, tenantID identity.I
 			gaps[item.RequirementKey] = struct{}{}
 		default:
 			requirement.AnalysisStatus = "INCONCLUSIVE"
-			requirement.Coverage, requirement.Instructions = VideoGapGuidance(item.Reason, label, scope.ViewLabel)
+			requirement.Coverage, requirement.Instructions = VideoGapGuidance(item.Reason, label, viewLabel)
 			gaps[item.RequirementKey] = struct{}{}
 		}
 		requirements = append(requirements, requirement)
@@ -129,4 +134,15 @@ func VideoScopeLabel(scope database.VideoScopeItem) string {
 		return component
 	}
 	return environment + " — " + component
+}
+
+// VideoScopeDisplayLabel returns a Portuguese display label when the video
+// model supplied one alongside the stable labels used for matching.
+func VideoScopeDisplayLabel(scope database.VideoScopeItem) (string, bool) {
+	environment := strings.TrimSpace(scope.EnvironmentDisplayName)
+	component := strings.TrimSpace(scope.ComponentDisplayName)
+	if environment == "" || component == "" {
+		return VideoScopeLabel(scope), false
+	}
+	return environment + " — " + component, true
 }

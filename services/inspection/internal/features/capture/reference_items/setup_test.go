@@ -232,3 +232,14 @@ func mustJSON(t *testing.T, value any) json.RawMessage {
 	}
 	return encoded
 }
+
+func TestScopeDescriptionPrefersCompleteDisplayNames(t *testing.T) {
+	scope := database.VideoScopeItem{EnvironmentCandidate: "outdoor_kitchen", ComponentLabel: "grill", EnvironmentDisplayName: "Área gourmet", ComponentDisplayName: "Churrasqueira"}
+	if got := scopeDescription(scope); got != "Área gourmet · Churrasqueira" {
+		t.Fatalf("description = %q", got)
+	}
+	scope.ComponentDisplayName = ""
+	if got := scopeDescription(scope); got != "outdoor_kitchen · grill" {
+		t.Fatalf("incomplete description = %q", got)
+	}
+}
