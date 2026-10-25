@@ -116,7 +116,7 @@ export function OriginManagement({ assetId, templateVersionId, participants }: {
     try {
       if (action === "invite") {
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-        const result = await graphql(InviteOriginCaptureDocument, { input: { assetId, participantId, expiresAt, clientMutationId: mutationId() } });
+        const result = await graphql(InviteOriginCaptureDocument, { input: { assetId, participantId, expiresAt, reviewerMembershipId: null, clientMutationId: mutationId() } });
         const payload = result.inviteOriginCapture;
         feedback = payload.userErrors[0]?.message ?? (payload.originVersionId ? `Convite de ${mediaKind === "VIDEO" ? "vídeo" : "fotos"} enviado; a origem aparecerá após o envio.` : "Não foi possível criar o convite.");
       } else if (version) {

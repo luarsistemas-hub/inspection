@@ -66,9 +66,13 @@ func TestInventoryEventContracts_IT039(t *testing.T) {
 		if _, err := DefaultRegistry().Validate(raw); err != nil {
 			t.Fatal(err)
 		}
-		payload.Clips = append(payload.Clips, payload.Clips[0])
+		payload.Clips = append(payload.Clips, CaptureVideoClip{RequirementKey: "env:room", MediaID: identity.NewID()})
+		if _, err := DefaultRegistry().Validate(eventJSON(t, "capture.video_submitted.v2", payload)); err != nil {
+			t.Fatalf("multiple clips for the same environment were rejected: %v", err)
+		}
+		payload.Clips[1].MediaID = payload.Clips[0].MediaID
 		if _, err := DefaultRegistry().Validate(eventJSON(t, "capture.video_submitted.v2", payload)); !errors.Is(err, ErrInvalidEnvelope) {
-			t.Fatalf("duplicate clip accepted: %v", err)
+			t.Fatalf("duplicate media in clips accepted: %v", err)
 		}
 	})
 }

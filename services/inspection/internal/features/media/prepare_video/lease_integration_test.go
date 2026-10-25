@@ -76,7 +76,7 @@ func TestVV_IT_591_592GatewayWaitHasNoOpenPreparationTransactionAndLeaseIsFenced
 		if err := tx.Create(&database.SubmissionVersion{ID: submissionID, TenantID: fixture.TenantID, DraftID: fixture.DraftID, ResponsibilityID: fixture.ResponsibilityID, VersionNumber: 1, Complete: true, Payload: json.RawMessage(`{}`), PayloadDigest: hex.EncodeToString(digest[:]), SubmittedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, SubmissionID: &submissionID, Status: "PROCESSING", Phase: "DISCOVERING", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: time.Unix(0, 0).UTC(), LeaseToken: &staleToken, LeaseExpiresAt: &leaseExpiry, SourceSHA256: hex.EncodeToString(digest[:]), PendingObjectKeys: []byte("[]"), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, SubmissionID: &submissionID, Status: "PROCESSING", Phase: "DISCOVERING", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: time.Unix(0, 0).UTC(), LeaseToken: &staleToken, LeaseExpiresAt: &leaseExpiry, SourceSHA256: hex.EncodeToString(digest[:]), FirstReadyAt: &now, PendingObjectKeys: []byte("[]"), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: fixture.TenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 2, Height: 2, FrameRate: 30, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, RetentionDays: &days, SourceExpiryAt: &expiry, Status: "RETAINED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -101,7 +101,7 @@ func TestVV_IT_591_592GatewayWaitHasNoOpenPreparationTransactionAndLeaseIsFenced
 			return llm.StructuredResult{}, ctx.Err()
 		}
 	}), Now: func() time.Time { return now }, TempDir: os.TempDir(), Limits: video.WorkerConfig{RequiredFreeBytes: 1, StepTimeout: time.Minute, LeaseDuration: 120 * time.Second, HeartbeatInterval: 30 * time.Second}}, permit: make(chan struct{}, 1)}
-	job := database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID}
+	job := database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Phase: "DISCOVERING", FirstReadyAt: &now}
 	media := database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, SHA256: hex.EncodeToString(digest[:]), VideoAttemptID: &attemptID}
 	probe := video.Probe{Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", Duration: time.Second, Width: 2, Height: 2, FrameRate: 30}
 	frame := database.VideoFrame{ID: frameID, TenantID: fixture.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: hex.EncodeToString(digest[:]), ObjectKey: frameKey, Width: 2, Height: 2, Role: "BASELINE", SizeBytes: int64(frameData.Len())}

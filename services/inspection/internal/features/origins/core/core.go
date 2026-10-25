@@ -31,6 +31,7 @@ type Service struct {
 }
 type InviteInput struct {
 	TenantID, AssetID, TemplateVersionID identity.ID
+	ReviewerMembershipID                 *identity.ID
 	Delivery                             []invitationcore.DeliveryIntent
 	Requirements                         []capturecore.Requirement
 	Policy, Reference                    json.RawMessage
@@ -113,7 +114,7 @@ func (s Service) Invite(ctx context.Context, in InviteInput) (Invitation, error)
 		version := database.OriginVersion{ID: identity.NewID(), TenantID: in.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "DRAFT", IdempotencyKey: in.IdempotencyKey, CreatedAt: now}
 		version.MediaKind = definition.MediaKind()
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", MediaKind: definition.MediaKind(), TemplateVersionID: in.TemplateVersionID, ReferencePayload: defaultJSON(in.Reference), PolicyPayload: defaultJSON(in.Policy), Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
-		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.ExpiresAt, CreatedAt: now}
+		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibilityID, ReviewerMembershipID: in.ReviewerMembershipID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.ExpiresAt, CreatedAt: now}
 		for _, row := range []any{&version, &draft, &invite} {
 			if err := tx.Create(row).Error; err != nil {
 				return err

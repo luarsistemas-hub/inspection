@@ -52,15 +52,22 @@ func TestFixedOriginMissingReferenceGraphQLIT455(t *testing.T) {
 	}
 }
 
-func TestFixedOriginPhotoReferenceForVideoGraphQLIT454(t *testing.T) {
+func TestFixedOriginPhotoReferenceForVideoGraphQL(t *testing.T) {
 	for _, entryPoint := range []string{"createInspection", "createSchedule", "planInspection"} {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, true)
 			clientID := "IT-454-" + entryPoint
 			response := executeFixedOriginEntry(t, fx, entryPoint, clientID)
-			assertFixedOriginInvalidInput(t, response)
+			assertFixedOriginCatalogOriginFirst(t, response)
 			assertFixedOriginNoSideEffects(t, fx, clientID)
 		})
+	}
+}
+
+func assertFixedOriginCatalogOriginFirst(t *testing.T, response string) {
+	t.Helper()
+	if !strings.Contains(response, `"code":"INVALID_STATE"`) || !strings.Contains(response, `"field":"referenceVersionId"`) || !strings.Contains(response, "CATALOG_ORIGIN_FIRST") {
+		t.Fatalf("expected CATALOG_ORIGIN_FIRST on referenceVersionId, got %s", response)
 	}
 }
 

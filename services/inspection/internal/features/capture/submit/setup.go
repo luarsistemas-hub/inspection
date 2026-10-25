@@ -13,6 +13,7 @@ import (
 type Command struct {
 	TenantID, ResponsibilityID identity.ID
 	ConfirmIncomplete          bool
+	ClientMutationID           string
 }
 type Dependencies struct {
 	Bus              *mediator.Bus

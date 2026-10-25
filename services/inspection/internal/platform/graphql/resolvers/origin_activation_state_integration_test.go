@@ -24,7 +24,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestActivateOriginDuringExtractionReturnsInvalidStateIT041(t *testing.T) {
+func TestActivateOriginDuringExtractionReturnsInvalidState(t *testing.T) {
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
 	}

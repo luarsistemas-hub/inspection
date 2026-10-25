@@ -204,6 +204,21 @@ func TestCapacityBoundaryUT062(t *testing.T) {
 	}
 }
 
+func TestSchemaVersionCapacityKeepsV1At200AndAllowsV2Aggregate1200(t *testing.T) {
+	if MaxInspectionPhotosForSchema(LegacySchemaVersion) != 200 || MaxInspectionPhotosForSchema(EnvironmentSchemaVersion) != 1200 {
+		t.Fatalf("schema photo caps v1=%d v2=%d", MaxInspectionPhotosForSchema(LegacySchemaVersion), MaxInspectionPhotosForSchema(EnvironmentSchemaVersion))
+	}
+	if err := ValidateCaptureCapacity(EnvironmentSchemaVersion, 1, 1, 1200, 1); err != nil {
+		t.Fatalf("v2 1200 photo cap rejected: %v", err)
+	}
+	if ValidateCaptureCapacity(EnvironmentSchemaVersion, 1, 1, 1201, 1) == nil {
+		t.Fatal("v2 photo cap overflow accepted")
+	}
+	if ValidateCaptureCapacity(LegacySchemaVersion, 1, 1, 201, 1) == nil {
+		t.Fatal("v1 cap was widened by v2 environment limits")
+	}
+}
+
 func TestUnicodeAndDocumentLimitsUT072(t *testing.T) {
 	if !ValidName(strings.Repeat("á", MaxNameCodePoints)) || ValidName(strings.Repeat("á", MaxNameCodePoints+1)) {
 		t.Fatal("name boundary incorrect")

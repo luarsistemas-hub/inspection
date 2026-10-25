@@ -38,6 +38,7 @@ type Frame struct {
 	PTS                                          int64
 	Environment, Component, ComponentLabel, View string
 	Visibility, IdentityStatus, Quality          string
+	RequirementKey                               string
 	Visible                                      bool
 }
 
@@ -62,6 +63,14 @@ type PlanItem struct {
 	CoreGroups         [][]Pair        `json:"coreGroups,omitempty"`
 	CurrentGroups      [][]identity.ID `json:"currentGroups,omitempty"`
 	CarriedResultJobID *identity.ID    `json:"carriedResultJobId,omitempty"`
+	RequirementKey     string          `json:"requirementKey,omitempty"`
+}
+
+// PreparationRef identifies one environment clip bank in a submission plan.
+type PreparationRef struct {
+	ID                   identity.ID
+	RequirementKey, Role string
+	Generation           int `json:",omitempty"`
 }
 
 // Plan binds a submission to the exact current and optional pinned-origin banks.
@@ -73,6 +82,7 @@ type Plan struct {
 	SupplementPreparationID                           *identity.ID
 	Generation, CurrentGeneration                     int
 	OriginPreparationID                               *identity.ID
+	CurrentPreparations                               []PreparationRef
 	LeaseToken                                        *identity.ID
 	Items                                             []PlanItem
 	Digest                                            string
@@ -110,12 +120,26 @@ type Component struct {
 	// ID is the originating VideoScopeItem UUID for expected reference
 	// components, and the current preparation's VideoScopeItem UUID for
 	// CURRENT_ONLY discoveries. It is persisted unchanged as video:<ID>.
-	ID        identity.ID
-	GapReason string
+	ID             identity.ID
+	RequirementKey string
+	GapReason      string
 	// PriorFrameIDs are the parent plan's current frames of this component.
 	// A child plan compares its supplement against them.
 	PriorFrameIDs []identity.ID
 }
+
+func assignRequirementKeys(items []PlanItem, components []Component) {
+	keys := make(map[identity.ID]string, len(components))
+	for _, component := range components {
+		keys[component.ID] = component.RequirementKey
+	}
+	for i := range items {
+		if items[i].RequirementKey == "" {
+			items[i].RequirementKey = keys[items[i].ComponentID]
+		}
+	}
+}
+
 type PlanRequest struct {
 	Plan         Plan
 	Components   []Component
@@ -157,15 +181,27 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 			}
 			currentPreparationID = *plan.SupplementPreparationID
 		}
-		current, err := deps.Frames.LoadPreparationFrames(ctx, plan.TenantID, currentPreparationID)
-		if err != nil {
-			return Plan{}, err
+		var current []Frame
+		var err error
+		if len(plan.CurrentPreparations) == 0 {
+			current, err = deps.Frames.LoadPreparationFrames(ctx, plan.TenantID, currentPreparationID)
+			if err != nil {
+				return Plan{}, err
+			}
+		} else {
+			for _, prep := range plan.CurrentPreparations {
+				frames, loadErr := deps.Frames.LoadPreparationFrames(ctx, plan.TenantID, prep.ID)
+				if loadErr != nil {
+					return Plan{}, loadErr
+				}
+				for i := range frames {
+					frames[i].RequirementKey = prep.RequirementKey
+				}
+				current = append(current, frames...)
+			}
 		}
 		var origin []Frame
-		if plan.ReferenceVersionID != nil {
-			if plan.OriginPreparationID == nil || *plan.OriginPreparationID == (identity.ID{}) {
-				return Plan{}, fmt.Errorf("%w: missing pinned origin preparation", ErrInvalidPlan)
-			}
+		if hasVideoOrigin(plan) {
 			origin, err = deps.Frames.LoadPreparationFrames(ctx, plan.TenantID, *plan.OriginPreparationID)
 			if err != nil {
 				return Plan{}, err
@@ -182,9 +218,9 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 			}
 		}
 		plan.Items = append([]PlanItem(nil), request.CarriedItems...)
-		if plan.ReferenceVersionID == nil {
+		if !hasVideoOrigin(plan) {
 			for _, component := range request.Components {
-				frames := framesForComponent(current, component.ID)
+				frames := filterRequirementFrames(framesForComponent(current, component.ID), component.RequirementKey)
 				usable, named := usableComponentFrames(frames)
 				reason := component.GapReason
 				if reason == "" {
@@ -214,6 +250,22 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 				plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: CurrentOnly, CurrentFrames: ids, CurrentGroups: currentFrameGroups(ids), InputDigest: componentDigest(nil, frames)})
 			}
 		} else {
+			usedCurrentFrames := make(map[identity.ID]bool)
+			isEnvironmentPlan := hasEnvironmentCurrentPreparations(plan.CurrentPreparations)
+			takeAvailableCurrentFrames := func(frames []Frame) []Frame {
+				available := make([]Frame, 0, len(frames))
+				for _, frame := range frames {
+					if !usedCurrentFrames[frame.ID] {
+						available = append(available, frame)
+					}
+				}
+				return available
+			}
+			markAcceptedCurrentFrames := func(pairs []Pair) {
+				for _, pair := range pairs {
+					usedCurrentFrames[pair.CurrentFrameID] = true
+				}
+			}
 			for componentIndex, component := range request.Components {
 				expectedOrigin := framesForComponent(comparisonOrigin, component.ID)
 				if plan.ParentPlanID != nil && len(component.PriorFrameIDs) > 0 {
@@ -221,6 +273,13 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 				}
 				componentOrigin := matchingFramesForComponent(comparisonOrigin, component.ID, expectedOrigin)
 				componentCurrent := matchingFramesForComponent(current, component.ID, expectedOrigin)
+				if isEnvironmentPlan {
+					componentCurrent = filterRequirementFrames(componentCurrent, component.RequirementKey)
+					if !hasExactEnvironmentMatch(componentCurrent, expectedOrigin) {
+						componentCurrent = excludeFramesClaimedByOtherComponents(componentCurrent, component, request.Components, comparisonOrigin)
+					}
+				}
+				componentCurrent = takeAvailableCurrentFrames(componentCurrent)
 				usableCurrent, named := usableComponentFrames(componentCurrent)
 				reason := component.GapReason
 				if reason == "" {
@@ -228,7 +287,7 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 				}
 				if reason != "" {
 					originFrames := framesForComponent(comparisonOrigin, component.ID)
-					currentFrames := scopedFramesForComponent(componentCurrent, component.ID, expectedOrigin)
+					currentFrames := scopedCurrentFramesForGap(componentCurrent, component, request.Components, comparisonOrigin, isEnvironmentPlan)
 					plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Inconclusive, Reason: reason, OriginFrames: frameIDs(originFrames), CurrentFrames: frameIDs(currentFrames), InputDigest: componentDigest(originFrames, currentFrames)})
 					continue
 				}
@@ -237,7 +296,7 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 				if errors.Is(err, ErrMatchBudgetExhausted) {
 					for _, unprocessed := range request.Components[componentIndex:] {
 						originFrames := framesForComponent(comparisonOrigin, unprocessed.ID)
-						currentFrames := framesForComponent(current, unprocessed.ID)
+						currentFrames := takeAvailableCurrentFrames(framesForComponent(current, unprocessed.ID))
 						plan.Items = append(plan.Items, PlanItem{ComponentID: unprocessed.ID, Outcome: TechnicalFailure, Reason: "MATCH_BUDGET_EXHAUSTED", OriginFrames: frameIDs(originFrames), CurrentFrames: frameIDs(currentFrames), InputDigest: componentDigest(originFrames, currentFrames)})
 					}
 					break
@@ -268,15 +327,17 @@ func Setup(deps Dependencies) (func(context.Context, PlanRequest) (Plan, error),
 						}
 					}
 					originFrames := framesForComponent(comparisonOrigin, component.ID)
-					currentFrames := scopedFramesForComponent(componentCurrent, component.ID, expectedOrigin)
+					currentFrames := scopedCurrentFramesForGap(componentCurrent, component, request.Components, comparisonOrigin, isEnvironmentPlan)
 					plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Inconclusive, Reason: reason, OriginFrames: frameIDs(originFrames), CurrentFrames: frameIDs(currentFrames), InputDigest: componentDigest(originFrames, currentFrames)})
 					continue
 				}
 				originIDs, currentIDs := pairsFrameIDs(groups)
 				acceptedPairs := flattenPairs(groups)
+				markAcceptedCurrentFrames(acceptedPairs)
 				plan.Items = append(plan.Items, PlanItem{ComponentID: component.ID, Outcome: Matched, OriginFrames: originIDs, CurrentFrames: currentIDs, CoreGroups: groups, InputDigest: componentDigest(pairFrames(acceptedPairs, comparisonOrigin, true), pairFrames(acceptedPairs, current, false))})
 			}
 		}
+		assignRequirementKeys(plan.Items, request.Components)
 		supplied := append([]Frame(nil), origin...)
 		if plan.ParentPlanID != nil {
 			supplied = append(supplied, comparisonOrigin...)
@@ -352,12 +413,133 @@ func scopedFramesForComponent(frames []Frame, componentID identity.ID, expected 
 
 func selectFramesForComponent(frames []Frame, componentID identity.ID, expected []Frame, includeUnlabelled bool) []Frame {
 	result := make([]Frame, 0)
+	for _, frame := range frames {
+		if frame.Component == componentID.String() {
+			result = append(result, frame)
+		}
+	}
+	if len(result) > 0 {
+		return result
+	}
 	labels := make(map[string]bool, len(expected))
+	labelsWithoutEnvironment := make(map[string]bool, len(expected))
+	environmentScoped := false
+	for _, frame := range frames {
+		if strings.HasPrefix(frame.RequirementKey, "env:") {
+			environmentScoped = true
+			break
+		}
+	}
 	for _, frame := range expected {
-		labels[normalizedScopeLabel(frame.ComponentLabel)+"\x00"+normalizedScopeLabel(frame.View)] = true
+		label := normalizedScopeLabel(frame.ComponentLabel) + "\x00" + normalizedScopeLabel(frame.View)
+		labelsWithoutEnvironment[label] = true
+		labels[normalizedScopeLabel(frame.Environment)+"\x00"+label] = true
 	}
 	for _, frame := range frames {
-		if frame.Component == componentID.String() || includeUnlabelled && frame.ComponentLabel == "" || frame.ComponentLabel != "" && labels[normalizedScopeLabel(frame.ComponentLabel)+"\x00"+normalizedScopeLabel(frame.View)] {
+		label := normalizedScopeLabel(frame.ComponentLabel) + "\x00" + normalizedScopeLabel(frame.View)
+		if frame.Component == componentID.String() || includeUnlabelled && frame.ComponentLabel == "" || frame.ComponentLabel != "" && (environmentScoped && labels[normalizedScopeLabel(frame.Environment)+"\x00"+label] || !environmentScoped && labelsWithoutEnvironment[label]) {
+			result = append(result, frame)
+		}
+	}
+	if environmentScoped && len(result) == 0 {
+		for _, frame := range frames {
+			label := normalizedScopeLabel(frame.ComponentLabel) + "\x00" + normalizedScopeLabel(frame.View)
+			if frame.Component == componentID.String() || includeUnlabelled && frame.ComponentLabel == "" || frame.ComponentLabel != "" && labelsWithoutEnvironment[label] {
+				result = append(result, frame)
+			}
+		}
+	}
+	return result
+}
+
+func hasEnvironmentCurrentPreparations(preparations []PreparationRef) bool {
+	if len(preparations) == 0 {
+		return false
+	}
+	for _, preparation := range preparations {
+		if !strings.HasPrefix(preparation.RequirementKey, "env:") {
+			return false
+		}
+	}
+	return true
+}
+
+func hasExactEnvironmentMatch(candidates, expected []Frame) bool {
+	for _, candidate := range candidates {
+		for _, frame := range expected {
+			if normalizedScopeLabel(candidate.Environment) == normalizedScopeLabel(frame.Environment) && normalizedScopeLabel(candidate.ComponentLabel) == normalizedScopeLabel(frame.ComponentLabel) && normalizedScopeLabel(candidate.View) == normalizedScopeLabel(frame.View) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func excludeFramesClaimedByOtherComponents(candidates []Frame, component Component, components []Component, origin []Frame) []Frame {
+	filtered := make([]Frame, 0, len(candidates))
+	for _, candidate := range candidates {
+		claimedByOther := false
+		for _, other := range components {
+			if other.ID == component.ID {
+				continue
+			}
+			expected := framesForComponent(origin, other.ID)
+			if len(expected) == 0 {
+				expected = framesWithIDs(origin, other.PriorFrameIDs)
+			}
+			if hasExactEnvironmentMatch([]Frame{candidate}, expected) {
+				claimedByOther = true
+				break
+			}
+		}
+		if !claimedByOther {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
+}
+
+func scopedCurrentFramesForGap(candidates []Frame, component Component, components []Component, origin []Frame, environmentScoped bool) []Frame {
+	scoped := scopedFramesForComponent(candidates, component.ID, framesForComponent(origin, component.ID))
+	result := make([]Frame, 0, len(scoped))
+	for _, candidate := range scoped {
+		claimedByOther := false
+		for _, other := range components {
+			if other.ID == component.ID {
+				continue
+			}
+			expected := framesForComponent(origin, other.ID)
+			if len(expected) == 0 {
+				expected = framesWithIDs(origin, other.PriorFrameIDs)
+			}
+			if environmentScoped {
+				claimedByOther = hasExactEnvironmentMatch([]Frame{candidate}, expected)
+			} else {
+				for _, frame := range expected {
+					if normalizedScopeLabel(candidate.ComponentLabel) == normalizedScopeLabel(frame.ComponentLabel) && normalizedScopeLabel(candidate.View) == normalizedScopeLabel(frame.View) {
+						claimedByOther = true
+						break
+					}
+				}
+			}
+			if claimedByOther {
+				break
+			}
+		}
+		if !claimedByOther {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func filterRequirementFrames(frames []Frame, key string) []Frame {
+	if key == "" {
+		return frames
+	}
+	result := make([]Frame, 0, len(frames))
+	for _, frame := range frames {
+		if frame.RequirementKey == key {
 			result = append(result, frame)
 		}
 	}
@@ -371,27 +553,38 @@ func normalizedScopeLabel(value string) string {
 // validateLoadedBank rejects frame-reader scope violations before any matcher
 // gateway can receive images from an untrusted or unpinned preparation.
 func validateLoadedBank(plan Plan, origin, current []Frame) error {
+	allowedCurrent := map[identity.ID]bool{expectedCurrentPreparation(plan): true}
+	generationByPreparation := make(map[identity.ID]int, len(plan.CurrentPreparations))
+	for _, prep := range plan.CurrentPreparations {
+		allowedCurrent[prep.ID] = true
+		generationByPreparation[prep.ID] = prep.Generation
+	}
 	for _, frame := range current {
-		if frame.ID == (identity.ID{}) || !validDigest(frame.Digest) || frame.TenantID != plan.TenantID || frame.AssetID != plan.AssetID || frame.PreparationID != expectedCurrentPreparation(plan) || frame.Generation != plan.CurrentGeneration {
+		generation := generationByPreparation[frame.PreparationID]
+		if generation == 0 {
+			generation = plan.CurrentGeneration
+		}
+		if frame.ID == (identity.ID{}) || !validDigest(frame.Digest) || frame.TenantID != plan.TenantID || frame.AssetID != plan.AssetID || !allowedCurrent[frame.PreparationID] || frame.Generation != generation {
 			return fmt.Errorf("%w: current frame is outside submitted bank", ErrInvalidPlan)
 		}
 	}
-	if plan.ReferenceVersionID == nil {
+	if !hasVideoOrigin(plan) {
 		if len(origin) != 0 {
 			return fmt.Errorf("%w: unpinned origin bank supplied", ErrInvalidPlan)
 		}
 		return nil
 	}
 	expected := plan.OriginPreparationID
-	if expected == nil {
-		return fmt.Errorf("%w: missing pinned origin preparation", ErrInvalidPlan)
-	}
 	for _, frame := range origin {
 		if frame.ID == (identity.ID{}) || !validDigest(frame.Digest) || frame.TenantID != plan.TenantID || frame.AssetID != plan.AssetID || frame.PreparationID != *expected {
 			return fmt.Errorf("%w: origin frame is outside pinned bank", ErrInvalidPlan)
 		}
 	}
 	return nil
+}
+
+func hasVideoOrigin(plan Plan) bool {
+	return plan.ReferenceVersionID != nil && plan.OriginPreparationID != nil && *plan.OriginPreparationID != (identity.ID{})
 }
 
 func missingExpectedView(componentID identity.ID, origin, current []Frame) bool {
@@ -640,11 +833,11 @@ func ValidatePlan(plan Plan) error {
 		}
 		switch item.Outcome {
 		case Matched:
-			if plan.ReferenceVersionID == nil || plan.OriginPreparationID == nil || len(item.OriginFrames) == 0 || len(item.CurrentFrames) == 0 || item.Reason != "" || !validDigest(item.InputDigest) {
+			if !hasVideoOrigin(plan) || len(item.OriginFrames) == 0 || len(item.CurrentFrames) == 0 || item.Reason != "" || !validDigest(item.InputDigest) {
 				return fmt.Errorf("%w: invalid matched item", ErrInvalidPlan)
 			}
 		case CurrentOnly:
-			if plan.ReferenceVersionID != nil || plan.OriginPreparationID != nil || len(item.OriginFrames) != 0 || len(item.CurrentFrames) == 0 {
+			if hasVideoOrigin(plan) || plan.OriginPreparationID != nil || len(item.OriginFrames) != 0 || len(item.CurrentFrames) == 0 {
 				return fmt.Errorf("%w: invalid current-only item", ErrInvalidPlan)
 			}
 			if len(item.CurrentGroups) == 0 {
@@ -756,7 +949,18 @@ func ValidatePlanWithFrames(plan Plan, supplied []Frame) error {
 			}
 			used[id] = struct{}{}
 			if item.Outcome == CurrentOnly || containsID(item.CurrentFrames, id) {
-				if frame.PreparationID != expectedCurrentPreparation(plan) || frame.Generation != plan.CurrentGeneration {
+				expectedGeneration := plan.CurrentGeneration
+				allowedPreparation := frame.PreparationID == expectedCurrentPreparation(plan)
+				for _, ref := range plan.CurrentPreparations {
+					if ref.ID == frame.PreparationID {
+						allowedPreparation = true
+						if ref.Generation > 0 {
+							expectedGeneration = ref.Generation
+						}
+						break
+					}
+				}
+				if !allowedPreparation || frame.Generation != expectedGeneration {
 					return fmt.Errorf("%w: mixed current generation", ErrInvalidPlan)
 				}
 			} else if expectedOriginPreparation(plan) == nil || frame.PreparationID != *expectedOriginPreparation(plan) {
@@ -829,8 +1033,9 @@ func PlanDigest(plan Plan) string {
 		ID, TenantID, AssetID, InspectionID, SubmissionID, CurrentPreparationID        string
 		Generation, CurrentGeneration                                                  int
 		ReferenceVersionID, OriginPreparationID, SupplementPreparationID, ParentPlanID string
+		CurrentPreparations                                                            []PreparationRef `json:",omitempty"`
 		Items                                                                          []PlanItem
-	}{ID: plan.ID.String(), TenantID: plan.TenantID.String(), AssetID: plan.AssetID.String(), InspectionID: plan.InspectionID.String(), SubmissionID: plan.SubmissionID.String(), CurrentPreparationID: plan.CurrentPreparationID.String(), Generation: plan.Generation, CurrentGeneration: plan.CurrentGeneration, Items: items}
+	}{ID: plan.ID.String(), TenantID: plan.TenantID.String(), AssetID: plan.AssetID.String(), InspectionID: plan.InspectionID.String(), SubmissionID: plan.SubmissionID.String(), CurrentPreparationID: plan.CurrentPreparationID.String(), Generation: plan.Generation, CurrentGeneration: plan.CurrentGeneration, CurrentPreparations: append([]PreparationRef(nil), plan.CurrentPreparations...), Items: items}
 	if plan.ReferenceVersionID != nil {
 		canonical.ReferenceVersionID = plan.ReferenceVersionID.String()
 	}

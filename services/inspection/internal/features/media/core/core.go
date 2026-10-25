@@ -12,6 +12,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
@@ -70,6 +71,12 @@ func (s Service) Create(ctx context.Context, tenantID, responsibilityID identity
 }
 
 func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID identity.ID, contentType, hash string, size int64, idempotencyKey string) (Upload, error) {
+	return s.CreateWithRequirement(ctx, tenantID, responsibilityID, contentType, hash, size, idempotencyKey, "")
+}
+
+// CreateWithRequirement reserves an upload against its v2 environment before
+// bytes are sent, allowing admission to enforce the per-environment cap.
+func (s Service) CreateWithRequirement(ctx context.Context, tenantID, responsibilityID identity.ID, contentType, hash string, size int64, idempotencyKey, requirementKey string) (Upload, error) {
 	if tenantID == (identity.ID{}) || responsibilityID == (identity.ID{}) || len(hash) != 64 || strings.TrimSpace(idempotencyKey) == "" {
 		return Upload{}, apperror.New(apperror.InvalidInput, "input", "invalid media request")
 	}
@@ -96,7 +103,7 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 		}
 		return tx.Where("tenant_id=? AND media_id=?", tenantID, existing.ID).First(&existingUpload).Error
 	}); err == nil {
-		if existing.ContentType != contentType || existing.SizeBytes != size || !strings.EqualFold(existing.SHA256, hash) {
+		if existing.ContentType != contentType || existing.SizeBytes != size || (requirementKey != "" && existing.RequirementKey != requirementKey) || !strings.EqualFold(existing.SHA256, hash) {
 			return Upload{}, apperror.New(apperror.Conflict, "clientMutationId", "media request payload changed")
 		}
 		return Upload{MediaID: existing.ID, UploadID: existingUpload.UploadID, ObjectKey: existing.ObjectKey, ExpiresAt: existingUpload.ExpiresAt}, nil
@@ -117,7 +124,7 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 			return apperror.New(apperror.InvalidInput, "contentType", "photo uploads are unavailable for video captures")
 		}
 		if err := tx.Where("tenant_id=? AND responsibility_id=? AND idempotency_key=?", tenantID, responsibilityID, idempotencyKey).First(&existing).Error; err == nil {
-			if existing.ContentType != contentType || existing.SizeBytes != size || !strings.EqualFold(existing.SHA256, hash) {
+			if existing.ContentType != contentType || existing.SizeBytes != size || (requirementKey != "" && existing.RequirementKey != requirementKey) || !strings.EqualFold(existing.SHA256, hash) {
 				return apperror.New(apperror.Conflict, "clientMutationId", "media request payload changed")
 			}
 			if err := tx.Where("tenant_id=? AND media_id=?", tenantID, existing.ID).First(&existingUpload).Error; err != nil {
@@ -132,7 +139,58 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND status NOT IN ?", tenantID, responsibilityID, []string{"ABORTED", "PURGED"}).Count(&active).Error; err != nil {
 			return err
 		}
-		if err := ValidateAdmission(contentType, size, int(active)); err != nil {
+		limit := capturecore.MaxActivePhotos
+		var templateVersion database.TemplateVersion
+		v2 := false
+		if err := tx.Select("schema_version").Where("tenant_id=? AND id=?", tenantID, draft.TemplateVersionID).Take(&templateVersion).Error; err == nil {
+			v2 = templateVersion.SchemaVersion >= catalog.EnvironmentSchemaVersion
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var requirements []capturecore.Requirement
+		if v2 || (len(draft.Requirements) > 0 && draft.Requirements[0] == '[') {
+			if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+				return err
+			}
+			if !v2 {
+				for _, requirement := range requirements {
+					if strings.HasPrefix(requirement.Key, "env:") {
+						v2 = true
+						break
+					}
+				}
+			}
+		}
+		if v2 {
+			maximum := catalog.MaxEnvironmentPhotos
+			for _, requirement := range requirements {
+				if strings.HasPrefix(requirement.Key, "env:") && requirement.EvidenceKind != "VIDEO" && requirement.MaximumMedia > maximum {
+					maximum = requirement.MaximumMedia
+				}
+			}
+			limit = catalog.MaxEnvironments * maximum
+			var selected *capturecore.Requirement
+			for i := range requirements {
+				if requirements[i].Key == requirementKey {
+					selected = &requirements[i]
+					break
+				}
+			}
+			if selected == nil || !strings.HasPrefix(requirementKey, "env:") {
+				return apperror.New(apperror.InvalidInput, "requirementKey", "environment requirement is required")
+			}
+			var count int64
+			if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", tenantID, responsibilityID, requirementKey, []string{"ABORTED", "PURGED"}).Count(&count).Error; err != nil {
+				return err
+			}
+			if count >= int64(selected.MaximumMedia) {
+				return apperror.New(apperror.InvalidInput, requirementKey, "LIMIT_MEDIA_PER_ENVIRONMENT")
+			}
+		}
+		if int(active) >= limit {
+			return apperror.New(apperror.InvalidState, "media", "active photo limit reached")
+		}
+		if err := ValidateAdmission(contentType, size, 0); err != nil {
 			return err
 		}
 		var err error
@@ -140,7 +198,7 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 		if err != nil {
 			return dependency(err)
 		}
-		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", IdempotencyKey: idempotencyKey, AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}
+		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: requirementKey, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", IdempotencyKey: idempotencyKey, AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}
 		upload := database.MultipartUpload{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, UploadID: remoteID, ObjectKey: key, Status: "UPLOADING", ExpiresAt: expires, CreatedAt: now}
 		if err := tx.Create(&media).Error; err != nil {
 			return err
@@ -158,7 +216,7 @@ func (s Service) CreateWithKey(ctx context.Context, tenantID, responsibilityID i
 				return err
 			}
 			return tx.Where("tenant_id=? AND media_id=?", tenantID, winner.ID).First(&winnerUpload).Error
-		}); readErr == nil && winner.ContentType == contentType && winner.SizeBytes == size && strings.EqualFold(winner.SHA256, hash) {
+		}); readErr == nil && winner.ContentType == contentType && winner.SizeBytes == size && (requirementKey == "" || winner.RequirementKey == requirementKey) && strings.EqualFold(winner.SHA256, hash) {
 			if remoteID != "" {
 				_ = s.Store.Client.AbortMultipart(ctx, s.Store.Bucket, key, remoteID)
 			}
@@ -284,6 +342,9 @@ func (s Service) CreateVideoWithAttempt(ctx context.Context, tenantID, responsib
 		requirementKey := "video:main"
 		if current.Kind == "SUPPLEMENT" {
 			requirementKey = "video:supplement"
+		}
+		if current.RequirementKey != nil && strings.HasPrefix(*current.RequirementKey, "env:") {
+			requirementKey = *current.RequirementKey
 		}
 		media := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: responsibilityID, ObjectKey: key, ContentType: contentType, SHA256: strings.ToLower(hash), SizeBytes: size, Status: "UPLOADING", MediaKind: "VIDEO", VideoAttemptID: &attemptID, IdempotencyKey: idempotencyKey, RequirementKey: requirementKey, AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}
 		upload := database.MultipartUpload{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, UploadID: remoteID, ObjectKey: key, Status: "UPLOADING", ExpiresAt: expires, CreatedAt: now}
@@ -583,7 +644,19 @@ func (s Service) completeVideoReceipt(ctx context.Context, tenantID, responsibil
 				return err
 			}
 		}
-		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: video.DefaultProfile().Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+		profile := video.DefaultProfile()
+		if !strings.HasPrefix(media.RequirementKey, "env:") {
+			legacy, err := video.ProfileByNameVersion("standard", 1)
+			if err != nil {
+				return err
+			}
+			profile = legacy
+		}
+		var requirementKey *string
+		if strings.HasPrefix(media.RequirementKey, "env:") {
+			requirementKey = &media.RequirementKey
+		}
+		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: mediaID, RequirementKey: requirementKey, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: profile.Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error; err != nil {
 			return err
 		}

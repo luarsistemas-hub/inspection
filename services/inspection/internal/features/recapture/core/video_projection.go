@@ -69,13 +69,45 @@ func projectVideoRecapture(ctx context.Context, tx *gorm.DB, in RequestInput, or
 	lines := make([]string, 0, len(in.Items)+1)
 	lines = append(lines, "Grave um único vídeo complementar apenas dos itens selecionados:")
 	for _, selected := range in.Items {
-		if !strings.HasPrefix(selected.RequirementKey, "video:") || selected.RequirementKey == "video:main" || selected.RequirementKey == "video:supplement" || selected.OriginalMediaID == nil {
+		if (!strings.HasPrefix(selected.RequirementKey, "video:") && !strings.HasPrefix(selected.RequirementKey, "env:")) || selected.RequirementKey == "video:main" || selected.RequirementKey == "video:supplement" || selected.OriginalMediaID == nil {
 			return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected video component or original is invalid")
 		}
-		componentID, err := identity.ParseID(strings.TrimPrefix(selected.RequirementKey, "video:"))
-		if err != nil || componentID == (identity.ID{}) {
-			return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected video component is invalid")
+		var item database.VideoPlanItem
+		if strings.HasPrefix(selected.RequirementKey, "env:") {
+			var candidates []database.VideoPlanItem
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND requirement_key=?", in.TenantID, plan.ID, selected.RequirementKey).Find(&candidates).Error; err != nil {
+				return nil, nil, err
+			}
+			for _, candidate := range candidates {
+				var frameIDs []identity.ID
+				if json.Unmarshal(candidate.CurrentFrameIDs, &frameIDs) != nil || len(frameIDs) == 0 {
+					continue
+				}
+				var matching int64
+				if err := tx.WithContext(ctx).Model(&database.VideoFrame{}).Where("tenant_id=? AND source_media_id=? AND id IN ?", in.TenantID, *selected.OriginalMediaID, frameIDs).Count(&matching).Error; err != nil {
+					return nil, nil, err
+				}
+				if matching > 0 {
+					item = candidate
+					break
+				}
+			}
+			if item.ID == (identity.ID{}) {
+				return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected environment video component is not in the sealed plan")
+			}
+		} else {
+			componentID, err := identity.ParseID(strings.TrimPrefix(selected.RequirementKey, "video:"))
+			if err != nil || componentID == (identity.ID{}) {
+				return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected video component is invalid")
+			}
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND component_id=? AND requirement_key=?", in.TenantID, plan.ID, componentID, selected.RequirementKey).Take(&item).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected video component is not in the sealed plan")
+				}
+				return nil, nil, err
+			}
 		}
+		componentID := item.ComponentID
 		// The original video is a tenant resource: an unknown or foreign ID is
 		// not found rather than a malformed selection.
 		var originalCount int64
@@ -84,13 +116,6 @@ func projectVideoRecapture(ctx context.Context, tx *gorm.DB, in RequestInput, or
 		}
 		if originalCount == 0 {
 			return nil, nil, apperror.New(apperror.NotFound, "originalMediaId", "original video not found")
-		}
-		var item database.VideoPlanItem
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND component_id=? AND requirement_key=?", in.TenantID, plan.ID, componentID, selected.RequirementKey).Take(&item).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, nil, apperror.New(apperror.InvalidInput, "items", "selected video component is not in the sealed plan")
-			}
-			return nil, nil, err
 		}
 		var currentFrameIDs []identity.ID
 		if len(item.CurrentFrameIDs) == 0 || json.Unmarshal(item.CurrentFrameIDs, &currentFrameIDs) != nil || len(currentFrameIDs) == 0 {

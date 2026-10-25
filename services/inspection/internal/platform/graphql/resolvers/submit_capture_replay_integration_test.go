@@ -29,7 +29,7 @@ func (f6SubmissionFinalizer) Finalize(context.Context, *gorm.DB, database.Captur
 	return nil
 }
 
-func TestReplayOriginSubmitCaptureReturnsSameSubmissionIDIT040(t *testing.T) {
+func TestUT120SubmitCaptureReplayWithSameClientMutationIDOneVersionOneEventIT(t *testing.T) {
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
 	}
@@ -55,7 +55,7 @@ func TestReplayOriginSubmitCaptureReturnsSameSubmissionIDIT040(t *testing.T) {
 		if err := tx.Create(&database.VideoAttempt{ID: attemptID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, Kind: "ORIGIN", PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: 1 << 30, AcquisitionSource: "CAMERA", Status: "RECEIVED", IdempotencyKey: "it040-attempt", PayloadDigest: strings.Repeat("a", 64), AdmittedAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, ObjectKey: "it040/source.mp4", ContentType: "video/mp4", SHA256: strings.Repeat("a", 64), SizeBytes: 10, Status: "RECEIVED", MediaKind: "VIDEO", VideoAttemptID: &attemptID, RequirementKey: "video:main", IdempotencyKey: "it040-media", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error
+		return tx.Create(&database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, ObjectKey: "it120/" + fixture.ResponsibilityID.String() + "/source.mp4", ContentType: "video/mp4", SHA256: strings.Repeat("a", 64), SizeBytes: 10, Status: "RECEIVED", MediaKind: "VIDEO", VideoAttemptID: &attemptID, RequirementKey: "video:main", IdempotencyKey: "it120-media-" + fixture.ResponsibilityID.String(), AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CaptureSource: "CAMERA", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -116,5 +116,14 @@ func TestReplayOriginSubmitCaptureReturnsSameSubmissionIDIT040(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("replay created %d submission rows, want exactly one", count)
+	}
+	var events int64
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.OutboxIntent{}).Where("tenant_id=? AND type='capture.video_submitted.v1'", fixture.TenantID).Count(&events).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if events != 1 {
+		t.Fatalf("replay emitted %d video submission events, want exactly one", events)
 	}
 }

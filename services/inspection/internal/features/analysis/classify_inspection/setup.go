@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -147,8 +148,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 					return answerErr
 				} else {
 					var flags []string
-					if err := json.Unmarshal(answer.Flags, &flags); err == nil && len(flags) > 0 {
-						fact.Flagged = true
+					if err := json.Unmarshal(answer.Flags, &flags); err == nil {
+						for _, flag := range flags {
+							if strings.HasPrefix(job.RequirementKey, "env:") || !isEnvironmentOnlyFlag(flag) {
+								fact.Flagged = true
+								break
+							}
+						}
 					}
 					if answer.ImpossibilityReason != "" {
 						fact.Missing = true
@@ -219,6 +225,10 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "inspection.classified.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: eventPayload})
 	}, nil
+}
+
+func isEnvironmentOnlyFlag(flag string) bool {
+	return strings.HasPrefix(flag, "IMPOSSIBILITY:") || strings.HasPrefix(flag, "QUALITY_WARNING")
 }
 
 func hasPendingVideoRecapture(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID) (bool, error) {

@@ -25,6 +25,20 @@ type replacementFixture struct {
 	now                    *time.Time
 }
 
+func TestVideoReplacementKeepsTheFailedEnvironmentRequirement(t *testing.T) {
+	encoded, err := mainVideoRequirement(json.RawMessage(`[{"key":"env:kitchen","required":false},{"key":"env:bathroom","required":false}]`), "env:bathroom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var requirements []capturecore.Requirement
+	if err := json.Unmarshal(encoded, &requirements); err != nil {
+		t.Fatal(err)
+	}
+	if len(requirements) != 1 || requirements[0].Key != "env:bathroom" || !requirements[0].Required || requirements[0].ImpossibilityAllowed {
+		t.Fatalf("replacement requirements = %+v", requirements)
+	}
+}
+
 func newReplacementFixture(t *testing.T, inspectionStatus, planErrorCode string) replacementFixture {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
@@ -36,7 +50,7 @@ func newReplacementFixture(t *testing.T, inspectionStatus, planErrorCode string)
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.CaptureDraft{}, &database.Inspection{}, &database.Responsibility{}, &database.MediaObject{}, &database.Invitation{}, &database.ExternalSession{}, &database.OutboxIntent{}, &database.VideoReplacement{}, &database.VideoPlan{}, &database.VideoPreparationJob{}, &database.SubmissionVersion{}, &database.AuditEvent{}}
+	models := []any{&database.CaptureDraft{}, &database.Inspection{}, &database.Responsibility{}, &database.MediaObject{}, &database.Invitation{}, &database.ExternalSession{}, &database.OutboxIntent{}, &database.VideoReplacement{}, &database.VideoPlan{}, &database.VideoPlanPreparation{}, &database.VideoPreparationJob{}, &database.SubmissionVersion{}, &database.AuditEvent{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)

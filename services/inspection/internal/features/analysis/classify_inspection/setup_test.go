@@ -17,6 +17,17 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestB13LegacyClassificationDoesNotTreatEnvironmentFlagsAsEvidence(t *testing.T) {
+	for _, flag := range []string{"IMPOSSIBILITY:LOCKED", "QUALITY_WARNING:DARK", "QUALITY_WARNING_IGNORED:BLURRY"} {
+		if !isEnvironmentOnlyFlag(flag) {
+			t.Errorf("v2-only flag %q was not identified for legacy filtering", flag)
+		}
+	}
+	if isEnvironmentOnlyFlag("GPS_MISSING") || isEnvironmentOnlyFlag("UNRELATED") {
+		t.Fatal("legacy evidence flags were incorrectly filtered")
+	}
+}
+
 func TestUnprocessedVideoPlanGapsKeepClassificationAtAttention(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {

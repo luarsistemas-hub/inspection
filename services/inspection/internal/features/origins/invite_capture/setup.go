@@ -21,12 +21,14 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/requestctx"
+	"inspection/services/inspection/internal/platform/tenanttx"
 
 	"gorm.io/gorm"
 )
 
 type Command struct {
 	TenantID, AssetID, ParticipantID identity.ID
+	ReviewerMembershipID             *identity.ID
 	ExpiresAt                        time.Time
 	IdempotencyKey                   string
 }
@@ -53,6 +55,11 @@ func Setup(d Dependencies) error {
 		asset := assetRaw.(assetcore.View)
 		if _, err := d.Authorizer.Authorize(ctx, command.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, true); err != nil {
 			return nil, err
+		}
+		if command.ReviewerMembershipID != nil {
+			if err := validateReviewer(ctx, d.DB, command.TenantID, *command.ReviewerMembershipID, command.AssetID, asset.Asset.BusinessUnitID); err != nil {
+				return nil, err
+			}
 		}
 		if asset.Asset.Status != "ACTIVE" || asset.Asset.TemplateID == nil {
 			return nil, apperror.New(apperror.InvalidState, "assetId", "active configured asset is required")
@@ -97,7 +104,7 @@ func Setup(d Dependencies) error {
 				ComparisonTarget:    string(catalog.ChecklistOnly),
 			})
 		}
-		created, err := d.Service.Invite(ctx, origincore.InviteInput{TenantID: command.TenantID, AssetID: command.AssetID, TemplateVersionID: template.Version.ID, Delivery: delivery, Requirements: requirements, Policy: policyJSON, ExpiresAt: command.ExpiresAt, IdempotencyKey: command.IdempotencyKey})
+		created, err := d.Service.Invite(ctx, origincore.InviteInput{TenantID: command.TenantID, AssetID: command.AssetID, TemplateVersionID: template.Version.ID, ReviewerMembershipID: command.ReviewerMembershipID, Delivery: delivery, Requirements: requirements, Policy: policyJSON, ExpiresAt: command.ExpiresAt, IdempotencyKey: command.IdempotencyKey})
 		if err != nil {
 			return nil, err
 		}
@@ -116,6 +123,23 @@ func Setup(d Dependencies) error {
 		}
 		return created, nil
 	})
+}
+
+func validateReviewer(ctx context.Context, db *gorm.DB, tenantID, membershipID, assetID, businessUnitID identity.ID) error {
+	validate := func(tx *gorm.DB) error {
+		matches, err := auth.ReviewerMembershipMatchesScopes(ctx, tx, tenantID, membershipID, []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: businessUnitID}, {Kind: "ASSET", ID: assetID}})
+		if err != nil {
+			return err
+		}
+		if !matches {
+			return apperror.New(apperror.InvalidInput, "reviewerMembershipId", "reviewer membership is unavailable or outside the asset scope")
+		}
+		return nil
+	}
+	if db.Dialector.Name() == "sqlite" {
+		return db.WithContext(ctx).Transaction(validate)
+	}
+	return (tenanttx.Runner{DB: db}).Within(ctx, tenantID, validate)
 }
 
 func selectedDeliveries(participant participantcore.ParticipantView) []invitationcore.DeliveryIntent {

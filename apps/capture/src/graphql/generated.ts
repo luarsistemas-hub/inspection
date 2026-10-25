@@ -16,6 +16,7 @@ export type BeginVideoCaptureInput = {
   acquisitionSource: string;
   clientMutationId: string;
   replacesMediaId: string | number | null | undefined;
+  requirementKey: string | null | undefined;
 };
 
 export type CaptureGpsInput = {
@@ -41,6 +42,7 @@ export type CreateMediaUploadInput = {
   attemptId: string | number | null | undefined;
   clientMutationId: string;
   contentType: string;
+  requirementKey: string | null | undefined;
   sha256: string;
   sizeBytes: number;
 };
@@ -48,7 +50,9 @@ export type CreateMediaUploadInput = {
 export type DeclareCaptureImpossibilityInput = {
   clientMutationId: string;
   expectedVersion: number | null | undefined;
-  reason: string;
+  reason: string | null | undefined;
+  reasonCode: string | null | undefined;
+  reasonText: string | null | undefined;
   requirementKey: string;
 };
 

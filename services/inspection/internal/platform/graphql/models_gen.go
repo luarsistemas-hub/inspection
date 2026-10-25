@@ -182,6 +182,7 @@ type BaselineInventory struct {
 
 type BeginVideoCaptureInput struct {
 	AcquisitionSource string  `json:"acquisitionSource"`
+	RequirementKey    *string `json:"requirementKey,omitempty"`
 	ReplacesMediaID   *string `json:"replacesMediaId,omitempty"`
 	ClientMutationID  string  `json:"clientMutationId"`
 }
@@ -231,6 +232,23 @@ type CaptureAnswer struct {
 	Version             int      `json:"version"`
 }
 
+type CaptureEnvironment struct {
+	RequirementKey     string `json:"requirementKey"`
+	IdentityID         string `json:"identityId"`
+	TypeCode           string `json:"typeCode"`
+	Name               string `json:"name"`
+	Expected           bool   `json:"expected"`
+	AddedDuringCapture bool   `json:"addedDuringCapture"`
+	MediaCount         int    `json:"mediaCount"`
+	Status             string `json:"status"`
+}
+
+type CaptureEnvironmentPayload struct {
+	Environment      *CaptureEnvironment `json:"environment,omitempty"`
+	UserErrors       []*UserError        `json:"userErrors"`
+	ClientMutationID string              `json:"clientMutationId"`
+}
+
 type CaptureGPSInput struct {
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
@@ -241,6 +259,12 @@ type CaptureGPSInput struct {
 
 type CapturePayload struct {
 	Status           string       `json:"status"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type CaptureQualityWarningPayload struct {
+	Flags            []string     `json:"flags"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
 }
@@ -264,18 +288,28 @@ type CaptureReferenceItem struct {
 }
 
 type CaptureRequirement struct {
-	Key                  string  `json:"key"`
-	Section              string  `json:"section"`
-	Label                string  `json:"label"`
-	Instructions         *string `json:"instructions,omitempty"`
-	EvidenceKind         string  `json:"evidenceKind"`
-	Required             bool    `json:"required"`
-	MinimumMedia         int     `json:"minimumMedia"`
-	MaximumMedia         int     `json:"maximumMedia"`
-	DescriptionRequired  bool    `json:"descriptionRequired"`
-	CaptureSourcePolicy  string  `json:"captureSourcePolicy"`
-	ComparisonTarget     string  `json:"comparisonTarget"`
-	ImpossibilityAllowed bool    `json:"impossibilityAllowed"`
+	Key                   string  `json:"key"`
+	Section               string  `json:"section"`
+	Label                 string  `json:"label"`
+	Instructions          *string `json:"instructions,omitempty"`
+	EvidenceKind          string  `json:"evidenceKind"`
+	Required              bool    `json:"required"`
+	MinimumMedia          int     `json:"minimumMedia"`
+	MaximumMedia          int     `json:"maximumMedia"`
+	DescriptionRequired   bool    `json:"descriptionRequired"`
+	CaptureSourcePolicy   string  `json:"captureSourcePolicy"`
+	ComparisonTarget      string  `json:"comparisonTarget"`
+	ImpossibilityAllowed  bool    `json:"impossibilityAllowed"`
+	EnvironmentIdentityID *string `json:"environmentIdentityId,omitempty"`
+	EnvironmentTypeCode   *string `json:"environmentTypeCode,omitempty"`
+	EnvironmentName       *string `json:"environmentName,omitempty"`
+	Expected              *bool   `json:"expected,omitempty"`
+	AddedDuringCapture    *bool   `json:"addedDuringCapture,omitempty"`
+}
+
+type CaptureReviewHandoff struct {
+	InspectionID    string  `json:"inspectionId"`
+	OriginVersionID *string `json:"originVersionId,omitempty"`
 }
 
 type CloseOriginInvitationInput struct {
@@ -373,24 +407,26 @@ type CreateBusinessUnitInput struct {
 }
 
 type CreateInspectionInput struct {
-	AssetID            string                `json:"assetId"`
-	ParticipantID      string                `json:"participantId"`
-	TemplateID         *string               `json:"templateId,omitempty"`
-	ComparisonMode     CaptureComparisonMode `json:"comparisonMode"`
-	ReferenceVersionID *string               `json:"referenceVersionId,omitempty"`
-	ProjectID          *string               `json:"projectId,omitempty"`
-	StageID            *string               `json:"stageId,omitempty"`
-	DueAt              string                `json:"dueAt"`
-	DeadlineAt         string                `json:"deadlineAt"`
-	ReminderInstants   []string              `json:"reminderInstants"`
-	Reason             string                `json:"reason"`
-	ClientMutationID   string                `json:"clientMutationId"`
+	AssetID              string                `json:"assetId"`
+	ParticipantID        string                `json:"participantId"`
+	TemplateID           *string               `json:"templateId,omitempty"`
+	ComparisonMode       CaptureComparisonMode `json:"comparisonMode"`
+	ReferenceVersionID   *string               `json:"referenceVersionId,omitempty"`
+	ReviewerMembershipID *string               `json:"reviewerMembershipId,omitempty"`
+	ProjectID            *string               `json:"projectId,omitempty"`
+	StageID              *string               `json:"stageId,omitempty"`
+	DueAt                string                `json:"dueAt"`
+	DeadlineAt           string                `json:"deadlineAt"`
+	ReminderInstants     []string              `json:"reminderInstants"`
+	Reason               string                `json:"reason"`
+	ClientMutationID     string                `json:"clientMutationId"`
 }
 
 type CreateMediaUploadInput struct {
 	ContentType      string  `json:"contentType"`
 	SizeBytes        int     `json:"sizeBytes"`
 	Sha256           string  `json:"sha256"`
+	RequirementKey   *string `json:"requirementKey,omitempty"`
 	AttemptID        *string `json:"attemptId,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
 }
@@ -525,11 +561,19 @@ type DecideInventoryItemsInput struct {
 	ClientMutationID string                    `json:"clientMutationId"`
 }
 
-type DeclareCaptureImpossibilityInput struct {
-	RequirementKey   string `json:"requirementKey"`
-	Reason           string `json:"reason"`
-	ExpectedVersion  *int   `json:"expectedVersion,omitempty"`
+type DeclareCaptureEnvironmentInput struct {
+	TypeCode         string `json:"typeCode"`
+	Name             string `json:"name"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type DeclareCaptureImpossibilityInput struct {
+	RequirementKey   string  `json:"requirementKey"`
+	Reason           *string `json:"reason,omitempty"`
+	ReasonCode       *string `json:"reasonCode,omitempty"`
+	ReasonText       *string `json:"reasonText,omitempty"`
+	ExpectedVersion  *int    `json:"expectedVersion,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type DisableMembershipInput struct {
@@ -553,10 +597,13 @@ type ExternalCapture struct {
 	Kind                  string                  `json:"kind"`
 	MediaKind             string                  `json:"mediaKind"`
 	TemplateVersionID     string                  `json:"templateVersionId"`
+	CaptureLayout         *string                 `json:"captureLayout,omitempty"`
 	Reference             map[string]any          `json:"reference"`
 	ReferenceItems        []*CaptureReferenceItem `json:"referenceItems"`
 	Policy                map[string]any          `json:"policy"`
 	Requirements          []*CaptureRequirement   `json:"requirements"`
+	Environments          []*CaptureEnvironment   `json:"environments"`
+	ReviewHandoff         *CaptureReviewHandoff   `json:"reviewHandoff,omitempty"`
 	Answers               []*CaptureAnswer        `json:"answers"`
 	DisclosureVersion     string                  `json:"disclosureVersion"`
 }
@@ -872,10 +919,11 @@ type InviteInternalUserInput struct {
 }
 
 type InviteOriginCaptureInput struct {
-	AssetID          string `json:"assetId"`
-	ParticipantID    string `json:"participantId"`
-	ExpiresAt        string `json:"expiresAt"`
-	ClientMutationID string `json:"clientMutationId"`
+	AssetID              string  `json:"assetId"`
+	ParticipantID        string  `json:"participantId"`
+	ReviewerMembershipID *string `json:"reviewerMembershipId,omitempty"`
+	ExpiresAt            string  `json:"expiresAt"`
+	ClientMutationID     string  `json:"clientMutationId"`
 }
 
 type LLMCallUsage struct {
@@ -1309,6 +1357,7 @@ type PlanInspectionInput struct {
 	TemplateID             string                      `json:"templateId"`
 	ComparisonMode         CaptureComparisonMode       `json:"comparisonMode"`
 	ReferenceVersionID     *string                     `json:"referenceVersionId,omitempty"`
+	ReviewerMembershipID   *string                     `json:"reviewerMembershipId,omitempty"`
 	DueAt                  *string                     `json:"dueAt,omitempty"`
 	StartsAt               *string                     `json:"startsAt,omitempty"`
 	Timezone               *string                     `json:"timezone,omitempty"`
@@ -1558,6 +1607,13 @@ type RecipientNotificationPayload struct {
 	UnreadCount      int                    `json:"unreadCount"`
 	UserErrors       []*UserError           `json:"userErrors"`
 	ClientMutationID string                 `json:"clientMutationId"`
+}
+
+type RecordCaptureQualityWarningInput struct {
+	RequirementKey   string `json:"requirementKey"`
+	Code             string `json:"code"`
+	Ignored          bool   `json:"ignored"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type RecordDeletionRequestInput struct {
@@ -2261,10 +2317,11 @@ type UsageSummary struct {
 }
 
 type UserError struct {
-	Code          string  `json:"code"`
-	Field         *string `json:"field,omitempty"`
-	Message       string  `json:"message"`
-	CorrelationID string  `json:"correlationId"`
+	Code                   string   `json:"code"`
+	Field                  *string  `json:"field,omitempty"`
+	Message                string   `json:"message"`
+	CorrelationID          string   `json:"correlationId"`
+	PendingRequirementKeys []string `json:"pendingRequirementKeys,omitempty"`
 }
 
 type VerifyAdminActivationOtpInput struct {

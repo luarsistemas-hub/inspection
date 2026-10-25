@@ -10,10 +10,10 @@ import (
 )
 
 type Command struct {
-	TenantID, ResponsibilityID          identity.ID
-	AttemptID                           *identity.ID
-	ContentType, SHA256, IdempotencyKey string
-	SizeBytes                           int64
+	TenantID, ResponsibilityID                          identity.ID
+	AttemptID                                           *identity.ID
+	ContentType, SHA256, IdempotencyKey, RequirementKey string
+	SizeBytes                                           int64
 }
 type Dependencies struct {
 	Bus     *mediator.Bus
@@ -29,6 +29,6 @@ func Setup(d Dependencies) error {
 		if command.AttemptID != nil {
 			return d.Service.CreateVideoWithAttempt(ctx, command.TenantID, command.ResponsibilityID, *command.AttemptID, command.ContentType, command.SHA256, command.SizeBytes, command.IdempotencyKey)
 		}
-		return d.Service.CreateWithKey(ctx, command.TenantID, command.ResponsibilityID, command.ContentType, command.SHA256, command.SizeBytes, command.IdempotencyKey)
+		return d.Service.CreateWithRequirement(ctx, command.TenantID, command.ResponsibilityID, command.ContentType, command.SHA256, command.SizeBytes, command.IdempotencyKey, command.RequirementKey)
 	})
 }

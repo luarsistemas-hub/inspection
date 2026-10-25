@@ -61,7 +61,7 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 		if err := tx.Create(&database.CaptureDraft{ID: mainDraft, TenantID: fixture.TenantID, ResponsibilityID: mainResponsibility, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: fixture.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: requirements, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaObject{ID: mainMedia, TenantID: fixture.TenantID, ResponsibilityID: mainResponsibility, ObjectKey: "it237/main.mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "it237-main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.MediaObject{ID: mainMedia, TenantID: fixture.TenantID, ResponsibilityID: mainResponsibility, ObjectKey: "it237/main-" + identity.NewID().String() + ".mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "it237-main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&mainSubmissionRow).Error; err != nil {
@@ -69,7 +69,7 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 		}
 		for _, row := range []any{
 			&database.Responsibility{ID: originResponsibility, TenantID: fixture.TenantID, InspectionID: inspectionID, ParticipantID: fixture.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now},
-			&database.MediaObject{ID: originMedia, TenantID: fixture.TenantID, ResponsibilityID: originResponsibility, ObjectKey: "it237/origin.mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "it237-origin", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now},
+			&database.MediaObject{ID: originMedia, TenantID: fixture.TenantID, ResponsibilityID: originResponsibility, ObjectKey: "it237/origin-" + identity.NewID().String() + ".mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", IdempotencyKey: "it237-origin", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now},
 			&database.VideoSource{ID: identity.NewID(), TenantID: fixture.TenantID, MediaID: originMedia, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 96, Height: 64, FrameRate: 30, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &firstFrameReadyAt, RetentionDays: &originRetentionDays, SourceExpiryAt: &originalExpiredAt, OriginalDeletedAt: &originalExpiredAt, Status: "EXPIRED", CreatedAt: firstFrameReadyAt, UpdatedAt: originalExpiredAt},
 			&database.VideoPreparationJob{ID: originPreparation, TenantID: fixture.TenantID, MediaID: originMedia, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now},
 			&database.VideoPreparationJob{ID: mainPreparation, TenantID: fixture.TenantID, MediaID: mainMedia, SubmissionID: &mainSubmission, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now},
@@ -84,10 +84,10 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 			return err
 		}
 		for _, frame := range []database.VideoFrame{
-			{ID: originFrameA, TenantID: fixture.TenantID, SourceMediaID: originMedia, PreparationID: originPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/origin-a.jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
-			{ID: originFrameB, TenantID: fixture.TenantID, SourceMediaID: originMedia, PreparationID: originPreparation, PTSMicros: 1, SHA256: digest, ObjectKey: "it237/origin-b.jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
-			{ID: mainFrameA, TenantID: fixture.TenantID, SourceMediaID: mainMedia, PreparationID: mainPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/main-a.jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
-			{ID: mainFrameB, TenantID: fixture.TenantID, SourceMediaID: mainMedia, PreparationID: mainPreparation, PTSMicros: 1, SHA256: digest, ObjectKey: "it237/main-b.jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
+			{ID: originFrameA, TenantID: fixture.TenantID, SourceMediaID: originMedia, PreparationID: originPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/origin-a-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
+			{ID: originFrameB, TenantID: fixture.TenantID, SourceMediaID: originMedia, PreparationID: originPreparation, PTSMicros: 1, SHA256: digest, ObjectKey: "it237/origin-b-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
+			{ID: mainFrameA, TenantID: fixture.TenantID, SourceMediaID: mainMedia, PreparationID: mainPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/main-a-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
+			{ID: mainFrameB, TenantID: fixture.TenantID, SourceMediaID: mainMedia, PreparationID: mainPreparation, PTSMicros: 1, SHA256: digest, ObjectKey: "it237/main-b-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now},
 		} {
 			if err := tx.Create(&frame).Error; err != nil {
 				return err
@@ -167,7 +167,7 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 	supplementMedia, supplementSubmission, supplementPreparation := identity.NewID(), identity.NewID(), identity.NewID()
 	supplementFrame := identity.NewID()
 	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Create(&database.MediaObject{ID: supplementMedia, TenantID: fixture.TenantID, ResponsibilityID: created.ResponsibilityID, ObjectKey: "it237/supplement.mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:supplement", IdempotencyKey: "it237-supplement", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.MediaObject{ID: supplementMedia, TenantID: fixture.TenantID, ResponsibilityID: created.ResponsibilityID, ObjectKey: "it237/supplement-" + identity.NewID().String() + ".mp4", ContentType: "video/mp4", SHA256: digest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:supplement", IdempotencyKey: "it237-supplement", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		payload, _ := json.Marshal(map[string]any{"mediaKind": "VIDEO", "mediaId": supplementMedia})
@@ -177,7 +177,7 @@ func TestSupplementalPlanCarriesUnchangedResultIT237(t *testing.T) {
 		if err := tx.Create(&database.VideoPreparationJob{ID: supplementPreparation, TenantID: fixture.TenantID, MediaID: supplementMedia, SubmissionID: &supplementSubmission, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 2, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoFrame{ID: supplementFrame, TenantID: fixture.TenantID, SourceMediaID: supplementMedia, PreparationID: supplementPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/supplement.jpg", Width: 1, Height: 1, Role: "SUPPLEMENT", SizeBytes: 1, CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.VideoFrame{ID: supplementFrame, TenantID: fixture.TenantID, SourceMediaID: supplementMedia, PreparationID: supplementPreparation, PTSMicros: 0, SHA256: digest, ObjectKey: "it237/supplement-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "SUPPLEMENT", SizeBytes: 1, CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: supplementPreparation, FrameID: supplementFrame, EnvironmentCandidate: "bathroom", ComponentLabel: "shower", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error

@@ -169,12 +169,12 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 				return RawEnvelope{}, fmt.Errorf("%w: capture video clip", ErrInvalidEnvelope)
 			}
 		}
-		keys, media := map[string]bool{}, map[identity.ID]bool{}
+		media := map[identity.ID]bool{}
 		for _, clip := range payload.Clips {
-			if keys[clip.RequirementKey] || media[clip.MediaID] {
+			if media[clip.MediaID] {
 				return RawEnvelope{}, fmt.Errorf("%w: duplicate capture video clip", ErrInvalidEnvelope)
 			}
-			keys[clip.RequirementKey], media[clip.MediaID] = true, true
+			media[clip.MediaID] = true
 		}
 	}
 	if valid, ok := inventoryPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {

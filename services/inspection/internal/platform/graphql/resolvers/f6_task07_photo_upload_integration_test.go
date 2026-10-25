@@ -5,6 +5,7 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -79,12 +80,20 @@ func newPhotoUploadFixture(t *testing.T, draftKind string) photoUploadFixture {
 }
 
 func (fx photoUploadFixture) upload(t *testing.T, contentType string, size int64, attemptID *identity.ID, key string) string {
+	return fx.uploadWithRequirement(t, contentType, size, attemptID, "", key)
+}
+
+func (fx photoUploadFixture) uploadWithRequirement(t *testing.T, contentType string, size int64, attemptID *identity.ID, requirementKey, key string) string {
 	t.Helper()
 	attempt := ""
 	if attemptID != nil {
 		attempt = `,attemptId:"` + attemptID.String() + `"`
 	}
-	mutation := `mutation { createMediaUpload(input:{contentType:"` + contentType + `",sizeBytes:` + strconv.FormatInt(size, 10) + `,sha256:"` + strings.Repeat("a", 64) + `"` + attempt + `,clientMutationId:"` + key + `"}) { upload { mediaId } } }`
+	requirement := ""
+	if requirementKey != "" {
+		requirement = `,requirementKey:"` + requirementKey + `"`
+	}
+	mutation := `mutation { createMediaUpload(input:{contentType:"` + contentType + `",sizeBytes:` + strconv.FormatInt(size, 10) + `,sha256:"` + strings.Repeat("a", 64) + `"` + attempt + requirement + `,clientMutationId:"` + key + `"}) { upload { mediaId } } }`
 	return executeCaptureGraphQL(t, fx.server, mutation, fx.seed.TenantID, fx.credentials, true)
 }
 
@@ -97,6 +106,100 @@ func (fx photoUploadFixture) mediaCount(t *testing.T) int64 {
 		t.Fatal(err)
 	}
 	return count
+}
+
+func (fx photoUploadFixture) multipartCount(t *testing.T) int64 {
+	t.Helper()
+	var count int64
+	if err := fx.h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
+		return tx.Table("media.multipart_uploads AS upload").Joins("JOIN media.media_objects AS media ON media.id=upload.media_id AND media.tenant_id=upload.tenant_id").Where("upload.tenant_id=? AND media.responsibility_id=?", fx.seed.TenantID, fx.seed.ResponsibilityID).Count(&count).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return count
+}
+
+func TestIT048EnvironmentPhotoUploadReplayKeepsOneMediaAndMultipart(t *testing.T) {
+	fx := newPhotoUploadFixture(t, "INSPECTION")
+	mediaBefore, multipartBefore := fx.mediaCount(t), fx.multipartCount(t)
+	requirementKey := "env:" + identity.NewID().String()
+	var draft database.CaptureDraft
+	if err := fx.h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, fx.seed.ResponsibilityID).Take(&draft).Error; err != nil {
+			return err
+		}
+		requirements, _ := json.Marshal([]map[string]any{{"key": requirementKey, "evidenceKind": "PHOTO", "required": true, "expected": true, "minimumMedia": 1, "maximumMedia": 20}})
+		return tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, fx.seed.ResponsibilityID).Update("requirements", requirements).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	first := fx.uploadWithRequirement(t, "image/jpeg", 1024, nil, requirementKey, "it048-same")
+	second := fx.uploadWithRequirement(t, "image/jpeg", 1024, nil, requirementKey, "it048-same")
+	if !strings.Contains(first, `"upload":{"mediaId"`) || !strings.Contains(second, `"upload":{"mediaId"`) {
+		t.Fatalf("idempotent upload responses: first=%s second=%s", first, second)
+	}
+	if n := fx.mediaCount(t); n != mediaBefore+1 {
+		t.Fatalf("same clientMutationId created %d media rows, want 1; first=%s second=%s", n, first, second)
+	}
+	if n := fx.multipartCount(t); n != multipartBefore+1 {
+		t.Fatalf("same clientMutationId created %d multipart rows, want 1", n)
+	}
+	different := fx.uploadWithRequirement(t, "image/jpeg", 1024, nil, "env:"+identity.NewID().String(), "it048-same")
+	if !strings.Contains(different, `"code":"CONFLICT"`) {
+		t.Fatalf("replay with another requirement returned %s; want CONFLICT", different)
+	}
+}
+
+func TestIT044InvitationExpiryDuringCaptureRejectsUpload(t *testing.T) {
+	fx := newPhotoUploadFixture(t, "INSPECTION")
+	if err := fx.h.AdminDB.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, fx.seed.ResponsibilityID).Update("expires_at", time.Now().UTC().Add(-time.Minute)).Error; err != nil {
+		t.Fatal(err)
+	}
+	response := fx.upload(t, "image/jpeg", 1024, nil, "it044-expired-invitation")
+	if !strings.Contains(response, `"code":"SESSION_EXPIRED"`) || strings.Contains(response, `"upload":{"mediaId"`) {
+		t.Fatalf("IT-044 expired invitation response=%s", response)
+	}
+}
+
+func TestIT041CreateMediaUploadRejectsTwentyFirstEnvironmentPhoto(t *testing.T) {
+	fx := newPhotoUploadFixture(t, "INSPECTION")
+	requirementKey := "env:" + identity.NewID().String()
+	requirements, _ := json.Marshal([]map[string]any{{"key": requirementKey, "evidenceKind": "PHOTO", "required": true, "expected": true, "minimumMedia": 1, "maximumMedia": 20}})
+	if err := fx.h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, fx.seed.ResponsibilityID).Update("requirements", requirements).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var mediaIDs []string
+	t.Cleanup(func() {
+		for _, mediaID := range mediaIDs {
+			var upload database.MultipartUpload
+			if err := fx.h.AdminDB.Where("media_id=?", mediaID).Take(&upload).Error; err == nil && upload.Status == "UPLOADING" {
+				_ = fx.h.Store.Client.AbortMultipart(context.Background(), fx.h.Store.Bucket, upload.ObjectKey, upload.UploadID)
+			}
+		}
+	})
+	for i := 0; i < 20; i++ {
+		response := fx.uploadWithRequirement(t, "image/jpeg", 1024, nil, requirementKey, fmt.Sprintf("it041-photo-%02d", i+1))
+		if !strings.Contains(response, `"upload":{"mediaId"`) {
+			t.Fatalf("photo %d of 20 was rejected: %s", i+1, response)
+		}
+		marker := `"mediaId":"`
+		position := strings.Index(response, marker)
+		if position < 0 {
+			t.Fatalf("could not read media ID from %s", response)
+		}
+		start := position + len(marker)
+		end := strings.Index(response[start:], `"`)
+		if end < 0 {
+			t.Fatalf("could not read media ID from %s", response)
+		}
+		mediaIDs = append(mediaIDs, response[start:start+end])
+	}
+	response := fx.uploadWithRequirement(t, "image/jpeg", 1024, nil, requirementKey, "it041-photo-21")
+	if !strings.Contains(response, "LIMIT_MEDIA_PER_ENVIRONMENT") || strings.Contains(response, `"upload":{"mediaId"`) {
+		t.Fatalf("21st environment photo response=%s; want LIMIT_MEDIA_PER_ENVIRONMENT", response)
+	}
 }
 
 // forgeVideoAttempt plants an attempt that PHOTO admission would never issue.

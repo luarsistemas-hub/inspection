@@ -5,6 +5,7 @@ package resolvers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,10 +18,14 @@ import (
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
+	inventorycore "inspection/services/inspection/internal/features/inventory/core"
+	inventorydecide "inspection/services/inspection/internal/features/inventory/decide_items"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	"inspection/services/inspection/internal/features/media/configure_video_policy"
 	"inspection/services/inspection/internal/integration/harness"
+	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
@@ -53,6 +58,109 @@ func TestAPI03InternalFailuresIT403(t *testing.T) {
 				t.Fatalf("%s did not hide its internal error and return no success data: %s", operation.name, response)
 			}
 		})
+	}
+}
+
+func TestIT045DisabledVideoAdmissionRejectsEnvironmentClip(t *testing.T) {
+	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	requirementKey := "env:" + identity.NewID().String()
+	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
+		requirements, _ := json.Marshal([]map[string]any{{"key": requirementKey, "evidenceKind": "VIDEO", "required": true, "expected": true, "minimumMedia": 1, "maximumMedia": 3}})
+		return tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).Updates(map[string]any{"requirements": requirements, "media_kind": "VIDEO", "status": "OPEN"}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=?", 1).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	query := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",requirementKey:"` + requirementKey + `",clientMutationId:"it045-env-disabled"}) { attempt { id } } }`
+	response := executeCaptureGraphQL(t, fixture.server, query, fixture.tenantID, fixture.credentials, true)
+	if !strings.Contains(response, `"code":"INTEGRATION_DISABLED"`) || strings.Contains(response, `"attempt":{`) {
+		t.Fatalf("IT-045 disabled admission response=%s", response)
+	}
+}
+
+func TestIT043CanceledInspectionMakesCaptureBootstrapUnavailable(t *testing.T) {
+	fixture := newAPI03FailureFixture(t, "externalCapture")
+	var responsibility database.Responsibility
+	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.responsibilityID).Take(&responsibility).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.tenantID, responsibility.InspectionID).Update("status", "CANCELED").Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response := executeCaptureGraphQL(t, fixture.server, `query { externalCapture { status captureLayout } }`, fixture.tenantID, fixture.credentials, true)
+	if !strings.Contains(response, `"code":"INVALID_STATE"`) || strings.Contains(response, `"externalCapture":{`) {
+		t.Fatalf("IT-043 canceled inspection bootstrap response=%s", response)
+	}
+}
+
+func TestUT134DisabledReviewerKeepsCaptureHandoffButCannotDecideInventory(t *testing.T) {
+	fixture := newAPI03FailureFixture(t, "externalCapture")
+	now := time.Now().UTC()
+	reviewerID := identity.NewID()
+	reviewerIdentityID := identity.NewID()
+	originID, versionID, environmentID, itemID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	var assetID identity.ID
+	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
+		var asset database.Asset
+		if err := tx.Where("tenant_id=?", fixture.tenantID).Take(&asset).Error; err != nil {
+			return err
+		}
+		assetID = asset.ID
+		if err := tx.Create(&database.Membership{ID: reviewerID, TenantID: fixture.tenantID, IdentityID: reviewerIdentityID, Issuer: "ut134", Subject: reviewerID.String(), Role: "EMPLOYEE", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.ResourceScope{ID: identity.NewID(), TenantID: fixture.tenantID, MembershipID: reviewerID, Kind: "ASSET", ResourceID: assetID, CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND id=?", fixture.tenantID, fixture.invitationID).Updates(map[string]any{"reviewer_membership_id": reviewerID, "status": "COMPLETED", "revoked_at": now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND id=?", fixture.tenantID, fixture.sessionID).Update("revoked_at", now).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).Updates(map[string]any{"status": "SUBMITTED", "version": 2}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.tenantID, AssetID: assetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		purpose, draftState := "MOVE_IN", "READY"
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: identity.Ptr(fixture.responsibilityID), Purpose: &purpose, HasInventory: true, DraftState: &draftState, Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "ut134-version", CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.InventoryEnvironment{ID: environmentID, TenantID: fixture.tenantID, OriginVersionID: versionID, IdentityID: identity.NewID(), TypeCode: "BEDROOM", Name: "Quarto", Expected: true, Decision: "ACCEPTED", Position: 1, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.InventoryItem{ID: itemID, TenantID: fixture.tenantID, OriginVersionID: versionID, EnvironmentID: environmentID, IdentityID: identity.NewID(), TypeCode: "BED", Name: "Cama", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.Membership{}).Where("tenant_id=? AND id=?", fixture.tenantID, reviewerID).Update("status", "DISABLED").Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response := executeCaptureGraphQL(t, fixture.server, `query { externalCapture { reviewHandoff { inspectionId originVersionId } } }`, fixture.tenantID, fixture.credentials, true)
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"reviewHandoff":{"inspectionId":"`) || !strings.Contains(response, `"originVersionId":"`+versionID.String()+`"`) {
+		t.Fatalf("UT-122 completed capture did not return its draft handoff: %s", response)
+	}
+	if err := inventorydecide.Setup(fixture.bus, inventorycore.Service{DB: fixture.harness.DB, Within: fixture.harness.WithinTenant}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.tenantID, Principal: requestctx.Principal{IdentityID: reviewerIdentityID, MembershipID: reviewerID, TenantID: fixture.tenantID, Roles: []string{auth.Employee}, Scopes: []requestctx.Scope{{Kind: "ASSET", ID: assetID}}}})
+	resolver := &Resolver{DB: fixture.harness.DB, Bus: fixture.bus, Authorizer: auth.Authorizer{Store: auth.GORMMembershipStore{DB: fixture.harness.DB}}}
+	payload, err := resolver.Mutation().DecideInventoryItems(ctx, graph.DecideInventoryItemsInput{OriginVersionID: versionID.String(), Decisions: []*graph.InventoryDecisionInput{{ItemID: itemID.String(), Action: "ACCEPT", ExpectedVersion: 1}}, ClientMutationID: "ut134-disabled-reviewer"})
+	if err != nil {
+		var appErr *apperror.Error
+		if errors.As(err, &appErr) && appErr.Code == apperror.Forbidden {
+			return
+		}
+		t.Fatalf("decideInventoryItems top-level error=%v", err)
+	}
+	if payload == nil || len(payload.UserErrors) != 1 || payload.UserErrors[0].Code != string(apperror.Forbidden) {
+		t.Fatalf("decideInventoryItems as disabled reviewer=%+v, want FORBIDDEN", payload)
 	}
 }
 

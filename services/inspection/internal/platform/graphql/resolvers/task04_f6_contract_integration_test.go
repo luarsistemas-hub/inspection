@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestVV_IT_078CreateVideoInspectionRejectsForeignAssetAndPhotoOrigins(t *testing.T) {
+func TestCreateVideoInspectionRejectsForeignAssetAndPhotoOrigins(t *testing.T) {
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
 	}
@@ -30,7 +30,7 @@ func TestVV_IT_078CreateVideoInspectionRejectsForeignAssetAndPhotoOrigins(t *tes
 			t.Fatal(err)
 		}
 		response := executeFixedOriginEntryWithReference(t, fx, "createInspection", "VV-IT-078-PHOTO", photoVersion.ID.String())
-		assertFixedOriginInvalidInput(t, response)
+		assertFixedOriginCatalogOriginFirst(t, response)
 	})
 	t.Run("origin from asset Y", func(t *testing.T) {
 		fx := newFixedOriginGraphQLFixture(t, false)

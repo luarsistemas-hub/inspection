@@ -142,6 +142,19 @@ func queue(ctx context.Context, within func(context.Context, identity.ID, func(*
 		if err := tx.WithContext(ctx).Create(&newPlan).Error; err != nil {
 			return err
 		}
+		var preparations []database.VideoPlanPreparation
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND role IN ?", command.TenantID, active.ID, []string{"MAIN", "SUPPLEMENT"}).Order("role,created_at,preparation_id").Find(&preparations).Error; err != nil {
+			return err
+		}
+		for i := range preparations {
+			preparations[i].PlanID = newPlan.ID
+			preparations[i].CreatedAt = createdAt
+		}
+		if len(preparations) > 0 {
+			if err := tx.WithContext(ctx).Create(&preparations).Error; err != nil {
+				return err
+			}
+		}
 		if meta.Principal.IdentityID != (identity.ID{}) {
 			audit := database.AuditEvent{ID: identity.NewID(), TenantID: command.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.inspection_reanalyzed", TargetType: "inspection", TargetID: inspection.ID.String(), Outcome: "ACCEPTED", CorrelationID: meta.CorrelationID, OccurredAt: createdAt}
 			if err := tx.WithContext(ctx).Create(&audit).Error; err != nil {

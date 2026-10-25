@@ -227,8 +227,9 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 	if err := Validate(snapshot); err != nil {
 		return nil, err
 	}
+	originalScopeStatements := append([]string(nil), snapshot.ScopeStatements...)
 	snapshot = LocalizeVideoPresentation(snapshot)
-	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p>{{if .Snapshot.ScopeStatements}}<h2>Escopo da análise</h2><ul>{{range .Snapshot.ScopeStatements}}<li>{{.}}</li>{{end}}</ul>{{end}}<h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p><p class="muted">{{analysisMode .AnalysisMode}} · {{analysisStatus .AnalysisStatus}}{{if .HasNoRelevantChange}} · {{noRelevantChange .NoRelevantChange}}{{end}}</p>{{if .Coverage}}<p class="muted">{{.Coverage}}</p>{{end}}<div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{category .Category}} · {{.Title}}</strong><p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
+	const source = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;color:#172033;margin:32px}h1{margin-bottom:4px}.muted{color:#526078}.badge{display:inline-block;padding:4px 8px;background:#e8edf8;border-radius:999px}.requirement{break-inside:avoid;margin:24px 0}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.evidence{border:1px solid #d7deea;padding:8px}.evidence img{width:100%;max-height:260px;object-fit:contain}.marker{padding:32px 12px;background:#f2f4f8;color:#526078;text-align:center}.finding{border-left:3px solid #516fc4;padding-left:10px;margin:10px 0}</style></head><body><h1>{{if .Internal}}Laudo interno de vistoria{{else}}Laudo de vistoria{{end}}</h1><p class="muted">{{.Snapshot.Context.Asset.Name}} · {{.Snapshot.Context.Asset.Address}}</p><p>Responsável: {{.Snapshot.Context.Participant.Name}} · Modelo: {{.Snapshot.Context.Template.Name}}</p><p><span class="badge">{{classification .Snapshot.Classification}}</span> · {{mode .Snapshot.Mode}}</p><p>{{.Snapshot.Advisory}}</p>{{if .Snapshot.ScopeStatements}}<h2>Escopo da análise</h2><ul>{{range $index, $statement := .Snapshot.ScopeStatements}}<li data-source-statement="{{index $.OriginalScopeStatements $index}}">{{$statement}}</li>{{end}}</ul>{{end}}<h2>Motivos</h2><ul>{{range .Snapshot.ReasonCodes}}<li>{{reason .}}</li>{{end}}</ul><h2>Evidências</h2>{{range .EvidenceGroups}}<section class="requirement"><h3>{{.Label}}</h3><p class="muted">{{.Instructions}}</p><p class="muted">{{analysisMode .AnalysisMode}} · {{analysisStatus .AnalysisStatus}}{{if .HasNoRelevantChange}} · {{noRelevantChange .NoRelevantChange}}{{end}}</p>{{if .Coverage}}<p class="muted">{{.Coverage}}</p>{{end}}<div class="gallery">{{range .Evidence}}<figure class="evidence" data-evidence-id="{{.ID}}">{{if available .ID}}<img src="{{assetName .ID}}" alt="{{.Role}} · {{.Description}}">{{else}}<div class="marker">Imagem indisponível</div>{{end}}<figcaption><strong>{{evidenceRole .Role}}</strong>{{if .Description}} · {{.Description}}{{end}}{{if .CapturedAt}} · {{.CapturedAt}}{{end}}{{range .Flags}} · {{flag .}}{{end}}</figcaption></figure>{{end}}</div></section>{{end}}{{if .Internal}}<h2>Constatações</h2>{{if .Snapshot.Findings}}{{range .Snapshot.Findings}}<section class="finding"><strong>{{category .Category}} · {{.Title}}</strong><p>{{.Description}}</p><p>Severidade: {{severity .Severity}} · Confiança: {{.Confidence}} · Ação recomendada: {{action .RecommendedAction}}</p></section>{{end}}{{else}}<p>{{noFindings .Snapshot}}</p>{{end}}{{end}}</body></html>`
 	t, err := template.New("report").Funcs(template.FuncMap{
 		"classification": presentClassification, "mode": presentMode, "reason": presentReason,
 		"requirement": presentRequirement, "captureSource": presentCaptureSource, "flag": presentFlag, "severity": presentSeverity, "action": presentAction,
@@ -239,7 +240,7 @@ func HTMLForPDF(snapshot Snapshot, availability map[string]bool, internal bool) 
 		return nil, err
 	}
 	var rendered strings.Builder
-	if err := t.Execute(&rendered, htmlModel{Snapshot: snapshot, EvidenceGroups: groupEvidence(snapshot), Internal: internal}); err != nil {
+	if err := t.Execute(&rendered, htmlModel{Snapshot: snapshot, OriginalScopeStatements: originalScopeStatements, EvidenceGroups: groupEvidence(snapshot), Internal: internal}); err != nil {
 		return nil, err
 	}
 	return []byte(rendered.String()), nil
@@ -252,9 +253,10 @@ type evidenceGroup struct {
 	Evidence                                                    []Evidence
 }
 type htmlModel struct {
-	Snapshot       Snapshot
-	EvidenceGroups []evidenceGroup
-	Internal       bool
+	Snapshot                Snapshot
+	OriginalScopeStatements []string
+	EvidenceGroups          []evidenceGroup
+	Internal                bool
 }
 
 func groupEvidence(snapshot Snapshot) []evidenceGroup {

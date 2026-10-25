@@ -49,6 +49,19 @@ func TestLifecycleOutcomesIT106IT127IT129IT551ToIT554(t *testing.T) {
 	if err := db.Model(&database.OutboxIntent{}).Where("type='origin.invitation_requested.v1'").Count(&invitations).Error; err != nil || invitations != 1 {
 		t.Fatalf("invitation outcome count=%d err=%v", invitations, err)
 	}
+	var invitationEvent database.OutboxIntent
+	if err := db.Where("type='origin.invitation_requested.v1'").Take(&invitationEvent).Error; err != nil {
+		t.Fatal(err)
+	}
+	var invitationEnvelope struct {
+		Payload map[string]json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(invitationEvent.Payload, &invitationEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := invitationEnvelope.Payload["reviewerMembershipId"]; exists {
+		t.Fatal("v1 invitation request added a null reviewerMembershipId")
+	}
 
 	now := time.Now().UTC()
 	plan := database.ReminderPlan{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, RemindAt: now.Add(time.Hour), Status: "PLANNED", CreatedAt: now}

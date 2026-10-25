@@ -121,7 +121,7 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 		}
 		var old database.Invitation
 		hasOld := true
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", in.TenantID, in.ResponsibilityID).Order("created_at desc").First(&old).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", in.TenantID, in.ResponsibilityID).Order("created_at desc,id desc").First(&old).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 			hasOld = false
 		} else if err != nil {
 			return err
@@ -174,7 +174,11 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 			return err
 		}
 		hash := security.HashToken(token)
-		invitation := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: in.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: deliveryIntents, IdempotencyKey: in.IdempotencyKey, Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
+		var reviewerMembershipID *identity.ID
+		if hasOld {
+			reviewerMembershipID = old.ReviewerMembershipID
+		}
+		invitation := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: in.ResponsibilityID, ReviewerMembershipID: reviewerMembershipID, TokenHash: hash[:], DeliveryIntents: deliveryIntents, IdempotencyKey: in.IdempotencyKey, Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
 		if err := tx.Create(&invitation).Error; err != nil {
 			return err
 		}

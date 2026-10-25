@@ -297,10 +297,23 @@ func CanonicalJSON(value any) ([]byte, string, error) {
 }
 
 func ValidateCapacity(assets, inspections, activePhotos int, originalBytes int64) error {
-	if assets > MaxAssetsPerTenant || inspections > MaxInspections || activePhotos > MaxActivePhotos || originalBytes > MaxOriginalBytes {
+	return ValidateCaptureCapacity(LegacySchemaVersion, assets, inspections, activePhotos, originalBytes)
+}
+
+// ValidateCaptureCapacity applies the media-count cap frozen by the template schema.
+func ValidateCaptureCapacity(schemaVersion, assets, inspections, activePhotos int, originalBytes int64) error {
+	if assets > MaxAssetsPerTenant || inspections > MaxInspections || activePhotos > MaxInspectionPhotosForSchema(schemaVersion) || originalBytes > MaxOriginalBytes {
 		return fmt.Errorf("confirmed platform capacity exceeded")
 	}
 	return nil
+}
+
+// MaxInspectionPhotosForSchema returns the aggregate photo cap for a template schema.
+func MaxInspectionPhotosForSchema(schemaVersion int) int {
+	if schemaVersion >= EnvironmentSchemaVersion {
+		return MaxEnvironmentInspectionPhotos
+	}
+	return MaxActivePhotos
 }
 
 type StorageMeter struct{ Bytes int64 }

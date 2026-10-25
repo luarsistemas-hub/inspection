@@ -28,7 +28,7 @@ func videoUploadDB(t *testing.T) (*gorm.DB, func(context.Context, identity.ID, f
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	for _, schema := range []string{"capture", "media", "inspections"} {
+	for _, schema := range []string{"capture", "media", "inspections", "templates"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +36,7 @@ func videoUploadDB(t *testing.T) (*gorm.DB, func(context.Context, identity.ID, f
 	if err := db.Exec("CREATE TABLE inspections.responsibilities (id TEXT PRIMARY KEY, tenant_id TEXT, status TEXT)").Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, model := range []any{&database.VideoAttempt{}, &database.CaptureDraft{}, &database.MediaObject{}, &database.MultipartUpload{}} {
+	for _, model := range []any{&database.VideoAttempt{}, &database.CaptureDraft{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.TemplateVersion{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
@@ -90,7 +90,7 @@ func TestVideoUploadReplayWithChangedHashConflictsUT018(t *testing.T) {
 	}
 }
 
-func TestIT012PhotoUploadRequiresPhotoDraft(t *testing.T) {
+func TestVideoUploadRequiresVideoDraft(t *testing.T) {
 	t.Run("rejects VIDEO draft before replay or object store", func(t *testing.T) {
 		db, within := videoUploadDB(t)
 		tenant, responsibility := identity.NewID(), identity.NewID()
@@ -168,7 +168,7 @@ func TestPhotoUploadReplayAfterDraftSubmittedReturnsExistingUpload(t *testing.T)
 	}
 }
 
-func TestVideoUploadRejectsPhotoDraftIT012(t *testing.T) {
+func TestVideoUploadRejectsPhotoDraft(t *testing.T) {
 	db, within := videoUploadDB(t)
 	tenant, responsibility, attemptID := identity.NewID(), identity.NewID(), identity.NewID()
 	now := time.Now().UTC()

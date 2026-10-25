@@ -54,7 +54,7 @@ func TestSensitiveVideoFalsePositiveAtomicallyResumesSubmittedInspection(t *test
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.Responsibility{}, &database.Inspection{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.VideoPlan{}} {
+	for _, model := range []any{&database.Responsibility{}, &database.Inspection{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.VideoPlan{}, &database.VideoPlanPreparation{}} {
 		if err := f.db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestSensitiveVideoFalsePositiveUnavailableSourceLeavesReviewUnchanged(t *te
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.Responsibility{}, &database.Inspection{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.VideoPlan{}} {
+	for _, model := range []any{&database.Responsibility{}, &database.Inspection{}, &database.VideoSource{}, &database.VideoPreparationJob{}, &database.VideoPlan{}, &database.VideoPlanPreparation{}} {
 		if err := f.db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}

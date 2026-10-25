@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -286,6 +287,12 @@ func (d Dependencies) load(ctx context.Context, query Query) ([]Item, error) {
 			selectedScopes := make([]videoScope, 0, len(pinned.Scope))
 			if requirement.Key == "video:main" && requirement.EvidenceKind == "VIDEO" {
 				selectedScopes = append(selectedScopes, pinned.Scope...)
+			} else if strings.HasPrefix(requirement.Key, "env:") {
+				for _, scope := range pinned.Scope {
+					if requirement.EnvironmentName != "" && strings.EqualFold(strings.TrimSpace(scope.EnvironmentCandidate), strings.TrimSpace(requirement.EnvironmentName)) {
+						selectedScopes = append(selectedScopes, scope)
+					}
+				}
 			} else if len(requirement.Key) > len("video:") && requirement.Key[:len("video:")] == "video:" {
 				scopeID, _ := identity.ParseID(requirement.Key[len("video:"):])
 				if scope, found := scopeByID[scopeID]; found {

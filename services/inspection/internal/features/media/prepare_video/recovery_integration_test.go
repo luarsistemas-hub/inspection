@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,6 +152,28 @@ func TestVV_IT_172FrameBankStorePutFailureRemainsRetryable(t *testing.T) {
 type failFramePutStoreIT172 struct {
 	objectstore.Client
 	failed bool
+}
+
+type failNthFramePutIT013 struct {
+	objectstore.Client
+	failed    bool
+	framePuts int
+	failAt    int
+}
+
+func (s *failNthFramePutIT013) Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error {
+	if strings.HasPrefix(key, "video-frames/") {
+		s.framePuts++
+		if !s.failed && s.framePuts == s.failAt {
+			s.failed = true
+			return errors.New("injected transient frame upload failure")
+		}
+	}
+	return s.Client.Put(ctx, bucket, key, body, size, contentType)
+}
+
+func (s *failNthFramePutIT013) Delete(ctx context.Context, bucket, key string) error {
+	return s.Client.(objectstore.Deleter).Delete(ctx, bucket, key)
 }
 
 func (s *failFramePutStoreIT172) Put(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error {

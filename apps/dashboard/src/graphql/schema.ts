@@ -202,6 +202,7 @@ export type BeginVideoCaptureInput = {
   acquisitionSource: Scalars['String']['input'];
   clientMutationId: Scalars['String']['input'];
   replacesMediaId: InputMaybe<Scalars['ID']['input']>;
+  requirementKey: InputMaybe<Scalars['String']['input']>;
 };
 
 export type BulkAcceptInventoryEnvironmentInput = {
@@ -258,6 +259,25 @@ export type CaptureComparisonMode =
   | 'CHECKLIST_ONLY'
   | 'FIXED_ORIGIN';
 
+export type CaptureEnvironment = {
+  __typename?: 'CaptureEnvironment';
+  addedDuringCapture: Scalars['Boolean']['output'];
+  expected: Scalars['Boolean']['output'];
+  identityId: Scalars['ID']['output'];
+  mediaCount: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+  requirementKey: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+};
+
+export type CaptureEnvironmentPayload = {
+  __typename?: 'CaptureEnvironmentPayload';
+  clientMutationId: Scalars['String']['output'];
+  environment: Maybe<CaptureEnvironment>;
+  userErrors: Array<UserError>;
+};
+
 export type CaptureGpsInput = {
   accuracyMeters: Scalars['Float']['input'];
   capturedAt: Scalars['String']['input'];
@@ -270,6 +290,13 @@ export type CapturePayload = {
   __typename?: 'CapturePayload';
   clientMutationId: Scalars['String']['output'];
   status: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type CaptureQualityWarningPayload = {
+  __typename?: 'CaptureQualityWarningPayload';
+  clientMutationId: Scalars['String']['output'];
+  flags: Array<Scalars['String']['output']>;
   userErrors: Array<UserError>;
 };
 
@@ -294,10 +321,15 @@ export type CaptureReferenceItem = {
 
 export type CaptureRequirement = {
   __typename?: 'CaptureRequirement';
+  addedDuringCapture: Maybe<Scalars['Boolean']['output']>;
   captureSourcePolicy: Scalars['String']['output'];
   comparisonTarget: Scalars['String']['output'];
   descriptionRequired: Scalars['Boolean']['output'];
+  environmentIdentityId: Maybe<Scalars['ID']['output']>;
+  environmentName: Maybe<Scalars['String']['output']>;
+  environmentTypeCode: Maybe<Scalars['String']['output']>;
   evidenceKind: Scalars['String']['output'];
+  expected: Maybe<Scalars['Boolean']['output']>;
   impossibilityAllowed: Scalars['Boolean']['output'];
   instructions: Maybe<Scalars['String']['output']>;
   key: Scalars['String']['output'];
@@ -306,6 +338,12 @@ export type CaptureRequirement = {
   minimumMedia: Scalars['Int']['output'];
   required: Scalars['Boolean']['output'];
   section: Scalars['String']['output'];
+};
+
+export type CaptureReviewHandoff = {
+  __typename?: 'CaptureReviewHandoff';
+  inspectionId: Scalars['ID']['output'];
+  originVersionId: Maybe<Scalars['ID']['output']>;
 };
 
 export type CloseOriginInvitationInput = {
@@ -414,6 +452,7 @@ export type CreateInspectionInput = {
   reason: Scalars['String']['input'];
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: Array<Scalars['String']['input']>;
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
   stageId: InputMaybe<Scalars['ID']['input']>;
   templateId: InputMaybe<Scalars['ID']['input']>;
 };
@@ -422,6 +461,7 @@ export type CreateMediaUploadInput = {
   attemptId: InputMaybe<Scalars['ID']['input']>;
   clientMutationId: Scalars['String']['input'];
   contentType: Scalars['String']['input'];
+  requirementKey: InputMaybe<Scalars['String']['input']>;
   sha256: Scalars['String']['input'];
   sizeBytes: Scalars['Int']['input'];
 };
@@ -565,10 +605,18 @@ export type DecideInventoryItemsInput = {
   originVersionId: Scalars['ID']['input'];
 };
 
+export type DeclareCaptureEnvironmentInput = {
+  clientMutationId: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+  typeCode: Scalars['String']['input'];
+};
+
 export type DeclareCaptureImpossibilityInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  reason: Scalars['String']['input'];
+  reason: InputMaybe<Scalars['String']['input']>;
+  reasonCode: InputMaybe<Scalars['String']['input']>;
+  reasonText: InputMaybe<Scalars['String']['input']>;
   requirementKey: Scalars['String']['input'];
 };
 
@@ -590,8 +638,10 @@ export type EvidenceMode =
 export type ExternalCapture = {
   __typename?: 'ExternalCapture';
   answers: Array<CaptureAnswer>;
+  captureLayout: Maybe<Scalars['String']['output']>;
   confirmationOnly: Scalars['Boolean']['output'];
   disclosureVersion: Scalars['String']['output'];
+  environments: Array<CaptureEnvironment>;
   kind: Scalars['String']['output'];
   mediaKind: Scalars['String']['output'];
   policy: Scalars['JSON']['output'];
@@ -602,6 +652,7 @@ export type ExternalCapture = {
   replacementDeadlineAt: Maybe<Scalars['String']['output']>;
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
+  reviewHandoff: Maybe<CaptureReviewHandoff>;
   status: Scalars['String']['output'];
   templateVersionId: Scalars['ID']['output'];
 };
@@ -955,6 +1006,7 @@ export type InviteOriginCaptureInput = {
   clientMutationId: Scalars['String']['input'];
   expiresAt: Scalars['String']['input'];
   participantId: Scalars['ID']['input'];
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type LlmCallState =
@@ -1169,6 +1221,7 @@ export type Mutation = {
   createSchedule: SchedulePayload;
   createTenant: CreateTenantPayload;
   decideInventoryItems: InventoryItemsPayload;
+  declareCaptureEnvironment: CaptureEnvironmentPayload;
   declareCaptureImpossibility: CapturePayload;
   declareSensitiveDetectionFalsePositive: MediaPayload;
   disableMembership: MembershipPayload;
@@ -1188,6 +1241,7 @@ export type Mutation = {
   publishSegmentDefinition: SegmentDefinitionPayload;
   publishTemplateVersion: TemplatePayload;
   reanalyzeVideoInspection: ReanalyzeVideoInspectionPayload;
+  recordCaptureQualityWarning: CaptureQualityWarningPayload;
   recordDeletionRequest: RetentionMutationPayload;
   registerAsset: AssetPayload;
   releaseLegalHold: RetentionMutationPayload;
@@ -1400,6 +1454,11 @@ export type MutationDecideInventoryItemsArgs = {
 };
 
 
+export type MutationDeclareCaptureEnvironmentArgs = {
+  input: DeclareCaptureEnvironmentInput;
+};
+
+
 export type MutationDeclareCaptureImpossibilityArgs = {
   input: DeclareCaptureImpossibilityInput;
 };
@@ -1492,6 +1551,11 @@ export type MutationPublishTemplateVersionArgs = {
 
 export type MutationReanalyzeVideoInspectionArgs = {
   input: ReanalyzeVideoInspectionInput;
+};
+
+
+export type MutationRecordCaptureQualityWarningArgs = {
+  input: RecordCaptureQualityWarningInput;
 };
 
 
@@ -1908,6 +1972,7 @@ export type OriginVersion = {
   limitedCoverage: Scalars['Boolean']['output'];
   mediaKind: Scalars['String']['output'];
   originId: Scalars['ID']['output'];
+  originRevision: Scalars['Int']['output'];
   preparationStatus: Maybe<Scalars['String']['output']>;
   purpose: Maybe<Scalars['String']['output']>;
   scopeManifestDigest: Maybe<Scalars['String']['output']>;
@@ -2002,6 +2067,7 @@ export type PlanInspectionInput = {
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: InputMaybe<Array<Scalars['String']['input']>>;
   reminderOffsetsMinutes: InputMaybe<Array<Scalars['Int']['input']>>;
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
   rrule: InputMaybe<Scalars['String']['input']>;
   stageId: InputMaybe<Scalars['ID']['input']>;
   stages: InputMaybe<Array<PlannedProjectStageInput>>;
@@ -2637,6 +2703,13 @@ export type RecipientNotificationPayload = {
   notification: Maybe<RecipientNotification>;
   unreadCount: Scalars['Int']['output'];
   userErrors: Array<UserError>;
+};
+
+export type RecordCaptureQualityWarningInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+  ignored: Scalars['Boolean']['input'];
+  requirementKey: Scalars['String']['input'];
 };
 
 export type RecordDeletionRequestInput = {
@@ -3428,6 +3501,7 @@ export type UserError = {
   correlationId: Scalars['String']['output'];
   field: Maybe<Scalars['String']['output']>;
   message: Scalars['String']['output'];
+  pendingRequirementKeys: Maybe<Array<Scalars['String']['output']>>;
 };
 
 export type VerifyAdminActivationOtpInput = {

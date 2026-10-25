@@ -34,6 +34,7 @@ type Task06FixtureOptions struct {
 	InspectionStatus string
 	RequirementKey   string
 	ComparisonMode   string
+	SchemaVersion    int
 }
 
 // VideoOriginFixture is a ready, active VIDEO origin with retained frame scope.
@@ -120,6 +121,9 @@ func (o Task06FixtureOptions) normalized() Task06FixtureOptions {
 	if o.ComparisonMode == "" {
 		o.ComparisonMode = "FIXED_ORIGIN"
 	}
+	if o.SchemaVersion == 0 {
+		o.SchemaVersion = 1
+	}
 	return o
 }
 
@@ -189,7 +193,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.Template{ID: f.TemplateID, TenantID: f.TenantID, Key: "task06-template", Name: "Task 06 template", SegmentVersionID: f.SegmentVersionID, ActiveVersionID: &f.TemplateVersionID, Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.TemplateVersion{ID: f.TemplateVersionID, TenantID: f.TenantID, TemplateID: f.TemplateID, VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "task06-template", PublishedAt: createdAt, CreatedBy: f.IdentityID}).Error; err != nil {
+		if err := tx.Create(&database.TemplateVersion{ID: f.TemplateVersionID, TenantID: f.TenantID, TemplateID: f.TemplateID, VersionNumber: 1, SchemaVersion: options.SchemaVersion, DefinitionJSON: templateJSON, CanonicalDigest: digest(templateJSON), Status: "ACTIVE", IdempotencyKey: "task06-template", PublishedAt: createdAt, CreatedBy: f.IdentityID}).Error; err != nil {
 			return err
 		}
 		promptJSON, promptDigest, err := analysisprompt.Canonicalize(analysisprompt.DefaultDefinition())

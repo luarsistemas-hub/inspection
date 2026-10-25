@@ -62,6 +62,13 @@ func TestEmptyBlackVideoOriginScopeRequiresReplacementIT050(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The integration database is shared across packages. Make this fixture the
+	// oldest due job so RunDue cannot pick up an unrelated queued preparation.
+	if err := h.AdminDB.WithContext(ctx).Model(&database.VideoPreparationJob{}).
+		Where("tenant_id=? AND id=?", fixture.tenantID, fixture.preparationID).
+		Update("next_attempt_at", time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)).Error; err != nil {
+		t.Fatal(err)
+	}
 	worked, err := executor.RunDue(ctx)
 	if err != nil || !worked {
 		t.Fatalf("prepare black origin: worked=%t err=%v", worked, err)

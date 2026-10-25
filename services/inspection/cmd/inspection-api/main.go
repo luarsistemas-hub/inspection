@@ -34,8 +34,10 @@ import (
 	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	capturedeclareenvironment "inspection/services/inspection/internal/features/capture/declare_environment"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
 	capturefinalize "inspection/services/inspection/internal/features/capture/finalize_submission"
+	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
@@ -472,6 +474,12 @@ func run() error {
 		func() error { return capturesave.Setup(capturesave.Dependencies{Bus: bus, Service: captureService}) },
 		func() error {
 			return capturedeclare.Setup(capturedeclare.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturedeclareenvironment.Setup(capturedeclareenvironment.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturequalitywarning.Setup(capturequalitywarning.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error {
 			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})

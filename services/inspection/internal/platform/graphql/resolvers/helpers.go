@@ -106,7 +106,12 @@ func userErrorFrom(err error) *graphql1.UserError {
 	if field != "" {
 		fieldValue = &field
 	}
-	return &graphql1.UserError{Code: string(code), Field: fieldValue, Message: message}
+	userError := &graphql1.UserError{Code: string(code), Field: fieldValue, Message: message}
+	var pending interface{ PendingRequirementKeys() []string }
+	if errors.As(err, &pending) {
+		userError.PendingRequirementKeys = pending.PendingRequirementKeys()
+	}
+	return userError
 }
 
 func maskEmail(value string) string {
@@ -344,6 +349,8 @@ func optionalString(value string) *string {
 	}
 	return &value
 }
+
+func boolPointer(value bool) *bool { return &value }
 
 func mapParticipant(view participantcore.ParticipantView) *graphql1.Participant {
 	contacts := make([]*graphql1.ParticipantContact, 0, len(view.Contacts))

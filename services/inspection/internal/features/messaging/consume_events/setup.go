@@ -70,19 +70,24 @@ func HandleLifecycleEvent(_ context.Context, tx *gorm.DB, envelope events.RawEnv
 	switch envelope.Type {
 	case "inspection.created.v1":
 		var payload struct {
-			InspectionID     identity.ID `json:"inspectionId"`
-			ResponsibilityID identity.ID `json:"responsibilityId"`
-			ParticipantID    identity.ID `json:"participantId"`
+			InspectionID         identity.ID  `json:"inspectionId"`
+			ResponsibilityID     identity.ID  `json:"responsibilityId"`
+			ParticipantID        identity.ID  `json:"participantId"`
+			ReviewerMembershipID *identity.ID `json:"reviewerMembershipId"`
 		}
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.InspectionID == (identity.ID{}) || payload.ResponsibilityID == (identity.ID{}) || payload.ParticipantID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
 		eventID := uuid.NewSHA1(envelope.ID, []byte("origin.invitation_requested.v1"))
+		requestPayload := map[string]any{"inspectionId": payload.InspectionID, "responsibilityId": payload.ResponsibilityID, "participantId": payload.ParticipantID}
+		if payload.ReviewerMembershipID != nil {
+			requestPayload["reviewerMembershipId"] = *payload.ReviewerMembershipID
+		}
 		body, _ := json.Marshal(events.Envelope[map[string]any]{
 			ID: eventID, Type: "origin.invitation_requested.v1", SchemaVersion: 1,
 			OccurredAt: time.Now().UTC(), TenantID: envelope.TenantID, AggregateID: payload.InspectionID,
 			CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(),
-			Payload: map[string]any{"inspectionId": payload.InspectionID, "responsibilityId": payload.ResponsibilityID, "participantId": payload.ParticipantID},
+			Payload: requestPayload,
 		})
 		now := time.Now().UTC()
 		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&database.OutboxIntent{ID: eventID, TenantID: envelope.TenantID, Type: "origin.invitation_requested.v1", SchemaVersion: 1, Payload: body, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Status: "PENDING", NextAttemptAt: now, CreatedAt: now}).Error

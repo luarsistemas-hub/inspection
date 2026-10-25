@@ -1,23 +1,30 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	inventoryvocabulary "inspection/services/inspection/internal/features/inventory/vocabulary"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"inspection/services/inspection/internal/platform/video"
 
+	"golang.org/x/text/unicode/norm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -34,8 +41,23 @@ type SubmissionFinalizer interface {
 	Finalize(context.Context, *gorm.DB, database.CaptureDraft, database.SubmissionVersion) error
 }
 
+// decodeRequirements treats the v1 template-definition payload as an empty
+// legacy requirement list and decodes v2 capture requirement arrays.
+func decodeRequirements(raw json.RawMessage) ([]Requirement, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil, nil
+	}
+	var requirements []Requirement
+	if err := json.Unmarshal(trimmed, &requirements); err != nil {
+		return nil, err
+	}
+	return requirements, nil
+}
+
 type Bootstrap struct {
 	Draft            database.CaptureDraft
+	SchemaVersion    int
 	Requirements     []Requirement
 	Answers          []database.RequirementAnswer
 	ConfirmationOnly bool
@@ -52,11 +74,38 @@ type MetadataInput struct {
 	ExpectedVersion                            int64
 }
 
+// DeclareEnvironmentInput names one additional environment in a v2 capture.
+type DeclareEnvironmentInput struct {
+	TenantID, ResponsibilityID identity.ID
+	TypeCode, Name             string
+	ClientMutationID           string
+}
+
+// RecordQualityWarningInput records a non-blocking client-side quality result.
+type RecordQualityWarningInput struct {
+	TenantID, ResponsibilityID identity.ID
+	RequirementKey, Code       string
+	Ignored                    bool
+}
+
 func (s Service) Load(ctx context.Context, tenantID, responsibilityID identity.ID) (Bootstrap, error) {
 	var result Bootstrap
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).First(&result.Draft).Error; err != nil {
 			return apperror.New(apperror.NotFound, "responsibility", "capture responsibility not found")
+		}
+		if result.Draft.Kind == "INSPECTION" && result.Draft.TemplateVersionID != (identity.ID{}) {
+			var responsibility database.Responsibility
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).Take(&responsibility).Error; err != nil {
+				return err
+			}
+			var inspection database.Inspection
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil {
+				return err
+			}
+			if responsibility.Status == "CANCELED" || responsibility.Status == "REVOKED" || inspection.Status == "CANCELED" || inspection.Status == "INVALIDATED" {
+				return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+			}
 		}
 		if result.Draft.Status == "SUBMITTED" {
 			result.ConfirmationOnly = true
@@ -67,8 +116,17 @@ func (s Service) Load(ctx context.Context, tenantID, responsibilityID identity.I
 			result.Draft.Requirements = json.RawMessage(`[]`)
 			return nil
 		}
-		if err := json.Unmarshal(result.Draft.Requirements, &result.Requirements); err != nil {
+		requirements, err := decodeRequirements(result.Draft.Requirements)
+		if err != nil {
 			return err
+		}
+		result.Requirements = requirements
+		if result.Draft.TemplateVersionID != (identity.ID{}) {
+			var templateVersion database.TemplateVersion
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, result.Draft.TemplateVersionID).Take(&templateVersion).Error; err != nil {
+				return err
+			}
+			result.SchemaVersion = templateVersion.SchemaVersion
 		}
 		if s.DisableRequiredGPS {
 			policy, err := withoutRequiredGPS(result.Draft.PolicyPayload)
@@ -80,6 +138,171 @@ func (s Service) Load(ctx context.Context, tenantID, responsibilityID identity.I
 		return tx.Where("tenant_id=? AND draft_id=?", tenantID, result.Draft.ID).Find(&result.Answers).Error
 	})
 	return result, err
+}
+
+// DeclareEnvironment adds an environment requirement to an open v2 capture.
+func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentInput) (Requirement, error) {
+	in.TypeCode = strings.ToUpper(strings.TrimSpace(in.TypeCode))
+	in.Name = strings.Join(strings.Fields(strings.TrimSpace(in.Name)), " ")
+	if err := inventoryvocabulary.ValidateEnvironment(in.TypeCode, in.Name); err != nil {
+		return Requirement{}, apperror.New(apperror.InvalidInput, "name", "environment type or name is invalid")
+	}
+	var created Requirement
+	err := s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", in.TenantID, in.ResponsibilityID).First(&draft).Error; err != nil {
+			return apperror.New(apperror.NotFound, "responsibility", "capture not found")
+		}
+		if draft.Status != "OPEN" || draft.Kind == "RECAPTURE" {
+			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+		}
+		var version database.TemplateVersion
+		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, draft.TemplateVersionID).Take(&version).Error; err != nil {
+			return err
+		}
+		if version.SchemaVersion < 2 {
+			return apperror.New(apperror.InvalidState, "templateVersion", "environment capture is not enabled")
+		}
+		if draft.Kind == "ORIGIN" && draft.MediaKind == "VIDEO" {
+			return apperror.New(apperror.InvalidState, "responsibility", "environment video capture is unavailable for origin drafts")
+		}
+		var definition catalog.TemplateDocument
+		if err := json.Unmarshal(version.DefinitionJSON, &definition); err != nil {
+			return apperror.New(apperror.InvalidState, "templateVersion", "environment capture limits are unavailable")
+		}
+		limits := definition.EnvironmentCapture
+		if limits == nil {
+			limits = catalog.DefaultEnvironmentCapture()
+		}
+		requirements, err := decodeRequirements(draft.Requirements)
+		if err != nil {
+			return err
+		}
+		keyID := identity.NewID()
+		if strings.TrimSpace(in.ClientMutationID) != "" {
+			keyID = identity.NewDeterministicID("capture-environment", in.ResponsibilityID.String()+":"+in.ClientMutationID)
+		}
+		key := "env:new:" + keyID.String()
+		for _, existing := range requirements {
+			if existing.Key == key {
+				if existing.EnvironmentTypeCode != in.TypeCode || existing.EnvironmentName != in.Name {
+					return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was reused with different environment data")
+				}
+				created = existing
+				return nil
+			}
+			if strings.EqualFold(existing.EnvironmentTypeCode, in.TypeCode) && normalizedEnvironmentName(existing.EnvironmentName) == normalizedEnvironmentName(in.Name) {
+				return apperror.New(apperror.Conflict, "name", "DUPLICATE_ENVIRONMENT")
+			}
+		}
+		if len(requirements) >= 60 {
+			return apperror.New(apperror.InvalidInput, "environments", "LIMIT_ENVIRONMENTS")
+		}
+		id := keyID
+		minimum, maximum := limits.Photo.Minimum, limits.Photo.Maximum
+		if draft.MediaKind == "VIDEO" {
+			minimum, maximum = 1, limits.Video.MaximumClips
+		}
+		created = Requirement{Key: key, Section: in.TypeCode, Label: in.Name, EvidenceKind: draft.MediaKind, Required: true, ImpossibilityAllowed: true, MinimumMedia: minimum, MaximumMedia: maximum, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: "CURRENT_ONLY", EnvironmentIdentityID: id.String(), EnvironmentTypeCode: in.TypeCode, EnvironmentName: in.Name, AddedDuringCapture: true, Expected: false}
+		requirements = append(requirements, created)
+		encoded, err := json.Marshal(requirements)
+		if err != nil {
+			return err
+		}
+		return tx.Model(&draft).Updates(map[string]any{"requirements": encoded, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error
+	})
+	return created, err
+}
+
+func normalizedEnvironmentName(value string) string {
+	value = strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+	decomposed := norm.NFD.String(value)
+	var normalized strings.Builder
+	for _, r := range decomposed {
+		if !unicode.Is(unicode.Mn, r) {
+			normalized.WriteRune(r)
+		}
+	}
+	return normalized.String()
+}
+
+// RecordQualityWarning stores a unique, non-blocking quality flag on an answer.
+func (s Service) RecordQualityWarning(ctx context.Context, in RecordQualityWarningInput) ([]string, error) {
+	code := strings.ToUpper(strings.TrimSpace(in.Code))
+	valid := code == "DARK" || code == "BLURRY" || code == "SHORT" || code == "TOO_FEW_PHOTOS"
+	if !valid {
+		return nil, apperror.New(apperror.InvalidInput, "code", "quality warning code is invalid")
+	}
+	var result []string
+	err := s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", in.TenantID, in.ResponsibilityID).First(&draft).Error; err != nil || draft.Status != "OPEN" {
+			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
+		}
+		requirements, err := decodeRequirements(draft.Requirements)
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, requirement := range requirements {
+			if requirement.Key == in.RequirementKey {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return apperror.New(apperror.InvalidInput, "requirementKey", "requirement is not part of this capture")
+		}
+		var answer database.RequirementAnswer
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND draft_id=? AND requirement_key=?", in.TenantID, draft.ID, in.RequirementKey).First(&answer).Error
+		isNew := errors.Is(err, gorm.ErrRecordNotFound)
+		if isNew {
+			answer = database.RequirementAnswer{ID: identity.NewID(), TenantID: in.TenantID, DraftID: draft.ID, RequirementKey: in.RequirementKey, MediaIDs: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
+		} else if err != nil {
+			return err
+		}
+		if len(answer.Flags) > 0 {
+			if err := json.Unmarshal(answer.Flags, &result); err != nil {
+				return err
+			}
+		}
+		flag := "QUALITY_WARNING:" + code
+		if in.Ignored {
+			flag = "QUALITY_WARNING_IGNORED:" + code
+		}
+		if slices.Contains(result, flag) {
+			return nil
+		}
+		result = appendUniqueFlag(result, flag)
+		encoded, _ := json.Marshal(result)
+		answer.Flags = encoded
+		answer.UpdatedAt = s.now()
+		if isNew {
+			return tx.Create(&answer).Error
+		}
+		return tx.Save(&answer).Error
+	})
+	return result, err
+}
+
+func appendUniqueFlag(flags []string, value string) []string {
+	for _, flag := range flags {
+		if flag == value {
+			return flags
+		}
+	}
+	return append(flags, value)
+}
+
+func captureProfileDigest(requirementKey string) string {
+	if strings.HasPrefix(requirementKey, "env:") {
+		return video.DefaultProfile().Digest()
+	}
+	profile, err := video.ProfileByNameVersion("standard", 1)
+	if err != nil {
+		return video.DefaultProfile().Digest()
+	}
+	return profile.Digest()
 }
 
 func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.MediaObject, error) {
@@ -134,8 +357,8 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			decision.Flags = append(decision.Flags, "GALLERY_SOURCE")
 		}
 		flags, _ := json.Marshal(decision.Flags)
-		var requirements []Requirement
-		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+		requirements, err := decodeRequirements(draft.Requirements)
+		if err != nil {
 			return err
 		}
 		var selected Requirement
@@ -149,7 +372,7 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if draft.MediaKind == "VIDEO" && (in.RequirementKey == "video:main" || in.RequirementKey == "video:supplement") {
 			owned = true
 			selected = Requirement{Key: in.RequirementKey, CaptureSourcePolicy: "CAMERA_DEFAULT"}
-		} else if draft.MediaKind == "VIDEO" && !strings.HasPrefix(in.RequirementKey, "video:") {
+		} else if draft.MediaKind == "VIDEO" && !(owned && strings.HasPrefix(in.RequirementKey, "env:")) && !strings.HasPrefix(in.RequirementKey, "video:") {
 			return apperror.New(apperror.InvalidInput, "requirementKey", "video evidence requires a video requirement")
 		}
 		if !owned && (draft.Kind == "RECAPTURE" || !strings.HasPrefix(in.RequirementKey, "extra:")) {
@@ -204,10 +427,13 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		}
 		if selected.MaximumMedia > 0 {
 			var active []database.MediaObject
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Order("created_at,id").Find(&active).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND id<>? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, out.ID, []string{"ABORTED", "PURGED"}).Order("created_at,id").Find(&active).Error; err != nil {
 				return err
 			}
 			if len(active) >= selected.MaximumMedia && len(replacedMediaIDs) == 0 {
+				if strings.HasPrefix(in.RequirementKey, "env:") {
+					return apperror.New(apperror.InvalidInput, in.RequirementKey, "LIMIT_MEDIA_PER_ENVIRONMENT")
+				}
 				requiredSlots := len(active) - selected.MaximumMedia + 1
 				for _, media := range active {
 					if media.Status == "SCREENED" && len(replacedMediaIDs) < requiredSlots {
@@ -243,7 +469,11 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		var existingFlags []string
 		_ = json.Unmarshal(out.Flags, &existingFlags)
 		out.RequirementKey, out.Description, out.CaptureSource, out.CapturedAt, out.DeviceContext = in.RequirementKey, strings.TrimSpace(in.Description), in.CaptureSource, &in.CapturedAt, device
-		out.Flags = mergeFlags(existingFlags, decision.Flags)
+		if strings.HasPrefix(in.RequirementKey, "env:") {
+			out.Flags = mergeFlags(existingFlags, decision.Flags)
+		} else {
+			out.Flags = flags
+		}
 		if reading != nil {
 			lat, lon := int32(reading.Latitude*1e6), int32(reading.Longitude*1e6)
 			accuracy := int(reading.AccuracyMeters * 1000)
@@ -259,8 +489,10 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 			return find.Error
 		}
 		var mediaIDs []identity.ID
+		var answerFlags []string
 		if find.Error == nil {
 			_ = json.Unmarshal(answer.MediaIDs, &mediaIDs)
+			_ = json.Unmarshal(answer.Flags, &answerFlags)
 		}
 		if len(replacedMediaIDs) > 0 {
 			replaced := make(map[identity.ID]struct{}, len(replacedMediaIDs))
@@ -289,7 +521,22 @@ func (s Service) SaveMetadata(ctx context.Context, in MetadataInput) (database.M
 		if in.ExpectedVersion > 0 && answer.Version != in.ExpectedVersion {
 			return apperror.New(apperror.Conflict, "version", "stale requirement answer")
 		}
-		return tx.Model(&answer).Updates(map[string]any{"media_ids": encoded, "flags": flags, "version": answer.Version + 1, "updated_at": s.now()}).Error
+		updates := map[string]any{"media_ids": encoded, "version": answer.Version + 1, "updated_at": s.now()}
+		if strings.HasPrefix(in.RequirementKey, "env:") {
+			keptFlags := make([]string, 0, len(answerFlags))
+			for _, flag := range answerFlags {
+				if !strings.HasPrefix(flag, "IMPOSSIBILITY:") {
+					keptFlags = append(keptFlags, flag)
+				}
+			}
+			updates["impossibility_reason"] = ""
+			updates["flags"] = mergeFlags(keptFlags, decision.Flags)
+		} else {
+			// Preserve the v1 answer contract: metadata replaces its flag payload
+			// and leaves impossibility_reason untouched.
+			updates["flags"] = flags
+		}
+		return tx.Model(&answer).Updates(updates).Error
 	})
 	return out, err
 }
@@ -331,20 +578,38 @@ func metadataMatches(media database.MediaObject, in MetadataInput, reading *GPSR
 }
 
 func (s Service) DeclareImpossibility(ctx context.Context, tenantID, responsibilityID identity.ID, requirementKey, reason string, expectedVersion int64) error {
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
+	return s.DeclareImpossibilityWithCode(ctx, tenantID, responsibilityID, requirementKey, "OTHER", reason, expectedVersion)
+}
+
+// DeclareImpossibilityWithCode records a controlled reason and optional detail.
+func (s Service) DeclareImpossibilityWithCode(ctx context.Context, tenantID, responsibilityID identity.ID, requirementKey, reasonCode, reasonText string, expectedVersion int64) error {
+	reasonCode = strings.ToUpper(strings.TrimSpace(reasonCode))
+	v2Environment := strings.HasPrefix(requirementKey, "env:")
+	reasonText = strings.TrimSpace(reasonText)
+	if !v2Environment && reasonText == "" {
 		return apperror.New(apperror.InvalidInput, "reason", "impossibility reason is required")
 	}
-	if err := ValidateDescription(reason, true); err != nil {
-		return err
+	validReason := reasonCode == "LOCKED" || reasonCode == "NO_ACCESS" || reasonCode == "DOES_NOT_EXIST" || reasonCode == "UNSAFE" || reasonCode == "OTHER"
+	if v2Environment && (!validReason || (reasonCode == "OTHER" && strings.TrimSpace(reasonText) == "")) {
+		return apperror.New(apperror.InvalidInput, "reasonCode", "impossibility reason code is invalid")
+	}
+	if utf8.RuneCountInString(reasonText) > 2000 {
+		if !v2Environment {
+			return ValidateDescription(reasonText, true)
+		}
+		return apperror.New(apperror.InvalidInput, "reasonText", "impossibility reason is too long")
+	}
+	if reasonText != "" {
+		if err := ValidateDescription(reasonText, true); err != nil {
+			return err
+		}
 	}
 	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var draft database.CaptureDraft
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND status='OPEN'", tenantID, responsibilityID).First(&draft).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
 		}
-		var requirements []Requirement
-		_ = json.Unmarshal(draft.Requirements, &requirements)
+		requirements, _ := decodeRequirements(draft.Requirements)
 		allowed := false
 		for _, r := range requirements {
 			if r.Key == requirementKey && r.ImpossibilityAllowed {
@@ -354,10 +619,21 @@ func (s Service) DeclareImpossibility(ctx context.Context, tenantID, responsibil
 		if !allowed {
 			return apperror.New(apperror.InvalidInput, "requirementKey", "impossibility is not allowed")
 		}
+		if !v2Environment && reasonText == "" {
+			return apperror.New(apperror.InvalidInput, "reason", "impossibility reason is required")
+		}
 		var answer database.RequirementAnswer
 		err := tx.Where("tenant_id=? AND draft_id=? AND requirement_key=?", tenantID, draft.ID, requirementKey).First(&answer).Error
 		if err == gorm.ErrRecordNotFound {
-			return tx.Create(&database.RequirementAnswer{ID: identity.NewID(), TenantID: tenantID, DraftID: draft.ID, RequirementKey: requirementKey, MediaIDs: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), ImpossibilityReason: reason, Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}).Error
+			storedReason := reasonText
+			if v2Environment && storedReason == "" {
+				storedReason = reasonCode
+			}
+			flags := json.RawMessage(`[]`)
+			if v2Environment {
+				flags, _ = json.Marshal([]string{"IMPOSSIBILITY:" + reasonCode})
+			}
+			return tx.Create(&database.RequirementAnswer{ID: identity.NewID(), TenantID: tenantID, DraftID: draft.ID, RequirementKey: requirementKey, MediaIDs: json.RawMessage(`[]`), Flags: flags, ImpossibilityReason: storedReason, Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}).Error
 		}
 		if err != nil {
 			return err
@@ -365,10 +641,39 @@ func (s Service) DeclareImpossibility(ctx context.Context, tenantID, responsibil
 		if expectedVersion > 0 && answer.Version != expectedVersion {
 			return apperror.New(apperror.Conflict, "version", "stale requirement answer")
 		}
-		if answer.ImpossibilityReason == reason {
-			return nil
+		storedReason := reasonText
+		if v2Environment && storedReason == "" {
+			storedReason = reasonCode
 		}
-		return tx.Model(&answer).Updates(map[string]any{"impossibility_reason": reason, "version": answer.Version + 1, "updated_at": s.now()}).Error
+		if answer.ImpossibilityReason == storedReason {
+			if !v2Environment {
+				return nil
+			}
+			var flags []string
+			_ = json.Unmarshal(answer.Flags, &flags)
+			hasCurrentReason, hasStaleReason := slices.Contains(flags, "IMPOSSIBILITY:"+reasonCode), false
+			for _, flag := range flags {
+				if strings.HasPrefix(flag, "IMPOSSIBILITY:") && flag != "IMPOSSIBILITY:"+reasonCode {
+					hasStaleReason = true
+					break
+				}
+			}
+			if hasCurrentReason && !hasStaleReason {
+				return nil
+			}
+		}
+		var flags []string
+		if len(answer.Flags) > 0 {
+			_ = json.Unmarshal(answer.Flags, &flags)
+		}
+		updates := map[string]any{"impossibility_reason": storedReason, "version": answer.Version + 1, "updated_at": s.now()}
+		if v2Environment {
+			flags = slices.DeleteFunc(flags, func(flag string) bool { return strings.HasPrefix(flag, "IMPOSSIBILITY:") })
+			flags = appendUniqueFlag(flags, "IMPOSSIBILITY:"+reasonCode)
+			encoded, _ := json.Marshal(flags)
+			updates["flags"] = encoded
+		}
+		return tx.Model(&answer).Updates(updates).Error
 	})
 }
 
@@ -385,7 +690,39 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if draft.Status != "OPEN" {
 			return apperror.New(apperror.InvalidState, "responsibility", "capture is unavailable")
 		}
+		schemaVersion := 1
+		draftRequirements, err := decodeRequirements(draft.Requirements)
+		if err != nil {
+			return err
+		}
+		for _, requirement := range draftRequirements {
+			if strings.HasPrefix(requirement.Key, "env:") {
+				schemaVersion = 2
+				break
+			}
+		}
+		if len(draftRequirements) == 0 && draft.TemplateVersionID != (identity.ID{}) {
+			var templateVersion database.TemplateVersion
+			if err := tx.Where("tenant_id=? AND id=?", tenantID, draft.TemplateVersionID).Take(&templateVersion).Error; err == nil {
+				schemaVersion = templateVersion.SchemaVersion
+			} else {
+				return err
+			}
+		}
+		if schemaVersion >= 2 && draft.Kind == "ORIGIN" && draft.MediaKind == "VIDEO" {
+			return apperror.New(apperror.InvalidState, "responsibility", "environment video capture is unavailable for origin drafts")
+		}
+		if schemaVersion >= 2 && len(draftRequirements) == 0 {
+			return apperror.New(apperror.InvalidState, "requirements", "NO_ENVIRONMENTS")
+		}
 		if draft.MediaKind == "VIDEO" {
+			requirements, err := decodeRequirements(draft.Requirements)
+			if err != nil {
+				return err
+			}
+			if schemaVersion >= 2 {
+				return s.submitEnvironmentVideo(ctx, tx, draft, requirements, &result, confirmIncomplete)
+			}
 			var acceptance database.ProcessingAcceptance
 			if err := tx.Where("tenant_id=? AND responsibility_id=? AND video_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).First(&acceptance).Error; err != nil {
 				return apperror.New(apperror.InvalidState, "consent", "video processing acceptance is required")
@@ -417,7 +754,7 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			}
 			var job database.VideoPreparationJob
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", tenantID, media[0].ID).Order("created_at DESC, id DESC").Take(&job).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-				job = database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: media[0].ID, SubmissionID: &result.ID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: video.DefaultProfile().Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+				job = database.VideoPreparationJob{ID: identity.NewID(), TenantID: tenantID, MediaID: media[0].ID, SubmissionID: &result.ID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: captureProfileDigest(media[0].RequirementKey), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
 				if err := tx.Create(&job).Error; err != nil {
 					return err
 				}
@@ -449,8 +786,8 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if err := tx.Model(&database.ProcessingAcceptance{}).Where("tenant_id=? AND responsibility_id=? AND photo_processing AND ai_analysis AND gps_use", tenantID, responsibilityID).Count(&acceptance).Error; err != nil || acceptance != 1 {
 			return apperror.New(apperror.InvalidState, "consent", "processing acceptance is required")
 		}
-		var requirements []Requirement
-		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+		requirements, err := decodeRequirements(draft.Requirements)
+		if err != nil {
 			return err
 		}
 		byKey := make(map[string]Requirement, len(requirements))
@@ -461,11 +798,19 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if err := tx.Where("tenant_id=? AND responsibility_id=? AND status NOT IN ?", tenantID, responsibilityID, []string{"ABORTED", "PURGED"}).Find(&media).Error; err != nil {
 			return err
 		}
-		if len(media) > MaxActivePhotos {
+		photoLimit := MaxActivePhotos
+		if schemaVersion >= 2 {
+			photoLimit = maxEnvironmentInspectionPhotoLimit(draftRequirements)
+		}
+		if len(media) > photoLimit {
 			return apperror.New(apperror.InvalidState, "media", "capture media limit exceeded")
 		}
 		ready := make(map[identity.ID]database.MediaObject, len(media))
+		perRequirementCount := make(map[string]int, len(requirements))
 		for _, item := range media {
+			if schemaVersion >= 2 && item.Status == "UPLOADING" && strings.HasPrefix(item.RequirementKey, "env:") {
+				return apperror.New(apperror.InvalidState, item.RequirementKey, "UPLOADS_IN_PROGRESS")
+			}
 			if item.Status != "READY" {
 				return apperror.New(apperror.InvalidState, item.ID.String(), "media verification and screening must complete before submission")
 			}
@@ -473,6 +818,10 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			extra := strings.HasPrefix(item.RequirementKey, "extra:") && draft.Kind != "RECAPTURE"
 			if !owned && !extra {
 				return apperror.New(apperror.InvalidInput, item.ID.String(), "media must belong to an applicable requirement")
+			}
+			perRequirementCount[item.RequirementKey]++
+			if owned && byKey[item.RequirementKey].MaximumMedia > 0 && perRequirementCount[item.RequirementKey] > byKey[item.RequirementKey].MaximumMedia {
+				return apperror.New(apperror.InvalidInput, item.RequirementKey, "LIMIT_MEDIA_PER_ENVIRONMENT")
 			}
 			if err := ValidateDescription(item.Description, strings.HasPrefix(item.RequirementKey, "extra:")); err != nil {
 				return apperror.New(apperror.InvalidInput, item.ID.String(), "media description is invalid")
@@ -502,6 +851,18 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		if len(associated) != len(ready) {
 			return apperror.New(apperror.InvalidState, "media", "media metadata must be saved before submission")
 		}
+		if schemaVersion >= 2 {
+			keys := make([]string, 0, len(requirements))
+			for _, requirement := range requirements {
+				keys = append(keys, requirement.Key)
+			}
+			var uploading database.MediaObject
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND status='UPLOADING' AND requirement_key IN ?", tenantID, responsibilityID, keys).Order("requirement_key").Take(&uploading).Error; err == nil {
+				return apperror.New(apperror.InvalidState, uploading.RequirementKey, "UPLOADS_IN_PROGRESS")
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
 		complete, err := Evaluate(requirements, answers, confirmIncomplete)
 		if err != nil {
 			return err
@@ -527,7 +888,17 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			return err
 		}
 		eventID := identity.NewID()
-		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: responsibilityID, CorrelationID: "capture-submit-" + result.ID.String(), Payload: map[string]any{"draftId": draft.ID, "kind": draft.Kind, "responsibilityId": responsibilityID, "inspectionId": responsibility.InspectionID, "submissionId": result.ID, "complete": result.Complete, "requiresAttention": result.RequiresAttention}}); err != nil {
+		requirementKeys := make([]string, 0, len(requirements))
+		if schemaVersion >= 2 {
+			for _, requirement := range requirements {
+				requirementKeys = append(requirementKeys, requirement.Key)
+			}
+		}
+		outboxPayload := map[string]any{"draftId": draft.ID, "kind": draft.Kind, "responsibilityId": responsibilityID, "inspectionId": responsibility.InspectionID, "submissionId": result.ID, "complete": result.Complete, "requiresAttention": result.RequiresAttention}
+		if schemaVersion >= 2 {
+			outboxPayload["requirementKeys"] = requirementKeys
+		}
+		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenantID, AggregateID: responsibilityID, CorrelationID: "capture-submit-" + result.ID.String(), Payload: outboxPayload}); err != nil {
 			return err
 		}
 		if s.Finalizer != nil {
@@ -536,6 +907,139 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 		return nil
 	})
 	return result, err
+}
+
+func (s Service) submitEnvironmentVideo(ctx context.Context, tx *gorm.DB, draft database.CaptureDraft, requirements []Requirement, result *database.SubmissionVersion, confirmIncomplete bool) error {
+	if len(requirements) == 0 {
+		return apperror.New(apperror.InvalidState, "requirements", "NO_ENVIRONMENTS")
+	}
+	var acceptance database.ProcessingAcceptance
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND video_processing AND ai_analysis AND gps_use", draft.TenantID, draft.ResponsibilityID).First(&acceptance).Error; err != nil {
+		return apperror.New(apperror.InvalidState, "consent", "video processing acceptance is required")
+	}
+	keys := make([]string, 0, len(requirements))
+	byKey := make(map[string]Requirement, len(requirements))
+	for _, requirement := range requirements {
+		keys = append(keys, requirement.Key)
+		byKey[requirement.Key] = requirement
+	}
+	var uploading database.MediaObject
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status='UPLOADING'", draft.TenantID, draft.ResponsibilityID, keys).Order("requirement_key").Take(&uploading).Error; err == nil {
+		return apperror.New(apperror.InvalidState, uploading.RequirementKey, "UPLOADS_IN_PROGRESS")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	var media []database.MediaObject
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status IN ?", draft.TenantID, draft.ResponsibilityID, keys, []string{"RECEIVED", "VERIFIED", "SCREENED", "READY"}).Order("requirement_key,created_at,id").Find(&media).Error; err != nil {
+		return err
+	}
+	var invalidStatus database.MediaObject
+	if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key IN ? AND status NOT IN ?", draft.TenantID, draft.ResponsibilityID, keys, []string{"ABORTED", "PURGED", "RECEIVED", "VERIFIED", "SCREENED", "READY"}).Order("requirement_key").Take(&invalidStatus).Error; err == nil {
+		return apperror.New(apperror.InvalidState, invalidStatus.RequirementKey, "video receipt is not complete")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	byMediaKey := make(map[string][]database.MediaObject, len(requirements))
+	for _, item := range media {
+		byMediaKey[item.RequirementKey] = append(byMediaKey[item.RequirementKey], item)
+	}
+	var answers []database.RequirementAnswer
+	if err := tx.Where("tenant_id=? AND draft_id=?", draft.TenantID, draft.ID).Find(&answers).Error; err != nil {
+		return err
+	}
+	answerByKey := make(map[string]database.RequirementAnswer, len(answers))
+	for _, answer := range answers {
+		answerByKey[answer.RequirementKey] = answer
+	}
+	evaluationAnswers := make([]Answer, 0, len(requirements))
+	for _, requirement := range requirements {
+		answer := answerByKey[requirement.Key]
+		evaluationAnswers = append(evaluationAnswers, Answer{RequirementKey: requirement.Key, ReadyMedia: len(byMediaKey[requirement.Key]), Impossibility: answer.ImpossibilityReason})
+	}
+	completeness, evaluationErr := Evaluate(requirements, evaluationAnswers, confirmIncomplete)
+	if evaluationErr != nil {
+		if len(completeness.PendingKeys) > 0 {
+			return PendingRequirementError{Keys: completeness.PendingKeys, Err: evaluationErr}
+		}
+		return evaluationErr
+	}
+	var clips []events.CaptureVideoClip
+	for _, key := range keys {
+		requirement := byKey[key]
+		items := byMediaKey[key]
+		if requirement.MaximumMedia > 0 && len(items) > requirement.MaximumMedia {
+			return apperror.New(apperror.InvalidInput, key, "LIMIT_MEDIA_PER_ENVIRONMENT")
+		}
+		for _, item := range items {
+			if item.VideoAttemptID == nil {
+				return apperror.New(apperror.InvalidState, key, "video attempt is unavailable")
+			}
+			var attempt database.VideoAttempt
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND id=? AND status='RECEIVED'", draft.TenantID, draft.ResponsibilityID, *item.VideoAttemptID).Take(&attempt).Error; err != nil {
+				return apperror.New(apperror.InvalidState, key, "video receipt is not complete")
+			}
+			clips = append(clips, events.CaptureVideoClip{RequirementKey: key, MediaID: item.ID})
+		}
+	}
+	var responsibility database.Responsibility
+	if err := tx.Where("tenant_id=? AND id=?", draft.TenantID, draft.ResponsibilityID).First(&responsibility).Error; err != nil {
+		return err
+	}
+	payload, _ := json.Marshal(map[string]any{"mediaKind": "VIDEO", "clips": clips, "complete": completeness.Complete, "requiresAttention": completeness.RequiresAttention})
+	digest := sha256.Sum256(payload)
+	now := s.now()
+	var previous int64
+	if err := tx.Model(&database.SubmissionVersion{}).Where("tenant_id=? AND draft_id=?", draft.TenantID, draft.ID).Count(&previous).Error; err != nil {
+		return err
+	}
+	*result = database.SubmissionVersion{ID: identity.NewID(), TenantID: draft.TenantID, DraftID: draft.ID, ResponsibilityID: draft.ResponsibilityID, VersionNumber: int(previous) + 1, Complete: completeness.Complete, RequiresAttention: completeness.RequiresAttention, Payload: payload, PayloadDigest: hex.EncodeToString(digest[:]), SubmittedAt: now}
+	if err := tx.Create(result).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&draft).Updates(map[string]any{"status": "SUBMITTED", "version": draft.Version + 1, "updated_at": now}).Error; err != nil {
+		return err
+	}
+	for _, clip := range clips {
+		var job database.VideoPreparationJob
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", draft.TenantID, clip.MediaID).Order("created_at DESC,id DESC").Take(&job).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			key := clip.RequirementKey
+			job = database.VideoPreparationJob{ID: identity.NewID(), TenantID: draft.TenantID, MediaID: clip.MediaID, SubmissionID: &result.ID, RequirementKey: &key, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: captureProfileDigest(key), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+			if err := tx.Create(&job).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		} else if job.SubmissionID == nil {
+			if err := tx.Model(&job).Updates(map[string]any{"submission_id": result.ID, "requirement_key": clip.RequirementKey}).Error; err != nil {
+				return err
+			}
+		} else if *job.SubmissionID != result.ID {
+			return apperror.New(apperror.Conflict, clip.RequirementKey, "video preparation is linked to another submission")
+		}
+	}
+	if err := tx.Model(&database.ExternalSession{}).Where("tenant_id=? AND responsibility_id=? AND revoked_at IS NULL", draft.TenantID, draft.ResponsibilityID).Update("revoked_at", now).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&database.Invitation{}).Where("tenant_id=? AND responsibility_id=? AND status='ACTIVE'", draft.TenantID, draft.ResponsibilityID).Updates(map[string]any{"status": "COMPLETED", "revoked_at": now}).Error; err != nil {
+		return err
+	}
+	eventID := identity.NewID()
+	if len(clips) == 0 {
+		requirementKeys := make([]string, 0, len(requirements))
+		for _, requirement := range requirements {
+			requirementKeys = append(requirementKeys, requirement.Key)
+		}
+		payload := map[string]any{"draftId": draft.ID, "kind": draft.Kind, "responsibilityId": draft.ResponsibilityID, "inspectionId": responsibility.InspectionID, "submissionId": result.ID, "complete": result.Complete, "requiresAttention": result.RequiresAttention, "requirementKeys": requirementKeys}
+		if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.submitted.v1", SchemaVersion: 1, OccurredAt: now, TenantID: draft.TenantID, AggregateID: draft.ResponsibilityID, CorrelationID: "capture-submit-" + result.ID.String(), Payload: payload}); err != nil {
+			return err
+		}
+	} else if err := messaging.AddOutbox(tx, events.Envelope[events.CaptureVideoSubmittedV2Payload]{ID: eventID, Type: "capture.video_submitted.v2", SchemaVersion: 2, OccurredAt: now, TenantID: draft.TenantID, AggregateID: draft.ResponsibilityID, CorrelationID: "capture-video-submit-" + result.ID.String(), Payload: events.CaptureVideoSubmittedV2Payload{InspectionID: responsibility.InspectionID, ResponsibilityID: draft.ResponsibilityID, SubmissionVersionID: result.ID, Clips: clips}}); err != nil {
+		return err
+	}
+	if s.Finalizer != nil {
+		return s.Finalizer.Finalize(ctx, tx, draft, *result)
+	}
+	return nil
 }
 
 func mergeFlags(existing, added []string) json.RawMessage {
@@ -551,6 +1055,16 @@ func mergeFlags(existing, added []string) json.RawMessage {
 	}
 	encoded, _ := json.Marshal(result)
 	return encoded
+}
+
+func maxEnvironmentInspectionPhotoLimit(requirements []Requirement) int {
+	maximum := catalog.MaxEnvironmentPhotos
+	for _, requirement := range requirements {
+		if strings.HasPrefix(requirement.Key, "env:") && requirement.EvidenceKind != "VIDEO" && requirement.MaximumMedia > maximum {
+			maximum = requirement.MaximumMedia
+		}
+	}
+	return catalog.MaxEnvironments * maximum
 }
 
 func (s Service) now() time.Time {

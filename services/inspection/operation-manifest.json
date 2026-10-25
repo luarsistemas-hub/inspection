@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "68de922c47a73d9852a4b7029564acfdc49c84f261f294a51b6250d8c49cc8f3",
+  "schemaSha256": "c807238ea581f697eeae0dd03cf4ae4a8dfb66e90bd8146796b164807e5e4f50",
   "capabilities": [
     {
       "root": "Query.me",
@@ -895,6 +895,20 @@
       "owner": "Dashboard",
       "persona": "manager, employee, or internal viewer",
       "journey": "Reviewers start a draft from a completed comparative inspection.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.declareCaptureEnvironment",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Declare an inspection environment during external capture and retain its keyed requirements.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.recordCaptureQualityWarning",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Record or acknowledge a quality warning for the active capture requirement.",
       "evidence": "IT-001"
     },
     {

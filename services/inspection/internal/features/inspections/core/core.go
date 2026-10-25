@@ -51,9 +51,11 @@ const (
 )
 
 const (
-	SourceScheduled = "SCHEDULED"
-	SourceMilestone = "MILESTONE"
-	SourceManual    = "MANUAL"
+	SourceScheduled          = "SCHEDULED"
+	SourceMilestone          = "MILESTONE"
+	SourceManual             = "MANUAL"
+	resolvepromptTaskCatalog = "INVENTORY_CATALOG"
+	resolvepromptTaskCompare = "INVENTORY_COMPARE"
 )
 
 type CreateInput struct {
@@ -62,6 +64,7 @@ type CreateInput struct {
 	TemplateVersionID                *identity.ID
 	ComparisonMode                   catalog.ComparisonMode
 	ReferenceVersionID               *identity.ID
+	ReviewerMembershipID             *identity.ID
 	ProjectID, StageID               *identity.ID
 	Source, SourceKey, Reason        string
 	DueAt, DeadlineAt                time.Time
@@ -163,9 +166,6 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	if err := json.Unmarshal(template.Version.DefinitionJSON, &document); err != nil {
 		return View{}, fmt.Errorf("decode template snapshot: %w", err)
 	}
-	if err := validateTemplateCaptureVersion(document); err != nil {
-		return View{}, err
-	}
 	comparisonMode := document.DefaultComparisonMode
 	if in.ComparisonMode != "" {
 		comparisonMode = in.ComparisonMode
@@ -194,6 +194,11 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			return View{}, err
 		}
 	}
+	if in.ReviewerMembershipID != nil {
+		if err := validateReviewerMembership(ctx, s.DB, in.TenantID, *in.ReviewerMembershipID, asset.Asset.BusinessUnitID, in.AssetID); err != nil {
+			return View{}, err
+		}
+	}
 	var originReference *originresolve.Result
 	if comparisonMode == catalog.FixedOrigin {
 		referenceRaw, err := s.Bus.Ask(ctx, originresolve.Query{TenantID: in.TenantID, AssetID: in.AssetID, VersionID: in.ReferenceVersionID, MediaKind: document.MediaKind()})
@@ -201,6 +206,9 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			return View{}, err
 		}
 		resolved := referenceRaw.(originresolve.Result)
+		if document.SchemaVersion < catalog.EnvironmentSchemaVersion && resolved.Version.HasInventory {
+			return View{}, apperror.New(apperror.InvalidState, "referenceVersionId", "CATALOG_ORIGIN_FIRST")
+		}
 		originReference = &resolved
 		referenceID := resolved.Version.ID
 		in.ReferenceVersionID = &referenceID
@@ -240,6 +248,16 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		if err != nil {
 			return err
 		}
+		var inventoryPromptID *identity.ID
+		if document.SchemaVersion >= catalog.EnvironmentSchemaVersion {
+			task := inventoryPromptTask(originReference)
+			inventoryPrompt, err := resolveprompt.ResolveTask(ctx, tx, document.AnalysisType, task, now)
+			if err != nil {
+				return err
+			}
+			id := inventoryPrompt.Snapshot.ID
+			inventoryPromptID = &id
+		}
 		contextSnapshot, _ := json.Marshal(map[string]any{
 			"tenantId": in.TenantID, "businessUnitId": asset.Asset.BusinessUnitID,
 			"assetId": asset.Asset.ID, "assetVersion": asset.Asset.Version,
@@ -247,7 +265,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			"templateId": *templateID, "templateVersionId": template.Version.ID,
 			"analysisType": document.AnalysisType, "analysisPromptSnapshotId": resolvedPrompt.Snapshot.ID, "source": in.Source,
 		})
-		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", MediaKind: document.MediaKind(), DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
+		inspection := database.Inspection{ID: identity.NewID(), TenantID: in.TenantID, BusinessUnitID: asset.Asset.BusinessUnitID, AssetID: in.AssetID, ParticipantID: in.ParticipantID, TemplateID: *templateID, TemplateVersionID: template.Version.ID, AnalysisPromptSnapshotID: resolvedPrompt.Snapshot.ID, InventoryPromptSnapshotID: inventoryPromptID, ProjectID: in.ProjectID, StageID: in.StageID, Source: in.Source, SourceKey: in.SourceKey, SourceReason: strings.TrimSpace(in.Reason), Status: "PLANNED", MediaKind: document.MediaKind(), DueAt: in.DueAt.UTC(), DeadlineAt: in.DeadlineAt.UTC(), ReminderInstants: reminderJSON, ContextSnapshot: contextSnapshot, Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ParticipantID: in.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		policy := database.PolicySnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, SchemaVersion: 1, Payload: policyPayload, CanonicalDigest: policyDigest, CreatedAt: now}
 		referenceDocument := map[string]any{"referenceVersionId": in.ReferenceVersionID, "comparisonMode": comparisonMode}
@@ -263,23 +281,7 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 		}
 		referencePayload, _ := json.Marshal(referenceDocument)
 		reference := database.ReferenceSnapshot{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: inspection.ID, ReferenceVersionID: in.ReferenceVersionID, ComparisonMode: string(comparisonMode), Payload: referencePayload, CreatedAt: now}
-		requirements := make([]capturecore.Requirement, 0, len(document.Requirements))
-		if originReference != nil {
-			requirements = append(requirements, originReference.Requirements...)
-		} else {
-			for _, requirement := range document.Requirements {
-				requirements = append(requirements, capturecore.Requirement{
-					Key: requirement.Key, Section: requirement.Section, Label: requirement.Label,
-					Instructions: requirement.Instructions, EvidenceKind: requirement.EvidenceKind,
-					Required: requirement.Required, ImpossibilityAllowed: true,
-					MinimumMedia: requirement.MinimumCount, MaximumMedia: requirement.MaximumCount,
-					DescriptionRequired: requirement.DescriptionRequired,
-					CaptureSourcePolicy: requirement.CaptureSourcePolicy,
-					ComparisonTarget:    string(comparisonMode),
-				})
-			}
-		}
-		requirements = inspectionCaptureRequirements(document.MediaKind(), string(comparisonMode), requirements)
+		requirements := createCaptureRequirements(document, comparisonMode, originReference)
 		requirementPayload, _ := json.Marshal(requirements)
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "INSPECTION", MediaKind: document.MediaKind(), TemplateVersionID: template.Version.ID, ReferencePayload: referencePayload, PolicyPayload: policyPayload, Requirements: requirementPayload, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		for _, row := range []any{&inspection, &responsibility, &policy, &reference, &draft} {
@@ -288,7 +290,11 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			}
 		}
 		eventID := createdEventID(inspection.ID)
-		if err := createOutbox(tx, eventID, in.TenantID, inspection.ID, "inspection.created.v1", map[string]any{"inspectionId": inspection.ID, "responsibilityId": responsibility.ID, "assetId": inspection.AssetID, "participantId": inspection.ParticipantID, "templateVersionId": inspection.TemplateVersionID, "source": inspection.Source, "dueAt": in.DueAt, "deadlineAt": inspection.DeadlineAt}, ctx, now); err != nil {
+		payload := map[string]any{"inspectionId": inspection.ID, "responsibilityId": responsibility.ID, "assetId": inspection.AssetID, "participantId": inspection.ParticipantID, "templateVersionId": inspection.TemplateVersionID, "source": inspection.Source, "dueAt": in.DueAt, "deadlineAt": inspection.DeadlineAt}
+		if in.ReviewerMembershipID != nil {
+			payload["reviewerMembershipId"] = *in.ReviewerMembershipID
+		}
+		if err := createOutbox(tx, eventID, in.TenantID, inspection.ID, "inspection.created.v1", payload, ctx, now); err != nil {
 			return err
 		}
 		out = View{Inspection: inspection, Responsibility: responsibility, Policy: policy, Reference: reference, EventID: eventID}
@@ -300,20 +306,79 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 	return out, nil
 }
 
-func validateTemplateCaptureVersion(document catalog.TemplateDocument) error {
-	if document.SchemaVersion >= catalog.EnvironmentSchemaVersion {
-		return apperror.New(apperror.InvalidState, "templateVersion", "environment capture is not available yet")
+func inventoryPromptTask(reference *originresolve.Result) string {
+	if reference != nil && reference.Version.HasInventory {
+		return string(resolvepromptTaskCompare)
 	}
-	return nil
+	return string(resolvepromptTaskCatalog)
+}
+
+func validateReviewerMembership(ctx context.Context, db *gorm.DB, tenantID, membershipID, businessUnitID, assetID identity.ID) error {
+	if db == nil {
+		return apperror.New(apperror.DependencyUnavailable, "reviewerMembershipId", "reviewer validation unavailable")
+	}
+	return (tenanttx.Runner{DB: db}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		allowed := []requestctx.Scope{{Kind: "BUSINESS_UNIT", ID: businessUnitID}, {Kind: "ASSET", ID: assetID}}
+		matches, err := auth.ReviewerMembershipMatchesScopes(ctx, tx, tenantID, membershipID, allowed)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			return apperror.New(apperror.InvalidInput, "reviewerMembershipId", "reviewer membership is unavailable or outside the asset scope")
+		}
+		return nil
+	})
+}
+
+func createCaptureRequirements(document catalog.TemplateDocument, comparisonMode catalog.ComparisonMode, originReference *originresolve.Result) []capturecore.Requirement {
+	requirements := make([]capturecore.Requirement, 0, len(document.Requirements))
+	if originReference != nil {
+		requirements = append(requirements, originReference.Requirements...)
+		if document.SchemaVersion >= catalog.EnvironmentSchemaVersion {
+			limits := document.EnvironmentCapture
+			if limits == nil {
+				limits = catalog.DefaultEnvironmentCapture()
+			}
+			for index := range requirements {
+				if requirements[index].EvidenceKind == "VIDEO" {
+					requirements[index].MinimumMedia = 1
+					requirements[index].MaximumMedia = limits.Video.MaximumClips
+				} else {
+					requirements[index].MinimumMedia = limits.Photo.Minimum
+					requirements[index].MaximumMedia = limits.Photo.Maximum
+				}
+			}
+		}
+	} else {
+		for _, requirement := range document.Requirements {
+			requirements = append(requirements, capturecore.Requirement{
+				Key: requirement.Key, Section: requirement.Section, Label: requirement.Label,
+				Instructions: requirement.Instructions, EvidenceKind: requirement.EvidenceKind,
+				Required: requirement.Required, ImpossibilityAllowed: true,
+				MinimumMedia: requirement.MinimumCount, MaximumMedia: requirement.MaximumCount,
+				DescriptionRequired: requirement.DescriptionRequired,
+				CaptureSourcePolicy: requirement.CaptureSourcePolicy,
+				ComparisonTarget:    string(comparisonMode),
+			})
+		}
+	}
+	if document.SchemaVersion >= catalog.EnvironmentSchemaVersion {
+		if originReference == nil || !originReference.Version.HasInventory {
+			return nil
+		}
+		return requirements
+	}
+	return inspectionCaptureRequirements(document.MediaKind(), string(comparisonMode), requirements)
 }
 
 func inspectionCaptureRequirements(mediaKind, comparisonTarget string, requirements []capturecore.Requirement) []capturecore.Requirement {
-	if mediaKind != "VIDEO" {
+	if len(requirements) > 0 && strings.HasPrefix(requirements[0].Key, "env:") {
 		return requirements
 	}
-	// VIDEO has one immutable participant upload slot. Any pinned expected
-	// components remain in ReferencePayload and never become upload slots.
-	return []capturecore.Requirement{capturecore.VideoMainRequirement(comparisonTarget)}
+	if mediaKind == "VIDEO" {
+		return []capturecore.Requirement{capturecore.VideoMainRequirement(comparisonTarget)}
+	}
+	return requirements
 }
 
 func (s Service) Cancel(ctx context.Context, tenantID, inspectionID identity.ID, expectedVersion int64) (View, error) {

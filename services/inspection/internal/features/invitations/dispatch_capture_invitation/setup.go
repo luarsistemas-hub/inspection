@@ -39,9 +39,10 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 	return func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 		tx = tx.WithContext(ctx)
 		var payload struct {
-			InspectionID     identity.ID `json:"inspectionId"`
-			ResponsibilityID identity.ID `json:"responsibilityId"`
-			ParticipantID    identity.ID `json:"participantId"`
+			InspectionID         identity.ID  `json:"inspectionId"`
+			ResponsibilityID     identity.ID  `json:"responsibilityId"`
+			ParticipantID        identity.ID  `json:"participantId"`
+			ReviewerMembershipID *identity.ID `json:"reviewerMembershipId"`
 		}
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.ResponsibilityID == (identity.ID{}) {
 			return messaging.ErrPermanent
@@ -93,7 +94,7 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 		hash := security.HashToken(token)
 		now := time.Now().UTC()
 		encoded, _ := json.Marshal(delivery)
-		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, TokenHash: hash[:], DeliveryIntents: encoded, IdempotencyKey: "inspection-created:" + envelope.ID.String(), Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
+		invitation := database.Invitation{ID: identity.NewID(), TenantID: envelope.TenantID, ResponsibilityID: payload.ResponsibilityID, ReviewerMembershipID: payload.ReviewerMembershipID, TokenHash: hash[:], DeliveryIntents: encoded, IdempotencyKey: "inspection-created:" + envelope.ID.String(), Status: "ACTIVE", ExpiresAt: inspection.DeadlineAt, CreatedAt: now}
 		if err := tx.Create(&invitation).Error; err != nil {
 			return err
 		}

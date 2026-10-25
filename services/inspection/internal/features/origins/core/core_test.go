@@ -216,6 +216,30 @@ func TestInvitePersistsTemplateMediaKindOnOriginVersion(t *testing.T) {
 	}
 }
 
+func TestOriginInviteStoresReviewerAndIdempotentResendPreservesIt(t *testing.T) {
+	f := newOriginActivationFixture(t)
+	templateID, templateVersionID := identity.NewID(), identity.NewID()
+	definition := catalog.TemplateDocument{SchemaVersion: catalog.SchemaVersion, SegmentVersionID: identity.NewID().String(), ParticipantRoles: []string{"TENANT"}, Requirements: []catalog.CaptureRequirement{{Key: "room", Section: "room", Label: "room", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 1, Required: true}}}
+	definitionJSON, _ := json.Marshal(definition)
+	if err := f.db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: f.tenantID, TemplateID: templateID, VersionNumber: 1, SchemaVersion: catalog.SchemaVersion, DefinitionJSON: definitionJSON, CanonicalDigest: strings.Repeat("f", 64), Status: "ACTIVE", IdempotencyKey: "ut130-template", PublishedAt: f.now, CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	reviewer := identity.NewID()
+	input := InviteInput{TenantID: f.tenantID, AssetID: identity.NewID(), TemplateVersionID: templateVersionID, ReviewerMembershipID: &reviewer, Delivery: []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "reviewer@example.test"}}, Requirements: []capturecore.Requirement{{Key: "room", Required: true, MinimumMedia: 1, MaximumMedia: 1}}, ExpiresAt: f.now.Add(time.Hour), IdempotencyKey: "ut130-invite"}
+	first, err := f.service.Invite(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.service.Invite(context.Background(), input)
+	if err != nil || first.InvitationID != second.InvitationID {
+		t.Fatalf("idempotent invitation replay changed identity: first=%+v second=%+v err=%v", first, second, err)
+	}
+	var invitation database.Invitation
+	if err := f.db.Where("tenant_id=? AND id=?", f.tenantID, first.InvitationID).Take(&invitation).Error; err != nil || invitation.ReviewerMembershipID == nil || *invitation.ReviewerMembershipID != reviewer {
+		t.Fatalf("reviewer membership was not retained: %+v err=%v", invitation, err)
+	}
+}
+
 type originActivationFixture struct {
 	db                                                      *gorm.DB
 	service                                                 Service

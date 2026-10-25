@@ -204,7 +204,7 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
       setDrafts((items) => [...items.filter((item) => item.id !== restarted.id), restarted]);
       return restarted;
     }
-    const result = await graphql(captureOperations.beginVideo, { input: { acquisitionSource: source, replacesMediaId: replacesMediaId ?? null, clientMutationId: crypto.randomUUID() } });
+    const result = await graphql(captureOperations.beginVideo, { input: { requirementKey: null, acquisitionSource: source, replacesMediaId: replacesMediaId ?? null, clientMutationId: crypto.randomUUID() } });
     throwOnUserErrors(result.beginVideoCapture);
     const attempt = result.beginVideoCapture.attempt;
     if (!attempt) throw new Error("O servidor não autorizou uma tentativa de vídeo.");

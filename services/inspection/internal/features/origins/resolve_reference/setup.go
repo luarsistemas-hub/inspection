@@ -80,30 +80,63 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 	var origin database.Origin
 	if err := tx.Where("tenant_id=? AND asset_id=?", query.TenantID, query.AssetID).First(&origin).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return Result{}, err
-	} else if err != nil || origin.ActiveVersionID == nil {
+	} else if err != nil {
 		return Result{}, apperror.New(apperror.InvalidInput, "referenceVersionId", "active origin is required")
 	}
-	if query.VersionID != nil && *query.VersionID != *origin.ActiveVersionID {
-		var requested database.OriginVersion
-		if err := tx.Where("tenant_id=? AND id=?", query.TenantID, *query.VersionID).Take(&requested).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return Result{}, apperror.New(apperror.NotFound, "", "resource not found")
-			}
+	selectedID := origin.ActiveVersionID
+	if query.VersionID != nil {
+		selectedID = query.VersionID
+	}
+	if selectedID == nil {
+		return Result{}, apperror.New(apperror.InvalidInput, "referenceVersionId", "active origin is required")
+	}
+	if err := tx.Where("tenant_id=? AND id=? AND origin_id=?", query.TenantID, *selectedID, origin.ID).Take(&result.Version).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return Result{}, apperror.New(apperror.NotFound, "", "resource not found")
+		}
+		return Result{}, err
+	}
+	if result.Version.HasInventory {
+		if result.Version.Status != "ACTIVE" && result.Version.Status != "SUPERSEDED" {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "inventory reference version is not pinnable")
+		}
+		var environments []database.InventoryEnvironment
+		if err := tx.Where("tenant_id=? AND origin_version_id=? AND decision<>'REJECTED'", query.TenantID, result.Version.ID).Order("position,id").Find(&environments).Error; err != nil {
 			return Result{}, err
 		}
-		return Result{}, apperror.New(apperror.Conflict, "referenceVersionId", "origin reference is no longer active")
-	}
-	if err := tx.Where("tenant_id=? AND id=? AND status='ACTIVE'", query.TenantID, *origin.ActiveVersionID).First(&result.Version).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "active origin is unavailable")
-	} else if err != nil {
-		return Result{}, err
+		if len(environments) == 0 || len(environments) > 60 {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "inventory version has no usable environments")
+		}
+		kind := query.MediaKind
+		if kind != "PHOTO" && kind != "VIDEO" {
+			kind = "PHOTO"
+		}
+		maximum := 20
+		if kind == "VIDEO" {
+			maximum = 3
+		}
+		for _, environment := range environments {
+			key := "env:" + environment.IdentityID.String()
+			requirement := capturecore.Requirement{Key: key, Section: environment.TypeCode, Label: environment.Name, EnvironmentIdentityID: environment.IdentityID.String(), EnvironmentTypeCode: environment.TypeCode, EnvironmentName: environment.Name, Expected: true, EvidenceKind: kind, Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: maximum, CaptureSourcePolicy: "CAMERA_DEFAULT", ComparisonTarget: "FIXED_ORIGIN"}
+			result.Requirements = append(result.Requirements, requirement)
+		}
+		// Inventory environments are the complete cross-modality reference.
+		// Do not mix legacy origin:* requirements or video-scope evidence in.
+		return result, nil
+	} else {
+		if origin.ActiveVersionID == nil || *selectedID != *origin.ActiveVersionID {
+			return Result{}, apperror.New(apperror.Conflict, "referenceVersionId", "origin reference is no longer active")
+		}
+		if result.Version.Status != "ACTIVE" {
+			return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "active origin is unavailable")
+		}
 	}
 	versionKind := result.Version.MediaKind
 	if versionKind == "" {
 		versionKind = "PHOTO"
 	}
-	if query.MediaKind != "" && query.MediaKind != versionKind {
-		return Result{}, apperror.New(apperror.InvalidInput, "referenceVersionId", "reference modality must match the inspection modality")
+	if !result.Version.HasInventory && query.MediaKind != "" && query.MediaKind != versionKind {
+		return Result{}, apperror.New(apperror.InvalidState, "referenceVersionId", "CATALOG_ORIGIN_FIRST")
 	}
 	if versionKind == "VIDEO" {
 		if result.Version.VideoPreparationID == nil || result.Version.ScopeManifestDigest == "" {
@@ -141,7 +174,9 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 			}
 			result.VideoScope = append(result.VideoScope, VideoEvidence{ScopeItemID: item.ID, FrameID: frame.ID, SourceMediaID: prep.MediaID, PTSMicros: frame.PTSMicros, EnvironmentCandidate: item.EnvironmentCandidate, ComponentLabel: item.ComponentLabel, ViewLabel: item.ViewLabel, Visibility: item.Visibility, Ambiguous: item.IdentityStatus == "AMBIGUOUS", Gap: item.Visibility == video.VisibilityObscured})
 		}
-		result.Requirements = []capturecore.Requirement{capturecore.VideoMainRequirement("FIXED_ORIGIN")}
+		if !result.Version.HasInventory {
+			result.Requirements = []capturecore.Requirement{capturecore.VideoMainRequirement("FIXED_ORIGIN")}
+		}
 		return result, nil
 	}
 	var rows []database.OriginEvidence

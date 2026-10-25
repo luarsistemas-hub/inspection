@@ -144,9 +144,32 @@ type ComplexityRoot struct {
 		Version             func(childComplexity int) int
 	}
 
+	CaptureEnvironment struct {
+		AddedDuringCapture func(childComplexity int) int
+		Expected           func(childComplexity int) int
+		IdentityID         func(childComplexity int) int
+		MediaCount         func(childComplexity int) int
+		Name               func(childComplexity int) int
+		RequirementKey     func(childComplexity int) int
+		Status             func(childComplexity int) int
+		TypeCode           func(childComplexity int) int
+	}
+
+	CaptureEnvironmentPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Environment      func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	CapturePayload struct {
 		ClientMutationID func(childComplexity int) int
 		Status           func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	CaptureQualityWarningPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Flags            func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -169,18 +192,28 @@ type ComplexityRoot struct {
 	}
 
 	CaptureRequirement struct {
-		CaptureSourcePolicy  func(childComplexity int) int
-		ComparisonTarget     func(childComplexity int) int
-		DescriptionRequired  func(childComplexity int) int
-		EvidenceKind         func(childComplexity int) int
-		ImpossibilityAllowed func(childComplexity int) int
-		Instructions         func(childComplexity int) int
-		Key                  func(childComplexity int) int
-		Label                func(childComplexity int) int
-		MaximumMedia         func(childComplexity int) int
-		MinimumMedia         func(childComplexity int) int
-		Required             func(childComplexity int) int
-		Section              func(childComplexity int) int
+		AddedDuringCapture    func(childComplexity int) int
+		CaptureSourcePolicy   func(childComplexity int) int
+		ComparisonTarget      func(childComplexity int) int
+		DescriptionRequired   func(childComplexity int) int
+		EnvironmentIdentityID func(childComplexity int) int
+		EnvironmentName       func(childComplexity int) int
+		EnvironmentTypeCode   func(childComplexity int) int
+		EvidenceKind          func(childComplexity int) int
+		Expected              func(childComplexity int) int
+		ImpossibilityAllowed  func(childComplexity int) int
+		Instructions          func(childComplexity int) int
+		Key                   func(childComplexity int) int
+		Label                 func(childComplexity int) int
+		MaximumMedia          func(childComplexity int) int
+		MinimumMedia          func(childComplexity int) int
+		Required              func(childComplexity int) int
+		Section               func(childComplexity int) int
+	}
+
+	CaptureReviewHandoff struct {
+		InspectionID    func(childComplexity int) int
+		OriginVersionID func(childComplexity int) int
 	}
 
 	ContestationSummary struct {
@@ -277,8 +310,10 @@ type ComplexityRoot struct {
 
 	ExternalCapture struct {
 		Answers               func(childComplexity int) int
+		CaptureLayout         func(childComplexity int) int
 		ConfirmationOnly      func(childComplexity int) int
 		DisclosureVersion     func(childComplexity int) int
+		Environments          func(childComplexity int) int
 		Kind                  func(childComplexity int) int
 		MediaKind             func(childComplexity int) int
 		Policy                func(childComplexity int) int
@@ -289,6 +324,7 @@ type ComplexityRoot struct {
 		ReplacementDeadlineAt func(childComplexity int) int
 		Requirements          func(childComplexity int) int
 		ResponsibilityID      func(childComplexity int) int
+		ReviewHandoff         func(childComplexity int) int
 		Status                func(childComplexity int) int
 		TemplateVersionID     func(childComplexity int) int
 	}
@@ -691,6 +727,7 @@ type ComplexityRoot struct {
 		CreateSchedule                         func(childComplexity int, input CreateScheduleInput) int
 		CreateTenant                           func(childComplexity int, input CreateTenantInput) int
 		DecideInventoryItems                   func(childComplexity int, input DecideInventoryItemsInput) int
+		DeclareCaptureEnvironment              func(childComplexity int, input DeclareCaptureEnvironmentInput) int
 		DeclareCaptureImpossibility            func(childComplexity int, input DeclareCaptureImpossibilityInput) int
 		DeclareSensitiveDetectionFalsePositive func(childComplexity int, input SensitiveFalsePositiveInput) int
 		DisableMembership                      func(childComplexity int, input DisableMembershipInput) int
@@ -710,6 +747,7 @@ type ComplexityRoot struct {
 		PublishSegmentDefinition               func(childComplexity int, input PublishSegmentDefinitionInput) int
 		PublishTemplateVersion                 func(childComplexity int, input PublishTemplateVersionInput) int
 		ReanalyzeVideoInspection               func(childComplexity int, input ReanalyzeVideoInspectionInput) int
+		RecordCaptureQualityWarning            func(childComplexity int, input RecordCaptureQualityWarningInput) int
 		RecordDeletionRequest                  func(childComplexity int, input RecordDeletionRequestInput) int
 		RegisterAsset                          func(childComplexity int, input RegisterAssetInput) int
 		ReleaseLegalHold                       func(childComplexity int, input LegalHoldInput) int
@@ -1686,10 +1724,11 @@ type ComplexityRoot struct {
 	}
 
 	UserError struct {
-		Code          func(childComplexity int) int
-		CorrelationID func(childComplexity int) int
-		Field         func(childComplexity int) int
-		Message       func(childComplexity int) int
+		Code                   func(childComplexity int) int
+		CorrelationID          func(childComplexity int) int
+		Field                  func(childComplexity int) int
+		Message                func(childComplexity int) int
+		PendingRequirementKeys func(childComplexity int) int
 	}
 
 	VideoAdmission struct {
@@ -1894,6 +1933,8 @@ type MutationResolver interface {
 	CompleteMediaUpload(ctx context.Context, input CompleteMediaUploadInput) (*MediaPayload, error)
 	SaveCaptureMetadata(ctx context.Context, input SaveCaptureMetadataInput) (*MediaPayload, error)
 	DeclareCaptureImpossibility(ctx context.Context, input DeclareCaptureImpossibilityInput) (*CapturePayload, error)
+	DeclareCaptureEnvironment(ctx context.Context, input DeclareCaptureEnvironmentInput) (*CaptureEnvironmentPayload, error)
+	RecordCaptureQualityWarning(ctx context.Context, input RecordCaptureQualityWarningInput) (*CaptureQualityWarningPayload, error)
 	SubmitCapture(ctx context.Context, input SubmitCaptureInput) (*SubmissionPayload, error)
 	RequestRecapture(ctx context.Context, input RequestRecaptureInput) (*RecapturePayload, error)
 	RequestVideoReplacement(ctx context.Context, input RequestVideoReplacementInput) (*VideoReplacementPayload, error)
@@ -2404,6 +2445,74 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CaptureAnswer.Version(childComplexity), true
 
+	case "CaptureEnvironment.addedDuringCapture":
+		if e.ComplexityRoot.CaptureEnvironment.AddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.AddedDuringCapture(childComplexity), true
+	case "CaptureEnvironment.expected":
+		if e.ComplexityRoot.CaptureEnvironment.Expected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Expected(childComplexity), true
+	case "CaptureEnvironment.identityId":
+		if e.ComplexityRoot.CaptureEnvironment.IdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.IdentityID(childComplexity), true
+	case "CaptureEnvironment.mediaCount":
+		if e.ComplexityRoot.CaptureEnvironment.MediaCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.MediaCount(childComplexity), true
+	case "CaptureEnvironment.name":
+		if e.ComplexityRoot.CaptureEnvironment.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Name(childComplexity), true
+	case "CaptureEnvironment.requirementKey":
+		if e.ComplexityRoot.CaptureEnvironment.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.RequirementKey(childComplexity), true
+	case "CaptureEnvironment.status":
+		if e.ComplexityRoot.CaptureEnvironment.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Status(childComplexity), true
+	case "CaptureEnvironment.typeCode":
+		if e.ComplexityRoot.CaptureEnvironment.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.TypeCode(childComplexity), true
+
+	case "CaptureEnvironmentPayload.clientMutationId":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.ClientMutationID(childComplexity), true
+	case "CaptureEnvironmentPayload.environment":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.Environment == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.Environment(childComplexity), true
+	case "CaptureEnvironmentPayload.userErrors":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.UserErrors(childComplexity), true
+
 	case "CapturePayload.clientMutationId":
 		if e.ComplexityRoot.CapturePayload.ClientMutationID == nil {
 			break
@@ -2422,6 +2531,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CapturePayload.UserErrors(childComplexity), true
+
+	case "CaptureQualityWarningPayload.clientMutationId":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.ClientMutationID(childComplexity), true
+	case "CaptureQualityWarningPayload.flags":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.Flags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.Flags(childComplexity), true
+	case "CaptureQualityWarningPayload.userErrors":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.UserErrors(childComplexity), true
 
 	case "CaptureReferenceItem.ambiguous":
 		if e.ComplexityRoot.CaptureReferenceItem.Ambiguous == nil {
@@ -2514,6 +2642,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CaptureReferenceItem.View(childComplexity), true
 
+	case "CaptureRequirement.addedDuringCapture":
+		if e.ComplexityRoot.CaptureRequirement.AddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.AddedDuringCapture(childComplexity), true
 	case "CaptureRequirement.captureSourcePolicy":
 		if e.ComplexityRoot.CaptureRequirement.CaptureSourcePolicy == nil {
 			break
@@ -2532,12 +2666,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.DescriptionRequired(childComplexity), true
+	case "CaptureRequirement.environmentIdentityId":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentIdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentIdentityID(childComplexity), true
+	case "CaptureRequirement.environmentName":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentName(childComplexity), true
+	case "CaptureRequirement.environmentTypeCode":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentTypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentTypeCode(childComplexity), true
 	case "CaptureRequirement.evidenceKind":
 		if e.ComplexityRoot.CaptureRequirement.EvidenceKind == nil {
 			break
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.EvidenceKind(childComplexity), true
+	case "CaptureRequirement.expected":
+		if e.ComplexityRoot.CaptureRequirement.Expected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.Expected(childComplexity), true
 	case "CaptureRequirement.impossibilityAllowed":
 		if e.ComplexityRoot.CaptureRequirement.ImpossibilityAllowed == nil {
 			break
@@ -2586,6 +2744,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.Section(childComplexity), true
+
+	case "CaptureReviewHandoff.inspectionId":
+		if e.ComplexityRoot.CaptureReviewHandoff.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReviewHandoff.InspectionID(childComplexity), true
+	case "CaptureReviewHandoff.originVersionId":
+		if e.ComplexityRoot.CaptureReviewHandoff.OriginVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReviewHandoff.OriginVersionID(childComplexity), true
 
 	case "ContestationSummary.acknowledged":
 		if e.ComplexityRoot.ContestationSummary.Acknowledged == nil {
@@ -2975,6 +3146,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.Answers(childComplexity), true
+	case "ExternalCapture.captureLayout":
+		if e.ComplexityRoot.ExternalCapture.CaptureLayout == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.CaptureLayout(childComplexity), true
 	case "ExternalCapture.confirmationOnly":
 		if e.ComplexityRoot.ExternalCapture.ConfirmationOnly == nil {
 			break
@@ -2987,6 +3164,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.DisclosureVersion(childComplexity), true
+	case "ExternalCapture.environments":
+		if e.ComplexityRoot.ExternalCapture.Environments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.Environments(childComplexity), true
 	case "ExternalCapture.kind":
 		if e.ComplexityRoot.ExternalCapture.Kind == nil {
 			break
@@ -3047,6 +3230,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.ResponsibilityID(childComplexity), true
+	case "ExternalCapture.reviewHandoff":
+		if e.ComplexityRoot.ExternalCapture.ReviewHandoff == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.ReviewHandoff(childComplexity), true
 	case "ExternalCapture.status":
 		if e.ComplexityRoot.ExternalCapture.Status == nil {
 			break
@@ -5068,6 +5257,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DecideInventoryItems(childComplexity, args["input"].(DecideInventoryItemsInput)), true
+	case "Mutation.declareCaptureEnvironment":
+		if e.ComplexityRoot.Mutation.DeclareCaptureEnvironment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_declareCaptureEnvironment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeclareCaptureEnvironment(childComplexity, args["input"].(DeclareCaptureEnvironmentInput)), true
 	case "Mutation.declareCaptureImpossibility":
 		if e.ComplexityRoot.Mutation.DeclareCaptureImpossibility == nil {
 			break
@@ -5277,6 +5477,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ReanalyzeVideoInspection(childComplexity, args["input"].(ReanalyzeVideoInspectionInput)), true
+	case "Mutation.recordCaptureQualityWarning":
+		if e.ComplexityRoot.Mutation.RecordCaptureQualityWarning == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_recordCaptureQualityWarning_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RecordCaptureQualityWarning(childComplexity, args["input"].(RecordCaptureQualityWarningInput)), true
 	case "Mutation.recordDeletionRequest":
 		if e.ComplexityRoot.Mutation.RecordDeletionRequest == nil {
 			break
@@ -9857,6 +10068,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserError.Message(childComplexity), true
+	case "UserError.pendingRequirementKeys":
+		if e.ComplexityRoot.UserError.PendingRequirementKeys == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserError.PendingRequirementKeys(childComplexity), true
 
 	case "VideoAdmission.changedAt":
 		if e.ComplexityRoot.VideoAdmission.ChangedAt == nil {
@@ -10361,6 +10578,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreateTenantInput,
 		ec.unmarshalInputCustomerPortfolioFilter,
 		ec.unmarshalInputDecideInventoryItemsInput,
+		ec.unmarshalInputDeclareCaptureEnvironmentInput,
 		ec.unmarshalInputDeclareCaptureImpossibilityInput,
 		ec.unmarshalInputDisableMembershipInput,
 		ec.unmarshalInputDiscardBaselineDraftInput,
@@ -10391,6 +10609,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPublishTemplateVersionInput,
 		ec.unmarshalInputReanalyzeVideoInspectionInput,
 		ec.unmarshalInputRecaptureItemInput,
+		ec.unmarshalInputRecordCaptureQualityWarningInput,
 		ec.unmarshalInputRecordDeletionRequestInput,
 		ec.unmarshalInputRegisterAssetInput,
 		ec.unmarshalInputRemoveInventoryEnvironmentInput,
@@ -10670,6 +10889,8 @@ type Mutation {
   completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
   saveCaptureMetadata(input: SaveCaptureMetadataInput!): MediaPayload!
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
+  declareCaptureEnvironment(input: DeclareCaptureEnvironmentInput!): CaptureEnvironmentPayload!
+  recordCaptureQualityWarning(input: RecordCaptureQualityWarningInput!): CaptureQualityWarningPayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
   requestVideoReplacement(input: RequestVideoReplacementInput!): VideoReplacementPayload!
@@ -10702,7 +10923,7 @@ type BusinessUnitPayload { businessUnit: BusinessUnit userErrors: [UserError!]! 
 type AuditEvent { id: ID! action: String! targetType: String! targetId: String! outcome: String! reason: String correlationId: String! occurredAt: String! }
 type AuditEventConnection { nodes: [AuditEvent!]! pageInfo: PageInfo! }
 type PageInfo { endCursor: String hasNextPage: Boolean! }
-type UserError { code: String! field: String message: String! correlationId: String! }
+type UserError { code: String! field: String message: String! correlationId: String! pendingRequirementKeys: [String!] }
 
 type Participant { id: ID! businessUnitId: ID! name: String! segmentRole: String! status: String! version: Int! contacts: [ParticipantContact!]! selectedContactIds: [ID!]! }
 type ParticipantContact { id: ID! channel: String! value: String! active: Boolean! verified: Boolean! }
@@ -10783,10 +11004,17 @@ type CaptureRequirement {
   captureSourcePolicy: String!
   comparisonTarget: String!
   impossibilityAllowed: Boolean!
+  environmentIdentityId: ID
+  environmentTypeCode: String
+  environmentName: String
+  expected: Boolean
+  addedDuringCapture: Boolean
 }
+type CaptureEnvironment { requirementKey: String! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! mediaCount: Int! status: String! }
+type CaptureReviewHandoff { inspectionId: ID! originVersionId: ID }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! captureLayout: String reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! environments: [CaptureEnvironment!]! reviewHandoff: CaptureReviewHandoff answers: [CaptureAnswer!]! disclosureVersion: String! }
 type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
@@ -11022,7 +11250,7 @@ input ArchiveAssetInput { assetId: ID! expectedVersion: Int! clientMutationId: S
 input RequestInvitationOtpInput { linkToken: String! clientMutationId: String! }
 input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutationId: String! }
 input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
-input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
+input InviteOriginCaptureInput { assetId: ID! participantId: ID! reviewerMembershipId: ID expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
 input CloseOriginInvitationInput { versionId: ID! reason: String! clientMutationId: String! }
 input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
@@ -11030,28 +11258,30 @@ input PromoteInspectionVideoInput { inspectionId: ID! clientMutationId: String! 
 input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
-input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
+input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
 input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
 input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
-input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
+input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
 input AddExceptionalStageInput { projectId: ID! expectedVersion: Int! key: String! label: String! reason: String! plannedAt: String clientMutationId: String! }
 input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! clientMutationId: String! }
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
-input BeginVideoCaptureInput { acquisitionSource: String! replacesMediaId: ID clientMutationId: String! }
+input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
 input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! expectedVersion: Int! clientMutationId: String! }
 input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
-input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! attemptId: ID clientMutationId: String! }
+input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }
 input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clientMutationId: String! }
 input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
 input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON replacesMediaId: ID clientMutationId: String! }
-input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String! expectedVersion: Int clientMutationId: String! }
+input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String reasonCode: String reasonText: String expectedVersion: Int clientMutationId: String! }
+input DeclareCaptureEnvironmentInput { typeCode: String! name: String! clientMutationId: String! }
+input RecordCaptureQualityWarningInput { requirementKey: String! code: String! ignored: Boolean! clientMutationId: String! }
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
@@ -11091,6 +11321,8 @@ type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection,
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type PlanInspectionPayload { inspection: Inspection schedule: Schedule project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
+type CaptureEnvironmentPayload { environment: CaptureEnvironment userErrors: [UserError!]! clientMutationId: String! }
+type CaptureQualityWarningPayload { flags: [String!]! userErrors: [UserError!]! clientMutationId: String! }
 type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }
 type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! clientMutationId: String! }
 type MediaPayload { media: Media userErrors: [UserError!]! clientMutationId: String! }
@@ -11324,6 +11556,40 @@ func (ec *executionContext) childFields_CaptureAnswer(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type CaptureAnswer", field.Name)
 }
 
+func (ec *executionContext) childFields_CaptureEnvironment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "requirementKey":
+		return ec.fieldContext_CaptureEnvironment_requirementKey(ctx, field)
+	case "identityId":
+		return ec.fieldContext_CaptureEnvironment_identityId(ctx, field)
+	case "typeCode":
+		return ec.fieldContext_CaptureEnvironment_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_CaptureEnvironment_name(ctx, field)
+	case "expected":
+		return ec.fieldContext_CaptureEnvironment_expected(ctx, field)
+	case "addedDuringCapture":
+		return ec.fieldContext_CaptureEnvironment_addedDuringCapture(ctx, field)
+	case "mediaCount":
+		return ec.fieldContext_CaptureEnvironment_mediaCount(ctx, field)
+	case "status":
+		return ec.fieldContext_CaptureEnvironment_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureEnvironment", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureEnvironmentPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "environment":
+		return ec.fieldContext_CaptureEnvironmentPayload_environment(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CaptureEnvironmentPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CaptureEnvironmentPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureEnvironmentPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_CapturePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "status":
@@ -11334,6 +11600,18 @@ func (ec *executionContext) childFields_CapturePayload(ctx context.Context, fiel
 		return ec.fieldContext_CapturePayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CapturePayload", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureQualityWarningPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "flags":
+		return ec.fieldContext_CaptureQualityWarningPayload_flags(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CaptureQualityWarningPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CaptureQualityWarningPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureQualityWarningPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_CaptureReferenceItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -11398,8 +11676,28 @@ func (ec *executionContext) childFields_CaptureRequirement(ctx context.Context, 
 		return ec.fieldContext_CaptureRequirement_comparisonTarget(ctx, field)
 	case "impossibilityAllowed":
 		return ec.fieldContext_CaptureRequirement_impossibilityAllowed(ctx, field)
+	case "environmentIdentityId":
+		return ec.fieldContext_CaptureRequirement_environmentIdentityId(ctx, field)
+	case "environmentTypeCode":
+		return ec.fieldContext_CaptureRequirement_environmentTypeCode(ctx, field)
+	case "environmentName":
+		return ec.fieldContext_CaptureRequirement_environmentName(ctx, field)
+	case "expected":
+		return ec.fieldContext_CaptureRequirement_expected(ctx, field)
+	case "addedDuringCapture":
+		return ec.fieldContext_CaptureRequirement_addedDuringCapture(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CaptureRequirement", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureReviewHandoff(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_CaptureReviewHandoff_inspectionId(ctx, field)
+	case "originVersionId":
+		return ec.fieldContext_CaptureReviewHandoff_originVersionId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureReviewHandoff", field.Name)
 }
 
 func (ec *executionContext) childFields_ContestationSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -11606,6 +11904,8 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_mediaKind(ctx, field)
 	case "templateVersionId":
 		return ec.fieldContext_ExternalCapture_templateVersionId(ctx, field)
+	case "captureLayout":
+		return ec.fieldContext_ExternalCapture_captureLayout(ctx, field)
 	case "reference":
 		return ec.fieldContext_ExternalCapture_reference(ctx, field)
 	case "referenceItems":
@@ -11614,6 +11914,10 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_policy(ctx, field)
 	case "requirements":
 		return ec.fieldContext_ExternalCapture_requirements(ctx, field)
+	case "environments":
+		return ec.fieldContext_ExternalCapture_environments(ctx, field)
+	case "reviewHandoff":
+		return ec.fieldContext_ExternalCapture_reviewHandoff(ctx, field)
 	case "answers":
 		return ec.fieldContext_ExternalCapture_answers(ctx, field)
 	case "disclosureVersion":
@@ -14100,6 +14404,8 @@ func (ec *executionContext) childFields_UserError(ctx context.Context, field gra
 		return ec.fieldContext_UserError_message(ctx, field)
 	case "correlationId":
 		return ec.fieldContext_UserError_correlationId(ctx, field)
+	case "pendingRequirementKeys":
+		return ec.fieldContext_UserError_pendingRequirementKeys(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserError", field.Name)
 }
@@ -14934,6 +15240,20 @@ func (ec *executionContext) field_Mutation_decideInventoryItems_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_declareCaptureEnvironment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DeclareCaptureEnvironmentInput, error) {
+			return ec.unmarshalNDeclareCaptureEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDeclareCaptureEnvironmentInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_declareCaptureImpossibility_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -15192,6 +15512,20 @@ func (ec *executionContext) field_Mutation_reanalyzeVideoInspection_args(ctx con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ReanalyzeVideoInspectionInput, error) {
 			return ec.unmarshalNReanalyzeVideoInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐReanalyzeVideoInspectionInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_recordCaptureQualityWarning_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RecordCaptureQualityWarningInput, error) {
+			return ec.unmarshalNRecordCaptureQualityWarningInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordCaptureQualityWarningInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -18741,6 +19075,277 @@ func (ec *executionContext) fieldContext_CaptureAnswer_version(_ context.Context
 	return graphql.NewScalarFieldContext("CaptureAnswer", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _CaptureEnvironment_requirementKey(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_identityId(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_identityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_identityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_typeCode(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_name(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_expected(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_expected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Expected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_addedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_addedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_addedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_mediaCount(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_mediaCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_mediaCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_status(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_environment(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_environment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environment, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+			return ec.marshalOCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_environment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironmentPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CapturePayload_status(ctx context.Context, field graphql.CollectedField, obj *CapturePayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18817,6 +19422,84 @@ func (ec *executionContext) _CapturePayload_clientMutationId(ctx context.Context
 }
 func (ec *executionContext) fieldContext_CapturePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CapturePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_flags(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_flags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Flags, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_flags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureQualityWarningPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureQualityWarningPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureQualityWarningPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CaptureReferenceItem_mediaId(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
@@ -19438,6 +20121,167 @@ func (ec *executionContext) _CaptureRequirement_impossibilityAllowed(ctx context
 }
 func (ec *executionContext) fieldContext_CaptureRequirement_impossibilityAllowed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentIdentityId(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentIdentityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentIdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentIdentityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentTypeCode(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentTypeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentTypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentTypeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentName(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_expected(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_expected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Expected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_addedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_addedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_addedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReviewHandoff_inspectionId(ctx context.Context, field graphql.CollectedField, obj *CaptureReviewHandoff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReviewHandoff_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReviewHandoff_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReviewHandoff", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReviewHandoff_originVersionId(ctx context.Context, field graphql.CollectedField, obj *CaptureReviewHandoff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReviewHandoff_originVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReviewHandoff_originVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReviewHandoff", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
 func (ec *executionContext) _ContestationSummary_pending(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
@@ -21163,6 +22007,29 @@ func (ec *executionContext) fieldContext_ExternalCapture_templateVersionId(_ con
 	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _ExternalCapture_captureLayout(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_captureLayout(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CaptureLayout, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_captureLayout(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _ExternalCapture_reference(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -21268,6 +22135,70 @@ func (ec *executionContext) fieldContext_ExternalCapture_requirements(_ context.
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_CaptureRequirement(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExternalCapture_environments(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_environments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CaptureEnvironment) graphql.Marshaler {
+			return ec.marshalNCaptureEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_environments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExternalCapture",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExternalCapture_reviewHandoff(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_reviewHandoff(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewHandoff, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureReviewHandoff) graphql.Marshaler {
+			return ec.marshalOCaptureReviewHandoff2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReviewHandoff(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_reviewHandoff(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExternalCapture",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureReviewHandoff(ctx, field)
 		},
 	}
 	return fc, nil
@@ -31202,6 +32133,94 @@ func (ec *executionContext) fieldContext_Mutation_declareCaptureImpossibility(ct
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_declareCaptureImpossibility_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_declareCaptureEnvironment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_declareCaptureEnvironment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeclareCaptureEnvironment(ctx, fc.Args["input"].(DeclareCaptureEnvironmentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureEnvironmentPayload) graphql.Marshaler {
+			return ec.marshalNCaptureEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_declareCaptureEnvironment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironmentPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_declareCaptureEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_recordCaptureQualityWarning(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_recordCaptureQualityWarning(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RecordCaptureQualityWarning(ctx, fc.Args["input"].(RecordCaptureQualityWarningInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureQualityWarningPayload) graphql.Marshaler {
+			return ec.marshalNCaptureQualityWarningPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureQualityWarningPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_recordCaptureQualityWarning(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureQualityWarningPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_recordCaptureQualityWarning_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -48586,6 +49605,29 @@ func (ec *executionContext) fieldContext_UserError_correlationId(_ context.Conte
 	return graphql.NewScalarFieldContext("UserError", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _UserError_pendingRequirementKeys(ctx context.Context, field graphql.CollectedField, obj *UserError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserError_pendingRequirementKeys(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PendingRequirementKeys, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserError_pendingRequirementKeys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserError", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _VideoAdmission_enabled(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -52188,7 +53230,7 @@ func (ec *executionContext) unmarshalInputBeginVideoCaptureInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"acquisitionSource", "replacesMediaId", "clientMutationId"}
+	fieldsInOrder := [...]string{"acquisitionSource", "requirementKey", "replacesMediaId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -52202,6 +53244,13 @@ func (ec *executionContext) unmarshalInputBeginVideoCaptureInput(ctx context.Con
 				return it, err
 			}
 			it.AcquisitionSource = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
 		case "replacesMediaId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("replacesMediaId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -53026,7 +54075,7 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "projectId", "stageId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "reviewerMembershipId", "projectId", "stageId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -53068,6 +54117,13 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "projectId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -53133,7 +54189,7 @@ func (ec *executionContext) unmarshalInputCreateMediaUploadInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"contentType", "sizeBytes", "sha256", "attemptId", "clientMutationId"}
+	fieldsInOrder := [...]string{"contentType", "sizeBytes", "sha256", "requirementKey", "attemptId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -53161,6 +54217,13 @@ func (ec *executionContext) unmarshalInputCreateMediaUploadInput(ctx context.Con
 				return it, err
 			}
 			it.Sha256 = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
 		case "attemptId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("attemptId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -53516,6 +54579,50 @@ func (ec *executionContext) unmarshalInputDecideInventoryItemsInput(ctx context.
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputDeclareCaptureEnvironmentInput(ctx context.Context, obj any) (DeclareCaptureEnvironmentInput, error) {
+	var it DeclareCaptureEnvironmentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"typeCode", "name", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx context.Context, obj any) (DeclareCaptureImpossibilityInput, error) {
 	var it DeclareCaptureImpossibilityInput
 	if obj == nil {
@@ -53527,7 +54634,7 @@ func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx c
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"requirementKey", "reason", "expectedVersion", "clientMutationId"}
+	fieldsInOrder := [...]string{"requirementKey", "reason", "reasonCode", "reasonText", "expectedVersion", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -53543,11 +54650,25 @@ func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx c
 			it.RequirementKey = data
 		case "reason":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Reason = data
+		case "reasonCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasonCode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReasonCode = data
+		case "reasonText":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasonText"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReasonText = data
 		case "expectedVersion":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
 			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
@@ -54116,7 +55237,7 @@ func (ec *executionContext) unmarshalInputInviteOriginCaptureInput(ctx context.C
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "expiresAt", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "reviewerMembershipId", "expiresAt", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -54137,6 +55258,13 @@ func (ec *executionContext) unmarshalInputInviteOriginCaptureInput(ctx context.C
 				return it, err
 			}
 			it.ParticipantID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "expiresAt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -54544,7 +55672,7 @@ func (ec *executionContext) unmarshalInputPlanInspectionInput(ctx context.Contex
 		asMap["orderedStages"] = false
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "dueAt", "startsAt", "timezone", "rrule", "deadlineAt", "deadlineMinutes", "reminderInstants", "reminderOffsetsMinutes", "reason", "projectId", "projectName", "createProject", "orderedStages", "stages", "stageId", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "reviewerMembershipId", "dueAt", "startsAt", "timezone", "rrule", "deadlineAt", "deadlineMinutes", "reminderInstants", "reminderOffsetsMinutes", "reason", "projectId", "projectName", "createProject", "orderedStages", "stages", "stageId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -54586,6 +55714,13 @@ func (ec *executionContext) unmarshalInputPlanInspectionInput(ctx context.Contex
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "dueAt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueAt"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -55259,6 +56394,57 @@ func (ec *executionContext) unmarshalInputRecaptureItemInput(ctx context.Context
 				return it, err
 			}
 			it.Reason = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputRecordCaptureQualityWarningInput(ctx context.Context, obj any) (RecordCaptureQualityWarningInput, error) {
+	var it RecordCaptureQualityWarningInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"requirementKey", "code", "ignored", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
+		case "code":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Code = data
+		case "ignored":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ignored"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Ignored = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
 		}
 	}
 	return it, nil
@@ -58008,6 +59194,127 @@ func (ec *executionContext) _CaptureAnswer(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var captureEnvironmentImplementors = []string{"CaptureEnvironment"}
+
+func (ec *executionContext) _CaptureEnvironment(ctx context.Context, sel ast.SelectionSet, obj *CaptureEnvironment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureEnvironmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureEnvironment")
+		case "requirementKey":
+			out.Values[i] = ec._CaptureEnvironment_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "identityId":
+			out.Values[i] = ec._CaptureEnvironment_identityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "typeCode":
+			out.Values[i] = ec._CaptureEnvironment_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CaptureEnvironment_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expected":
+			out.Values[i] = ec._CaptureEnvironment_expected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addedDuringCapture":
+			out.Values[i] = ec._CaptureEnvironment_addedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaCount":
+			out.Values[i] = ec._CaptureEnvironment_mediaCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CaptureEnvironment_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureEnvironmentPayloadImplementors = []string{"CaptureEnvironmentPayload"}
+
+func (ec *executionContext) _CaptureEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, obj *CaptureEnvironmentPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureEnvironmentPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureEnvironmentPayload")
+		case "environment":
+			out.Values[i] = ec._CaptureEnvironmentPayload_environment(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CaptureEnvironmentPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CaptureEnvironmentPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var capturePayloadImplementors = []string{"CapturePayload"}
 
 func (ec *executionContext) _CapturePayload(ctx context.Context, sel ast.SelectionSet, obj *CapturePayload) graphql.Marshaler {
@@ -58032,6 +59339,54 @@ func (ec *executionContext) _CapturePayload(ctx context.Context, sel ast.Selecti
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._CapturePayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureQualityWarningPayloadImplementors = []string{"CaptureQualityWarningPayload"}
+
+func (ec *executionContext) _CaptureQualityWarningPayload(ctx context.Context, sel ast.SelectionSet, obj *CaptureQualityWarningPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureQualityWarningPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureQualityWarningPayload")
+		case "flags":
+			out.Values[i] = ec._CaptureQualityWarningPayload_flags(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CaptureQualityWarningPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CaptureQualityWarningPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -58234,6 +59589,74 @@ func (ec *executionContext) _CaptureRequirement(ctx context.Context, sel ast.Sel
 		case "impossibilityAllowed":
 			out.Values[i] = ec._CaptureRequirement_impossibilityAllowed(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentIdentityId":
+			out.Values[i] = ec._CaptureRequirement_environmentIdentityId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "environmentTypeCode":
+			out.Values[i] = ec._CaptureRequirement_environmentTypeCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "environmentName":
+			out.Values[i] = ec._CaptureRequirement_environmentName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "expected":
+			out.Values[i] = ec._CaptureRequirement_expected(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "addedDuringCapture":
+			out.Values[i] = ec._CaptureRequirement_addedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureReviewHandoffImplementors = []string{"CaptureReviewHandoff"}
+
+func (ec *executionContext) _CaptureReviewHandoff(ctx context.Context, sel ast.SelectionSet, obj *CaptureReviewHandoff) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureReviewHandoffImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureReviewHandoff")
+		case "inspectionId":
+			out.Values[i] = ec._CaptureReviewHandoff_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "originVersionId":
+			out.Values[i] = ec._CaptureReviewHandoff_originVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -58954,6 +60377,11 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "captureLayout":
+			out.Values[i] = ec._ExternalCapture_captureLayout(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "reference":
 			out.Values[i] = ec._ExternalCapture_reference(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -58972,6 +60400,16 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 		case "requirements":
 			out.Values[i] = ec._ExternalCapture_requirements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environments":
+			out.Values[i] = ec._ExternalCapture_environments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewHandoff":
+			out.Values[i] = ec._ExternalCapture_reviewHandoff(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "answers":
@@ -61951,6 +63389,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "declareCaptureImpossibility":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_declareCaptureImpossibility(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "declareCaptureEnvironment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_declareCaptureEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recordCaptureQualityWarning":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_recordCaptureQualityWarning(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -69694,6 +71146,11 @@ func (ec *executionContext) _UserError(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "pendingRequirementKeys":
+			out.Values[i] = ec._UserError_pendingRequirementKeys(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -71312,6 +72769,42 @@ func (ec *executionContext) marshalNCaptureComparisonMode2inspectionᚋservices�
 	return v
 }
 
+func (ec *executionContext) marshalNCaptureEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureEnvironment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureEnvironment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCaptureEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironmentPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureEnvironmentPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCapturePayload(ctx context.Context, sel ast.SelectionSet, v *CapturePayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -71320,6 +72813,16 @@ func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋin
 		return graphql.Null
 	}
 	return ec._CapturePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCaptureQualityWarningPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureQualityWarningPayload(ctx context.Context, sel ast.SelectionSet, v *CaptureQualityWarningPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureQualityWarningPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNCaptureReferenceItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureReferenceItem) graphql.Marshaler {
@@ -71627,6 +73130,11 @@ func (ec *executionContext) marshalNDashboardSummary2ᚖinspectionᚋservicesᚋ
 
 func (ec *executionContext) unmarshalNDecideInventoryItemsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDecideInventoryItemsInput(ctx context.Context, v any) (DecideInventoryItemsInput, error) {
 	res, err := ec.unmarshalInputDecideInventoryItemsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNDeclareCaptureEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDeclareCaptureEnvironmentInput(ctx context.Context, v any) (DeclareCaptureEnvironmentInput, error) {
+	res, err := ec.unmarshalInputDeclareCaptureEnvironmentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -73029,6 +74537,11 @@ func (ec *executionContext) marshalNRecipientNotificationPayload2ᚖinspection�
 		return graphql.Null
 	}
 	return ec._RecipientNotificationPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRecordCaptureQualityWarningInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordCaptureQualityWarningInput(ctx context.Context, v any) (RecordCaptureQualityWarningInput, error) {
+	res, err := ec.unmarshalInputRecordCaptureQualityWarningInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNRecordDeletionRequestInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordDeletionRequestInput(ctx context.Context, v any) (RecordDeletionRequestInput, error) {
@@ -74455,12 +75968,26 @@ func (ec *executionContext) marshalOBusinessUnit2ᚖinspectionᚋservicesᚋinsp
 	return ec._BusinessUnit(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CaptureEnvironment(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOCaptureGPSInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureGPSInput(ctx context.Context, v any) (*CaptureGPSInput, error) {
 	if v == nil {
 		return nil, nil
 	}
 	res, err := ec.unmarshalInputCaptureGPSInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOCaptureReviewHandoff2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReviewHandoff(ctx context.Context, sel ast.SelectionSet, v *CaptureReviewHandoff) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CaptureReviewHandoff(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOContestationSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐContestationSummary(ctx context.Context, sel ast.SelectionSet, v *ContestationSummary) graphql.Marshaler {

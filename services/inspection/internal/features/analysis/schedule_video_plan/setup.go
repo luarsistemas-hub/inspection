@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -135,11 +136,140 @@ func (s *Scheduler) Handle(ctx context.Context, tx *gorm.DB, envelope events.Raw
 	switch envelope.Type {
 	case "capture.video_submitted.v1":
 		return s.handleSubmission(ctx, tx, envelope)
+	case "capture.video_submitted.v2":
+		return s.handleSubmissionV2(ctx, tx, envelope)
 	case "media.video_prepared.v1":
 		return s.handlePrepared(ctx, tx, envelope)
 	default:
 		return permanent(fmt.Errorf("%w: unsupported message type", ErrInvalidEvent))
 	}
+}
+
+func (s *Scheduler) handleSubmissionV2(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+	var payload events.CaptureVideoSubmittedV2Payload
+	if err := strictDecode(envelope.Payload, &payload); err != nil || payload.SubmissionVersionID == (identity.ID{}) || payload.ResponsibilityID == (identity.ID{}) || len(payload.Clips) == 0 {
+		return permanent(fmt.Errorf("%w: malformed v2 submission", ErrInvalidEvent))
+	}
+	var submission database.SubmissionVersion
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND responsibility_id=?", envelope.TenantID, payload.SubmissionVersionID, payload.ResponsibilityID).Take(&submission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return permanent(fmt.Errorf("%w: unknown v2 submission", ErrInvalidEvent))
+		}
+		return err
+	}
+	var responsibility database.Responsibility
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.ResponsibilityID).Take(&responsibility).Error; err != nil {
+		return err
+	}
+	if responsibility.InspectionID != payload.InspectionID {
+		return permanent(fmt.Errorf("%w: v2 submission inspection mismatch", ErrInvalidEvent))
+	}
+	var recaptureDraft database.CaptureDraft
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id=? AND kind='RECAPTURE' AND media_kind='VIDEO'", envelope.TenantID, responsibility.ID).Take(&recaptureDraft).Error; err == nil {
+		return nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	var immutable struct {
+		Clips []events.CaptureVideoClip `json:"clips"`
+	}
+	if err := json.Unmarshal(submission.Payload, &immutable); err != nil || len(immutable.Clips) != len(payload.Clips) {
+		return permanent(fmt.Errorf("%w: v2 event differs from immutable submission", ErrInvalidEvent))
+	}
+	preparations := make([]database.VideoPreparationJob, 0, len(payload.Clips))
+	for i, clip := range payload.Clips {
+		if immutable.Clips[i] != clip || !strings.HasPrefix(clip.RequirementKey, "env:") || clip.MediaID == (identity.ID{}) {
+			return permanent(fmt.Errorf("%w: v2 event differs from immutable submission", ErrInvalidEvent))
+		}
+		var preparation database.VideoPreparationJob
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=? AND submission_id=? AND requirement_key=?", envelope.TenantID, clip.MediaID, submission.ID, clip.RequirementKey).Order("created_at DESC,id DESC").Take(&preparation).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return permanent(fmt.Errorf("%w: clip preparation missing", ErrInvalidEvent))
+			}
+			return err
+		}
+		preparations = append(preparations, preparation)
+	}
+	var inspection database.Inspection
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND media_kind='VIDEO'", envelope.TenantID, responsibility.InspectionID).Take(&inspection).Error; err != nil {
+		return err
+	}
+	if err := s.ensurePlan(ctx, tx, envelope.TenantID, inspection, submission, preparations[0]); err != nil {
+		return err
+	}
+	var plan database.VideoPlan
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND submission_id=? AND generation=1", envelope.TenantID, submission.ID).Take(&plan).Error; err != nil {
+		return err
+	}
+	var replacement database.VideoReplacement
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id=? AND status='SUBMITTED'", envelope.TenantID, responsibility.ID).Take(&replacement).Error; err == nil {
+		return inheritReplacementPlanPreparations(ctx, tx, envelope.TenantID, inspection.ID, plan, replacement.MediaID, payload.Clips, preparations, s.now().UTC())
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	for i, clip := range payload.Clips {
+		preparation := preparations[i]
+		key := clip.RequirementKey
+		role := "SUPPLEMENT"
+		if i == 0 {
+			role = "MAIN"
+		}
+		link := database.VideoPlanPreparation{TenantID: envelope.TenantID, PlanID: plan.ID, PreparationID: preparation.ID, Role: role, RequirementKey: &key, CreatedAt: s.now().UTC()}
+		if err := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func inheritReplacementPlanPreparations(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID, plan database.VideoPlan, replacedMediaID identity.ID, clips []events.CaptureVideoClip, preparations []database.VideoPreparationJob, now time.Time) error {
+	if len(clips) != len(preparations) {
+		return fmt.Errorf("replacement preparation count does not match clips")
+	}
+	newPreparationByRequirement := make(map[string]identity.ID, len(clips))
+	for i, clip := range clips {
+		newPreparationByRequirement[clip.RequirementKey] = preparations[i].ID
+	}
+	var oldLinks []database.VideoPlanPreparation
+	var oldPlan database.VideoPlan
+	if err := tx.WithContext(ctx).Table("analysis.video_plans AS old_plan").Select("old_plan.*").
+		Joins("JOIN analysis.video_plan_preparations link ON link.tenant_id=old_plan.tenant_id AND link.plan_id=old_plan.id").
+		Joins("JOIN media.video_preparation_jobs old_preparation ON old_preparation.tenant_id=link.tenant_id AND old_preparation.id=link.preparation_id").
+		Where("old_plan.tenant_id=? AND old_plan.inspection_id=? AND old_plan.status='FAILED' AND old_plan.error_code='REPLACED' AND old_preparation.media_id=? AND link.role IN ?", tenantID, inspectionID, replacedMediaID, []string{"MAIN", "SUPPLEMENT"}).
+		Order("old_plan.created_at DESC").Take(&oldPlan).Error; err != nil {
+		return err
+	}
+	if err := tx.WithContext(ctx).Table("analysis.video_plan_preparations AS link").Select("link.*").
+		Joins("JOIN analysis.video_plans old_plan ON old_plan.tenant_id=link.tenant_id AND old_plan.id=link.plan_id").
+		Joins("JOIN media.video_preparation_jobs old_preparation ON old_preparation.tenant_id=link.tenant_id AND old_preparation.id=link.preparation_id").
+		Where("link.tenant_id=? AND link.plan_id=? AND link.role IN ?", tenantID, oldPlan.ID, []string{"MAIN", "SUPPLEMENT"}).
+		Find(&oldLinks).Error; err != nil {
+		return err
+	}
+	if len(oldLinks) == 0 {
+		return fmt.Errorf("replacement source plan link was not found")
+	}
+	var mainPreparationID identity.ID
+	for _, oldLink := range oldLinks {
+		if oldLink.RequirementKey == nil {
+			return fmt.Errorf("replacement source plan link has no requirement key")
+		}
+		preparationID := oldLink.PreparationID
+		if replacementPreparationID, replaced := newPreparationByRequirement[*oldLink.RequirementKey]; replaced {
+			preparationID = replacementPreparationID
+		}
+		link := database.VideoPlanPreparation{TenantID: tenantID, PlanID: plan.ID, PreparationID: preparationID, Role: oldLink.Role, RequirementKey: oldLink.RequirementKey, CreatedAt: now}
+		if err := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&link).Error; err != nil {
+			return err
+		}
+		if link.Role == "MAIN" {
+			mainPreparationID = preparationID
+		}
+	}
+	if mainPreparationID == (identity.ID{}) {
+		return fmt.Errorf("replacement source plan has no MAIN preparation")
+	}
+	return tx.WithContext(ctx).Model(&database.VideoPlan{}).Where("tenant_id=? AND id=?", tenantID, plan.ID).Update("current_preparation_id", mainPreparationID).Error
 }
 
 type videoSubmitted struct {
@@ -215,6 +345,13 @@ func (s *Scheduler) handlePrepared(ctx context.Context, tx *gorm.DB, envelope ev
 		}
 		return err
 	}
+	if preparation.RequirementKey != nil && strings.HasPrefix(*preparation.RequirementKey, "env:") {
+		// Environment plans are created atomically from capture.video_submitted.v2.
+		if preparation.Status != "READY" {
+			return nil
+		}
+		return s.wakePlansWaitingForPreparation(ctx, tx, envelope.TenantID, preparation.ID)
+	}
 	if preparation.Status != "READY" {
 		return fmt.Errorf("preparation pending: %w", gorm.ErrRecordNotFound)
 	}
@@ -231,7 +368,7 @@ func (s *Scheduler) handlePrepared(ctx context.Context, tx *gorm.DB, envelope ev
 		return permanent(fmt.Errorf("%w: manifest digest mismatch", ErrInvalidEvent))
 	}
 	if preparation.SubmissionID == nil {
-		return nil
+		return s.wakePlansWaitingForPreparation(ctx, tx, envelope.TenantID, preparation.ID)
 	}
 	var submission database.SubmissionVersion
 	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, *preparation.SubmissionID).Take(&submission).Error; err != nil {
@@ -257,13 +394,24 @@ func (s *Scheduler) handlePrepared(ctx context.Context, tx *gorm.DB, envelope ev
 		}
 		return err
 	}
-	return s.ensurePlan(ctx, tx, envelope.TenantID, inspection, submission, preparation)
+	if err := s.ensurePlan(ctx, tx, envelope.TenantID, inspection, submission, preparation); err != nil {
+		return err
+	}
+	return s.wakePlansWaitingForPreparation(ctx, tx, envelope.TenantID, preparation.ID)
+}
+
+func (s *Scheduler) wakePlansWaitingForPreparation(ctx context.Context, tx *gorm.DB, tenantID, preparationID identity.ID) error {
+	return tx.WithContext(ctx).Model(&database.VideoPlan{}).Where(`tenant_id=? AND status='BUILDING' AND (origin_preparation_id=? OR EXISTS (
+		SELECT 1 FROM analysis.video_plan_preparations link WHERE link.tenant_id=video_plans.tenant_id AND link.plan_id=video_plans.id AND link.preparation_id=? AND link.role='ORIGIN'))`, tenantID, preparationID, preparationID).Update("next_attempt_at", s.now().UTC()).Error
 }
 
 func (s *Scheduler) ensurePlan(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, submission database.SubmissionVersion, preparation database.VideoPreparationJob) error {
 	var existing database.VideoPlan
 	err := tx.WithContext(ctx).Where("tenant_id=? AND submission_id=? AND generation=1", tenantID, submission.ID).Take(&existing).Error
 	if err == nil {
+		if existing.Status == "BUILDING" && existing.LeaseToken == nil {
+			return tx.WithContext(ctx).Model(&existing).Update("next_attempt_at", s.now().UTC()).Error
+		}
 		return nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -276,7 +424,7 @@ func (s *Scheduler) ensurePlan(ctx context.Context, tx *gorm.DB, tenantID identi
 	var version *database.OriginVersion
 	if reference.ReferenceVersionID != nil {
 		var origin database.OriginVersion
-		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND media_kind='VIDEO'", tenantID, *reference.ReferenceVersionID).Take(&origin).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, *reference.ReferenceVersionID).Take(&origin).Error; err != nil {
 			return err
 		}
 		version = &origin
@@ -308,7 +456,10 @@ func (s *Scheduler) RunDue(ctx context.Context) (bool, error) {
 	token := identity.NewID()
 	now := s.now().UTC()
 	err := s.claimDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		query := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("status='BUILDING' AND next_attempt_at<=? AND (lease_until IS NULL OR lease_until<=?)", now, now).Order("created_at,id").Take(&job)
+		query := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where(`status='BUILDING' AND next_attempt_at<=? AND (lease_until IS NULL OR lease_until<=?) AND NOT EXISTS (
+SELECT 1 FROM analysis.video_plan_preparations link
+JOIN media.video_preparation_jobs prep ON prep.tenant_id=link.tenant_id AND prep.id=link.preparation_id
+		WHERE link.tenant_id=analysis.video_plans.tenant_id AND link.plan_id=analysis.video_plans.id AND prep.status NOT IN ('READY','FAILED','CANCELED'))`, now, now).Order("created_at,id").Take(&job)
 		if query.Error != nil {
 			return query.Error
 		}
@@ -441,10 +592,7 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 	if current.SubmissionID == nil || *current.SubmissionID != submission.ID {
 		return nil, permanent(fmt.Errorf("%w: preparation submission mismatch", ErrInvalidEvent))
 	}
-	if reference != nil {
-		if originPreparation == nil {
-			return nil, permanent(fmt.Errorf("%w: pinned origin has no video preparation", ErrInvalidEvent))
-		}
+	if reference != nil && originPreparation != nil {
 		var origin database.VideoPreparationJob
 		if err := s.within(ctx, job.TenantID, func(tx *gorm.DB) error {
 			return tx.WithContext(ctx).Where("tenant_id=? AND id=?", job.TenantID, *originPreparation).Take(&origin).Error
@@ -461,8 +609,37 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 			return nil, errDeferred
 		}
 	}
+	currentRefs := make([]buildplan.PreparationRef, 0)
+	if job.ParentPlanID == nil {
+		if err := s.within(ctx, job.TenantID, func(tx *gorm.DB) error {
+			var links []database.VideoPlanPreparation
+			if err := tx.Where("tenant_id=? AND plan_id=? AND role IN ?", job.TenantID, job.ID, []string{"MAIN", "SUPPLEMENT"}).Order("role,created_at,preparation_id").Find(&links).Error; err != nil {
+				return err
+			}
+			for _, link := range links {
+				var prep database.VideoPreparationJob
+				if err := tx.Where("tenant_id=? AND id=?", job.TenantID, link.PreparationID).Take(&prep).Error; err != nil {
+					return err
+				}
+				if statusErr := preparationStatusError(prep); statusErr != nil {
+					return statusErr
+				}
+				if prep.SubmissionID == nil || *prep.SubmissionID != submission.ID {
+					return permanent(fmt.Errorf("%w: preparation submission mismatch", ErrInvalidEvent))
+				}
+				key := ""
+				if link.RequirementKey != nil {
+					key = *link.RequirementKey
+				}
+				currentRefs = append(currentRefs, buildplan.PreparationRef{ID: link.PreparationID, RequirementKey: key, Role: link.Role, Generation: prep.Generation})
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
 	componentPreparation := current.ID
-	if reference != nil {
+	if reference != nil && originPreparation != nil {
 		componentPreparation = *originPreparation
 	}
 	components := make([]buildplan.Component, 0)
@@ -471,12 +648,39 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND preparation_id=?", job.TenantID, componentPreparation).Order("created_at,id").Find(&scopes).Error; err != nil {
 			return err
 		}
-		seen := make(map[identity.ID]bool)
-		for _, scope := range scopes {
-			if !seen[scope.ID] {
-				seen[scope.ID] = true
-				components = append(components, buildplan.Component{ID: scope.ID})
+		seen := make(map[string]bool)
+		addScopes := func(preparationID identity.ID, requirementKey string) error {
+			var scopes []database.VideoScopeItem
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND preparation_id=?", job.TenantID, preparationID).Order("created_at,id").Find(&scopes).Error; err != nil {
+				return err
 			}
+			for _, scope := range scopes {
+				key := requirementKey + ":" + scope.ID.String()
+				if !seen[key] {
+					seen[key] = true
+					components = append(components, buildplan.Component{ID: scope.ID, RequirementKey: requirementKey})
+				}
+			}
+			return nil
+		}
+		if hasEnvironmentPreparations(currentRefs) && reference != nil && originPreparation != nil {
+			currentScopesByPreparation := make(map[identity.ID][]database.VideoScopeItem, len(currentRefs))
+			for _, ref := range currentRefs {
+				var currentScopes []database.VideoScopeItem
+				if err := tx.WithContext(ctx).Where("tenant_id=? AND preparation_id=?", job.TenantID, ref.ID).Find(&currentScopes).Error; err != nil {
+					return err
+				}
+				currentScopesByPreparation[ref.ID] = currentScopes
+			}
+			components = originComponentsForCurrentEnvironments(scopes, currentRefs, currentScopesByPreparation)
+		} else if len(currentRefs) > 0 && (reference == nil || originPreparation == nil) {
+			for _, ref := range currentRefs {
+				if err := addScopes(ref.ID, ref.RequirementKey); err != nil {
+					return err
+				}
+			}
+		} else if err := addScopes(componentPreparation, ""); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -486,7 +690,7 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 	if len(components) == 0 {
 		return nil, permanent(fmt.Errorf("%w: preparation has no scope components", ErrInvalidEvent))
 	}
-	plan := buildplan.Plan{ID: job.ID, TenantID: job.TenantID, InspectionID: inspection.ID, AssetID: inspection.AssetID, SubmissionID: submission.ID, ReferenceVersionID: reference, ParentPlanID: job.ParentPlanID, OriginPreparationID: originPreparation, CurrentPreparationID: job.CurrentPreparationID, SupplementPreparationID: supplementPreparationID, Generation: job.Generation, CurrentGeneration: current.Generation, LeaseToken: &token}
+	plan := buildplan.Plan{ID: job.ID, TenantID: job.TenantID, InspectionID: inspection.ID, AssetID: inspection.AssetID, SubmissionID: submission.ID, ReferenceVersionID: reference, ParentPlanID: job.ParentPlanID, OriginPreparationID: originPreparation, CurrentPreparationID: job.CurrentPreparationID, SupplementPreparationID: supplementPreparationID, CurrentPreparations: currentRefs, Generation: job.Generation, CurrentGeneration: current.Generation, LeaseToken: &token}
 	request := &buildplan.PlanRequest{Plan: plan, Components: components}
 	if job.ParentPlanID != nil {
 		var parent database.VideoPlan
@@ -576,9 +780,73 @@ func (s *Scheduler) planRequest(ctx context.Context, job database.VideoPlan, ins
 	return request, nil
 }
 
+func hasEnvironmentPreparations(refs []buildplan.PreparationRef) bool {
+	if len(refs) == 0 {
+		return false
+	}
+	for _, ref := range refs {
+		if !strings.HasPrefix(ref.RequirementKey, "env:") {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizedEnvironment(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), " ")
+}
+
+func originComponentsForCurrentEnvironments(originScopes []database.VideoScopeItem, refs []buildplan.PreparationRef, currentScopes map[identity.ID][]database.VideoScopeItem) []buildplan.Component {
+	refsByEnvironment := make(map[string]map[identity.ID]buildplan.PreparationRef)
+	for _, ref := range refs {
+		for _, scope := range currentScopes[ref.ID] {
+			if environment := normalizedEnvironment(scope.EnvironmentCandidate); environment != "" {
+				if refsByEnvironment[environment] == nil {
+					refsByEnvironment[environment] = make(map[identity.ID]buildplan.PreparationRef)
+				}
+				refsByEnvironment[environment][ref.ID] = ref
+			}
+		}
+	}
+	components := make([]buildplan.Component, 0, len(originScopes))
+	matchedRefs := make(map[identity.ID]bool)
+	for _, scope := range originScopes {
+		matches := refsByEnvironment[normalizedEnvironment(scope.EnvironmentCandidate)]
+		if len(matches) != 1 {
+			continue
+		}
+		for _, ref := range matches {
+			matchedRefs[ref.ID] = true
+			components = append(components, buildplan.Component{ID: scope.ID, RequirementKey: ref.RequirementKey})
+		}
+	}
+	for _, ref := range refs {
+		if matchedRefs[ref.ID] {
+			continue
+		}
+		for _, scope := range currentScopes[ref.ID] {
+			components = append(components, buildplan.Component{ID: scope.ID, RequirementKey: ref.RequirementKey, GapReason: "AMBIGUOUS_IDENTITY"})
+		}
+	}
+	return components
+}
+
 var errDeferred = errors.New("video plan prerequisite is not ready")
 var errSensitivePreparation = errors.New("sensitive content preparation blocked")
 var errPreparationFailed = errors.New("video preparation failed")
+
+func preparationStatusError(preparation database.VideoPreparationJob) error {
+	if preparation.Status == "FAILED" || preparation.Status == "CANCELED" {
+		if preparation.ErrorCode == "SENSITIVE_CONTENT" {
+			return errSensitivePreparation
+		}
+		return errPreparationFailed
+	}
+	if preparation.Status != "READY" {
+		return errDeferred
+	}
+	return nil
+}
 
 func (s *Scheduler) finishFailure(ctx context.Context, job database.VideoPlan, token identity.ID, cause error) error {
 	now := s.now().UTC()
@@ -606,7 +874,7 @@ func (s *Scheduler) finishFailure(ctx context.Context, job database.VideoPlan, t
 			return result.Error
 		})
 	} else if errors.Is(cause, errDeferred) {
-		updates["next_attempt_at"] = now.Add(10 * time.Second)
+		updates["next_attempt_at"] = now.Add(5 * time.Minute)
 		updates["error_code"] = ""
 		updates["attempts"] = max(job.Attempts-1, 0)
 	} else if terminal || job.Attempts >= 4 {

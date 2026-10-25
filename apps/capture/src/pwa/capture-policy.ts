@@ -45,7 +45,7 @@ export const mergeUploadedAnswer = (answers: CaptureAnswer[], requirementKey: st
   if (current.mediaIds.includes(mediaId) && replacesMediaId === undefined) return answers;
   return answers.map((answer) => answer.requirementKey === requirementKey ? { ...answer, mediaIds: [...retained.filter((id) => id !== mediaId), mediaId], version: current.mediaIds.includes(mediaId) ? answer.version : answer.version + 1 } : answer);
 };
-export const buildImpossibilityInput = (requirementKey: string, reason: string, answer: CaptureAnswer | undefined, clientMutationId: string) => ({ requirementKey, reason, expectedVersion: answer?.version ?? null, clientMutationId });
+export const buildImpossibilityInput = (requirementKey: string, reason: string, answer: CaptureAnswer | undefined, clientMutationId: string) => ({ requirementKey, reason, reasonCode: null, reasonText: null, expectedVersion: answer?.version ?? null, clientMutationId });
 export const updateImpossibleAnswer = (answers: CaptureAnswer[], requirementKey: string, reason: string): CaptureAnswer[] => answers.some((answer) => answer.requirementKey === requirementKey)
   ? answers.map((answer) => answer.requirementKey === requirementKey && answer.impossibilityReason !== reason ? { ...answer, impossibilityReason: reason, version: answer.version + 1 } : answer)
   : [...answers, { requirementKey, mediaIds: [], impossibilityReason: reason, version: 1 }];

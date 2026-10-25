@@ -40,7 +40,7 @@ func LocalizeVideoPresentation(snapshot Snapshot) Snapshot {
 	labels := make(map[string]string, len(snapshot.Requirements))
 	for i := range snapshot.Requirements {
 		requirement := &snapshot.Requirements[i]
-		if !strings.HasPrefix(requirement.Key, "video:") {
+		if !strings.HasPrefix(requirement.Key, "video:") && !strings.HasPrefix(requirement.Key, "env:") {
 			continue
 		}
 		original := requirement.Label

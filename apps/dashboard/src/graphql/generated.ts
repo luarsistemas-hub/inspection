@@ -46,6 +46,7 @@ export type CreateInspectionInput = {
   reason: string;
   referenceVersionId: string | number | null | undefined;
   reminderInstants: Array<string>;
+  reviewerMembershipId: string | number | null | undefined;
   stageId: string | number | null | undefined;
   templateId: string | number | null | undefined;
 };
@@ -115,6 +116,7 @@ export type InviteOriginCaptureInput = {
   clientMutationId: string;
   expiresAt: string;
   participantId: string | number;
+  reviewerMembershipId: string | number | null | undefined;
 };
 
 export type MarkNotificationReadInput = {
@@ -147,6 +149,7 @@ export type PlanInspectionInput = {
   referenceVersionId: string | number | null | undefined;
   reminderInstants: Array<string> | null | undefined;
   reminderOffsetsMinutes: Array<number> | null | undefined;
+  reviewerMembershipId: string | number | null | undefined;
   rrule: string | null | undefined;
   stageId: string | number | null | undefined;
   stages: Array<PlannedProjectStageInput> | null | undefined;

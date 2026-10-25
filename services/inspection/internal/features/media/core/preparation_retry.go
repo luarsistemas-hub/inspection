@@ -73,7 +73,8 @@ func RetryFailedPreparation(tx *gorm.DB, tenantID, mediaID identity.ID, expected
 // ResumeBlockedPlans changes the blocked plan and inspection in the same transaction.
 func ResumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPreparationID identity.ID, now time.Time) error {
 	var plans []database.VideoPlan
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND status='BLOCKED' AND (current_preparation_id=? OR origin_preparation_id=?)", tenantID, previousPreparationID, previousPreparationID).Find(&plans).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(`tenant_id=? AND status='BLOCKED' AND (current_preparation_id=? OR origin_preparation_id=? OR EXISTS (
+		SELECT 1 FROM analysis.video_plan_preparations link WHERE link.tenant_id=video_plans.tenant_id AND link.plan_id=video_plans.id AND link.preparation_id=?))`, tenantID, previousPreparationID, previousPreparationID, previousPreparationID).Find(&plans).Error; err != nil {
 		return err
 	}
 	for _, plan := range plans {
@@ -90,6 +91,24 @@ func ResumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPrepar
 		}
 		if plan.OriginPreparationID != nil && *plan.OriginPreparationID == previousPreparationID {
 			updates["origin_preparation_id"] = nextPreparationID
+		}
+		var links []database.VideoPlanPreparation
+		if err := tx.Where("tenant_id=? AND plan_id=? AND preparation_id=?", tenantID, plan.ID, previousPreparationID).Find(&links).Error; err != nil {
+			return err
+		}
+		for _, link := range links {
+			if previousPreparationID != nextPreparationID {
+				if err := tx.Where("tenant_id=? AND plan_id=? AND preparation_id=?", tenantID, plan.ID, previousPreparationID).Delete(&database.VideoPlanPreparation{}).Error; err != nil {
+					return err
+				}
+				link.PreparationID = nextPreparationID
+				if err := tx.Create(&link).Error; err != nil {
+					return err
+				}
+			}
+			if link.Role == "MAIN" {
+				updates["current_preparation_id"] = nextPreparationID
+			}
 		}
 		if err := tx.Model(&database.VideoPlan{}).Where("tenant_id=? AND id=? AND status='BLOCKED'", tenantID, plan.ID).Updates(updates).Error; err != nil {
 			return err

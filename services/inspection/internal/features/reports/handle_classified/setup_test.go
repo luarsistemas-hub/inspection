@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"inspection/libs/identity"
+	reportcore "inspection/services/inspection/internal/features/reports/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 
@@ -13,9 +14,67 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestB13LegacyReportFlagsFilterV2OnlyPrefixes(t *testing.T) {
+	input := []string{"IMPOSSIBILITY:LOCKED", "QUALITY_WARNING_IGNORED:DARK", "GPS_MISSING"}
+	legacy := reportFlags("video:main", input)
+	if len(legacy) != 1 || legacy[0] != "GPS_MISSING" {
+		t.Fatalf("legacy flags=%v; want only pre-existing evidence flags", legacy)
+	}
+	v2 := reportFlags("env:room", input)
+	if len(v2) != len(input) {
+		t.Fatalf("v2 environment flags were lost: %v", v2)
+	}
+}
+
 func TestSetupRequiresNotificationAndSnapshotAdapters(t *testing.T) {
 	if handler, err := Setup(Dependencies{}); err == nil || handler != nil {
 		t.Fatalf("Setup() returned handler=%t err=%v, want missing dependency error", handler != nil, err)
+	}
+}
+
+func TestAnalysisStatusAggregatesBySeverityAndRequiresAllUnchangedUT012(t *testing.T) {
+	unchanged := true
+	changed := false
+	combined := mergeRequirementAnalysis(requirementAnalysis{mode: "CURRENT_ONLY", status: "COMPLETED", noRelevantChange: &unchanged}, requirementAnalysis{mode: "COMPARE_ORIGIN_CURRENT", status: "FAILED", noRelevantChange: &changed})
+	if combined.status != "FAILED" || combined.mode != "COMPARE_ORIGIN_CURRENT" || combined.noRelevantChange == nil || *combined.noRelevantChange {
+		t.Fatalf("merged analysis status = %+v", combined)
+	}
+	combined = mergeRequirementAnalysis(requirementAnalysis{status: "FAILED"}, requirementAnalysis{status: "INCONCLUSIVE"})
+	if combined.status != "FAILED" {
+		t.Fatalf("less severe result replaced failure: %+v", combined)
+	}
+}
+
+func TestMergeCurrentOnlyAnalysisKeepsNoRelevantChangeNull(t *testing.T) {
+	merged := mergeRequirementAnalysis(
+		requirementAnalysis{mode: "CURRENT_ONLY", status: "COMPLETED"},
+		requirementAnalysis{mode: "CURRENT_ONLY", status: "COMPLETED"},
+	)
+	if merged.mode != "CURRENT_ONLY" || merged.noRelevantChange != nil {
+		t.Fatalf("merged CURRENT_ONLY analysis = %+v, want null noRelevantChange", merged)
+	}
+	snapshot := reportcore.Snapshot{
+		SchemaVersion: 1, ReportID: "report", InspectionID: "inspection", TemplateVersionID: "template-version", ReferenceVersionID: "reference-version", PromptDigest: "prompt", Mode: "CONSOLIDATED", Classification: "NORMAL", Advisory: "advisory",
+		Context:      reportcore.Context{Asset: reportcore.AssetContext{ID: "asset", Name: "Asset", Address: "Address"}, Participant: reportcore.ParticipantContext{ID: "participant", Name: "Participant"}, Template: reportcore.TemplateContext{ID: "template", Name: "Template", Version: 1}, Inspection: reportcore.InspectionContext{GeneratedAt: "2026-10-25T00:00:00Z"}},
+		Requirements: []reportcore.Requirement{{Key: "video:main", Section: "Vídeo", Label: "Vídeo", AnalysisMode: merged.mode, AnalysisStatus: merged.status, NoRelevantChange: merged.noRelevantChange}},
+	}
+	if err := reportcore.Validate(snapshot); err != nil {
+		t.Fatalf("CURRENT_ONLY snapshot with null noRelevantChange failed validation: %v", err)
+	}
+}
+
+func TestMergeComparisonAnalysisIgnoresCurrentOnlyNullButPropagatesComparisonNull(t *testing.T) {
+	unchanged := true
+	merged := mergeRequirementAnalysis(
+		requirementAnalysis{mode: "CURRENT_ONLY", status: "COMPLETED"},
+		requirementAnalysis{mode: "COMPARE_ORIGIN_CURRENT", status: "COMPLETED", noRelevantChange: &unchanged},
+	)
+	if merged.mode != "COMPARE_ORIGIN_CURRENT" || merged.noRelevantChange == nil || !*merged.noRelevantChange {
+		t.Fatalf("mixed analysis = %+v, want comparison result only", merged)
+	}
+	merged = mergeRequirementAnalysis(merged, requirementAnalysis{mode: "COMPARE_ORIGIN_CURRENT", status: "COMPLETED"})
+	if merged.noRelevantChange != nil {
+		t.Fatalf("nil comparison result was treated as unchanged: %+v", merged)
 	}
 }
 

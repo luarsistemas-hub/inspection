@@ -4,20 +4,24 @@ package core
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 )
 
 const (
-	MaxActivePhotos = 200
-	MaxTextRunes    = 2000
-	MaxGPSAccuracyM = 50.0
-	GPSWindow       = 60 * time.Second
+	MaxActivePhotos                = 200
+	MaxEnvironmentPhotos           = 20
+	MaxEnvironmentInspectionPhotos = catalog.MaxEnvironmentInspectionPhotos
+	MaxTextRunes                   = 2000
+	MaxGPSAccuracyM                = 50.0
+	GPSWindow                      = 60 * time.Second
 )
 
 type Requirement struct {
@@ -37,6 +41,7 @@ type Requirement struct {
 	EnvironmentTypeCode   string `json:"environmentTypeCode,omitempty"`
 	EnvironmentName       string `json:"environmentName,omitempty"`
 	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
+	Expected              bool   `json:"expected,omitempty"`
 }
 
 // VideoMainRequirement returns the canonical participant upload slot for a video capture.
@@ -75,6 +80,20 @@ type Completeness struct {
 	Complete, RequiresAttention bool
 	Satisfied, Total            int
 	Missing, Blocked            []string
+	PendingKeys                 []string
+}
+
+// PendingRequirementError carries the v2 environment keys through GraphQL
+// error presentation without putting them in client-facing prose.
+type PendingRequirementError struct {
+	Keys []string
+	Err  error
+}
+
+func (e PendingRequirementError) Error() string { return e.Err.Error() }
+func (e PendingRequirementError) Unwrap() error { return e.Err }
+func (e PendingRequirementError) PendingRequirementKeys() []string {
+	return append([]string(nil), e.Keys...)
 }
 
 func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bool) (Completeness, error) {
@@ -102,20 +121,32 @@ func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bo
 			continue
 		}
 		result.Missing = append(result.Missing, requirement.Key)
+		result.PendingKeys = append(result.PendingKeys, requirement.Key)
 	}
 	result.Complete = result.Satisfied == result.Total && len(result.Blocked) == 0
 	result.RequiresAttention = !result.Complete
 	if len(result.Blocked) > 0 {
 		return result, apperror.New(apperror.InvalidState, result.Blocked[0], "media checks must complete before submission")
 	}
-	if !result.Complete && !confirmIncomplete {
+	v2ExpectedPending := false
+	for _, requirement := range requirements {
+		if requirement.Expected && strings.HasPrefix(requirement.Key, "env:") && slices.Contains(result.PendingKeys, requirement.Key) {
+			v2ExpectedPending = true
+			break
+		}
+	}
+	if !result.Complete && (!confirmIncomplete || v2ExpectedPending) {
 		field := "requirements"
 		if len(result.Blocked) > 0 {
 			field = result.Blocked[0]
 		} else if len(result.Missing) > 0 {
 			field = result.Missing[0]
 		}
-		return result, apperror.New(apperror.InvalidState, field, "explicit incomplete submission confirmation is required")
+		base := apperror.New(apperror.InvalidState, field, "explicit incomplete submission confirmation is required")
+		if v2ExpectedPending {
+			return result, PendingRequirementError{Keys: append([]string(nil), result.PendingKeys...), Err: base}
+		}
+		return result, base
 	}
 	return result, nil
 }

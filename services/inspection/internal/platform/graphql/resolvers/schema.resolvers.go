@@ -32,7 +32,9 @@ import (
 	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	capturedeclareenvironment "inspection/services/inspection/internal/features/capture/declare_environment"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
+	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
@@ -865,7 +867,11 @@ func (r *mutationResolver) InviteOriginCapture(ctx context.Context, input graphq
 	if err != nil {
 		return nil, graphql1Error("expiresAt")
 	}
-	raw, err := r.Bus.Send(ctx, origininvite.Command{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, ExpiresAt: expires, IdempotencyKey: input.ClientMutationID})
+	reviewerMembershipID, err := parseOptionalID(input.ReviewerMembershipID, "reviewerMembershipId")
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, origininvite.Command{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, ReviewerMembershipID: reviewerMembershipID, ExpiresAt: expires, IdempotencyKey: input.ClientMutationID})
 	if err != nil {
 		return nil, err
 	}
@@ -1160,6 +1166,10 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 	if err != nil {
 		return nil, err
 	}
+	reviewerMembershipID, err := parseOptionalID(input.ReviewerMembershipID, "reviewerMembershipId")
+	if err != nil {
+		return nil, err
+	}
 	projectID, err := parseOptionalID(input.ProjectID, "projectId")
 	if err != nil {
 		return nil, err
@@ -1180,11 +1190,39 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 	if err != nil {
 		return nil, err
 	}
-	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+	view, err := r.InspectionService.Create(ctx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ProjectID: projectID, StageID: stageID, ReferenceVersionID: referenceID, ReviewerMembershipID: reviewerMembershipID, Source: inspectioncore.SourceManual, SourceKey: requestctx.IdempotencyKey(ctx, input.ClientMutationID), Reason: input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
 	if err != nil {
 		return nil, err
 	}
 	return &graphql1.InspectionPayload{Inspection: mapInspection(view), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// DeclareCaptureEnvironment appends one requirement to an open v2 capture.
+func (r *mutationResolver) DeclareCaptureEnvironment(ctx context.Context, input graphql1.DeclareCaptureEnvironmentInput) (*graphql1.CaptureEnvironmentPayload, error) {
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, capturedeclareenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, TypeCode: input.TypeCode, Name: input.Name, ClientMutationID: input.ClientMutationID})
+	if err != nil {
+		return nil, err
+	}
+	req := raw.(capturecore.Requirement)
+	env := &graphql1.CaptureEnvironment{RequirementKey: req.Key, IdentityID: req.EnvironmentIdentityID, TypeCode: req.EnvironmentTypeCode, Name: req.EnvironmentName, Expected: req.Expected, AddedDuringCapture: req.AddedDuringCapture, MediaCount: 0, Status: "PENDING"}
+	return &graphql1.CaptureEnvironmentPayload{Environment: env, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// RecordCaptureQualityWarning records a retryable quality notice on one environment.
+func (r *mutationResolver) RecordCaptureQualityWarning(ctx context.Context, input graphql1.RecordCaptureQualityWarningInput) (*graphql1.CaptureQualityWarningPayload, error) {
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, capturequalitywarning.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, Code: input.Code, Ignored: input.Ignored})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.CaptureQualityWarningPayload{Flags: raw.([]string), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // PlanInspection is the resolver for the planInspection field.
@@ -1216,6 +1254,13 @@ func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.Pl
 	referenceID, err := parseOptionalID(input.ReferenceVersionID, "referenceVersionId")
 	if err != nil {
 		return nil, err
+	}
+	reviewerMembershipID, err := parseOptionalID(input.ReviewerMembershipID, "reviewerMembershipId")
+	if err != nil {
+		return nil, err
+	}
+	if input.Rrule != nil && strings.TrimSpace(*input.Rrule) != "" && reviewerMembershipID != nil {
+		return nil, apperror.New(apperror.InvalidInput, "reviewerMembershipId", "reviewer membership cannot be assigned to a recurring schedule")
 	}
 	if stageID != nil && projectID == nil && (input.CreateProject == nil || !*input.CreateProject) {
 		return nil, apperror.New(apperror.InvalidInput, "stageId", "stage requires a project")
@@ -1283,7 +1328,7 @@ func (r *mutationResolver) PlanInspection(ctx context.Context, input graphql1.Pl
 		if err != nil {
 			return err
 		}
-		view, err := r.InspectionService.Create(workCtx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: &templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: referenceID, ProjectID: projectID, StageID: stageID, Source: inspectioncore.SourceManual, SourceKey: key + "/inspection", Reason: *input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
+		view, err := r.InspectionService.Create(workCtx, inspectioncore.CreateInput{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, TemplateID: &templateID, ComparisonMode: catalog.ComparisonMode(input.ComparisonMode), ReferenceVersionID: referenceID, ReviewerMembershipID: reviewerMembershipID, ProjectID: projectID, StageID: stageID, Source: inspectioncore.SourceManual, SourceKey: key + "/inspection", Reason: *input.Reason, DueAt: dueAt, DeadlineAt: deadlineAt, ReminderInstants: reminders})
 		if err != nil {
 			return err
 		}
@@ -1486,7 +1531,11 @@ func (r *mutationResolver) BeginVideoCapture(ctx context.Context, input graphql1
 		}
 		replaces = &id
 	}
-	raw, err := r.Bus.Send(ctx, capturebeginvideo.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AcquisitionSource: input.AcquisitionSource, MutationID: input.ClientMutationID, ReplacesMediaID: replaces})
+	requirementKey := ""
+	if input.RequirementKey != nil {
+		requirementKey = *input.RequirementKey
+	}
+	raw, err := r.Bus.Send(ctx, capturebeginvideo.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AcquisitionSource: input.AcquisitionSource, MutationID: input.ClientMutationID, RequirementKey: requirementKey, ReplacesMediaID: replaces})
 	if err != nil {
 		return nil, err
 	}
@@ -1642,9 +1691,9 @@ func (r *mutationResolver) CreateMediaUpload(ctx context.Context, input graphql1
 		if parseErr != nil {
 			return nil, invalidID("attemptId")
 		}
-		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AttemptID: &attemptID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID})
+		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, AttemptID: &attemptID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID, RequirementKey: stringValue(input.RequirementKey)})
 	} else {
-		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID})
+		raw, err = r.Bus.Send(ctx, mediacreate.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ContentType: input.ContentType, SHA256: input.Sha256, SizeBytes: int64(input.SizeBytes), IdempotencyKey: input.ClientMutationID, RequirementKey: stringValue(input.RequirementKey)})
 	}
 	if err != nil {
 		return nil, err
@@ -1757,7 +1806,16 @@ func (r *mutationResolver) DeclareCaptureImpossibility(ctx context.Context, inpu
 	if input.ExpectedVersion != nil {
 		expected = int64(*input.ExpectedVersion)
 	}
-	if _, err := r.Bus.Send(ctx, capturedeclare.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, Reason: input.Reason, ExpectedVersion: expected}); err != nil {
+	reasonText := stringValue(input.ReasonText)
+	if reasonText == "" {
+		reasonText = stringValue(input.Reason)
+	}
+	if input.ReasonCode != nil {
+		_, err = r.Bus.Send(ctx, capturedeclare.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, ReasonCode: *input.ReasonCode, ReasonText: reasonText, ExpectedVersion: expected})
+	} else {
+		_, err = r.Bus.Send(ctx, capturedeclare.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, Reason: reasonText, ExpectedVersion: expected})
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &graphql1.CapturePayload{Status: "SAVED", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
@@ -1778,7 +1836,7 @@ func (r *mutationResolver) SubmitCapture(ctx context.Context, input graphql1.Sub
 			return nil, err
 		}
 	}
-	raw, err := r.Bus.Send(ctx, capturesubmit.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ConfirmIncomplete: input.ConfirmIncomplete})
+	raw, err := r.Bus.Send(ctx, capturesubmit.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, ConfirmIncomplete: input.ConfirmIncomplete, ClientMutationID: input.ClientMutationID})
 	if err != nil {
 		return nil, err
 	}
@@ -1786,9 +1844,6 @@ func (r *mutationResolver) SubmitCapture(ctx context.Context, input graphql1.Sub
 	preparationPending, err := submissionPreparationPending(ctx, r.DB, tenantID, submission)
 	if err != nil {
 		return nil, err
-	}
-	if writer, ok := requestctx.ResponseWriter(ctx); ok {
-		http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: "", Path: "/", MaxAge: -1, Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	}
 	return &graphql1.SubmissionPayload{Submission: &graphql1.Submission{ID: submission.ID.String(), Complete: submission.Complete, RequiresAttention: submission.RequiresAttention, PreparationPending: preparationPending, SubmittedAt: submission.SubmittedAt.Format(time.RFC3339Nano)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
@@ -4029,7 +4084,13 @@ func (r *queryResolver) LlmUsageTenants(ctx context.Context, search *string, fir
 func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.ExternalCapture, error) {
 	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
 	if err != nil {
-		return nil, err
+		if _, hasExternalCredentials := requestctx.ExternalCredentialsFromContext(ctx); !hasExternalCredentials {
+			return nil, err
+		}
+		tenantID, responsibilityID, err = r.externalCaptureReadResponsibility(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	raw, err := r.Bus.Ask(ctx, capturebootstrap.Query{TenantID: tenantID, ResponsibilityID: responsibilityID})
 	if err != nil {
@@ -4051,7 +4112,12 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 		policy["maxDurationSeconds"] = videoPolicy.MaxDurationMinutes * 60
 		policy["videoPolicyVersion"] = videoPolicy.Version
 	}
-	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, MediaKind: view.Draft.MediaKind, TemplateVersionID: view.Draft.TemplateVersionID.String(), Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
+	var captureLayout *string
+	if !view.ConfirmationOnly && view.SchemaVersion >= 2 {
+		value := "ENVIRONMENTS"
+		captureLayout = &value
+	}
+	response := &graphql1.ExternalCapture{ResponsibilityID: responsibilityID.String(), Status: view.Draft.Status, ConfirmationOnly: view.ConfirmationOnly, Kind: view.Draft.Kind, MediaKind: view.Draft.MediaKind, TemplateVersionID: view.Draft.TemplateVersionID.String(), CaptureLayout: captureLayout, Reference: reference, ReferenceItems: []*graphql1.CaptureReferenceItem{}, Policy: policy, Requirements: []*graphql1.CaptureRequirement{}, Environments: []*graphql1.CaptureEnvironment{}, Answers: []*graphql1.CaptureAnswer{}, DisclosureVersion: invitationcore.PrivacyDisclosureVersion}
 	if view.Draft.Kind == "RECAPTURE" {
 		var request database.RecaptureRequest
 		if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -4076,6 +4142,40 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 	}
 	if view.ConfirmationOnly {
 		response.Status = "CONFIRMED"
+		within := r.Invitations.Within
+		if within == nil {
+			within = (tenanttx.Runner{DB: r.DB}).Within
+		}
+		var invitation database.Invitation
+		if err := within(ctx, tenantID, func(tx *gorm.DB) error {
+			return tx.Where("tenant_id=? AND responsibility_id=?", tenantID, responsibilityID).Order("created_at DESC").Take(&invitation).Error
+		}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		if invitation.ReviewerMembershipID != nil {
+			inspectionID := responsibilityID
+			var originVersion database.OriginVersion
+			if err := within(ctx, tenantID, func(tx *gorm.DB) error {
+				var responsibility database.Responsibility
+				if err := tx.Where("tenant_id=? AND id=?", tenantID, responsibilityID).Take(&responsibility).Error; err == nil {
+					inspectionID = responsibility.InspectionID
+				} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				err := tx.Where("tenant_id=? AND has_inventory=true AND status='DRAFT' AND (responsibility_id=? OR source_inspection_id=?)", tenantID, responsibilityID, inspectionID).Order("created_at DESC,id DESC").Take(&originVersion).Error
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}); err != nil {
+				return nil, err
+			}
+			var draftOriginID *identity.ID
+			if originVersion.ID != (identity.ID{}) {
+				draftOriginID = &originVersion.ID
+			}
+			response.ReviewHandoff = captureReviewHandoff(invitation, inspectionID, draftOriginID)
+		}
 		return response, nil
 	}
 	accepted, err := r.Invitations.HasProcessingAcceptance(ctx, tenantID, responsibilityID)
@@ -4151,6 +4251,7 @@ func (r *queryResolver) ExternalCapture(ctx context.Context) (*graphql1.External
 			ImpossibilityAllowed: req.ImpossibilityAllowed,
 		})
 	}
+	response.Environments = mapCaptureEnvironments(view)
 	answers := make([]*graphql1.CaptureAnswer, 0, len(view.Answers))
 	for _, row := range view.Answers {
 		var ids []identity.ID

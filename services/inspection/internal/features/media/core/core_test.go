@@ -42,6 +42,117 @@ func TestUT033RejectedMediaBoundaries(t *testing.T) {
 	}
 }
 
+func TestResumeBlockedPlanReplacesSupplementPreparationForEnvironmentClip(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"analysis", "inspections"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		"CREATE TABLE analysis.video_plans (id TEXT, tenant_id TEXT, inspection_id TEXT, current_preparation_id TEXT, origin_preparation_id TEXT, status TEXT, next_attempt_at DATETIME, attempts INTEGER, error_code TEXT, lease_token TEXT, lease_until DATETIME)",
+		"CREATE TABLE analysis.video_plan_preparations (tenant_id TEXT, plan_id TEXT, preparation_id TEXT, role TEXT, requirement_key TEXT, created_at DATETIME)",
+		"CREATE TABLE inspections.inspections (tenant_id TEXT, id TEXT, status TEXT, updated_at DATETIME, version INTEGER)",
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenant, planID, inspectionID := identity.NewID(), identity.NewID(), identity.NewID()
+	mainPrep, failedSupplement, retriedSupplement := identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,current_preparation_id,status,next_attempt_at,attempts,error_code) VALUES (?,?,?,?,?,?,?,?)", planID, tenant, inspectionID, mainPrep, "BLOCKED", now, 4, "VIDEO_PLAN_FAILED").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO analysis.video_plan_preparations (tenant_id,plan_id,preparation_id,role,requirement_key,created_at) VALUES (?,?,?,?,?,?),(?,?,?,?,?,?)", tenant, planID, mainPrep, "MAIN", "env:kitchen", now, tenant, planID, failedSupplement, "SUPPLEMENT", "env:bathroom", now).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO inspections.inspections (tenant_id,id,status,version) VALUES (?,?,?,?)", tenant, inspectionID, "PROCESSING_FAILED", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ResumeBlockedPlans(db, tenant, failedSupplement, retriedSupplement, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var plan database.VideoPlan
+	if err := db.Table("analysis.video_plans").Where("id=?", planID).Take(&plan).Error; err != nil {
+		t.Fatal(err)
+	}
+	var links []database.VideoPlanPreparation
+	if err := db.Table("analysis.video_plan_preparations").Where("plan_id=?", planID).Order("role").Find(&links).Error; err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != "BUILDING" || plan.CurrentPreparationID != mainPrep || len(links) != 2 || links[1].PreparationID != retriedSupplement || links[1].RequirementKey == nil || *links[1].RequirementKey != "env:bathroom" {
+		t.Fatalf("blocked environment plan was not resumed on its clip link: plan=%+v links=%+v", plan, links)
+	}
+}
+
+func TestB7V1UploadSizeErrorKeepsFieldAndMessage(t *testing.T) {
+	service := Service{}
+	_, err := service.CreateWithRequirement(context.Background(), identity.NewID(), identity.NewID(), "image/jpeg", strings.Repeat("a", 64), objectstore.MaxOriginalBytes+1, "b7-size", "")
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.Field != "sizeBytes" || appErr.Safe != "original must be at most 20 MiB" {
+		t.Fatalf("v1 size validation changed: %#v (%v)", appErr, err)
+	}
+}
+
+func TestB6V1UploadReplayIgnoresUnspecifiedRequirementKey(t *testing.T) {
+	db, within := videoUploadDB(t)
+	tenantID, responsibilityID := identity.NewID(), identity.NewID()
+	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "PHOTO", Requirements: json.RawMessage(`[]`), ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Status: "OPEN", Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	client := &uploadAdmissionClient{}
+	service := Service{DB: db, Store: objectstore.Store{Bucket: "private", Client: client}, Within: within}
+	first, err := service.CreateWithRequirement(context.Background(), tenantID, responsibilityID, "image/jpeg", strings.Repeat("a", 64), 10, "v1-replay", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.CreateWithRequirement(context.Background(), tenantID, responsibilityID, "image/jpeg", strings.Repeat("a", 64), 10, "v1-replay", "")
+	if err != nil || first.MediaID != second.MediaID || first.UploadID != second.UploadID || client.creates != 1 {
+		t.Fatalf("v1 replay first=%+v second=%+v creates=%d err=%v", first, second, client.creates, err)
+	}
+}
+
+func TestUT115PhotoUploadAdmissionCapsEnvironmentAtTwenty(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"capture", "media", "templates"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxOpenConns(1)
+	for _, model := range []any{&database.CaptureDraft{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.TemplateVersion{}} {
+		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
+			t.Fatal(err)
+		}
+	}
+	tenant, responsibility, templateVersionID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenant, TemplateID: identity.NewID(), VersionNumber: 1, SchemaVersion: 2, DefinitionJSON: json.RawMessage(`{}`), CanonicalDigest: strings.Repeat("c", 64), Status: "ACTIVE", IdempotencyKey: "ut115-v2", PublishedAt: time.Now().UTC(), CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, Kind: "INSPECTION", MediaKind: "PHOTO", TemplateVersionID: templateVersionID, Requirements: json.RawMessage(`[{"key":"env:room","required":true,"maximumMedia":20}]`), ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Status: "OPEN", Version: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		row := database.MediaObject{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, ObjectKey: "qa/" + identity.NewID().String(), RequirementKey: "env:room", ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 10, Status: "UPLOADING", IdempotencyKey: "existing-" + identity.NewID().String(), Flags: json.RawMessage(`[]`), AttentionItems: json.RawMessage(`[]`)}
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := Service{DB: db, Within: func(_ context.Context, _ identity.ID, fn func(*gorm.DB) error) error { return fn(db) }}
+	_, err = service.CreateWithRequirement(context.Background(), tenant, responsibility, "image/jpeg", strings.Repeat("b", 64), 10, "twenty-first", "env:room")
+	if !apperror.Is(err, apperror.InvalidInput) || !strings.Contains(err.Error(), "LIMIT_MEDIA_PER_ENVIRONMENT") {
+		t.Fatalf("21st photo upload returned %v", err)
+	}
+}
+
 func TestIT193ScreeningAttemptLimitIsExplicit(t *testing.T) {
 	if MaxScreeningAttempts != 3 {
 		t.Fatalf("unexpected screening attempt limit: %d", MaxScreeningAttempts)

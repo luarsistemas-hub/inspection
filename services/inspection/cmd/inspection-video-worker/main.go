@@ -157,7 +157,7 @@ func run() error {
 	if err := declareVideoQueueMigration(channel, legacyChannel, contract, legacyContract); err != nil {
 		return fmt.Errorf("video worker rabbitmq topology: %w", err)
 	}
-	for _, key := range []string{"media.video_prepared.v1", "capture.video_submitted.v1"} {
+	for _, key := range []string{"media.video_prepared.v1", "capture.video_submitted.v1", "capture.video_submitted.v2"} {
 		if err := channel.QueueBind(contract.Name, key, messaging.Exchange, false, nil); err != nil {
 			return fmt.Errorf("video worker event binding: %w", err)
 		}

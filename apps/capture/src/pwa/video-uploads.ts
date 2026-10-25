@@ -33,7 +33,7 @@ export async function uploadVideoDraft(source: VideoDraft, onProgress?: (complet
     if (draft.state === "SAVED") { draft = { ...draft, state: "CONFIRMED" }; await saveVideoDraft(draft); }
     if (!draft.sha256 || draft.sizeBytes < 1) throw new Error("A gravação não tem integridade confirmada.");
     if (!draft.mediaId) {
-      const result = await graphql(captureOperations.createUpload, { input: { contentType: draft.contentType, sizeBytes: draft.sizeBytes, sha256: draft.sha256, attemptId: draft.id, clientMutationId: `${draft.id}:create` } });
+      const result = await graphql(captureOperations.createUpload, { input: { requirementKey: null, contentType: draft.contentType, sizeBytes: draft.sizeBytes, sha256: draft.sha256, attemptId: draft.id, clientMutationId: `${draft.id}:create` } });
       throwOnUserErrors(result.createMediaUpload);
       const upload = result.createMediaUpload.upload;
       if (!upload) throw new Error("Não foi possível iniciar o envio.");

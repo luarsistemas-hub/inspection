@@ -315,6 +315,68 @@ func TestVV_IT_189CurrentReadyOriginNotReadyRemainsWaiting(t *testing.T) {
 	if plan.Status != "BUILDING" || plan.ErrorCode != "" || calls != 0 {
 		t.Fatalf("origin prerequisite did not defer plan: status=%s error=%q matcherCalls=%d", plan.Status, plan.ErrorCode, calls)
 	}
+	if time.Until(plan.NextAttemptAt) < 4*time.Minute {
+		t.Fatalf("deferred plan remains immediately claimable: nextAttemptAt=%s", plan.NextAttemptAt)
+	}
+}
+
+func TestOriginPreparationReadyWakesDeferredVideoPlanIT_R2_011(t *testing.T) {
+	fixture := newTask04PlanFixtureWithOriginStatus(t, false, true, "QUEUED")
+	scheduler := newTask04Scheduler(t, fixture, integrationMatcher{}, integrationMatcher{})
+	if err := fixture.h.WithinTenant(fixture.ctx, fixture.tenantID, func(tx *gorm.DB) error {
+		return scheduler.Handle(fixture.ctx, tx, fixture.submittedEvent(t))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	worked, err := scheduler.RunDue(fixture.ctx)
+	if err != nil || !worked {
+		t.Fatalf("RunDue before origin is ready = %t, %v", worked, err)
+	}
+	var plan database.VideoPlan
+	if err := fixture.h.AdminDB.Where("tenant_id=? AND submission_id=?", fixture.tenantID, fixture.submissionID).Take(&plan).Error; err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != "BUILDING" || time.Until(plan.NextAttemptAt) < 4*time.Minute {
+		t.Fatalf("origin-pending plan state=%s next=%s; expected a parked BUILDING plan", plan.Status, plan.NextAttemptAt)
+	}
+	var origin database.VideoPreparationJob
+	if err := fixture.h.AdminDB.Where("tenant_id=? AND id=?", fixture.tenantID, fixture.originPreparation).Take(&origin).Error; err != nil {
+		t.Fatal(err)
+	}
+	preparedPayload, err := json.Marshal(events.VideoPreparedPayload{MediaID: origin.MediaID, PreparationID: origin.ID, ManifestDigest: origin.ManifestDigest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.h.WithinTenant(fixture.ctx, fixture.tenantID, func(tx *gorm.DB) error {
+		if err := tx.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND id=?", fixture.tenantID, fixture.originPreparation).Updates(map[string]any{"status": "READY", "phase": "READY"}).Error; err != nil {
+			return err
+		}
+		return scheduler.Handle(fixture.ctx, tx, events.RawEnvelope{Type: "media.video_prepared.v1", TenantID: fixture.tenantID, Payload: preparedPayload})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var woken database.VideoPlan
+	if err := fixture.h.AdminDB.Where("tenant_id=? AND id=?", fixture.tenantID, plan.ID).Take(&woken).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !woken.NextAttemptAt.Before(time.Now().UTC().Add(time.Second)) {
+		t.Fatalf("origin-ready plan was not made immediately due: %s", woken.NextAttemptAt)
+	}
+	if err := fixture.h.AdminDB.Where("tenant_id=? AND id=?", fixture.tenantID, plan.ID).Take(&woken).Error; err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 5 && woken.Status != "SEALED"; attempt++ {
+		worked, err := scheduler.RunDue(fixture.ctx)
+		if err != nil || !worked {
+			t.Fatalf("RunDue after origin became READY = %t, %v", worked, err)
+		}
+		if err := fixture.h.AdminDB.Where("tenant_id=? AND id=?", fixture.tenantID, plan.ID).Take(&woken).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if woken.Status != "SEALED" {
+		t.Fatalf("origin-ready plan status=%s error=%s; want SEALED", woken.Status, woken.ErrorCode)
+	}
 }
 
 func TestVV_IT_176NineHundredAdjacentSinkViewsSealOneComponent(t *testing.T) {

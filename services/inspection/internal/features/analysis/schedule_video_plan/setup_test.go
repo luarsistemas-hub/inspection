@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -476,7 +477,7 @@ func schedulePlanTestDB(t *testing.T) *gorm.DB {
 		}
 	}
 	for _, statement := range []string{
-		"CREATE TABLE media.video_preparation_jobs (id TEXT, tenant_id TEXT, media_id TEXT, submission_id TEXT, status TEXT, generation INTEGER, manifest_digest TEXT, pending_object_keys BLOB, next_attempt_at DATETIME, created_at DATETIME)",
+		"CREATE TABLE media.video_preparation_jobs (id TEXT, tenant_id TEXT, media_id TEXT, submission_id TEXT, requirement_key TEXT, status TEXT, error_code TEXT, generation INTEGER, manifest_digest TEXT, pending_object_keys BLOB, next_attempt_at DATETIME, created_at DATETIME)",
 		"CREATE TABLE media.video_scope_items (id TEXT, tenant_id TEXT, preparation_id TEXT, created_at DATETIME)",
 		"CREATE TABLE media.media_objects (id TEXT, tenant_id TEXT, responsibility_id TEXT, media_kind TEXT)",
 		"CREATE TABLE capture.submission_versions (id TEXT, tenant_id TEXT, draft_id TEXT, responsibility_id TEXT, version_number INTEGER, complete NUMERIC, payload BLOB, payload_digest TEXT, submitted_at DATETIME)",
@@ -484,7 +485,9 @@ func schedulePlanTestDB(t *testing.T) *gorm.DB {
 		"CREATE TABLE inspections.inspections (id TEXT, tenant_id TEXT, asset_id TEXT, media_kind TEXT, status TEXT, version INTEGER NOT NULL DEFAULT 1, updated_at DATETIME)",
 		"CREATE TABLE inspections.responsibilities (id TEXT, tenant_id TEXT, inspection_id TEXT)",
 		"CREATE TABLE inspections.reference_snapshots (id TEXT, tenant_id TEXT, inspection_id TEXT, reference_version_id TEXT, comparison_mode TEXT, payload BLOB, created_at DATETIME)",
+		"CREATE TABLE inspections.video_replacements (id TEXT, tenant_id TEXT, inspection_id TEXT, media_id TEXT, responsibility_id TEXT, invitation_id TEXT, deadline_at DATETIME, reason TEXT, status TEXT, idempotency_key TEXT, created_at DATETIME, updated_at DATETIME)",
 		"CREATE TABLE analysis.video_plans (id TEXT, tenant_id TEXT, inspection_id TEXT, submission_id TEXT, parent_plan_id TEXT, reference_version_id TEXT, origin_preparation_id TEXT, current_preparation_id TEXT, generation INTEGER, plan_digest TEXT, status TEXT, lease_token TEXT, lease_until DATETIME, attempts INTEGER, next_attempt_at DATETIME, error_code TEXT, client_mutation_id TEXT, expected_plan_id TEXT, sealed_at DATETIME, created_at DATETIME, UNIQUE(tenant_id,submission_id,generation))",
+		"CREATE TABLE analysis.video_plan_preparations (tenant_id TEXT, plan_id TEXT, preparation_id TEXT, role TEXT, requirement_key TEXT, created_at DATETIME, PRIMARY KEY(tenant_id,plan_id,preparation_id))",
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -534,6 +537,269 @@ func TestReplacementDraftBuildsPlanWhileRecaptureDraftDoesNot(t *testing.T) {
 			}
 			if tc.wantPlans == 1 && (plans[0].Generation != 1 || plans[0].Status != "BUILDING") {
 				t.Fatalf("replacement plan must start a fresh generation: %+v", plans[0])
+			}
+		})
+	}
+}
+
+func TestUT161LegacyVideoSubmissionStillBuildsOneMainPlan(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	tenant, submissionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID()
+	seedReadySubmission(t, db, tenant, submissionID, preparationID)
+	scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	responsibilityID := lookupResponsibility(t, db)
+	payload, _ := json.Marshal(videoSubmitted{DraftID: identity.NewID(), SubmissionID: submissionID, ResponsibilityID: responsibilityID, MediaID: lookupMedia(t, db), PreparationStatus: "READY"})
+	if err := scheduler.Handle(context.Background(), db, eventsEnvelope("capture.video_submitted.v1", payload, tenant)); err != nil {
+		t.Fatal(err)
+	}
+	var plans []database.VideoPlan
+	if err := db.Find(&plans).Error; err != nil || len(plans) != 1 || plans[0].CurrentPreparationID != preparationID {
+		t.Fatalf("legacy plan changed: plans=%+v err=%v", plans, err)
+	}
+}
+
+func TestOriginComponentsKeepEnvironmentKeysWhenCurrentPreparationsAreLinkedUT011(t *testing.T) {
+	originScopes := []database.VideoScopeItem{{ID: identity.NewID(), EnvironmentCandidate: "Bathroom", ComponentLabel: "Sink"}, {ID: identity.NewID(), EnvironmentCandidate: "Kitchen", ComponentLabel: "Counter"}}
+	bathroomPreparation, kitchenPreparation := identity.NewID(), identity.NewID()
+	refs := []buildplan.PreparationRef{{ID: bathroomPreparation, RequirementKey: "env:bathroom-id", Role: "MAIN"}, {ID: kitchenPreparation, RequirementKey: "env:kitchen-id", Role: "SUPPLEMENT"}}
+	currentScopes := map[identity.ID][]database.VideoScopeItem{
+		bathroomPreparation: {{EnvironmentCandidate: " bathroom ", ComponentLabel: "Sink"}},
+		kitchenPreparation:  {{EnvironmentCandidate: "KITCHEN", ComponentLabel: "Counter"}},
+	}
+	components := originComponentsForCurrentEnvironments(originScopes, refs, currentScopes)
+	if len(components) != 2 || components[0].RequirementKey != "env:bathroom-id" || components[1].RequirementKey != "env:kitchen-id" {
+		t.Fatalf("baseline components lost environment requirement keys: %+v", components)
+	}
+}
+
+func TestOriginComponentsWithUnmatchedOrDuplicateEnvironmentNamesBecomeScopedGaps(t *testing.T) {
+	originScopes := []database.VideoScopeItem{{ID: identity.NewID(), EnvironmentCandidate: "Sala de estar", ComponentLabel: "Janela"}}
+	prepA, prepB := identity.NewID(), identity.NewID()
+	refs := []buildplan.PreparationRef{{ID: prepA, RequirementKey: "env:living-room"}, {ID: prepB, RequirementKey: "env:bedroom"}}
+	components := originComponentsForCurrentEnvironments(originScopes, refs, map[identity.ID][]database.VideoScopeItem{
+		prepA: {{ID: identity.NewID(), EnvironmentCandidate: "Quarto", ComponentLabel: "Janela"}},
+		prepB: {{ID: identity.NewID(), EnvironmentCandidate: "Quarto", ComponentLabel: "Janela"}},
+	})
+	if len(components) != 2 {
+		t.Fatalf("unmatched duplicate room labels should produce one scoped gap per requirement: %+v", components)
+	}
+	wantKeys := map[string]bool{"env:living-room": false, "env:bedroom": false}
+	for _, component := range components {
+		if _, ok := wantKeys[component.RequirementKey]; !ok || component.GapReason != "AMBIGUOUS_IDENTITY" {
+			t.Fatalf("unmatched scope was assigned by display text: %+v", component)
+		}
+		wantKeys[component.RequirementKey] = true
+	}
+	for key, found := range wantKeys {
+		if !found {
+			t.Fatalf("missing explicit gap for %s: %+v", key, components)
+		}
+	}
+}
+
+func TestReplacementPlanInheritsOtherEnvironmentPreparations(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	tenant, inspectionID, oldPlanID, newPlanID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	oldPreparations := []identity.ID{identity.NewID(), identity.NewID(), identity.NewID()}
+	newBathroomPreparation := identity.NewID()
+	keys := []string{"env:kitchen", "env:bathroom", "env:bedroom"}
+	roles := []string{"MAIN", "SUPPLEMENT", "SUPPLEMENT"}
+	for i, preparationID := range oldPreparations {
+		if err := db.Exec("INSERT INTO media.video_preparation_jobs (id,tenant_id,media_id,status,generation,next_attempt_at,created_at) VALUES (?,?,?,?,?,?,?)", preparationID, tenant, identity.NewID(), "READY", 1, time.Now(), time.Now()).Error; err != nil {
+			t.Fatal(err)
+		}
+		key := keys[i]
+		if err := db.Exec("INSERT INTO analysis.video_plan_preparations (tenant_id,plan_id,preparation_id,role,requirement_key,created_at) VALUES (?,?,?,?,?,?)", tenant, oldPlanID, preparationID, roles[i], key, time.Now()).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,status,error_code,created_at) VALUES (?,?,?,?,?,?)", oldPlanID, tenant, inspectionID, "FAILED", "REPLACED", time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO media.video_preparation_jobs (id,tenant_id,media_id,status,generation,next_attempt_at,created_at) VALUES (?,?,?,?,?,?,?)", newBathroomPreparation, tenant, identity.NewID(), "READY", 1, time.Now(), time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO analysis.video_plans (id,tenant_id,inspection_id,current_preparation_id,status,created_at) VALUES (?,?,?,?,?,?)", newPlanID, tenant, inspectionID, newBathroomPreparation, "BUILDING", time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+	var replacedMediaID string
+	if err := db.Table("media.video_preparation_jobs").Select("media_id").Where("id=?", oldPreparations[1]).Scan(&replacedMediaID).Error; err != nil {
+		t.Fatal(err)
+	}
+	clips := []events.CaptureVideoClip{{RequirementKey: "env:bathroom"}}
+	preparations := []database.VideoPreparationJob{{ID: newBathroomPreparation}}
+	plan := database.VideoPlan{ID: newPlanID}
+	replacedMediaIDValue, err := identity.ParseID(replacedMediaID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inheritReplacementPlanPreparations(context.Background(), db, tenant, inspectionID, plan, replacedMediaIDValue, clips, preparations, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	var links []database.VideoPlanPreparation
+	if err := db.Where("tenant_id=? AND plan_id=?", tenant, newPlanID).Order("requirement_key").Find(&links).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 3 {
+		t.Fatalf("replacement plan has %d environment links: %+v", len(links), links)
+	}
+	gotByKey := make(map[string]database.VideoPlanPreparation, len(links))
+	for _, link := range links {
+		gotByKey[*link.RequirementKey] = link
+	}
+	if gotByKey["env:kitchen"].PreparationID != oldPreparations[0] || gotByKey["env:bathroom"].PreparationID != newBathroomPreparation || gotByKey["env:bedroom"].PreparationID != oldPreparations[2] || gotByKey["env:bathroom"].Role != "SUPPLEMENT" {
+		t.Fatalf("replacement did not preserve the other environment links: %+v", gotByKey)
+	}
+	var gotMain string
+	if err := db.Table("analysis.video_plans").Select("current_preparation_id").Where("id=?", newPlanID).Scan(&gotMain).Error; err != nil || gotMain != oldPreparations[0].String() {
+		t.Fatalf("replacement plan MAIN preparation=%s err=%v", gotMain, err)
+	}
+}
+
+func TestReadyOriginMakesDeferredPlanImmediatelyDue(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	originPreparationID := identity.NewID()
+	plan := database.VideoPlan{ID: identity.NewID(), TenantID: identity.NewID(), SubmissionID: identity.NewID(), CurrentPreparationID: identity.NewID(), OriginPreparationID: &originPreparationID, Generation: 1, Status: "BUILDING", Attempts: 1, NextAttemptAt: now.Add(5 * time.Minute)}
+	if err := insertVideoPlan(db, plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("UPDATE analysis.video_plans SET origin_preparation_id=? WHERE id=?", originPreparationID, plan.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}, Now: func() time.Time { return now }, Within: sqliteWithin(db)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduler.wakePlansWaitingForPreparation(context.Background(), db, plan.TenantID, originPreparationID); err != nil {
+		t.Fatal(err)
+	}
+	var got database.VideoPlan
+	if err := db.Where("id=?", plan.ID).Take(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "BUILDING" || !got.NextAttemptAt.Equal(now) {
+		t.Fatalf("deferred plan next attempt = %s status=%s; want immediate retry after origin preparation becomes ready", got.NextAttemptAt, got.Status)
+	}
+}
+
+func TestUT160ThreeEnvironmentPreparationsWaitForAllLinksAndKeepRoles(t *testing.T) {
+	db := schedulePlanTestDB(t)
+	tenant, submissionID := identity.NewID(), identity.NewID()
+	inspectionID, responsibilityID, draftID := identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	if err := db.Exec("INSERT INTO inspections.inspections (id,tenant_id,asset_id,media_kind) VALUES (?,?,?,?)", inspectionID, tenant, identity.NewID(), "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO inspections.responsibilities (id,tenant_id,inspection_id) VALUES (?,?,?)", responsibilityID, tenant, inspectionID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO inspections.reference_snapshots (id,tenant_id,inspection_id,comparison_mode,payload,created_at) VALUES (?,?,?,?,?,?)", identity.NewID(), tenant, inspectionID, "FIXED_ORIGIN", []byte(`{"comparisonMode":"FIXED_ORIGIN"}`), now).Error; err != nil {
+		t.Fatal(err)
+	}
+	clips := make([]events.CaptureVideoClip, 3)
+	preparationIDs := make([]identity.ID, 3)
+	for i := range clips {
+		key := "env:" + identity.NewID().String()
+		if i < 2 {
+			key = "env:shared-room"
+		}
+		clips[i] = events.CaptureVideoClip{RequirementKey: key, MediaID: identity.NewID()}
+		preparationIDs[i] = identity.NewID()
+		status := "READY"
+		if i == 2 {
+			status = "PROCESSING"
+		}
+		if err := db.Exec("INSERT INTO media.video_preparation_jobs (id,tenant_id,media_id,submission_id,requirement_key,status,manifest_digest,pending_object_keys,next_attempt_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)", preparationIDs[i], tenant, clips[i].MediaID, submissionID, clips[i].RequirementKey, status, "digest", []byte("[]"), now, now).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	immutable, _ := json.Marshal(map[string]any{"clips": clips})
+	if err := db.Exec("INSERT INTO capture.submission_versions (id,tenant_id,draft_id,responsibility_id,version_number,complete,payload,payload_digest,submitted_at) VALUES (?,?,?,?,?,?,?,?,?)", submissionID, tenant, draftID, responsibilityID, 1, true, immutable, "digest", now).Error; err != nil {
+		t.Fatal(err)
+	}
+	scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparedPayload, _ := json.Marshal(events.VideoPreparedPayload{MediaID: clips[0].MediaID, PreparationID: preparationIDs[0], ManifestDigest: "digest"})
+	if err := scheduler.Handle(context.Background(), db, eventsEnvelope("media.video_prepared.v1", preparedPayload, tenant)); err != nil {
+		t.Fatal(err)
+	}
+	var earlyPlans int64
+	if err := db.Model(&database.VideoPlan{}).Count(&earlyPlans).Error; err != nil || earlyPlans != 0 {
+		t.Fatalf("environment preparation created a plan before the v2 submission: plans=%d err=%v", earlyPlans, err)
+	}
+	eventPayload, _ := json.Marshal(events.CaptureVideoSubmittedV2Payload{InspectionID: inspectionID, ResponsibilityID: responsibilityID, SubmissionVersionID: submissionID, Clips: clips})
+	if err := scheduler.Handle(context.Background(), db, eventsEnvelope("capture.video_submitted.v2", eventPayload, tenant)); err != nil {
+		t.Fatal(err)
+	}
+	var plan database.VideoPlan
+	if err := db.Where("tenant_id=? AND submission_id=?", tenant, submissionID).Take(&plan).Error; err != nil {
+		t.Fatal(err)
+	}
+	var links []database.VideoPlanPreparation
+	if err := db.Where("tenant_id=? AND plan_id=?", tenant, plan.ID).Order("role").Find(&links).Error; err != nil || len(links) != 3 {
+		t.Fatalf("plan links=%+v err=%v", links, err)
+	}
+	roles := map[string]int{}
+	for _, link := range links {
+		roles[link.Role]++
+		if link.RequirementKey == nil || !strings.HasPrefix(*link.RequirementKey, "env:") {
+			t.Fatalf("link lost its environment key: %+v", link)
+		}
+	}
+	if roles["MAIN"] != 1 || roles["SUPPLEMENT"] != 2 {
+		t.Fatalf("multi-preparation roles=%v", roles)
+	}
+	sharedRoomLinks := 0
+	for _, link := range links {
+		if link.RequirementKey != nil && *link.RequirementKey == "env:shared-room" {
+			sharedRoomLinks++
+		}
+	}
+	if sharedRoomLinks != 2 {
+		t.Fatalf("same-environment clips produced %d plan links; want 2", sharedRoomLinks)
+	}
+	worked, err := scheduler.RunDue(context.Background())
+	if err != nil || worked {
+		t.Fatalf("plan ran before its final environment preparation was READY: worked=%v err=%v", worked, err)
+	}
+}
+
+func TestB3RunDueClaimsFailedAndCanceledPreparationsAndClassifiesThem(t *testing.T) {
+	for _, tc := range []struct {
+		status, errorCode, wantCode string
+	}{{"FAILED", "SENSITIVE_CONTENT", "SENSITIVE_CONTENT"}, {"CANCELED", "", "PREPARATION_FAILED"}} {
+		t.Run(tc.status+"/"+tc.errorCode, func(t *testing.T) {
+			db := schedulePlanTestDB(t)
+			now := time.Now().UTC()
+			tenant, submissionID, preparationID := identity.NewID(), identity.NewID(), identity.NewID()
+			seedReadySubmission(t, db, tenant, submissionID, preparationID)
+			scheduler, err := Setup(Dependencies{DB: db, Frames: framesStub{}, Matcher: matcherStub{}, Verifier: matcherStub{}, Now: func() time.Time { return now }, Within: sqliteWithin(db)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, _ := json.Marshal(videoSubmitted{DraftID: identity.NewID(), SubmissionID: submissionID, ResponsibilityID: lookupResponsibility(t, db), MediaID: lookupMedia(t, db), PreparationStatus: "READY"})
+			if err := scheduler.Handle(context.Background(), db, eventsEnvelope("capture.video_submitted.v1", payload, tenant)); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND id=?", tenant, preparationID).Updates(map[string]any{"status": tc.status, "error_code": tc.errorCode, "next_attempt_at": now}).Error; err != nil {
+				t.Fatal(err)
+			}
+			worked, err := scheduler.RunDue(context.Background())
+			if !worked || err != nil {
+				t.Fatalf("RunDue worked=%v err=%v", worked, err)
+			}
+			var plan database.VideoPlan
+			if err := db.Where("tenant_id=? AND submission_id=?", tenant, submissionID).Take(&plan).Error; err != nil {
+				t.Fatal(err)
+			}
+			if plan.Status != "BLOCKED" || plan.ErrorCode != tc.wantCode {
+				t.Fatalf("terminal preparation status=%s code=%s, want BLOCKED/%s", plan.Status, plan.ErrorCode, tc.wantCode)
 			}
 		})
 	}

@@ -49,7 +49,7 @@ func TestPropertyOriginContractsIT311IT312IT313IT315IT320(t *testing.T) {
 		}
 		query.VersionID = &oldID
 		if _, err := resolve(db, query); code(err) != apperror.Conflict {
-			t.Fatalf("stale requested origin accepted: %v", err)
+			t.Fatalf("inactive legacy requested origin returned %v; want CONFLICT", err)
 		}
 		query.VersionID = &activeID
 		result, err := resolve(db, query)
@@ -176,6 +176,142 @@ func TestVideoOriginUsesOneMediaRequirementAndKeepsScopeProjection(t *testing.T)
 	if result.VideoScope[1].ScopeItemID != bedroomScopeID || !result.VideoScope[1].Ambiguous {
 		t.Fatalf("identity-ambiguous bedroom was not marked ambiguous: %+v", result.VideoScope[1])
 	}
+}
+
+func TestInventoryReferenceRulesAndCrossModalityRequirements(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, mediaKind string
+		wantCode                apperror.Code
+		wantRequirements        int
+	}{
+		{"photo inventory", "ACTIVE", "PHOTO", "", 2},
+		{"video inventory", "ACTIVE", "VIDEO", "", 2},
+		{"superseded inventory", "SUPERSEDED", "VIDEO", "", 2},
+		{"invalidated inventory", "INVALIDATED", "VIDEO", apperror.InvalidState, 0},
+		{"draft inventory", "DRAFT", "VIDEO", apperror.InvalidState, 0},
+		{"discarded inventory", "DISCARDED", "VIDEO", apperror.InvalidState, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, query, versionID := inventoryReferenceFixture(t, tc.status)
+			result, err := resolve(db, Query{TenantID: query.TenantID, AssetID: query.AssetID, VersionID: &versionID, MediaKind: tc.mediaKind})
+			if tc.wantCode != "" {
+				if code(err) != tc.wantCode {
+					t.Fatalf("inventory status %s returned %v, want %s", tc.status, err, tc.wantCode)
+				}
+				return
+			}
+			if err != nil || len(result.Requirements) != tc.wantRequirements || len(result.Evidence) != 0 || len(result.VideoScope) != 0 {
+				t.Fatalf("inventory reference mixed modalities or lost environments: result=%+v err=%v", result, err)
+			}
+			for _, requirement := range result.Requirements {
+				if requirement.EvidenceKind != tc.mediaKind || requirement.Key[:4] != "env:" || !requirement.Expected {
+					t.Fatalf("wrong environment requirement for %s: %+v", tc.mediaKind, requirement)
+				}
+				wantMax := 20
+				if tc.mediaKind == "VIDEO" {
+					wantMax = 3
+				}
+				if requirement.MaximumMedia != wantMax {
+					t.Fatalf("maximum=%d, want %d", requirement.MaximumMedia, wantMax)
+				}
+			}
+		})
+	}
+}
+
+func TestInventoryReferenceIncludesPendingAndExcludesRejectedEnvironments(t *testing.T) {
+	db, query, versionID := inventoryReferenceFixture(t, "ACTIVE")
+	var environments []database.InventoryEnvironment
+	if err := db.Where("origin_version_id=?", versionID).Order("position,id").Find(&environments).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(environments) != 2 {
+		t.Fatalf("fixture environments=%d, want 2", len(environments))
+	}
+	if err := db.Model(&database.InventoryEnvironment{}).Where("id=?", environments[0].ID).Update("decision", "PENDING").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&database.InventoryEnvironment{}).Where("id=?", environments[1].ID).Update("decision", "REJECTED").Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	item := database.InventoryItem{ID: identity.NewID(), TenantID: query.TenantID, OriginVersionID: versionID, EnvironmentID: environments[0].ID, IdentityID: identity.NewID(), TypeCode: "FLOOR", Name: "Floor", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := resolve(db, Query{TenantID: query.TenantID, AssetID: query.AssetID, VersionID: &versionID, MediaKind: "PHOTO"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Requirements) != 1 || result.Requirements[0].Key != "env:"+environments[0].IdentityID.String() {
+		t.Fatalf("requirements=%+v, want only pending environment %s", result.Requirements, environments[0].IdentityID)
+	}
+}
+
+func TestUT234LegacyCrossModalityNeedsInventoryOriginFirst(t *testing.T) {
+	db, query, versionID := originFixture(t, 1)
+	if err := db.Model(&database.OriginVersion{}).Where("id=?", versionID).Update("media_kind", "PHOTO").Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err := resolve(db, Query{TenantID: query.TenantID, AssetID: query.AssetID, VersionID: &versionID, MediaKind: "VIDEO"})
+	if code(err) != apperror.InvalidState || !strings.Contains(err.Error(), "CATALOG_ORIGIN_FIRST") {
+		t.Fatalf("legacy cross-modality reference returned %v", err)
+	}
+}
+
+func TestUT235LegacySameModalityStillResolves(t *testing.T) {
+	db, query, versionID := originFixture(t, 1)
+	if err := db.Model(&database.OriginVersion{}).Where("id=?", versionID).Update("media_kind", "PHOTO").Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := resolve(db, Query{TenantID: query.TenantID, AssetID: query.AssetID, VersionID: &versionID, MediaKind: "PHOTO"})
+	if err != nil || len(result.Requirements) != 1 || !strings.HasPrefix(result.Requirements[0].Key, "origin:") {
+		t.Fatalf("legacy same-modality reference changed: %+v %v", result, err)
+	}
+}
+
+func inventoryReferenceFixture(t *testing.T, status string) (*gorm.DB, Query, identity.ID) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, schema := range []string{"origins"} {
+		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.InventoryEnvironment{}, &database.InventoryItem{}} {
+		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
+			t.Fatal(err)
+		}
+	}
+	tenantID, assetID, originID, versionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	now := time.Now().UTC()
+	activeID := versionID
+	if status == "SUPERSEDED" {
+		activeID = identity.NewID()
+	}
+	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: assetID, ActiveVersionID: &activeID, Version: 2, CreatedAt: now, UpdatedAt: now}
+	version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: originID, VersionNumber: 2, HasInventory: true, Status: status, MediaKind: "PHOTO", IdempotencyKey: "inventory-reference", CreatedAt: now, ActivatedAt: &now}
+	for _, row := range []any{&origin, &version} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if status == "SUPERSEDED" {
+		active := database.OriginVersion{ID: activeID, TenantID: tenantID, OriginID: originID, VersionNumber: 3, HasInventory: true, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "inventory-reference-active", CreatedAt: now, ActivatedAt: &now}
+		if err := db.Create(&active).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		environment := database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: versionID, IdentityID: identity.NewID(), TypeCode: "BEDROOM", Name: "Bedroom", Expected: true, Decision: "ACCEPTED", Position: i, CreatedAt: now, UpdatedAt: now}
+		if err := db.Create(&environment).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	return db, Query{TenantID: tenantID, AssetID: assetID}, versionID
 }
 
 func originFixture(t *testing.T, evidenceCount int) (*gorm.DB, Query, identity.ID) {
