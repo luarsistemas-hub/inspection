@@ -48,8 +48,18 @@ func TestVV_IT_311ExpiredActiveOriginalStillFeedsNewComparisonFromRetainedF01(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claimed, err := expiry.RunDue(fixture.ctx, fixture.tenantID, now, 10); err != nil || claimed != 1 {
-		t.Fatalf("O1 original expiry claimed=%d err=%v; want 1", claimed, err)
+	// ADR-019: the ACTIVE origin owns its source, so the expiry job keeps the
+	// original even past its fixed date.
+	if claimed, err := expiry.RunDue(fixture.ctx, fixture.tenantID, now, 10); err != nil || claimed != 0 {
+		t.Fatalf("O1 original expiry claimed=%d err=%v; want 0 while the origin is active", claimed, err)
+	}
+	// The original can still disappear by other means (e.g. a legal deletion);
+	// the retained frame bank must keep feeding new comparisons afterwards.
+	if err := fixture.h.Store.Delete(fixture.ctx, originMedia.ObjectKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.h.AdminDB.Model(&database.VideoSource{}).Where("tenant_id=? AND media_id=?", fixture.tenantID, originPrep.MediaID).Updates(map[string]any{"status": "EXPIRED", "original_deleted_at": now}).Error; err != nil {
+		t.Fatal(err)
 	}
 	var source database.VideoSource
 	if err := fixture.h.AdminDB.Where("tenant_id=? AND media_id=?", fixture.tenantID, originPrep.MediaID).Take(&source).Error; err != nil {

@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "16eabe8694348e873a8f553ae92dcaa37272569adc79aae1cd5de2bbf6aa49bf",
+  "schemaSha256": "329d35be4b4f3773d6c3f50e63e1265521978f22a7710372aab9a19d6fe681c3",
   "capabilities": [
     {
       "root": "Query.me",
@@ -898,6 +898,62 @@
       "evidence": "IT-001"
     },
     {
+      "root": "Query.counterpartyBaseline",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties read the customer-safe baseline projection, response state, deadline, and resolution.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.requestCounterpartyOtp",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties request an OTP for a scoped baseline invitation.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.verifyCounterpartyOtp",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties verify an OTP and receive a counterparty-only session.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.acknowledgeBaseline",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties acknowledge an active baseline once before its deadline.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.contestBaseline",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties submit a bounded statement before the deadline.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.resolveBaselineContestation",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Authorized operators resolve an open contestation.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.resendCounterpartyInvitation",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Authorized operators resend a failed baseline invitation.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.updateBaselinePolicy",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Tenant administrators configure the deadline for future invitations.",
+      "evidence": "IT-001"
+    },
+    {
       "root": "Mutation.declareCaptureEnvironment",
       "owner": "Capture",
       "persona": "external participant",
@@ -1317,77 +1373,102 @@
         {
           "name": "AcceptProcessing",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
+        },
+        {
+          "name": "AcknowledgeBaseline",
+          "type": "mutation",
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "BeginVideoCapture",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "CompleteMediaUpload",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
+        },
+        {
+          "name": "ContestBaseline",
+          "type": "mutation",
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
+        },
+        {
+          "name": "CounterpartyBaseline",
+          "type": "query",
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "CreateMediaUpload",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "DeclareCaptureImpossibility",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "ExternalCaptureBootstrap",
           "type": "query",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "PresignMediaParts",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
+        },
+        {
+          "name": "RequestCounterpartyOtp",
+          "type": "mutation",
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "RequestInvitationOtp",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "RevokeInvitation",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "SaveCaptureMetadata",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "SubmitCapture",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "SubmitRecapture",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
+        },
+        {
+          "name": "VerifyCounterpartyOtp",
+          "type": "mutation",
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "VerifyInvitationOtp",
           "type": "mutation",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "VideoPreparation",
           "type": "query",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         },
         {
           "name": "VideoUploadStatus",
           "type": "query",
-          "documentSha256": "2f042057a2027e7baaefe038c5cf6081517ee0d90d3b929e47a3179d6d0f4448"
+          "documentSha256": "1920c0214b8928106184254d747e9bedb5723e931e691c2d7e0f07f3d8f938a1"
         }
       ]
     },

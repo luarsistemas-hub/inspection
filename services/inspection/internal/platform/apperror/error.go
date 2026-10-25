@@ -17,6 +17,9 @@ const (
 	DependencyUnavailable    Code = "DEPENDENCY_UNAVAILABLE"
 	SourceUnavailable        Code = "SOURCE_UNAVAILABLE"
 	IntegrationDisabled      Code = "INTEGRATION_DISABLED"
+	AlreadyResponded         Code = "ALREADY_RESPONDED"
+	DeadlinePassed           Code = "DEADLINE_PASSED"
+	AlreadyResolved          Code = "ALREADY_RESOLVED"
 	UnsupportedSchemaVersion Code = "UNSUPPORTED_SCHEMA_VERSION"
 	Internal                 Code = "INTERNAL"
 )
@@ -56,5 +59,18 @@ func Public(err error) (Code, string, string) {
 // Is reports whether err carries the given public code.
 func Is(err error, code Code) bool {
 	var appErr *Error
-	return errors.As(err, &appErr) && appErr.Code == code
+	if !errors.As(err, &appErr) {
+		return false
+	}
+	if appErr.Code == code {
+		return true
+	}
+	switch appErr.Code {
+	case AlreadyResponded, DeadlinePassed:
+		return code == InvalidState
+	case AlreadyResolved:
+		return code == Conflict
+	default:
+		return false
+	}
 }

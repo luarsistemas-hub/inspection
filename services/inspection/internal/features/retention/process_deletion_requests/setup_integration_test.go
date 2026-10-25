@@ -124,3 +124,64 @@ func TestDeletionRequestProcessorDeletesUnheldSourceAndBlocksHeldSource(t *testi
 		t.Fatal(err)
 	}
 }
+
+func TestDeletionRequestForDraftOriginDoesNotCompleteOrReleaseReferences(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	originID, versionID, requestID, prepID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoPreparationJob{ID: prepID, TenantID: fixture.TenantID, MediaID: fixture.MediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: strings.Repeat("a", 64), ManifestDigest: strings.Repeat("a", 64), PendingObjectKeys: []byte(`[]`), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "draft-delete-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoEvidenceReference{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: prepID, OwnerType: "ORIGIN_VERSION", OwnerID: versionID, CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.DeletionRequest{ID: requestID, TenantID: fixture.TenantID, OriginVersionID: &versionID, Status: "REQUESTED", RequestedAt: now}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	executor, err := Setup(Dependencies{DB: h.DB, Store: h.Store, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := executor.RunDue(ctx, fixture.TenantID, 10); err == nil || processed != 0 {
+		t.Fatalf("DRAFT deletion request processed=%d err=%v; want a failed request that remains queued", processed, err)
+	}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		var request database.DeletionRequest
+		if err := tx.Where("tenant_id=? AND id=?", fixture.TenantID, requestID).Take(&request).Error; err != nil {
+			return err
+		}
+		if request.Status != "REQUESTED" {
+			t.Errorf("DRAFT deletion request status=%s; want REQUESTED", request.Status)
+		}
+		var referenceCount int64
+		if err := tx.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", fixture.TenantID, versionID).Count(&referenceCount).Error; err != nil {
+			return err
+		}
+		if referenceCount != 1 {
+			t.Errorf("DRAFT origin evidence references=%d; want 1", referenceCount)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

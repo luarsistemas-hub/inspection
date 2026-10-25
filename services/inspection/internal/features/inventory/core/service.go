@@ -25,11 +25,10 @@ type Service struct {
 	Counterparties CounterpartyInviter
 }
 
-// RetentionTransition updates retention ownership after baseline supersession.
-// The source IDs are media.media_objects IDs; VIDEO_FRAME evidence points to
-// its source media in MediaID and carries the frame row separately in FrameID.
+// RetentionTransition recomputes source retention for every video source
+// referenced by the given origin versions after an activation or supersession.
 type RetentionTransition interface {
-	Transition(context.Context, *gorm.DB, identity.ID, []identity.ID) error
+	TransitionVersions(context.Context, *gorm.DB, identity.ID, []identity.ID) error
 }
 
 // CounterpartyInviter creates invitations as part of an activation transaction.
@@ -40,8 +39,8 @@ type CounterpartyInviter interface {
 // NoopRetentionTransition is used until the retention slice supplies its hook.
 type NoopRetentionTransition struct{}
 
-// Transition is a no-op retention hook.
-func (NoopRetentionTransition) Transition(context.Context, *gorm.DB, identity.ID, []identity.ID) error {
+// TransitionVersions is a no-op retention hook.
+func (NoopRetentionTransition) TransitionVersions(context.Context, *gorm.DB, identity.ID, []identity.ID) error {
 	return nil
 }
 
@@ -171,8 +170,9 @@ type ItemView struct {
 
 // EvidenceView reports the retained evidence's public availability.
 type EvidenceView struct {
-	Evidence     database.InventoryItemEvidence
-	Availability string
+	Evidence              database.InventoryItemEvidence
+	Availability          string
+	RetentionAvailability string
 }
 
 // BaselineView is the internal or customer-safe inventory projection.

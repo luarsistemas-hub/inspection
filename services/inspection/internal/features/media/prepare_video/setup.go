@@ -21,6 +21,7 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	configurevideopolicy "inspection/services/inspection/internal/features/media/configure_video_policy"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/llm"
@@ -779,9 +780,9 @@ func (e *Executor) markFrameBankReady(ctx context.Context, r reservation, media 
 				return err
 			}
 		}
-		days := 5
+		days := configurevideopolicy.DefaultCurrentDays
 		if attempt.Kind == "ORIGIN" {
-			days = 30
+			days = configurevideopolicy.DefaultOriginDays
 		}
 		var policy database.VideoPolicy
 		if err := tx.Where("tenant_id=?", r.job.TenantID).Take(&policy).Error; err == nil {
@@ -800,7 +801,14 @@ func (e *Executor) markFrameBankReady(ctx context.Context, r reservation, media 
 		}
 		if source.FirstFrameReadyAt == nil {
 			expiry := now.Add(time.Duration(days) * 24 * time.Hour)
-			source.FirstFrameReadyAt, source.RetentionDays, source.SourceExpiryAt = &now, &days, &expiry
+			source.FirstFrameReadyAt, source.RetentionDays = &now, &days
+			if source.RetentionAnchor == "ACTIVE_BASELINE" {
+				// An active baseline owns the source: the fixed window becomes the
+				// floor applied when the baseline is superseded.
+				source.RetentionFloorAt = laterTime(source.RetentionFloorAt, expiry)
+			} else {
+				source.SourceExpiryAt = &expiry
+			}
 			source.UpdatedAt = now
 			if err := tx.Save(&source).Error; err != nil {
 				return err
@@ -1372,7 +1380,7 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=? AND screening_status IN ('APPROVED','DISABLED')", r.job.TenantID, m.ID).Take(&source).Error; err != nil {
 			return err
 		}
-		if source.FirstFrameReadyAt == nil || source.SourceExpiryAt == nil || source.RetentionDays == nil {
+		if source.FirstFrameReadyAt == nil || source.RetentionDays == nil || (source.RetentionAnchor != "ACTIVE_BASELINE" && source.SourceExpiryAt == nil) {
 			return errors.New("video frame bank readiness anchor missing")
 		}
 		for i := range scopeItems {
@@ -1667,4 +1675,11 @@ func scopeUserPrompt(knownEnvironments []string) (string, error) {
 func promptDigest() string {
 	sum := sha256.Sum256([]byte(preparationPrompt + "|video-scope-v1"))
 	return hex.EncodeToString(sum[:])
+}
+
+func laterTime(current *time.Time, candidate time.Time) *time.Time {
+	if current != nil && current.After(candidate) {
+		return current
+	}
+	return &candidate
 }

@@ -47,10 +47,10 @@ func (r *Resolver) inventoryAuthorize(ctx context.Context, assetID identity.ID, 
 		roles = []string{auth.Auditor, auth.Manager, auth.TenantAdmin}
 	}
 	product := auth.DashboardProduct
-	if access == "trail" {
-		product = auth.AdminProduct
-	}
 	principal, err := r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: product, Roles: roles, Mutate: access == "mutate"})
+	if access == "trail" && apperror.Is(err, apperror.Forbidden) {
+		principal, err = r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.AdminProduct, Roles: roles, Mutate: false})
+	}
 	if err != nil {
 		return err
 	}
@@ -201,10 +201,11 @@ func (r *Resolver) inventoryVersionSummary(ctx context.Context, tenant, version 
 		}
 		counts.Included, counts.Rejected, counts.NotReviewed = int(included), int(rejected), int(pending)
 		var rows []struct {
-			Status string `gorm:"column:response"`
-			Count  int64
+			Status     string `gorm:"column:response"`
+			Resolution string `gorm:"column:resolution"`
+			Count      int64
 		}
-		if err := tx.Model(&database.CounterpartyInvitation{}).Select("response, count(*) AS count").Where("tenant_id=? AND origin_version_id=?", tenant, version).Group("response").Scan(&rows).Error; err != nil {
+		if err := tx.Model(&database.CounterpartyInvitation{}).Select("response, resolution, count(*) AS count").Where("tenant_id=? AND origin_version_id=?", tenant, version).Group("response, resolution").Scan(&rows).Error; err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -215,6 +216,9 @@ func (r *Resolver) inventoryVersionSummary(ctx context.Context, tenant, version 
 				contest.Acknowledged = int(row.Count)
 			case "CONTESTED":
 				contest.Contested = int(row.Count)
+				if row.Resolution == "OPEN" {
+					contest.Open += int(row.Count)
+				}
 			case "NO_RESPONSE":
 				contest.NoResponse = int(row.Count)
 			}
@@ -257,11 +261,12 @@ func (r *Resolver) inventoryVersionSummaries(ctx context.Context, tenant identit
 			}
 		}
 		var events []struct {
-			VersionID identity.ID `gorm:"column:origin_version_id"`
-			Response  string
-			Count     int64
+			VersionID  identity.ID `gorm:"column:origin_version_id"`
+			Response   string
+			Resolution string
+			Count      int64
 		}
-		if err := tx.Model(&database.CounterpartyInvitation{}).Select("origin_version_id,response,count(*) AS count").Where("tenant_id=? AND origin_version_id IN ?", tenant, ids).Group("origin_version_id,response").Scan(&events).Error; err != nil {
+		if err := tx.Model(&database.CounterpartyInvitation{}).Select("origin_version_id,response,resolution,count(*) AS count").Where("tenant_id=? AND origin_version_id IN ?", tenant, ids).Group("origin_version_id,response,resolution").Scan(&events).Error; err != nil {
 			return err
 		}
 		for _, row := range events {
@@ -273,6 +278,9 @@ func (r *Resolver) inventoryVersionSummaries(ctx context.Context, tenant identit
 				target.Acknowledged += int(row.Count)
 			case "CONTESTED":
 				target.Contested += int(row.Count)
+				if row.Resolution == "OPEN" {
+					target.Open += int(row.Count)
+				}
 			case "NO_RESPONSE":
 				target.NoResponse += int(row.Count)
 			}
@@ -299,7 +307,11 @@ func inventoryItem(view inventorycore.ItemView) *graphql1.InventoryItem {
 		if len(e.Evidence.Region) > 0 {
 			_ = json.Unmarshal(e.Evidence.Region, &region)
 		}
-		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{ID: e.Evidence.ID.String(), Kind: e.Evidence.Kind, MediaID: e.Evidence.MediaID.String(), FrameID: frame, Region: region, Position: e.Evidence.Position, Availability: e.Availability})
+		var retention *string
+		if e.RetentionAvailability != "" {
+			retention = &e.RetentionAvailability
+		}
+		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{ID: e.Evidence.ID.String(), Kind: e.Evidence.Kind, MediaID: e.Evidence.MediaID.String(), FrameID: frame, Region: region, Position: e.Evidence.Position, Availability: e.Availability, RetentionAvailability: retention})
 	}
 	return out
 }
@@ -346,7 +358,11 @@ func inventoryCustomerItem(view inventorycore.ItemView) *graphql1.InventoryItem 
 			value := evidence.Evidence.FrameID.String()
 			frame = &value
 		}
-		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{Kind: evidence.Evidence.Kind, MediaID: evidence.Evidence.MediaID.String(), FrameID: frame, Position: evidence.Evidence.Position, Availability: evidence.Availability})
+		var retention *string
+		if evidence.RetentionAvailability != "" {
+			retention = &evidence.RetentionAvailability
+		}
+		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{Kind: evidence.Evidence.Kind, MediaID: evidence.Evidence.MediaID.String(), FrameID: frame, Position: evidence.Evidence.Position, Availability: evidence.Availability, RetentionAvailability: retention})
 	}
 	return out
 }
@@ -389,27 +405,24 @@ func inventoryTrail(suggestions []database.InventoryItem, suggestionEvidence map
 		out.Decisions = append(out.Decisions, &graphql1.InventoryTrailEntry{ID: row.ID.String(), TargetType: row.TargetType, TargetID: row.TargetID.String(), Action: row.Action, Before: inventoryJSON(row.Before), After: inventoryJSON(row.After), Reason: row.Reason, ActorMembershipID: actor, OccurredAt: row.OccurredAt.UTC().Format(time.RFC3339Nano)})
 	}
 	for _, row := range counterparty {
-		timestamp := row.CreatedAt
-		action := "INVITATION_CREATED"
-		after := map[string]any{"response": row.Response, "resolution": row.Resolution}
-		if row.RespondedAt != nil {
-			timestamp = *row.RespondedAt
-			action = "RESPONDED"
-		}
-		if row.ResolvedAt != nil {
-			timestamp = *row.ResolvedAt
-			action = "RESOLVED"
-		}
-		reason := row.ResolutionReason
-		if reason == nil {
-			reason = row.Statement
-		}
 		var actor *string
 		if row.ResolvedBy != nil {
 			x := row.ResolvedBy.String()
 			actor = &x
 		}
-		out.CounterpartyEvents = append(out.CounterpartyEvents, &graphql1.InventoryTrailEntry{ID: row.ID.String(), TargetType: "COUNTERPARTY", TargetID: row.ID.String(), Action: action, After: after, Reason: reason, ActorMembershipID: actor, OccurredAt: timestamp.UTC().Format(time.RFC3339Nano)})
+		appendEvent := func(action string, occurred time.Time, after map[string]any, statement, reason *string, eventActor *string) {
+			id := identity.NewDeterministicID("counterparty/trail", row.ID.String()+":"+action)
+			out.CounterpartyEvents = append(out.CounterpartyEvents, &graphql1.InventoryTrailEntry{ID: id.String(), TargetType: "COUNTERPARTY", TargetID: row.ID.String(), Action: action, After: after, Statement: statement, ResolutionReason: reason, ActorMembershipID: eventActor, OccurredAt: occurred.UTC().Format(time.RFC3339Nano)})
+		}
+		appendEvent("INVITATION_CREATED", row.CreatedAt, map[string]any{"deadlineAt": row.DeadlineAt.UTC().Format(time.RFC3339Nano)}, nil, nil, nil)
+		if row.RespondedAt != nil {
+			appendEvent("RESPONDED", *row.RespondedAt, map[string]any{"response": row.Response}, row.Statement, nil, nil)
+		} else if row.Response == "NO_RESPONSE" {
+			appendEvent("NO_RESPONSE", row.DeadlineAt, map[string]any{"response": "NO_RESPONSE"}, nil, nil, nil)
+		}
+		if row.ResolvedAt != nil {
+			appendEvent("RESOLVED", *row.ResolvedAt, map[string]any{"resolution": row.Resolution}, nil, row.ResolutionReason, actor)
+		}
 	}
 	return out
 }

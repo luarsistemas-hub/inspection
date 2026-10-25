@@ -60,7 +60,8 @@ func TestInactiveOriginPurgeSkipsEmptyBanksAndDeletesDiscardedEvidence(t *testin
 			if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: strings.Repeat("d", 64), ManifestDigest: strings.Repeat("d", 64), PendingObjectKeys: []byte(`[]`), CreatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, Status: "SUPERSEDED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "inactive-origin-evidence-version-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+			supersededAt := now.AddDate(0, 0, -400)
+			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, Status: "SUPERSEDED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, SupersededAt: &supersededAt, IdempotencyKey: "inactive-origin-evidence-version-" + versionID.String(), CreatedAt: supersededAt}).Error; err != nil {
 				return err
 			}
 			if index != 2 {
@@ -72,7 +73,8 @@ func TestInactiveOriginPurgeSkipsEmptyBanksAndDeletesDiscardedEvidence(t *testin
 			}
 			inventoryVersionID, environmentID, itemID := identity.NewID(), identity.NewID(), identity.NewID()
 			purpose := "INVENTORY_UPDATE"
-			if err := tx.Create(&database.OriginVersion{ID: inventoryVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 2, Purpose: &purpose, HasInventory: true, Status: "DISCARDED", IdempotencyKey: "discarded-inactive-evidence-" + inventoryVersionID.String(), CreatedAt: now}).Error; err != nil {
+			staleAt := now.AddDate(0, 0, -60)
+			if err := tx.Create(&database.OriginVersion{ID: inventoryVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 2, Purpose: &purpose, HasInventory: true, Status: "DISCARDED", DiscardedAt: &staleAt, IdempotencyKey: "discarded-inactive-evidence-" + inventoryVersionID.String(), CreatedAt: staleAt}).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&database.InventoryEnvironment{ID: environmentID, TenantID: fixture.TenantID, OriginVersionID: inventoryVersionID, IdentityID: identity.NewID(), TypeCode: "LIVING_ROOM", Name: "Sala", Decision: "ACCEPTED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -93,8 +95,8 @@ func TestInactiveOriginPurgeSkipsEmptyBanksAndDeletesDiscardedEvidence(t *testin
 		t.Fatal(err)
 	}
 	count, err := executor.PurgeInactiveOriginBanks(ctx, fixture.TenantID, 2)
-	if err != nil || count != 1 {
-		t.Fatalf("PurgeInactiveOriginBanks() = %d, %v; want one nonempty stale-evidence bank", count, err)
+	if err != nil || count != 2 {
+		t.Fatalf("PurgeInactiveOriginBanks() = %d, %v; want one frame bank and one discarded inventory version", count, err)
 	}
 	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
 		var frames, evidence int64

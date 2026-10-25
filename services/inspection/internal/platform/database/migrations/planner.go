@@ -2332,6 +2332,147 @@ ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_generation 
 DROP INDEX IF EXISTS analysis.uq_inventory_job_input;
 CREATE UNIQUE INDEX uq_inventory_job_input ON analysis.inventory_jobs(tenant_id,inspection_id,kind,requirement_key,generation);
 `},
+		{Version: 87, Name: "baseline_supersession_timestamp", Compatible: true, SQL: `
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
+UPDATE origins.origin_versions v SET superseded_at=(
+  SELECT successor.activated_at FROM origins.origin_versions successor
+  WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+  ORDER BY successor.activated_at DESC LIMIT 1
+) WHERE v.status='SUPERSEDED' AND v.superseded_at IS NULL AND EXISTS (
+  SELECT 1 FROM origins.origin_versions successor WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+);
+`},
+		{Version: 88, Name: "counterparty_response_idempotency", Compatible: true, SQL: `
+ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS response_mutation_id text;
+`},
+		{Version: 89, Name: "counterparty_deadline_scheduler_discovery", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz,
+  p_terminal_updated_before timestamptz,
+  p_deadline_before timestamptz
+) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT s.tenant_id FROM schedules.schedules s
+  WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION
+  SELECT r.tenant_id FROM schedules.reminder_plans r
+  WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION
+  SELECT c.tenant_id FROM origins.counterparty_invitations c
+  WHERE c.response='PENDING' AND c.deadline_at<=p_now
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
+`},
+		{Version: 90, Name: "counterparty_delivery_generation", Compatible: true, SQL: `
+ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS delivery_generation integer NOT NULL DEFAULT 1;
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_delivery_generation CHECK(delivery_generation >= 1);
+`},
+		{Version: 91, Name: "baseline_retention_scheduler_repairs", Compatible: true, SQL: `
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS retention_floor_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_video_sources_fixed_expiry ON media.video_sources(source_expiry_at,tenant_id) WHERE status='RETAINED' AND retention_anchor='FIXED';
+CREATE INDEX IF NOT EXISTS idx_deletion_requests_pending ON retention.deletion_requests(tenant_id,status,processed_at,requested_at) WHERE status IN ('REQUESTED','BLOCKED');
+CREATE INDEX IF NOT EXISTS idx_origin_inventory_purge ON origins.origin_versions(tenant_id,status,id) WHERE has_inventory AND responsibility_id IS NULL AND status IN ('SUPERSEDED','INVALIDATED','DISCARDED');
+UPDATE media.video_sources SET retention_floor_at=COALESCE(source_expiry_at,first_frame_ready_at + (COALESCE(retention_days,30) * interval '1 day'))
+WHERE retention_floor_at IS NULL AND (source_expiry_at IS NOT NULL OR (retention_anchor='ACTIVE_BASELINE' AND first_frame_ready_at IS NOT NULL));
+UPDATE origins.origin_versions v SET superseded_at=(
+  SELECT successor.activated_at FROM origins.origin_versions successor
+  WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+  ORDER BY successor.activated_at DESC LIMIT 1
+) WHERE v.status='SUPERSEDED' AND EXISTS (
+  SELECT 1 FROM origins.origin_versions successor WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+) AND (v.superseded_at IS NULL OR v.superseded_at=COALESCE(v.activated_at,v.created_at));
+CREATE INDEX IF NOT EXISTS idx_counterparty_pending_deadline ON origins.counterparty_invitations(deadline_at) WHERE response='PENDING';
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
+) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT s.tenant_id FROM schedules.schedules s WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION SELECT r.tenant_id FROM schedules.reminder_plans r WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION SELECT c.tenant_id FROM origins.counterparty_invitations c WHERE c.response='PENDING' AND c.deadline_at<=p_now
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE (v.status='RETAINED' AND v.retention_anchor='FIXED' AND v.source_expiry_at<=p_now) OR (v.status='DELETING' AND (v.delete_lease_until IS NULL OR v.delete_lease_until<=p_now))
+  UNION SELECT d.tenant_id FROM retention.deletion_requests d WHERE d.status='REQUESTED' OR (d.status='BLOCKED' AND COALESCE(d.processed_at,d.requested_at)<=p_now-interval '5 minutes')
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    WHERE ov.has_inventory AND ov.responsibility_id IS NULL AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+      AND EXISTS (SELECT 1 FROM origins.inventory_items i WHERE i.tenant_id=ov.tenant_id AND i.origin_version_id=ov.id)
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
+`},
+		{Version: 92, Name: "retention_scheduler_due_windows", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
+) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT s.tenant_id FROM schedules.schedules s WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION SELECT r.tenant_id FROM schedules.reminder_plans r WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION SELECT c.tenant_id FROM origins.counterparty_invitations c WHERE c.response='PENDING' AND c.deadline_at<=p_now
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='DELETING' AND (v.delete_lease_until IS NULL OR v.delete_lease_until<=p_now)
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='RETAINED' AND v.retention_anchor='FIXED' AND v.source_expiry_at<=p_now
+    AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=v.tenant_id AND h.active AND (h.source_media_id=v.media_id OR h.inspection_id IN (SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id WHERE m.tenant_id=v.tenant_id AND m.id=v.media_id)))
+    AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=v.tenant_id AND c.response='CONTESTED' AND c.resolution='OPEN' AND c.origin_version_id IN (
+      SELECT e.origin_version_id FROM origins.origin_evidence e WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id
+      UNION SELECT i.origin_version_id FROM origins.inventory_item_evidence e JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id JOIN origins.inventory_environments env ON env.tenant_id=i.tenant_id AND env.id=i.environment_id WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND i.decision IN ('ACCEPTED','EDITED','ADDED') AND i.merged_into_id IS NULL AND env.decision<>'REJECTED'
+      UNION SELECT ov.id FROM origins.origin_versions ov JOIN media.video_preparation_jobs p ON p.tenant_id=ov.tenant_id AND p.id=ov.video_preparation_id WHERE ov.tenant_id=v.tenant_id AND p.media_id=v.media_id))
+    AND NOT EXISTS (
+      SELECT 1 FROM origins.origin_evidence e JOIN origins.origin_versions ov ON ov.tenant_id=e.tenant_id AND ov.id=e.origin_version_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+      JOIN origins.origin_versions ov ON ov.tenant_id=it.tenant_id AND ov.id=it.origin_version_id
+      JOIN origins.inventory_environments env ON env.tenant_id=it.tenant_id AND env.id=it.environment_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND it.decision IN ('ACCEPTED','EDITED','ADDED') AND it.merged_into_id IS NULL AND env.decision<>'REJECTED' AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM media.video_preparation_jobs p JOIN origins.origin_versions ov ON ov.tenant_id=p.tenant_id AND ov.video_preparation_id=p.id
+      WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND ov.status='ACTIVE'
+    )
+    AND NOT EXISTS (SELECT 1 FROM media.video_source_leases l WHERE l.tenant_id=v.tenant_id AND l.source_media_id=v.media_id AND l.lease_until>p_now)
+    AND NOT EXISTS (SELECT 1 FROM media.video_preparation_jobs p WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND p.status='PROCESSING' AND p.lease_expires_at>p_now)
+  UNION SELECT d.tenant_id FROM retention.deletion_requests d WHERE d.status='REQUESTED' OR (d.status='BLOCKED' AND COALESCE(d.processed_at,d.requested_at)<=p_now-interval '5 minutes')
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.has_inventory AND ov.responsibility_id IS NULL AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+      AND COALESCE(ov.superseded_at,ov.invalidated_at,ov.discarded_at,ov.activated_at,ov.created_at)
+        + (CASE WHEN ov.status='SUPERSEDED' THEN COALESCE(p.superseded_baseline_retention_days,365) ELSE COALESCE(p.current_retention_days,30) END) * interval '1 day' <= p_now
+      AND EXISTS (SELECT 1 FROM origins.inventory_items it WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active)
+      AND NOT EXISTS (
+        SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+        JOIN retention.legal_holds h ON h.tenant_id=e.tenant_id AND h.source_media_id=e.media_id AND h.active
+        WHERE e.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id
+      )
+      AND NOT EXISTS (SELECT 1 FROM schedules.schedules s WHERE s.tenant_id=ov.tenant_id AND s.status='ACTIVE' AND s.reference_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM inspections.reference_snapshots r JOIN inspections.inspections i ON i.tenant_id=r.tenant_id AND i.id=r.inspection_id WHERE r.tenant_id=ov.tenant_id AND r.reference_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM analysis.inventory_jobs j JOIN inspections.inspections i ON i.tenant_id=j.tenant_id AND i.id=j.inspection_id WHERE j.tenant_id=ov.tenant_id AND j.origin_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND (h.inspection_id=ov.source_inspection_id OR h.inspection_id IN (
+        SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id
+        JOIN origins.inventory_item_evidence e ON e.tenant_id=m.tenant_id AND e.media_id=m.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)))
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.media_kind='VIDEO' AND ov.status IN ('INVALIDATED','SUPERSEDED')
+      AND ov.video_preparation_id IS NOT NULL
+      AND (ov.status='INVALIDATED' OR (ov.superseded_at IS NOT NULL AND ov.superseded_at + COALESCE(p.superseded_baseline_retention_days,365) * interval '1 day' <= p_now))
+      AND EXISTS (SELECT 1 FROM media.video_frames f WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=ov.tenant_id AND r.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM origins.origin_versions active WHERE active.tenant_id=ov.tenant_id AND active.video_preparation_id=ov.video_preparation_id AND active.status='ACTIVE')
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND h.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_frames f JOIN origins.inventory_item_evidence e ON e.tenant_id=f.tenant_id AND e.frame_id=f.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id JOIN origins.origin_versions v ON v.tenant_id=it.tenant_id AND v.id=it.origin_version_id WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id AND v.status<>'DISCARDED')
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
+`},
 	}
 }
 

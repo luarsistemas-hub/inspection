@@ -89,7 +89,7 @@ func (s Service) ensureOrigin(ctx context.Context, tenantID, sessionID, assetID,
 			supersedes = origin.ActiveVersionID
 			if err := tx.Model(&database.OriginVersion{}).
 				Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *origin.ActiveVersionID).
-				Updates(map[string]any{"status": "SUPERSEDED"}).Error; err != nil {
+				Updates(map[string]any{"status": "SUPERSEDED", "superseded_at": now}).Error; err != nil {
 				return err
 			}
 		}

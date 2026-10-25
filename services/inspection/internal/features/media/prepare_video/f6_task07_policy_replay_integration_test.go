@@ -31,7 +31,7 @@ func TestVV_IT_312ReplayAfterPolicyChangeKeepsFirstReadinessAndFrozenDeadline(t 
 	t0 := fixture.now
 	setPolicy := func(days int, version int64) {
 		t.Helper()
-		policy := database.VideoPolicy{TenantID: fixture.tenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: days, Version: version, UpdatedAt: time.Now().UTC()}
+		policy := database.VideoPolicy{TenantID: fixture.tenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: days, SupersededBaselineRetentionDays: 365, Version: version, UpdatedAt: time.Now().UTC()}
 		if err := h.AdminDB.Save(&policy).Error; err != nil {
 			t.Fatal(err)
 		}

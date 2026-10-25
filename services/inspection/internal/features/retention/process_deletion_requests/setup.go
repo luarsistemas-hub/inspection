@@ -3,6 +3,7 @@ package process_deletion_requests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -54,7 +55,7 @@ func (e *Executor) RunDue(ctx context.Context, tenantID identity.ID, limit int) 
 	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		return tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 			Where("tenant_id=? AND status IN ('REQUESTED','BLOCKED')", tenantID).
-			Order("requested_at,id").Limit(limit).Find(&requests).Error
+			Order("CASE WHEN status='REQUESTED' THEN 0 ELSE 1 END, COALESCE(processed_at,requested_at), id").Limit(limit).Find(&requests).Error
 	})
 	if err != nil {
 		return 0, err
@@ -83,6 +84,9 @@ func (e *Executor) process(ctx context.Context, tenantID identity.ID, request da
 	switch {
 	case request.SourceMediaID != nil:
 		if err := e.deleteRequestedSource(ctx, tenantID, *request.SourceMediaID); err != nil {
+			if errors.Is(err, expiresources.ErrDeletionBlocked) {
+				return e.setStatus(ctx, tenantID, request.ID, "BLOCKED", "source hold or active baseline prevents source deletion", nil)
+			}
 			return err
 		}
 	case request.OriginVersionID != nil:
@@ -120,7 +124,23 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 			}
 			if held {
 				blocked = 1
-				reason = "legal hold prevents source deletion"
+				legal, err := core.SourceHeld(tx, tenantID, *request.SourceMediaID)
+				if err != nil {
+					return err
+				}
+				if legal {
+					reason = "legal hold prevents source deletion"
+				} else {
+					contested, err := core.OpenContestationSourceHeld(tx, tenantID, *request.SourceMediaID)
+					if err != nil {
+						return err
+					}
+					if contested {
+						reason = "open counterparty contestation prevents source deletion"
+					} else {
+						reason = "inherited legal hold prevents source deletion"
+					}
+				}
 				break
 			}
 			now := e.deps.Now().UTC()
@@ -130,6 +150,12 @@ func (e *Executor) blockReason(ctx context.Context, tenantID identity.ID, reques
 			}
 			if source.Status == "DELETING" && source.DeleteLeaseUntil != nil && source.DeleteLeaseUntil.After(now) {
 				blocked, reason = 1, "source deletion lease is still active"
+				break
+			}
+			if active, err := core.ActiveBaselineReferences(tx, tenantID, *request.SourceMediaID); err != nil {
+				return err
+			} else if active || source.RetentionAnchor == "ACTIVE_BASELINE" {
+				blocked, reason = 1, "active baseline prevents source deletion"
 				break
 			}
 			var active int64
@@ -210,10 +236,20 @@ func (e *Executor) invalidateOrigin(ctx context.Context, tenantID, originID iden
 		if version.Status == "ACTIVE" {
 			return fmt.Errorf("active origin cannot be invalidated by deletion request")
 		}
-		if err := tx.WithContext(ctx).Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status IN ('INVALIDATED','SUPERSEDED')", tenantID, originID).Update("status", "INVALIDATED").Error; err != nil {
+		now := e.deps.Now().UTC()
+		if version.Status != "INVALIDATED" {
+			result := tx.WithContext(ctx).Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status IN ('INVALIDATED','SUPERSEDED')", tenantID, originID).Updates(map[string]any{"status": "INVALIDATED", "invalidated_at": gorm.Expr("COALESCE(invalidated_at, ?)", now)})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return fmt.Errorf("origin version state changed before invalidation")
+			}
+		}
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, originID).Delete(&database.VideoEvidenceReference{}).Error; err != nil {
 			return err
 		}
-		return tx.WithContext(ctx).Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, originID).Delete(&database.VideoEvidenceReference{}).Error
+		return (core.BaselineTransition{Now: func() time.Time { return now }}).TransitionVersions(ctx, tx.WithContext(ctx), tenantID, []identity.ID{originID})
 	})
 }
 
@@ -250,6 +286,9 @@ func (e *Executor) purgeInspection(ctx context.Context, tenantID, inspectionID i
 func (e *Executor) setStatus(ctx context.Context, tenantID, requestID identity.ID, status, reason string, processedAt *time.Time) error {
 	return (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		updates := map[string]any{"status": status, "reason": reason}
+		if status == "BLOCKED" && processedAt == nil {
+			updates["processed_at"] = e.deps.Now().UTC()
+		}
 		if processedAt != nil {
 			updates["processed_at"] = processedAt
 		}

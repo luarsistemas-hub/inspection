@@ -10,6 +10,7 @@ import (
 
 	"inspection/libs/identity"
 	activateinternal "inspection/services/inspection/internal/features/access/activate_internal_user"
+	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
@@ -34,6 +35,7 @@ type Resolver struct {
 	DB                       *gorm.DB
 	WithinTenant             func(context.Context, identity.ID, func(*gorm.DB) error) error
 	Invitations              invitationcore.Service
+	Counterparty             counterpartycore.Service
 	ScheduleService          schedulecore.Service
 	InspectionService        inspectioncore.Service
 	ProjectService           projectcore.Service

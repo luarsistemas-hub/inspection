@@ -64,7 +64,10 @@ func TestPurgeUnreferencedVideoFramesPreservesReferencedBank(t *testing.T) {
 		`CREATE TABLE media.video_evidence_references (id text, tenant_id text, preparation_id text, owner_type text, owner_id text)`,
 		`CREATE TABLE analysis.video_plans (id text, tenant_id text, origin_preparation_id text, current_preparation_id text)`,
 		`CREATE TABLE retention.legal_holds (id text, tenant_id text, origin_version_id text, active numeric)`,
-		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text)`,
+		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text, status text DEFAULT 'ACTIVE')`,
+		`CREATE TABLE origins.inventory_items (id text, tenant_id text, origin_version_id text, environment_id text, decision text, merged_into_id text)`,
+		`CREATE TABLE origins.inventory_environments (id text, tenant_id text, decision text)`,
+		`CREATE TABLE origins.inventory_item_evidence (id text, tenant_id text, item_id text, media_id text, frame_id text)`,
 		`CREATE TABLE media.video_frames (id text, tenant_id text, preparation_id text, object_key text)`,
 		`CREATE TABLE media.video_scope_items (id text, tenant_id text, preparation_id text)`,
 	}
@@ -128,7 +131,10 @@ func TestPurgeReturnsInvalidStateForLivePlanReference(t *testing.T) {
 		`CREATE TABLE media.video_evidence_references (id text, tenant_id text, preparation_id text, owner_type text, owner_id text)`,
 		`CREATE TABLE analysis.video_plans (id text, tenant_id text, origin_preparation_id text, current_preparation_id text)`,
 		`CREATE TABLE retention.legal_holds (id text, tenant_id text, origin_version_id text, active numeric)`,
-		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text)`,
+		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text, status text DEFAULT 'ACTIVE')`,
+		`CREATE TABLE origins.inventory_items (id text, tenant_id text, origin_version_id text, environment_id text, decision text, merged_into_id text)`,
+		`CREATE TABLE origins.inventory_environments (id text, tenant_id text, decision text)`,
+		`CREATE TABLE origins.inventory_item_evidence (id text, tenant_id text, item_id text, media_id text, frame_id text)`,
 		`CREATE TABLE media.video_frames (id text, tenant_id text, preparation_id text, object_key text)`,
 		`CREATE TABLE media.video_scope_items (id text, tenant_id text, preparation_id text)`,
 	} {
@@ -186,7 +192,10 @@ func TestPurgeReleasesSealedPlanReferencesAndKeepsPromotedOriginFrames(t *testin
 		`CREATE TABLE analysis.video_plans (id text, tenant_id text, inspection_id text, status text)`,
 		`CREATE TABLE media.video_preparation_jobs (id text, tenant_id text, media_id text)`,
 		`CREATE TABLE retention.legal_holds (id text, tenant_id text, origin_version_id text, active numeric)`,
-		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text)`,
+		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text, status text DEFAULT 'ACTIVE')`,
+		`CREATE TABLE origins.inventory_items (id text, tenant_id text, origin_version_id text, environment_id text, decision text, merged_into_id text)`,
+		`CREATE TABLE origins.inventory_environments (id text, tenant_id text, decision text)`,
+		`CREATE TABLE origins.inventory_item_evidence (id text, tenant_id text, item_id text, media_id text, frame_id text)`,
 		`CREATE TABLE media.video_frames (id text, tenant_id text, preparation_id text, object_key text)`,
 		`CREATE TABLE media.video_scope_items (id text, tenant_id text, preparation_id text)`,
 	} {
@@ -213,7 +222,7 @@ func TestPurgeReleasesSealedPlanReferencesAndKeepsPromotedOriginFrames(t *testin
 		t.Fatal(err)
 	}
 	originID := identity.NewID()
-	if err := db.Exec("INSERT INTO origins.origin_versions VALUES (?,?,?)", originID, tenantID, originPreparationID).Error; err != nil {
+	if err := db.Exec("INSERT INTO origins.origin_versions (id,tenant_id,video_preparation_id) VALUES (?,?,?)", originID, tenantID, originPreparationID).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO media.video_evidence_references VALUES (?,?,?,?,?)", identity.NewID(), tenantID, originPreparationID, "ORIGIN_VERSION", originID).Error; err != nil {

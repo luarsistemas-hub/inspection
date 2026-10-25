@@ -36,6 +36,7 @@ type CaptureQuery struct{ TenantID identity.ID }
 type Command struct {
 	TenantID                                                      identity.ID
 	MaxDurationMinutes, OriginRetentionDays, CurrentRetentionDays int
+	SupersededBaselineRetentionDays                               *int
 	ExpectedVersion                                               int64
 	MutationID                                                    string
 }
@@ -98,6 +99,14 @@ func Validate(maxDuration, originDays, currentDays int) error {
 	return nil
 }
 
+// ValidateSupersededBaselineRetention checks the lifecycle-specific range.
+func ValidateSupersededBaselineRetention(days int) error {
+	if days < 1 || days > 3650 {
+		return apperror.New(apperror.InvalidInput, "supersededBaselineRetentionDays", "retention must be between 1 and 3650 days")
+	}
+	return nil
+}
+
 func load(ctx context.Context, db *gorm.DB, within func(context.Context, identity.ID, func(*gorm.DB) error) error, tenantID identity.ID) (database.VideoPolicy, error) {
 	policy := Defaults(tenantID)
 	run := within
@@ -121,7 +130,21 @@ func configure(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		return database.VideoPolicy{}, err
 	}
 	meta, _ := requestctx.FromContext(ctx)
+	supersededDays := 365
+	if cmd.SupersededBaselineRetentionDays != nil {
+		supersededDays = *cmd.SupersededBaselineRetentionDays
+		if err := ValidateSupersededBaselineRetention(supersededDays); err != nil {
+			return database.VideoPolicy{}, err
+		}
+	}
+	supersededDigest := "omitted"
+	if cmd.SupersededBaselineRetentionDays != nil {
+		supersededDigest = fmt.Sprintf("%d", supersededDays)
+	}
 	values := fmt.Sprintf("%d:%d:%d", cmd.MaxDurationMinutes, cmd.OriginRetentionDays, cmd.CurrentRetentionDays)
+	if cmd.SupersededBaselineRetentionDays != nil {
+		values = fmt.Sprintf("%s:%s", values, supersededDigest)
+	}
 	sum := sha256.Sum256([]byte(values))
 	digest := hex.EncodeToString(sum[:])
 	policy := Defaults(cmd.TenantID)
@@ -144,6 +167,12 @@ func configure(ctx context.Context, db *gorm.DB, within func(context.Context, id
 			policy = current
 			return nil
 		}
+		if cmd.SupersededBaselineRetentionDays == nil {
+			supersededDays = current.SupersededBaselineRetentionDays
+			if supersededDays == 0 {
+				supersededDays = 365
+			}
+		}
 		var tenant database.Tenant
 		if err := tx.Where("tenant_id=?", cmd.TenantID).First(&tenant).Error; err != nil {
 			return err
@@ -155,7 +184,7 @@ func configure(ctx context.Context, db *gorm.DB, within func(context.Context, id
 			return apperror.New(apperror.Conflict, "expectedVersion", "video policy has changed")
 		}
 		now := time.Now().UTC()
-		policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: cmd.MaxDurationMinutes, OriginRetentionDays: cmd.OriginRetentionDays, CurrentRetentionDays: cmd.CurrentRetentionDays, SupersededBaselineRetentionDays: current.SupersededBaselineRetentionDays, Version: current.Version + 1, LastMutationID: cmd.MutationID, LastPayloadDigest: digest, UpdatedAt: now}
+		policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: cmd.MaxDurationMinutes, OriginRetentionDays: cmd.OriginRetentionDays, CurrentRetentionDays: cmd.CurrentRetentionDays, SupersededBaselineRetentionDays: supersededDays, Version: current.Version + 1, LastMutationID: cmd.MutationID, LastPayloadDigest: digest, UpdatedAt: now}
 		if err := tx.Save(&policy).Error; err != nil {
 			return err
 		}

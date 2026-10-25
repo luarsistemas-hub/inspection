@@ -12,6 +12,7 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -233,7 +234,7 @@ func (s Service) ActivateCompletedTx(tx *gorm.DB, tenantID, responsibilityID ide
 		return database.OriginVersion{}, err
 	}
 	if origin.ActiveVersionID != nil && *origin.ActiveVersionID != result.ID {
-		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *origin.ActiveVersionID).Update("status", "SUPERSEDED").Error; err != nil {
+		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", tenantID, *origin.ActiveVersionID).Updates(map[string]any{"status": "SUPERSEDED", "superseded_at": now}).Error; err != nil {
 			return database.OriginVersion{}, err
 		}
 		if err := releaseOriginReference(tx, tenantID, *origin.ActiveVersionID); err != nil {
@@ -245,6 +246,9 @@ func (s Service) ActivateCompletedTx(tx *gorm.DB, tenantID, responsibilityID ide
 		return database.OriginVersion{}, err
 	}
 	if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": result.ID, "version": origin.Version + 1, "updated_at": now}).Error; err != nil {
+		return database.OriginVersion{}, err
+	}
+	if err := (retentioncore.BaselineTransition{Now: func() time.Time { return now }}).TransitionVersions(context.Background(), tx, tenantID, []identity.ID{result.ID, identityID(origin.ActiveVersionID)}); err != nil {
 		return database.OriginVersion{}, err
 	}
 	return result, nil
@@ -262,16 +266,31 @@ func (s Service) Invalidate(ctx context.Context, tenantID, versionID identity.ID
 		if row.Status == "INVALIDATED" {
 			return nil
 		}
-		row.Status, row.InvalidatedAt = "INVALIDATED", &now
+		if row.Status != "INVALIDATED" {
+			row.Status = "INVALIDATED"
+			if row.InvalidatedAt == nil {
+				row.InvalidatedAt = &now
+			}
+		}
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
 		if err := releaseOriginReference(tx, tenantID, row.ID); err != nil {
 			return err
 		}
-		return tx.Model(&database.Origin{}).Where("tenant_id=? AND id=? AND active_version_id=?", tenantID, row.OriginID, row.ID).Updates(map[string]any{"active_version_id": nil, "updated_at": now, "version": gorm.Expr("version + 1")}).Error
+		if err := tx.Model(&database.Origin{}).Where("tenant_id=? AND id=? AND active_version_id=?", tenantID, row.OriginID, row.ID).Updates(map[string]any{"active_version_id": nil, "updated_at": now, "version": gorm.Expr("version + 1")}).Error; err != nil {
+			return err
+		}
+		return (retentioncore.BaselineTransition{Now: func() time.Time { return now }}).TransitionVersions(ctx, tx, tenantID, []identity.ID{row.ID})
 	})
 	return row, err
+}
+
+func identityID(value *identity.ID) identity.ID {
+	if value == nil {
+		return identity.ID{}
+	}
+	return *value
 }
 
 func releaseOriginReference(tx *gorm.DB, tenantID, versionID identity.ID) error {

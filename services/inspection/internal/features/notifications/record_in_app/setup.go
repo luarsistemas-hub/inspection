@@ -104,6 +104,22 @@ func Setup() func(context.Context, *gorm.DB, events.RawEnvelope) error {
 			if version.SourceInspectionID != nil {
 				value.inspectionID = *version.SourceInspectionID
 			}
+		case "counterparty.responded.v1":
+			var payload events.CounterpartyRespondedPayload
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.CounterpartyInvitationID == (identity.ID{}) || payload.OriginVersionID == (identity.ID{}) {
+				return messaging.ErrPermanent
+			}
+			var version database.OriginVersion
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.OriginVersionID).Take(&version).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			} else if err != nil {
+				return err
+			}
+			var origin database.Origin
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, version.OriginID).Take(&origin).Error; err != nil {
+				return err
+			}
+			value = notice{kind: "COUNTERPARTY_RESPONDED", title: "Resposta da contraparte recebida", body: "Uma contraparte respondeu à vistoria de referência.", assetID: origin.AssetID, resourceID: version.ID, eventKey: payload.CounterpartyInvitationID}
 		default:
 			return messaging.ErrPermanent
 		}
@@ -175,7 +191,7 @@ func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value
 	}
 	var scoped []database.Membership
 	roles := []string{"MANAGER"}
-	if value.kind == "INVENTORY_DRAFT_READY" {
+	if value.kind == "INVENTORY_DRAFT_READY" || value.kind == "COUNTERPARTY_RESPONDED" {
 		roles = []string{"EMPLOYEE", "MANAGER"}
 	}
 	query := tx.WithContext(ctx).Table("access.memberships AS m").Select("m.*").Joins("JOIN access.resource_scopes AS s ON s.tenant_id=m.tenant_id AND s.membership_id=m.id").Where("m.tenant_id=? AND m.status='ACTIVE' AND m.role IN ?", envelope.TenantID, roles).Where(
@@ -198,7 +214,7 @@ func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value
 		}
 		seen[recipient.ID] = struct{}{}
 		logicalEventID := envelope.ID
-		if envelope.Type == "report.ready.v1" || envelope.Type == "inventory.draft_ready.v1" {
+		if envelope.Type == "report.ready.v1" || envelope.Type == "inventory.draft_ready.v1" || envelope.Type == "counterparty.responded.v1" {
 			logicalEventID = identity.NewDeterministicID("inspection/report-ready-notification", value.eventKey.String())
 		}
 		resourceKind := "INSPECTION"
@@ -206,6 +222,8 @@ func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value
 			resourceKind = "REPORT"
 		} else if value.kind == "INVENTORY_DRAFT_READY" {
 			resourceKind = "BASELINE_DRAFT"
+		} else if value.kind == "COUNTERPARTY_RESPONDED" {
+			resourceKind = "BASELINE"
 		}
 		resourceID := value.inspectionID
 		if value.resourceID != (identity.ID{}) {

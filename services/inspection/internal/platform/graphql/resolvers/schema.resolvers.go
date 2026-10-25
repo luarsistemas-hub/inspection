@@ -38,6 +38,15 @@ import (
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
+	counterpartyacknowledge "inspection/services/inspection/internal/features/counterparty/acknowledge"
+	counterpartycontest "inspection/services/inspection/internal/features/counterparty/contest"
+	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
+	counterpartyrequestotp "inspection/services/inspection/internal/features/counterparty/request_otp"
+	counterpartyresend "inspection/services/inspection/internal/features/counterparty/resend"
+	counterpartyresolve "inspection/services/inspection/internal/features/counterparty/resolve"
+	counterpartyupdatepolicy "inspection/services/inspection/internal/features/counterparty/update_policy"
+	counterpartyverifyotp "inspection/services/inspection/internal/features/counterparty/verify_otp"
+	counterpartyviewbaseline "inspection/services/inspection/internal/features/counterparty/view_baseline"
 	dashboardcore "inspection/services/inspection/internal/features/dashboard/core"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
@@ -107,6 +116,7 @@ import (
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -837,6 +847,122 @@ func (r *mutationResolver) VerifyInvitationOtp(ctx context.Context, input graphq
 	return &graphql1.ExternalSessionPayload{Status: "ACTIVE", CsrfToken: session.CSRF, ExpiresAt: session.ExpiresAt.Format(time.RFC3339Nano), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// RequestCounterpartyOtp is the resolver for the requestCounterpartyOtp field.
+func (r *mutationResolver) RequestCounterpartyOtp(ctx context.Context, input graphql1.RequestCounterpartyOtpInput) (*graphql1.InvitationOtpPayload, error) {
+	raw, err := r.Bus.Send(ctx, counterpartyrequestotp.Command{Token: input.Token})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.InvitationOtpPayload{Status: raw.(counterpartyrequestotp.Result).Status, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// VerifyCounterpartyOtp is the resolver for the verifyCounterpartyOtp field.
+func (r *mutationResolver) VerifyCounterpartyOtp(ctx context.Context, input graphql1.VerifyCounterpartyOtpInput) (*graphql1.ExternalSessionPayload, error) {
+	raw, err := r.Bus.Send(ctx, counterpartyverifyotp.Command{Token: input.Token, Code: input.Code})
+	if err != nil {
+		return nil, err
+	}
+	session := raw.(counterpartycore.ExternalSession)
+	writer, ok := requestctx.ResponseWriter(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	http.SetCookie(writer, &http.Cookie{Name: "inspection_external", Value: session.Token, Path: "/", Expires: session.ExpiresAt, MaxAge: int(time.Until(session.ExpiresAt).Seconds()), Secure: requestctx.SecureCookies(ctx), HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	return &graphql1.ExternalSessionPayload{Status: "ACTIVE", CsrfToken: session.CSRF, ExpiresAt: session.ExpiresAt.Format(time.RFC3339Nano), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// AcknowledgeBaseline is the resolver for the acknowledgeBaseline field.
+func (r *mutationResolver) AcknowledgeBaseline(ctx context.Context, input graphql1.CounterpartyResponseInput) (*graphql1.CounterpartyResponsePayload, error) {
+	tenantID, invitationID, err := r.externalCounterparty(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, counterpartyacknowledge.Command{Owner: counterpartycore.SessionOwner{TenantID: tenantID, InvitationID: invitationID}, MutationID: input.ClientMutationID})
+	if err != nil {
+		if userErrors, ok := counterpartyMutationErrors(err, input.ClientMutationID); ok {
+			return counterpartyResponseErrorPayload(userErrors, input.ClientMutationID), nil
+		}
+		return nil, err
+	}
+	return counterpartyResponsePayload(raw.(database.CounterpartyInvitation), input.ClientMutationID), nil
+}
+
+// ContestBaseline is the resolver for the contestBaseline field.
+func (r *mutationResolver) ContestBaseline(ctx context.Context, input graphql1.ContestBaselineInput) (*graphql1.CounterpartyResponsePayload, error) {
+	tenantID, invitationID, err := r.externalCounterparty(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, counterpartycontest.Command{Owner: counterpartycore.SessionOwner{TenantID: tenantID, InvitationID: invitationID}, Statement: input.Statement, MutationID: input.ClientMutationID})
+	if err != nil {
+		if userErrors, ok := counterpartyMutationErrors(err, input.ClientMutationID); ok {
+			return counterpartyResponseErrorPayload(userErrors, input.ClientMutationID), nil
+		}
+		return nil, err
+	}
+	return counterpartyResponsePayload(raw.(database.CounterpartyInvitation), input.ClientMutationID), nil
+}
+
+// ResolveBaselineContestation is the resolver for the resolveBaselineContestation field.
+func (r *mutationResolver) ResolveBaselineContestation(ctx context.Context, input graphql1.ResolveBaselineContestationInput) (*graphql1.CounterpartyInvitationPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	id, err := identity.ParseID(input.CounterpartyInvitationID)
+	if err != nil {
+		return nil, invalidID("counterpartyInvitationId")
+	}
+	if _, err := r.Bus.Send(ctx, counterpartyresolve.Command{TenantID: meta.TenantID, InvitationID: id, ActorID: meta.Principal.MembershipID, Outcome: input.Outcome, Reason: stringValue(input.Reason)}); err != nil {
+		if userErrors, ok := counterpartyMutationErrors(err, input.ClientMutationID); ok {
+			return counterpartyInvitationErrorPayload(userErrors, input.ClientMutationID), nil
+		}
+		return nil, err
+	}
+	var row database.CounterpartyInvitation
+	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error { return tx.Where("tenant_id=? AND id=?", meta.TenantID, id).First(&row).Error }); err != nil {
+		return nil, err
+	}
+	return counterpartyInvitationPayload(row, input.ClientMutationID), nil
+}
+
+// ResendCounterpartyInvitation is the resolver for the resendCounterpartyInvitation field.
+func (r *mutationResolver) ResendCounterpartyInvitation(ctx context.Context, input graphql1.ResendCounterpartyInvitationInput) (*graphql1.CounterpartyInvitationPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	id, err := identity.ParseID(input.CounterpartyInvitationID)
+	if err != nil {
+		return nil, invalidID("counterpartyInvitationId")
+	}
+	raw, err := r.Bus.Send(ctx, counterpartyresend.Command{TenantID: meta.TenantID, InvitationID: id})
+	if err != nil {
+		if userErrors, ok := counterpartyMutationErrors(err, input.ClientMutationID); ok {
+			return counterpartyInvitationErrorPayload(userErrors, input.ClientMutationID), nil
+		}
+		return nil, err
+	}
+	return counterpartyInvitationPayload(raw.(database.CounterpartyInvitation), input.ClientMutationID), nil
+}
+
+// UpdateBaselinePolicy is the resolver for the updateBaselinePolicy field.
+func (r *mutationResolver) UpdateBaselinePolicy(ctx context.Context, input graphql1.UpdateBaselinePolicyInput) (*graphql1.BaselinePolicyPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	raw, err := r.Bus.Send(ctx, counterpartyupdatepolicy.Command{TenantID: meta.TenantID, Days: input.ContestationDeadlineDays})
+	if err != nil {
+		if userErrors, ok := counterpartyMutationErrors(err, input.ClientMutationID); ok {
+			return &graphql1.BaselinePolicyPayload{UserErrors: userErrors, ClientMutationID: input.ClientMutationID}, nil
+		}
+		return nil, err
+	}
+	policy := raw.(database.BaselinePolicy)
+	return &graphql1.BaselinePolicyPayload{Policy: &graphql1.BaselinePolicy{ContestationDeadlineDays: policy.ContestationDeadlineDays, Version: int(policy.Version)}, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
 // RevokeInvitation is the resolver for the revokeInvitation field.
 func (r *mutationResolver) RevokeInvitation(ctx context.Context, input graphql1.RevokeInvitationInput) (*graphql1.InvitationPayload, error) {
 	raw, err := r.Bus.Send(ctx, revokeinvitation.Command{LinkToken: input.LinkToken, ClientMutationID: input.ClientMutationID})
@@ -1526,7 +1652,7 @@ func (r *mutationResolver) ConfigureVideoPolicy(ctx context.Context, input graph
 	if !ok {
 		return nil, unauthenticated()
 	}
-	raw, err := r.Bus.Send(ctx, mediavideopolicy.Command{TenantID: meta.TenantID, MaxDurationMinutes: input.MaxDurationMinutes, OriginRetentionDays: input.OriginRetentionDays, CurrentRetentionDays: input.CurrentRetentionDays, ExpectedVersion: int64(input.ExpectedVersion), MutationID: input.ClientMutationID})
+	raw, err := r.Bus.Send(ctx, mediavideopolicy.Command{TenantID: meta.TenantID, MaxDurationMinutes: input.MaxDurationMinutes, OriginRetentionDays: input.OriginRetentionDays, CurrentRetentionDays: input.CurrentRetentionDays, SupersededBaselineRetentionDays: input.SupersededBaselineRetentionDays, ExpectedVersion: int64(input.ExpectedVersion), MutationID: input.ClientMutationID})
 	if err != nil {
 		return nil, err
 	}
@@ -2315,6 +2441,90 @@ func (r *mutationResolver) ConfigureMyNotificationPreferences(ctx context.Contex
 	return &graphql1.NotificationPreferencesPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// CounterpartyInvitations is the resolver for the counterpartyInvitations field.
+func (r *originVersionResolver) CounterpartyInvitations(ctx context.Context, obj *graphql1.OriginVersion) ([]*graphql1.BaselineCounterpartyInvitation, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.Manager, auth.Employee}, nil, false); err != nil {
+		return nil, err
+	}
+	versionID, err := identity.ParseID(obj.ID)
+	if err != nil {
+		return nil, invalidID("originVersionId")
+	}
+	var invitations []database.CounterpartyInvitation
+	var deliveries []database.Delivery
+	err = (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND origin_version_id=?", meta.TenantID, versionID).Order("created_at,id").Find(&invitations).Error; err != nil || len(invitations) == 0 {
+			return err
+		}
+		patterns := make([]string, 0, len(invitations))
+		args := []any{meta.TenantID}
+		for _, invitation := range invitations {
+			patterns = append(patterns, "correlation_id LIKE ?")
+			args = append(args, "counterparty-"+invitation.ID.String()+"-g%")
+		}
+		return tx.Where("tenant_id=? AND ("+strings.Join(patterns, " OR ")+")", args...).Order("created_at DESC,id DESC").Find(&deliveries).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	type generationStatus struct {
+		generation int
+		status     string
+		delivery   database.Delivery
+	}
+	byInvitation := make(map[string]generationStatus, len(invitations))
+	for _, delivery := range deliveries {
+		parts := strings.LastIndex(delivery.CorrelationID, "-g")
+		if parts < 0 {
+			continue
+		}
+		generation, parseErr := strconv.Atoi(delivery.CorrelationID[parts+2:])
+		if parseErr != nil {
+			continue
+		}
+		id := strings.TrimPrefix(delivery.CorrelationID[:parts], "counterparty-")
+		current, exists := byInvitation[id]
+		if !exists || generation > current.generation {
+			byInvitation[id] = generationStatus{generation: generation, status: delivery.Status, delivery: delivery}
+		} else if generation == current.generation {
+			if deliverySuccessful(delivery.Status) {
+				current.status, current.delivery = delivery.Status, delivery
+			} else if !deliveryFailed(current.status) && deliveryFailed(delivery.Status) {
+				current.status, current.delivery = "FAILED", delivery
+			}
+			byInvitation[id] = current
+		}
+	}
+	result := make([]*graphql1.BaselineCounterpartyInvitation, 0, len(invitations))
+	for _, invitation := range invitations {
+		item := &graphql1.BaselineCounterpartyInvitation{ID: invitation.ID.String(), ParticipantID: invitation.ParticipantID.String(), Response: invitation.Response, DeadlineAt: invitation.DeadlineAt.UTC().Format(time.RFC3339Nano)}
+		item.Resolution, item.Statement, item.ResolutionReason = invitation.Resolution, invitation.Statement, invitation.ResolutionReason
+		if invitation.AdjustmentVersionID != nil {
+			value := invitation.AdjustmentVersionID.String()
+			item.AdjustmentVersionID = &value
+		}
+		if invitation.RespondedAt != nil {
+			value := invitation.RespondedAt.UTC().Format(time.RFC3339Nano)
+			item.RespondedAt = &value
+		}
+		if delivery, found := byInvitation[invitation.ID.String()]; found {
+			status := delivery.status
+			if status == "PENDING" {
+				status = "QUEUED"
+			}
+			item.DeliveryStatus = &status
+			id := delivery.delivery.ID.String()
+			item.DeliveryID = &id
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
 // OnboardingDefinition is the resolver for the onboardingDefinition field.
 func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string) (*graphql1.OnboardingDefinition, error) {
 	value, err := onboardingcatalog.Resolve(segment)
@@ -2783,6 +2993,46 @@ func (r *queryResolver) InventoryDraft(ctx context.Context, originVersionID stri
 // BaselineInventory is the resolver for the baselineInventory field.
 func (r *queryResolver) BaselineInventory(ctx context.Context, assetID string, versionID *string) (*graphql1.BaselineInventory, error) {
 	return r.baselineInventory(ctx, assetID, versionID)
+}
+
+// CounterpartyBaseline is the resolver for the counterpartyBaseline field.
+func (r *queryResolver) CounterpartyBaseline(ctx context.Context) (*graphql1.CounterpartyBaseline, error) {
+	tenantID, invitationID, err := r.externalCounterparty(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Ask(ctx, counterpartyviewbaseline.Query{Owner: counterpartycore.SessionOwner{TenantID: tenantID, InvitationID: invitationID}})
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(counterpartycore.BaselineView)
+	baseline := &graphql1.CounterpartyBaselineInventory{HasInventory: view.Inventory.HasInventory, Environments: []*graphql1.CounterpartyBaselineEnvironment{}}
+	for _, environment := range view.Inventory.Environments {
+		mappedEnvironment := &graphql1.CounterpartyBaselineEnvironment{TypeCode: environment.Environment.TypeCode, Name: environment.Environment.Name, Items: []*graphql1.CounterpartyBaselineItem{}}
+		for _, item := range environment.Items {
+			mappedItem := &graphql1.CounterpartyBaselineItem{TypeCode: item.Item.TypeCode, Name: item.Item.Name, Material: item.Item.Material, Color: item.Item.Color, Quantity: item.Item.Quantity, Condition: item.Item.Condition, Observation: item.Item.Observation, Limitation: item.Item.Limitation, Evidence: []*graphql1.CounterpartyBaselineEvidence{}}
+			for _, evidence := range item.Evidence {
+				if evidence.Availability == "AVAILABLE" {
+					mappedItem.Evidence = append(mappedItem.Evidence, &graphql1.CounterpartyBaselineEvidence{Kind: evidence.Evidence.Kind, Position: evidence.Evidence.Position})
+				}
+			}
+			mappedEnvironment.Items = append(mappedEnvironment.Items, mappedItem)
+		}
+		baseline.Environments = append(baseline.Environments, mappedEnvironment)
+	}
+	result := &graphql1.CounterpartyBaseline{Baseline: baseline, DeadlineAt: view.Invitation.DeadlineAt.UTC().Format(time.RFC3339Nano), Response: view.Invitation.Response, Resolution: view.Invitation.Resolution, AdjustmentStatus: nonEmptyStringPointer(view.AdjustmentStatus), NewerVersionExists: view.Newer, ReadOnly: view.ReadOnly}
+	if view.Invitation.RespondedAt != nil {
+		value := view.Invitation.RespondedAt.UTC().Format(time.RFC3339Nano)
+		result.RespondedAt = &value
+	}
+	if view.Invitation.ResolutionReason != nil {
+		category := "DECLINED"
+		if view.Invitation.Resolution == "ACCEPTED" {
+			category = "ACCEPTED"
+		}
+		result.ResolutionReason = &category
+	}
+	return result, nil
 }
 
 // InventoryTrail is the resolver for the inventoryTrail field.
@@ -4408,6 +4658,9 @@ func (r *reportResolver) Evidence(ctx context.Context, obj *graphql1.Report, fir
 // Mutation returns graphql1.MutationResolver implementation.
 func (r *Resolver) Mutation() graphql1.MutationResolver { return &mutationResolver{r} }
 
+// OriginVersion returns graphql1.OriginVersionResolver implementation.
+func (r *Resolver) OriginVersion() graphql1.OriginVersionResolver { return &originVersionResolver{r} }
+
 // Query returns graphql1.QueryResolver implementation.
 func (r *Resolver) Query() graphql1.QueryResolver { return &queryResolver{r} }
 
@@ -4415,7 +4668,8 @@ func (r *Resolver) Query() graphql1.QueryResolver { return &queryResolver{r} }
 func (r *Resolver) Report() graphql1.ReportResolver { return &reportResolver{r} }
 
 type (
-	mutationResolver struct{ *Resolver }
-	queryResolver    struct{ *Resolver }
-	reportResolver   struct{ *Resolver }
+	mutationResolver      struct{ *Resolver }
+	originVersionResolver struct{ *Resolver }
+	queryResolver         struct{ *Resolver }
+	reportResolver        struct{ *Resolver }
 )

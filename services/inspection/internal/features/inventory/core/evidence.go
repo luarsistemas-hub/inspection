@@ -2,8 +2,10 @@ package core
 
 import (
 	"encoding/json"
+	"time"
 
 	"inspection/libs/identity"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -79,6 +81,92 @@ func LoadEvidenceAvailability(tx *gorm.DB, tenant identity.ID, evidence []databa
 		availability[row.ID] = state
 	}
 	return availability, nil
+}
+
+// LoadRetentionAvailability returns the lifecycle label exposed beside video evidence.
+func LoadRetentionAvailability(tx *gorm.DB, tenant identity.ID, evidence []database.InventoryItemEvidence) (map[identity.ID]string, error) {
+	result := make(map[identity.ID]string, len(evidence))
+	frameIDs := make([]identity.ID, 0, len(evidence))
+	for _, row := range evidence {
+		if row.Kind == "VIDEO_FRAME" && row.FrameID != nil {
+			frameIDs = append(frameIDs, *row.FrameID)
+		}
+	}
+	frameIDs = uniqueIDs(frameIDs)
+	if len(frameIDs) == 0 {
+		return result, nil
+	}
+	var frames []database.VideoFrame
+	if err := tx.Where("tenant_id=? AND id IN ?", tenant, frameIDs).Find(&frames).Error; err != nil {
+		return nil, err
+	}
+	mediaIDs := make([]identity.ID, 0, len(frames))
+	frameSource := make(map[identity.ID]identity.ID, len(frames))
+	for _, row := range frames {
+		mediaIDs = append(mediaIDs, row.SourceMediaID)
+		frameSource[row.ID] = row.SourceMediaID
+	}
+	mediaIDs = uniqueIDs(mediaIDs)
+	var sources []database.VideoSource
+	if err := tx.Where("tenant_id=? AND media_id IN ?", tenant, mediaIDs).Find(&sources).Error; err != nil {
+		return nil, err
+	}
+	type holdState struct {
+		MediaID          identity.ID `gorm:"column:media_id"`
+		LegalHold        bool        `gorm:"column:legal_hold"`
+		ContestationHold bool        `gorm:"column:contestation_hold"`
+	}
+	// One set-based read per call; ownership uses the same reference query as
+	// retention transitions and expiry claims, so the label never disagrees
+	// with what the executor would protect.
+	owners := retentioncore.ReferencingVersionsFor("s.tenant_id", "s.media_id")
+	var holds []holdState
+	if err := tx.Raw(`SELECT s.media_id,
+		EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=s.tenant_id AND h.active=true AND (
+			h.source_media_id=s.media_id OR
+			h.inspection_id IN (SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id WHERE r.tenant_id=s.tenant_id AND m.id=s.media_id) OR
+			h.origin_version_id IN (`+owners+`)
+		)) AS legal_hold,
+		EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=s.tenant_id AND c.response='CONTESTED' AND c.resolution='OPEN' AND c.origin_version_id IN (`+owners+`)) AS contestation_hold
+		FROM media.video_sources s WHERE s.tenant_id=? AND s.media_id IN ?`, tenant, mediaIDs).Scan(&holds).Error; err != nil {
+		return nil, err
+	}
+	holdByMedia := make(map[identity.ID]holdState, len(holds))
+	for _, hold := range holds {
+		holdByMedia[hold.MediaID] = hold
+	}
+	sourceLabels := make(map[identity.ID]string, len(sources))
+	for _, source := range sources {
+		hold := holdByMedia[source.MediaID]
+		if source.Status == "EXPIRED" || source.OriginalDeletedAt != nil {
+			hold = holdState{}
+		}
+		sourceLabels[source.MediaID] = RetentionAvailabilityLabel(source, hold.LegalHold, hold.ContestationHold)
+	}
+	for _, row := range evidence {
+		if row.Kind == "VIDEO_FRAME" && row.FrameID != nil {
+			result[row.ID] = sourceLabels[frameSource[*row.FrameID]]
+		}
+	}
+	return result, nil
+}
+
+// RetentionAvailabilityLabel maps a source's lifecycle to the customer-facing label.
+func RetentionAvailabilityLabel(source database.VideoSource, legalHold, contestationHold bool) string {
+	switch {
+	case source.Status == "EXPIRED" || source.OriginalDeletedAt != nil:
+		return "EXPIRED_FRAMES_PRESERVED"
+	case legalHold:
+		return "LEGAL_HOLD"
+	case contestationHold:
+		return "CONTESTATION_HOLD"
+	case source.RetentionAnchor == "ACTIVE_BASELINE":
+		return "WHILE_BASELINE_ACTIVE"
+	case source.SourceExpiryAt != nil:
+		return source.SourceExpiryAt.UTC().Format(time.DateOnly)
+	default:
+		return ""
+	}
 }
 
 func uniqueIDs(ids []identity.ID) []identity.ID {

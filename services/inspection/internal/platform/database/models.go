@@ -579,6 +579,7 @@ type OriginVersion struct {
 	CreatedAt               time.Time
 	SubmittedAt             *time.Time
 	ActivatedAt             *time.Time
+	SupersededAt            *time.Time
 	InvalidatedAt           *time.Time
 }
 
@@ -751,6 +752,7 @@ type VideoSource struct {
 	FirstFrameReadyAt       *time.Time
 	RetentionDays           *int
 	SourceExpiryAt          *time.Time
+	RetentionFloorAt        *time.Time
 	RetentionAnchor         string       `gorm:"size:24;not null;default:FIXED"`
 	Status                  string       `gorm:"size:16;not null;default:RETAINED;index"`
 	DeleteLeaseToken        *identity.ID `gorm:"type:uuid"`
@@ -1443,11 +1445,13 @@ type CounterpartyInvitation struct {
 	OTPHash             []byte      `gorm:"type:bytea"`
 	OTPExpiresAt        *time.Time
 	OTPAttempts         int             `gorm:"not null;default:0"`
+	DeliveryGeneration  int             `gorm:"not null;default:1"`
 	Channels            json.RawMessage `gorm:"type:jsonb;not null;default:'[]'"`
 	DeadlineAt          time.Time       `gorm:"not null"`
 	Response            string          `gorm:"size:16;not null;default:PENDING"`
 	Statement           *string         `gorm:"size:4000"`
 	RespondedAt         *time.Time
+	ResponseMutationID  *string      `gorm:"size:200"`
 	Resolution          string       `gorm:"size:16;not null;default:OPEN"`
 	ResolutionReason    *string      `gorm:"size:500"`
 	ResolvedBy          *identity.ID `gorm:"type:uuid"`

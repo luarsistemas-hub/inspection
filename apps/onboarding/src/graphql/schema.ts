@@ -191,11 +191,39 @@ export type AuditEventConnection = {
   pageInfo: PageInfo;
 };
 
+export type BaselineCounterpartyInvitation = {
+  __typename?: 'BaselineCounterpartyInvitation';
+  adjustmentVersionId: Maybe<Scalars['ID']['output']>;
+  deadlineAt: Scalars['String']['output'];
+  deliveryId: Maybe<Scalars['ID']['output']>;
+  deliveryStatus: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  participantId: Scalars['ID']['output'];
+  resolution: Scalars['String']['output'];
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+  statement: Maybe<Scalars['String']['output']>;
+};
+
 export type BaselineInventory = {
   __typename?: 'BaselineInventory';
   environments: Array<InventoryEnvironment>;
   hasInventory: Scalars['Boolean']['output'];
   version: Maybe<OriginVersion>;
+};
+
+export type BaselinePolicy = {
+  __typename?: 'BaselinePolicy';
+  contestationDeadlineDays: Scalars['Int']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type BaselinePolicyPayload = {
+  __typename?: 'BaselinePolicyPayload';
+  clientMutationId: Scalars['String']['output'];
+  policy: Maybe<BaselinePolicy>;
+  userErrors: Array<UserError>;
 };
 
 export type BeginVideoCaptureInput = {
@@ -404,6 +432,7 @@ export type ConfigureVideoPolicyInput = {
   expectedVersion: Scalars['Int']['input'];
   maxDurationMinutes: Scalars['Int']['input'];
   originRetentionDays: Scalars['Int']['input'];
+  supersededBaselineRetentionDays: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type ContactInput = {
@@ -411,11 +440,17 @@ export type ContactInput = {
   value: Scalars['String']['input'];
 };
 
+export type ContestBaselineInput = {
+  clientMutationId: Scalars['String']['input'];
+  statement: Scalars['String']['input'];
+};
+
 export type ContestationSummary = {
   __typename?: 'ContestationSummary';
   acknowledged: Scalars['Int']['output'];
   contested: Scalars['Int']['output'];
   noResponse: Scalars['Int']['output'];
+  open: Scalars['Int']['output'];
   pending: Scalars['Int']['output'];
 };
 
@@ -432,6 +467,74 @@ export type CorrectOnboardingResponsibleEmailInput = {
   email: Scalars['String']['input'];
   emailConfirmation: Scalars['String']['input'];
   expectedResponsibilityVersion: Scalars['Int']['input'];
+};
+
+export type CounterpartyBaseline = {
+  __typename?: 'CounterpartyBaseline';
+  adjustmentStatus: Maybe<Scalars['String']['output']>;
+  baseline: CounterpartyBaselineInventory;
+  deadlineAt: Scalars['String']['output'];
+  newerVersionExists: Scalars['Boolean']['output'];
+  readOnly: Scalars['Boolean']['output'];
+  resolution: Scalars['String']['output'];
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+};
+
+export type CounterpartyBaselineEnvironment = {
+  __typename?: 'CounterpartyBaselineEnvironment';
+  items: Array<CounterpartyBaselineItem>;
+  name: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+};
+
+export type CounterpartyBaselineEvidence = {
+  __typename?: 'CounterpartyBaselineEvidence';
+  kind: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
+};
+
+export type CounterpartyBaselineInventory = {
+  __typename?: 'CounterpartyBaselineInventory';
+  environments: Array<CounterpartyBaselineEnvironment>;
+  hasInventory: Scalars['Boolean']['output'];
+};
+
+export type CounterpartyBaselineItem = {
+  __typename?: 'CounterpartyBaselineItem';
+  color: Maybe<Scalars['String']['output']>;
+  condition: Scalars['String']['output'];
+  evidence: Array<CounterpartyBaselineEvidence>;
+  limitation: Maybe<Scalars['String']['output']>;
+  material: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  observation: Scalars['String']['output'];
+  quantity: Maybe<Scalars['Int']['output']>;
+  typeCode: Scalars['String']['output'];
+};
+
+export type CounterpartyInvitationPayload = {
+  __typename?: 'CounterpartyInvitationPayload';
+  adjustmentVersionId: Maybe<Scalars['ID']['output']>;
+  clientMutationId: Scalars['String']['output'];
+  deadlineAt: Scalars['String']['output'];
+  invitationId: Scalars['ID']['output'];
+  resolution: Scalars['String']['output'];
+  response: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type CounterpartyResponseInput = {
+  clientMutationId: Scalars['String']['input'];
+};
+
+export type CounterpartyResponsePayload = {
+  __typename?: 'CounterpartyResponsePayload';
+  clientMutationId: Scalars['String']['output'];
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+  userErrors: Array<UserError>;
 };
 
 export type CreateBusinessUnitInput = {
@@ -926,6 +1029,7 @@ export type InventoryEvidence = {
   mediaId: Scalars['ID']['output'];
   position: Scalars['Int']['output'];
   region: Maybe<Scalars['JSON']['output']>;
+  retentionAvailability: Maybe<Scalars['String']['output']>;
 };
 
 export type InventoryEvidenceInput = {
@@ -1015,6 +1119,8 @@ export type InventoryTrailEntry = {
   id: Scalars['ID']['output'];
   occurredAt: Scalars['String']['output'];
   reason: Maybe<Scalars['String']['output']>;
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  statement: Maybe<Scalars['String']['output']>;
   targetId: Scalars['ID']['output'];
   targetType: Scalars['String']['output'];
 };
@@ -1228,6 +1334,7 @@ export type MergeInventoryItemsInput = {
 export type Mutation = {
   __typename?: 'Mutation';
   acceptProcessing: CapturePayload;
+  acknowledgeBaseline: CounterpartyResponsePayload;
   activateBaselineVersion: OriginVersionPayload;
   activateOriginVersion: OriginVersionPayload;
   activateSegmentDefinition: SegmentDefinitionPayload;
@@ -1252,6 +1359,7 @@ export type Mutation = {
   configureRetentionPolicy: RetentionPolicyPayload;
   configureVideoAdmission: VideoAdmissionPayload;
   configureVideoPolicy: VideoPolicyPayload;
+  contestBaseline: CounterpartyResponsePayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
   correctOnboardingResponsibleEmail: OnboardingPayload;
   createBusinessUnit: BusinessUnitPayload;
@@ -1289,13 +1397,16 @@ export type Mutation = {
   reopenProject: ProjectPayload;
   reprocessVideoPreparation: VideoPreparationPayload;
   requestAdminActivationOtp: OnboardingPayload;
+  requestCounterpartyOtp: InvitationOtpPayload;
   requestInternalUserActivationOtp: InternalUserActivationPayload;
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
   requestOriginCataloging: OriginVersionPayload;
   requestRecapture: RecapturePayload;
   requestVideoReplacement: VideoReplacementPayload;
+  resendCounterpartyInvitation: CounterpartyInvitationPayload;
   resendInternalUserInvitation: MembershipPayload;
+  resolveBaselineContestation: CounterpartyInvitationPayload;
   retryInventoryDraft: OriginVersionPayload;
   retryVideoPreparation: VideoPreparationPayload;
   revokeInvitation: InvitationPayload;
@@ -1311,6 +1422,7 @@ export type Mutation = {
   submitRecapture: RecapturePayload;
   updateAnalysisPrompt: AnalysisPromptPayload;
   updateAsset: AssetPayload;
+  updateBaselinePolicy: BaselinePolicyPayload;
   updateSchedule: SchedulePayload;
   updateTenant: TenantPayload;
   updateTriageCase: TriageCasePayload;
@@ -1319,6 +1431,7 @@ export type Mutation = {
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
   verifyContact: ParticipantContactPayload;
+  verifyCounterpartyOtp: ExternalSessionPayload;
   verifyInternalUserActivationOtp: InternalUserActivationPayload;
   verifyInvitationOtp: ExternalSessionPayload;
   verifyOnboardingOtp: OnboardingPayload;
@@ -1327,6 +1440,11 @@ export type Mutation = {
 
 export type MutationAcceptProcessingArgs = {
   input: AcceptProcessingInput;
+};
+
+
+export type MutationAcknowledgeBaselineArgs = {
+  input: CounterpartyResponseInput;
 };
 
 
@@ -1447,6 +1565,11 @@ export type MutationConfigureVideoAdmissionArgs = {
 
 export type MutationConfigureVideoPolicyArgs = {
   input: ConfigureVideoPolicyInput;
+};
+
+
+export type MutationContestBaselineArgs = {
+  input: ContestBaselineInput;
 };
 
 
@@ -1635,6 +1758,11 @@ export type MutationRequestAdminActivationOtpArgs = {
 };
 
 
+export type MutationRequestCounterpartyOtpArgs = {
+  input: RequestCounterpartyOtpInput;
+};
+
+
 export type MutationRequestInternalUserActivationOtpArgs = {
   input: RequestInternalUserActivationOtpInput;
 };
@@ -1665,8 +1793,18 @@ export type MutationRequestVideoReplacementArgs = {
 };
 
 
+export type MutationResendCounterpartyInvitationArgs = {
+  input: ResendCounterpartyInvitationInput;
+};
+
+
 export type MutationResendInternalUserInvitationArgs = {
   input: ResendInternalUserInvitationInput;
+};
+
+
+export type MutationResolveBaselineContestationArgs = {
+  input: ResolveBaselineContestationInput;
 };
 
 
@@ -1745,6 +1883,11 @@ export type MutationUpdateAssetArgs = {
 };
 
 
+export type MutationUpdateBaselinePolicyArgs = {
+  input: UpdateBaselinePolicyInput;
+};
+
+
 export type MutationUpdateScheduleArgs = {
   input: UpdateScheduleInput;
 };
@@ -1782,6 +1925,11 @@ export type MutationVerifyAdminActivationOtpArgs = {
 
 export type MutationVerifyContactArgs = {
   input: VerifyContactInput;
+};
+
+
+export type MutationVerifyCounterpartyOtpArgs = {
+  input: VerifyCounterpartyOtpInput;
 };
 
 
@@ -2011,6 +2159,7 @@ export type OriginVersion = {
   activatedBy: Maybe<Scalars['ID']['output']>;
   captureSubmitted: Scalars['Boolean']['output'];
   contestationSummary: Maybe<ContestationSummary>;
+  counterpartyInvitations: Array<BaselineCounterpartyInvitation>;
   counts: Maybe<InventoryCounts>;
   draftState: Maybe<Scalars['String']['output']>;
   hasInventory: Scalars['Boolean']['output'];
@@ -2315,6 +2464,7 @@ export type Query = {
   baselineInventory: Maybe<BaselineInventory>;
   baselineVersions: OriginVersionConnection;
   businessUnits: BusinessUnitConnection;
+  counterpartyBaseline: CounterpartyBaseline;
   customerEvidence: CustomerEvidenceConnection;
   customerPortfolio: CustomerPortfolioConnection;
   customerReport: Maybe<CustomerReport>;
@@ -2978,6 +3128,11 @@ export type RequestAdminActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
 };
 
+export type RequestCounterpartyOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  token: Scalars['String']['input'];
+};
+
 export type RequestInternalUserActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   invitationToken: InputMaybe<Scalars['String']['input']>;
@@ -3015,9 +3170,21 @@ export type RequestVideoReplacementInput = {
   reason: Scalars['String']['input'];
 };
 
+export type ResendCounterpartyInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  counterpartyInvitationId: Scalars['ID']['input'];
+};
+
 export type ResendInternalUserInvitationInput = {
   clientMutationId: Scalars['String']['input'];
   membershipId: Scalars['ID']['input'];
+};
+
+export type ResolveBaselineContestationInput = {
+  clientMutationId: Scalars['String']['input'];
+  counterpartyInvitationId: Scalars['ID']['input'];
+  outcome: Scalars['String']['input'];
+  reason: InputMaybe<Scalars['String']['input']>;
 };
 
 export type ResponsibleEmailCorrection = {
@@ -3482,6 +3649,11 @@ export type UpdateAssetInput = {
   expectedVersion: Scalars['Int']['input'];
 };
 
+export type UpdateBaselinePolicyInput = {
+  clientMutationId: Scalars['String']['input'];
+  contestationDeadlineDays: Scalars['Int']['input'];
+};
+
 export type UpdateScheduleInput = {
   clientMutationId: Scalars['String']['input'];
   deadlineMinutes: Scalars['Int']['input'];
@@ -3569,6 +3741,12 @@ export type VerifyContactInput = {
   verified: Scalars['Boolean']['input'];
 };
 
+export type VerifyCounterpartyOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+  token: Scalars['String']['input'];
+};
+
 export type VerifyInternalUserActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   code: Scalars['String']['input'];
@@ -3626,6 +3804,7 @@ export type VideoPolicy = {
   currentRetentionDays: Scalars['Int']['output'];
   maxDurationMinutes: Scalars['Int']['output'];
   originRetentionDays: Scalars['Int']['output'];
+  supersededBaselineRetentionDays: Scalars['Int']['output'];
   version: Scalars['Int']['output'];
 };
 

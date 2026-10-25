@@ -82,9 +82,11 @@ func TestVV_IT_063PromotionExtendsExpiryFromFirstReadiness(t *testing.T) {
 	if err := h.AdminDB.Where("tenant_id=? AND media_id=?", fixture.TenantID, mediaID).Take(&source).Error; err != nil {
 		t.Fatal(err)
 	}
+	// ADR-019: the promoted ACTIVE version anchors its source; the origin window
+	// computed from first readiness survives as the floor for the later fixed date.
 	want := t0.Add(30 * 24 * time.Hour)
-	if source.SourceExpiryAt == nil || !source.SourceExpiryAt.Equal(want) {
-		t.Fatalf("promoted C1 expiry=%v, want max(T0+5d,T0+30d)=%v (never promotion time plus 30 days %v)", source.SourceExpiryAt, want, promotedAt.Add(30*24*time.Hour))
+	if source.RetentionAnchor != "ACTIVE_BASELINE" || source.SourceExpiryAt != nil || source.RetentionFloorAt == nil || !source.RetentionFloorAt.Equal(want) {
+		t.Fatalf("promoted C1 anchor=%s expiry=%v floor=%v, want ACTIVE_BASELINE/nil/max(T0+5d,T0+30d)=%v (never promotion time plus 30 days %v)", source.RetentionAnchor, source.SourceExpiryAt, source.RetentionFloorAt, want, promotedAt.Add(30*24*time.Hour))
 	}
 	if source.FirstFrameReadyAt == nil || !source.FirstFrameReadyAt.Equal(t0) {
 		t.Fatalf("promotion moved the first-readiness anchor: %v", source.FirstFrameReadyAt)

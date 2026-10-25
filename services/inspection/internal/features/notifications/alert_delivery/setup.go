@@ -39,20 +39,27 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return messaging.ErrPermanent
 		}
 		var payload struct {
-			DeliveryID      identity.ID  `json:"deliveryId"`
-			InspectionID    identity.ID  `json:"inspectionId"`
-			InvitationID    *identity.ID `json:"invitationId"`
-			LogicalTemplate string       `json:"logicalTemplate"`
-			State           string       `json:"state"`
-			FailureCode     string       `json:"failureCode"`
+			DeliveryID               identity.ID  `json:"deliveryId"`
+			InspectionID             identity.ID  `json:"inspectionId"`
+			CounterpartyInvitationID *identity.ID `json:"counterpartyInvitationId"`
+			InvitationID             *identity.ID `json:"invitationId"`
+			LogicalTemplate          string       `json:"logicalTemplate"`
+			State                    string       `json:"state"`
+			FailureCode              string       `json:"failureCode"`
 		}
-		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.DeliveryID == (identity.ID{}) || payload.InspectionID == (identity.ID{}) {
+		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.DeliveryID == (identity.ID{}) {
 			return messaging.ErrPermanent
 		}
 		if payload.State != string(notificationcore.StateFailed) && payload.State != string(notificationcore.StateUnknown) {
 			return messaging.ErrPermanent
 		}
-		if payload.LogicalTemplate != "capture-link" && payload.LogicalTemplate != "reminder" {
+		if payload.LogicalTemplate == "baseline-acknowledgment" {
+			if payload.CounterpartyInvitationID == nil {
+				return messaging.ErrPermanent
+			}
+			return nil
+		}
+		if payload.InspectionID == (identity.ID{}) || (payload.LogicalTemplate != "capture-link" && payload.LogicalTemplate != "reminder") {
 			return nil
 		}
 

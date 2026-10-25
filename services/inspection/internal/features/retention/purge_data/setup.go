@@ -479,7 +479,7 @@ func purgeUnreferencedVideoFrames(ctx context.Context, tx *gorm.DB, store object
 		return err
 	}
 	for _, preparation := range preparations {
-		var references, retainedOwners, heldOrigins int64
+		var references, retainedOwners, heldOrigins, retainedInventoryEvidence int64
 		if err := tx.Model(&database.VideoEvidenceReference{}).Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Count(&references).Error; err != nil {
 			return err
 		}
@@ -489,10 +489,17 @@ func purgeUnreferencedVideoFrames(ctx context.Context, tx *gorm.DB, store object
 		if err := tx.Model(&database.LegalHold{}).Where("tenant_id=? AND active=true AND origin_version_id IN (SELECT id FROM origins.origin_versions WHERE tenant_id=? AND video_preparation_id=?)", tenantID, tenantID, preparation.ID).Count(&heldOrigins).Error; err != nil {
 			return err
 		}
+		if err := tx.Raw(`SELECT count(*) FROM origins.inventory_item_evidence e
+			JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id
+			JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+			JOIN media.video_frames f ON f.tenant_id=e.tenant_id AND f.id=e.frame_id
+			WHERE e.tenant_id=? AND f.preparation_id=? AND v.status<>'DISCARDED'`, tenantID, preparation.ID).Scan(&retainedInventoryEvidence).Error; err != nil {
+			return err
+		}
 		if retainedOwners > 0 {
 			return apperror.New(apperror.InvalidState, "preparationId", "retained video evidence still depends on this frame bank")
 		}
-		if references > 0 || heldOrigins > 0 {
+		if references > 0 || heldOrigins > 0 || retainedInventoryEvidence > 0 {
 			continue
 		}
 		var frames []database.VideoFrame

@@ -195,7 +195,7 @@ func TestVV_IT_246InterruptedSupplementExtractionKeepsRC1PendingAndResumesCheckp
 		if err := tx.Model(&database.VideoFrame{}).Where("tenant_id=? AND preparation_id=?", fixture.tenantID, fixture.preparationID).Count(&frames).Error; err != nil {
 			return err
 		}
-		if job.Status != "READY" || frames == 0 || request.Status != "REQUESTED" || source.FirstFrameReadyAt == nil || !source.FirstFrameReadyAt.Equal(replayAt) || source.RetentionDays == nil || *source.RetentionDays != 5 || source.SourceExpiryAt == nil || !source.SourceExpiryAt.Equal(replayAt.Add(5*24*time.Hour)) {
+		if job.Status != "READY" || frames == 0 || request.Status != "REQUESTED" || source.FirstFrameReadyAt == nil || !source.FirstFrameReadyAt.Equal(replayAt) || source.RetentionDays == nil || *source.RetentionDays != 30 || source.SourceExpiryAt == nil || !source.SourceExpiryAt.Equal(replayAt.Add(30*24*time.Hour)) {
 			t.Errorf("resumed supplement state: job=%s/%s frames=%d RC1=%s first=%v retention=%v expiry=%v", job.Status, job.Phase, frames, request.Status, source.FirstFrameReadyAt, source.RetentionDays, source.SourceExpiryAt)
 		}
 		return nil

@@ -9,6 +9,8 @@ import (
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	getasset "inspection/services/inspection/internal/features/assets/get_asset"
+	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
+	counterpartysweep "inspection/services/inspection/internal/features/counterparty/sweep_deadlines"
 	createoccurrence "inspection/services/inspection/internal/features/inspections/create_occurrence"
 	reminddeadlines "inspection/services/inspection/internal/features/notifications/remind_deadlines"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
@@ -100,6 +102,9 @@ func run() error {
 		},
 		func() error { return materializedue.Setup(materializedue.Dependencies{DB: db, Bus: bus}) },
 		func() error {
+			return counterpartysweep.Setup(counterpartysweep.Dependencies{Bus: bus, Service: counterpartycore.Service{DB: db}})
+		},
+		func() error {
 			return schedulereminders.Setup(schedulereminders.Dependencies{DB: db, Bus: bus, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin})
 		},
 	}
@@ -155,6 +160,9 @@ func runMaterializer(ctx context.Context, db *gorm.DB, bus *mediator.Bus, deadli
 				}
 				if _, err := bus.Send(tenantCtx, schedulereminders.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
 					log.Printf("scheduler reminder dispatch failed: %v", err)
+				}
+				if _, err := bus.Send(tenantCtx, counterpartysweep.Command{TenantID: tenantID, Now: now, Limit: 100}); err != nil {
+					log.Printf("counterparty deadline sweep failed: %v", err)
 				}
 				if err := emitRetentionDue(ctx, db, tenantID, now); err != nil {
 					log.Printf("scheduler retention discovery failed: %v", err)

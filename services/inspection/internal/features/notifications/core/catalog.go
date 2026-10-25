@@ -69,6 +69,15 @@ func DefaultCatalog() Catalog {
 				Parameters: []string{captureURL, name, assetName, address, expiresAt},
 			}
 		}},
+		"baseline-acknowledgment:v1": {Ref: TemplateRef{Name: "baseline-acknowledgment", Version: "v1"}, Channels: all, Required: []string{"assetName", "purposeLabel", "deadlineDate", "link"}, render: func(v map[string]string) RenderedTemplate {
+			asset, purpose, deadline, link := v["assetName"], v["purposeLabel"], v["deadlineDate"], v["link"]
+			return RenderedTemplate{
+				Subject:    "Revise a vistoria de referência",
+				Text:       fmt.Sprintf("A vistoria de referência de %s (%s) está disponível até %s. Acesse: %s", asset, purpose, deadline, link),
+				HTML:       fmt.Sprintf("<p>A vistoria de referência de <strong>%s</strong> (%s) está disponível até %s.</p><p><a href=\"%s\">Revisar vistoria</a></p>", html.EscapeString(asset), html.EscapeString(purpose), html.EscapeString(deadline), html.EscapeString(link)),
+				Parameters: []string{asset, purpose, deadline, link},
+			}
+		}},
 		"recapture-link:v1": {Ref: TemplateRef{Name: "recapture-link", Version: "v1"}, Channels: all, Required: []string{"recaptureUrl", "recipientName"}, render: func(v map[string]string) RenderedTemplate {
 			return RenderedTemplate{Subject: "Complemento de vistoria solicitado", Text: "Olá " + v["recipientName"] + ", acesse " + v["recaptureUrl"], HTML: "<p>Olá " + v["recipientName"] + ", acesse <a href=\"" + v["recaptureUrl"] + "\">o complemento da vistoria</a>.</p>", Parameters: []string{v["recaptureUrl"], v["recipientName"]}}
 		}},

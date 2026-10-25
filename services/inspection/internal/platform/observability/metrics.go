@@ -19,6 +19,17 @@ func LogDeliveryTransition(ctx context.Context, tenantID, deliveryID, inspection
 	slog.InfoContext(ctx, "notification_delivery_transition", "tenantId", tenantID.String(), "deliveryId", deliveryID.String(), "inspectionId", inspectionID.String(), "from", safeCode(from), "to", safeCode(to), "failureCode", safeCode(code), "provider", safeValue(provider), "attempt", attempt)
 }
 
+// LogCounterpartyDeliveryTransition records terminal delivery state without
+// exposing destination data or rendered notification content.
+func LogCounterpartyDeliveryTransition(ctx context.Context, tenantID, deliveryID, invitationID identity.ID, from, to, code, provider string, attempt int) {
+	slog.InfoContext(ctx, "notification_delivery_transition", "tenantId", tenantID.String(), "deliveryId", deliveryID.String(), "counterpartyInvitationId", invitationID.String(), "from", safeCode(from), "to", safeCode(to), "failureCode", safeCode(code), "provider", safeValue(provider), "attempt", attempt)
+}
+
+// LogCounterpartyResponded records the response kind and stable identifiers.
+func LogCounterpartyResponded(ctx context.Context, tenantID, invitationID, versionID identity.ID, response string) {
+	slog.InfoContext(ctx, "counterparty_responded", "tenantId", tenantID.String(), "counterpartyInvitationId", invitationID.String(), "originVersionId", versionID.String(), "response", safeCode(response))
+}
+
 // LogResponsibleEmailCorrected records a redacted correction audit signal.
 func LogResponsibleEmailCorrected(ctx context.Context, tenantID, inspectionID, invitationID identity.ID, source string, version int64) {
 	slog.InfoContext(ctx, "responsible_email_corrected", "tenantId", tenantID.String(), "inspectionId", inspectionID.String(), "invitationId", invitationID.String(), "source", safeCode(source), "responsibilityVersion", version)

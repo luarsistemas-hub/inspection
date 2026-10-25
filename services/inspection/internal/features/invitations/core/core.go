@@ -354,6 +354,12 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 	var row database.ExternalSession
 	err = s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id=? AND session_digest = ? AND kind='CAPTURE'", tenantID, hash[:]).First(&row).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				var counterparty database.ExternalSession
+				if lookupErr := tx.Where("tenant_id=? AND session_digest=? AND kind='COUNTERPARTY'", tenantID, hash[:]).First(&counterparty).Error; lookupErr == nil {
+					return apperror.New(apperror.Unauthenticated, "", "authentication required")
+				}
+			}
 			return err
 		}
 		if !isCaptureSession(row) {
@@ -362,6 +368,9 @@ func (s Service) ValidateSession(ctx context.Context, token, csrf string) (ident
 		return activeInvitation(tx, tenantID, *row.InvitationID, now)
 	})
 	if err != nil {
+		if apperror.Is(err, apperror.Unauthenticated) {
+			return identity.ID{}, err
+		}
 		return identity.ID{}, apperror.New(apperror.SessionExpired, "", "session expired")
 	}
 	if !security.Active(now, row.ExpiresAt, row.RevokedAt) {
@@ -393,6 +402,9 @@ func activeInvitation(tx *gorm.DB, tenantID, invitationID identity.ID, now time.
 func (s Service) ValidateCaptureRead(ctx context.Context, token, csrf string) (identity.ID, error) {
 	if responsibility, err := s.ValidateSession(ctx, token, csrf); err == nil {
 		return responsibility, nil
+	} else if apperror.Is(err, apperror.Unauthenticated) {
+		// A COUNTERPARTY session is never a capture session, not even for reads.
+		return identity.ID{}, err
 	}
 	tenantID, hash, err := scopedHash(token)
 	if err != nil {

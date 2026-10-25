@@ -118,7 +118,7 @@ func TestRealClipCommitsFrameBankAndScope(t *testing.T) {
 		if err := tx.Model(&database.OutboxIntent{}).Where("tenant_id=? AND type='media.video_prepared.v1' AND correlation_id=?", fixture.TenantID, preparationID.String()).Count(&events).Error; err != nil {
 			return err
 		}
-		if job.Status != "READY" || job.ManifestDigest == "" || source.FirstFrameReadyAt == nil || source.SourceExpiryAt == nil || source.RetentionDays == nil || *source.RetentionDays != 5 || frames == 0 || scope != 1 || events != 1 {
+		if job.Status != "READY" || job.ManifestDigest == "" || source.FirstFrameReadyAt == nil || source.SourceExpiryAt == nil || source.RetentionDays == nil || *source.RetentionDays != 30 || frames == 0 || scope != 1 || events != 1 {
 			t.Errorf("incomplete real preparation: status=%s digest=%t anchor=%t frames=%d scope=%d events=%d", job.Status, job.ManifestDigest != "", source.FirstFrameReadyAt != nil, frames, scope, events)
 		}
 		if source.FirstFrameReadyAt != nil && !source.FirstFrameReadyAt.Equal(now) {

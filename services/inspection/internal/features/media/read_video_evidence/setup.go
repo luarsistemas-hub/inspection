@@ -154,8 +154,8 @@ func (h *Handler) source(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusGone)
 		return
 	}
-	if r.Method == http.MethodHead && (item.source.SourceExpiryAt == nil || !item.source.SourceExpiryAt.After(h.deps.Now())) {
-		held, err := h.sourceHeld(r.Context(), item.metadata.TenantID, item.media.ID)
+	if r.Method == http.MethodHead && item.source.RetentionAnchor != "ACTIVE_BASELINE" && (item.source.SourceExpiryAt == nil || !item.source.SourceExpiryAt.After(h.deps.Now())) {
+		held, err := h.sourceProtected(r.Context(), item.metadata.TenantID, item.media.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -498,11 +498,16 @@ func (h *Handler) acquireSourceLease(ctx context.Context, item access) (identity
 		if source.Status == "DELETING" || source.Status == "EXPIRED" {
 			return objectstore.ErrExpired
 		}
-		if source.SourceExpiryAt == nil || !source.SourceExpiryAt.After(now) {
+		if source.RetentionAnchor != "ACTIVE_BASELINE" && (source.SourceExpiryAt == nil || !source.SourceExpiryAt.After(now)) {
 			held, err := retentioncore.EffectiveSourceHeld(tx, item.metadata.TenantID, item.media.ID)
 			if err != nil {
 				return err
 			}
+			active, err := retentioncore.ActiveBaselineReferences(tx, item.metadata.TenantID, item.media.ID)
+			if err != nil {
+				return err
+			}
+			held = held || active
 			if !held {
 				return objectstore.ErrExpired
 			}
@@ -521,6 +526,20 @@ func (h *Handler) sourceHeld(ctx context.Context, tenantID, mediaID identity.ID)
 		return err
 	})
 	return held, err
+}
+
+func (h *Handler) sourceProtected(ctx context.Context, tenantID, mediaID identity.ID) (bool, error) {
+	var protected bool
+	err := (tenanttx.Runner{DB: h.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, mediaID)
+		if err != nil {
+			return err
+		}
+		active, err := retentioncore.ActiveBaselineReferences(tx, tenantID, mediaID)
+		protected = held || active
+		return err
+	})
+	return protected, err
 }
 
 func (h *Handler) releaseSourceLease(ctx context.Context, tenantID, leaseID identity.ID) {

@@ -79,7 +79,7 @@ func TestService_AssignedActivationCases(t *testing.T) {
 			t.Fatalf("unexpected activation result: %+v", row)
 		}
 		var old database.OriginVersion
-		if err := db.First(&old, "id=?", oldID).Error; err != nil || old.Status != "SUPERSEDED" {
+		if err := db.First(&old, "id=?", oldID).Error; err != nil || old.Status != "SUPERSEDED" || old.SupersededAt == nil || !old.SupersededAt.Equal(testService(db).Now()) {
 			t.Fatalf("prior active not superseded: %+v %v", old, err)
 		}
 		if err := db.First(&origin, "id=?", origin.ID).Error; err != nil || origin.ActiveVersionID == nil || *origin.ActiveVersionID != version || origin.Version != 2 {
@@ -207,10 +207,10 @@ type retentionTransitionSpy struct {
 	versions []identity.ID
 }
 
-func (s *retentionTransitionSpy) Transition(_ context.Context, _ *gorm.DB, tenant identity.ID, sources []identity.ID) error {
+func (s *retentionTransitionSpy) TransitionVersions(_ context.Context, _ *gorm.DB, tenant identity.ID, versions []identity.ID) error {
 	s.calls++
 	s.tenant = tenant
-	s.versions = append([]identity.ID(nil), sources...)
+	s.versions = append([]identity.ID(nil), versions...)
 	return nil
 }
 
@@ -241,8 +241,8 @@ func TestService_AssignedActivationHooks(t *testing.T) {
 		if _, err := svc.Activate(context.Background(), ActivateInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Purpose: "MOVE_IN", ExpectedOriginVersion: 1}); err != nil {
 			t.Fatal(err)
 		}
-		if spy.calls != 1 || spy.tenant != tenant {
-			t.Fatalf("retention hook was not called: %+v", spy)
+		if spy.calls != 1 || spy.tenant != tenant || len(spy.versions) != 1 || spy.versions[0] != version {
+			t.Fatalf("retention hook must receive the activated version: %+v", spy)
 		}
 	})
 	t.Run("UT-071 counterparty hook receives selected participants in transaction", func(t *testing.T) {

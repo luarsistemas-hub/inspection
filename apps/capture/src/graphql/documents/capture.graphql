@@ -35,3 +35,13 @@ mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) 
 mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }
 
 mutation SubmitRecapture($input: SubmitRecaptureInput!) { submitRecapture(input: $input) { recapture { id status } userErrors { code field message correlationId } clientMutationId } }
+
+query CounterpartyBaseline { counterpartyBaseline { deadlineAt response respondedAt resolution resolutionReason adjustmentStatus newerVersionExists readOnly baseline { hasInventory environments { typeCode name items { typeCode name material color quantity condition observation limitation evidence { kind position } } } } } }
+
+mutation RequestCounterpartyOtp($input: RequestCounterpartyOtpInput!) { requestCounterpartyOtp(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation VerifyCounterpartyOtp($input: VerifyCounterpartyOtpInput!) { verifyCounterpartyOtp(input: $input) { status csrfToken expiresAt userErrors { code field message correlationId } clientMutationId } }
+
+mutation AcknowledgeBaseline($input: CounterpartyResponseInput!) { acknowledgeBaseline(input: $input) { response respondedAt userErrors { code field message correlationId } clientMutationId } }
+
+mutation ContestBaseline($input: ContestBaselineInput!) { contestBaseline(input: $input) { response respondedAt userErrors { code field message correlationId } clientMutationId } }

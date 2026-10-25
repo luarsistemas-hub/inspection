@@ -23,6 +23,7 @@ type Query {
 	baselineVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
 	inventoryDraft(originVersionId: ID!): InventoryDraft
 	baselineInventory(assetId: ID!, versionId: ID): BaselineInventory
+	counterpartyBaseline: CounterpartyBaseline!
 	inventoryTrail(originVersionId: ID!): InventoryTrail!
   originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
@@ -120,6 +121,13 @@ type Mutation {
   archiveAsset(input: ArchiveAssetInput!): AssetPayload!
   requestInvitationOtp(input: RequestInvitationOtpInput!): InvitationOtpPayload!
   verifyInvitationOtp(input: VerifyInvitationOtpInput!): ExternalSessionPayload!
+  requestCounterpartyOtp(input: RequestCounterpartyOtpInput!): InvitationOtpPayload!
+  verifyCounterpartyOtp(input: VerifyCounterpartyOtpInput!): ExternalSessionPayload!
+  acknowledgeBaseline(input: CounterpartyResponseInput!): CounterpartyResponsePayload!
+  contestBaseline(input: ContestBaselineInput!): CounterpartyResponsePayload!
+  resolveBaselineContestation(input: ResolveBaselineContestationInput!): CounterpartyInvitationPayload!
+  resendCounterpartyInvitation(input: ResendCounterpartyInvitationInput!): CounterpartyInvitationPayload!
+  updateBaselinePolicy(input: UpdateBaselinePolicyInput!): BaselinePolicyPayload!
   revokeInvitation(input: RevokeInvitationInput!): InvitationPayload!
   inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
@@ -218,18 +226,28 @@ type PostalAddress { countryCode: String! postalCode: String! street: String! nu
 type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
-type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
 type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
-type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! noResponse: Int! }
+type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
+type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
 type InventoryDraft { version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
 type InventoryProgress { decided: Int! pending: Int! }
 type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
 type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
-type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID region: JSON position: Int! availability: String! }
+type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
+type CounterpartyBaselineEvidence { kind: String! position: Int! }
+type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
+type CounterpartyBaselineEnvironment { typeCode: String! name: String! items: [CounterpartyBaselineItem!]! }
+type CounterpartyBaselineInventory { hasInventory: Boolean! environments: [CounterpartyBaselineEnvironment!]! }
+type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
+type CounterpartyResponsePayload { response: String! respondedAt: String userErrors: [UserError!]! clientMutationId: String! }
+type CounterpartyInvitationPayload { invitationId: ID! response: String! deadlineAt: String! resolution: String! adjustmentVersionId: ID userErrors: [UserError!]! clientMutationId: String! }
+type BaselinePolicy { contestationDeadlineDays: Int! version: Int! }
+type BaselinePolicyPayload { policy: BaselinePolicy userErrors: [UserError!]! clientMutationId: String! }
 type InventoryTrail { suggestions: [InventoryTrailEntry!]! decisions: [InventoryTrailEntry!]! counterpartyEvents: [InventoryTrailEntry!]! }
-type InventoryTrailEntry { id: ID! targetType: String! targetId: ID! action: String! before: JSON after: JSON reason: String actorMembershipId: ID occurredAt: String! }
+type InventoryTrailEntry { id: ID! targetType: String! targetId: ID! action: String! before: JSON after: JSON reason: String statement: String resolutionReason: String actorMembershipId: ID occurredAt: String! }
 input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int condition: String observation: String limitation: String }
 input InventoryDecisionInput { itemId: ID! action: String! expectedVersion: Int! patch: InventoryItemPatchInput reason: String reasonText: String }
 input InventoryEvidenceInput { kind: String! mediaId: ID! frameId: ID region: JSON }
@@ -242,6 +260,13 @@ input SplitInventoryItemInput { originVersionId: ID! itemId: ID! expectedVersion
 input UpsertInventoryEnvironmentInput { originVersionId: ID! environmentId: ID typeCode: String! name: String! expected: Boolean! clientMutationId: String! }
 input RemoveInventoryEnvironmentInput { originVersionId: ID! environmentId: ID! confirmItemExclusion: Boolean! clientMutationId: String! }
 input ActivateBaselineVersionInput { originVersionId: ID! purpose: String! expectedOriginVersion: Int! counterpartyParticipantIds: [ID!]! clientMutationId: String! }
+input RequestCounterpartyOtpInput { token: String! clientMutationId: String! }
+input VerifyCounterpartyOtpInput { token: String! code: String! clientMutationId: String! }
+input CounterpartyResponseInput { clientMutationId: String! }
+input ContestBaselineInput { statement: String! clientMutationId: String! }
+input ResolveBaselineContestationInput { counterpartyInvitationId: ID! outcome: String! reason: String clientMutationId: String! }
+input ResendCounterpartyInvitationInput { counterpartyInvitationId: ID! clientMutationId: String! }
+input UpdateBaselinePolicyInput { contestationDeadlineDays: Int! clientMutationId: String! }
 input DiscardBaselineDraftInput { originVersionId: ID! clientMutationId: String! }
 input RequestOriginCatalogingInput { assetId: ID! clientMutationId: String! }
 input RetryInventoryDraftInput { originVersionId: ID! clientMutationId: String! }
@@ -291,7 +316,7 @@ type CaptureReviewHandoff { inspectionId: ID! originVersionId: ID }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
 type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! captureLayout: String reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! environments: [CaptureEnvironment!]! reviewHandoff: CaptureReviewHandoff answers: [CaptureAnswer!]! disclosureVersion: String! }
-type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
+type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
 type VideoAttemptPayload { attempt: VideoAttempt userErrors: [UserError!]! clientMutationId: String! }
@@ -551,7 +576,7 @@ input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutati
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
 input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
-input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! expectedVersion: Int! clientMutationId: String! }
+input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
 input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
 input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }

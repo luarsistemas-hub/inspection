@@ -53,6 +53,13 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 		if err := mediavideopolicy.Validate(command.MaxDurationMinutes, command.OriginRetentionDays, command.CurrentRetentionDays); err != nil {
 			return nil, err
 		}
+		supersededDays := 365
+		if command.SupersededBaselineRetentionDays != nil {
+			supersededDays = *command.SupersededBaselineRetentionDays
+			if err := mediavideopolicy.ValidateSupersededBaselineRetention(supersededDays); err != nil {
+				return nil, err
+			}
+		}
 		if !tenantEnabled {
 			return nil, apperror.New(apperror.InvalidState, "tenant", "inactive tenant cannot change video policy")
 		}
@@ -63,7 +70,7 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 			return nil, apperror.New(apperror.InvalidInput, "maxDurationMinutes", "duration must be between 1 and 60 minutes")
 		}
 		policyVersion++
-		return database.VideoPolicy{TenantID: command.TenantID, MaxDurationMinutes: command.MaxDurationMinutes, OriginRetentionDays: command.OriginRetentionDays, CurrentRetentionDays: command.CurrentRetentionDays, Version: policyVersion}, nil
+		return database.VideoPolicy{TenantID: command.TenantID, MaxDurationMinutes: command.MaxDurationMinutes, OriginRetentionDays: command.OriginRetentionDays, CurrentRetentionDays: command.CurrentRetentionDays, SupersededBaselineRetentionDays: supersededDays, Version: policyVersion}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -71,15 +78,15 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 	server.SetErrorPresenter(graph.PresentError)
 
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, CorrelationID: "video-policy-test"})
-	response := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }`, ctx)
-	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"version":1`} {
+	response := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } }`, ctx)
+	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"supersededBaselineRetentionDays":365`, `"version":1`} {
 		if !strings.Contains(response, expected) {
 			t.Fatalf("default policy response missing %s: %s", expected, response)
 		}
 	}
 
-	response = executeVideoPolicyGraphQL(t, server, `mutation { configureVideoPolicy(input:{maxDurationMinutes:10,originRetentionDays:40,currentRetentionDays:7,expectedVersion:1,clientMutationId:"k1"}) { policy { maxDurationMinutes originRetentionDays currentRetentionDays version } clientMutationId userErrors { field message } } }`, ctx)
-	for _, expected := range []string{`"maxDurationMinutes":10`, `"originRetentionDays":40`, `"currentRetentionDays":7`, `"version":2`, `"clientMutationId":"k1"`} {
+	response = executeVideoPolicyGraphQL(t, server, `mutation { configureVideoPolicy(input:{maxDurationMinutes:10,originRetentionDays:40,currentRetentionDays:7,supersededBaselineRetentionDays:730,expectedVersion:1,clientMutationId:"k1"}) { policy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } clientMutationId userErrors { field message } } }`, ctx)
+	for _, expected := range []string{`"maxDurationMinutes":10`, `"originRetentionDays":40`, `"currentRetentionDays":7`, `"supersededBaselineRetentionDays":730`, `"version":2`, `"clientMutationId":"k1"`} {
 		if !strings.Contains(response, expected) {
 			t.Fatalf("configured policy response missing %s: %s", expected, response)
 		}

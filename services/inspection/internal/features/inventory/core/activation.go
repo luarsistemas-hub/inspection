@@ -112,7 +112,8 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 		}
 		if origin.ActiveVersionID != nil {
 			beforeActive = *origin.ActiveVersionID
-			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", in.TenantID, beforeActive).Updates(map[string]any{"status": "SUPERSEDED"}).Error; err != nil {
+			updates := map[string]any{"status": "SUPERSEDED", "superseded_at": now}
+			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", in.TenantID, beforeActive).Updates(updates).Error; err != nil {
 				return err
 			}
 			if err := origincore.ReleaseOriginReference(tx, in.TenantID, beforeActive); err != nil {
@@ -145,11 +146,7 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 			if beforeActive != (identity.ID{}) {
 				versions = append(versions, beforeActive)
 			}
-			affected, err := retentionSources(tx, in.TenantID, versions)
-			if err != nil {
-				return err
-			}
-			if err := s.Retention.Transition(ctx, tx, in.TenantID, affected); err != nil {
+			if err := s.Retention.TransitionVersions(ctx, tx, in.TenantID, versions); err != nil {
 				return err
 			}
 		}
@@ -214,29 +211,4 @@ func (s Service) Discard(ctx context.Context, tenantID, versionID, actor identit
 
 func inventoryEvent(tenant, version identity.ID, now time.Time) events.Envelope[map[string]any] {
 	return events.Envelope[map[string]any]{ID: identity.NewID(), Type: "inventory.version_activated.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenant, AggregateID: version, CorrelationID: "inventory-activation-" + version.String(), Payload: map[string]any{"originVersionId": version}}
-}
-
-func retentionSources(tx *gorm.DB, tenant identity.ID, versions []identity.ID) ([]identity.ID, error) {
-	seen := map[identity.ID]bool{}
-	var evidence []database.InventoryItemEvidence
-	if err := tx.Table("origins.inventory_item_evidence AS e").Select("e.*").Joins("JOIN origins.inventory_items i ON i.id=e.item_id AND i.tenant_id=e.tenant_id").Where("i.tenant_id=? AND i.origin_version_id IN ?", tenant, versions).Find(&evidence).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range evidence {
-		seen[row.MediaID] = true
-	}
-	var originEvidence []database.OriginEvidence
-	if err := tx.Where("tenant_id=? AND origin_version_id IN ?", tenant, versions).Find(&originEvidence).Error; err != nil {
-		return nil, err
-	}
-	for _, row := range originEvidence {
-		seen[row.MediaID] = true
-	}
-	// Inventory evidence.MediaID already identifies the retained source media;
-	// FrameID is a frame row id and must never be resolved as media.
-	ids := make([]identity.ID, 0, len(seen))
-	for id := range seen {
-		ids = append(ids, id)
-	}
-	return ids, nil
 }

@@ -41,6 +41,15 @@ import (
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
+	counterpartyacknowledge "inspection/services/inspection/internal/features/counterparty/acknowledge"
+	counterpartycontest "inspection/services/inspection/internal/features/counterparty/contest"
+	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
+	counterpartyrequestotp "inspection/services/inspection/internal/features/counterparty/request_otp"
+	counterpartyresend "inspection/services/inspection/internal/features/counterparty/resend"
+	counterpartyresolve "inspection/services/inspection/internal/features/counterparty/resolve"
+	counterpartyupdatepolicy "inspection/services/inspection/internal/features/counterparty/update_policy"
+	counterpartyverifyotp "inspection/services/inspection/internal/features/counterparty/verify_otp"
+	counterpartyviewbaseline "inspection/services/inspection/internal/features/counterparty/view_baseline"
 	inspectioncancel "inspection/services/inspection/internal/features/inspections/cancel"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	inspectionmanual "inspection/services/inspection/internal/features/inspections/create_manual"
@@ -120,6 +129,7 @@ import (
 	recapturereplacement "inspection/services/inspection/internal/features/recapture/request_video_replacement"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
 	publication "inspection/services/inspection/internal/features/reports/publication"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecancel "inspection/services/inspection/internal/features/schedules/cancel_schedule"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	schedulecreate "inspection/services/inspection/internal/features/schedules/create_schedule"
@@ -266,7 +276,10 @@ func run() error {
 		return err
 	}
 	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer, DisableRequiredGPS: cfg.Stage != "production"}
-	inventoryService := inventorycore.Service{DB: db, Within: tenanttx.Runner{DB: db}.Within, Retention: inventorycore.NoopRetentionTransition{}, Counterparties: inventorycore.NoopCounterpartyInviter{}}
+	inventoryService := inventorycore.Service{DB: db, Within: tenanttx.Runner{DB: db}.Within}
+	counterpartyService := counterpartycore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Stage: cfg.Stage}, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Inventory: inventoryService, Stage: cfg.Stage}
+	inventoryService.Retention = retentioncore.BaselineTransition{}
+	inventoryService.Counterparties = counterpartyService
 	postalLookupService := &postallookup.Service{}
 	setups := []func() error{
 		func() error { return postallookup.Setup(bus, postalLookupService) },
@@ -467,6 +480,30 @@ func run() error {
 		func() error { return inventorybaseline.Setup(bus, inventoryService) },
 		func() error { return inventorytrail.Setup(bus, inventoryService) },
 		func() error {
+			return counterpartyrequestotp.Setup(counterpartyrequestotp.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyverifyotp.Setup(counterpartyverifyotp.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyviewbaseline.Setup(counterpartyviewbaseline.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyacknowledge.Setup(counterpartyacknowledge.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartycontest.Setup(counterpartycontest.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyresolve.Setup(counterpartyresolve.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
+		},
+		func() error {
+			return counterpartyresend.Setup(counterpartyresend.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
+		},
+		func() error {
+			return counterpartyupdatepolicy.Setup(counterpartyupdatepolicy.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
+		},
+		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error { return capturebeginvideo.Setup(capturebeginvideo.Dependencies{DB: db, Bus: bus}) },
@@ -552,7 +589,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer, Stage: cfg.Stage}, AdminActivation: activationService, UserActivation: activateinternal.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: inviteinternal.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.InternalUserActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Counterparty: counterpartyService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer, Stage: cfg.Stage}, AdminActivation: activationService, UserActivation: activateinternal.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: inviteinternal.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.InternalUserActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {

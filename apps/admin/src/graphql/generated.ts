@@ -64,6 +64,7 @@ export type ConfigureVideoPolicyInput = {
   expectedVersion: number;
   maxDurationMinutes: number;
   originRetentionDays: number;
+  supersededBaselineRetentionDays: number | null | undefined;
 };
 
 export type ContactInput = {

@@ -183,11 +183,15 @@ func loadInventoryViews(tx *gorm.DB, tenant identity.ID, envs []database.Invento
 	if err != nil {
 		return err
 	}
+	retentionAvailability, err := LoadRetentionAvailability(tx, tenant, evidence)
+	if err != nil {
+		return err
+	}
 	evidenceByItem := make(map[identity.ID][]EvidenceView, len(itemIDs))
 	ranks := make(map[identity.ID]int, len(itemIDs))
 	for _, row := range evidence {
 		state := availability[row.ID]
-		evidenceByItem[row.ItemID] = append(evidenceByItem[row.ItemID], EvidenceView{Evidence: row, Availability: state})
+		evidenceByItem[row.ItemID] = append(evidenceByItem[row.ItemID], EvidenceView{Evidence: row, Availability: state, RetentionAvailability: retentionAvailability[row.ID]})
 		if state != "AVAILABLE" {
 			ranks[row.ItemID] = 0
 		} else if _, exists := ranks[row.ItemID]; !exists {

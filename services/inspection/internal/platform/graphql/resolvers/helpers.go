@@ -390,7 +390,7 @@ func mapTemplateVersion(row database.TemplateVersion) *graphql1.TemplateVersion 
 }
 
 func mapVideoPolicy(row database.VideoPolicy) *graphql1.VideoPolicy {
-	return &graphql1.VideoPolicy{MaxDurationMinutes: row.MaxDurationMinutes, OriginRetentionDays: row.OriginRetentionDays, CurrentRetentionDays: row.CurrentRetentionDays, Version: int(row.Version)}
+	return &graphql1.VideoPolicy{MaxDurationMinutes: row.MaxDurationMinutes, OriginRetentionDays: row.OriginRetentionDays, CurrentRetentionDays: row.CurrentRetentionDays, SupersededBaselineRetentionDays: row.SupersededBaselineRetentionDays, Version: int(row.Version)}
 }
 
 func mapVideoAdmission(row database.VideoAdmission) *graphql1.VideoAdmission {
@@ -780,6 +780,18 @@ func (r *Resolver) externalResponsibility(ctx context.Context) (identity.ID, ide
 		return identity.ID{}, identity.ID{}, unauthenticated()
 	}
 	return tenantID, responsibilityID, nil
+}
+
+func (r *Resolver) externalCounterparty(ctx context.Context) (identity.ID, identity.ID, error) {
+	credentials, ok := requestctx.ExternalCredentialsFromContext(ctx)
+	if !ok {
+		return identity.ID{}, identity.ID{}, unauthenticated()
+	}
+	owner, err := r.Counterparty.ValidateSession(ctx, credentials.SessionToken, credentials.CSRFToken)
+	if err != nil {
+		return identity.ID{}, identity.ID{}, err
+	}
+	return owner.TenantID, owner.InvitationID, nil
 }
 
 func externalOperationAuthError(ctx context.Context) error {

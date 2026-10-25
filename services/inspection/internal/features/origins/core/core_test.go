@@ -263,6 +263,17 @@ func newOriginActivationFixture(t *testing.T) originActivationFixture {
 			t.Fatal(err)
 		}
 	}
+	for _, ddl := range []string{
+		`CREATE TABLE IF NOT EXISTS origins.inventory_item_evidence(id text,tenant_id text,item_id text,media_id text,kind text,frame_id text)`,
+		`CREATE TABLE IF NOT EXISTS origins.inventory_items(id text,tenant_id text,origin_version_id text,environment_id text,decision text,merged_into_id text)`,
+		`CREATE TABLE IF NOT EXISTS origins.inventory_environments(id text,tenant_id text,decision text)`,
+		`CREATE TABLE IF NOT EXISTS media.video_preparation_jobs(id text,tenant_id text,media_id text)`,
+		`CREATE TABLE IF NOT EXISTS media.video_policies(tenant_id text,current_retention_days integer,superseded_baseline_retention_days integer,version integer,updated_at datetime)`,
+	} {
+		if err := db.Exec(ddl).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	now := time.Date(2026, time.September, 5, 12, 0, 0, 0, time.UTC)
 	tenantID, originID, responsibilityID, mediaID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	origin := database.Origin{ID: originID, TenantID: tenantID, AssetID: identity.NewID(), Version: 1, CreatedAt: now, UpdatedAt: now}

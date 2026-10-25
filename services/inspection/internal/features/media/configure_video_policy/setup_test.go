@@ -18,6 +18,13 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestUnit_UT318_NewVideoPolicyDefaults(t *testing.T) {
+	policy := Defaults(identity.NewID())
+	if policy.CurrentRetentionDays != 30 || policy.SupersededBaselineRetentionDays != 365 {
+		t.Fatalf("UT-318 defaults current=%d superseded=%d, want 30/365", policy.CurrentRetentionDays, policy.SupersededBaselineRetentionDays)
+	}
+}
+
 func TestPolicyDefaultsAndBoundsUT001UT003(t *testing.T) {
 	if p := Defaults([16]byte{1}); p.MaxDurationMinutes != 15 || p.OriginRetentionDays != 30 || p.CurrentRetentionDays != 30 || p.SupersededBaselineRetentionDays != 365 || p.Version != 1 {
 		t.Fatalf("unexpected defaults: %#v", p)
@@ -30,6 +37,33 @@ func TestPolicyDefaultsAndBoundsUT001UT003(t *testing.T) {
 		if (err == nil) != tc.valid {
 			t.Fatalf("Validate(%d,%d,%d) err=%v", tc.duration, tc.origin, tc.current, err)
 		}
+	}
+}
+
+func TestUnit_UT315_SupersededRetentionBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		days  int
+		valid bool
+	}{
+		{name: "UT-315 rejects zero", days: 0},
+		{name: "UT-315 accepts one", days: 1, valid: true},
+		{name: "UT-315 accepts maximum", days: 3650, valid: true},
+		{name: "UT-315 rejects above maximum", days: 3651},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateSupersededBaselineRetention(tc.days)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, err=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestUnit_UT318_VideoPolicyDefaults(t *testing.T) {
+	policy := Defaults([16]byte{1})
+	if policy.CurrentRetentionDays != 30 || policy.SupersededBaselineRetentionDays != 365 {
+		t.Fatalf("new policy defaults = current %d/superseded %d, want 30/365", policy.CurrentRetentionDays, policy.SupersededBaselineRetentionDays)
 	}
 }
 

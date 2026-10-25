@@ -16,6 +16,30 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 )
 
+func TestUnit_Issue006_CounterpartyTrailKeepsResponseAndResolutionEvents(t *testing.T) {
+	created := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	responded, resolved := created.Add(time.Hour), created.Add(2*time.Hour)
+	statement, reason := "visible statement", "accepted reason"
+	row := database.CounterpartyInvitation{ID: identity.NewID(), Response: "CONTESTED", Resolution: "ACCEPTED", Statement: &statement, ResolutionReason: &reason, CreatedAt: created, RespondedAt: &responded, ResolvedAt: &resolved}
+	trail := inventoryTrail(nil, nil, nil, []database.CounterpartyInvitation{row})
+	if len(trail.CounterpartyEvents) != 3 {
+		t.Fatalf("issue-006 counterparty event count=%d, want invitation, response, resolution", len(trail.CounterpartyEvents))
+	}
+	want := []struct {
+		action string
+		at     time.Time
+	}{{"INVITATION_CREATED", created}, {"RESPONDED", responded}, {"RESOLVED", resolved}}
+	for i, expected := range want {
+		entry := trail.CounterpartyEvents[i]
+		if entry.Action != expected.action || entry.OccurredAt != expected.at.Format(time.RFC3339Nano) {
+			t.Fatalf("issue-006 event[%d]=%s at %s, want %s at %s", i, entry.Action, entry.OccurredAt, expected.action, expected.at.Format(time.RFC3339Nano))
+		}
+	}
+	if trail.CounterpartyEvents[1].Statement == nil || *trail.CounterpartyEvents[1].Statement != statement || trail.CounterpartyEvents[2].ResolutionReason == nil || *trail.CounterpartyEvents[2].ResolutionReason != reason {
+		t.Fatal("issue-006 response statement or resolution reason missing from its distinct audit event")
+	}
+}
+
 func TestResolver_InventoryMutationErrors(t *testing.T) {
 	t.Run("UT-320 conflict field mapping", func(t *testing.T) {
 		userErrors, err := mutationInventoryError(apperror.New(apperror.Conflict, "expectedVersion", "item changed"), "review-1")
