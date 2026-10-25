@@ -109,8 +109,8 @@ func TestMigratorUpgradeFromV78WithLegacyRows(t *testing.T) {
 	if err := db.Raw(`SELECT MAX(version) FROM platform.schema_migrations`).Scan(&maxVersion).Error; err != nil {
 		t.Fatal(err)
 	}
-	if maxVersion != 85 {
-		t.Fatalf("max migration=%d, want 85", maxVersion)
+	if maxVersion != 86 {
+		t.Fatalf("max migration=%d, want 86", maxVersion)
 	}
 	assertVideoPlanPreparationCatalog(t, db)
 	var upgradedFinding FindingRecord

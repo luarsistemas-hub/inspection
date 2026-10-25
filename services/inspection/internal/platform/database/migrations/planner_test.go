@@ -124,8 +124,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 85 {
-			t.Fatalf("LatestVersion()=%d, want 85", LatestVersion())
+		if LatestVersion() != 86 {
+			t.Fatalf("LatestVersion()=%d, want 86", LatestVersion())
 		}
 		return
 	}
@@ -151,8 +151,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 85 {
-			t.Fatalf("LatestVersion()=%d, want 85", LatestVersion())
+		if LatestVersion() != 86 {
+			t.Fatalf("LatestVersion()=%d, want 86", LatestVersion())
 		}
 		return
 	}
@@ -172,8 +172,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 85 {
-			t.Fatalf("LatestVersion()=%d, want 85", LatestVersion())
+		if LatestVersion() != 86 {
+			t.Fatalf("LatestVersion()=%d, want 86", LatestVersion())
 		}
 		return
 	}
@@ -198,8 +198,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 85 {
-			t.Fatalf("LatestVersion()=%d, want 85", LatestVersion())
+		if LatestVersion() != 86 {
+			t.Fatalf("LatestVersion()=%d, want 86", LatestVersion())
 		}
 		return
 	}
@@ -238,8 +238,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 85 {
-			t.Fatalf("LatestVersion()=%d, want 85", LatestVersion())
+		if LatestVersion() != 86 {
+			t.Fatalf("LatestVersion()=%d, want 86", LatestVersion())
 		}
 		return
 	}

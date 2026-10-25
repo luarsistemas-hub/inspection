@@ -1499,8 +1499,41 @@ func (e *Executor) finishFailure(ctx context.Context, r reservation, code string
 		if result.RowsAffected != 1 {
 			return errLeaseLost
 		}
+		if status == "FAILED" {
+			return requestInventoryAfterFailure(tx, job, e.deps.Now().UTC())
+		}
 		return nil
 	})
+}
+
+// requestInventoryAfterFailure wakes the inventory job request of a v2
+// environment clip whose preparation failed terminally: inventory jobs wait for
+// every clip to be terminal and a failure emits no media.video_prepared.v1.
+func requestInventoryAfterFailure(tx *gorm.DB, job database.VideoPreparationJob, now time.Time) error {
+	if job.RequirementKey == nil || !strings.HasPrefix(*job.RequirementKey, "env:") {
+		return nil
+	}
+	var media database.MediaObject
+	if err := tx.Where("tenant_id=? AND id=?", job.TenantID, job.MediaID).Take(&media).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	var responsibility database.Responsibility
+	if err := tx.Where("tenant_id=? AND id=?", job.TenantID, media.ResponsibilityID).Take(&responsibility).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	eventID := identity.NewDeterministicID("inspection/inventory-after-preparation-failure", job.ID.String())
+	envelope := events.Envelope[events.InventoryJobRequestedPayload]{ID: eventID, Type: "inventory.job_requested.v1", SchemaVersion: 1, OccurredAt: now, TenantID: job.TenantID, AggregateID: responsibility.InspectionID, CorrelationID: job.ID.String(), CausationID: job.ID.String(), Payload: events.InventoryJobRequestedPayload{JobID: job.ID, InspectionID: responsibility.InspectionID}}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		return err
+	}
+	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&database.OutboxIntent{ID: eventID, TenantID: job.TenantID, Type: envelope.Type, SchemaVersion: envelope.SchemaVersion, Payload: payload, CorrelationID: envelope.CorrelationID, CausationID: envelope.CausationID, Status: "PENDING", NextAttemptAt: now, CreatedAt: now}).Error
 }
 
 func retryDelay(attempt int) time.Duration {

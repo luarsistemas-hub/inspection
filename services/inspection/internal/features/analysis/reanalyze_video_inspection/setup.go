@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	requestinventoryjobs "inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -154,6 +155,10 @@ func queue(ctx context.Context, within func(context.Context, identity.ID, func(*
 			if err := tx.WithContext(ctx).Create(&preparations).Error; err != nil {
 				return err
 			}
+		}
+		// Inventory comparison of the inspection is re-run as a new job generation.
+		if _, err := requestinventoryjobs.Reanalyze(ctx, tx, command.TenantID, inspection.ID, createdAt); err != nil {
+			return err
 		}
 		if meta.Principal.IdentityID != (identity.ID{}) {
 			audit := database.AuditEvent{ID: identity.NewID(), TenantID: command.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.inspection_reanalyzed", TargetType: "inspection", TargetID: inspection.ID.String(), Outcome: "ACCEPTED", CorrelationID: meta.CorrelationID, OccurredAt: createdAt}

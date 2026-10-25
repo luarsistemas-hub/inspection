@@ -48,8 +48,8 @@ func TestFoundationCatalog_IT001ToIT007AndIT040(t *testing.T) {
 	if err := admin.Raw("SELECT MAX(version) FROM platform.schema_migrations").Scan(&latest).Error; err != nil {
 		t.Fatal(err)
 	}
-	if latest != 85 || migrations.LatestVersion() != 85 {
-		t.Fatalf("max migration=%d, catalog=%d, want 85", latest, migrations.LatestVersion())
+	if latest != 86 || migrations.LatestVersion() != 86 {
+		t.Fatalf("max migration=%d, catalog=%d, want 86", latest, migrations.LatestVersion())
 	}
 	t.Run("IT001 migration catalog and forced RLS", func(t *testing.T) {
 		for _, table := range []string{"origins.inventory_environments", "origins.inventory_items", "origins.inventory_item_evidence", "origins.inventory_decisions", "analysis.inventory_jobs", "analysis.inventory_evidence_pairs", "analysis.inventory_item_results", "origins.counterparty_invitations", "origins.baseline_policies"} {

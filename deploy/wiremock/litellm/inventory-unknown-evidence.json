@@ -1,0 +1,21 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [
+      { "matchesJsonPath": { "expression": "$.metadata.comparison_mode", "equalTo": "INVENTORY_CATALOG" } },
+      { "contains": "inventory-unknown-evidence" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": "inventory-unknown-evidence",
+      "provider": "stub",
+      "model": "stub/vision",
+      "choices": [{ "message": { "content": "{\"environments\":[{\"typeCode\":\"OTHER\",\"name\":\"Ambiente\",\"items\":[{\"typeCode\":\"OTHER\",\"name\":\"Objeto de teste\",\"material\":null,\"color\":null,\"quantity\":null,\"condition\":\"GOOD\",\"observation\":\"OBSERVED\",\"limitation\":null,\"confidenceBps\":9000,\"evidence\":[{\"mediaId\":\"foreign-evidence\",\"frameId\":null}]}]}]}" } }]
+    }
+  }
+}

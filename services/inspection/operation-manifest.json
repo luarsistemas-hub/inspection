@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "c807238ea581f697eeae0dd03cf4ae4a8dfb66e90bd8146796b164807e5e4f50",
+  "schemaSha256": "16eabe8694348e873a8f553ae92dcaa37272569adc79aae1cd5de2bbf6aa49bf",
   "capabilities": [
     {
       "root": "Query.me",
@@ -1071,6 +1071,13 @@
       "persona": "manager, employee, or internal viewer",
       "journey": "Request a new video from the participant for an inspection needing attention, with a reason and deadline.",
       "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.retryInventoryDraft",
+      "owner": "Dashboard",
+      "persona": "internal inventory reviewer",
+      "journey": "Reopen a failed inventory catalog draft and resume its leased analysis jobs.",
+      "evidence": "UT-202; IT-032"
     }
   ],
   "products": [

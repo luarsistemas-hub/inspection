@@ -501,6 +501,41 @@ type CustomerEvidenceItem struct {
 	URL                *string  `json:"url,omitempty"`
 }
 
+type CustomerInventory struct {
+	ReferenceVersionNumber int                        `json:"referenceVersionNumber"`
+	Purpose                string                     `json:"purpose"`
+	Coverage               *CustomerInventoryCoverage `json:"coverage,omitempty"`
+	Problems               []*CustomerInventoryEntry  `json:"problems"`
+	Informational          []*CustomerInventoryEntry  `json:"informational"`
+}
+
+type CustomerInventoryCoverage struct {
+	ExpectedItems                  int      `json:"expectedItems"`
+	AssessedItems                  int      `json:"assessedItems"`
+	NotObserved                    int      `json:"notObserved"`
+	EnvironmentsNotCaptured        []string `json:"environmentsNotCaptured"`
+	EnvironmentsAddedDuringCapture []string `json:"environmentsAddedDuringCapture"`
+}
+
+type CustomerInventoryEntry struct {
+	Environment     string                   `json:"environment"`
+	Type            string                   `json:"type"`
+	Name            string                   `json:"name"`
+	Status          string                   `json:"status"`
+	ConditionBefore *string                  `json:"conditionBefore,omitempty"`
+	ConditionAfter  *string                  `json:"conditionAfter,omitempty"`
+	Reason          *string                  `json:"reason,omitempty"`
+	Pairs           []*CustomerInventoryPair `json:"pairs"`
+}
+
+type CustomerInventoryPair struct {
+	OriginEvidenceID          string `json:"originEvidenceId"`
+	CurrentEvidenceID         string `json:"currentEvidenceId"`
+	OriginSourceAvailability  string `json:"originSourceAvailability"`
+	CurrentSourceAvailability string `json:"currentSourceAvailability"`
+	TimestampMs               *int   `json:"timestampMs,omitempty"`
+}
+
 type CustomerPortfolioConnection struct {
 	Nodes    []*CustomerPortfolioItem `json:"nodes"`
 	PageInfo *PageInfo                `json:"pageInfo"`
@@ -531,6 +566,7 @@ type CustomerReport struct {
 	Historical     bool                 `json:"historical"`
 	Context        *ReportContext       `json:"context"`
 	Requirements   []*ReportRequirement `json:"requirements"`
+	Inventory      *CustomerInventory   `json:"inventory,omitempty"`
 }
 
 type CustomerTimelineConnection struct {
@@ -1304,10 +1340,12 @@ type OriginVersionInput struct {
 }
 
 type OriginVersionPayload struct {
-	Version          *OriginVersion `json:"version,omitempty"`
-	Warnings         []string       `json:"warnings,omitempty"`
-	UserErrors       []*UserError   `json:"userErrors"`
-	ClientMutationID string         `json:"clientMutationId"`
+	Version  *OriginVersion `json:"version,omitempty"`
+	Warnings []string       `json:"warnings,omitempty"`
+	// Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged.
+	SourcesExpired   *bool        `json:"sourcesExpired,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
 }
 
 type PageInfo struct {
@@ -1658,6 +1696,7 @@ type Report struct {
 	Advisory       string                    `json:"advisory"`
 	Context        *ReportContext            `json:"context"`
 	Requirements   []*ReportRequirement      `json:"requirements"`
+	Inventory      *CustomerInventory        `json:"inventory,omitempty"`
 	Evidence       *ReportEvidenceConnection `json:"evidence"`
 	Findings       []*ReportFinding          `json:"findings"`
 	Timeline       []*ReportTimelineEntry    `json:"timeline"`
@@ -1897,6 +1936,11 @@ type RetentionPolicyPayload struct {
 	Policy           *RetentionPolicy `json:"policy,omitempty"`
 	UserErrors       []*UserError     `json:"userErrors"`
 	ClientMutationID string           `json:"clientMutationId"`
+}
+
+type RetryInventoryDraftInput struct {
+	OriginVersionID  string `json:"originVersionId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type RetryVideoPreparationInput struct {

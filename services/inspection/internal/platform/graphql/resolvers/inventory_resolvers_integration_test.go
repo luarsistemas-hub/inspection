@@ -239,7 +239,9 @@ func TestInventoryITRequestOriginCatalogingFromLegacyOrigin(t *testing.T) {
 	}
 	request := fmt.Sprintf(`mutation { requestOriginCataloging(input:{assetId:"%s",clientMutationId:"it-legacy-cataloging"}) { version { id status source draftState } userErrors { code field } } }`, fx.seed.AssetID)
 	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, request, fx.ctx, "", "")
-	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"userErrors":[]`) || !strings.Contains(response, `"status":"DRAFT"`) || !strings.Contains(response, `"source":"LEGACY_ORIGIN"`) || !strings.Contains(response, `"draftState":"PREPARING"`) {
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"userErrors":[]`) || !strings.Contains(response, `"status":"DRAFT"`) || !strings.Contains(response, `"source":"LEGACY_ORIGIN"`) || !strings.Contains(response, `"draftState":"READY"`) {
+		// Without origin evidence there is nothing to catalog: the empty draft is
+		// reviewable at once instead of waiting for a job that never exists.
 		t.Fatalf("legacy origin cataloging failed: %s", response)
 	}
 	repeated := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, request, fx.ctx, "", "")

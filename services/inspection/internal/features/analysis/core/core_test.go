@@ -39,6 +39,28 @@ func TestParseResultFindingsRemainIndependentOfQualityFindings(t *testing.T) {
 	require.Equal(t, "OBSTRUCTION", result.Findings[0].Category)
 }
 
+func TestClassifyInventoryAppliesReasonCodesAndPriority(t *testing.T) {
+	base := Decision{Classification: ClassificationNormal}
+	got := ClassifyInventory(base, InventoryFacts{Worsened: 1, NotObserved: 1, BaselineItems: 2})
+	if got.Classification != ClassificationAttention || len(got.ReasonCodes) != 2 || got.ReasonCodes[0] != "INVENTORY_CONDITION_WORSENED" || got.ReasonCodes[1] != "INVENTORY_ITEM_NOT_OBSERVED" {
+		t.Fatalf("unexpected inventory decision: %+v", got)
+	}
+	got = ClassifyInventory(got, InventoryFacts{Missing: 1, BaselineItems: 2})
+	if got.Classification != ClassificationCritical || got.ReasonCodes[len(got.ReasonCodes)-1] != "INVENTORY_ITEM_MISSING" {
+		t.Fatalf("missing item must be critical: %+v", got)
+	}
+	got = ClassifyInventory(Decision{Classification: ClassificationNormal}, InventoryFacts{})
+	if got.Classification != ClassificationAttention || got.ReasonCodes[0] != "INVENTORY_EMPTY_BASELINE" {
+		t.Fatalf("empty inventory must require attention: %+v", got)
+	}
+}
+
+func TestClassifyInventoryRetainsAllReasonsWhenMissingIsCritical(t *testing.T) {
+	got := ClassifyInventory(Decision{Classification: ClassificationNormal}, InventoryFacts{Missing: 1, Worsened: 1, NotObserved: 2, EnvironmentsNotCaptured: 1, BaselineItems: 4})
+	require.Equal(t, ClassificationCritical, got.Classification)
+	require.Equal(t, []string{"INVENTORY_ITEM_MISSING", "INVENTORY_CONDITION_WORSENED", "INVENTORY_ITEM_NOT_OBSERVED", "INVENTORY_ENVIRONMENT_NOT_CAPTURED"}, got.ReasonCodes)
+}
+
 func TestParseResultPresentsFriendlyImageLabels(t *testing.T) {
 	payload := []byte(`{"noRelevantChange":false,"findings":[{"category":"OBSTRUCTION","title":"Obstrução · CURRENT","description":"Na imagem CURRENT, um saco encobre o gabinete. Não estava presente na imagem ORIGIN.","severity":"LOW","confidence":0.9,"evidenceIds":["current","origin"],"quality":"ADEQUATE","recommendedAction":"Refazer a captura de CURRENT e comparar com ORIGIN."}]}`)
 	result, err := ParseResult(payload)
@@ -60,4 +82,35 @@ func TestClassificationPrioritizesCriticalAndAttention(t *testing.T) {
 	require.Equal(t, ClassificationNormal, Classify([]ComparisonFacts{{Terminal: true}}).Classification)
 	require.Equal(t, ClassificationAttention, Classify([]ComparisonFacts{{Terminal: true, Inconclusive: true}}).Classification)
 	require.Equal(t, ClassificationCritical, Classify([]ComparisonFacts{{Terminal: true, Findings: []Finding{{Severity: "CRITICAL"}}}}).Classification)
+}
+
+func TestUT240To248InventoryClassificationMatrix(t *testing.T) {
+	normal := Classify([]ComparisonFacts{{Terminal: true}})
+	cases := []struct {
+		id     string
+		base   Decision
+		facts  InventoryFacts
+		want   string
+		reason string
+	}{
+		{"UT-240", normal, InventoryFacts{BaselineItems: 3}, ClassificationNormal, ""},
+		{"UT-241", normal, InventoryFacts{Worsened: 1, BaselineItems: 3}, ClassificationAttention, "INVENTORY_CONDITION_WORSENED"},
+		{"UT-242", normal, InventoryFacts{NotObserved: 1, BaselineItems: 3}, ClassificationAttention, "INVENTORY_ITEM_NOT_OBSERVED"},
+		{"UT-243", normal, InventoryFacts{EnvironmentsNotCaptured: 1, BaselineItems: 3}, ClassificationAttention, "INVENTORY_ENVIRONMENT_NOT_CAPTURED"},
+		{"UT-244", normal, InventoryFacts{Missing: 1, BaselineItems: 3}, ClassificationCritical, "INVENTORY_ITEM_MISSING"},
+		{"UT-245", Classify([]ComparisonFacts{{Terminal: true, Findings: []Finding{{Severity: "CRITICAL"}}}}), InventoryFacts{BaselineItems: 3}, ClassificationCritical, ""},
+		{"UT-246", Classify([]ComparisonFacts{{Terminal: true, Findings: []Finding{{Severity: "HIGH"}}}}), InventoryFacts{BaselineItems: 3}, ClassificationAttention, ""},
+		// UT-247: outside-inventory and improved items are not inventory facts.
+		{"UT-247", normal, InventoryFacts{BaselineItems: 3}, ClassificationNormal, ""},
+		{"UT-248", normal, InventoryFacts{}, ClassificationAttention, "INVENTORY_EMPTY_BASELINE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			got := ClassifyInventory(tc.base, tc.facts)
+			require.Equal(t, tc.want, got.Classification)
+			if tc.reason != "" {
+				require.Contains(t, got.ReasonCodes, tc.reason)
+			}
+		})
+	}
 }

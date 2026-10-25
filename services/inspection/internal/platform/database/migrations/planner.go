@@ -2323,6 +2323,15 @@ ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_superseded_rete
 ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 1;
 ALTER TABLE reports.report_snapshots ADD CONSTRAINT chk_report_snapshot_schema_version CHECK(schema_version IN (1,2));
 `},
+		// Re-analysis appends a new generation of inventory jobs; readers use the
+		// latest generation per requirement while earlier results stay auditable.
+		{Version: 86, Name: "inventory_job_generations", Compatible: true, SQL: `
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS generation integer NOT NULL DEFAULT 1;
+ALTER TABLE analysis.inventory_jobs DROP CONSTRAINT IF EXISTS chk_inventory_job_generation;
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_generation CHECK(generation >= 1);
+DROP INDEX IF EXISTS analysis.uq_inventory_job_input;
+CREATE UNIQUE INDEX uq_inventory_job_input ON analysis.inventory_jobs(tenant_id,inspection_id,kind,requirement_key,generation);
+`},
 	}
 }
 

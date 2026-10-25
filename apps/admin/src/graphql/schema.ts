@@ -539,6 +539,45 @@ export type CustomerEvidenceItem = {
   url: Maybe<Scalars['String']['output']>;
 };
 
+export type CustomerInventory = {
+  __typename?: 'CustomerInventory';
+  coverage: Maybe<CustomerInventoryCoverage>;
+  informational: Array<CustomerInventoryEntry>;
+  problems: Array<CustomerInventoryEntry>;
+  purpose: Scalars['String']['output'];
+  referenceVersionNumber: Scalars['Int']['output'];
+};
+
+export type CustomerInventoryCoverage = {
+  __typename?: 'CustomerInventoryCoverage';
+  assessedItems: Scalars['Int']['output'];
+  environmentsAddedDuringCapture: Array<Scalars['String']['output']>;
+  environmentsNotCaptured: Array<Scalars['String']['output']>;
+  expectedItems: Scalars['Int']['output'];
+  notObserved: Scalars['Int']['output'];
+};
+
+export type CustomerInventoryEntry = {
+  __typename?: 'CustomerInventoryEntry';
+  conditionAfter: Maybe<Scalars['String']['output']>;
+  conditionBefore: Maybe<Scalars['String']['output']>;
+  environment: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  pairs: Array<CustomerInventoryPair>;
+  reason: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  type: Scalars['String']['output'];
+};
+
+export type CustomerInventoryPair = {
+  __typename?: 'CustomerInventoryPair';
+  currentEvidenceId: Scalars['ID']['output'];
+  currentSourceAvailability: Scalars['String']['output'];
+  originEvidenceId: Scalars['ID']['output'];
+  originSourceAvailability: Scalars['String']['output'];
+  timestampMs: Maybe<Scalars['Int']['output']>;
+};
+
 export type CustomerPortfolioConnection = {
   __typename?: 'CustomerPortfolioConnection';
   nodes: Array<CustomerPortfolioItem>;
@@ -568,6 +607,7 @@ export type CustomerReport = {
   context: ReportContext;
   historical: Scalars['Boolean']['output'];
   inspectionId: Scalars['ID']['output'];
+  inventory: Maybe<CustomerInventory>;
   requirements: Array<ReportRequirement>;
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -1256,6 +1296,7 @@ export type Mutation = {
   requestRecapture: RecapturePayload;
   requestVideoReplacement: VideoReplacementPayload;
   resendInternalUserInvitation: MembershipPayload;
+  retryInventoryDraft: OriginVersionPayload;
   retryVideoPreparation: VideoPreparationPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
@@ -1629,6 +1670,11 @@ export type MutationResendInternalUserInvitationArgs = {
 };
 
 
+export type MutationRetryInventoryDraftArgs = {
+  input: RetryInventoryDraftInput;
+};
+
+
 export type MutationRetryVideoPreparationArgs = {
   input: RetryVideoPreparationInput;
 };
@@ -1999,6 +2045,8 @@ export type OriginVersionInput = {
 export type OriginVersionPayload = {
   __typename?: 'OriginVersionPayload';
   clientMutationId: Scalars['String']['output'];
+  /** Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged. */
+  sourcesExpired: Maybe<Scalars['Boolean']['output']>;
   userErrors: Array<UserError>;
   version: Maybe<OriginVersion>;
   warnings: Maybe<Array<Scalars['String']['output']>>;
@@ -2752,6 +2800,7 @@ export type Report = {
   htmlDigest: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   inspectionId: Scalars['ID']['output'];
+  inventory: Maybe<CustomerInventory>;
   jsonDigest: Scalars['String']['output'];
   mode: Scalars['String']['output'];
   pdfStatus: Scalars['String']['output'];
@@ -3021,6 +3070,11 @@ export type RetentionPolicyPayload = {
   clientMutationId: Scalars['String']['output'];
   policy: Maybe<RetentionPolicy>;
   userErrors: Array<UserError>;
+};
+
+export type RetryInventoryDraftInput = {
+  clientMutationId: Scalars['String']['input'];
+  originVersionId: Scalars['ID']['input'];
 };
 
 export type RetryVideoPreparationInput = {

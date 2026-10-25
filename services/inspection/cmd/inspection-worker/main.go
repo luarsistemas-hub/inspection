@@ -13,8 +13,11 @@ import (
 	"inspection/services/inspection/internal/contracts/events"
 	buildrequest "inspection/services/inspection/internal/features/analysis/build_request"
 	classifyinspection "inspection/services/inspection/internal/features/analysis/classify_inspection"
+	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
+	processinventoryjob "inspection/services/inspection/internal/features/analysis/process_inventory_job"
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
+	requestinventoryjobs "inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
 	processuploadcompleted "inspection/services/inspection/internal/features/media/process_upload_completed"
@@ -55,7 +58,7 @@ import (
 // workerQueueDefinitions are the durable queues of the ordinary worker and
 // the event each one receives. Video condition requests are deliberately
 // absent: they belong to the dedicated video worker queue.
-var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"inventory-draft-ready", "inventory.draft_ready.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
 
 // ordinaryQueueContracts drops the dedicated video condition queue: the
 // ordinary worker declares it for topology but never consumes video payloads.
@@ -208,6 +211,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	requestInventoryJobs, err := requestinventoryjobs.Setup(requestinventoryjobs.Dependencies{Now: time.Now})
+	if err != nil {
+		return err
+	}
+	inventoryProcessor, err := processinventoryjob.Setup(processinventoryjob.Dependencies{DB: runtimeDB, Store: privateStore, Gateway: llmGateway, Now: time.Now})
+	if err != nil {
+		return err
+	}
+	inventoryJobs := &inventoryexecutor.Executor{DB: runtimeDB, ClaimDB: db, Processor: inventoryProcessor, Now: time.Now}
 	requestBuilder, err := buildrequest.Setup(buildrequest.Dependencies{Store: privateStore})
 	if err != nil {
 		return err
@@ -328,7 +340,13 @@ func run() error {
 		"recapture.deadline_reached.v1":         deadlineHandler,
 		"video_replacement.deadline_reached.v1": replacementDeadlineHandler,
 		"recapture.requested.v1":                inAppNotification,
-		"capture.submitted.v1":                  requestJobs,
+		"capture.submitted.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			if err := requestJobs(ctx, tx, envelope); err != nil {
+				return err
+			}
+			return requestInventoryJobs(ctx, tx, envelope)
+		},
+		"inventory.draft_ready.v1": inAppNotification,
 		"recapture.completed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 			if err := requestJobs(ctx, tx, envelope); err != nil {
 				return err
@@ -355,7 +373,7 @@ func run() error {
 		return err
 	}
 	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {
-		errCh := make(chan error, 4)
+		errCh := make(chan error, 5)
 		go func() { errCh <- dispatch(ctx) }()
 		go func() { errCh <- consume(ctx) }()
 		go func() {
@@ -383,6 +401,25 @@ func run() error {
 					// Database hiccups must not take down unrelated consumers.
 					log.Printf("report PDF executor: %v", err)
 				} else if worked && ctx.Err() == nil {
+					continue
+				}
+				select {
+				case <-ctx.Done():
+					errCh <- nil
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				worked, err := inventoryJobs.RunDue(ctx)
+				if err != nil && ctx.Err() == nil {
+					log.Printf("inventory job executor: %v", err)
+				}
+				if worked && ctx.Err() == nil {
 					continue
 				}
 				select {

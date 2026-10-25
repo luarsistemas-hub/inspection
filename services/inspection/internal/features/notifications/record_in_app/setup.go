@@ -21,7 +21,10 @@ import (
 type notice struct {
 	kind, title, body string
 	inspectionID      identity.ID
-	eventKey          identity.ID
+	// assetID scopes notices that are not tied to an inspection.
+	assetID    identity.ID
+	resourceID identity.ID
+	eventKey   identity.ID
 }
 
 // Setup returns an idempotent event handler for in-app notifications.
@@ -82,6 +85,25 @@ func Setup() func(context.Context, *gorm.DB, events.RawEnvelope) error {
 			if payload.SnapshotID != (identity.ID{}) {
 				value.body += " Versão " + payload.SnapshotID.String()[:8] + "."
 			}
+		case "inventory.draft_ready.v1":
+			var payload events.InventoryDraftReadyPayload
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.OriginVersionID == (identity.ID{}) {
+				return messaging.ErrPermanent
+			}
+			var version database.OriginVersion
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, payload.OriginVersionID).Take(&version).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			} else if err != nil {
+				return err
+			}
+			var origin database.Origin
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, version.OriginID).Take(&origin).Error; err != nil {
+				return err
+			}
+			value = notice{kind: "INVENTORY_DRAFT_READY", title: "Inventário pronto para revisão", body: "O inventário sugerido está pronto para revisão.", assetID: origin.AssetID, resourceID: payload.OriginVersionID, eventKey: payload.OriginVersionID}
+			if version.SourceInspectionID != nil {
+				value.inspectionID = *version.SourceInspectionID
+			}
 		default:
 			return messaging.ErrPermanent
 		}
@@ -91,14 +113,27 @@ func Setup() func(context.Context, *gorm.DB, events.RawEnvelope) error {
 
 func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value notice) error {
 	var inspection database.Inspection
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, value.inspectionID).First(&inspection).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+	if value.inspectionID != (identity.ID{}) {
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, value.inspectionID).First(&inspection).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+	} else if value.assetID == (identity.ID{}) {
 		return nil
-	} else if err != nil {
-		return err
+	}
+	assetID := inspection.AssetID
+	if value.assetID != (identity.ID{}) {
+		assetID = value.assetID
 	}
 	var asset database.Asset
-	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, inspection.AssetID).First(&asset).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, assetID).First(&asset).Error; err != nil {
 		return err
+	}
+	if inspection.ID == (identity.ID{}) {
+		// Asset-scoped notice (legacy cataloging): recipients are found through
+		// the asset and its business unit.
+		inspection.AssetID, inspection.BusinessUnitID = asset.ID, asset.BusinessUnitID
 	}
 	project := ""
 	if inspection.ProjectID != nil {
@@ -139,12 +174,16 @@ func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value
 		return err
 	}
 	var scoped []database.Membership
-	query := tx.WithContext(ctx).Table("access.memberships AS m").Select("m.*").Joins("JOIN access.resource_scopes AS s ON s.tenant_id=m.tenant_id AND s.membership_id=m.id").Where("m.tenant_id=? AND m.status='ACTIVE' AND m.role=?", envelope.TenantID, "MANAGER").Where(
+	roles := []string{"MANAGER"}
+	if value.kind == "INVENTORY_DRAFT_READY" {
+		roles = []string{"EMPLOYEE", "MANAGER"}
+	}
+	query := tx.WithContext(ctx).Table("access.memberships AS m").Select("m.*").Joins("JOIN access.resource_scopes AS s ON s.tenant_id=m.tenant_id AND s.membership_id=m.id").Where("m.tenant_id=? AND m.status='ACTIVE' AND m.role IN ?", envelope.TenantID, roles).Where(
 		"(s.kind='BUSINESS_UNIT' AND s.resource_id=?) OR (s.kind='ASSET' AND s.resource_id=?) OR (s.kind='INSPECTION' AND s.resource_id=?)",
 		inspection.BusinessUnitID, inspection.AssetID, inspection.ID,
 	)
 	if inspection.ProjectID != nil {
-		query = query.Or("m.tenant_id=? AND m.status='ACTIVE' AND m.role=? AND EXISTS (SELECT 1 FROM access.resource_scopes s WHERE s.tenant_id=m.tenant_id AND s.membership_id=m.id AND s.kind='PROJECT' AND s.resource_id=?)", envelope.TenantID, "MANAGER", *inspection.ProjectID)
+		query = query.Or("m.tenant_id=? AND m.status='ACTIVE' AND m.role IN ? AND EXISTS (SELECT 1 FROM access.resource_scopes s WHERE s.tenant_id=m.tenant_id AND s.membership_id=m.id AND s.kind='PROJECT' AND s.resource_id=?)", envelope.TenantID, roles, *inspection.ProjectID)
 	}
 	if value.kind != "REPORT_PUBLISHED" {
 		if err := query.Distinct("m.id").Find(&scoped).Error; err != nil {
@@ -159,14 +198,20 @@ func record(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope, value
 		}
 		seen[recipient.ID] = struct{}{}
 		logicalEventID := envelope.ID
-		if envelope.Type == "report.ready.v1" {
+		if envelope.Type == "report.ready.v1" || envelope.Type == "inventory.draft_ready.v1" {
 			logicalEventID = identity.NewDeterministicID("inspection/report-ready-notification", value.eventKey.String())
 		}
 		resourceKind := "INSPECTION"
 		if value.kind == "REPORT_READY" {
 			resourceKind = "REPORT"
+		} else if value.kind == "INVENTORY_DRAFT_READY" {
+			resourceKind = "BASELINE_DRAFT"
 		}
-		row := database.RecipientNotification{ID: identity.NewDeterministicID("inspection/recipient-notification", recipient.ID.String()+":"+logicalEventID.String()+":"+value.kind), TenantID: envelope.TenantID, RecipientMembershipID: recipient.ID, EventID: logicalEventID, Kind: value.kind, Title: value.title, Body: body, ResourceKind: resourceKind, ResourceID: &value.inspectionID, CreatedAt: envelope.OccurredAt.UTC()}
+		resourceID := value.inspectionID
+		if value.resourceID != (identity.ID{}) {
+			resourceID = value.resourceID
+		}
+		row := database.RecipientNotification{ID: identity.NewDeterministicID("inspection/recipient-notification", recipient.ID.String()+":"+logicalEventID.String()+":"+value.kind), TenantID: envelope.TenantID, RecipientMembershipID: recipient.ID, EventID: logicalEventID, Kind: value.kind, Title: value.title, Body: body, ResourceKind: resourceKind, ResourceID: &resourceID, CreatedAt: envelope.OccurredAt.UTC()}
 		if err := tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
 			return fmt.Errorf("record in-app notification: %w", err)
 		}

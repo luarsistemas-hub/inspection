@@ -59,6 +59,7 @@ import (
 	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
 	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
+	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
 	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
 	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
 	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
@@ -460,6 +461,7 @@ func run() error {
 		func() error { return inventoryactivate.Setup(bus, inventoryService) },
 		func() error { return inventorydiscard.Setup(bus, inventoryService) },
 		func() error { return inventoryrequest.Setup(bus, inventoryService) },
+		func() error { return inventoryretry.Setup(bus, inventoryService) },
 		func() error { return inventorystart.Setup(bus, inventoryService) },
 		func() error { return inventorydraft.Setup(bus, inventoryService) },
 		func() error { return inventorybaseline.Setup(bus, inventoryService) },

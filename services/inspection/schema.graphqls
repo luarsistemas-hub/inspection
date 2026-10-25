@@ -137,6 +137,7 @@ type Mutation {
   activateBaselineVersion(input: ActivateBaselineVersionInput!): OriginVersionPayload!
   discardBaselineDraft(input: DiscardBaselineDraftInput!): OriginVersionPayload!
   requestOriginCataloging(input: RequestOriginCatalogingInput!): OriginVersionPayload!
+  retryInventoryDraft(input: RetryInventoryDraftInput!): OriginVersionPayload!
   startBaselineDraftFromInspection(input: StartBaselineDraftFromInspectionInput!): OriginVersionPayload!
   createSchedule(input: CreateScheduleInput!): SchedulePayload!
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
@@ -243,6 +244,7 @@ input RemoveInventoryEnvironmentInput { originVersionId: ID! environmentId: ID! 
 input ActivateBaselineVersionInput { originVersionId: ID! purpose: String! expectedOriginVersion: Int! counterpartyParticipantIds: [ID!]! clientMutationId: String! }
 input DiscardBaselineDraftInput { originVersionId: ID! clientMutationId: String! }
 input RequestOriginCatalogingInput { assetId: ID! clientMutationId: String! }
+input RetryInventoryDraftInput { originVersionId: ID! clientMutationId: String! }
 input StartBaselineDraftFromInspectionInput { inspectionId: ID! clientMutationId: String! }
 type InventoryItemsPayload { items: [InventoryItem!]! emptyEnvironments: [ID!]! userErrors: [UserError!]! clientMutationId: String! }
 type InventoryItemPayload { item: InventoryItem userErrors: [UserError!]! clientMutationId: String! }
@@ -319,7 +321,7 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
@@ -330,7 +332,11 @@ type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification:
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
-type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory }
+type CustomerInventory { referenceVersionNumber: Int! purpose: String! coverage: CustomerInventoryCoverage problems: [CustomerInventoryEntry!]! informational: [CustomerInventoryEntry!]! }
+type CustomerInventoryCoverage { expectedItems: Int! assessedItems: Int! notObserved: Int! environmentsNotCaptured: [String!]! environmentsAddedDuringCapture: [String!]! }
+type CustomerInventoryEntry { environment: String! type: String! name: String! status: String! conditionBefore: String conditionAfter: String reason: String pairs: [CustomerInventoryPair!]! }
+type CustomerInventoryPair { originEvidenceId: ID! currentEvidenceId: ID! originSourceAvailability: String! currentSourceAvailability: String! timestampMs: Int }
 enum EvidenceMode { SIMPLE ADVANCED }
 type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
@@ -585,7 +591,14 @@ type InvitationOtpPayload { status: String! userErrors: [UserError!]! clientMuta
 type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: String! userErrors: [UserError!]! clientMutationId: String! }
 type InvitationPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginInvitationPayload { invitationId: ID originVersionId: ID status: String! userErrors: [UserError!]! clientMutationId: String! }
-type OriginVersionPayload { version: OriginVersion warnings: [String!] userErrors: [UserError!]! clientMutationId: String! }
+type OriginVersionPayload {
+  version: OriginVersion
+  warnings: [String!]
+  "Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged."
+  sourcesExpired: Boolean
+  userErrors: [UserError!]!
+  clientMutationId: String!
+}
 type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }

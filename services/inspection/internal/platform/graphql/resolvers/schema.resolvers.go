@@ -1051,6 +1051,11 @@ func (r *mutationResolver) RequestOriginCataloging(ctx context.Context, input gr
 	return r.requestOriginCataloging(ctx, input)
 }
 
+// RetryInventoryDraft is the resolver for the retryInventoryDraft field.
+func (r *mutationResolver) RetryInventoryDraft(ctx context.Context, input graphql1.RetryInventoryDraftInput) (*graphql1.OriginVersionPayload, error) {
+	return r.retryInventoryDraft(ctx, input)
+}
+
 // StartBaselineDraftFromInspection is the resolver for the startBaselineDraftFromInspection field.
 func (r *mutationResolver) StartBaselineDraftFromInspection(ctx context.Context, input graphql1.StartBaselineDraftFromInspectionInput) (*graphql1.OriginVersionPayload, error) {
 	return r.startBaselineDraftFromInspection(ctx, input)
@@ -1195,34 +1200,6 @@ func (r *mutationResolver) CreateInspection(ctx context.Context, input graphql1.
 		return nil, err
 	}
 	return &graphql1.InspectionPayload{Inspection: mapInspection(view), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
-}
-
-// DeclareCaptureEnvironment appends one requirement to an open v2 capture.
-func (r *mutationResolver) DeclareCaptureEnvironment(ctx context.Context, input graphql1.DeclareCaptureEnvironmentInput) (*graphql1.CaptureEnvironmentPayload, error) {
-	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := r.Bus.Send(ctx, capturedeclareenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, TypeCode: input.TypeCode, Name: input.Name, ClientMutationID: input.ClientMutationID})
-	if err != nil {
-		return nil, err
-	}
-	req := raw.(capturecore.Requirement)
-	env := &graphql1.CaptureEnvironment{RequirementKey: req.Key, IdentityID: req.EnvironmentIdentityID, TypeCode: req.EnvironmentTypeCode, Name: req.EnvironmentName, Expected: req.Expected, AddedDuringCapture: req.AddedDuringCapture, MediaCount: 0, Status: "PENDING"}
-	return &graphql1.CaptureEnvironmentPayload{Environment: env, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
-}
-
-// RecordCaptureQualityWarning records a retryable quality notice on one environment.
-func (r *mutationResolver) RecordCaptureQualityWarning(ctx context.Context, input graphql1.RecordCaptureQualityWarningInput) (*graphql1.CaptureQualityWarningPayload, error) {
-	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := r.Bus.Send(ctx, capturequalitywarning.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, Code: input.Code, Ignored: input.Ignored})
-	if err != nil {
-		return nil, err
-	}
-	return &graphql1.CaptureQualityWarningPayload{Flags: raw.([]string), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // PlanInspection is the resolver for the planInspection field.
@@ -1819,6 +1796,34 @@ func (r *mutationResolver) DeclareCaptureImpossibility(ctx context.Context, inpu
 		return nil, err
 	}
 	return &graphql1.CapturePayload{Status: "SAVED", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// DeclareCaptureEnvironment appends one requirement to an open v2 capture.
+func (r *mutationResolver) DeclareCaptureEnvironment(ctx context.Context, input graphql1.DeclareCaptureEnvironmentInput) (*graphql1.CaptureEnvironmentPayload, error) {
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, capturedeclareenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, TypeCode: input.TypeCode, Name: input.Name, ClientMutationID: input.ClientMutationID})
+	if err != nil {
+		return nil, err
+	}
+	req := raw.(capturecore.Requirement)
+	env := &graphql1.CaptureEnvironment{RequirementKey: req.Key, IdentityID: req.EnvironmentIdentityID, TypeCode: req.EnvironmentTypeCode, Name: req.EnvironmentName, Expected: req.Expected, AddedDuringCapture: req.AddedDuringCapture, MediaCount: 0, Status: "PENDING"}
+	return &graphql1.CaptureEnvironmentPayload{Environment: env, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+// RecordCaptureQualityWarning records a retryable quality notice on one environment.
+func (r *mutationResolver) RecordCaptureQualityWarning(ctx context.Context, input graphql1.RecordCaptureQualityWarningInput) (*graphql1.CaptureQualityWarningPayload, error) {
+	tenantID, responsibilityID, err := r.externalResponsibility(ctx)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := r.Bus.Send(ctx, capturequalitywarning.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: input.RequirementKey, Code: input.Code, Ignored: input.Ignored})
+	if err != nil {
+		return nil, err
+	}
+	return &graphql1.CaptureQualityWarningPayload{Flags: raw.([]string), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // SubmitCapture is the resolver for the submitCapture field.
@@ -3583,7 +3588,7 @@ func (r *queryResolver) CustomerReport(ctx context.Context, inspectionID string,
 		return nil, err
 	}
 	view := mapReport(row)
-	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, Advisory: view.Advisory, Status: "PUBLISHED", Historical: false, Context: view.Context, Requirements: view.Requirements}, nil
+	return &graphql1.CustomerReport{InspectionID: row.InspectionID.String(), SnapshotID: row.ID.String(), Version: row.VersionNumber, Classification: row.Classification, Advisory: view.Advisory, Status: "PUBLISHED", Historical: false, Context: view.Context, Requirements: view.Requirements, Inventory: customerInventoryFromSnapshot(row.CanonicalJSON)}, nil
 }
 
 // CustomerEvidence is the resolver for the customerEvidence field.

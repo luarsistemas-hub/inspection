@@ -1461,12 +1461,14 @@ func (CounterpartyInvitation) TableName() string { return "origins.counterparty_
 
 // InventoryJob leases one inventory analysis task.
 type InventoryJob struct {
-	ID                    identity.ID  `gorm:"type:uuid;primaryKey"`
-	TenantID              identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:1"`
-	InspectionID          identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:2"`
-	OriginVersionID       identity.ID  `gorm:"type:uuid;not null"`
-	Kind                  string       `gorm:"size:16;not null;uniqueIndex:uq_inventory_job_input,priority:3"`
-	RequirementKey        string       `gorm:"size:200;not null;uniqueIndex:uq_inventory_job_input,priority:4"`
+	ID              identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID        identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:1"`
+	InspectionID    identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_job_input,priority:2"`
+	OriginVersionID identity.ID `gorm:"type:uuid;not null"`
+	Kind            string      `gorm:"size:16;not null;uniqueIndex:uq_inventory_job_input,priority:3"`
+	RequirementKey  string      `gorm:"size:200;not null;uniqueIndex:uq_inventory_job_input,priority:4"`
+	// Generation increases when an inspection is re-analyzed.
+	Generation            int          `gorm:"not null;default:1;uniqueIndex:uq_inventory_job_input,priority:5"`
 	EnvironmentIdentityID *identity.ID `gorm:"type:uuid"`
 	Status                string       `gorm:"size:16;not null;default:PENDING;index"`
 	Attempts              int          `gorm:"not null;default:0"`

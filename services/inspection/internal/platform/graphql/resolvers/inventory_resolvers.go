@@ -17,6 +17,7 @@ import (
 	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
 	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
+	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
 	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
 	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
 	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
@@ -528,6 +529,46 @@ func (r *mutationResolver) discardBaselineDraft(ctx context.Context, input graph
 	return out, nil
 }
 
+func (r *mutationResolver) retryInventoryDraft(ctx context.Context, input graphql1.RetryInventoryDraftInput) (*graphql1.OriginVersionPayload, error) {
+	meta, err := inventoryMutationMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}
+	versionID, err := inventoryID(input.OriginVersionID, "originVersionId")
+	if err != nil {
+		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
+		return out, nil
+	}
+	assetID, err := r.inventoryVersionAsset(ctx, meta.TenantID, versionID)
+	if err != nil {
+		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
+		return out, nil
+	}
+	if err := r.inventoryAuthorize(ctx, assetID, "mutate"); err != nil {
+		if businessInventoryError(err) {
+			out.UserErrors = append(out.UserErrors, userErrorFrom(err))
+			return out, nil
+		}
+		return nil, err
+	}
+	rowRaw, err := r.Bus.Send(ctx, inventoryretry.Command{TenantID: meta.TenantID, VersionID: versionID, ActorID: meta.Principal.MembershipID})
+	if err != nil {
+		out.UserErrors, err = mutationInventoryError(err, input.ClientMutationID)
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	row := rowRaw.(database.OriginVersion)
+	revision, err := r.inventoryOriginRevision(ctx, meta.TenantID, row.OriginID)
+	if err != nil {
+		return nil, err
+	}
+	out.Version = inventoryVersion(row, revision)
+	return out, nil
+}
+
 func (r *mutationResolver) requestOriginCataloging(ctx context.Context, input graphql1.RequestOriginCatalogingInput) (*graphql1.OriginVersionPayload, error) {
 	meta, err := inventoryMutationMeta(ctx)
 	if err != nil {
@@ -554,12 +595,14 @@ func (r *mutationResolver) requestOriginCataloging(ctx context.Context, input gr
 		}
 		return out, nil
 	}
-	row := rowRaw.(database.OriginVersion)
+	result := rowRaw.(inventoryrequest.Result)
+	row := result.Version
 	revision, err := r.inventoryOriginRevision(ctx, meta.TenantID, row.OriginID)
 	if err != nil {
 		return nil, err
 	}
 	out.Version = inventoryVersion(row, revision)
+	out.SourcesExpired = &result.SourcesExpired
 	return out, nil
 }
 

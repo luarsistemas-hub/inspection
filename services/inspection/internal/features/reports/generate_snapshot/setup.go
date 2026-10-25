@@ -31,6 +31,7 @@ type Input struct {
 	Requirements                                        []report.Requirement
 	Findings                                            []report.Finding
 	Evidence                                            []report.Evidence
+	Inventory                                           *report.InventorySection
 	PublicationPolicyVersion                            int64
 	PublicationMode                                     string
 	ActorID                                             identity.ID
@@ -85,7 +86,11 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 	if hasVideoEvidence(input.Evidence) {
 		findings = consolidateFindings(findings, componentLabels(input.Evidence, input.Requirements))
 	}
-	snapshot := report.Snapshot{SchemaVersion: 1, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, PromptDigest: input.PromptDigest, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Context: input.Context, Requirements: input.Requirements, Findings: findings, Evidence: input.Evidence, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
+	schemaVersion := 1
+	if input.Inventory != nil {
+		schemaVersion = 2
+	}
+	snapshot := report.Snapshot{SchemaVersion: schemaVersion, ReportID: reportID, InspectionID: input.InspectionID.String(), Mode: input.Mode, Classification: input.Classification, TemplateVersionID: input.TemplateVersionID, ReferenceVersionID: input.ReferenceVersionID, PromptDigest: input.PromptDigest, ReasonCodes: input.ReasonCodes, Timeline: input.Timeline, Coverage: input.Coverage, Context: input.Context, Requirements: input.Requirements, Findings: findings, Evidence: input.Evidence, Inventory: input.Inventory, Advisory: "Esta triagem interna descreve alterações observadas e não atribui culpa, custo, responsabilidade ou consequência automática."}
 	if input.VideoPlanID != nil {
 		snapshot.VideoPlanID = input.VideoPlanID.String()
 		snapshot.ScopeStatements = VideoScopeStatements(hasReference(input.ReferenceVersionID), input.Requirements)
@@ -118,7 +123,7 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 		}
 		return Result{SnapshotID: latest.ID, Version: latest.VersionNumber, JSONDigest: latest.JSONDigest, HTMLDigest: latest.HTMLDigest}, nil
 	}
-	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, VideoPlanID: input.VideoPlanID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, VersionNumber: version, PDFRenderVersion: 1, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
+	row := database.ReportSnapshot{ID: id, TenantID: input.TenantID, InspectionID: input.InspectionID, ProjectID: input.ProjectID, VideoPlanID: input.VideoPlanID, Mode: input.Mode, Classification: input.Classification, JSONDigest: jsonDigest, HTMLDigest: htmlDigest, SchemaVersion: schemaVersion, VersionNumber: version, PDFRenderVersion: 1, PublicationPolicyVersion: input.PublicationPolicyVersion, CanonicalJSON: canonical, HTML: htmlJSON, CreatedAt: now.UTC()}
 	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := setSnapshotTenant(tx, input.TenantID); err != nil {
 			return err

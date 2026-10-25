@@ -1,6 +1,7 @@
 package core
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -87,5 +88,109 @@ func TestHTMLIsInternalAndEscaped(t *testing.T) {
 	}
 	if presentClassification("UNKNOWN") != "Situação não reconhecida" || presentSeverity("UNKNOWN") != "Situação não reconhecida" {
 		t.Fatal("unknown report codes must use the safe fallback")
+	}
+}
+
+func TestInventorySnapshotV2RendersProblemsBeforeEvidenceAndValidatesPairs(t *testing.T) {
+	snapshot := validSnapshot()
+	snapshot.SchemaVersion = 2
+	snapshot.Evidence = []Evidence{{ID: "origin", RequirementKey: "env:kitchen", Role: "REFERENCE"}, {ID: "current", RequirementKey: "env:kitchen", Role: "CURRENT"}}
+	snapshot.Inventory = &InventorySection{Reference: InventoryReference{VersionID: snapshot.ReferenceVersionID, VersionNumber: 3, Purpose: "MOVE_IN", ActivatedAt: "2026-01-01T00:00:00Z"}, Problems: []InventoryEntry{{ItemIdentityID: "item-1", Environment: "Cozinha", Type: "SINK", Name: "Pia", Status: "MISSING", Pairs: []InventoryEvidencePair{{Origin: "origin", Current: "current", Decision: "SAME_VIEW"}}}}}
+	html, err := HTML(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(html), "Problemas do inventário") || !strings.Contains(string(html), "Pia") {
+		t.Fatalf("inventory report section missing: %s", html)
+	}
+	if strings.Contains(string(html), "item-1") || strings.Contains(string(html), "SAME_VIEW") || strings.Contains(string(html), "MISSING") {
+		t.Fatal("customer-facing inventory text must not expose internal IDs or raw matcher/status codes")
+	}
+	if !strings.Contains(string(html), "Item ausente") || !strings.Contains(string(html), "Referência") || !strings.Contains(string(html), "Vistoria atual") {
+		t.Fatal("inventory pair must render localized labels and side-by-side evidence")
+	}
+	if strings.Index(string(html), "Problemas do inventário") > strings.Index(string(html), "Evidências") {
+		t.Fatal("inventory exceptions must precede evidence")
+	}
+	snapshot.Inventory.Problems[0].Pairs[0].Current = "unknown"
+	if err := Validate(snapshot); err == nil {
+		t.Fatal("pair referencing unknown evidence was accepted")
+	}
+}
+
+func TestLegacySnapshotHTMLRemainsDeterministic(t *testing.T) {
+	first, err := HTML(validSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := HTML(validSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != string(second) {
+		t.Fatal("v1 HTML changed between renders")
+	}
+}
+
+func v2Snapshot() Snapshot {
+	snapshot := validSnapshot()
+	snapshot.SchemaVersion = 2
+	snapshot.Classification = "NORMAL"
+	snapshot.Inventory = &InventorySection{Reference: InventoryReference{VersionID: "version-1", VersionNumber: 2, Purpose: "MOVE_IN", ActivatedAt: "2026-01-01T00:00:00Z"}, Coverage: &InventoryCoverage{ExpectedItems: 4, AssessedItems: 4, EnvironmentsNotCaptured: []string{}, EnvironmentsAddedDuringCapture: []string{}}, Problems: []InventoryEntry{}, Informational: []InventoryEntry{}}
+	return snapshot
+}
+
+func TestUT266NormalInventoryRendersSummaryOnly(t *testing.T) {
+	html, err := HTML(v2Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(html), `id="inventory-summary"`) || strings.Contains(string(html), `id="inventory-problems"`) || !strings.Contains(string(html), "4 de 4 itens avaliados") {
+		t.Fatalf("NORMAL inventory report must render only the summary: %s", html)
+	}
+}
+
+func TestUT267V1SnapshotRendersByteIdenticalToPreviousRenderer(t *testing.T) {
+	golden, err := os.ReadFile("testdata/v1_report.golden.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html, err := HTML(validSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(html) != string(golden) {
+		t.Fatalf("v1 HTML differs from the pre-change renderer fixture:\n%s", html)
+	}
+}
+
+func TestUT269ValidateRejectsIncompleteV2(t *testing.T) {
+	if err := Validate(v2Snapshot()); err != nil {
+		t.Fatalf("valid v2 rejected: %v", err)
+	}
+	missingReference := v2Snapshot()
+	missingReference.Inventory.Reference.VersionID = ""
+	unknownEvidence := v2Snapshot()
+	unknownEvidence.Inventory.Problems = []InventoryEntry{{Environment: "Sala", Type: "SOFA", Name: "Sofá", Status: "MISSING", Pairs: []InventoryEvidencePair{{Origin: "nowhere", Current: "nobody", Decision: "SAME_VIEW"}}}}
+	noSection := v2Snapshot()
+	noSection.Inventory = nil
+	comparativeWithoutPurpose := v2Snapshot()
+	comparativeWithoutPurpose.Inventory.Reference.Purpose = ""
+	for name, snapshot := range map[string]Snapshot{"missing reference": missingReference, "unknown evidence": unknownEvidence, "v2 without section": noSection, "comparative without purpose": comparativeWithoutPurpose} {
+		if err := Validate(snapshot); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
+
+func TestCatalogingSectionValidatesWithoutCoverageOrPurpose(t *testing.T) {
+	snapshot := v2Snapshot()
+	snapshot.Inventory = &InventorySection{Reference: InventoryReference{VersionID: "draft-1", VersionNumber: 1}, Problems: []InventoryEntry{}, Informational: []InventoryEntry{}}
+	if err := Validate(snapshot); err != nil {
+		t.Fatalf("cataloging section rejected: %v", err)
+	}
+	html, err := HTML(snapshot)
+	if err != nil || !strings.Contains(string(html), "Inventário catalogado nesta vistoria") {
+		t.Fatalf("cataloging summary missing: %v %s", err, html)
 	}
 }

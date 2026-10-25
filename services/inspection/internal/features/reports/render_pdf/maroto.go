@@ -159,6 +159,49 @@ func (r MarotoRenderer) Render(ctx context.Context, document PDFDocument, assets
 		}
 	}
 
+	if inventory := document.Snapshot.Inventory; inventory != nil {
+		for i, line := range inventorySummaryLines(inventory) {
+			prop := props.Text{Size: 9}
+			if i == 0 {
+				prop.Top = 6
+			}
+			addText(line, prop)
+		}
+		if len(inventory.Problems) > 0 {
+			addText("Problemas do inventário", props.Text{Size: 11, Top: 6})
+		}
+		for _, item := range inventory.Problems {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			addText(inventoryProblemHeading(item), props.Text{Size: 10, Top: 4})
+			if item.ConditionBefore != "" || item.ConditionAfter != "" {
+				addText(label(item.ConditionBefore)+" → "+label(item.ConditionAfter), props.Text{Size: 8})
+			}
+			if item.Reason != "" {
+				addText(item.Reason, props.Text{Size: 8})
+			}
+			for _, pair := range item.Pairs {
+				addText("Evidência de referência ↔ vistoria atual", props.Text{Size: 8})
+				paired := make([]core.Evidence, 0, 2)
+				for _, side := range []struct{ id, role string }{{pair.Origin, "REFERENCE"}, {pair.Current, "CURRENT"}} {
+					if side.id == "" {
+						continue
+					}
+					availability := "MISSING"
+					if assets["evidence-"+side.id+".jpg"] != nil {
+						availability = "AVAILABLE"
+					}
+					paired = append(paired, core.Evidence{ID: side.id, Role: side.role, Availability: availability})
+				}
+				if len(paired) > 0 {
+					if err := addEvidenceRows(ctx, documentMaker, paired, assets, item.Name, document.SnapshotID, r.DashboardOrigin); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
 	addText("Evidências", props.Text{Size: 11, Top: 6})
 	evidenceByRequirement := make(map[string][]core.Evidence, len(document.Snapshot.Requirements))
 	for _, evidence := range document.Snapshot.Evidence {
@@ -552,9 +595,38 @@ func label(value string) string {
 		"REFERENCE": "Referência", "CURRENT": "Vistoria atual", "CONSERVATION": "Conservação", "INVENTORY": "Inventário", "CLEANLINESS": "Limpeza", "OBSTRUCTION": "Obstrução", "EVIDENCE_QUALITY": "Qualidade da evidência",
 		"CURRENT_ONLY": "Análise atual", "COMPARE_ORIGIN_CURRENT": "Comparação com referência", "PENDING": "Pendente", "COMPLETED": "Concluída", "FAILED": "Falha técnica", "GPS_MISSING": "Localização ausente", "LOW_QUALITY": "Qualidade insuficiente", "SENSITIVE_DETECTION": "Detecção sensível", "CONSOLIDATED": "Consolidado", "HISTORICAL": "Histórico", "CLASSIFICATION_CRITICAL": "Classificação crítica",
 		"NONE": "Insuficiente", "LOW": "Baixa", "MEDIUM": "Média", "HIGH": "Alta", "CRITICAL": "Crítica", "REVIEW": "Revisar evidência", "RECOVER": "Solicitar complemento", "NO_ACTION": "Nenhuma ação adicional",
+		"MISSING": "Item ausente", "CONDITION_CHANGED": "Condição alterada", "PRESENT_UNCHANGED": "Presente sem alteração relevante", "NOT_OBSERVED": "Não observado", "OUTSIDE_INVENTORY": "Fora do inventário", "IMPROVED": "Condição melhorada", "ENVIRONMENT_NOT_CAPTURED": "Ambiente não capturado",
+		"NEW": "Novo", "GOOD": "Bom", "FAIR": "Regular", "POOR": "Ruim", "NOT_ASSESSABLE": "Não avaliável",
+		"MOVE_IN": "Entrada no imóvel", "CONSTRUCTION_HANDOVER": "Entrega da obra", "POST_RENOVATION": "Pós-reforma", "INVENTORY_UPDATE": "Atualização do inventário", "CONTESTATION_ADJUSTMENT": "Ajuste de contestação",
 	}
 	if translated, ok := labels[value]; ok {
 		return translated
 	}
 	return strings.ReplaceAll(strings.ToLower(value), "_", " ")
+}
+
+// inventorySummaryLines opens the inventory section: the reference, the
+// coverage of a comparative report and, without problems, the all-clear line.
+func inventorySummaryLines(inventory *core.InventorySection) []string {
+	lines := []string{"Inventário catalogado nesta vistoria"}
+	if inventory.Reference.Purpose != "" {
+		lines[0] = "Referência: " + label(inventory.Reference.Purpose)
+	}
+	if inventory.Coverage != nil {
+		lines = append(lines, fmt.Sprintf("%d de %d itens avaliados · %d não observados", inventory.Coverage.AssessedItems, inventory.Coverage.ExpectedItems, inventory.Coverage.NotObserved))
+		if len(inventory.Problems) == 0 {
+			lines = append(lines, "Inventário sem alertas.")
+		}
+	}
+	return lines
+}
+
+// inventoryProblemHeading names the section of one problem; missing items are
+// grouped under "Itens ausentes".
+func inventoryProblemHeading(item core.InventoryEntry) string {
+	section := label(item.Status)
+	if item.Status == "MISSING" {
+		section = "Itens ausentes"
+	}
+	return section + " · " + item.Environment + " · " + item.Name
 }

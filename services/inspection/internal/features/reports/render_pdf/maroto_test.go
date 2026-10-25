@@ -237,3 +237,28 @@ func TestUniqueImageCountIgnoresMissingAndDuplicates(t *testing.T) {
 		t.Fatal("evidence limit not enforced")
 	}
 }
+
+func TestUT273PDFRendersMissingItemsSectionAndReferencePurpose(t *testing.T) {
+	snapshot := validPDFSnapshot()
+	snapshot.SchemaVersion = 2
+	snapshot.Evidence = append(snapshot.Evidence, core.Evidence{ID: "origin-photo", RequirementKey: "env:sala", Role: "REFERENCE"}, core.Evidence{ID: "current-photo", RequirementKey: "env:sala", Role: "CURRENT"})
+	missing := core.InventoryEntry{Environment: "Sala", Type: "SOFA", Name: "Sofá", Status: "MISSING", Pairs: []core.InventoryEvidencePair{{Origin: "origin-photo", Current: "current-photo", Decision: "SAME_VIEW"}}}
+	snapshot.Inventory = &core.InventorySection{Reference: core.InventoryReference{VersionID: "version-1", VersionNumber: 2, Purpose: "MOVE_IN", ActivatedAt: "2026-01-01T00:00:00Z"}, Coverage: &core.InventoryCoverage{ExpectedItems: 3, AssessedItems: 3}, Problems: []core.InventoryEntry{missing}}
+	lines := inventorySummaryLines(snapshot.Inventory)
+	if lines[0] != "Referência: Entrada no imóvel" || len(lines) != 2 {
+		t.Fatalf("summary lines = %q", lines)
+	}
+	if heading := inventoryProblemHeading(missing); !strings.HasPrefix(heading, "Itens ausentes") || !strings.Contains(heading, "Sofá") {
+		t.Fatalf("missing item heading = %q", heading)
+	}
+	result, err := (MarotoRenderer{}).Render(context.Background(), PDFDocument{SnapshotID: "snapshot-v2", Version: 1, Snapshot: snapshot, Internal: true}, pdf.AssetBundle{
+		"evidence-origin-photo.jpg":  jpegBytes(t, 320, 240),
+		"evidence-current-photo.jpg": jpegBytes(t, 240, 320),
+	})
+	if err != nil || !bytes.HasPrefix(result, []byte("%PDF-")) {
+		t.Fatalf("v2 PDF render failed: %v", err)
+	}
+	if got := strings.Count(string(result), "/Subtype /Image"); got < 2 {
+		t.Fatalf("pair images embedded = %d, want the reference and current photos", got)
+	}
+}

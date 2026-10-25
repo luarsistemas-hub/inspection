@@ -84,6 +84,35 @@ func TestService_CreateDraft(t *testing.T) {
 	}
 }
 
+func TestUT202RetryDraftResetsFailedJobsAndDraftAtomically(t *testing.T) {
+	db := inventoryTestDB(t)
+	tenant, versionID, inspectionID, actor := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	failed := "FAILED"
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	if err := db.Create(&database.OriginVersion{ID: versionID, TenantID: tenant, OriginID: identity.NewID(), VersionNumber: 1, Source: "CAPTURE", HasInventory: true, Status: "DRAFT", DraftState: &failed, IdempotencyKey: "retry-draft"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	errorCode := "INVENTORY_ANALYSIS_FAILED"
+	if err := db.Create(&database.InventoryJob{ID: identity.NewID(), TenantID: tenant, InspectionID: inspectionID, OriginVersionID: versionID, Kind: "CATALOG", RequirementKey: "env:kitchen", Status: "FAILED", Attempts: 4, NextAttemptAt: now.Add(-time.Hour), ErrorCode: &errorCode}).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := Service{DB: db, Now: func() time.Time { return now }, Within: func(_ context.Context, _ identity.ID, fn func(*gorm.DB) error) error { return db.Transaction(fn) }}
+	version, err := service.RetryDraft(context.Background(), tenant, versionID, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version.DraftState == nil || *version.DraftState != "PREPARING" {
+		t.Fatalf("draft state = %v, want PREPARING", version.DraftState)
+	}
+	var job database.InventoryJob
+	if err := db.Where("tenant_id=? AND origin_version_id=?", tenant, versionID).Take(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if job.Status != "PENDING" || job.Attempts != 0 || !job.NextAttemptAt.Equal(now) || job.ErrorCode != nil {
+		t.Fatalf("job was not reset: %+v", job)
+	}
+}
+
 func TestService_Decide(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -188,7 +217,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE inspections.inspections (id text, tenant_id text, status text, asset_id text)`,
 		`CREATE TABLE inspections.responsibilities (id text, tenant_id text, inspection_id text, participant_id text, status text, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE inspections.reference_snapshots (id text, tenant_id text, inspection_id text, reference_version_id text)`,
-		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, status text, requirement_key text, environment_identity_id text)`,
+		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, requirement_key text, generation integer NOT NULL DEFAULT 1, environment_identity_id text, status text, attempts integer, next_attempt_at datetime, lease_token text, lease_until datetime, error_code text, prompt_snapshot_id text, input_digest text, created_at datetime, updated_at datetime, UNIQUE(tenant_id,inspection_id,kind,requirement_key,generation))`,
 		`CREATE TABLE analysis.inventory_item_results (id text, tenant_id text, job_id text, inspection_id text, item_identity_id text, status text, condition_after text, outside_type_code text, outside_name text)`,
 		`CREATE TABLE assets.assets (id text, tenant_id text, status text, updated_at datetime)`,
 		`CREATE TABLE messaging.outbox (id text primary key, tenant_id text, type text, schema_version integer, payload blob, correlation_id text, causation_id text, status text, attempts integer, next_attempt_at datetime, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,

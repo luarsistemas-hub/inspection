@@ -9,6 +9,7 @@ import (
 
 	"inspection/libs/identity"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
+	customerreport "inspection/services/inspection/internal/features/reports/customer/core"
 	"inspection/services/inspection/internal/platform/database"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/objectstore"
@@ -76,7 +77,43 @@ func mapReport(row database.ReportSnapshot) *graphql1.Report {
 	for _, value := range snapshot.Timeline {
 		timeline = append(timeline, &graphql1.ReportTimelineEntry{StageID: value.StageID, Classification: optional(value.Classification), Status: value.Status, Position: value.Position})
 	}
-	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+	return &graphql1.Report{ID: row.ID.String(), InspectionID: row.InspectionID.String(), ProjectID: projectID, Version: row.VersionNumber, Mode: row.Mode, Classification: row.Classification, JSONDigest: row.JSONDigest, HTMLDigest: row.HTMLDigest, CanonicalJSON: canonical, HTML: html, CreatedAt: row.CreatedAt.Format(time.RFC3339Nano), Advisory: snapshot.Advisory, Context: context, Requirements: requirements, Inventory: mapCustomerInventory(customerreport.MapInventory(snapshot)), Evidence: &graphql1.ReportEvidenceConnection{Nodes: evidence, PageInfo: pageInfo("", false)}, Findings: findings, Timeline: timeline, PDFStatus: "PENDING"}
+}
+
+func mapCustomerInventory(section *customerreport.InventoryView) *graphql1.CustomerInventory {
+	if section == nil {
+		return nil
+	}
+	out := &graphql1.CustomerInventory{ReferenceVersionNumber: section.ReferenceVersionNumber, Purpose: section.Purpose, Problems: mapCustomerInventoryEntries(section.Problems), Informational: mapCustomerInventoryEntries(section.Informational)}
+	if section.Coverage != nil {
+		out.Coverage = &graphql1.CustomerInventoryCoverage{ExpectedItems: section.Coverage.ExpectedItems, AssessedItems: section.Coverage.AssessedItems, NotObserved: section.Coverage.NotObserved, EnvironmentsNotCaptured: section.Coverage.EnvironmentsNotCaptured, EnvironmentsAddedDuringCapture: section.Coverage.EnvironmentsAddedDuringCapture}
+	}
+	return out
+}
+
+func customerInventoryFromSnapshot(raw []byte) *graphql1.CustomerInventory {
+	var snapshot reportcore.Snapshot
+	if json.Unmarshal(raw, &snapshot) != nil {
+		return nil
+	}
+	return mapCustomerInventory(customerreport.MapInventory(snapshot))
+}
+
+func mapCustomerInventoryEntries(entries []customerreport.InventoryEntry) []*graphql1.CustomerInventoryEntry {
+	out := make([]*graphql1.CustomerInventoryEntry, 0, len(entries))
+	for _, entry := range entries {
+		item := &graphql1.CustomerInventoryEntry{Environment: entry.Environment, Type: entry.Type, Name: entry.Name, Status: entry.Status, ConditionBefore: entry.ConditionBefore, ConditionAfter: entry.ConditionAfter, Reason: entry.Reason, Pairs: make([]*graphql1.CustomerInventoryPair, 0, len(entry.Pairs))}
+		for _, pair := range entry.Pairs {
+			var timestamp *int
+			if pair.TimestampMS != nil {
+				v := int(*pair.TimestampMS)
+				timestamp = &v
+			}
+			item.Pairs = append(item.Pairs, &graphql1.CustomerInventoryPair{OriginEvidenceID: pair.OriginEvidenceID, CurrentEvidenceID: pair.CurrentEvidenceID, OriginSourceAvailability: pair.OriginSourceAvailability, CurrentSourceAvailability: pair.CurrentSourceAvailability, TimestampMs: timestamp})
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func optional(value string) *string {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	resolveprompt "inspection/services/inspection/internal/features/analysis/resolve_prompt"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -111,7 +112,109 @@ func (s Service) RequestOriginCataloging(ctx context.Context, tenantID, assetID,
 		}
 		var err error
 		result, err = s.CreateDraft(tx, DraftInput{TenantID: tenantID, AssetID: assetID, Source: "LEGACY_ORIGIN", ActorMembershipID: actor})
+		if err != nil {
+			return err
+		}
+		return s.requestLegacyCatalogJob(ctx, tx, tenantID, &result)
+	})
+	return result, err
+}
+
+// legacyCatalogKey is the requirement key of the single CATALOG job that
+// catalogs a legacy origin version.
+const legacyCatalogKey = "legacy:origin"
+
+// requestLegacyCatalogJob schedules the CATALOG job over the evidence of the
+// legacy version. The job is keyed to the inspection that captured the legacy
+// origin; without evidence or such an inspection there is nothing to catalog
+// and the empty draft is immediately reviewable.
+func (s Service) requestLegacyCatalogJob(ctx context.Context, tx *gorm.DB, tenantID identity.ID, draft *database.OriginVersion) error {
+	now := s.now()
+	var legacy database.OriginVersion
+	if err := tx.Where("tenant_id=? AND id=?", tenantID, *draft.SourceVersionID).Take(&legacy).Error; err != nil {
 		return err
+	}
+	var inspectionID identity.ID
+	if legacy.ResponsibilityID != nil {
+		var responsibility database.Responsibility
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, *legacy.ResponsibilityID).Take(&responsibility).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		inspectionID = responsibility.InspectionID
+	}
+	var evidence int64
+	if legacy.MediaKind == "VIDEO" {
+		if legacy.VideoPreparationID != nil {
+			if err := tx.Model(&database.VideoFrame{}).Where("tenant_id=? AND preparation_id=? AND representative=true", tenantID, *legacy.VideoPreparationID).Count(&evidence).Error; err != nil {
+				return err
+			}
+		}
+	} else if err := tx.Model(&database.OriginEvidence{}).Where("tenant_id=? AND origin_version_id=?", tenantID, legacy.ID).Count(&evidence).Error; err != nil {
+		return err
+	}
+	if inspectionID == (identity.ID{}) || evidence == 0 {
+		ready := "READY"
+		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND draft_state='PREPARING'", tenantID, draft.ID).Update("draft_state", ready).Error; err != nil {
+			return err
+		}
+		draft.DraftState = &ready
+		return EmitDraftReady(tx, tenantID, draft.ID, identity.ID{}, now)
+	}
+	var inspection database.Inspection
+	if err := tx.Where("tenant_id=? AND id=?", tenantID, inspectionID).Take(&inspection).Error; err != nil {
+		return err
+	}
+	var analysis database.AnalysisPromptSnapshot
+	if err := tx.Where("id=?", inspection.AnalysisPromptSnapshotID).Take(&analysis).Error; err != nil {
+		return err
+	}
+	catalogPrompt, err := resolveprompt.ResolveTask(ctx, tx, analysis.AnalysisType, "INVENTORY_CATALOG", now)
+	if err != nil {
+		return err
+	}
+	snapshotID := catalogPrompt.Snapshot.ID
+	// A discarded earlier draft of the same legacy origin used this key; the job
+	// is re-pointed at the new draft instead of violating uniqueness.
+	var existing database.InventoryJob
+	if err := tx.Where("tenant_id=? AND inspection_id=? AND kind='CATALOG' AND requirement_key=?", tenantID, inspectionID, legacyCatalogKey).Take(&existing).Error; err == nil {
+		return tx.Model(&existing).Updates(map[string]any{"origin_version_id": draft.ID, "status": "PENDING", "attempts": 0, "next_attempt_at": now, "error_code": nil, "lease_token": nil, "lease_until": nil, "prompt_snapshot_id": snapshotID, "updated_at": now}).Error
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, OriginVersionID: draft.ID, Kind: "CATALOG", RequirementKey: legacyCatalogKey, Generation: 1, Status: "PENDING", NextAttemptAt: now, PromptSnapshotID: &snapshotID, CreatedAt: now, UpdatedAt: now}
+	return tx.Create(&job).Error
+}
+
+// RetryDraft resets failed inventory jobs and reopens their draft atomically.
+func (s Service) RetryDraft(ctx context.Context, tenantID, versionID, actor identity.ID) (database.OriginVersion, error) {
+	var result database.OriginVersion
+	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var version database.OriginVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND has_inventory", tenantID, versionID).Take(&version).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.New(apperror.NotFound, "originVersionId", "draft not found")
+			}
+			return err
+		}
+		if version.Status != "DRAFT" || version.DraftState == nil || *version.DraftState != "FAILED" {
+			return apperror.New(apperror.InvalidState, "originVersionId", "only failed inventory drafts can be retried")
+		}
+		now := s.now()
+		jobs := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND status='FAILED'", tenantID, versionID).Updates(map[string]any{"status": "PENDING", "attempts": 0, "next_attempt_at": now, "error_code": nil, "lease_token": nil, "lease_until": nil, "updated_at": now})
+		if jobs.Error != nil {
+			return jobs.Error
+		}
+		if jobs.RowsAffected == 0 {
+			return apperror.New(apperror.InvalidState, "originVersionId", "draft has no failed jobs to retry")
+		}
+		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND draft_state='FAILED'", tenantID, versionID).Update("draft_state", "PREPARING").Error; err != nil {
+			return err
+		}
+		state := "PREPARING"
+		version.DraftState = &state
+		result = version
+		_ = actor // Authorization is enforced by the resolver before this operation.
+		return nil
 	})
 	return result, err
 }
@@ -260,4 +363,31 @@ func (s Service) copyIncluded(tx *gorm.DB, tenant, source, target identity.ID, n
 		}
 	}
 	return nil
+}
+
+// LegacySourcesExpired reports whether a LEGACY_ORIGIN draft catalogs a video
+// origin whose source is gone; cataloging then relies on retained frames.
+func (s Service) LegacySourcesExpired(ctx context.Context, tenantID, draftID identity.ID) (bool, error) {
+	expired := false
+	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		var draft database.OriginVersion
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, draftID).Take(&draft).Error; err != nil {
+			return err
+		}
+		if draft.SourceVersionID == nil {
+			return nil
+		}
+		var legacy database.OriginVersion
+		if err := tx.Where("tenant_id=? AND id=?", tenantID, *draft.SourceVersionID).Take(&legacy).Error; err != nil {
+			return err
+		}
+		if legacy.MediaKind != "VIDEO" || legacy.VideoPreparationID == nil {
+			return nil
+		}
+		var count int64
+		err := tx.Table("media.video_sources AS s").Joins("JOIN media.video_preparation_jobs AS p ON p.tenant_id=s.tenant_id AND p.media_id=s.media_id").Where("s.tenant_id=? AND p.id=? AND (s.status IN ('EXPIRED','DELETING') OR s.original_deleted_at IS NOT NULL)", tenantID, *legacy.VideoPreparationID).Count(&count).Error
+		expired = count > 0
+		return err
+	})
+	return expired, err
 }
