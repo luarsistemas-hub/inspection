@@ -8,6 +8,8 @@ self.addEventListener("activate", (event) => event.waitUntil((async () => {
 })()));
 self.addEventListener("fetch", (event) => {
   const request = event.request; const url = new URL(request.url);
+  // Counterparty sessions and baseline pages are never placed in the capture shell cache.
+  if (url.pathname.startsWith("/baseline/")) return;
   // Never cache pages, GraphQL, credentials, evidence, signed URLs, or any dynamic response.
   if (request.method !== "GET" || url.origin !== self.location.origin || !url.pathname.startsWith("/_next/static/") && !ASSETS.includes(url.pathname)) return;
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => { if (!response.ok) return response; const copy = response.clone(); void caches.open(CACHE).then((cache) => cache.put(request, copy)); return response; })));

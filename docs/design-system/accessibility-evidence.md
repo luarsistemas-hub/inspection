@@ -76,3 +76,7 @@ criterion, browser/OS/AT versions, viewport or zoom, fixture, steps, expected
 and observed behavior, artifact, reviewer and execution date. `not-applicable`
 requires a route/state-specific rationale. A skipped, blocked or untested row
 remains unresolved and cannot be converted into a pass by an axe result.
+
+## Capture counterparty route
+
+`CAP-002` (`/baseline/[token]`) is registered for US-023 and US-024. The reviewer ran E2E-012/E2E-013 in desktop-chrome; both passed and axe reported zero violations. The 55 criterion rows record that run (2026-10-25). The new photo/video capture journeys still need a browser run because this sandbox cannot start Playwright browsers.

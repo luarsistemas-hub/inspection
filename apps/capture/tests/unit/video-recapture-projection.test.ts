@@ -6,7 +6,7 @@ import { VideoCapture } from "../../app/capture/[linkToken]/video-capture";
 vi.mock("@inspection/design-system", async () => {
   const React = await import("react");
   const wrap = (tag: string) => ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => React.createElement(tag, props, children);
-  return { Alert: wrap("div"), Button: wrap("button"), Card: wrap("section"), Field: wrap("div"), ProductIdentity: () => null, Status: wrap("span"), Textarea: wrap("textarea"), ThemeSelector: () => null };
+  return { Alert: wrap("div"), Button: wrap("button"), Card: wrap("section"), Field: wrap("div"), ProductIdentity: () => null, Select: wrap("select"), Status: wrap("span"), Textarea: wrap("textarea"), ThemeSelector: () => null };
 });
 
 describe("video recapture projection", () => {
@@ -18,6 +18,8 @@ describe("video recapture projection", () => {
       recaptureDeadlineAt: "2026-10-18T12:00:00Z",
       policy: {},
       requirements: [],
+      answers: [],
+      environments: [],
       comparisonMode: "FIXED_ORIGIN",
       online: true,
       onSessionFailure: () => false,

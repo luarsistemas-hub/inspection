@@ -1,8 +1,10 @@
 query ExternalCaptureBootstrap {
   externalCapture {
-    responsibilityId recaptureRequestId recaptureDeadlineAt replacementDeadlineAt status confirmationOnly kind mediaKind disclosureVersion reference policy
+    responsibilityId recaptureRequestId recaptureDeadlineAt replacementDeadlineAt status confirmationOnly kind mediaKind disclosureVersion captureLayout reference policy
+    environments { requirementKey identityId typeCode name expected addedDuringCapture mediaCount status }
+    reviewHandoff { inspectionId originVersionId }
     referenceItems { mediaId evidenceId sourceMediaId timestampMs environment component view ambiguous gap requirementKey description reason availability imageUrl imageUrlExpiresAt }
-    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed }
+    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed environmentIdentityId environmentTypeCode environmentName expected addedDuringCapture }
     answers { requirementKey mediaIds impossibilityReason version }
   }
 }
@@ -30,6 +32,10 @@ mutation CompleteMediaUpload($input: CompleteMediaUploadInput!) { completeMediaU
 mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMetadata(input: $input) { media { id status replacesMediaId } userErrors { code field message correlationId } clientMutationId } }
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation DeclareCaptureEnvironment($input: DeclareCaptureEnvironmentInput!) { declareCaptureEnvironment(input: $input) { environment { requirementKey identityId typeCode name expected addedDuringCapture mediaCount status } userErrors { code field message correlationId } clientMutationId } }
+
+mutation RecordCaptureQualityWarning($input: RecordCaptureQualityWarningInput!) { recordCaptureQualityWarning(input: $input) { flags userErrors { code field message correlationId } clientMutationId } }
 
 
 mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }

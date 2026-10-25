@@ -6,7 +6,8 @@ import { readyForSubmission, type CaptureDraft } from "@/pwa/drafts";
 const requirement = {
   key: "front", section: "property", label: "Frente", instructions: null, required: true,
   minimumMedia: 1, maximumMedia: 1, descriptionRequired: false,
-  captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: true
+  captureSourcePolicy: "ANY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: true,
+  environmentIdentityId: null, environmentTypeCode: null, environmentName: null, expected: null, addedDuringCapture: null
 };
 
 describe("Capture migration contracts", () => {

@@ -100,6 +100,8 @@ button.capture-photo-trigger:hover:not(:disabled) { border-color: var(--inspecti
 .capture-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; border-block-end: 1px solid var(--inspection-border); padding-block-end: .45rem; }
 .capture-section-heading h3 { margin: 0; }
 .capture-section-heading span { color: var(--inspection-muted); font: .68rem/1.3 var(--inspection-font-mono); }
+.capture-environment-add { display: grid; gap: .7rem; padding-block-start: .65rem; border-block-start: 1px solid var(--inspection-border); }
+.capture-environment-add h3 { margin: 0; }
 .capture-media-status { display: grid; gap: .7rem; }
 .capture-card ul { display: grid; gap: .6rem; margin: 0; padding-inline-start: 1.2rem; }
 .capture-card li { color: var(--inspection-muted); font-size: .84rem; }

@@ -5,7 +5,7 @@ import { guidedProgress, guidedRequirements, nextGuidedRequirement, requirementS
 
 type Requirement = ExternalCaptureBootstrapQuery["externalCapture"]["requirements"][number];
 type Answer = ExternalCaptureBootstrapQuery["externalCapture"]["answers"][number];
-const requirement = (key: string): Requirement => ({ key, section: "Referência", label: "Referência", instructions: key, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", comparisonTarget: "FIXED_ORIGIN", impossibilityAllowed: true });
+const requirement = (key: string): Requirement => ({ key, section: "Referência", label: "Referência", instructions: key, required: true, minimumMedia: 1, maximumMedia: 1, descriptionRequired: false, captureSourcePolicy: "CAMERA_DEFAULT", comparisonTarget: "FIXED_ORIGIN", impossibilityAllowed: true, environmentIdentityId: null, environmentTypeCode: null, environmentName: null, expected: null, addedDuringCapture: null });
 const answer = (key: string, mediaIds: string[], impossibilityReason: string | null = null): Answer => ({ requirementKey: key, mediaIds, impossibilityReason, version: 1 });
 const draft = (key: string, mediaId: string | undefined, mediaStatus: string | undefined, metadataSaved: boolean, replacesMediaId?: string): CaptureDraft => ({ metadata: { requirementKey: key }, mediaId, mediaStatus, metadataSaved, replacesMediaId }) as CaptureDraft;
 

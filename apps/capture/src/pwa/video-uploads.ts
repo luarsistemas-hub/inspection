@@ -33,7 +33,7 @@ export async function uploadVideoDraft(source: VideoDraft, onProgress?: (complet
     if (draft.state === "SAVED") { draft = { ...draft, state: "CONFIRMED" }; await saveVideoDraft(draft); }
     if (!draft.sha256 || draft.sizeBytes < 1) throw new Error("A gravação não tem integridade confirmada.");
     if (!draft.mediaId) {
-      const result = await graphql(captureOperations.createUpload, { input: { requirementKey: null, contentType: draft.contentType, sizeBytes: draft.sizeBytes, sha256: draft.sha256, attemptId: draft.id, clientMutationId: `${draft.id}:create` } });
+      const result = await graphql(captureOperations.createUpload, { input: { requirementKey: draft.requirementKey ?? null, contentType: draft.contentType, sizeBytes: draft.sizeBytes, sha256: draft.sha256, attemptId: draft.id, clientMutationId: `${draft.id}:create` } });
       throwOnUserErrors(result.createMediaUpload);
       const upload = result.createMediaUpload.upload;
       if (!upload) throw new Error("Não foi possível iniciar o envio.");
@@ -77,7 +77,7 @@ export async function uploadVideoDraft(source: VideoDraft, onProgress?: (complet
       }
     }
     if (!draft.metadataSaved) {
-      const saved = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: draft.kind === "RECAPTURE" ? "video:supplement" : "video:main", description: "Vídeo contínuo", captureSource: draft.source, deviceContext: null, gps: null, replacesMediaId: draft.replacesMediaId ?? null, clientMutationId: `${draft.id}:metadata` } });
+      const saved = await graphql(captureOperations.metadata, { input: { mediaId, requirementKey: draft.requirementKey ?? (draft.kind === "RECAPTURE" ? "video:supplement" : "video:main"), description: draft.requirementKey ? "Clipe do ambiente" : "Vídeo contínuo", captureSource: draft.source, deviceContext: null, gps: null, replacesMediaId: draft.replacesMediaId ?? null, clientMutationId: `${draft.id}:metadata` } });
       throwOnUserErrors(saved.saveCaptureMetadata);
       draft = { ...draft, metadataSaved: true };
     }
