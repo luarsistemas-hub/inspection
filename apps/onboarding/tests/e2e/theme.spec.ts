@@ -15,7 +15,7 @@ test("Cobalto themes preserve the onboarding entry at supported viewport widths"
   await expect(page.getByText(/Os campos ficam neste navegador/)).toBeVisible();
   const reducedMotionDuration = await page.locator(".inspection-info-disclosure__panel").evaluate((element) => getComputedStyle(element).transitionDuration);
   expect(Number.parseFloat(reducedMotionDuration)).toBeLessThan(0.001);
-  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  const axe = await new AxeBuilder({ page: page as never }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
 
   for (const width of [320, 360, 768, 1024, 1440]) {

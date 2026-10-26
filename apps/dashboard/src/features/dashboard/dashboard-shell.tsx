@@ -155,7 +155,7 @@ function OperationsDashboard({ section, capability, reportsRefreshKey, operation
   if (section === "Vistorias") return <InspectionsJourney canMutate={capability.canMutate} canPromoteOrigin={capability.canPromoteOrigin} options={formOptions} />;
   if (section === "Projetos e etapas") return <ProjectsJourney canMutate={capability.canMutate} options={formOptions} />;
   if (section === "Laudos") return <ReportsJourney canPublish={capability.canPublish} refreshKey={reportsRefreshKey} />;
-  if (section === "Inventários") return <BaselinesJourney canReview={capability.canMutate} isCustomer={capability.audience === "customer"} readHistory={capability.audience === "internal"} />;
+  if (section === "Inventários") return <BaselinesJourney canReview={capability.canMutate} isCustomer={capability.audience === "customer"} readHistory={capability.audience === "internal"} canReadTrail={capability.canReadTrail} />;
   if (section === "Triagem") return <TriageJourney capability={capability} />;
   if (section === "Revisão de privacidade") return capability.canManageTriage ? <PrivacyReviewJourney /> : <p role="alert">Acesso negado.</p>;
   if (section === "Notificações") return null;

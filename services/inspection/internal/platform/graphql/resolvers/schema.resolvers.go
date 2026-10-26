@@ -3020,6 +3020,17 @@ func (r *queryResolver) CounterpartyBaseline(ctx context.Context) (*graphql1.Cou
 		return nil, err
 	}
 	view := raw.(counterpartycore.BaselineView)
+	available := []database.InventoryItemEvidence{}
+	for _, environment := range view.Inventory.Environments {
+		for _, item := range environment.Items {
+			for _, evidence := range item.Evidence {
+				if evidence.Availability == "AVAILABLE" {
+					available = append(available, evidence.Evidence)
+				}
+			}
+		}
+	}
+	media := signCounterpartyEvidence(ctx, r.DB, r.Store, tenantID, available)
 	baseline := &graphql1.CounterpartyBaselineInventory{HasInventory: view.Inventory.HasInventory, Environments: []*graphql1.CounterpartyBaselineEnvironment{}}
 	for _, environment := range view.Inventory.Environments {
 		mappedEnvironment := &graphql1.CounterpartyBaselineEnvironment{TypeCode: environment.Environment.TypeCode, Name: environment.Environment.Name, Items: []*graphql1.CounterpartyBaselineItem{}}
@@ -3027,7 +3038,11 @@ func (r *queryResolver) CounterpartyBaseline(ctx context.Context) (*graphql1.Cou
 			mappedItem := &graphql1.CounterpartyBaselineItem{TypeCode: item.Item.TypeCode, Name: item.Item.Name, Material: item.Item.Material, Color: item.Item.Color, Quantity: item.Item.Quantity, Condition: item.Item.Condition, Observation: item.Item.Observation, Limitation: item.Item.Limitation, Evidence: []*graphql1.CounterpartyBaselineEvidence{}}
 			for _, evidence := range item.Evidence {
 				if evidence.Availability == "AVAILABLE" {
-					mappedItem.Evidence = append(mappedItem.Evidence, &graphql1.CounterpartyBaselineEvidence{Kind: evidence.Evidence.Kind, Position: evidence.Evidence.Position})
+					mapped := &graphql1.CounterpartyBaselineEvidence{Kind: evidence.Evidence.Kind, Position: evidence.Evidence.Position}
+					if signed, ok := media[evidence.Evidence.ID]; ok {
+						mapped.URL, mapped.TimestampMs = &signed.url, signed.timestampMs
+					}
+					mappedItem.Evidence = append(mappedItem.Evidence, mapped)
 				}
 			}
 			mappedEnvironment.Items = append(mappedEnvironment.Items, mappedItem)
@@ -3035,6 +3050,13 @@ func (r *queryResolver) CounterpartyBaseline(ctx context.Context) (*graphql1.Cou
 		baseline.Environments = append(baseline.Environments, mappedEnvironment)
 	}
 	result := &graphql1.CounterpartyBaseline{Baseline: baseline, DeadlineAt: view.Invitation.DeadlineAt.UTC().Format(time.RFC3339Nano), Response: view.Invitation.Response, Resolution: view.Invitation.Resolution, AdjustmentStatus: nonEmptyStringPointer(view.AdjustmentStatus), NewerVersionExists: view.Newer, ReadOnly: view.ReadOnly}
+	if view.Inventory.Version != nil {
+		result.Purpose = view.Inventory.Version.Purpose
+		if view.Inventory.Version.ActivatedAt != nil {
+			value := view.Inventory.Version.ActivatedAt.UTC().Format(time.RFC3339Nano)
+			result.ActivatedAt = &value
+		}
+	}
 	if view.Invitation.RespondedAt != nil {
 		value := view.Invitation.RespondedAt.UTC().Format(time.RFC3339Nano)
 		result.RespondedAt = &value

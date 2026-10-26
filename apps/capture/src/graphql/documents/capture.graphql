@@ -42,7 +42,7 @@ mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $inpu
 
 mutation SubmitRecapture($input: SubmitRecaptureInput!) { submitRecapture(input: $input) { recapture { id status } userErrors { code field message correlationId } clientMutationId } }
 
-query CounterpartyBaseline { counterpartyBaseline { deadlineAt response respondedAt resolution resolutionReason adjustmentStatus newerVersionExists readOnly baseline { hasInventory environments { typeCode name items { typeCode name material color quantity condition observation limitation evidence { kind position } } } } } }
+query CounterpartyBaseline { counterpartyBaseline { purpose activatedAt deadlineAt response respondedAt resolution resolutionReason adjustmentStatus newerVersionExists readOnly baseline { hasInventory environments { typeCode name items { typeCode name material color quantity condition observation limitation evidence { kind position url timestampMs } } } } } }
 
 mutation RequestCounterpartyOtp($input: RequestCounterpartyOtpInput!) { requestCounterpartyOtp(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 

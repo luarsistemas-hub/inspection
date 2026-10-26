@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "d8f48a2074c6a2b8de07989b8a665714c7797bfba91c0fc1cb9bda95541d7ebf",
+  "schemaSha256": "32897327803ea8027ded72b84a5d64a422116add24b517f0bf3a79e8d5d3e734",
   "capabilities": [
     {
       "root": "Query.me",
@@ -1390,112 +1390,112 @@
         {
           "name": "AcceptProcessing",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "AcknowledgeBaseline",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "BeginVideoCapture",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "CompleteMediaUpload",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "ContestBaseline",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "CounterpartyBaseline",
           "type": "query",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "CreateMediaUpload",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "DeclareCaptureEnvironment",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "DeclareCaptureImpossibility",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "ExternalCaptureBootstrap",
           "type": "query",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "PresignMediaParts",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "RecordCaptureQualityWarning",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "RequestCounterpartyOtp",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "RequestInvitationOtp",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "RevokeInvitation",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "SaveCaptureMetadata",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "SubmitCapture",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "SubmitRecapture",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "VerifyCounterpartyOtp",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "VerifyInvitationOtp",
           "type": "mutation",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "VideoPreparation",
           "type": "query",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         },
         {
           "name": "VideoUploadStatus",
           "type": "query",
-          "documentSha256": "f95dbe69a93425e1fecc6c7b7145e33f22d3249b493d569ee239ee97cf8021eb"
+          "documentSha256": "7334314c97d6dfb889296b0665bdcc26ea5cf4c04886b1c9055aec7795a04fa6"
         }
       ]
     },

@@ -229,3 +229,25 @@ func inventoryResolverContext() context.Context {
 	tenantID, identityID := identity.NewID(), identity.NewID()
 	return requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{TenantID: tenantID, IdentityID: identityID, MembershipID: identity.NewID()}, CorrelationID: "inventory-test"})
 }
+
+func TestResolver_InventoryItemPatchDistinguishesUnknownFromUnchanged(t *testing.T) {
+	empty, clear := "", true
+	patch, err := inventoryItemPatch(graphql1.InventoryItemPatchInput{Material: &empty, Color: &empty, ClearQuantity: &clear})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Material == nil || *patch.Material != "" || patch.Color == nil || *patch.Color != "" || !patch.ClearQuantity || patch.Quantity != nil {
+		t.Fatalf("cleared attributes = %+v, want explicit unknown values", patch)
+	}
+	unchanged, err := inventoryItemPatch(graphql1.InventoryItemPatchInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Material != nil || unchanged.Color != nil || unchanged.ClearQuantity {
+		t.Fatalf("omitted attributes = %+v, want unchanged", unchanged)
+	}
+	bad := "bad-id"
+	if _, err := inventoryItemPatch(graphql1.InventoryItemPatchInput{EnvironmentID: &bad}); err == nil {
+		t.Fatal("malformed environment id was accepted")
+	}
+}

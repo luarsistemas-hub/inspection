@@ -243,52 +243,8 @@ func (s Service) StartFromInspection(ctx context.Context, tenantID, inspectionID
 		if err != nil {
 			return err
 		}
-		var jobs []database.InventoryJob
-		if err := tx.Where("tenant_id=? AND inspection_id=? AND kind='COMPARE' AND status='SUCCEEDED'", tenantID, inspectionID).Find(&jobs).Error; err != nil {
+		if err := s.importComparison(tx, tenantID, inspection.ID, result.ID); err != nil {
 			return err
-		}
-		jobIDs := make([]identity.ID, 0, len(jobs))
-		jobByID := make(map[identity.ID]database.InventoryJob, len(jobs))
-		for _, job := range jobs {
-			jobIDs = append(jobIDs, job.ID)
-			jobByID[job.ID] = job
-		}
-		if len(jobIDs) > 0 {
-			var results []database.InventoryItemResult
-			if err := tx.Where("tenant_id=? AND job_id IN ?", tenantID, jobIDs).Find(&results).Error; err != nil {
-				return err
-			}
-			for _, itemResult := range results {
-				switch itemResult.Status {
-				case "CONDITION_CHANGED":
-					if itemResult.ItemIdentityID == nil || itemResult.ConditionAfter == nil {
-						continue
-					}
-					var copied database.InventoryItem
-					if err := tx.Where("tenant_id=? AND origin_version_id=? AND identity_id=?", tenantID, result.ID, *itemResult.ItemIdentityID).First(&copied).Error; err != nil {
-						continue
-					}
-					copied.Decision = "PENDING"
-					copied.Suggested = marshal(map[string]any{"condition": *itemResult.ConditionAfter})
-					copied.Version++
-					if err := tx.Save(&copied).Error; err != nil {
-						return err
-					}
-				case "OUTSIDE_INVENTORY":
-					job := jobByID[itemResult.JobID]
-					if job.EnvironmentIdentityID == nil || itemResult.OutsideTypeCode == nil || itemResult.OutsideName == nil {
-						continue
-					}
-					var env database.InventoryEnvironment
-					if err := tx.Where("tenant_id=? AND origin_version_id=? AND identity_id=?", tenantID, result.ID, *job.EnvironmentIdentityID).First(&env).Error; err != nil {
-						continue
-					}
-					created := database.InventoryItem{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: result.ID, EnvironmentID: env.ID, IdentityID: identity.NewID(), TypeCode: *itemResult.OutsideTypeCode, Name: *itemResult.OutsideName, Condition: "NOT_ASSESSABLE", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Version: 1, Suggested: marshal(map[string]any{"status": "OUTSIDE_INVENTORY"}), CreatedAt: s.now(), UpdatedAt: s.now()}
-					if err := tx.Create(&created).Error; err != nil {
-						return err
-					}
-				}
-			}
 		}
 		var active database.Origin
 		if err := tx.Where("tenant_id=? AND asset_id=?", tenantID, inspection.AssetID).First(&active).Error; err == nil && active.ActiveVersionID != nil && *active.ActiveVersionID != source.ID {

@@ -215,6 +215,8 @@ type ItemPatch struct {
 	Material      *string
 	Color         *string
 	Quantity      *int
+	// ClearQuantity makes the quantity unknown; it excludes Quantity.
+	ClearQuantity bool
 	Condition     *string
 	Observation   *string
 	Limitation    *string
@@ -274,6 +276,9 @@ func ValidateItemPatch(patch ItemPatch) error {
 	}
 	if patch.Quantity != nil && (*patch.Quantity < MinQuantity || *patch.Quantity > MaxQuantity) {
 		return apperror.New(apperror.InvalidInput, "quantity", "quantity must be between 1 and 999")
+	}
+	if patch.ClearQuantity && patch.Quantity != nil {
+		return apperror.New(apperror.InvalidInput, "quantity", "quantity cannot be set and cleared together")
 	}
 	if patch.Condition != nil && !IsCondition(*patch.Condition) {
 		return apperror.New(apperror.InvalidInput, "condition", "unknown condition")

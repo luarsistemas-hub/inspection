@@ -558,6 +558,10 @@ legend { padding-inline: var(--inspection-space-2); font-weight: 700; }
 .baseline-activation,
 .baseline-environment-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .baseline-version-list { display: grid; gap: 1rem; padding: 0; list-style: none; }
+.baseline-trail { display: grid; gap: 1rem; }
+.baseline-trail-list { display: grid; gap: 0.75rem; padding: 0; list-style: none; }
+.baseline-trail-list li { border: 1px solid var(--color-outline, #c7c4bf); border-radius: 0.75rem; padding: 0.75rem 1rem; }
+.baseline-trail-list p { margin: 0.2rem 0; }
 .baseline-version-list article,
 .baseline-environment,
 .baseline-activation,

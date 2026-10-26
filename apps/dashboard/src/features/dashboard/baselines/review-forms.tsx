@@ -38,6 +38,21 @@ export function RejectItemForm({ itemName, onSubmit }: { itemName: string; onSub
   </form>;
 }
 
+/**
+ * editItemPatch builds the edit patch from the form values. A blank material
+ * or color is sent as an empty string and a blank quantity as clearQuantity,
+ * because the API reads null as "keep the current value".
+ */
+export function editItemPatch(item: ReviewItem, values: { name: string; typeCode: string; condition: string; material: string; color: string; quantity: string }): G.InventoryItemPatchInput {
+  const quantity = values.quantity.trim();
+  return {
+    name: values.name.trim(), typeCode: values.typeCode, condition: values.condition,
+    material: values.material.trim(), color: values.color.trim(),
+    quantity: quantity ? Number(quantity) : null, clearQuantity: quantity ? null : true,
+    observation: item.observation, limitation: item.limitation, environmentId: item.environmentId,
+  };
+}
+
 /** EditItemForm edits the descriptive fields of one item. */
 export function EditItemForm({ item, onSubmit }: { item?: ReviewItem; onSubmit: (patch: G.InventoryItemPatchInput) => Promise<void> }) {
   const [name, setName] = useState(item?.name ?? "");
@@ -59,12 +74,7 @@ export function EditItemForm({ item, onSubmit }: { item?: ReviewItem; onSubmit: 
     event.preventDefault();
     if (!item || !name.trim()) return;
     setSubmitting(true);
-    void onSubmit({
-      name: name.trim(), typeCode, condition,
-      material: material.trim() || null, color: color.trim() || null,
-      quantity: quantity.trim() ? Number(quantity) : null,
-      observation: item.observation, limitation: item.limitation, environmentId: item.environmentId,
-    }).finally(() => setSubmitting(false));
+    void onSubmit(editItemPatch(item, { name, typeCode, condition, material, color, quantity })).finally(() => setSubmitting(false));
   }}>
     <Field label="Nome do item"><Input required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></Field>
     <Field label="Tipo do item"><Select value={typeCode} onChange={(event) => setTypeCode(event.target.value)}>{itemTypeOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</Select></Field>

@@ -543,3 +543,78 @@ func TestAddedEnvironmentComparesWithoutBaselineRows(t *testing.T) {
 		t.Fatalf("results = %+v", rows)
 	}
 }
+
+func TestCompareDeclaresOnlyPairsWhoseImagesAreSent(t *testing.T) {
+	env := inventorytest.BaselineEnvironment{Name: "Sala", TypeCode: "LIVING_ROOM"}
+	for i := 0; i < 13; i++ {
+		env.Items = append(env.Items, inventorytest.BaselineItem{Name: fmt.Sprintf("Item %02d", i), Condition: "GOOD", Evidence: 1})
+	}
+	f := newCompareFixture(t, 13, env)
+	proposals := 0
+	f.gateway.Respond = func(request llm.StructuredRequest) (string, error) {
+		if request.Mode == "INVENTORY_MATCH" {
+			var in matchRequest
+			if err := json.Unmarshal([]byte(request.UserPrompt), &in); err != nil {
+				return "", err
+			}
+			if in.Stage == "verify" {
+				return mustJSON(t, matchOutput{Pairs: in.ProposedPairs}), nil
+			}
+			// Each origin view matches a distinct current photo, so every pair
+			// needs two images of its own.
+			candidate := in.CurrentEvidenceIDs[proposals%len(in.CurrentEvidenceIDs)]
+			proposals++
+			return mustJSON(t, matchOutput{Pairs: []matchPair{{OriginEvidenceID: in.OriginEvidenceID, CurrentEvidenceID: candidate, Decision: "SAME_VIEW", Reason: "mesma parede"}}}), nil
+		}
+		rows := make([]map[string]any, 0, len(f.baseline.Items))
+		for _, item := range f.baseline.Items {
+			rows = append(rows, claim(item, "CONDITION_CHANGED", "conditionAfter", "FAIR"))
+		}
+		return compareJSON(t, rows...), nil
+	}
+	if err := f.process(t, f.job); err != nil {
+		t.Fatal(err)
+	}
+	call := f.gateway.Calls("INVENTORY_COMPARE")[0]
+	if len(call.Images) > maxRequestImages {
+		t.Fatalf("compare sent %d images", len(call.Images))
+	}
+	sent := map[string]bool{}
+	for _, image := range call.Images {
+		sent[image.EvidenceID] = true
+	}
+	data := userData(t, call)
+	declared := map[string]bool{}
+	for _, raw := range data["confirmedPairs"].([]any) {
+		pair := raw.(map[string]any)
+		if !sent[pair["originEvidenceId"].(string)] || !sent[pair["currentEvidenceId"].(string)] {
+			t.Fatalf("pair %v declared without its images", pair)
+		}
+		declared[pair["itemIdentityId"].(string)] = true
+	}
+	for _, id := range data["currentEvidenceIds"].([]any) {
+		if !sent[id.(string)] {
+			t.Fatalf("current evidence %v declared without its image", id)
+		}
+	}
+	items := data["items"].([]any)
+	if len(declared) != 12 || len(items) != 12 {
+		t.Fatalf("declared pairs = %d items = %d, want 12 of 13 within the image budget", len(declared), len(items))
+	}
+	withheld := 0
+	for id, row := range resultsOf(t, f) {
+		if declared[id] {
+			if row.Status != "CONDITION_CHANGED" {
+				t.Fatalf("evaluated item %s = %s", id, row.Status)
+			}
+			continue
+		}
+		withheld++
+		if row.Status != "NOT_OBSERVED" || value(row.ReasonCode) != "NO_CORRESPONDING_VIEW" {
+			t.Fatalf("withheld item %s = %s/%s, want NOT_OBSERVED", id, row.Status, value(row.ReasonCode))
+		}
+	}
+	if withheld != 1 {
+		t.Fatalf("withheld items = %d, want 1", withheld)
+	}
+}

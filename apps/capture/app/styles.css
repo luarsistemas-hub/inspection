@@ -75,6 +75,10 @@ button.capture-photo-trigger:hover:not(:disabled) { border-color: var(--inspecti
 .capture-image-overlay { display: grid; align-content: center; justify-items: center; gap: .75rem; min-block-size: 100%; padding: 1rem; background: color-mix(in oklch, var(--inspection-ink) 88%, transparent); color: white; }
 .capture-image-overlay img { max-inline-size: min(100%, 70rem); max-block-size: 78dvh; object-fit: contain; }
 .capture-image-overlay p { margin: 0; }
+.counterparty-evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: .6rem; margin-block: .5rem; }
+.counterparty-evidence figure { display: grid; gap: .3rem; margin: 0; }
+.counterparty-evidence img { display: block; inline-size: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--inspection-radius); background: var(--inspection-bg); }
+.counterparty-evidence figcaption, .counterparty-evidence span { color: var(--inspection-muted); font-size: .75rem; }
 .capture-review-references { display: grid; gap: .6rem; }
 .capture-review-references h3 { margin: 0; }
 .capture-review-references ol { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }

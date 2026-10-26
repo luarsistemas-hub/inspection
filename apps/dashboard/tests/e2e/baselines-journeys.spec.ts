@@ -50,6 +50,11 @@ async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baseline
     if (operation === "DiscardBaselineDraft") { discardStatus = "DISCARDED"; data = { discardBaselineDraft: { version: { id: "draft-a", status: "DISCARDED" }, userErrors: [], clientMutationId: "discard" } }; }
     if (operation === "ResendCounterpartyInvitation") data = { resendCounterpartyInvitation: { invitationId: "invite-failed", response: "PENDING", deadlineAt: "2026-11-01T00:00:00Z", userErrors: [], clientMutationId: "resend" } };
     if (operation === "ResolveBaselineContestation") { const outcome = (request.variables?.input as { outcome?: string })?.outcome; adjustmentDraftCreated = outcome === "ACCEPT"; data = { resolveBaselineContestation: { invitationId: "invite-contested", response: "CONTESTED", resolution: outcome === "ACCEPT" ? "ACCEPTED" : "DECLINED", adjustmentVersionId: adjustmentDraftCreated ? "adjustment-draft" : null, userErrors: [], clientMutationId: "resolve" } }; }
+    if (operation === "DashboardInventoryTrail") data = { inventoryTrail: {
+      suggestions: [{ id: "trail-suggestion", targetType: "ITEM", targetId: "item-a", action: "AI_SUGGESTED", before: null, after: { name: "Sofá", condition: "GOOD", evidenceIds: ["evidence-a"] }, reason: null, statement: null, resolutionReason: null, actorMembershipId: null, occurredAt: "2026-10-10T12:00:00Z" }],
+      decisions: [{ id: "trail-edit", targetType: "ITEM", targetId: "item-a", action: "EDIT", before: { Name: "Sofá", Condition: "GOOD" }, after: { Name: "Sofá", Condition: "FAIR" }, reason: "Rasgo no assento", statement: null, resolutionReason: null, actorMembershipId: "membership-author", occurredAt: "2026-10-11T12:00:00Z" }, { id: "trail-activate", targetType: "VERSION", targetId: "version-active", action: "ACTIVATE", before: null, after: null, reason: null, statement: null, resolutionReason: null, actorMembershipId: "membership-author", occurredAt: "2026-10-12T12:00:00Z" }],
+      counterpartyEvents: [{ id: "trail-response", targetType: "COUNTERPARTY", targetId: "invite-contested", action: "RESPONDED", before: null, after: { response: "CONTESTED" }, reason: null, statement: "O sofá já estava rasgado.", resolutionReason: null, actorMembershipId: null, occurredAt: "2026-10-13T12:00:00Z" }, { id: "trail-resolved", targetType: "COUNTERPARTY", targetId: "invite-contested", action: "RESOLVED", before: null, after: { resolution: "DECLINED" }, reason: null, statement: null, resolutionReason: "Fotos da entrada mostram o assento intacto.", actorMembershipId: "membership-author", occurredAt: "2026-10-14T12:00:00Z" }],
+    } };
     if (operation === "InspectionDetail") data = { inspection: { id: "inspection-a", assetId: "asset-a" } };
     if (operation === "Inspections") data = { inspections: { nodes: [{ id: "inspection-a", assetId: "asset-a", participantName: "Participante QA", status: "COMPLETED", dueAt: "2026-10-20T12:00:00Z" }], pageInfo } };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
@@ -162,3 +167,22 @@ test("E2E-017 labels expired baseline source and E2E-018 discards a draft", asyn
   await expect(page.getByRole("button", { name: "Ativar inventário", exact: true })).toHaveCount(0);
 });
 
+
+test("E2E-037 auditor reads a version audit trail without review controls", async ({ page }) => {
+  const calls = await openBaselines(page, "AUDITOR");
+  await expect(page.getByRole("link", { name: "Vistorias", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Revisar rascunho" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Criar vistoria com esta versão" })).toHaveCount(0);
+  const active = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Versão 2 · Entrada de locação/ }) });
+  await active.getByRole("button", { name: "Trilha de auditoria", exact: true }).click();
+  await expect(page).toHaveURL(/\/baselines\/trail\/version-active$/);
+  await expect(page.getByRole("heading", { name: "Trilha de auditoria" })).toBeVisible();
+  await expect(page.getByText("Item editado · Gestora QA")).toBeVisible();
+  await expect(page.getByText("Justificativa: Rasgo no assento")).toBeVisible();
+  await expect(page.getByText("Versão ativada · Gestora QA")).toBeVisible();
+  await expect(page.getByText("Manifestação: O sofá já estava rasgado.")).toBeVisible();
+  await expect(page.getByText("Motivo da resolução: Fotos da entrada mostram o assento intacto.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Contraparte" }).getByRole("button")).toHaveCount(0);
+  expect(calls.filter((call) => call.operation === "DashboardInventoryTrail").map((call) => call.variables)).toEqual([{ originVersionId: "version-active" }]);
+  expect(calls.some((call) => /^(Decide|Activate|Discard|Resolve|Start|Request)/.test(call.operation))).toBe(false);
+});

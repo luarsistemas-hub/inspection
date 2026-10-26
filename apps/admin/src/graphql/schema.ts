@@ -1070,6 +1070,7 @@ export type InventoryItem = {
 };
 
 export type InventoryItemPatchInput = {
+  clearQuantity: InputMaybe<Scalars['Boolean']['input']>;
   color: InputMaybe<Scalars['String']['input']>;
   condition: InputMaybe<Scalars['String']['input']>;
   environmentId: InputMaybe<Scalars['ID']['input']>;

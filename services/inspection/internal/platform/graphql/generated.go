@@ -251,10 +251,12 @@ type ComplexityRoot struct {
 	}
 
 	CounterpartyBaseline struct {
+		ActivatedAt        func(childComplexity int) int
 		AdjustmentStatus   func(childComplexity int) int
 		Baseline           func(childComplexity int) int
 		DeadlineAt         func(childComplexity int) int
 		NewerVersionExists func(childComplexity int) int
+		Purpose            func(childComplexity int) int
 		ReadOnly           func(childComplexity int) int
 		Resolution         func(childComplexity int) int
 		ResolutionReason   func(childComplexity int) int
@@ -269,8 +271,10 @@ type ComplexityRoot struct {
 	}
 
 	CounterpartyBaselineEvidence struct {
-		Kind     func(childComplexity int) int
-		Position func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		Position    func(childComplexity int) int
+		TimestampMs func(childComplexity int) int
+		URL         func(childComplexity int) int
 	}
 
 	CounterpartyBaselineInventory struct {
@@ -3048,6 +3052,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ContestationSummary.Pending(childComplexity), true
 
+	case "CounterpartyBaseline.activatedAt":
+		if e.ComplexityRoot.CounterpartyBaseline.ActivatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.ActivatedAt(childComplexity), true
 	case "CounterpartyBaseline.adjustmentStatus":
 		if e.ComplexityRoot.CounterpartyBaseline.AdjustmentStatus == nil {
 			break
@@ -3072,6 +3082,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CounterpartyBaseline.NewerVersionExists(childComplexity), true
+	case "CounterpartyBaseline.purpose":
+		if e.ComplexityRoot.CounterpartyBaseline.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.Purpose(childComplexity), true
 	case "CounterpartyBaseline.readOnly":
 		if e.ComplexityRoot.CounterpartyBaseline.ReadOnly == nil {
 			break
@@ -3134,6 +3150,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CounterpartyBaselineEvidence.Position(childComplexity), true
+	case "CounterpartyBaselineEvidence.timestampMs":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.TimestampMs(childComplexity), true
+	case "CounterpartyBaselineEvidence.url":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.URL(childComplexity), true
 
 	case "CounterpartyBaselineInventory.environments":
 		if e.ComplexityRoot.CounterpartyBaselineInventory.Environments == nil {
@@ -11810,18 +11838,18 @@ type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: Stri
 type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
 type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
-type CounterpartyBaselineEvidence { kind: String! position: Int! }
+type CounterpartyBaselineEvidence { kind: String! position: Int! url: String timestampMs: Int }
 type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
 type CounterpartyBaselineEnvironment { typeCode: String! name: String! items: [CounterpartyBaselineItem!]! }
 type CounterpartyBaselineInventory { hasInventory: Boolean! environments: [CounterpartyBaselineEnvironment!]! }
-type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
+type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! purpose: String activatedAt: String deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
 type CounterpartyResponsePayload { response: String! respondedAt: String userErrors: [UserError!]! clientMutationId: String! }
 type CounterpartyInvitationPayload { invitationId: ID! response: String! deadlineAt: String! resolution: String! adjustmentVersionId: ID userErrors: [UserError!]! clientMutationId: String! }
 type BaselinePolicy { contestationDeadlineDays: Int! version: Int! }
 type BaselinePolicyPayload { policy: BaselinePolicy userErrors: [UserError!]! clientMutationId: String! }
 type InventoryTrail { suggestions: [InventoryTrailEntry!]! decisions: [InventoryTrailEntry!]! counterpartyEvents: [InventoryTrailEntry!]! }
 type InventoryTrailEntry { id: ID! targetType: String! targetId: ID! action: String! before: JSON after: JSON reason: String statement: String resolutionReason: String actorMembershipId: ID occurredAt: String! }
-input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int condition: String observation: String limitation: String }
+input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int clearQuantity: Boolean condition: String observation: String limitation: String }
 input InventoryDecisionInput { itemId: ID! action: String! expectedVersion: Int! patch: InventoryItemPatchInput reason: String reasonText: String }
 input InventoryEvidenceInput { kind: String! mediaId: ID! frameId: ID region: JSON }
 input InventorySplitPartInput { name: String! typeCode: String! condition: String evidenceIds: [ID!]! }
@@ -12655,6 +12683,10 @@ func (ec *executionContext) childFields_CounterpartyBaseline(ctx context.Context
 	switch field.Name {
 	case "baseline":
 		return ec.fieldContext_CounterpartyBaseline_baseline(ctx, field)
+	case "purpose":
+		return ec.fieldContext_CounterpartyBaseline_purpose(ctx, field)
+	case "activatedAt":
+		return ec.fieldContext_CounterpartyBaseline_activatedAt(ctx, field)
 	case "deadlineAt":
 		return ec.fieldContext_CounterpartyBaseline_deadlineAt(ctx, field)
 	case "response":
@@ -12693,6 +12725,10 @@ func (ec *executionContext) childFields_CounterpartyBaselineEvidence(ctx context
 		return ec.fieldContext_CounterpartyBaselineEvidence_kind(ctx, field)
 	case "position":
 		return ec.fieldContext_CounterpartyBaselineEvidence_position(ctx, field)
+	case "url":
+		return ec.fieldContext_CounterpartyBaselineEvidence_url(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_CounterpartyBaselineEvidence_timestampMs(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaselineEvidence", field.Name)
 }
@@ -22086,6 +22122,52 @@ func (ec *executionContext) fieldContext_CounterpartyBaseline_baseline(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _CounterpartyBaseline_purpose(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_purpose(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_activatedAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_activatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActivatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_activatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CounterpartyBaseline_deadlineAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22391,6 +22473,52 @@ func (ec *executionContext) _CounterpartyBaselineEvidence_position(ctx context.C
 	)
 }
 func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_url(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_timestampMs(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -59098,7 +59226,7 @@ func (ec *executionContext) unmarshalInputInventoryItemPatchInput(ctx context.Co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"environmentId", "typeCode", "name", "material", "color", "quantity", "condition", "observation", "limitation"}
+	fieldsInOrder := [...]string{"environmentId", "typeCode", "name", "material", "color", "quantity", "clearQuantity", "condition", "observation", "limitation"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -59147,6 +59275,13 @@ func (ec *executionContext) unmarshalInputInventoryItemPatchInput(ctx context.Co
 				return it, err
 			}
 			it.Quantity = data
+		case "clearQuantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearQuantity"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearQuantity = data
 		case "condition":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("condition"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -64233,6 +64368,16 @@ func (ec *executionContext) _CounterpartyBaseline(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "purpose":
+			out.Values[i] = ec._CounterpartyBaseline_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "activatedAt":
+			out.Values[i] = ec._CounterpartyBaseline_activatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "deadlineAt":
 			out.Values[i] = ec._CounterpartyBaseline_deadlineAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -64362,6 +64507,16 @@ func (ec *executionContext) _CounterpartyBaselineEvidence(ctx context.Context, s
 		case "position":
 			out.Values[i] = ec._CounterpartyBaselineEvidence_position(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:

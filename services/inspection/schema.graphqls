@@ -238,18 +238,18 @@ type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: Stri
 type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
 type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
-type CounterpartyBaselineEvidence { kind: String! position: Int! }
+type CounterpartyBaselineEvidence { kind: String! position: Int! url: String timestampMs: Int }
 type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
 type CounterpartyBaselineEnvironment { typeCode: String! name: String! items: [CounterpartyBaselineItem!]! }
 type CounterpartyBaselineInventory { hasInventory: Boolean! environments: [CounterpartyBaselineEnvironment!]! }
-type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
+type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! purpose: String activatedAt: String deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
 type CounterpartyResponsePayload { response: String! respondedAt: String userErrors: [UserError!]! clientMutationId: String! }
 type CounterpartyInvitationPayload { invitationId: ID! response: String! deadlineAt: String! resolution: String! adjustmentVersionId: ID userErrors: [UserError!]! clientMutationId: String! }
 type BaselinePolicy { contestationDeadlineDays: Int! version: Int! }
 type BaselinePolicyPayload { policy: BaselinePolicy userErrors: [UserError!]! clientMutationId: String! }
 type InventoryTrail { suggestions: [InventoryTrailEntry!]! decisions: [InventoryTrailEntry!]! counterpartyEvents: [InventoryTrailEntry!]! }
 type InventoryTrailEntry { id: ID! targetType: String! targetId: ID! action: String! before: JSON after: JSON reason: String statement: String resolutionReason: String actorMembershipId: ID occurredAt: String! }
-input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int condition: String observation: String limitation: String }
+input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int clearQuantity: Boolean condition: String observation: String limitation: String }
 input InventoryDecisionInput { itemId: ID! action: String! expectedVersion: Int! patch: InventoryItemPatchInput reason: String reasonText: String }
 input InventoryEvidenceInput { kind: String! mediaId: ID! frameId: ID region: JSON }
 input InventorySplitPartInput { name: String! typeCode: String! condition: String evidenceIds: [ID!]! }

@@ -196,7 +196,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, schema := range []string{"origins", "media", "inspections", "messaging", "assets", "analysis"} {
+	for _, schema := range []string{"origins", "media", "inspections", "messaging", "assets", "analysis", "capture"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -219,6 +219,8 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE inspections.reference_snapshots (id text, tenant_id text, inspection_id text, reference_version_id text)`,
 		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, requirement_key text, generation integer NOT NULL DEFAULT 1, environment_identity_id text, status text, attempts integer, next_attempt_at datetime, lease_token text, lease_until datetime, error_code text, prompt_snapshot_id text, input_digest text, created_at datetime, updated_at datetime, UNIQUE(tenant_id,inspection_id,kind,requirement_key,generation))`,
 		`CREATE TABLE analysis.inventory_item_results (id text, tenant_id text, job_id text, inspection_id text, item_identity_id text, status text, condition_after text, outside_type_code text, outside_name text)`,
+		`CREATE TABLE analysis.inventory_evidence_pairs (id text, tenant_id text, job_id text, item_identity_id text, origin_kind text, origin_media_id text, origin_frame_id text, current_kind text, current_media_id text, current_frame_id text, decision text, confirmed numeric, reason text, created_at datetime)`,
+		`CREATE TABLE capture.capture_drafts (id text, tenant_id text, responsibility_id text, kind text, media_kind text, template_version_id text, reference_payload json, policy_payload json, requirements json, status text, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE assets.assets (id text, tenant_id text, status text, updated_at datetime)`,
 		`CREATE TABLE messaging.outbox (id text primary key, tenant_id text, type text, schema_version integer, payload blob, correlation_id text, causation_id text, status text, attempts integer, next_attempt_at datetime, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,
 	}

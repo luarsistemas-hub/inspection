@@ -37,4 +37,14 @@ describe("Dashboard capability composition", () => {
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["DASHBOARD"] }).canUseAdmin).toBe(false);
     expect(composeCapabilities({ roles: ["MANAGER"], entitlements: ["ADMIN", "DASHBOARD"] }).canUseAdmin).toBe(false);
   });
+
+  it("opens the inventory audit trail only to auditors, managers and tenant admins", () => {
+    for (const role of ["AUDITOR", "MANAGER", "TENANT_ADMIN"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canReadTrail).toBe(true);
+    for (const role of ["EMPLOYEE", "VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canReadTrail).toBe(false);
+  });
+
+  it("keeps an auditor read-only and focused on inventories", () => {
+    expect(composeCapabilities({ roles: ["AUDITOR"], entitlements: ["DASHBOARD"] })).toMatchObject({ audience: "internal", canMutate: false, canPublish: false, canPromoteOrigin: false, canManageTriage: false, canReadTrail: true, links: [["Inventários", "/baselines"]] });
+    expect(composeCapabilities({ roles: ["AUDITOR", "MANAGER"], entitlements: ["DASHBOARD"] })).toMatchObject({ canMutate: true, canReadTrail: true });
+  });
 });

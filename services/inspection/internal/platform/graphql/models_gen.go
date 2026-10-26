@@ -433,6 +433,8 @@ type CorrectOnboardingResponsibleEmailInput struct {
 
 type CounterpartyBaseline struct {
 	Baseline           *CounterpartyBaselineInventory `json:"baseline"`
+	Purpose            *string                        `json:"purpose,omitempty"`
+	ActivatedAt        *string                        `json:"activatedAt,omitempty"`
 	DeadlineAt         string                         `json:"deadlineAt"`
 	Response           string                         `json:"response"`
 	RespondedAt        *string                        `json:"respondedAt,omitempty"`
@@ -450,8 +452,10 @@ type CounterpartyBaselineEnvironment struct {
 }
 
 type CounterpartyBaselineEvidence struct {
-	Kind     string `json:"kind"`
-	Position int    `json:"position"`
+	Kind        string  `json:"kind"`
+	Position    int     `json:"position"`
+	URL         *string `json:"url,omitempty"`
+	TimestampMs *int    `json:"timestampMs,omitempty"`
 }
 
 type CounterpartyBaselineInventory struct {
@@ -986,6 +990,7 @@ type InventoryItemPatchInput struct {
 	Material      *string `json:"material,omitempty"`
 	Color         *string `json:"color,omitempty"`
 	Quantity      *int    `json:"quantity,omitempty"`
+	ClearQuantity *bool   `json:"clearQuantity,omitempty"`
 	Condition     *string `json:"condition,omitempty"`
 	Observation   *string `json:"observation,omitempty"`
 	Limitation    *string `json:"limitation,omitempty"`

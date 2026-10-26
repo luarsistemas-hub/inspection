@@ -88,6 +88,28 @@ func TestService_AssignedDecisionCases(t *testing.T) {
 			t.Fatalf("material was not cleared: %+v", result.Items[0])
 		}
 	})
+	t.Run("UT-025 edit color and quantity to unknown clears them", func(t *testing.T) {
+		db := inventoryTestDB(t)
+		tenant, version, env, actor := seedReadyDraft(t, db)
+		color, quantity := "Branco", 4
+		item := database.InventoryItem{ID: identity.NewID(), TenantID: tenant, OriginVersionID: version, EnvironmentID: env, IdentityID: identity.NewID(), TypeCode: "OTHER", Name: "Item", Color: &color, Quantity: &quantity, Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "PENDING", Version: 1}
+		if err := db.Create(&item).Error; err != nil {
+			t.Fatal(err)
+		}
+		empty := ""
+		result, err := testService(db).Decide(context.Background(), DecideInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Decisions: []Decision{{ItemID: item.ID, Action: "EDIT", ExpectedVersion: 1, Patch: &ItemPatch{Color: &empty, ClearQuantity: true}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Items[0].Color != nil || result.Items[0].Quantity != nil || result.Items[0].Decision != "EDITED" {
+			t.Fatalf("color and quantity were not cleared: %+v", result.Items[0])
+		}
+		other := 2
+		_, err = testService(db).Decide(context.Background(), DecideInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Decisions: []Decision{{ItemID: item.ID, Action: "EDIT", ExpectedVersion: 2, Patch: &ItemPatch{Quantity: &other, ClearQuantity: true}}}})
+		if _, field, _ := apperror.Public(err); !apperror.Is(err, apperror.InvalidInput) || field != "quantity" {
+			t.Fatalf("setting and clearing quantity together = %v", err)
+		}
+	})
 	t.Run("UT-026 edit to another version environment is invalid", func(t *testing.T) {
 		db := inventoryTestDB(t)
 		tenant, version, env, actor := seedReadyDraft(t, db)

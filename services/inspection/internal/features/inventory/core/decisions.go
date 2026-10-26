@@ -257,6 +257,9 @@ func applyPatch(item *database.InventoryItem, p ItemPatch) {
 	if p.Quantity != nil {
 		item.Quantity = p.Quantity
 	}
+	if p.ClearQuantity {
+		item.Quantity = nil
+	}
 	if p.Condition != nil {
 		item.Condition = *p.Condition
 	}

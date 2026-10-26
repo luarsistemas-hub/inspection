@@ -40,7 +40,8 @@ func (r *Resolver) inventoryAuthorize(ctx context.Context, assetID identity.ID, 
 	}); err != nil {
 		return apperror.New(apperror.NotFound, "assetId", "asset not found")
 	}
-	roles := []string{auth.Employee, auth.Manager, auth.TenantAdmin, auth.Viewer, auth.CustomerViewer}
+	// Auditors read baselines; review and draft access stay with operators.
+	roles := []string{auth.Employee, auth.Manager, auth.TenantAdmin, auth.Viewer, auth.CustomerViewer, auth.Auditor}
 	switch access {
 	case "mutate":
 		roles = []string{auth.Employee, auth.Manager, auth.TenantAdmin}

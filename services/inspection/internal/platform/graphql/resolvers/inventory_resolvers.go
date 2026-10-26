@@ -83,16 +83,12 @@ func (r *mutationResolver) decideInventoryItems(ctx context.Context, input graph
 			decision.ReasonText = *d.ReasonText
 		}
 		if d.Patch != nil {
-			patch := &inventorycore.ItemPatch{TypeCode: d.Patch.TypeCode, Name: d.Patch.Name, Material: d.Patch.Material, Color: d.Patch.Color, Quantity: d.Patch.Quantity, Condition: d.Patch.Condition, Observation: d.Patch.Observation, Limitation: d.Patch.Limitation}
-			if d.Patch.EnvironmentID != nil {
-				id, e := inventoryID(*d.Patch.EnvironmentID, "environmentId")
-				if e != nil {
-					out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-					return out, nil
-				}
-				patch.EnvironmentID = &id
+			patch, e := inventoryItemPatch(*d.Patch)
+			if e != nil {
+				out.UserErrors = append(out.UserErrors, userErrorFrom(e))
+				return out, nil
 			}
-			decision.Patch = patch
+			decision.Patch = &patch
 		}
 		decisions = append(decisions, decision)
 	}
@@ -117,6 +113,20 @@ func (r *mutationResolver) decideInventoryItems(ctx context.Context, input graph
 		out.EmptyEnvironments = append(out.EmptyEnvironments, id.String())
 	}
 	return out, nil
+}
+
+// inventoryItemPatch maps an edit patch. Null keeps an attribute; an empty
+// material, color or limitation and clearQuantity make the attribute unknown.
+func inventoryItemPatch(in graphql1.InventoryItemPatchInput) (inventorycore.ItemPatch, error) {
+	patch := inventorycore.ItemPatch{TypeCode: in.TypeCode, Name: in.Name, Material: in.Material, Color: in.Color, Quantity: in.Quantity, ClearQuantity: in.ClearQuantity != nil && *in.ClearQuantity, Condition: in.Condition, Observation: in.Observation, Limitation: in.Limitation}
+	if in.EnvironmentID != nil {
+		id, err := inventoryID(*in.EnvironmentID, "environmentId")
+		if err != nil {
+			return inventorycore.ItemPatch{}, err
+		}
+		patch.EnvironmentID = &id
+	}
+	return patch, nil
 }
 
 func (r *mutationResolver) bulkAcceptInventoryEnvironment(ctx context.Context, input graphql1.BulkAcceptInventoryEnvironmentInput) (*graphql1.BulkAcceptInventoryEnvironmentPayload, error) {

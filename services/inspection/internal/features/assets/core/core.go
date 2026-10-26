@@ -501,13 +501,18 @@ func (s Service) Get(ctx context.Context, tenantID, assetID identity.ID) (View, 
 	if err != nil {
 		return View{}, err
 	}
-	if _, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Asset.BusinessUnitID}, false); err != nil {
+	if _, err := s.Authorizer.Authorize(ctx, tenantID, assetReadRoles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: out.Asset.BusinessUnitID}, false); err != nil {
 		return View{}, err
 	}
 	return out, nil
 }
+
+// assetReadRoles may read assets; auditors read them to reach inventory
+// versions and their audit trail, never to change them.
+var assetReadRoles = []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.Auditor}
+
 func (s Service) List(ctx context.Context, tenantID identity.ID, businessUnitID *identity.ID, search string, first int, after string) ([]View, string, bool, error) {
-	principal, err := s.Authorizer.Authorize(ctx, tenantID, []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.Manager, auth.Employee, auth.Viewer}, nil, false)
+	principal, err := s.Authorizer.Authorize(ctx, tenantID, assetReadRoles, nil, false)
 	if err != nil {
 		return nil, "", false, err
 	}

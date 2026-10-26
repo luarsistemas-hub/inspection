@@ -44,6 +44,10 @@ type Dependencies struct {
 	Within     func(context.Context, identity.ID, func(*gorm.DB) error) error
 }
 
+// versionReadRoles may list origin versions; auditors list them to open the
+// inventory audit trail.
+var versionReadRoles = []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.Auditor}
+
 func Setup(d Dependencies) error {
 	if d.DB == nil || d.Bus == nil {
 		return fmt.Errorf("slice origins/list_versions: missing dependency")
@@ -78,7 +82,7 @@ func Setup(d Dependencies) error {
 			return nil, err
 		}
 		asset := assetRaw.(assetcore.View)
-		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, versionReadRoles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
 			return nil, err
 		}
 		details, err := loadDetails(ctx, within, query.TenantID, []database.OriginVersion{version})
@@ -96,7 +100,7 @@ func Setup(d Dependencies) error {
 			return nil, err
 		}
 		asset := assetRaw.(assetcore.View)
-		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
+		if _, err := d.Authorizer.Authorize(ctx, query.TenantID, versionReadRoles, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.Asset.BusinessUnitID}, false); err != nil {
 			return nil, err
 		}
 		first := query.First

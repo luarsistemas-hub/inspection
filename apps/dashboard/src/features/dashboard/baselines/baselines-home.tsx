@@ -22,7 +22,7 @@ function existingDraftId(errors: UserError[]) {
 type CompletedInspection = G.InspectionsQuery["inspections"]["nodes"][number];
 
 /** BaselinesHome lists an asset's baseline versions and, for customers, its active inventory. */
-export function BaselinesHome({ canReview, isCustomer, readHistory }: { canReview: boolean; isCustomer: boolean; readHistory: boolean }) {
+export function BaselinesHome({ canReview, isCustomer, readHistory, canReadTrail = false }: { canReview: boolean; isCustomer: boolean; readHistory: boolean; canReadTrail?: boolean }) {
   const router = useRouter();
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [assetId, setAssetId] = useState("");
@@ -153,13 +153,13 @@ export function BaselinesHome({ canReview, isCustomer, readHistory }: { canRevie
     {!canReview && inventory?.version && <PublishedInventory inventory={inventory} isCustomer={isCustomer} />}
     {!canReview && inventory && !inventory.hasInventory && <p>Este imóvel ainda não tem inventário ativo.</p>}
     {showHistory && (versions.length === 0 ? <p>Nenhuma versão de inventário para este imóvel.</p> : <ol className="baseline-version-list">
-      {versions.map((version) => <li key={version.id}><VersionCard version={version} assetId={assetId} canReview={canReview} participantNames={participantNames} authorName={version.activatedBy ? memberNames.get(version.activatedBy) : undefined} onView={() => canReview ? router.push(`/baselines/review/${version.id}`) : setSelectedReadOnlyVersion(version.id)} onChanged={() => void refreshVersions()} /></li>)}
+      {versions.map((version) => <li key={version.id}><VersionCard version={version} assetId={assetId} canReview={canReview} canReadTrail={canReadTrail} participantNames={participantNames} authorName={version.activatedBy ? memberNames.get(version.activatedBy) : undefined} onView={() => canReview ? router.push(`/baselines/review/${version.id}`) : setSelectedReadOnlyVersion(version.id)} onChanged={() => void refreshVersions()} /></li>)}
     </ol>)}
   </section>;
 }
 
 /** VersionCard summarizes one baseline version and its pending actions. */
-function VersionCard({ version, assetId, canReview, participantNames, authorName, onView, onChanged }: { version: BaselineVersion; assetId: string; canReview: boolean; participantNames: Map<string, string>; authorName?: string; onView: () => void; onChanged: () => void }) {
+function VersionCard({ version, assetId, canReview, canReadTrail, participantNames, authorName, onView, onChanged }: { version: BaselineVersion; assetId: string; canReview: boolean; canReadTrail: boolean; participantNames: Map<string, string>; authorName?: string; onView: () => void; onChanged: () => void }) {
   const router = useRouter();
   const presentation = baselineVersionPresentation(version, authorName);
   const pinnable = canReview && version.hasInventory && ["ACTIVE", "SUPERSEDED"].includes(version.status);
@@ -171,6 +171,7 @@ function VersionCard({ version, assetId, canReview, participantNames, authorName
     <p>Contestações: {presentation.contestation}</p>
     {version.draftState === "PREPARING" && <p role="status">Inventário em preparação</p>}
     {version.hasInventory && <Button variant="secondary" onClick={onView}>{canReview && version.status === "DRAFT" ? "Revisar rascunho" : "Ver inventário"}</Button>}
+    {canReadTrail && version.hasInventory && <Button variant="secondary" onClick={() => router.push(`/baselines/trail/${encodeURIComponent(version.id)}`)}>Trilha de auditoria</Button>}
     {pinnable && <Button variant="secondary" onClick={() => router.push(`/inspections?create=1&assetId=${encodeURIComponent(assetId)}&originVersionId=${encodeURIComponent(version.id)}`)}>Criar vistoria com esta versão</Button>}
     <CounterpartyList invitations={version.counterpartyInvitations} participantNames={participantNames} canReview={canReview} onChanged={onChanged} />
   </article>;

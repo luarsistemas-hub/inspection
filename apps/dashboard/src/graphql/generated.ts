@@ -169,6 +169,7 @@ export type InventoryEvidenceInput = {
 };
 
 export type InventoryItemPatchInput = {
+  clearQuantity: boolean | null | undefined;
   color: string | null | undefined;
   condition: string | null | undefined;
   environmentId: string | number | null | undefined;
