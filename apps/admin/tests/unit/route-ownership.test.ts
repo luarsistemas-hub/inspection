@@ -5,7 +5,8 @@ import { adminRoutes, legacyRedirects } from "@/routes";
 
 describe("UT-075 product route ownership", () => {
   it("keeps Admin routes separate from Dashboard and Capture concerns", () => {
-    expect(adminRoutes).toEqual(expect.arrayContaining(["/activate", "/organization", "/access", "/catalogs", "/assets", "/templates", "/video", "/video-operations", "/governance", "/audit", "/prompts"]));
+    expect(adminRoutes).toEqual(expect.arrayContaining(["/activate", "/organization", "/access", "/catalogs", "/assets", "/templates", "/video", "/video-operations", "/baseline-policy", "/governance", "/audit", "/prompts"]));
+    expect(hasAdminRouteAccess("/baseline-policy", ["TENANT_ADMIN"])).toBe(true);
     expect(hasAdminRouteAccess("/video-operations", ["TENANT_ADMIN"])).toBe(true);
     expect(hasAdminRouteAccess("/video-operations", ["GOVERNANCE_ADMIN", "AUDITOR"])).toBe(false);
     expect(adminRoutes).not.toContain("/reports");
@@ -16,6 +17,7 @@ describe("UT-075 product route ownership", () => {
 describe("C07 safe destinations", () => {
   it("UT-045 retains an owned prompt destination and its query", () => {
     expect(safeAdminPath("/prompts?source=bookmark")).toBe("/prompts?source=bookmark");
+    expect(safeAdminPath("/baseline-policy?source=bookmark")).toBe("/baseline-policy?source=bookmark");
     expect(safeAdminPath("/video?source=bookmark")).toBe("/video?source=bookmark");
   });
 

@@ -695,7 +695,10 @@ export type CustomerPortfolioFilter = {
 
 export type CustomerPortfolioItem = {
   __typename?: 'CustomerPortfolioItem';
+  assetExternalKey: Scalars['String']['output'];
   assetId: Scalars['ID']['output'];
+  assetName: Scalars['String']['output'];
+  latestPublishedInspectionId: Maybe<Scalars['ID']['output']>;
   progress: Scalars['Int']['output'];
   projectId: Maybe<Scalars['ID']['output']>;
   publishedClassification: Maybe<Scalars['String']['output']>;
@@ -991,6 +994,7 @@ export type InventoryDecisionInput = {
 
 export type InventoryDraft = {
   __typename?: 'InventoryDraft';
+  assetId: Scalars['ID']['output'];
   environments: Array<InventoryEnvironment>;
   noticeCode: Maybe<Scalars['String']['output']>;
   progress: InventoryProgress;
@@ -1030,6 +1034,8 @@ export type InventoryEvidence = {
   position: Scalars['Int']['output'];
   region: Maybe<Scalars['JSON']['output']>;
   retentionAvailability: Maybe<Scalars['String']['output']>;
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  url: Maybe<Scalars['String']['output']>;
 };
 
 export type InventoryEvidenceInput = {
@@ -2174,6 +2180,7 @@ export type OriginVersion = {
   selectable: Scalars['Boolean']['output'];
   source: Maybe<Scalars['String']['output']>;
   sourceAvailability: Maybe<Scalars['String']['output']>;
+  sourceInspectionId: Maybe<Scalars['ID']['output']>;
   status: Scalars['String']['output'];
   supersedesId: Maybe<Scalars['ID']['output']>;
   versionNumber: Scalars['Int']['output'];
@@ -2462,6 +2469,7 @@ export type Query = {
   assets: AssetConnection;
   auditEvents: AuditEventConnection;
   baselineInventory: Maybe<BaselineInventory>;
+  baselinePolicy: BaselinePolicy;
   baselineVersions: OriginVersionConnection;
   businessUnits: BusinessUnitConnection;
   counterpartyBaseline: CounterpartyBaseline;
@@ -3855,6 +3863,9 @@ export type VideoPreparationStatus = {
   attempts: Scalars['Int']['output'];
   errorCode: Scalars['String']['output'];
   firstFrameReadyAt: Maybe<Scalars['String']['output']>;
+  framesRepresentative: Scalars['Int']['output'];
+  framesRetained: Scalars['Int']['output'];
+  framesSampled: Scalars['Int']['output'];
   manifestDigest: Scalars['String']['output'];
   mediaId: Scalars['ID']['output'];
   preparationId: Scalars['ID']['output'];

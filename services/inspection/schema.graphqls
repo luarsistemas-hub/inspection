@@ -23,6 +23,7 @@ type Query {
 	baselineVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
 	inventoryDraft(originVersionId: ID!): InventoryDraft
 	baselineInventory(assetId: ID!, versionId: ID): BaselineInventory
+  baselinePolicy: BaselinePolicy!
 	counterpartyBaseline: CounterpartyBaseline!
 	inventoryTrail(originVersionId: ID!): InventoryTrail!
   originPromotion(inspectionId: ID!): OriginPromotion
@@ -226,16 +227,16 @@ type PostalAddress { countryCode: String! postalCode: String! street: String! nu
 type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
-type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String sourceInspectionId: ID hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
 type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
 type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
 type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
-type InventoryDraft { version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
+type InventoryDraft { assetId: ID! version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
 type InventoryProgress { decided: Int! pending: Int! }
 type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
 type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
-type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID region: JSON position: Int! availability: String! retentionAvailability: String }
+type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
 type CounterpartyBaselineEvidence { kind: String! position: Int! }
 type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
@@ -324,7 +325,7 @@ type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason:
 type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
 type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
 type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
-type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
+type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! framesSampled: Int! framesRetained: Int! framesRepresentative: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
 type VideoPreparationConnection { nodes: [VideoPreparationStatus!]! pageInfo: PageInfo! }
 input RetryVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! clientMutationId: String! }
 input ReprocessVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! profileDigest: String! clientMutationId: String! }
@@ -353,7 +354,7 @@ type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
 type ReportPublicationPayload { publication: ReportPublication userErrors: [UserError!]! clientMutationId: String! }
-type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
+type CustomerPortfolioItem { assetId: ID! assetName: String! assetExternalKey: String! latestPublishedInspectionId: ID projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }

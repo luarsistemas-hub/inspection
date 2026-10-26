@@ -1,8 +1,8 @@
 import { isSuperAdmin, type DashboardIdentity } from "@/auth/session";
 
 export type Capability = { audience: "internal" | "customer"; canMutate: boolean; canPublish: boolean; canPromoteOrigin: boolean; canUseAdmin: boolean; canManageTriage: boolean; links: Array<[string, string]>; home: string };
-const customerLinks: Array<[string, string]> = [["Portfólio", "/portfolio"], ["Laudos publicados", "/reports"], ["Notificações", "/notifications"]];
-const viewerLinks: Array<[string, string]> = [["Início", "/tenants/current"], ["Agenda de vistorias", "/schedules"], ["Vistorias", "/inspections"], ["Projetos de vistoria", "/projects"], ["Triagem", "/triage"], ["Laudos de vistoria", "/reports"], ["Notificações", "/notifications"]];
+const customerLinks: Array<[string, string]> = [["Portfólio", "/portfolio"], ["Inventários", "/baselines"], ["Laudos publicados", "/reports"], ["Notificações", "/notifications"]];
+const viewerLinks: Array<[string, string]> = [["Início", "/tenants/current"], ["Agenda de vistorias", "/schedules"], ["Vistorias", "/inspections"], ["Projetos de vistoria", "/projects"], ["Inventários", "/baselines"], ["Triagem", "/triage"], ["Laudos de vistoria", "/reports"], ["Notificações", "/notifications"]];
 const operatorLinks: Array<[string, string]> = [...viewerLinks];
 
 export function composeCapabilities(identity: Pick<DashboardIdentity, "roles" | "entitlements">): Capability {

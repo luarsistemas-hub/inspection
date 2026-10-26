@@ -733,12 +733,15 @@ func (r *queryResolver) inventoryDraft(ctx context.Context, originVersionID stri
 	}); e != nil {
 		return nil, e
 	}
-	out := &graphql1.InventoryDraft{Version: inventoryVersion(view.Version, origin.Version), Environments: []*graphql1.InventoryEnvironment{}, Progress: &graphql1.InventoryProgress{Decided: view.Decided, Pending: view.Pending}, ReadOnly: view.ReadOnly, Warnings: view.Warnings}
+	out := &graphql1.InventoryDraft{AssetID: asset.String(), Version: inventoryVersion(view.Version, origin.Version), Environments: []*graphql1.InventoryEnvironment{}, Progress: &graphql1.InventoryProgress{Decided: view.Decided, Pending: view.Pending}, ReadOnly: view.ReadOnly, Warnings: view.Warnings}
 	if view.NoticeCode != "" {
 		out.NoticeCode = &view.NoticeCode
 	}
 	for _, env := range view.Environments {
 		out.Environments = append(out.Environments, inventoryEnvironment(env))
+	}
+	if err := hydrateInventoryEvidence(ctx, r.DB, r.Store, meta.TenantID, id, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -797,6 +800,11 @@ func (r *queryResolver) baselineInventory(ctx context.Context, assetID string, v
 			out.Environments = append(out.Environments, inventoryCustomerEnvironment(env))
 		} else {
 			out.Environments = append(out.Environments, inventoryEnvironment(env))
+		}
+	}
+	if view.Version != nil {
+		if e := hydrateEnvironmentEvidence(ctx, r.DB, r.Store, meta.TenantID, view.Version.ID, out.Environments); e != nil {
+			return nil, e
 		}
 	}
 	return out, nil

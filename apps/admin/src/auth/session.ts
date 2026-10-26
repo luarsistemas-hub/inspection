@@ -77,6 +77,7 @@ const adminPageRoles: Record<string, string[]> = {
   "/templates": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/video": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/video-operations": ["TENANT_ADMIN"],
+  "/baseline-policy": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
   "/governance": ["TENANT_ADMIN", "GOVERNANCE_ADMIN"],
   "/prompts": ["TENANT_ADMIN", "INSPECTION_CONFIG_ADMIN"],
 };

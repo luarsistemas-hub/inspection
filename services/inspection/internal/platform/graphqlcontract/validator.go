@@ -49,13 +49,20 @@ func matrixCapabilities(section, rootKind string) []Capability {
 	capabilities := make([]Capability, 0, len(matches))
 	for _, match := range matches {
 		owner := strings.TrimSpace(match[2])
-		capabilities = append(capabilities, Capability{Root: rootKind + "." + strings.TrimSpace(match[1]), Owner: owner, Persona: personaForOwner(owner), Journey: strings.TrimSpace(match[3]), Evidence: "IT-001"})
+		root := rootKind + "." + strings.TrimSpace(match[1])
+		evidence := "IT-001"
+		if root == "Query.customerPortfolio" {
+			evidence = "IT-054"
+		}
+		capabilities = append(capabilities, Capability{Root: root, Owner: owner, Persona: personaForOwner(owner), Journey: strings.TrimSpace(match[3]), Evidence: evidence})
 	}
 	return capabilities
 }
 
 func personaForOwner(owner string) string {
 	switch {
+	case strings.Contains(owner, "Policy Admin"):
+		return "TENANT_ADMIN or INSPECTION_CONFIG_ADMIN"
 	case strings.Contains(owner, "Capture"):
 		return "external participant"
 	case strings.Contains(owner, "customer"):

@@ -385,12 +385,15 @@ type ComplexityRoot struct {
 	}
 
 	CustomerPortfolioItem struct {
-		AssetID                 func(childComplexity int) int
-		Progress                func(childComplexity int) int
-		ProjectID               func(childComplexity int) int
-		PublishedClassification func(childComplexity int) int
-		Status                  func(childComplexity int) int
-		UpdatedAt               func(childComplexity int) int
+		AssetExternalKey            func(childComplexity int) int
+		AssetID                     func(childComplexity int) int
+		AssetName                   func(childComplexity int) int
+		LatestPublishedInspectionID func(childComplexity int) int
+		Progress                    func(childComplexity int) int
+		ProjectID                   func(childComplexity int) int
+		PublishedClassification     func(childComplexity int) int
+		Status                      func(childComplexity int) int
+		UpdatedAt                   func(childComplexity int) int
 	}
 
 	CustomerReport struct {
@@ -588,6 +591,7 @@ type ComplexityRoot struct {
 	}
 
 	InventoryDraft struct {
+		AssetID      func(childComplexity int) int
 		Environments func(childComplexity int) int
 		NoticeCode   func(childComplexity int) int
 		Progress     func(childComplexity int) int
@@ -624,6 +628,8 @@ type ComplexityRoot struct {
 		Position              func(childComplexity int) int
 		Region                func(childComplexity int) int
 		RetentionAvailability func(childComplexity int) int
+		TimestampMs           func(childComplexity int) int
+		URL                   func(childComplexity int) int
 	}
 
 	InventoryItem struct {
@@ -1118,6 +1124,7 @@ type ComplexityRoot struct {
 		Selectable              func(childComplexity int) int
 		Source                  func(childComplexity int) int
 		SourceAvailability      func(childComplexity int) int
+		SourceInspectionID      func(childComplexity int) int
 		Status                  func(childComplexity int) int
 		SupersedesID            func(childComplexity int) int
 		VersionNumber           func(childComplexity int) int
@@ -1288,6 +1295,7 @@ type ComplexityRoot struct {
 		Assets                            func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
 		AuditEvents                       func(childComplexity int, first *int, after *string) int
 		BaselineInventory                 func(childComplexity int, assetID string, versionID *string) int
+		BaselinePolicy                    func(childComplexity int) int
 		BaselineVersions                  func(childComplexity int, assetID string, first *int, after *string) int
 		BusinessUnits                     func(childComplexity int, first *int, after *string) int
 		CounterpartyBaseline              func(childComplexity int) int
@@ -1943,19 +1951,22 @@ type ComplexityRoot struct {
 	}
 
 	VideoPreparationStatus struct {
-		Attempts           func(childComplexity int) int
-		ErrorCode          func(childComplexity int) int
-		FirstFrameReadyAt  func(childComplexity int) int
-		ManifestDigest     func(childComplexity int) int
-		MediaID            func(childComplexity int) int
-		PreparationID      func(childComplexity int) int
-		PreparationVersion func(childComplexity int) int
-		ProcessedFrames    func(childComplexity int) int
-		Retryable          func(childComplexity int) int
-		SourceAvailable    func(childComplexity int) int
-		SourceExpiryAt     func(childComplexity int) int
-		Stage              func(childComplexity int) int
-		Status             func(childComplexity int) int
+		Attempts             func(childComplexity int) int
+		ErrorCode            func(childComplexity int) int
+		FirstFrameReadyAt    func(childComplexity int) int
+		FramesRepresentative func(childComplexity int) int
+		FramesRetained       func(childComplexity int) int
+		FramesSampled        func(childComplexity int) int
+		ManifestDigest       func(childComplexity int) int
+		MediaID              func(childComplexity int) int
+		PreparationID        func(childComplexity int) int
+		PreparationVersion   func(childComplexity int) int
+		ProcessedFrames      func(childComplexity int) int
+		Retryable            func(childComplexity int) int
+		SourceAvailable      func(childComplexity int) int
+		SourceExpiryAt       func(childComplexity int) int
+		Stage                func(childComplexity int) int
+		Status               func(childComplexity int) int
 	}
 
 	VideoReceivedPart struct {
@@ -2121,6 +2132,7 @@ type QueryResolver interface {
 	BaselineVersions(ctx context.Context, assetID string, first *int, after *string) (*OriginVersionConnection, error)
 	InventoryDraft(ctx context.Context, originVersionID string) (*InventoryDraft, error)
 	BaselineInventory(ctx context.Context, assetID string, versionID *string) (*BaselineInventory, error)
+	BaselinePolicy(ctx context.Context) (*BaselinePolicy, error)
 	CounterpartyBaseline(ctx context.Context) (*CounterpartyBaseline, error)
 	InventoryTrail(ctx context.Context, originVersionID string) (*InventoryTrail, error)
 	OriginPromotion(ctx context.Context, inspectionID string) (*OriginPromotion, error)
@@ -3585,12 +3597,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CustomerPortfolioConnection.PageInfo(childComplexity), true
 
+	case "CustomerPortfolioItem.assetExternalKey":
+		if e.ComplexityRoot.CustomerPortfolioItem.AssetExternalKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.AssetExternalKey(childComplexity), true
 	case "CustomerPortfolioItem.assetId":
 		if e.ComplexityRoot.CustomerPortfolioItem.AssetID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.CustomerPortfolioItem.AssetID(childComplexity), true
+	case "CustomerPortfolioItem.assetName":
+		if e.ComplexityRoot.CustomerPortfolioItem.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.AssetName(childComplexity), true
+	case "CustomerPortfolioItem.latestPublishedInspectionId":
+		if e.ComplexityRoot.CustomerPortfolioItem.LatestPublishedInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.LatestPublishedInspectionID(childComplexity), true
 	case "CustomerPortfolioItem.progress":
 		if e.ComplexityRoot.CustomerPortfolioItem.Progress == nil {
 			break
@@ -4531,6 +4561,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InventoryCounts.Rejected(childComplexity), true
 
+	case "InventoryDraft.assetId":
+		if e.ComplexityRoot.InventoryDraft.AssetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.AssetID(childComplexity), true
 	case "InventoryDraft.environments":
 		if e.ComplexityRoot.InventoryDraft.Environments == nil {
 			break
@@ -4696,6 +4732,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.InventoryEvidence.RetentionAvailability(childComplexity), true
+	case "InventoryEvidence.timestampMs":
+		if e.ComplexityRoot.InventoryEvidence.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.TimestampMs(childComplexity), true
+	case "InventoryEvidence.url":
+		if e.ComplexityRoot.InventoryEvidence.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.URL(childComplexity), true
 
 	case "InventoryItem.color":
 		if e.ComplexityRoot.InventoryItem.Color == nil {
@@ -7490,6 +7538,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersion.SourceAvailability(childComplexity), true
+	case "OriginVersion.sourceInspectionId":
+		if e.ComplexityRoot.OriginVersion.SourceInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.SourceInspectionID(childComplexity), true
 	case "OriginVersion.status":
 		if e.ComplexityRoot.OriginVersion.Status == nil {
 			break
@@ -8161,6 +8215,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.BaselineInventory(childComplexity, args["assetId"].(string), args["versionId"].(*string)), true
+	case "Query.baselinePolicy":
+		if e.ComplexityRoot.Query.BaselinePolicy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.BaselinePolicy(childComplexity), true
 	case "Query.baselineVersions":
 		if e.ComplexityRoot.Query.BaselineVersions == nil {
 			break
@@ -11133,6 +11193,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.VideoPreparationStatus.FirstFrameReadyAt(childComplexity), true
+	case "VideoPreparationStatus.framesRepresentative":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesRepresentative == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesRepresentative(childComplexity), true
+	case "VideoPreparationStatus.framesRetained":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesRetained == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesRetained(childComplexity), true
+	case "VideoPreparationStatus.framesSampled":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesSampled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesSampled(childComplexity), true
 	case "VideoPreparationStatus.manifestDigest":
 		if e.ComplexityRoot.VideoPreparationStatus.ManifestDigest == nil {
 			break
@@ -11517,6 +11595,7 @@ type Query {
 	baselineVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
 	inventoryDraft(originVersionId: ID!): InventoryDraft
 	baselineInventory(assetId: ID!, versionId: ID): BaselineInventory
+  baselinePolicy: BaselinePolicy!
 	counterpartyBaseline: CounterpartyBaseline!
 	inventoryTrail(originVersionId: ID!): InventoryTrail!
   originPromotion(inspectionId: ID!): OriginPromotion
@@ -11720,16 +11799,16 @@ type PostalAddress { countryCode: String! postalCode: String! street: String! nu
 type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
-type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String sourceInspectionId: ID hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
 type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
 type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
 type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
-type InventoryDraft { version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
+type InventoryDraft { assetId: ID! version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
 type InventoryProgress { decided: Int! pending: Int! }
 type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
 type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
-type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID region: JSON position: Int! availability: String! retentionAvailability: String }
+type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
 type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
 type CounterpartyBaselineEvidence { kind: String! position: Int! }
 type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
@@ -11818,7 +11897,7 @@ type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason:
 type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
 type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
 type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
-type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
+type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! framesSampled: Int! framesRetained: Int! framesRepresentative: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
 type VideoPreparationConnection { nodes: [VideoPreparationStatus!]! pageInfo: PageInfo! }
 input RetryVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! clientMutationId: String! }
 input ReprocessVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! profileDigest: String! clientMutationId: String! }
@@ -11847,7 +11926,7 @@ type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
 type ReportPublicationPayload { publication: ReportPublication userErrors: [UserError!]! clientMutationId: String! }
-type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
+type CustomerPortfolioItem { assetId: ID! assetName: String! assetExternalKey: String! latestPublishedInspectionId: ID projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
@@ -12844,6 +12923,12 @@ func (ec *executionContext) childFields_CustomerPortfolioItem(ctx context.Contex
 	switch field.Name {
 	case "assetId":
 		return ec.fieldContext_CustomerPortfolioItem_assetId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_CustomerPortfolioItem_assetName(ctx, field)
+	case "assetExternalKey":
+		return ec.fieldContext_CustomerPortfolioItem_assetExternalKey(ctx, field)
+	case "latestPublishedInspectionId":
+		return ec.fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(ctx, field)
 	case "projectId":
 		return ec.fieldContext_CustomerPortfolioItem_projectId(ctx, field)
 	case "publishedClassification":
@@ -13248,6 +13333,8 @@ func (ec *executionContext) childFields_InventoryCounts(ctx context.Context, fie
 
 func (ec *executionContext) childFields_InventoryDraft(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
+	case "assetId":
+		return ec.fieldContext_InventoryDraft_assetId(ctx, field)
 	case "version":
 		return ec.fieldContext_InventoryDraft_version(ctx, field)
 	case "environments":
@@ -13312,6 +13399,10 @@ func (ec *executionContext) childFields_InventoryEvidence(ctx context.Context, f
 		return ec.fieldContext_InventoryEvidence_mediaId(ctx, field)
 	case "frameId":
 		return ec.fieldContext_InventoryEvidence_frameId(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_InventoryEvidence_timestampMs(ctx, field)
+	case "url":
+		return ec.fieldContext_InventoryEvidence_url(ctx, field)
 	case "region":
 		return ec.fieldContext_InventoryEvidence_region(ctx, field)
 	case "position":
@@ -14096,6 +14187,8 @@ func (ec *executionContext) childFields_OriginVersion(ctx context.Context, field
 		return ec.fieldContext_OriginVersion_purpose(ctx, field)
 	case "source":
 		return ec.fieldContext_OriginVersion_source(ctx, field)
+	case "sourceInspectionId":
+		return ec.fieldContext_OriginVersion_sourceInspectionId(ctx, field)
 	case "hasInventory":
 		return ec.fieldContext_OriginVersion_hasInventory(ctx, field)
 	case "draftState":
@@ -15634,6 +15727,12 @@ func (ec *executionContext) childFields_VideoPreparationStatus(ctx context.Conte
 		return ec.fieldContext_VideoPreparationStatus_attempts(ctx, field)
 	case "processedFrames":
 		return ec.fieldContext_VideoPreparationStatus_processedFrames(ctx, field)
+	case "framesSampled":
+		return ec.fieldContext_VideoPreparationStatus_framesSampled(ctx, field)
+	case "framesRetained":
+		return ec.fieldContext_VideoPreparationStatus_framesRetained(ctx, field)
+	case "framesRepresentative":
+		return ec.fieldContext_VideoPreparationStatus_framesRepresentative(ctx, field)
 	case "errorCode":
 		return ec.fieldContext_VideoPreparationStatus_errorCode(ctx, field)
 	case "retryable":
@@ -24169,6 +24268,75 @@ func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetId(_ context
 	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _CustomerPortfolioItem_assetName(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerPortfolioItem_assetExternalKey(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_assetExternalKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetExternalKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetExternalKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerPortfolioItem_latestPublishedInspectionId(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LatestPublishedInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
 func (ec *executionContext) _CustomerPortfolioItem_projectId(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27891,6 +28059,29 @@ func (ec *executionContext) fieldContext_InventoryCounts_notReviewed(_ context.C
 	return graphql.NewScalarFieldContext("InventoryCounts", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _InventoryDraft_assetId(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_assetId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
 func (ec *executionContext) _InventoryDraft_version(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28472,6 +28663,52 @@ func (ec *executionContext) _InventoryEvidence_frameId(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_InventoryEvidence_frameId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_timestampMs(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_url(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _InventoryEvidence_region(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
@@ -39665,6 +39902,29 @@ func (ec *executionContext) fieldContext_OriginVersion_source(_ context.Context,
 	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _OriginVersion_sourceInspectionId(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_sourceInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_sourceInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
 func (ec *executionContext) _OriginVersion_hasInventory(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -43142,6 +43402,38 @@ func (ec *executionContext) fieldContext_Query_baselineInventory(ctx context.Con
 	if fc.Args, err = ec.field_Query_baselineInventory_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_baselinePolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_baselinePolicy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().BaselinePolicy(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+			return ec.marshalNBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_baselinePolicy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselinePolicy(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -54553,6 +54845,75 @@ func (ec *executionContext) fieldContext_VideoPreparationStatus_processedFrames(
 	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _VideoPreparationStatus_framesSampled(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesSampled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesSampled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesSampled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPreparationStatus_framesRetained(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesRetained(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesRetained, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesRetained(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPreparationStatus_framesRepresentative(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesRepresentative(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesRepresentative, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesRepresentative(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _VideoPreparationStatus_errorCode(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -64812,6 +65173,21 @@ func (ec *executionContext) _CustomerPortfolioItem(ctx context.Context, sel ast.
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "assetName":
+			out.Values[i] = ec._CustomerPortfolioItem_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetExternalKey":
+			out.Values[i] = ec._CustomerPortfolioItem_assetExternalKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "latestPublishedInspectionId":
+			out.Values[i] = ec._CustomerPortfolioItem_latestPublishedInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "projectId":
 			out.Values[i] = ec._CustomerPortfolioItem_projectId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -66110,6 +66486,11 @@ func (ec *executionContext) _InventoryDraft(ctx context.Context, sel ast.Selecti
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("InventoryDraft")
+		case "assetId":
+			out.Values[i] = ec._InventoryDraft_assetId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "version":
 			out.Values[i] = ec._InventoryDraft_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -66321,6 +66702,16 @@ func (ec *executionContext) _InventoryEvidence(ctx context.Context, sel ast.Sele
 			}
 		case "frameId":
 			out.Values[i] = ec._InventoryEvidence_frameId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._InventoryEvidence_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._InventoryEvidence_url(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -69741,6 +70132,11 @@ func (ec *executionContext) _OriginVersion(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "sourceInspectionId":
+			out.Values[i] = ec._OriginVersion_sourceInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "hasInventory":
 			out.Values[i] = ec._OriginVersion_hasInventory(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -71481,6 +71877,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_baselineInventory(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "baselinePolicy":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_baselinePolicy(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -76705,6 +77123,21 @@ func (ec *executionContext) _VideoPreparationStatus(ctx context.Context, sel ast
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "framesSampled":
+			out.Values[i] = ec._VideoPreparationStatus_framesSampled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesRetained":
+			out.Values[i] = ec._VideoPreparationStatus_framesRetained(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesRepresentative":
+			out.Values[i] = ec._VideoPreparationStatus_framesRepresentative(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "errorCode":
 			out.Values[i] = ec._VideoPreparationStatus_errorCode(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -77601,6 +78034,16 @@ func (ec *executionContext) marshalNBaselineCounterpartyInvitation2ᚖinspection
 		return graphql.Null
 	}
 	return ec._BaselineCounterpartyInvitation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx context.Context, sel ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BaselinePolicy(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBaselinePolicyPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicyPayload(ctx context.Context, sel ast.SelectionSet, v *BaselinePolicyPayload) graphql.Marshaler {

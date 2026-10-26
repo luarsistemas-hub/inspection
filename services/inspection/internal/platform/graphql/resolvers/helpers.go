@@ -599,7 +599,7 @@ func mapOriginVersion(row database.OriginVersion, details *originlist.Details) *
 	if details != nil {
 		revision = details.OriginRevision
 	}
-	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: revision, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated, ActivatedBy: optionalID(row.ActivatedByMembershipID), Purpose: purpose, Source: optional(row.Source), HasInventory: row.HasInventory, DraftState: draftState}
+	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: revision, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated, ActivatedBy: optionalID(row.ActivatedByMembershipID), Purpose: purpose, Source: optional(row.Source), SourceInspectionID: optionalID(row.SourceInspectionID), HasInventory: row.HasInventory, DraftState: draftState}
 }
 
 func (r *Resolver) projectOriginVersion(ctx context.Context, tenantID identity.ID, row database.OriginVersion) (*graphql1.OriginVersion, error) {

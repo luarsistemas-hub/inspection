@@ -5,6 +5,7 @@ import { accessTokenForRequest, getMembershipId } from "@/auth/session";
 import { prepareVideoPlaybackSession } from "@/auth/video-playback-session";
 import { buildReportRooms, type ReportRoom, type RoomItem } from "./report-room-model";
 import { presentAnalysisStatus, presentFindingCategory, presentClassification, presentNoRelevantChange } from "./presentation";
+import { buildCoverageSummary, conditionLabel, itemTypeLabel, purposeLabel } from "./inventory-presentation";
 
 type InternalReport = NonNullable<ReportWorkspaceQuery["report"]>;
 type CustomerReport = NonNullable<CustomerReportQuery["customerReport"]>;
@@ -40,16 +41,41 @@ export function ReportVisual({ report, onDownload, onMediaError, downloadUrl, do
     <div className="report-details">
       <details><summary>Dados do imóvel e da vistoria</summary><p>{report.context.asset.externalKey} · Responsável: {report.context.participant?.name}<br />{report.context.template?.name} · v{report.context.template?.version}{report.context.inspection?.stageLabel && <> · {report.context.inspection.stageLabel}</>}</p>{captureInstructions.map((instruction) => <p key={instruction}>{instruction}</p>)}</details>
     </div>
-    <ReportSections key={report.id} rooms={rooms} onMediaError={onMediaError} />
+    {report.inventory && <InventoryReport inventory={report.inventory} evidence={report.evidence.nodes} snapshotId={report.id} classification={report.classification} />}
+    {!(report.inventory && report.classification === "NORMAL" && report.inventory.problems.length === 0) && <ReportSections key={report.id} rooms={rooms} onMediaError={onMediaError} />}
   </article>;
 }
 
 export function CustomerReportVisual({ report, evidence, onMediaError }: { report: CustomerReport; evidence: CustomerEvidenceQuery["customerEvidence"]["nodes"]; onMediaError?: () => void }) {
   return <article className="report-visual report-visual--customer">
     <CustomerReportHeader classification={report.classification} advisory={report.advisory} context={report.context} version={report.version} />
-    <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, snapshotId: report.snapshotId, availability: item.mediaAvailability }))} findings={[]} hasReferenceInReport={evidence.some((item) => item.role === "REFERENCE")} onMediaError={onMediaError} />
+    {report.inventory && <InventoryReport inventory={report.inventory} evidence={evidence.map((item) => ({ ...item, availability: item.mediaAvailability }))} snapshotId={report.snapshotId} classification={report.classification} />}
+    {!(report.inventory && report.classification === "NORMAL" && report.inventory.problems.length === 0) && <ReportEvidence requirements={report.requirements} evidence={evidence.map((item) => ({ ...item, snapshotId: report.snapshotId, availability: item.mediaAvailability }))} findings={[]} hasReferenceInReport={evidence.some((item) => item.role === "REFERENCE")} onMediaError={onMediaError} />}
   </article>;
 }
+
+type InventoryPair = { originEvidenceId: string; currentEvidenceId: string; originSourceAvailability: string; currentSourceAvailability: string; timestampMs?: number | null };
+type InventoryEntry = { environment: string; type: string; name: string; status: string; conditionBefore?: string | null; conditionAfter?: string | null; reason?: string | null; pairs: InventoryPair[] };
+type InventoryProjection = { referenceVersionNumber: number; purpose: string; coverage?: { expectedItems: number; assessedItems: number; notObserved: number; environmentsNotCaptured: string[]; environmentsAddedDuringCapture: string[] } | null; problems: InventoryEntry[]; informational: InventoryEntry[] };
+
+function InventoryReport({ inventory, evidence, snapshotId, classification }: { inventory: InventoryProjection; evidence: Array<ReportEvidenceItem & { mediaAvailability?: string | null }>; snapshotId: string; classification: string }) {
+  const evidenceById = new Map(evidence.map((item) => [item.id, item]));
+  const clean = classification === "NORMAL" && inventory.problems.length === 0;
+  const coverage = buildCoverageSummary(inventory.coverage);
+  return <section className="report-inventory" aria-label="Comparação do inventário">
+    <header><div><p className="report-kicker">Inventário de referência · versão {inventory.referenceVersionNumber}</p><h3>{clean ? "Sem alertas no inventário" : inventory.problems.length ? "Problemas encontrados" : "Resumo do inventário"}</h3><p>Propósito: {purposeLabel(inventory.purpose)}</p></div>{coverage && <strong>{coverage.label}</strong>}</header>
+    {clean ? <p>Todos os itens esperados foram verificados sem alterações relevantes.</p> : <>
+      {inventory.coverage?.notObserved ? <p>{inventory.coverage.notObserved} item(ns) não observado(s).</p> : null}
+      {inventory.coverage?.environmentsNotCaptured.length ? <p>Ambientes não capturados: {inventory.coverage.environmentsNotCaptured.join(", ")}</p> : null}
+      {inventory.problems.map((item, index) => <article className="report-inventory-entry" key={`${item.environment}-${item.name}-${index}`}><div><p>{item.environment} · {itemTypeLabel(item.type)}</p><h4>{item.name}</h4><p>{reportStatusLabel(item.status)}{item.conditionBefore || item.conditionAfter ? ` · ${conditionLabel(item.conditionBefore)} → ${conditionLabel(item.conditionAfter)}` : ""}</p>{item.reason && <p>{item.reason}</p>}</div>{item.pairs.length ? <div className="report-inventory-pairs">{item.pairs.map((pair) => { const origin = evidenceById.get(pair.originEvidenceId); const current = evidenceById.get(pair.currentEvidenceId); return <div className="report-inventory-pair" key={`${pair.originEvidenceId}-${pair.currentEvidenceId}`}><div><strong>Na origem</strong>{origin ? origin.evidenceKind === "VIDEO_FRAME" ? <VideoEvidencePlayer item={{ ...origin, snapshotId, sourceAvailability: pair.originSourceAvailability }} /> : <EvidenceThumbnail item={{ ...origin, snapshotId, sourceAvailability: pair.originSourceAvailability }} /> : <span>{pair.originSourceAvailability === "EXPIRED" ? "Quadro preservado" : "Evidência de origem indisponível"}</span>}<small>{reportAvailabilityLabel(pair.originSourceAvailability)}</small>{origin?.timestampMs != null && <small>Momento {formatVideoTime(origin.timestampMs)}</small>}</div><div><strong>Na vistoria atual</strong>{current ? current.evidenceKind === "VIDEO_FRAME" ? <VideoEvidencePlayer item={{ ...current, snapshotId, timestampMs: pair.timestampMs ?? current.timestampMs, sourceAvailability: pair.currentSourceAvailability }} /> : <EvidenceThumbnail item={{ ...current, snapshotId, sourceAvailability: pair.currentSourceAvailability }} /> : <span>Evidência atual indisponível</span>}<small>{pair.timestampMs != null ? `Momento ${formatVideoTime(pair.timestampMs)}` : reportAvailabilityLabel(pair.currentSourceAvailability)}</small></div></div>; })}</div> : <p>Não observado — sem imagem correspondente.</p>}</article>)}
+      {inventory.informational.length > 0 && <details><summary>Melhorias e itens informativos ({inventory.informational.length})</summary>{inventory.informational.map((item, index) => <p key={`${item.environment}-${item.name}-${index}`}>{item.environment} · {item.name} · {reportStatusLabel(item.status)}</p>)}</details>}
+    </>}
+    {inventory.coverage?.environmentsAddedDuringCapture.length ? <p className="report-inventory-added">Ambientes adicionados nesta vistoria: {inventory.coverage.environmentsAddedDuringCapture.join(", ")}</p> : null}
+  </section>;
+}
+
+function reportStatusLabel(value: string) { return ({ MISSING: "Não encontrado", CONDITION_CHANGED: "Condição alterada", PRESENT_UNCHANGED: "Presente sem alteração relevante", IMPROVED: "Condição melhorada", NOT_OBSERVED: "Não observado", OUTSIDE_INVENTORY: "Fora do inventário", ENVIRONMENT_NOT_CAPTURED: "Ambiente não capturado", DAMAGE: "Dano identificado" } as Record<string, string>)[value] ?? "Alteração identificada"; }
+function reportAvailabilityLabel(value: string) { return ({ AVAILABLE: "Original disponível", RETAINED: "Original disponível", ACTIVE_BASELINE: "Disponível enquanto o inventário estiver ativo", CONTESTATION_HOLD: "Mantido enquanto a contestação estiver aberta", LEGAL_HOLD: "Mantido por retenção legal", EXPIRED: "Original não disponível; quadro preservado", MISSING: "Evidência indisponível" } as Record<string, string>)[value] ?? "Evidência indisponível"; }
 
 function CustomerReportHeader({ classification, advisory, context, version }: { classification: string; advisory: string; context: CustomerReport["context"]; version: number }) {
   return <header className="report-header">
@@ -310,7 +336,7 @@ function EvidenceThumbnail({ item, onMediaError }: { item: ReportEvidenceItem; o
 }
 
 /** Same-origin BFF URL; the report snapshot scopes which videos the API will serve. */
-function videoContentUrl(item: ReportEvidenceItem): string {
+export function videoContentUrl(item: ReportEvidenceItem): string {
   return item.sourceMediaId && item.snapshotId ? `/api/media/videos/${encodeURIComponent(item.sourceMediaId)}/content?${new URLSearchParams({ snapshotId: item.snapshotId })}` : "";
 }
 
@@ -357,8 +383,7 @@ export function VideoEvidencePlayer({ item, onMediaError }: { item: ReportEviden
   const seekToEvidence = () => {
     const video = videoRef.current;
     if (!video || !validTimestamp || timestampMs === null || timestampMs === undefined) return false;
-    if (!Number.isFinite(video.duration) || timestampMs / 1000 >= video.duration) { setSeekUnavailable(true); setState("unavailable"); return false; }
-    video.currentTime = timestampMs / 1000;
+    if (!seekVideoToEvidence(video, timestampMs)) { setSeekUnavailable(true); setState("unavailable"); return false; }
     return true;
   };
 
@@ -385,8 +410,15 @@ export function VideoEvidencePlayer({ item, onMediaError }: { item: ReportEviden
   </div>;
 }
 
-function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; onMediaError?: () => void }) {
+export function seekVideoToEvidence(video: Pick<HTMLVideoElement, "duration" | "currentTime">, timestampMs: number) {
+  if (!Number.isFinite(timestampMs) || timestampMs < 0 || !Number.isFinite(video.duration) || timestampMs / 1000 >= video.duration) return false;
+  video.currentTime = timestampMs / 1000;
+  return true;
+}
+
+export function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; onMediaError?: () => void }) {
   const [blobURL, setBlobURL] = useState<string>();
+  const [unavailable, setUnavailable] = useState(false);
   const onError = useRef(onMediaError);
   useEffect(() => { onError.current = onMediaError; }, [onMediaError]);
   const authenticatedFrame = url.startsWith("/media/video-evidence/");
@@ -395,6 +427,7 @@ function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; o
     const controller = new AbortController();
     let createdURL: string | undefined;
     setBlobURL(undefined);
+    setUnavailable(false);
     const load = async () => {
       const token = await accessTokenForRequest();
       if (!token) throw new Error("missing access token");
@@ -408,9 +441,10 @@ function EvidenceImage({ url, alt, onMediaError }: { url: string; alt: string; o
       createdURL = URL.createObjectURL(blob);
       if (!controller.signal.aborted) setBlobURL(createdURL);
     };
-    void load().catch(() => { if (!controller.signal.aborted) onError.current?.(); });
+    void load().catch(() => { if (!controller.signal.aborted) { setUnavailable(true); onError.current?.(); } });
     return () => { controller.abort(); if (createdURL) URL.revokeObjectURL(createdURL); };
   }, [authenticatedFrame, url]);
+  if (unavailable) return <span className="report-image-missing">Evidência indisponível</span>;
   if (authenticatedFrame && !blobURL) return <div className="report-image-missing">Carregando frame…</div>;
-  return <img src={authenticatedFrame ? blobURL : url} loading="lazy" alt={alt} onError={() => onMediaError?.()} />;
+  return <img src={authenticatedFrame ? blobURL : url} loading="lazy" alt={alt} onError={() => { setUnavailable(true); onMediaError?.(); }} />;
 }

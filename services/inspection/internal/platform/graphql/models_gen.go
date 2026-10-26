@@ -641,12 +641,15 @@ type CustomerPortfolioFilter struct {
 }
 
 type CustomerPortfolioItem struct {
-	AssetID                 string  `json:"assetId"`
-	ProjectID               *string `json:"projectId,omitempty"`
-	PublishedClassification *string `json:"publishedClassification,omitempty"`
-	Status                  string  `json:"status"`
-	Progress                int     `json:"progress"`
-	UpdatedAt               string  `json:"updatedAt"`
+	AssetID                     string  `json:"assetId"`
+	AssetName                   string  `json:"assetName"`
+	AssetExternalKey            string  `json:"assetExternalKey"`
+	LatestPublishedInspectionID *string `json:"latestPublishedInspectionId,omitempty"`
+	ProjectID                   *string `json:"projectId,omitempty"`
+	PublishedClassification     *string `json:"publishedClassification,omitempty"`
+	Status                      string  `json:"status"`
+	Progress                    int     `json:"progress"`
+	UpdatedAt                   string  `json:"updatedAt"`
 }
 
 type CustomerReport struct {
@@ -905,6 +908,7 @@ type InventoryDecisionInput struct {
 }
 
 type InventoryDraft struct {
+	AssetID      string                  `json:"assetId"`
 	Version      *OriginVersion          `json:"version"`
 	Environments []*InventoryEnvironment `json:"environments"`
 	Progress     *InventoryProgress      `json:"progress"`
@@ -937,6 +941,8 @@ type InventoryEvidence struct {
 	Kind                  string         `json:"kind"`
 	MediaID               string         `json:"mediaId"`
 	FrameID               *string        `json:"frameId,omitempty"`
+	TimestampMs           *int           `json:"timestampMs,omitempty"`
+	URL                   *string        `json:"url,omitempty"`
 	Region                map[string]any `json:"region,omitempty"`
 	Position              int            `json:"position"`
 	Availability          string         `json:"availability"`
@@ -1419,6 +1425,7 @@ type OriginVersion struct {
 	ActivatedBy             *string                           `json:"activatedBy,omitempty"`
 	Purpose                 *string                           `json:"purpose,omitempty"`
 	Source                  *string                           `json:"source,omitempty"`
+	SourceInspectionID      *string                           `json:"sourceInspectionId,omitempty"`
 	HasInventory            bool                              `json:"hasInventory"`
 	DraftState              *string                           `json:"draftState,omitempty"`
 	Counts                  *InventoryCounts                  `json:"counts,omitempty"`
@@ -2598,19 +2605,22 @@ type VideoPreparationPayload struct {
 }
 
 type VideoPreparationStatus struct {
-	MediaID            string  `json:"mediaId"`
-	PreparationID      string  `json:"preparationId"`
-	Status             string  `json:"status"`
-	Stage              string  `json:"stage"`
-	PreparationVersion int     `json:"preparationVersion"`
-	Attempts           int     `json:"attempts"`
-	ProcessedFrames    int     `json:"processedFrames"`
-	ErrorCode          string  `json:"errorCode"`
-	Retryable          bool    `json:"retryable"`
-	SourceAvailable    bool    `json:"sourceAvailable"`
-	ManifestDigest     string  `json:"manifestDigest"`
-	FirstFrameReadyAt  *string `json:"firstFrameReadyAt,omitempty"`
-	SourceExpiryAt     *string `json:"sourceExpiryAt,omitempty"`
+	MediaID              string  `json:"mediaId"`
+	PreparationID        string  `json:"preparationId"`
+	Status               string  `json:"status"`
+	Stage                string  `json:"stage"`
+	PreparationVersion   int     `json:"preparationVersion"`
+	Attempts             int     `json:"attempts"`
+	ProcessedFrames      int     `json:"processedFrames"`
+	FramesSampled        int     `json:"framesSampled"`
+	FramesRetained       int     `json:"framesRetained"`
+	FramesRepresentative int     `json:"framesRepresentative"`
+	ErrorCode            string  `json:"errorCode"`
+	Retryable            bool    `json:"retryable"`
+	SourceAvailable      bool    `json:"sourceAvailable"`
+	ManifestDigest       string  `json:"manifestDigest"`
+	FirstFrameReadyAt    *string `json:"firstFrameReadyAt,omitempty"`
+	SourceExpiryAt       *string `json:"sourceExpiryAt,omitempty"`
 }
 
 type VideoReceivedPart struct {

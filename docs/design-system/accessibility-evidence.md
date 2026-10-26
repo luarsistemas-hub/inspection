@@ -71,6 +71,8 @@ evidence.
 | 4.1.2 | A | Pending route/state review | not-tested | E2E-043, E2E-044 |
 | 4.1.3 | AA | Pending route/state review | not-tested | E2E-043, E2E-044 |
 
+Task 7 routes added to the migration inventory: Admin `/baseline-policy`; Dashboard `/baselines`, `/baselines/review/[originVersionId]`, and `/baselines/review/inspection/[inspectionId]`. They follow the same manual execution gate as the other routes: the `ALL-SURFACES` records above stay `not-tested`, and their 55-criterion route/state walkthroughs remain pending. Browser automation alone does not establish the required screen-reader, zoom, and physical-device evidence, so no conformance is claimed for them.
+
 Each executed record must add: inventory surface ID, route, state, persona,
 criterion, browser/OS/AT versions, viewport or zoom, fixture, steps, expected
 and observed behavior, artifact, reviewer and execution date. `not-applicable`

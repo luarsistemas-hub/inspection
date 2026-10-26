@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -13,6 +14,19 @@ import (
 
 // DefaultDeadlineDays is the contestation window used until a tenant configures one.
 const DefaultDeadlineDays = 5
+
+// Policy returns the tenant setting or the product default when it has not been configured.
+func (s Service) Policy(ctx context.Context, tenantID identity.ID) (database.BaselinePolicy, error) {
+	row := database.BaselinePolicy{TenantID: tenantID, ContestationDeadlineDays: DefaultDeadlineDays}
+	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		err := tx.Where("tenant_id=?", tenantID).First(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	})
+	return row, err
+}
 
 // UpdatePolicy upserts the tenant's immutable default for future invitations only.
 func (s Service) UpdatePolicy(ctx context.Context, tenantID identity.ID, days int) (database.BaselinePolicy, error) {
