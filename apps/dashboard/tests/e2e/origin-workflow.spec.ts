@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import type { DashboardOriginVersionsQuery } from "@/graphql/generated";
-import { loginAsLocalAdmin } from "./support/auth";
+import { loginAsMockAdmin } from "./support/auth";
 
 const pageInfo = { hasNextPage: false, endCursor: null };
 const readyOrigin: DashboardOriginVersionsQuery["originVersions"]["nodes"][number] = {
@@ -53,7 +53,7 @@ test.describe("Dashboard origin management mock journey", () => {
 
   test("invites and activates a video origin, then selects it for inspection planning", async ({ page }) => {
     const calls = await installMocks(page);
-    await loginAsLocalAdmin(page, "/inspections?inspectionId=inspection-a");
+    await loginAsMockAdmin(page, "/inspections?inspectionId=inspection-a");
 
     await expect(page.getByText("Esta vistoria foi configurada sem referência de comparação.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Usar esta vistoria como origem" })).toBeVisible();

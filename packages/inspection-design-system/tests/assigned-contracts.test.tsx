@@ -39,6 +39,14 @@ async function mount(node: ReactNode) {
   return { container, root };
 }
 
+/** Waits for the Dialog's deferred focus restoration (timeout + two frames). */
+async function flushFocusRestore() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
 async function unmount(rendered: { container: HTMLElement; root: Root }) {
   await act(async () => rendered.root.unmount());
   rendered.container.remove();
@@ -309,8 +317,21 @@ describe("assigned shared foundation contracts", () => {
     const rendered = await mount(<Dialog isOpen title="Nova vistoria" restoreFocusRef={{ current: fallback }} onClose={() => {}} />);
     trigger.remove();
     await act(async () => rendered.root.render(<Dialog isOpen={false} title="Nova vistoria" restoreFocusRef={{ current: fallback }} onClose={() => {}} />));
+    await flushFocusRestore();
     expect(document.activeElement).toBe(fallback);
     fallback.remove();
+    await unmount(rendered);
+  });
+
+  it("Dialog mounted closed does not move focus", async () => {
+    const field = document.createElement("input");
+    document.body.append(field);
+    field.focus();
+    const rendered = await mount(<Dialog isOpen={false} title="Detalhe" onClose={() => {}} />);
+    await act(async () => rendered.root.render(<Dialog isOpen={false} title="Detalhe atualizado" onClose={() => {}} />));
+    await flushFocusRestore();
+    expect(document.activeElement).toBe(field);
+    field.remove();
     await unmount(rendered);
   });
 

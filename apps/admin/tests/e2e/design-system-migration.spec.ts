@@ -30,9 +30,10 @@ test("E2E-039 Admin organization stays operable and accessible across supported 
   await pageInfo.focus();
   await pageInfo.press("Enter");
   await expect(pageInfo).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("Unidades e estrutura da sua operação.")).toBeVisible();
+  const disclosure = page.locator(".inspection-info-disclosure").filter({ has: page.getByRole("button", { name: "Informações sobre Organização" }) });
+  await expect(disclosure.getByText("Unidades e estrutura da sua operação.")).toBeVisible();
   await pageInfo.press("Enter");
-  await expect(page.getByText("Unidades e estrutura da sua operação.")).toBeHidden();
+  await expect(disclosure.getByText("Unidades e estrutura da sua operação.")).toBeHidden();
 
   await page.getByRole("button", { name: "Criar unidade" }).click();
   const dialog = page.locator(".inspection-dialog");
@@ -71,9 +72,9 @@ test("E2E-065 Admin secondary navigation and prompt metadata fit a 320px viewpor
   }
 
   await bottomBar.getByRole("link", { name: "Organização" }).click();
-  const mobileCollection = page.locator(".admin-mobile-collection");
+  const mobileCollection = page.getByRole("list", { name: "Organização: registros" });
   await expect(mobileCollection).toBeVisible();
-  await expect(page.locator(".admin-content > .inspection-data-table")).toBeHidden();
-  await mobileCollection.getByRole("button", { name: "Abrir detalhes" }).first().click();
+  await expect(page.locator(".inspection-data-table")).toHaveCount(0);
+  await mobileCollection.getByRole("button", { name: /^Abrir detalhes de/ }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });

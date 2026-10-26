@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { collectionRows, loginAsLocalAdmin, mockAdminOidc, navigateAdmin } from "./support/auth";
+import { collectionRows, loginAsMockAdmin, mockAdminOidc, navigateAdmin } from "./support/auth";
 
 type GraphQLReply = { data?: Record<string, unknown>; errors?: Array<{ message: string; extensions?: { code?: string; field?: string } }> };
 type GraphQLCall = { operation: string; variables: Record<string, unknown> };
@@ -127,7 +127,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("desktop menu switches between labels and icons; smaller screens stay compact", async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 900 });
     await installMocks(page);
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
 
     const sidebar = page.locator(".admin-shell .inspection-adaptive-navigation__sidebar");
     const toggle = sidebar.getByRole("button", { name: "Recolher menu" });
@@ -143,7 +143,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     expect(compactWidth).toBeLessThan(expandedWidth);
 
     await page.reload();
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
     await expect(sidebar.getByRole("button", { name: "Expandir menu" })).toBeVisible();
     await sidebar.getByRole("button", { name: "Expandir menu" }).click();
     await expect(organization.locator("span:last-child")).toBeVisible();
@@ -287,7 +287,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { errors: [{ message: "Falha de transporte", extensions: { code: "INTERNAL" } }] },
       { data: { createBusinessUnit: { businessUnit: { id: "unit-new", code: "UN02", name: "Unidade Sul", status: "ACTIVE", version: 1 }, userErrors: [], clientMutationId: "success" } } },
     );
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
     await page.getByRole("button", { name: "Criar unidade" }).click();
     await page.getByLabel("Código da unidade").fill("UN01");
     await page.getByRole("button", { name: "Salvar operação" }).click();
@@ -311,7 +311,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { data: { businessUnits: { nodes: [], pageInfo: pageInfo() } } },
       { data: { businessUnits: { nodes: Array.from({ length: 25 }, (_, index) => ({ id: `unit-${index}`, code: `UN${String(index).padStart(2, "0")}`, name: `Unidade ${index}`, status: "ACTIVE", version: 1 })), pageInfo: pageInfo(true, "cursor-next") } } },
     );
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
     await expect(page.getByRole("heading", { name: "Nenhum registro configurado em Organização." })).toBeVisible();
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Organização");
@@ -330,7 +330,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       ], pageInfo: pageInfo() } },
     };
     mocks.enqueue("AdminOrganization", units, units);
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
     await expect(collectionRows(page).filter({ hasText: "Unidade Norte" })).toHaveCount(1);
     await page.getByRole("textbox", { name: "Buscar unidade" }).fill("su-02");
     await expect(collectionRows(page).filter({ hasText: "Unidade Sul" })).toHaveCount(1);
@@ -341,7 +341,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-038 does not request protected organization data for an auditor", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.setIdentity(activeIdentity("AUDITOR"));
-    await loginAsLocalAdmin(page, "/organization");
+    await loginAsMockAdmin(page, "/organization");
     await expect(page.getByRole("heading", { name: "Acesso restrito" })).toBeVisible();
     await expect(page.getByRole("row", { name: /Unidade Norte/ })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Navegação administrativa" }).getByRole("link", { name: "Organização" })).toHaveCount(0);
@@ -355,7 +355,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await loginIntoFirstAccess(page);
     await page.getByRole("button", { name: "Criar operação local" }).click();
     await expect(page.getByRole("heading", { name: "Organização" })).toBeVisible();
-    await expect(page.getByText("Minha operação").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Abrir perfil de Minha operação" })).toBeVisible();
     expect(mocks.calls.find((call) => call.operation === "BootstrapTenant")?.variables.input).toMatchObject({ name: "Minha operação", businessUnitCode: "MATRIZ" });
 
   });
@@ -379,7 +379,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { data: { inviteInternalUser: { membership: { id: "member-new", role: "EMPLOYEE", status: "ACTIVE", version: 1, scopes: [] }, userErrors: [], clientMutationId: "invite-success" } } },
     );
     const release = mocks.hold("AdminInviteInternalUser");
-    await loginAsLocalAdmin(page, "/access");
+    await loginAsMockAdmin(page, "/access");
     await expect(page.getByRole("heading", { name: "Nenhum registro configurado em Identidade e acesso." })).toBeVisible();
     await page.getByRole("button", { name: "Convidar usuário" }).click();
     await page.getByLabel("Nome do usuário").fill("Usuário de teste");
@@ -406,7 +406,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     const mocks = await installMocks(page);
     mocks.setIdentity(activeIdentity("AUDITOR"));
     mocks.enqueue("AdminAccess", { data: { memberships: { nodes: [], pageInfo: pageInfo() } } });
-    await loginAsLocalAdmin(page, "/access");
+    await loginAsMockAdmin(page, "/access");
     await expect(page.getByRole("heading", { name: "Identidade e acesso", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Convidar usuário" })).toHaveCount(0);
     expect(mocks.calls.some((call) => call.operation === "AdminInviteInternalUser")).toBe(false);
@@ -421,7 +421,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { errors: [{ message: "Unidades indisponíveis.", extensions: { code: "INTERNAL" } }] },
     );
     const release = mocks.hold("AdminUpsertParticipant");
-    await loginAsLocalAdmin(page, "/catalogs");
+    await loginAsMockAdmin(page, "/catalogs");
 
     await page.getByRole("button", { name: "Criar responsável" }).click();
     const requiredUnit = page.getByLabel("Unidade");
@@ -473,7 +473,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     mocks.enqueue("AdminCatalogs", catalogs,
       { data: { segmentDefinitions: catalogs.data.segmentDefinitions, templates: { nodes: [], pageInfo: pageInfo() } } },
       catalogs, catalogs);
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
 
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await expect(page.getByLabel("Unidade").locator("option")).toHaveCount(3);
@@ -526,7 +526,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("asset registration sends the required attributes from its segment schema", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminSegmentDefinitionVersion", { data: { segmentDefinitionVersion: { id: "segment-version-a", schema: { type: "object", properties: { propertyType: { type: "string", enum: ["APARTMENT", "HOUSE"] }, purpose: { type: "string", enum: ["SALE", "RENTAL"] } }, required: ["propertyType", "purpose"] } } } });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -547,7 +547,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     assets.nodes[0].status = "DRAFT";
     mocks.enqueue("AdminAssets", draft);
     mocks.enqueue("AdminSegmentDefinitionVersion", { data: { segmentDefinitionVersion: { id: "segment-version-a", schema: { type: "object", properties: { propertyType: { type: "string", enum: ["APARTMENT", "HOUSE"] }, purpose: { type: "string", enum: ["SALE", "RENTAL"] } }, required: ["propertyType", "purpose"] } } } });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Abrir detalhes de Apartamento 101" }).click();
     await page.getByRole("button", { name: "Completar cadastro" }).click();
     await page.getByLabel("Tipo do imóvel").selectOption("APARTMENT");
@@ -560,7 +560,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("CEP lookup preserves edits made while awaiting the provider", async ({ page }) => {
     const mocks = await installMocks(page);
     const release = mocks.hold("AdminLookupPostalCode");
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByRole("button", { name: "Preencher endereço manualmente" }).click();
     await page.getByRole("textbox", { name: /^CEP/ }).fill("01001-000");
@@ -582,7 +582,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("changing CEP ignores the old result and allows a new lookup", async ({ page }) => {
     const mocks = await installMocks(page);
     const release = mocks.hold("AdminLookupPostalCode");
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByRole("textbox", { name: /^CEP/ }).fill("01001000");
     await page.getByRole("button", { name: "Buscar CEP" }).click();
@@ -599,7 +599,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("address form fits small screens with enlarged text and both themes", async ({ page }) => {
     await installMocks(page);
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.setViewportSize({ width: 320, height: 900 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
     for (const theme of ["light", "dark"]) {
@@ -616,7 +616,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("completes a legacy address and preserves asset coordinates and configuration", async ({ page }) => {
     const mocks = await installMocks(page);
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Abrir detalhes de Apartamento 101" }).click();
     await page.getByRole("button", { name: "Editar imóvel" }).click();
     await page.getByRole("textbox", { name: /^CEP/ }).fill("01001-000");
@@ -643,7 +643,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-013 shows a forbidden asset relationship error and preserves the entered values", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminRegisterAsset", { errors: [{ message: "Você não tem permissão para esta operação.", extensions: { code: "FORBIDDEN" } }] });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -659,7 +659,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("IT-011 identifies an empty asset name without losing the other form values", async ({ page }) => {
     const mocks = await installMocks(page);
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -676,7 +676,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-012 keeps an entered asset name editable after a server length validation", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminRegisterAsset", { data: { registerAsset: { asset: null, userErrors: [{ code: "VALIDATION", field: "name", message: "O nome do imóvel excede o limite permitido." }], clientMutationId: "migration-fixture" } } });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -692,7 +692,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-014 requires current-value review after an asset version conflict", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminRegisterAsset", { data: { registerAsset: { asset: null, userErrors: [{ code: "VERSION_CONFLICT", field: null, message: "A configuração mudou. Revise os valores atuais." }], clientMutationId: "migration-fixture" } } });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -707,7 +707,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-015 preserves the unsaved asset name after a failed save request", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminRegisterAsset", { errors: [{ message: "Falha temporária ao registrar o imóvel.", extensions: { code: "INTERNAL" } }] });
-    await loginAsLocalAdmin(page, "/assets");
+    await loginAsMockAdmin(page, "/assets");
     await page.getByRole("button", { name: "Registrar imóvel" }).click();
     await page.getByLabel("Unidade").selectOption("unit-a");
     await page.getByLabel("Versão do segmento").selectOption("segment-version-a");
@@ -736,7 +736,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { errors: [{ message: "Falha de entrega.", extensions: { code: "INTERNAL" } }] },
     );
     mocks.enqueue("AdminConfigurePublicationPolicy", { data: { configurePublicationPolicy: { policy: null, userErrors: [{ code: "VERSION_CONFLICT", field: null, message: "A política mudou. Revise antes de salvar." }], clientMutationId: "stale-policy" } } });
-    await loginAsLocalAdmin(page, "/governance");
+    await loginAsMockAdmin(page, "/governance");
 
     const retention = collectionRows(page).filter({ hasText: "Retenção" });
     const delivery = collectionRows(page).filter({ hasText: "Entrega" });
@@ -779,14 +779,14 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { data: { auditEvents: { nodes: [{ id: "history-25", action: "UPDATED_25", targetType: "Asset", targetId: "asset-a", outcome: "SUCCEEDED", reason: "Last page", correlationId: "history-correlation-25", occurredAt: "2026-01-02T00:00:00Z" }], pageInfo: pageInfo() } } },
       { errors: [{ message: "Histórico temporariamente indisponível.", extensions: { code: "INTERNAL" } }] },
     );
-    await loginAsLocalAdmin(page, "/audit");
-    await collectionRows(page).first().getByRole("button", { name: "Abrir detalhes" }).click();
+    await loginAsMockAdmin(page, "/audit");
+    await collectionRows(page).first().getByRole("button", { name: /^Abrir detalhes de/ }).click();
     await expect(page.getByRole("dialog")).toContainText("Nenhum evento encontrado para este recurso.");
     await page.getByRole("button", { name: "Fechar detalhe" }).click();
 
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Auditoria");
-    await collectionRows(page).first().getByRole("button", { name: "Abrir detalhes" }).click();
+    await collectionRows(page).first().getByRole("button", { name: /^Abrir detalhes de/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText(/Long synthetic reason 0/)).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Carregar mais histórico" })).toBeVisible();
@@ -796,7 +796,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Auditoria");
-    await collectionRows(page).first().getByRole("button", { name: "Abrir detalhes" }).click();
+    await collectionRows(page).first().getByRole("button", { name: /^Abrir detalhes de/ }).click();
     await expect(page.getByText("Histórico temporariamente indisponível.")).toBeVisible();
     await expect(page.getByRole("dialog")).toContainText("UPDATED_event-a");
   });
@@ -804,8 +804,8 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-063 hides history contents when the selected resource history is forbidden", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminHistory", { errors: [{ message: "O histórico deste recurso é restrito.", extensions: { code: "FORBIDDEN" } }] });
-    await loginAsLocalAdmin(page, "/audit");
-    await collectionRows(page).first().getByRole("button", { name: "Abrir detalhes" }).click();
+    await loginAsMockAdmin(page, "/audit");
+    await collectionRows(page).first().getByRole("button", { name: /^Abrir detalhes de/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText("O histórico deste recurso é restrito.");
     await expect(dialog.getByText("fixture history")).toHaveCount(0);
@@ -822,11 +822,11 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { data: { auditEvents: { nodes: [{ id: "history-b", action: "UPDATED_B", targetType: "Asset", targetId: "asset-b", outcome: "SUCCEEDED", reason: "history B", correlationId: "history-b", occurredAt: "2026-01-01T00:00:00Z" }], pageInfo: pageInfo() } } },
     );
     const releaseOldHistory = mocks.hold("AdminHistory");
-    await loginAsLocalAdmin(page, "/audit");
-    await collectionRows(page).first().getByRole("button", { name: "Abrir detalhes" }).click();
+    await loginAsMockAdmin(page, "/audit");
+    await collectionRows(page).first().getByRole("button", { name: /^Abrir detalhes de/ }).click();
     await expect(page.getByText("Carregando histórico…")).toBeVisible();
     await page.getByRole("button", { name: "Fechar detalhe" }).click();
-    await collectionRows(page).nth(1).getByRole("button", { name: "Abrir detalhes" }).click();
+    await collectionRows(page).nth(1).getByRole("button", { name: /^Abrir detalhes de/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("history B")).toBeVisible();
     releaseOldHistory();
@@ -843,14 +843,14 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
       { data: { updateAnalysisPrompt: { prompt: null, userErrors: [{ code: "VERSION_CONFLICT", field: null, message: "A revisão mudou. Revise a configuração atual." }], clientMutationId: "stale-prompt" } } },
       { errors: [{ message: "Falha ao salvar o prompt.", extensions: { code: "INTERNAL" } }] },
     );
-    await loginAsLocalAdmin(page, "/prompts");
+    await loginAsMockAdmin(page, "/prompts");
 
     const editor = page.getByLabel("Instrução do sistema");
     await editor.fill(" ");
     await page.getByLabel("Confirmo a alteração do prompt global.").check();
     await page.getByRole("button", { name: "Salvar nova revisão" }).click();
     await expect(page.getByText("A instrução não pode ficar em branco.")).toBeVisible();
-    await expect(page.getByText("Revisão: 1")).toBeVisible();
+    await expect(page.locator(".prompt-editor-meta").locator("dl").getByText("1", { exact: true })).toBeVisible();
 
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Prompts de análise");
@@ -861,7 +861,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     const promptBounds = await page.getByLabel("Instrução do sistema").boundingBox();
     expect(promptBounds?.height).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Salvar nova revisão" }).click();
-    await expect(page.getByText("Revisão: 1")).toBeVisible();
+    await expect(page.locator(".prompt-editor-meta dl").getByText("1", { exact: true })).toBeVisible();
 
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Prompts de análise");
@@ -870,7 +870,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByRole("button", { name: "Salvar nova revisão" }).click();
     await expect(page.getByText("A revisão mudou. Revise a configuração atual.")).toBeVisible();
     await expect(page.getByLabel("Instrução do sistema")).toHaveValue("Prompt revisto após conflito.");
-    await expect(page.getByText("Revisão: 1")).toBeVisible();
+    await expect(page.locator(".prompt-editor-meta dl").getByText("1", { exact: true })).toBeVisible();
 
     await navigateAdmin(page, "Visão geral");
     await navigateAdmin(page, "Prompts de análise");
@@ -884,7 +884,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-068 denies prompt configuration to an auditor", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.setIdentity(activeIdentity("AUDITOR"));
-    await loginAsLocalAdmin(page, "/prompts");
+    await loginAsMockAdmin(page, "/prompts");
     await expect(page.getByText("Você não tem permissão para acessar este recurso neste escopo.")).toBeVisible();
     await expect(page.getByLabel("Instrução do sistema")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Salvar nova revisão" })).toHaveCount(0);
@@ -893,7 +893,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("IT-071 blocks reversed dates before requesting usage", async ({ page }) => {
     const mocks = await installMocks(page);
-    await loginAsLocalAdmin(page, "/llm-usage");
+    await loginAsMockAdmin(page, "/llm-usage");
     const start = page.getByLabel("Início");
     const end = page.getByLabel("Fim");
     await start.fill("2026-02-02T10:00");
@@ -906,7 +906,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-072 distinguishes incomplete coverage from confirmed zero usage", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminLLMUsage", { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 0, deliveredCalls: 0, incompleteCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 1, knownReportedCost: null, unknownCostCalls: 1, costComplete: false, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: false, calls: [], pageInfo: pageInfo() } } });
-    await loginAsLocalAdmin(page, "/llm-usage");
+    await loginAsMockAdmin(page, "/llm-usage");
     await expect(page.getByText("Cobertura histórica parcial")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Nenhuma chamada encontrada" })).toBeVisible();
     expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsage")).toHaveLength(1);
@@ -915,7 +915,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-073 hides global usage and cost details from a membership without cost access", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.setIdentity(activeIdentity("TENANT_ADMIN", false));
-    await loginAsLocalAdmin(page, "/llm-usage");
+    await loginAsMockAdmin(page, "/llm-usage");
     await expect(page.getByText("O consumo de LLM está disponível somente para o super admin.")).toBeVisible();
     await expect(page.getByText("Custo informado")).toHaveCount(0);
     expect(mocks.calls.some((call) => call.operation === "AdminLLMUsage")).toBe(false);
@@ -928,7 +928,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     const tenantA = { id: "tenant-a", name: "Tenant A" }; const tenantB = { id: "tenant-b", name: "Tenant B" };
     mocks.enqueue("AdminLLMUsageTenants", tenantChoices([tenantA, tenantB]), tenantChoices([tenantA, tenantB]), tenantChoices([tenantB]), tenantChoices([tenantB]));
     const releaseOldRequest = mocks.hold("AdminLLMUsage");
-    await loginAsLocalAdmin(page, "/llm-usage");
+    await loginAsMockAdmin(page, "/llm-usage");
     await page.locator(".llm-usage-advanced-filters > summary").click();
     const tenant = page.getByRole("textbox", { name: "Tenant", exact: true });
     await tenant.fill("Tenant A");
@@ -947,7 +947,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("IT-075 replaces prior usage with a clear refresh failure", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminLLMUsage", usageReply("Tenant A", "inspection-a"), { errors: [{ message: "Falha ao atualizar o consumo.", extensions: { code: "INTERNAL" } }] });
-    await loginAsLocalAdmin(page, "/llm-usage");
+    await loginAsMockAdmin(page, "/llm-usage");
     await expect(collectionRows(page).filter({ hasText: "Tenant A" })).toBeVisible();
     await page.getByRole("button", { name: "Atualizar" }).click();
     await expect(page.getByRole("alert").getByText("Falha ao atualizar o consumo.")).toBeVisible();
@@ -957,8 +957,9 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("video operations filters preparations and confirms a retry", async ({ page }) => {
     const mocks = await installMocks(page);
     page.on("dialog", (dialog) => dialog.accept());
-    await loginAsLocalAdmin(page, "/video-operations");
-    await expect(page.getByRole("heading", { name: "Operações de vídeo" })).toBeVisible();
+    await loginAsMockAdmin(page, "/organization");
+    await navigateAdmin(page, "Operações de vídeo");
+    await expect(page.locator("#page-title")).toHaveText("Operações de vídeo");
     await expect(page.getByText("STORE_UNAVAILABLE")).toBeVisible();
     await expect(page.getByText("Admissão da plataforma")).toBeVisible();
     await page.getByRole("button", { name: "Tentar novamente" }).click();
@@ -968,7 +969,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("E2E-016 Admin saves policy limits, edits a v2 template and shows preparation metrics", async ({ page }) => {
     const mocks = await installMocks(page);
-    await loginAsLocalAdmin(page, "/baseline-policy");
+    await loginAsMockAdmin(page, "/baseline-policy");
     await expect(page.getByRole("heading", { name: "Prazo para contestação" })).toBeVisible();
     await page.getByLabel("Prazo (dias corridos)").fill("7");
     await page.getByRole("button", { name: "Salvar prazo" }).click();

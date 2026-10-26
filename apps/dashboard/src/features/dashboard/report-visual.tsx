@@ -179,15 +179,24 @@ function EvidencePair({ reference, current, onMediaError }: { reference?: Report
   const referenceIsVideo = Boolean(reference && isVideoEvidence(reference));
   const playable = currentIsVideo ? current : referenceIsVideo ? reference : undefined;
   const [active, setActive] = useState<ReportEvidenceItem | null>(null);
+  const playButtonRef = useRef<HTMLButtonElement | null>(null);
   const initial = currentIsVideo ? current : reference ?? current;
+  const openVideo = (item: ReportEvidenceItem, button: HTMLButtonElement) => {
+    playButtonRef.current = button;
+    setActive(item);
+  };
+  const closeVideo = () => {
+    setActive(null);
+    window.setTimeout(() => playButtonRef.current?.focus(), 0);
+  };
   return <div className="report-evidence-pair">
-    <EvidenceTile title="Origem" item={reference} onPlay={playable?.id === reference?.id ? () => initial && setActive(initial) : undefined} onMediaError={onMediaError} />
-    <EvidenceTile title="Vistoria atual" item={current} onPlay={playable?.id === current?.id ? () => initial && setActive(initial) : undefined} onMediaError={onMediaError} />
-    {playable && <PairVideoModal active={active} currentVideo={currentIsVideo ? current : undefined} referenceVideo={referenceIsVideo ? reference : undefined} onSelect={setActive} onClose={() => setActive(null)} />}
+    <EvidenceTile title="Origem" item={reference} onPlay={playable?.id === reference?.id ? (button) => initial && openVideo(initial, button) : undefined} onMediaError={onMediaError} />
+    <EvidenceTile title="Vistoria atual" item={current} onPlay={playable?.id === current?.id ? (button) => initial && openVideo(initial, button) : undefined} onMediaError={onMediaError} />
+    {playable && <PairVideoModal active={active} currentVideo={currentIsVideo ? current : undefined} referenceVideo={referenceIsVideo ? reference : undefined} onSelect={setActive} onClose={closeVideo} />}
   </div>;
 }
 
-function EvidenceTile({ title, item, onPlay, onMediaError }: { title: string; item?: ReportEvidenceItem; onPlay?: () => void; onMediaError?: () => void }) {
+function EvidenceTile({ title, item, onPlay, onMediaError }: { title: string; item?: ReportEvidenceItem; onPlay?: (button: HTMLButtonElement) => void; onMediaError?: () => void }) {
   if (!item) return <div className="report-evidence-tile"><h4>{title}</h4><div className="report-image-missing">Sem imagem</div></div>;
   return <div className="report-evidence-tile"><h4>{title}</h4><figure>
     <div className="report-evidence-photo">
@@ -198,9 +207,9 @@ function EvidenceTile({ title, item, onPlay, onMediaError }: { title: string; it
   </figure></div>;
 }
 
-function PairVideoLauncher({ item, onPlay }: { item: ReportEvidenceItem; onPlay: () => void }) {
+function PairVideoLauncher({ item, onPlay }: { item: ReportEvidenceItem; onPlay: (button: HTMLButtonElement) => void }) {
   const context = item.label ?? item.component ?? "da vistoria";
-  return <button className="report-pair-play" type="button" aria-label={`Reproduzir vídeo de ${context} a partir de ${formatVideoTime(item.timestampMs) ?? "evidência"}`} onClick={onPlay}><span aria-hidden="true">▶</span></button>;
+  return <button className="report-pair-play" type="button" aria-label={`Reproduzir vídeo de ${context} a partir de ${formatVideoTime(item.timestampMs) ?? "evidência"}`} onClick={(event) => onPlay(event.currentTarget)}><span aria-hidden="true">▶</span></button>;
 }
 
 function PairVideoModal({ active, currentVideo, referenceVideo, onSelect, onClose }: { active: ReportEvidenceItem | null; currentVideo?: ReportEvidenceItem; referenceVideo?: ReportEvidenceItem; onSelect: (item: ReportEvidenceItem) => void; onClose: () => void }) {

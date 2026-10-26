@@ -231,6 +231,11 @@ describe("design-system public contracts", () => {
         <Dialog isOpen={false} onClose={() => {}} title="Confirmação">{null}</Dialog>
       </>
     ));
+    // Dialog restores focus after a timeout and two frames so nested overlays settle first.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
     expect(document.activeElement).toBe(opener);
     const css = await readFile(resolve(packageRoot, "src/styles.css"), "utf8");
     expect(css).toContain(".inspection-dialog--wide");

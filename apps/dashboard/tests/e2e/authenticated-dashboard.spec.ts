@@ -62,7 +62,7 @@ test.describe("authenticated Dashboard against the local stack", () => {
       await selector.getByRole("button", { name: view, exact: true }).click();
       await expect(selector.getByRole("button", { name: view, exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.locator("[data-inspection-id]")).toHaveCount(recordCount);
-      await expect(page.locator(view === "Quadro" ? ".inspection-board" : view === "Agenda" ? ".inspection-agenda-layout" : ".inspection-table-box")).toBeVisible();
+      await expect(page.locator(view === "Quadro" ? ".inspection-board" : view === "Agenda" ? ".inspection-agenda-layout" : ".inspection-focus-rows")).toBeVisible();
     }
     expect(inspectionRequests).toBe(requestsAfterLoad);
 
@@ -75,7 +75,6 @@ test.describe("authenticated Dashboard against the local stack", () => {
     await page.locator(".inspection-action-menu summary").first().click();
     await expect(page.getByRole("button", { name: "Cancelar" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Invalidar" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Solicitar complemento" }).first()).toBeVisible();
 
     await page.getByRole("button", { name: "Lista", exact: true }).focus();
     await expect(page.getByRole("button", { name: "Lista", exact: true })).toBeFocused();

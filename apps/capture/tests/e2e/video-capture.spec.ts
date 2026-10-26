@@ -134,7 +134,7 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
     if (query.includes("beginVideoCapture")) { recorderAdmissions += 1; return respond({ beginVideoCapture: { attempt: { id: "attempt-1", kind: "CURRENT", acquisitionSource: "CAMERA", maxDurationSeconds: 900, maxBytes: 1073741824, policyVersion: 1, admittedAt: "2026-10-15T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z", status: "ACTIVE" }, userErrors: [] } }); }
     if (query.includes("videoUploadStatus")) return respond({ videoUploadStatus: { mediaId: "media-1", status: received ? "RECEIVED" : "UPLOADING", expiresAt: "2099-01-01T00:00:00Z", receivedParts: [], confirmedParts: [], missingParts: [1] } });
     if (query.includes("createMediaUpload")) { mediaCreates += 1; return respond({ createMediaUpload: { upload: { mediaId: "media-1", uploadId: "upload-1", expiresAt: "2099-01-01T00:00:00Z", partSizeBytes: 5 * 1024 * 1024 }, userErrors: [] } }); }
-    if (query.includes("presignMediaParts")) return respond({ presignMediaParts: { parts: [{ partNumber: 1, url: `http://localhost:${process.env.PLAYWRIGHT_PORT ?? "3113"}/upload-part`, expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } });
+    if (query.includes("presignMediaParts")) return respond({ presignMediaParts: { parts: [{ partNumber: 1, url: new URL("/upload-part", page.url()).toString(), expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] } });
     if (query.includes("completeMediaUpload")) { received = true; return respond({ completeMediaUpload: { media: { id: "media-1", status: "RECEIVED" }, userErrors: [] } }); }
     if (query.includes("saveCaptureMetadata")) return respond({ saveCaptureMetadata: { media: { id: "media-1", status: "RECEIVED", replacesMediaId: null }, userErrors: [] } });
     if (query.includes("submitCapture")) { submitted += 1; return respond({ submitCapture: { submission: { id: "submission-1", complete: true, requiresAttention: false, submittedAt: "2026-10-15T00:00:00Z" }, userErrors: [] } }); }
@@ -219,9 +219,13 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
   await page.getByRole("button", { name: "Descartar e gravar novamente" }).click();
   await startVideoRecording(page);
-  await page.waitForTimeout(1200);
-  // A lost camera is signalled to the page by the track "ended" event; the recorder must still flush and save what it has.
-  await page.evaluate(() => (window as typeof window & { lastCameraStream?: MediaStream }).lastCameraStream?.getVideoTracks()[0]?.dispatchEvent(new Event("ended")));
+  await page.waitForTimeout(2200);
+  // WebKit does not stop MediaRecorder when a canvas track is stopped, so signal the ended event its adapter observes.
+  await page.locator("video").evaluate((element) => {
+    const track = ((element as HTMLVideoElement).srcObject as MediaStream | null)?.getVideoTracks()[0];
+    if (navigator.userAgent.includes("AppleWebKit") && !navigator.userAgent.includes("Chrome")) track?.dispatchEvent(new Event("ended"));
+    else track?.stop();
+  });
   await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toBeEnabled();
   expect(mediaCreates).toBe(0);
@@ -410,9 +414,9 @@ test("IT-122 shows replacement guidance when server validation reports CHECKSUM_
   await page.getByLabel("Localização quando necessária").check();
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
   await page.getByRole("button", { name: "Atualizar status" }).click();
-  await expect(page.getByText("A preparação desta gravação foi interrompida.", { exact: false })).toBeVisible();
-  await expect(page.getByText("Uma substituição exige autorização vigente.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Gravar substituição" })).toBeVisible();
+  const preparationNotice = page.getByRole("status").filter({ hasText: "A preparação desta gravação foi interrompida." });
+  await expect(preparationNotice).toContainText("O gestor da vistoria poderá solicitar uma nova gravação.");
+  await expect(page.getByRole("button", { name: "Gravar substituição" })).toHaveCount(0);
 });
 
 test("E2E-027 physical iPhone Safari and Android Chrome capture", async () => {

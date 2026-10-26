@@ -35,9 +35,9 @@ var ErrLocalOnboardingMissing = errors.New("local admin onboarding missing")
 
 // Setup adds one fresh end-to-end QA scenario to the first active local admin
 // onboarding. Catalog rows are stable across runs; capture scenarios are not.
-func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, enableVideoAdmission bool) (string, error) {
+func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, enableVideoAdmission bool) (string, string, error) {
 	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(captureBaseURL) == "" || (mediaKind != "PHOTO" && mediaKind != "VIDEO") {
-		return "", fmt.Errorf("slice %s: missing dependency", sliceName)
+		return "", "", fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
 
 	var membership database.Membership
@@ -45,18 +45,18 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		Where("issuer = ? AND role = ? AND status = ?", issuer, "TENANT_ADMIN", "ACTIVE").
 		Order("created_at ASC").First(&membership).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return "", fmt.Errorf("%w: slice %s: local admin onboarding not found", ErrLocalOnboardingMissing, sliceName)
+			return "", "", fmt.Errorf("%w: slice %s: local admin onboarding not found", ErrLocalOnboardingMissing, sliceName)
 		}
-		return "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
 	}
 
 	var tenant database.Tenant
 	if err := db.WithContext(ctx).Where("id = ? AND status = ?", membership.TenantID, "ACTIVE").First(&tenant).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find active tenant: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find active tenant: %w", sliceName, err)
 	}
 	var unit database.BusinessUnit
 	if err := db.WithContext(ctx).Where("tenant_id = ? AND status = ?", tenant.ID, "ACTIVE").Order("created_at ASC").First(&unit).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find active business unit: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find active business unit: %w", sliceName, err)
 	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -85,22 +85,22 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	}
 	requirementJSON, err := json.Marshal(requirements)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
 	}
 	segmentJSON := json.RawMessage(`{"type":"object","properties":{"propertyType":{"type":"string"}}}`)
 	templateJSON, err := qaTemplateDefinition(ids.segmentVersion, mediaKind)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
 	}
 	var promptSnapshot database.AnalysisPromptSnapshot
 	promptSnapshot, err = findFindingsPromptSnapshot(ctx, db)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
 	}
 
 	token, err := security.NewScopedToken(tenant.ID)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: create invitation token: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: create invitation token: %w", sliceName, err)
 	}
 	tokenHash := security.HashToken(token)
 	scenarioID := identity.NewID()
@@ -216,10 +216,10 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		return nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("slice %s: persist scenario: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: persist scenario: %w", sliceName, err)
 	}
 
-	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, nil
+	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, inspectionID.String(), nil
 }
 
 func findFindingsPromptSnapshot(ctx context.Context, db *gorm.DB) (database.AnalysisPromptSnapshot, error) {
