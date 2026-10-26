@@ -49,19 +49,22 @@ type ReprocessCommand struct {
 }
 
 type Status struct {
-	MediaID            identity.ID
-	PreparationID      identity.ID
-	Status             string
-	Stage              string
-	PreparationVersion int
-	Attempts           int
-	ProcessedFrames    int
-	ErrorCode          string
-	Retryable          bool
-	SourceAvailable    bool
-	ManifestDigest     string
-	FirstFrameReadyAt  *time.Time
-	SourceExpiryAt     *time.Time
+	MediaID              identity.ID
+	PreparationID        identity.ID
+	Status               string
+	Stage                string
+	PreparationVersion   int
+	Attempts             int
+	ProcessedFrames      int
+	FramesSampled        int
+	FramesRetained       int
+	FramesRepresentative int
+	ErrorCode            string
+	Retryable            bool
+	SourceAvailable      bool
+	ManifestDigest       string
+	FirstFrameReadyAt    *time.Time
+	SourceExpiryAt       *time.Time
 }
 
 type Dependencies struct {
@@ -164,8 +167,10 @@ func load(ctx context.Context, db *gorm.DB, within func(context.Context, identit
 			MediaID: job.MediaID, PreparationID: job.ID, Status: job.Status, Stage: job.Phase,
 			PreparationVersion: job.PreparationVersion, Attempts: job.Attempts,
 			ProcessedFrames: job.ProcessedFrames, ErrorCode: job.ErrorCode,
-			Retryable:       job.Status == "FAILED" && (sourceAvailable || retainedBank) && !sourceBlocked,
-			SourceAvailable: sourceAvailable, ManifestDigest: job.ManifestDigest,
+			FramesSampled: job.FramesSampled, FramesRetained: job.FramesRetained,
+			FramesRepresentative: job.FramesRepresentative,
+			Retryable:            job.Status == "FAILED" && (sourceAvailable || retainedBank) && !sourceBlocked,
+			SourceAvailable:      sourceAvailable, ManifestDigest: job.ManifestDigest,
 			FirstFrameReadyAt: job.FirstReadyAt,
 		}
 		if source.ID != (identity.ID{}) {

@@ -43,8 +43,11 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminAssets": return { data: { assets: { nodes: [{ id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101", addressDetails: null, addressStatus: "LEGACY", status: "ACTIVE", businessUnitId: "unit-a", segmentVersionId: "segment-version-a", templateId: "template-a", latitudeE6: 12345, longitudeE6: 67890, geofenceMeters: 150, attributes: { propertyType: "residential" }, policyOverrides: { allowGallery: true }, assignments: [{ participantId: "participant-a", role: "OWNER", active: true }], version: 1 }], pageInfo: pageInfo() } } };
     case "AdminLookupPostalCode": return { data: { lookupPostalCode: { found: true, postalCode: "01001000", street: "Praça da Sé", district: "Sé", city: "São Paulo", state: "SP", municipalityCode: "3550308" } } };
     case "AdminPublicationPolicy": return { data: { publicationPolicy: { mode: "MANUAL", version: 1 } } };
-    case "AdminVideoPreparations": return { data: { videoPreparations: { nodes: [{ mediaId: "media-a", preparationId: "preparation-a", status: "FAILED", stage: "EXTRACTING", preparationVersion: 2, attempts: 3, processedFrames: 12, errorCode: "STORE_UNAVAILABLE", retryable: true, sourceAvailable: true, firstFrameReadyAt: null, sourceExpiryAt: null }], pageInfo: pageInfo() } } };
+    case "AdminVideoPreparations": return { data: { videoPreparations: { nodes: [{ mediaId: "media-a", preparationId: "preparation-a", status: "FAILED", stage: "EXTRACTING", preparationVersion: 2, attempts: 3, processedFrames: 12, framesSampled: 80, framesRetained: 24, framesRepresentative: 6, errorCode: "STORE_UNAVAILABLE", retryable: true, sourceAvailable: true, firstFrameReadyAt: null, sourceExpiryAt: null }], pageInfo: pageInfo() } } };
     case "AdminVideoAdmission": return { data: { videoAdmission: { enabled: false, version: 4, reason: "QA hold", changedAt: "2026-01-01T00:00:00Z" } } };
+    case "AdminBaselinePolicy": return { data: { baselinePolicy: { contestationDeadlineDays: 5, version: 1 } } };
+    case "AdminVideoPolicy": return { data: { videoPolicy: { maxDurationMinutes: 10, originRetentionDays: 30, currentRetentionDays: 30, supersededBaselineRetentionDays: 365, version: 1 } } };
+    case "AdminTemplateVersion": return { data: { templateVersion: { id: "template-version-a", templateId: "template-a", versionNumber: 2, schemaVersion: 2, definition: { schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } }, suggestedEnvironmentTypes: ["LIVING_ROOM"], segmentVersionId: "segment-version-a", participantRoles: ["OWNER"], defaultComparisonMode: "COMPARE_ORIGIN_CURRENT", analysisType: "REAL_ESTATE", policy: { gpsRequired: false, geofenceMeters: 150, allowGallery: true } }, status: "ACTIVE", publishedAt: "2026-01-01T00:00:00Z" } } };
     case "AdminRetryVideoPreparation": return { data: { retryVideoPreparation: { preparation: { mediaId: "media-a", preparationId: "preparation-a", status: "QUEUED", stage: "RECEIVED", preparationVersion: 3, attempts: 0, errorCode: "", retryable: false, sourceAvailable: true }, userErrors: [], clientMutationId: "retry" } } };
     case "AdminReprocessVideoPreparation": return { data: { reprocessVideoPreparation: { preparation: { mediaId: "media-a", preparationId: "preparation-b", status: "QUEUED", stage: "RECEIVED", preparationVersion: 3, attempts: 0, errorCode: "", retryable: false, sourceAvailable: true }, userErrors: [], clientMutationId: "reprocess" } } };
     case "AdminRetentionPolicies": return { data: { retentionPolicies: { nodes: [{ id: "retention-a", evidenceDays: 30, operationalDays: 60, securityDays: 90, version: 1 }], pageInfo: pageInfo() } } };
@@ -60,6 +63,10 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminRegisterAsset": return { data: { registerAsset: { asset: { id: "asset-created", name: "Apartamento 101", externalKey: "APT101", status: "ACTIVE", version: 1 }, userErrors: [], clientMutationId: "asset-mutation" } } };
     case "AdminUpdateAsset": return { data: { updateAsset: { asset: { id: "asset-a", name: "Apartamento 101", externalKey: "APT101", address: "Rua de Teste, 101 — São Paulo/SP — CEP 01001-000", addressStatus: "COMPLETE", status: "ACTIVE", version: 2 }, userErrors: [], clientMutationId: "address-mutation" } } };
     case "AdminConfigurePublicationPolicy": return { data: { configurePublicationPolicy: { policy: { mode: "AUTOMATIC", version: 2 }, userErrors: [], clientMutationId: "policy-mutation" } } };
+    case "AdminUpdateBaselinePolicy": return { data: { updateBaselinePolicy: { policy: { contestationDeadlineDays: 7, version: 2 }, userErrors: [], clientMutationId: "baseline-policy" } } };
+    case "AdminConfigureVideoPolicy": return { data: { configureVideoPolicy: { policy: { maxDurationMinutes: 10, originRetentionDays: 30, currentRetentionDays: 30, supersededBaselineRetentionDays: 400, version: 2 }, userErrors: [], clientMutationId: "video-policy" } } };
+    case "AdminPublishTemplateVersion": return { data: { publishTemplateVersion: { template: { id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-version-a", activeVersionId: "template-version-b", version: 2 }, version: { id: "template-version-b", templateId: "template-a", versionNumber: 3, definition: {}, status: "PUBLISHED" }, userErrors: [], clientMutationId: "publish-template" } } };
+    case "AdminActivateTemplateVersion": return { data: { activateTemplateVersion: { template: { id: "template-a", key: "STANDARD", name: "Padrão", segmentVersionId: "segment-version-a", activeVersionId: "template-version-b", version: 3 }, version: { id: "template-version-b", templateId: "template-a", versionNumber: 3, definition: {}, status: "ACTIVE" }, userErrors: [], clientMutationId: "activate-template" } } };
     case "AdminUpdateAnalysisPrompt": return { data: { updateAnalysisPrompt: { prompt: { analysisType: "REAL_ESTATE", systemPrompt: "Revise as imagens", modelAlias: "inspection-vision", minimumConfidenceBps: 7000, canonicalDigest: "digest-b", revision: 2, updatedAt: "2026-01-02T00:00:00Z" }, userErrors: [], clientMutationId: "prompt-mutation" } } };
     case "BootstrapTenant": return { data: { createTenant: { tenant: { id: "tenant-a", name: "Minha operação", status: "ACTIVE" }, userErrors: [], clientMutationId: "bootstrap-mutation" } } };
     default: return { data: {} };
@@ -957,5 +964,31 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await page.getByRole("button", { name: "Tentar novamente" }).click();
     await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminRetryVideoPreparation").length).toBe(1);
     expect(mocks.calls.find((call) => call.operation === "AdminRetryVideoPreparation")?.variables.input).toMatchObject({ mediaId: "media-a", expectedPreparationVersion: 2 });
+  });
+
+  test("E2E-016 Admin saves policy limits, edits a v2 template and shows preparation metrics", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await loginAsLocalAdmin(page, "/baseline-policy");
+    await expect(page.getByRole("heading", { name: "Prazo para contestação" })).toBeVisible();
+    await page.getByLabel("Prazo (dias corridos)").fill("7");
+    await page.getByRole("button", { name: "Salvar prazo" }).click();
+    await expect(page.getByRole("status")).toContainText("Prazo salvo: 7 dia(s)");
+    expect(mocks.calls.find((call) => call.operation === "AdminUpdateBaselinePolicy")?.variables.input).toMatchObject({ contestationDeadlineDays: 7 });
+
+    await navigateAdmin(page, "Vídeo");
+    await page.getByLabel("Retenção após substituição do inventário (dias)").fill("400");
+    await page.getByRole("button", { name: "Salvar limites de vídeo" }).click();
+    await expect.poll(() => mocks.calls.find((call) => call.operation === "AdminConfigureVideoPolicy")?.variables.input).toMatchObject({ supersededBaselineRetentionDays: 400 });
+
+    await navigateAdmin(page, "Modelos de vistoria");
+    await expect(page.locator("#admin-content section").getByRole("heading", { name: "Padrão" })).toBeVisible();
+    await page.getByRole("button", { name: "Editar v2" }).click();
+    await page.getByLabel("Máximo de fotos por ambiente").fill("12");
+    await page.getByRole("button", { name: "Publicar nova versão do modelo" }).click();
+    await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminPublishTemplateVersion").length).toBe(1);
+    expect(mocks.calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables.input).toMatchObject({ definition: { schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 12 } } } });
+
+    await navigateAdmin(page, "Operações de vídeo");
+    await expect(page.getByText(/80 amostrados · 24 mantidos · 6 enviados à análise/)).toBeVisible();
   });
 });

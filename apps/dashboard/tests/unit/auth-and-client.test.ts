@@ -13,6 +13,12 @@ describe("Dashboard auth and transport", () => {
   it("restores the schedules screen after authentication", () => {
     expect(safeDashboardPath("/schedules")).toBe("/schedules");
   });
+  it("restores baseline review routes, including the Capture handoff, after authentication", () => {
+    expect(safeDashboardPath("/baselines")).toBe("/baselines");
+    expect(safeDashboardPath("/baselines/review/version-a")).toBe("/baselines/review/version-a");
+    expect(safeDashboardPath("/baselines/review/inspection/inspection-a")).toBe("/baselines/review/inspection/inspection-a");
+    expect(safeDashboardPath("//evil.example/baselines")).toBe("/tenants/current");
+  });
   it("revocation immediately removes the local capability state", () => { setSession("token", { tenantId: "t", tenantName: "T", tenantStatus: "ACTIVE", entitlements: ["DASHBOARD"], roles: ["VIEWER"], scopes: [] }); expect(hasDashboardAccess()).toBe(true); clearSession(); expect(getAccessToken()).toBeUndefined(); expect(hasDashboardAccess()).toBe(false); });
   it("UT-072 persists the selected membership per tab and sends it with omitted credentials", async () => { setSession("dashboard-token"); selectMembership("membership-a"); setSession("dashboard-token-after-reload"); expect(getMembershipId()).toBe("membership-a"); expect(sessionStorage.getItem("inspection.dashboard.membership")).toBe("membership-a"); const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { me: { identityId: "1" } } }), { status: 200 })); vi.stubGlobal("fetch", fetch); await graphql(DashboardGateDocument, {}); expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ credentials: "omit", headers: expect.objectContaining({ Authorization: "Bearer dashboard-token-after-reload", "X-Inspection-Membership-ID": "membership-a" }) })); });
   it("clears protected state before a different membership can load", () => { setSession("dashboard-token", { tenantId: "t", tenantName: "T", tenantStatus: "ACTIVE", entitlements: ["DASHBOARD"], roles: ["VIEWER"], scopes: [] }); const before = getProtectedStateGeneration(); selectMembership("membership-a"); selectMembership("membership-b"); expect(getProtectedStateGeneration()).toBeGreaterThan(before); expect(hasDashboardAccess()).toBe(false); });

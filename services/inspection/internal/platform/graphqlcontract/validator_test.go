@@ -39,6 +39,20 @@ func TestValidateCapabilitiesRequiresMutationIdentity(t *testing.T) {
 	}
 }
 
+func TestCapabilityMatrixUsesSpecificCustomerEvidenceAndPolicyPersona(t *testing.T) {
+	matrix := []byte("# Matrix\n## Queries\n| # | Canonical query | Owner | Current state | Required product outcome |\n| 1 | `customerPortfolio` | Dashboard customer | Implemented | Scoped portfolio. |\n| 2 | `baselinePolicy` | Policy Admin | Implemented | Admin-only policy. |\n## Mutations\n| # | Canonical mutation | Owner | Current state | Required product outcome |\n| 3 | `save` | Admin | Implemented | Save. |\n")
+	capabilities, err := ParseCapabilityMatrix(matrix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capabilities[0].Evidence != "IT-054" {
+		t.Fatalf("customerPortfolio evidence=%q, want IT-054", capabilities[0].Evidence)
+	}
+	if capabilities[1].Persona != "TENANT_ADMIN or INSPECTION_CONFIG_ADMIN" {
+		t.Fatalf("baselinePolicy persona=%q", capabilities[1].Persona)
+	}
+}
+
 func TestUS001EdgeContractsUT133(t *testing.T) {
 	capabilities := []Capability{
 		{Root: "Query.ready", Owner: "Admin", Persona: "administrator", Journey: "first-use, pagination, denial, prerequisite, archived-state, and scale behavior", Evidence: "IT-001"},

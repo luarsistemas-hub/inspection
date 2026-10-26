@@ -2184,7 +2184,7 @@ func (r *mutationResolver) ConfigureRetentionPolicy(ctx context.Context, input g
 	if !ok {
 		return nil, unauthenticated()
 	}
-	if err := internalRole(meta, auth.TenantAdmin, auth.Manager); err != nil {
+	if err := internalRole(meta, auth.TenantAdmin, auth.Manager, auth.Employee); err != nil {
 		return nil, err
 	}
 	if input.EvidenceDays <= 0 || input.OperationalDays <= 0 || (input.SecurityDays != nil && *input.SecurityDays < 0) {
@@ -2995,6 +2995,20 @@ func (r *queryResolver) BaselineInventory(ctx context.Context, assetID string, v
 	return r.baselineInventory(ctx, assetID, versionID)
 }
 
+// BaselinePolicy is the resolver for the baselinePolicy field.
+func (r *queryResolver) BaselinePolicy(ctx context.Context) (*graphql1.BaselinePolicy, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	raw, err := r.Bus.Ask(ctx, counterpartyupdatepolicy.Query{TenantID: meta.TenantID})
+	if err != nil {
+		return nil, err
+	}
+	policy := raw.(database.BaselinePolicy)
+	return &graphql1.BaselinePolicy{ContestationDeadlineDays: policy.ContestationDeadlineDays, Version: int(policy.Version)}, nil
+}
+
 // CounterpartyBaseline is the resolver for the counterpartyBaseline field.
 func (r *queryResolver) CounterpartyBaseline(ctx context.Context) (*graphql1.CounterpartyBaseline, error) {
 	tenantID, invitationID, err := r.externalCounterparty(ctx)
@@ -3787,14 +3801,7 @@ func (r *queryResolver) PublicationPolicy(ctx context.Context) (*graphql1.Public
 
 // CustomerPortfolio is the resolver for the customerPortfolio field.
 func (r *queryResolver) CustomerPortfolio(ctx context.Context, filter *graphql1.CustomerPortfolioFilter, first *int, after *string) (*graphql1.CustomerPortfolioConnection, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if err := internalRole(meta, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer); err != nil {
-		return nil, err
-	}
-	return &graphql1.CustomerPortfolioConnection{Nodes: []*graphql1.CustomerPortfolioItem{}, PageInfo: pageInfo("", false)}, nil
+	return r.customerPortfolio(ctx, filter, first, after)
 }
 
 // CustomerTimeline is the resolver for the customerTimeline field.

@@ -20,10 +20,12 @@ query AdminAssets($first: Int!, $after: String, $search: String) { assets(first:
 query AdminLookupPostalCode($postalCode: String!) { lookupPostalCode(postalCode: $postalCode) { found postalCode street district city state municipalityCode } }
 
 query AdminPublicationPolicy { publicationPolicy { mode version } }
-query AdminVideoPolicy { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }
+query AdminVideoPolicy { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } }
+query AdminBaselinePolicy { baselinePolicy { contestationDeadlineDays version } }
+mutation AdminUpdateBaselinePolicy($input: UpdateBaselinePolicyInput!) { updateBaselinePolicy(input: $input) { policy { contestationDeadlineDays version } userErrors { code field message } clientMutationId } }
 query AdminVideoPreparationEvidence($preparationId: ID!, $first: Int = 25, $after: String) { videoPreparationEvidence(preparationId: $preparationId, first: $first, after: $after) { nodes { kind id frameId preparationId sourceMediaId ptsMicros timestampMs component label environment view role } pageInfo { endCursor hasNextPage } } }
-mutation AdminConfigureVideoPolicy($input: ConfigureVideoPolicyInput!) { configureVideoPolicy(input: $input) { policy { maxDurationMinutes originRetentionDays currentRetentionDays version } userErrors { code field message correlationId } clientMutationId } }
-query AdminVideoPreparations($status: [String!], $first: Int!, $after: String) { videoPreparations(status: $status, first: $first, after: $after) { nodes { mediaId preparationId status stage preparationVersion attempts processedFrames errorCode retryable sourceAvailable firstFrameReadyAt sourceExpiryAt } pageInfo { endCursor hasNextPage } } }
+mutation AdminConfigureVideoPolicy($input: ConfigureVideoPolicyInput!) { configureVideoPolicy(input: $input) { policy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } userErrors { code field message correlationId } clientMutationId } }
+query AdminVideoPreparations($status: [String!], $first: Int!, $after: String) { videoPreparations(status: $status, first: $first, after: $after) { nodes { mediaId preparationId status stage preparationVersion attempts processedFrames framesSampled framesRetained framesRepresentative errorCode retryable sourceAvailable firstFrameReadyAt sourceExpiryAt } pageInfo { endCursor hasNextPage } } }
 query AdminVideoAdmission { videoAdmission { enabled version reason changedAt } }
 mutation AdminConfigureVideoAdmission($input: ConfigureVideoAdmissionInput!) { configureVideoAdmission(input: $input) { admission { enabled version reason changedAt } userErrors { code field message } clientMutationId } }
 mutation AdminRetryVideoPreparation($input: RetryVideoPreparationInput!) { retryVideoPreparation(input: $input) { preparation { mediaId preparationId status stage preparationVersion attempts errorCode retryable sourceAvailable } userErrors { code field message } clientMutationId } }

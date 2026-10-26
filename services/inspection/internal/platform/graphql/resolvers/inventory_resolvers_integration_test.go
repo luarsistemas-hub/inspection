@@ -208,6 +208,29 @@ func TestInventoryIT018CustomerProjectionAndForeignVersionNotFound(t *testing.T)
 	}
 }
 
+func TestInventoryIT054CustomerPortfolioScopeRoleAndRealProgress(t *testing.T) {
+	fx := newInventoryITFixture(t, auth.TenantAdmin)
+	seed := seedInventoryDraft(t, fx, true)
+	if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, seed.items[0]).Update("decision", "ACCEPTED").Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	activateInventoryDraft(t, fx, seed.version, 4, "it054-activate")
+	query := `query { customerPortfolio(first:10) { nodes { assetId assetName status progress } pageInfo { hasNextPage } } }`
+	customer := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, inventoryITContext(fx, auth.CustomerViewer), "", "")
+	if strings.Contains(customer, `"errors"`) || !strings.Contains(customer, `"assetName":`) {
+		t.Fatalf("IT-054 customer portfolio query failed: %s", customer)
+	}
+	if !strings.Contains(customer, `"progress":50`) || !strings.Contains(customer, `"hasNextPage":false`) {
+		t.Fatalf("IT-054 customer progress/pagination projection is incorrect: %s", customer)
+	}
+	viewer := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, inventoryITContext(fx, auth.Viewer), "", "")
+	if !strings.Contains(viewer, `"code":"FORBIDDEN"`) {
+		t.Fatalf("IT-054 VIEWER must not access the customer portfolio projection: %s", viewer)
+	}
+}
+
 func TestInventoryITBaselineQueriesWithoutOriginAndCatalogingWithoutOrigin(t *testing.T) {
 	fx := newInventoryITFixture(t, auth.TenantAdmin)
 	versions := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`query { baselineVersions(assetId:"%s",first:25) { nodes { id } } }`, fx.seed.AssetID), fx.ctx, "", "")

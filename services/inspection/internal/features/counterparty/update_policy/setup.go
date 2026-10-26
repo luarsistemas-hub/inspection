@@ -17,6 +17,9 @@ type Command struct {
 	Days     int
 }
 
+// Query reads the tenant contestation deadline without changing it.
+type Query struct{ TenantID identity.ID }
+
 // Roles may change the baseline policy.
 var Roles = []string{auth.TenantAdmin, auth.InspectionConfigAdmin}
 
@@ -31,6 +34,18 @@ type Dependencies struct {
 func Setup(deps Dependencies) error {
 	if deps.Bus == nil || deps.Service.DB == nil || deps.Authorizer.Store == nil {
 		return errors.New("counterparty update policy: missing dependency")
+	}
+	if err := deps.Bus.RegisterQuery(Query{}, func(ctx context.Context, raw any) (any, error) {
+		query := raw.(Query)
+		if query.TenantID == (identity.ID{}) {
+			return nil, errors.New("counterparty update policy: tenant is required")
+		}
+		if _, err := deps.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: query.TenantID, Product: auth.AdminProduct, Roles: Roles}); err != nil {
+			return nil, err
+		}
+		return deps.Service.Policy(ctx, query.TenantID)
+	}); err != nil {
+		return err
 	}
 	return deps.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 		command := raw.(Command)

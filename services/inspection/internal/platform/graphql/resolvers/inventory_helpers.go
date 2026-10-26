@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
 	"time"
 
 	"inspection/libs/identity"
@@ -12,6 +14,7 @@ import (
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graphql1 "inspection/services/inspection/internal/platform/graphql"
+	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
 
@@ -139,7 +142,7 @@ func businessInventoryError(err error) bool {
 	return code != apperror.Internal && code != apperror.DependencyUnavailable && code != apperror.Unauthenticated
 }
 func inventoryVersion(row database.OriginVersion, revision int64) *graphql1.OriginVersion {
-	out := &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, Status: row.Status, MediaKind: row.MediaKind, Selectable: row.Status == "ACTIVE" || row.Status == "SUPERSEDED", CaptureSubmitted: row.SubmittedAt != nil, Purpose: row.Purpose, Source: &row.Source, HasInventory: row.HasInventory, DraftState: row.DraftState}
+	out := &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, Status: row.Status, MediaKind: row.MediaKind, Selectable: row.Status == "ACTIVE" || row.Status == "SUPERSEDED", CaptureSubmitted: row.SubmittedAt != nil, Purpose: row.Purpose, Source: &row.Source, SourceInspectionID: optionalID(row.SourceInspectionID), HasInventory: row.HasInventory, DraftState: row.DraftState}
 	out.OriginRevision = int(revision)
 	if row.VideoPreparationID != nil {
 		x := row.VideoPreparationID.String()
@@ -174,7 +177,7 @@ func (r *Resolver) inventoryOriginRevision(ctx context.Context, tenant, origin i
 }
 
 func inventoryCustomerVersion(row database.OriginVersion, revision int64) *graphql1.OriginVersion {
-	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: int(revision), Status: row.Status, MediaKind: row.MediaKind, CaptureSubmitted: row.SubmittedAt != nil, Selectable: row.Status == "ACTIVE" || row.Status == "SUPERSEDED", Purpose: row.Purpose, HasInventory: row.HasInventory}
+	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: int(revision), Status: row.Status, MediaKind: row.MediaKind, CaptureSubmitted: row.SubmittedAt != nil, Selectable: row.Status == "ACTIVE" || row.Status == "SUPERSEDED", Purpose: row.Purpose, SourceInspectionID: optionalID(row.SourceInspectionID), HasInventory: row.HasInventory}
 }
 
 func applyInventoryVersionSummary(node *graphql1.OriginVersion, counts *graphql1.InventoryCounts, contestation *graphql1.ContestationSummary) {
@@ -314,6 +317,116 @@ func inventoryItem(view inventorycore.ItemView) *graphql1.InventoryItem {
 		out.Evidence = append(out.Evidence, &graphql1.InventoryEvidence{ID: e.Evidence.ID.String(), Kind: e.Evidence.Kind, MediaID: e.Evidence.MediaID.String(), FrameID: frame, Region: region, Position: e.Evidence.Position, Availability: e.Availability, RetentionAvailability: retention})
 	}
 	return out
+}
+
+func hydrateInventoryEvidence(ctx context.Context, db *gorm.DB, store objectstore.Store, tenant identity.ID, version identity.ID, draft *graphql1.InventoryDraft) error {
+	return hydrateEnvironmentEvidence(ctx, db, store, tenant, version, draft.Environments)
+}
+
+// hydrateEnvironmentEvidence fills evidence URLs and frame moments in batch:
+// frames link to the authenticated evidence route through the version id and
+// photos receive a short-lived signed display URL.
+func hydrateEnvironmentEvidence(ctx context.Context, db *gorm.DB, store objectstore.Store, tenant identity.ID, version identity.ID, environments []*graphql1.InventoryEnvironment) error {
+	type evidenceRef struct {
+		evidence *graphql1.InventoryEvidence
+		mediaID  identity.ID
+		frameID  *identity.ID
+	}
+	refs := make([]evidenceRef, 0)
+	frameIDs, photoMediaIDs := make([]identity.ID, 0), make([]identity.ID, 0)
+	for _, environment := range environments {
+		for _, item := range environment.Items {
+			for _, evidence := range item.Evidence {
+				mediaID, err := identity.ParseID(evidence.MediaID)
+				if err != nil {
+					continue
+				}
+				ref := evidenceRef{evidence: evidence, mediaID: mediaID}
+				if evidence.Kind == "VIDEO_FRAME" && evidence.FrameID != nil {
+					frameID, err := identity.ParseID(*evidence.FrameID)
+					if err == nil {
+						ref.frameID = &frameID
+						frameIDs = append(frameIDs, frameID)
+					}
+				} else if evidence.Availability == "AVAILABLE" {
+					photoMediaIDs = append(photoMediaIDs, mediaID)
+				}
+				refs = append(refs, ref)
+			}
+		}
+	}
+	frameIDs = uniqueIDs(frameIDs)
+	photoMediaIDs = uniqueIDs(photoMediaIDs)
+	var frames []database.VideoFrame
+	var derivatives []database.MediaDerivative
+	err := (tenanttx.Runner{DB: db}).Within(ctx, tenant, func(tx *gorm.DB) error {
+		if len(frameIDs) > 0 {
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND id IN ?", tenant, frameIDs).Find(&frames).Error; err != nil {
+				return err
+			}
+		}
+		if len(photoMediaIDs) > 0 {
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id IN ? AND kind=?", tenant, photoMediaIDs, "DISPLAY").Find(&derivatives).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		// Evidence enrichment is best effort: one unavailable row must not hide
+		// the inventory decisions or the rest of the evidence list.
+		return nil
+	}
+	frameByID := make(map[identity.ID]database.VideoFrame, len(frames))
+	for _, frame := range frames {
+		frameByID[frame.ID] = frame
+	}
+	derivativeByMedia := make(map[identity.ID]database.MediaDerivative, len(derivatives))
+	for _, derivative := range derivatives {
+		derivativeByMedia[derivative.MediaID] = derivative
+	}
+	presigned := make(map[string]string)
+	for _, ref := range refs {
+		if ref.frameID != nil {
+			frame, ok := frameByID[*ref.frameID]
+			if !ok || frame.SourceMediaID != ref.mediaID {
+				continue
+			}
+			timestamp := int(frame.PTSMicros / 1000)
+			ref.evidence.TimestampMs = &timestamp
+			frameURL := fmt.Sprintf("/media/video-evidence/%s?snapshotId=%s", url.PathEscape(frame.ID.String()), url.QueryEscape(version.String()))
+			ref.evidence.URL = &frameURL
+			continue
+		}
+		derivative, ok := derivativeByMedia[ref.mediaID]
+		if !ok || store.Client == nil {
+			continue
+		}
+		if signed, ok := presigned[derivative.ObjectKey]; ok {
+			ref.evidence.URL = &signed
+			continue
+		}
+		signed, err := store.PresignGet(ctx, derivative.ObjectKey, 5*time.Minute)
+		if err != nil {
+			continue
+		}
+		presigned[derivative.ObjectKey] = signed
+		ref.evidence.URL = &signed
+	}
+	return nil
+}
+
+func uniqueIDs(values []identity.ID) []identity.ID {
+	seen := make(map[identity.ID]struct{}, len(values))
+	unique := make([]identity.ID, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }
 
 func (r *Resolver) inventorySingleItem(ctx context.Context, tenant identity.ID, row database.InventoryItem) (*graphql1.InventoryItem, error) {

@@ -6,7 +6,7 @@ const pageInfo = { hasNextPage: false, endCursor: null };
 const readyOrigin: DashboardOriginVersionsQuery["originVersions"]["nodes"][number] = {
   id: "origin-version-a", originId: "origin-a", versionNumber: 1, status: "DRAFT", mediaKind: "VIDEO",
   preparationStatus: "READY", captureSubmitted: true, selectable: false,
-  sourceAvailability: "RETAINED", limitedCoverage: true, scopeManifestDigest: "digest-a", supersedesId: null, activatedAt: null,
+  sourceAvailability: "RETAINED", limitedCoverage: true, scopeManifestDigest: "digest-a", supersedesId: null, activatedAt: null, purpose: null, hasInventory: false,
 };
 
 async function installMocks(page: Page) {
@@ -30,11 +30,12 @@ async function installMocks(page: Page) {
           participants: { nodes: [{ id: "participant-a", businessUnitId: "unit-a", name: "Ana QA", status: "ACTIVE" }], pageInfo },
           templates: { nodes: [{ id: "template-a", key: "VIDEO", name: "Modelo vídeo", segmentVersionId: "segment-a", activeVersionId: "template-version-a", version: 1 }], pageInfo } };
         break;
+      case "DashboardReviewers": data = { memberships: { nodes: [{ id: "membership-a", tenantId: "tenant-a", name: "Gestora QA", email: "reviewer@example.test", role: "MANAGER", status: "ACTIVE", scopes: [{ kind: "BUSINESS_UNIT", resourceId: "unit-a" }] }], pageInfo } }; break;
       case "DashboardTemplateVersion": data = { templateVersion: { id: "template-version-a", mediaKind: "VIDEO", isVideo: true } }; break;
-      case "DashboardOriginVersions": data = { originVersions: { nodes: originVersion.status === "DRAFT" && calls.filter((call) => call.operation === "InviteOriginCapture").length === 0 ? [] : [originVersion], pageInfo } }; break;
+      case "DashboardOriginVersions": data = { originVersions: { nodes: originVersion.status === "DRAFT" && calls.filter((call) => call.operation === "InviteOriginCapture").length === 0 ? [] : [originVersion, ...(originVersion.status === "ACTIVE" ? [{ ...originVersion, id: "origin-version-old", versionNumber: 1, status: "SUPERSEDED", purpose: "MOVE_IN", hasInventory: true }] : [])], pageInfo } }; break;
       case "InviteOriginCapture": data = { inviteOriginCapture: { invitationId: "invitation-a", originVersionId: originVersion.id, status: "ACTIVE", userErrors: [], clientMutationId: "invite-a" } }; break;
       case "ActivateOriginVersion":
-        originVersion = { ...originVersion, status: "ACTIVE", selectable: true, activatedAt: "2030-05-10T12:00:00Z" };
+        originVersion = { ...originVersion, status: "ACTIVE", versionNumber: 2, selectable: true, activatedAt: "2030-05-10T12:00:00Z", purpose: "MOVE_IN" };
         data = { activateOriginVersion: { version: originVersion, userErrors: [], clientMutationId: "activate-a" } };
         break;
       case "Inspections": data = { inspections: { nodes: [], pageInfo } }; break;
@@ -59,12 +60,18 @@ test.describe("Dashboard origin management mock journey", () => {
     await expect(page.getByText("Convide o responsável para enviar fotos")).toHaveCount(0);
     await page.getByRole("button", { name: "Origens do imóvel" }).click();
     const originsDialog = page.getByRole("dialog", { name: "Origens do imóvel" });
+    await originsDialog.getByLabel("Responsável pela origem").selectOption("participant-a");
+    await originsDialog.getByLabel("Revisor responsável").selectOption("membership-a");
     await originsDialog.getByRole("button", { name: "Convidar origem (vídeo)" }).click();
+    await expect.poll(() => calls.find((call) => call.operation === "InviteOriginCapture")?.variables.input).toMatchObject({ reviewerMembershipId: "membership-a" });
     await expect(page.getByRole("status").filter({ hasText: "Convite de vídeo enviado" })).toBeVisible();
     await originsDialog.getByRole("button", { name: "Ativar", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Origem ativada" })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
+    await originsDialog.getByRole("button", { name: "Fechar", exact: true }).click();
+    await expect(originsDialog).toBeHidden();
+    const detailDialog = page.getByRole("dialog", { name: "Detalhe da vistoria" });
+    await detailDialog.getByRole("button", { name: "Fechar", exact: true }).click();
+    await expect(detailDialog).toBeHidden();
 
     await page.getByRole("button", { name: "Nova vistoria" }).click();
     const form = page.getByRole("dialog", { name: "Nova vistoria" }).locator("form");
@@ -75,13 +82,13 @@ test.describe("Dashboard origin management mock journey", () => {
     await form.getByRole("combobox", { name: "Modelo de vistoria" }).click();
     await page.getByRole("option", { name: /Modelo vídeo/ }).click();
     await form.getByLabel("Comparação").selectOption("FIXED_ORIGIN");
-    await expect(form.getByRole("option", { name: "Versão 1 · Vídeo" })).toBeAttached();
-    await form.getByLabel("Origem").selectOption("origin-version-a");
+    await expect(form.getByRole("option", { name: /Versão 1.*anterior.*Vídeo/ })).toBeAttached();
+    await form.getByLabel("Origem").selectOption("origin-version-old");
     await form.getByLabel("Vencimento").fill("2030-05-10T12:00");
     await form.getByLabel("Prazo final").fill("2030-05-11T12:00");
     await form.getByRole("button", { name: "Planejar vistoria" }).click();
     await expect.poll(() => calls.find((call) => call.operation === "PlanInspection")?.variables.input).toMatchObject({
-      assetId: "asset-a", comparisonMode: "FIXED_ORIGIN", referenceVersionId: "origin-version-a",
+      assetId: "asset-a", comparisonMode: "FIXED_ORIGIN", referenceVersionId: "origin-version-old",
     });
   });
 });

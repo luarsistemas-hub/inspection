@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ReportVisual, unmatchedReportEvidence } from "@/features/dashboard/report-visual";
+import { ReportVisual, seekVideoToEvidence, unmatchedReportEvidence, videoContentUrl } from "@/features/dashboard/report-visual";
 import { buildReportRooms } from "@/features/dashboard/report-room-model";
 
 describe("Report evidence presentation", () => {
@@ -54,6 +54,47 @@ describe("Report evidence presentation", () => {
     expect(document.querySelector(".report-details summary")?.textContent).toBe("Dados do imóvel e da vistoria");
     const managerDocument = new DOMParser().parseFromString(renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {}, onPublish: () => {}, onInvalidatePublication: () => {} })), "text/html");
     expect(managerDocument.querySelector(".report-publication-menu summary")?.getAttribute("aria-label")).toBe("Gerenciar publicação");
+  });
+
+  it("UT-354 and UT-356 render a NORMAL v2 summary and separate added environments", () => {
+    const report = { ...reportWith([], [], []), classification: "NORMAL", inventory: { referenceVersionNumber: 2, purpose: "MOVE_IN", coverage: { expectedItems: 24, assessedItems: 18, notObserved: 0, environmentsNotCaptured: [], environmentsAddedDuringCapture: ["Depósito"] }, problems: [], informational: [] } } as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    expect(markup).toContain("Sem alertas no inventário");
+    expect(markup).toContain("18 de 24 itens avaliados");
+    expect(markup).toContain("Ambientes adicionados nesta vistoria: Depósito");
+    expect(markup).not.toContain("report-room-list");
+    expect(markup).not.toContain("Informativos");
+    const video = { id: "current", requirementKey: "room", role: "CURRENT", flags: [], availability: "AVAILABLE", sourceMediaId: "source/1", snapshotId: "snapshot-7", timestampMs: 12_500 };
+    expect(videoContentUrl(video)).toBe("/api/media/videos/source%2F1/content?snapshotId=snapshot-7");
+    expect(videoContentUrl(video)).not.toContain("?t=");
+    const seekTarget = { duration: 30, currentTime: 0 };
+    expect(seekVideoToEvidence(seekTarget, 12_500)).toBe(true);
+    expect(seekTarget.currentTime).toBe(12.5);
+  });
+
+  it("UT-354 renders problem evidence as an origin/current pair with both timestamps", () => {
+    const report = {
+      ...reportWith([], [
+        evidence("origin-frame", "inventory:item-a", "REFERENCE", "/origin.jpg", "VIDEO_FRAME", "origin-video", 5_000),
+        evidence("current-frame", "inventory:item-a", "CURRENT", "/current.jpg", "VIDEO_FRAME", "current-video", 17_500),
+      ], []),
+      inventory: {
+        referenceVersionNumber: 2,
+        purpose: "MOVE_IN",
+        coverage: null,
+        problems: [{ environment: "Sala", type: "SOFA", name: "Sofá", status: "CONDITION_CHANGED", conditionBefore: "GOOD", conditionAfter: "POOR", reason: "Rasgo visível", pairs: [{ originEvidenceId: "origin-frame", currentEvidenceId: "current-frame", originSourceAvailability: "EXPIRED", currentSourceAvailability: "AVAILABLE", timestampMs: 17_500 }] }],
+        informational: [],
+      },
+    } as ComponentProps<typeof ReportVisual>["report"];
+    const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const pair = document.querySelector(".report-inventory-pair");
+    expect(pair?.children).toHaveLength(2);
+    expect(pair?.children[0]?.textContent).toContain("Na origem");
+    expect(pair?.children[0]?.textContent).toContain("Momento 00:05");
+    expect(pair?.children[0]?.textContent).toContain("Original não disponível; quadro preservado");
+    expect(pair?.children[1]?.textContent).toContain("Na vistoria atual");
+    expect(pair?.children[1]?.textContent).toContain("Momento 00:17");
   });
 
   it("starts with all rooms collapsed and does not mount any images until a room is expanded", async () => {

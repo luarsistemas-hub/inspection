@@ -1,1 +1,1 @@
-export const dashboardRoutes = ["/auth/callback", "/tenants/[tenantId]", "/schedules", "/inspections", "/projects", "/triage", "/portfolio", "/reports", "/notifications"] as const;
+export const dashboardRoutes = ["/auth/callback", "/tenants/[tenantId]", "/schedules", "/inspections", "/projects", "/triage", "/portfolio", "/reports", "/notifications", "/baselines", "/baselines/review/[originVersionId]", "/baselines/review/inspection/[inspectionId]"] as const;

@@ -548,3 +548,41 @@ legend { padding-inline: var(--inspection-space-2); font-weight: 700; }
   .origin-invite-controls > * { flex: 1 1 100%; }
   .inspection-table td[data-label="Vistoria"] > span { display: block; }
 }
+.baselines-page,
+.baseline-review,
+.baseline-customer-view { display: grid; gap: 1rem; }
+.baseline-toolbar,
+.baseline-review-heading,
+.baseline-environment > header,
+.baseline-version-list article > header,
+.baseline-activation,
+.baseline-environment-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.baseline-version-list { display: grid; gap: 1rem; padding: 0; list-style: none; }
+.baseline-version-list article,
+.baseline-environment,
+.baseline-activation,
+.baseline-customer-view,
+.baseline-contestation { border: 1px solid var(--color-outline, #c7c4bf); border-radius: 1rem; padding: 1rem; }
+.baseline-environment { display: grid; gap: 1rem; }
+.baseline-item { display: grid; grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr); gap: 1rem; border-top: 1px solid var(--color-outline, #c7c4bf); padding-block: 1rem; }
+.baseline-item-evidence { min-height: 10rem; display: grid; place-items: center; background: var(--color-surface-container, #f4f1ed); border-radius: 0.75rem; overflow: hidden; }
+.baseline-item-evidence img, .baseline-item-evidence video { width: 100%; max-height: 22rem; object-fit: contain; }
+.baseline-item-actions, .baseline-toolbar { display: flex; align-items: end; gap: 0.75rem; flex-wrap: wrap; }
+.baseline-review button, .baselines-page button, .form-dialog-body button, .confirmation-dialog button { min-height: 48px; }
+.baseline-choice { display: flex; align-items: center; gap: 0.75rem; min-height: 48px; }
+.baseline-choice input { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; }
+.baseline-confidence { font-size: 0.875rem; color: var(--color-on-surface-variant, #5b5a57); }
+.baseline-add-item { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); align-items: end; gap: 0.75rem; padding-top: 0.5rem; }
+.report-inventory { display: grid; gap: 1rem; border-block: 1px solid var(--color-outline, #c7c4bf); padding-block: 1.25rem; }
+.report-inventory > header { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.report-inventory-entry { display: grid; gap: 1rem; border: 1px solid var(--color-outline, #c7c4bf); border-radius: 0.75rem; padding: 1rem; }
+.report-inventory-pairs { display: grid; gap: 0.75rem; }
+.report-inventory-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.report-inventory-pair > div { display: grid; align-content: start; gap: 0.5rem; min-width: 0; }
+.report-inventory-pair img, .report-inventory-pair video { width: 100%; max-height: 20rem; object-fit: contain; background: var(--color-surface-container, #f4f1ed); }
+.report-inventory-added { padding: 0.75rem; background: var(--color-surface-container, #f4f1ed); border-radius: 0.5rem; }
+@media (max-width: 599px) {
+  .baseline-item, .report-inventory-pair { grid-template-columns: minmax(0, 1fr); }
+  .baseline-item-actions > button, .baseline-environment-actions > button { min-height: 48px; }
+  .baseline-item-evidence { min-height: 8rem; }
+}
