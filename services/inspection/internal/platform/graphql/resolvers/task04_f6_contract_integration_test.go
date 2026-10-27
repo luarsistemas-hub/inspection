@@ -4,14 +4,12 @@ package resolvers
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	"inspection/services/inspection/internal/platform/database"
 
 	"gorm.io/gorm"
@@ -59,61 +57,6 @@ func TestCreateVideoInspectionRejectsForeignAssetAndPhotoOrigins(t *testing.T) {
 		response := executeFixedOriginEntryWithReference(t, fx, "createInspection", "VV-IT-078-ASSET-Y", versionID.String())
 		assertFixedOriginInvalidInput(t, response)
 	})
-}
-
-func TestVV_IT_073HundredInspectionsRemainPinnedToOriginalVideoFramesAfterActivation(t *testing.T) {
-	fx := newFixedOriginGraphQLFixture(t, false)
-	setFixedVideoAdmission(t, fx)
-	originOneID := seedFixedVideoOrigin(t, fx)
-	inspectionIDs := make([]identity.ID, 0, 100)
-	for i := 0; i < 100; i++ {
-		clientID := fmt.Sprintf("VV-IT-073-%03d", i)
-		response := executeFixedOriginEntryWithReference(t, fx, "createInspection", clientID, originOneID.String())
-		var payload struct {
-			Data struct {
-				Create struct {
-					Inspection struct {
-						ID string `json:"id"`
-					} `json:"inspection"`
-				} `json:"createInspection"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal([]byte(response), &payload); err != nil || payload.Data.Create.Inspection.ID == "" {
-			t.Fatalf("createInspection %d failed: response=%s decode=%v", i+1, response, err)
-		}
-		id, err := identity.ParseID(payload.Data.Create.Inspection.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		inspectionIDs = append(inspectionIDs, id)
-	}
-	originTwoResponsibility := seedSecondVideoOrigin(t, fx, originOneID)
-	if _, err := (origincore.Service{DB: fx.h.DB, Within: fx.h.WithinTenant}).ActivateCompleted(fx.ctx, fx.seed.TenantID, originTwoResponsibility); err != nil {
-		t.Fatalf("activate O2: %v", err)
-	}
-	var o1 database.OriginVersion
-	if err := fx.h.AdminDB.Where("tenant_id=? AND id=?", fx.seed.TenantID, originOneID).Take(&o1).Error; err != nil {
-		t.Fatal(err)
-	}
-	if o1.Status != "SUPERSEDED" || o1.VideoPreparationID == nil {
-		t.Fatalf("O1 state after activation: %+v", o1)
-	}
-	var scope []database.VideoScopeItem
-	if err := fx.h.AdminDB.Where("tenant_id=? AND preparation_id=?", fx.seed.TenantID, *o1.VideoPreparationID).Find(&scope).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(scope) == 0 {
-		t.Fatalf("O1 preparation %s has no resolvable frame scope", *o1.VideoPreparationID)
-	}
-	for _, inspectionID := range inspectionIDs {
-		var snapshot database.ReferenceSnapshot
-		if err := fx.h.AdminDB.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, inspectionID).Take(&snapshot).Error; err != nil {
-			t.Fatal(err)
-		}
-		if snapshot.ReferenceVersionID == nil || *snapshot.ReferenceVersionID != originOneID {
-			t.Fatalf("inspection %s changed its pinned origin: got %v, want O1 %s", inspectionID, snapshot.ReferenceVersionID, originOneID)
-		}
-	}
 }
 
 func seedSecondVideoOrigin(t *testing.T, fx fixedOriginGraphQLFixture, originOneID identity.ID) identity.ID {

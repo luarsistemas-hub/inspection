@@ -781,16 +781,9 @@ func (e *Executor) markFrameBankReady(ctx context.Context, r reservation, media 
 			}
 		}
 		days := configurevideopolicy.DefaultCurrentDays
-		if attempt.Kind == "ORIGIN" {
-			days = configurevideopolicy.DefaultOriginDays
-		}
 		var policy database.VideoPolicy
 		if err := tx.Where("tenant_id=?", r.job.TenantID).Take(&policy).Error; err == nil {
-			if attempt.Kind == "ORIGIN" {
-				days = policy.OriginRetentionDays
-			} else {
-				days = policy.CurrentRetentionDays
-			}
+			days = policy.CurrentRetentionDays
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -1330,9 +1323,6 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 	observations, err = video.ConsolidateScope(frameIDs, observations)
 	if err != nil {
 		return err
-	}
-	if attempt.Kind == "ORIGIN" && len(observations) == 0 {
-		return errNoScope
 	}
 	if len(observations) > maxScopeObservations {
 		return video.ErrResourceLimit

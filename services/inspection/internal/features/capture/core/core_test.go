@@ -103,18 +103,6 @@ func TestUT105DeclareEnvironmentAddsStableExpectedFields(t *testing.T) {
 	}
 }
 
-func TestDeclareEnvironmentRejectsOriginV2VideoDraft(t *testing.T) {
-	db, service, tenant, responsibility := environmentFixture(t, "OPEN", json.RawMessage(`[]`))
-	if err := db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Updates(map[string]any{"kind": "ORIGIN", "media_kind": "VIDEO"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	_, err := service.DeclareEnvironment(context.Background(), DeclareEnvironmentInput{TenantID: tenant, ResponsibilityID: responsibility, TypeCode: "BEDROOM", Name: "Quarto", ClientMutationID: "origin-video-v2"})
-	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || appErr.Field != "responsibility" || appErr.Safe != "environment video capture is unavailable for origin drafts" {
-		t.Fatalf("origin environment declaration = %v; want stable INVALID_STATE", err)
-	}
-}
-
 func TestDeclareEnvironmentUsesPinnedTemplatePhotoLimits(t *testing.T) {
 	db, service, tenant, responsibility := environmentFixture(t, "OPEN", nil)
 	var draft database.CaptureDraft

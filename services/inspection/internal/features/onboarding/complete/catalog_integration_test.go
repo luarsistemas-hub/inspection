@@ -10,9 +10,7 @@ import (
 
 	"inspection/libs/identity"
 	segmentresolve "inspection/services/inspection/internal/features/segments/resolve_definition"
-	templatecore "inspection/services/inspection/internal/features/templates/core"
 	publishtemplate "inspection/services/inspection/internal/features/templates/publish_template"
-	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
@@ -22,7 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestOnboardingCompleteCatalogKeepsLegacyFlowOnV1UntilEnvironmentCaptureIT(t *testing.T) {
+func TestOnboardingCompletePublishesAndActivatesEnvironmentTemplateIT(t *testing.T) {
 	url := os.Getenv("INSPECTION_TEST_ONBOARDING_DATABASE_URL")
 	runtimeURL := os.Getenv("INSPECTION_TEST_ONBOARDING_RUNTIME_DATABASE_URL")
 	if url == "" || runtimeURL == "" {
@@ -58,7 +56,7 @@ func TestOnboardingCompleteCatalogKeepsLegacyFlowOnV1UntilEnvironmentCaptureIT(t
 		t.Fatal(err)
 	}
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: tenantID, Roles: []string{auth.TenantAdmin, auth.InspectionConfigAdmin, auth.ParticipationAdmin}, ProductEntitlements: []string{auth.AdminProduct}, Internal: true}})
-	_, _, template, err := (Service{DB: runtimeDB, Bus: bus, Stage: "production"}).ensureCatalog(ctx, tenantID, actorID, "CHECKLIST_ONLY")
+	_, _, template, err := (Service{DB: runtimeDB, Bus: bus, Stage: "production"}).ensureCatalog(ctx, tenantID)
 	if err != nil {
 		t.Fatalf("ensure onboarding catalog: %v", err)
 	}
@@ -69,8 +67,19 @@ func TestOnboardingCompleteCatalogKeepsLegacyFlowOnV1UntilEnvironmentCaptureIT(t
 	if err := db.First(&active, "id=?", *template.ActiveVersionID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if active.SchemaVersion != 1 || active.Status != "ACTIVE" {
-		t.Fatalf("legacy onboarding flow active template version schema=%d status=%s", active.SchemaVersion, active.Status)
+	if active.SchemaVersion != 2 || active.Status != "ACTIVE" {
+		t.Fatalf("onboarding flow active template version schema=%d status=%s", active.SchemaVersion, active.Status)
+	}
+	var document struct {
+		CaptureLayout         string          `json:"captureLayout"`
+		DefaultComparisonMode string          `json:"defaultComparisonMode"`
+		EnvironmentCapture    json.RawMessage `json:"environmentCapture"`
+	}
+	if err := json.Unmarshal(active.DefinitionJSON, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.CaptureLayout != "ENVIRONMENTS" || document.DefaultComparisonMode != "CHECKLIST_ONLY" || len(document.EnvironmentCapture) == 0 {
+		t.Fatalf("active onboarding template = %+v", document)
 	}
 	var onboarding database.Template
 	if err := db.Where("tenant_id=? AND key='real-estate-checklist'", tenantID).First(&onboarding).Error; err != nil {
@@ -80,33 +89,12 @@ func TestOnboardingCompleteCatalogKeepsLegacyFlowOnV1UntilEnvironmentCaptureIT(t
 	if err := db.Where("tenant_id=? AND template_id=?", tenantID, onboarding.ID).Find(&versions).Error; err != nil {
 		t.Fatal(err)
 	}
-	var v2Published bool
-	var v2 database.TemplateVersion
 	for _, version := range versions {
-		var document struct {
-			SchemaVersion int `json:"schemaVersion"`
-		}
-		if err := json.Unmarshal(version.DefinitionJSON, &document); err != nil {
-			t.Fatal(err)
-		}
-		if document.SchemaVersion == 2 && version.Status == "PUBLISHED" && version.ID != *template.ActiveVersionID {
-			v2Published, v2 = true, version
-		}
-		if version.ID == *template.ActiveVersionID && document.SchemaVersion != 1 {
-			t.Fatalf("legacy flow selected schemaVersion=%d", document.SchemaVersion)
+		if version.ID != *template.ActiveVersionID && version.SchemaVersion == 2 {
+			t.Fatalf("unexpected duplicate schemaVersion 2: %+v", versions)
 		}
 	}
-	if !v2Published {
-		t.Fatalf("onboarding v2 was not published as inactive version: %+v", versions)
-	}
-	if v2.VersionNumber <= active.VersionNumber || v2.SchemaVersion != 2 {
-		t.Fatalf("v2 version=%d schema=%d, want newer than active v1 version %d", v2.VersionNumber, v2.SchemaVersion, active.VersionNumber)
-	}
-	_, err = (templatecore.Service{DB: runtimeDB, Bus: bus, Authorizer: auth.Authorizer{}}).Activate(ctx, tenantID, v2.ID, onboarding.Version)
-	if !apperror.Is(err, apperror.InvalidState) {
-		t.Fatalf("activating the v2 template error=%v, want INVALID_STATE until environment capture", err)
-	}
-	if _, _, _, err := (Service{DB: runtimeDB, Bus: bus, Stage: "production"}).ensureCatalog(ctx, tenantID, actorID, "CHECKLIST_ONLY"); err != nil {
+	if _, _, _, err := (Service{DB: runtimeDB, Bus: bus, Stage: "production"}).ensureCatalog(ctx, tenantID); err != nil {
 		t.Fatalf("onboarding catalog replay: %v", err)
 	}
 	var replayed int64

@@ -27,7 +27,7 @@ export INSPECTION_ENV=test
 
 A role `inspection_runtime` precisa estar provisionada com a senha indicada na URL antes de rodar os testes. O harness não altera a senha dessa role compartilhada com a API local.
 
-`SeedTask06Fixture` cria tenant isolado, principal autorizado, capture submetido e PNG privado no MinIO. Use `Task06AuthHeaders`, `WaitOutbox`/`WaitInbox`/`WaitQueue` e `ResetProviderStubs`. Headers de test auth só são aceitos com `INSPECTION_ENV=test` e `INSPECTION_TEST_AUTH_ENABLED=true`.
+`SeedTask06Fixture` cria tenant isolado, principal autorizado, capture submetido e PNG privado no MinIO. Por padrão, o template e a captura usam schema 2, chave `env:new:<uuid>` e requisito de ambiente; passe `SchemaVersion: 1, RequirementKey: "room-1"` quando um teste ainda precisar fixar o contrato legado. `SeedInventoryBaseline` cria uma origem ACTIVE `MOVE_IN` com inventário revisado, ambiente, item e evidência mínima. `SeedVideoEnvironmentFixture` cria uma vistoria VIDEO schema 2 com clipe associado ao ambiente e frame preparado com scope. Use `Task06AuthHeaders`, `WaitOutbox`/`WaitInbox`/`WaitQueue` e `ResetProviderStubs`. Headers de test auth só são aceitos com `INSPECTION_ENV=test` e `INSPECTION_TEST_AUTH_ENABLED=true`.
 
 `SeedVideoOriginFixture(ctx, VideoOriginFixtureOptions{Active: true})` cria uma
 origem VIDEO ativa, preparação READY, frame real no MinIO com SHA-256 conferível

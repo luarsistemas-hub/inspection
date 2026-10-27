@@ -66,11 +66,7 @@ import (
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
 	onboardingcatalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
-	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
@@ -977,55 +973,11 @@ func (r *mutationResolver) RevokeInvitation(ctx context.Context, input graphql1.
 
 // InviteOriginCapture is the resolver for the inviteOriginCapture field.
 func (r *mutationResolver) InviteOriginCapture(ctx context.Context, input graphql1.InviteOriginCaptureInput) (*graphql1.OriginInvitationPayload, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	assetID, err := identity.ParseID(input.AssetID)
-	if err != nil {
-		return nil, invalidID("assetId")
-	}
-	participantID, err := identity.ParseID(input.ParticipantID)
-	if err != nil {
-		return nil, invalidID("participantId")
-	}
-	expires, err := time.Parse(time.RFC3339, input.ExpiresAt)
-	if err != nil {
-		return nil, graphql1Error("expiresAt")
-	}
-	reviewerMembershipID, err := parseOptionalID(input.ReviewerMembershipID, "reviewerMembershipId")
-	if err != nil {
-		return nil, err
-	}
-	raw, err := r.Bus.Send(ctx, origininvite.Command{TenantID: meta.TenantID, AssetID: assetID, ParticipantID: participantID, ReviewerMembershipID: reviewerMembershipID, ExpiresAt: expires, IdempotencyKey: input.ClientMutationID})
-	if err != nil {
-		return nil, err
-	}
-	created := raw.(origincore.Invitation)
-	invitationID, versionID := created.InvitationID.String(), created.VersionID.String()
-	return &graphql1.OriginInvitationPayload{InvitationID: &invitationID, OriginVersionID: &versionID, Status: "SENT", UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return &graphql1.OriginInvitationPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
 
-// ActivateOriginVersion is the resolver for the activateOriginVersion field.
 func (r *mutationResolver) ActivateOriginVersion(ctx context.Context, input graphql1.OriginVersionInput) (*graphql1.OriginVersionPayload, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	id, err := identity.ParseID(input.VersionID)
-	if err != nil {
-		return nil, invalidID("versionId")
-	}
-	raw, err := r.Bus.Send(ctx, originactivate.Command{TenantID: meta.TenantID, VersionID: id})
-	if err != nil {
-		return nil, err
-	}
-	row := raw.(database.OriginVersion)
-	version, err := r.projectOriginVersion(ctx, meta.TenantID, row)
-	if err != nil {
-		return nil, err
-	}
-	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // InvalidateOriginVersion is the resolver for the invalidateOriginVersion field.
@@ -1052,26 +1004,11 @@ func (r *mutationResolver) InvalidateOriginVersion(ctx context.Context, input gr
 
 // CloseOriginInvitation is the resolver for the closeOriginInvitation field.
 func (r *mutationResolver) CloseOriginInvitation(ctx context.Context, input graphql1.CloseOriginInvitationInput) (*graphql1.OriginVersionPayload, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	id, err := identity.ParseID(input.VersionID)
-	if err != nil {
-		return nil, invalidID("versionId")
-	}
-	raw, err := r.Bus.Send(ctx, originclose.Command{TenantID: meta.TenantID, ActorID: meta.Principal.IdentityID, VersionID: id, Reason: input.Reason, ClientMutationID: requestctx.IdempotencyKey(ctx, input.ClientMutationID)})
-	if err != nil {
-		if apperror.Is(err, apperror.InvalidInput) || apperror.Is(err, apperror.InvalidState) || apperror.Is(err, apperror.Conflict) {
-			return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
-		}
-		return nil, err
-	}
-	version, err := r.projectOriginVersion(ctx, meta.TenantID, raw.(database.OriginVersion))
-	if err != nil {
-		return nil, err
-	}
-	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
+}
+
+func originUnavailableError() *graphql1.UserError {
+	return &graphql1.UserError{Code: string(apperror.InvalidState), Message: "Recurso indisponível."}
 }
 
 // PromoteInspectionPhotos is the resolver for the promoteInspectionPhotos field.
@@ -2550,10 +2487,7 @@ func (r *queryResolver) OnboardingDefinition(ctx context.Context, segment string
 		}
 		steps = append(steps, &graphql1.OnboardingStep{Key: step.Key, Label: step.Label, Position: step.Position, Required: step.Required, Fields: fields})
 	}
-	modes := make([]*graphql1.OnboardingOriginMode, 0, len(value.OriginModes))
-	for _, mode := range value.OriginModes {
-		modes = append(modes, &graphql1.OnboardingOriginMode{Key: mode.Key, Label: mode.Label, TemplateKey: mode.TemplateKey, Required: mode.Required})
-	}
+	modes := []*graphql1.OnboardingOriginMode{}
 	return &graphql1.OnboardingDefinition{SchemaVersion: value.SchemaVersion, Version: value.Version, Segment: value.Segment, SegmentVersion: value.SegmentVersion, Steps: steps, Purposes: value.Purposes, OriginModes: modes, Templates: value.Templates, AnalysisType: graphql1.AnalysisType(value.AnalysisType)}, nil
 }
 

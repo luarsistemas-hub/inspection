@@ -29,10 +29,7 @@ import (
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
 	mediavideoprep "inspection/services/inspection/internal/features/media/manage_video_preparation"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
-	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
@@ -62,8 +59,6 @@ func TestTask5GraphQLTransportIT411ToIT412IT473ToIT478IT509ToIT526(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	register(origininvite.Command{}, origincore.Invitation{InvitationID: ids[0], VersionID: ids[1]})
-	register(originactivate.Command{}, database.OriginVersion{ID: ids[1], OriginID: ids[2], VersionNumber: 1, Status: "ACTIVE"})
 	register(origininvalidate.Command{}, database.OriginVersion{ID: ids[1], OriginID: ids[2], VersionNumber: 1, Status: "INVALIDATED"})
 	register(acceptprocessing.Command{}, acceptprocessing.Result{Status: "ACCEPTED"})
 	register(mediacreate.Command{}, mediacore.Upload{MediaID: ids[3], UploadID: "upload", ExpiresAt: time.Now().Add(time.Hour)})
@@ -101,8 +96,8 @@ func TestTask5GraphQLTransportIT411ToIT412IT473ToIT478IT509ToIT526(t *testing.T)
 		name, failureName, query, expected string
 	}{
 		{"IT-411 origin versions", "IT-412 origin versions safe failure", `query { originVersions(assetId:"` + validID + `") { nodes { status } pageInfo { hasNextPage } } }`, "ACTIVE"},
-		{"IT-473 invite origin", "IT-474 invite origin safe failure", `mutation { inviteOriginCapture(input:{assetId:"` + validID + `",participantId:"` + validID + `",expiresAt:"2030-01-01T00:00:00Z",clientMutationId:"c"}) { status } }`, "SENT"},
-		{"IT-475 activate origin", "IT-476 activate origin safe failure", `mutation { activateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { version { status } } }`, "ACTIVE"},
+		{"IT-473 invite origin tombstone", "", `mutation { inviteOriginCapture(input:{assetId:"` + validID + `",participantId:"` + validID + `",expiresAt:"2030-01-01T00:00:00Z",clientMutationId:"c"}) { userErrors { code message } } }`, "INVALID_STATE"},
+		{"IT-475 activate origin tombstone", "", `mutation { activateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { userErrors { code message } } }`, "INVALID_STATE"},
 		{"IT-477 invalidate origin", "IT-478 invalidate origin safe failure", `mutation { invalidateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { version { status } } }`, "INVALIDATED"},
 		{"accept processing", "", `mutation { acceptProcessing(input:{disclosureVersion:"v1",photoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"c"}) { status } }`, "ACCEPTED"},
 		{"IT-509 create media", "IT-510 create media safe failure", `mutation { createMediaUpload(input:{contentType:"image/jpeg",sizeBytes:3,sha256:"` + strings.Repeat("a", 64) + `",clientMutationId:"c"}) { upload { uploadId } } }`, "upload"},

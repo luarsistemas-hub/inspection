@@ -14,21 +14,21 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
+	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 3 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
-	if got.OriginModes[0].TemplateKey != got.OriginModes[1].TemplateKey || len(got.Templates) != 1 {
-		t.Fatal("comparison choice must reuse the same inspection model")
+	if len(got.Templates) != 1 {
+		t.Fatalf("unexpected templates: %+v", got.Templates)
 	}
 }
 
-func TestResolveVersionPreservesTheLegacyAddressContract(t *testing.T) {
+func TestResolveVersionUsesCurrentContract(t *testing.T) {
 	got, err := ResolveVersion(Segment, DefinitionVersion-1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != 1 || got.Version != 4 || got.Steps[1].Fields[0].Key != "address" || got.Steps[1].Fields[0].Type != "textarea" {
-		t.Fatalf("legacy onboarding definition changed: %+v", got)
+	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || got.Steps[1].Fields[0].Key != "addressDetails" {
+		t.Fatalf("current onboarding definition changed: %+v", got)
 	}
 }
 
@@ -42,7 +42,6 @@ func TestDefinitionChoicesKeepInternalValuesAndPortugueseLabels(t *testing.T) {
 	}{
 		{"property", "propertyType", "APARTMENT", "Apartamento"},
 		{"property", "purpose", "RENTAL", "Locação"},
-		{"origin", "mode", "CHECKLIST_ONLY", "Registrar estado inicial"},
 		{"participant", "mode", "SELF", "Eu farei a vistoria"},
 	}
 	for _, check := range checks {

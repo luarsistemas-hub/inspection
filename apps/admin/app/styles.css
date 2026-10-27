@@ -97,6 +97,9 @@ body { margin: 0; color: var(--admin-fg); background: var(--admin-bg); font: 16p
 .template-requirements > p { color: var(--admin-muted); }
 .template-count-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 .template-policy { align-items: start; }
+.template-environment-options { display: grid; gap: .5rem; min-inline-size: 0; border: 1px solid var(--admin-border); border-radius: .6rem; padding: .75rem; }
+.template-environment-options > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .2rem .75rem; }
+.template-environment-options .inspection-choice { min-block-size: 2.5rem; }
 .admin-template-editor .collection li { grid-template-columns: 1fr auto auto; }
 .detail-panel { display: grid; gap: 1rem; max-block-size: 75vh; overflow: auto; }
 .detail-panel dl { display: grid; gap: .65rem; }

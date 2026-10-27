@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
-	origincore "inspection/services/inspection/internal/features/origins/core"
+	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -145,7 +145,7 @@ func TestVV_IT_336InvalidateOriginWhileV1PinnedAndRPT1RetainedKeepsFrames(t *tes
 		t.Fatal(err)
 	}
 	addTask07ReportReferences(t, h, fixture, 1)
-	if _, err := (origincore.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
+	if _, err := (origininvalidate.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
 		t.Fatal(err)
 	}
 	var version database.OriginVersion
@@ -173,7 +173,7 @@ func TestVV_IT_337ReleasingNewestOfHundredReportReferencesKeepsP1Protected(t *te
 	h, fixture := newTask07OriginHarness(t)
 	ctx := context.Background()
 	reports := addTask07ReportReferences(t, h, fixture, 100)
-	if _, err := (origincore.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
+	if _, err := (origininvalidate.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
 		t.Fatal(err)
 	}
 	newest := reports[len(reports)-1]

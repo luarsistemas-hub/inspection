@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/video"
@@ -28,13 +30,54 @@ type Task06Fixture struct {
 	PromptSnapshotID, AssetID                          identity.ID
 	InspectionID, ResponsibilityID, DraftID            identity.ID
 	MediaID, DerivativeID, ProjectID, StageID          identity.ID
+	EnvironmentIdentityID                              identity.ID
+	VideoAttemptID                                     identity.ID
 }
 
 type Task06FixtureOptions struct {
-	InspectionStatus string
-	RequirementKey   string
-	ComparisonMode   string
-	SchemaVersion    int
+	InspectionStatus      string
+	RequirementKey        string
+	EnvironmentIdentityID identity.ID
+	MediaKind             string
+	ComparisonMode        string
+	SchemaVersion         int
+}
+
+// InventoryBaselineFixture identifies the ACTIVE inventory seeded for a fixture tenant.
+type InventoryBaselineFixture struct {
+	Task06Fixture
+	OriginID, OriginVersionID identity.ID
+	EnvironmentIdentityIDs    []identity.ID
+	EnvironmentIDs            []identity.ID
+	ItemIDs                   []identity.ID
+	EvidenceIDs               []identity.ID
+}
+
+// VideoEnvironmentFixture identifies a VIDEO inspection captured through an environment key.
+type VideoEnvironmentFixture struct {
+	Task06Fixture
+	PreparationID, VideoAttemptID, FrameID, ScopeItemID identity.ID
+}
+
+// fixtureRequirement matches capturecore.Requirement's JSON shape without importing its package.
+type fixtureRequirement struct {
+	Key                   string
+	Section               string
+	Label                 string
+	Instructions          string
+	EvidenceKind          string
+	Required              bool
+	ImpossibilityAllowed  bool
+	MinimumMedia          int
+	MaximumMedia          int
+	DescriptionRequired   bool
+	CaptureSourcePolicy   string
+	ComparisonTarget      string
+	EnvironmentIdentityID string `json:"environmentIdentityId,omitempty"`
+	EnvironmentTypeCode   string `json:"environmentTypeCode,omitempty"`
+	EnvironmentName       string `json:"environmentName,omitempty"`
+	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
+	Expected              bool   `json:"expected,omitempty"`
 }
 
 // VideoOriginFixture is a ready, active VIDEO origin with retained frame scope.
@@ -73,7 +116,7 @@ func (h *Harness) SeedVideoOriginFixture(ctx context.Context, options VideoOrigi
 		if err := tx.Create(&database.Responsibility{ID: f.ResponsibilityID, TenantID: f.TenantID, InspectionID: base.InspectionID, ParticipantID: base.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "ORIGIN", MediaKind: "VIDEO", TemplateVersionID: base.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[{"key":"video:main","label":"Vídeo principal","evidenceKind":"VIDEO","required":true,"minimumCount":1,"maximumCount":1}]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: base.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[{"key":"video:main","label":"Vídeo principal","evidenceKind":"VIDEO","required":true,"minimumCount":1,"maximumCount":1}]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
 		status := "DRAFT"
@@ -115,14 +158,28 @@ func (o Task06FixtureOptions) normalized() Task06FixtureOptions {
 	if o.InspectionStatus == "" {
 		o.InspectionStatus = "SUBMITTED"
 	}
+	if o.MediaKind == "" {
+		o.MediaKind = "PHOTO"
+	}
+	if strings.HasPrefix(o.RequirementKey, "env:new:") {
+		if parsed, err := identity.ParseID(strings.TrimPrefix(o.RequirementKey, "env:new:")); err == nil {
+			o.EnvironmentIdentityID = parsed
+		} else {
+			o.EnvironmentIdentityID = identity.NewID()
+			o.RequirementKey = "env:new:" + o.EnvironmentIdentityID.String()
+		}
+	}
+	if o.EnvironmentIdentityID == (identity.ID{}) {
+		o.EnvironmentIdentityID = identity.NewID()
+	}
 	if o.RequirementKey == "" {
-		o.RequirementKey = "room-1"
+		o.RequirementKey = "env:new:" + o.EnvironmentIdentityID.String()
 	}
 	if o.ComparisonMode == "" {
 		o.ComparisonMode = "FIXED_ORIGIN"
 	}
 	if o.SchemaVersion == 0 {
-		o.SchemaVersion = 1
+		o.SchemaVersion = catalog.EnvironmentSchemaVersion
 	}
 	return o
 }
@@ -144,6 +201,10 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		ParticipantID: identity.NewID(), ContactID: identity.NewID(), SegmentVersionID: identity.NewID(), TemplateID: identity.NewID(), TemplateVersionID: identity.NewID(),
 		PromptSnapshotID: identity.NewID(), AssetID: identity.NewID(), InspectionID: identity.NewID(), ResponsibilityID: identity.NewID(),
 		DraftID: identity.NewID(), MediaID: identity.NewID(), DerivativeID: identity.NewID(), ProjectID: identity.NewID(), StageID: identity.NewID(),
+		EnvironmentIdentityID: options.EnvironmentIdentityID,
+	}
+	if options.MediaKind == "VIDEO" {
+		f.VideoAttemptID = identity.NewID()
 	}
 	tenant := database.Tenant{ID: f.TenantID, TenantID: f.TenantID, Name: "Task 06 tenant", Language: "pt-BR", DefaultTimezone: "America/Sao_Paulo", Status: "ACTIVE", Version: 1, CreatedAt: now, UpdatedAt: now}
 	adminDB := h.AdminDB
@@ -189,7 +250,21 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.SegmentDefinitionVersion{ID: f.SegmentVersionID, TenantID: f.TenantID, DefinitionID: segmentID, VersionNumber: 1, SchemaVersion: 1, SchemaJSON: segmentSchema, UISchemaJSON: segmentSchema, CanonicalDigest: segmentDigest, Status: "ACTIVE", IdempotencyKey: "task06-segment", PublishedAt: createdAt, CreatedBy: f.IdentityID}).Error; err != nil {
 			return err
 		}
-		templateJSON := json.RawMessage(fmt.Sprintf(`{"segment":"task06","requirements":[{"key":"%s","description":"Capture current evidence","required":true}]}`, options.RequirementKey))
+		var templateJSON json.RawMessage
+		if options.SchemaVersion == catalog.EnvironmentSchemaVersion {
+			mode := catalog.FixedOrigin
+			if options.ComparisonMode == "CURRENT_ONLY" {
+				mode = catalog.ChecklistOnly
+			}
+			document := catalog.TemplateDocument{SchemaVersion: catalog.EnvironmentSchemaVersion, IsVideo: options.MediaKind == "VIDEO", SegmentVersionID: f.SegmentVersionID.String(), ParticipantRoles: []string{"OWNER"}, DefaultComparisonMode: mode, CaptureLayout: catalog.EnvironmentsLayout, EnvironmentCapture: catalog.DefaultEnvironmentCapture(), SuggestedEnvironmentTypes: []string{"LIVING_ROOM"}, AnalysisType: analysisprompt.RealEstate, Policy: catalog.Policy{GeofenceMeters: catalog.DefaultGeofence, AllowGallery: true}}
+			payload, _, err := catalog.CanonicalJSON(document)
+			if err != nil {
+				return err
+			}
+			templateJSON = payload
+		} else {
+			templateJSON = json.RawMessage(fmt.Sprintf(`{"segment":"task06","requirements":[{"key":"%s","description":"Capture current evidence","required":true}]}`, options.RequirementKey))
+		}
 		if err := tx.Create(&database.Template{ID: f.TemplateID, TenantID: f.TenantID, Key: "task06-template", Name: "Task 06 template", SegmentVersionID: f.SegmentVersionID, ActiveVersionID: &f.TemplateVersionID, Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
@@ -222,7 +297,7 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		if err := tx.Create(&database.ProjectStage{ID: f.StageID, TenantID: f.TenantID, ProjectID: f.ProjectID, Key: "stage-1", Label: "Fixture stage", Kind: "INSPECTION", Position: 1, Status: "COMPLETED", Requirements: templateJSON, EffectiveReference: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.Inspection{ID: f.InspectionID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, AnalysisPromptSnapshotID: f.PromptSnapshotID, ProjectID: &f.ProjectID, StageID: &f.StageID, Source: "MANUAL", SourceKey: "task06-inspection", SourceReason: "integration fixture", Status: options.InspectionStatus, EvidenceCount: 1, DueAt: createdAt, DeadlineAt: createdAt.Add(24 * time.Hour), ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.Inspection{ID: f.InspectionID, TenantID: f.TenantID, BusinessUnitID: f.BusinessUnitID, AssetID: f.AssetID, ParticipantID: f.ParticipantID, TemplateID: f.TemplateID, TemplateVersionID: f.TemplateVersionID, AnalysisPromptSnapshotID: f.PromptSnapshotID, ProjectID: &f.ProjectID, StageID: &f.StageID, Source: "MANUAL", SourceKey: "task06-inspection", SourceReason: "integration fixture", Status: options.InspectionStatus, EvidenceCount: 1, MediaKind: options.MediaKind, DueAt: createdAt, DeadlineAt: createdAt.Add(24 * time.Hour), ReminderInstants: json.RawMessage(`[]`), ContextSnapshot: json.RawMessage(`{}`), Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Responsibility{ID: f.ResponsibilityID, TenantID: f.TenantID, InspectionID: f.InspectionID, ParticipantID: f.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
@@ -242,22 +317,53 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 		mediaBytes := fixturePNG()
 		mediaDigest := digest(mediaBytes)
 		mediaContentType := "image/png"
+		if options.MediaKind == "VIDEO" {
+			mediaBytes = []byte("fixture-mp4-clip")
+			mediaDigest = digest(mediaBytes)
+			mediaContentType = "video/mp4"
+		}
 		derivativeKey := mediaKey + "/normalized"
 		if h.Store.Client != nil {
 			if err := h.Store.Client.Put(ctx, h.Store.Bucket, mediaKey, bytes.NewReader(mediaBytes), int64(len(mediaBytes)), mediaContentType); err != nil {
 				return err
 			}
-			if err := h.Store.Client.Put(ctx, h.Store.Bucket, derivativeKey, bytes.NewReader(mediaBytes), int64(len(mediaBytes)), mediaContentType); err != nil {
+			if options.MediaKind == "PHOTO" {
+				if err := h.Store.Client.Put(ctx, h.Store.Bucket, derivativeKey, bytes.NewReader(mediaBytes), int64(len(mediaBytes)), mediaContentType); err != nil {
+					return err
+				}
+			}
+		}
+		if options.MediaKind == "VIDEO" {
+			expiresAt := createdAt.Add(24 * time.Hour)
+			if err := tx.Create(&database.VideoAttempt{ID: f.VideoAttemptID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "CURRENT", RequirementKey: &options.RequirementKey, PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: 1 << 30, AcquisitionSource: "CAMERA", Status: "RECEIVED", IdempotencyKey: "task06-video-attempt-" + f.VideoAttemptID.String(), PayloadDigest: mediaDigest, AdmittedAt: createdAt, ExpiresAt: expiresAt, CreatedAt: createdAt}).Error; err != nil {
 				return err
 			}
 		}
-		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: mediaKey, ContentType: mediaContentType, SHA256: mediaDigest, SizeBytes: int64(len(mediaBytes)), Status: "READY", IdempotencyKey: "task06-media", RequirementKey: options.RequirementKey, Description: "Fixture evidence", CaptureSource: "CAMERA", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: createdAt}).Error; err != nil {
+		var videoAttemptID *identity.ID
+		if options.MediaKind == "VIDEO" {
+			videoAttemptID = identity.Ptr(f.VideoAttemptID)
+		}
+		if err := tx.Create(&database.MediaObject{ID: f.MediaID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, ObjectKey: mediaKey, ContentType: mediaContentType, SHA256: mediaDigest, SizeBytes: int64(len(mediaBytes)), Status: "READY", MediaKind: options.MediaKind, VideoAttemptID: videoAttemptID, IdempotencyKey: "task06-media", RequirementKey: options.RequirementKey, Description: "Fixture evidence", CaptureSource: "CAMERA", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: createdAt}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.MediaDerivative{ID: f.DerivativeID, TenantID: f.TenantID, MediaID: f.MediaID, ObjectKey: derivativeKey, Kind: "NORMALIZED", SHA256: mediaDigest, ContentType: mediaContentType, Width: 1, Height: 1, SizeBytes: int64(len(mediaBytes)), CreatedAt: createdAt}).Error; err != nil {
+		if options.MediaKind == "PHOTO" {
+			if err := tx.Create(&database.MediaDerivative{ID: f.DerivativeID, TenantID: f.TenantID, MediaID: f.MediaID, ObjectKey: derivativeKey, Kind: "NORMALIZED", SHA256: mediaDigest, ContentType: mediaContentType, Width: 1, Height: 1, SizeBytes: int64(len(mediaBytes)), CreatedAt: createdAt}).Error; err != nil {
+				return err
+			}
+		}
+		maximumMedia := catalog.MaxEnvironmentPhotos
+		if options.MediaKind == "VIDEO" {
+			maximumMedia = catalog.MaxEnvironmentClips
+		}
+		requirement := fixtureRequirement{Key: options.RequirementKey, Section: "LIVING_ROOM", Label: "Sala", EvidenceKind: options.MediaKind, Required: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: maximumMedia, EnvironmentIdentityID: options.EnvironmentIdentityID.String(), EnvironmentTypeCode: "LIVING_ROOM", EnvironmentName: "Sala", AddedDuringCapture: true}
+		if options.SchemaVersion == catalog.LegacySchemaVersion {
+			requirement = fixtureRequirement{Key: options.RequirementKey, Section: "room", Label: "Sala", EvidenceKind: "PHOTO", Required: true, MinimumMedia: 1, MaximumMedia: 1}
+		}
+		requirementsJSON, err := json.Marshal([]fixtureRequirement{requirement})
+		if err != nil {
 			return err
 		}
-		if err := tx.Create(&database.CaptureDraft{ID: f.DraftID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", TemplateVersionID: f.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: templateJSON, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
+		if err := tx.Create(&database.CaptureDraft{ID: f.DraftID, TenantID: f.TenantID, ResponsibilityID: f.ResponsibilityID, Kind: "INSPECTION", MediaKind: options.MediaKind, TemplateVersionID: f.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: requirementsJSON, Status: "SUBMITTED", Version: 1, CreatedAt: createdAt, UpdatedAt: createdAt}).Error; err != nil {
 			return err
 		}
 		mediaIDs, _ := json.Marshal([]identity.ID{f.MediaID})
@@ -268,6 +374,87 @@ func (h *Harness) SeedTask06Fixture(ctx context.Context, options Task06FixtureOp
 	})
 	if err != nil {
 		return Task06Fixture{}, fmt.Errorf("seed task06 fixture: %w", err)
+	}
+	return f, nil
+}
+
+// SeedInventoryBaseline creates and activates a minimal MOVE_IN inventory for an inspection fixture.
+func (h *Harness) SeedInventoryBaseline(ctx context.Context, options Task06FixtureOptions) (InventoryBaselineFixture, error) {
+	base, err := h.SeedTask06Fixture(ctx, options)
+	if err != nil {
+		return InventoryBaselineFixture{}, err
+	}
+	result := InventoryBaselineFixture{Task06Fixture: base, OriginID: identity.NewID(), OriginVersionID: identity.NewID()}
+	environmentID, environmentIdentityID, itemID, evidenceID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	result.EnvironmentIDs = []identity.ID{environmentID}
+	result.EnvironmentIdentityIDs = []identity.ID{environmentIdentityID}
+	result.ItemIDs = []identity.ID{itemID}
+	result.EvidenceIDs = []identity.ID{evidenceID}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	purpose := "MOVE_IN"
+	activatedAt := now.Add(-time.Minute)
+	err = h.WithinTenant(ctx, base.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&database.Origin{ID: result.OriginID, TenantID: base.TenantID, AssetID: base.AssetID, ActiveVersionID: &result.OriginVersionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.OriginVersion{ID: result.OriginVersionID, TenantID: base.TenantID, OriginID: result.OriginID, VersionNumber: 1, Purpose: &purpose, Source: "CAPTURE", HasInventory: true, Status: "ACTIVE", IdempotencyKey: "harness-inventory-baseline-" + result.OriginVersionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &activatedAt}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.InventoryEnvironment{ID: environmentID, TenantID: base.TenantID, OriginVersionID: result.OriginVersionID, IdentityID: environmentIdentityID, TypeCode: "LIVING_ROOM", Name: "Sala", Expected: true, Decision: "ACCEPTED", Position: 0, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.InventoryItem{ID: itemID, TenantID: base.TenantID, OriginVersionID: result.OriginVersionID, EnvironmentID: environmentID, IdentityID: identity.NewID(), TypeCode: "SOFA", Name: "Sofá", Condition: "GOOD", Observation: "OBSERVED", Origin: "AI", Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.InventoryItemEvidence{ID: evidenceID, TenantID: base.TenantID, ItemID: itemID, Kind: "PHOTO", MediaID: base.MediaID, Position: 0, CreatedAt: now}).Error
+	})
+	if err != nil {
+		return InventoryBaselineFixture{}, fmt.Errorf("seed inventory baseline: %w", err)
+	}
+	return result, nil
+}
+
+// SeedVideoEnvironmentFixture creates a VIDEO inspection with an environment-keyed clip and retained frame scope.
+func (h *Harness) SeedVideoEnvironmentFixture(ctx context.Context) (VideoEnvironmentFixture, error) {
+	base, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{MediaKind: "VIDEO"})
+	if err != nil {
+		return VideoEnvironmentFixture{}, err
+	}
+	f := VideoEnvironmentFixture{Task06Fixture: base, PreparationID: identity.NewID(), VideoAttemptID: base.VideoAttemptID, FrameID: identity.NewID(), ScopeItemID: identity.NewID()}
+	key := "env:new:" + base.EnvironmentIdentityID.String()
+	frameBytes := fixturePNG()
+	frameDigest := digest(frameBytes)
+	frameKey := "tenant/" + base.TenantID.String() + "/video-frames/" + f.FrameID.String() + ".jpg"
+	if h.Store.Client == nil || h.Store.Bucket == "" {
+		return VideoEnvironmentFixture{}, fmt.Errorf("integration harness: object store is required for video fixture")
+	}
+	if err := h.Store.Client.Put(ctx, h.Store.Bucket, frameKey, bytes.NewReader(frameBytes), int64(len(frameBytes)), "image/png"); err != nil {
+		return VideoEnvironmentFixture{}, fmt.Errorf("seed environment video frame: %w", err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	err = h.WithinTenant(ctx, base.TenantID, func(tx *gorm.DB) error {
+		expiresAt := now.Add(24 * time.Hour)
+		var media database.MediaObject
+		if err := tx.Where("tenant_id=? AND id=?", base.TenantID, base.MediaID).Take(&media).Error; err != nil {
+			return err
+		}
+		if media.VideoAttemptID == nil || *media.VideoAttemptID != f.VideoAttemptID || media.RequirementKey != key {
+			return fmt.Errorf("video fixture media was not seeded with its environment requirement")
+		}
+		if err := tx.Create(&database.VideoPreparationJob{ID: f.PreparationID, TenantID: base.TenantID, MediaID: base.MediaID, RequirementKey: &key, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: media.SHA256, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		retentionDays := 30
+		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: base.TenantID, MediaID: base.MediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, RetentionDays: &retentionDays, SourceExpiryAt: &expiresAt, RetentionAnchor: "FIXED", Status: "RETAINED", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoFrame{ID: f.FrameID, TenantID: base.TenantID, SourceMediaID: base.MediaID, PreparationID: f.PreparationID, PTSMicros: 0, SHA256: frameDigest, ObjectKey: frameKey, Width: 1, Height: 1, Role: "BASELINE", Representative: true, Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.VideoScopeItem{ID: f.ScopeItemID, TenantID: base.TenantID, PreparationID: f.PreparationID, FrameID: f.FrameID, EnvironmentCandidate: "living_room", ComponentLabel: "sofa", ViewLabel: "wide", Visibility: video.VisibilityVisible, IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error
+	})
+	if err != nil {
+		return VideoEnvironmentFixture{}, fmt.Errorf("seed environment video fixture: %w", err)
 	}
 	return f, nil
 }

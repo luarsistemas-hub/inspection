@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"inspection/libs/identity"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -41,17 +40,6 @@ func inspectionDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestFinalizeVideoOriginDoesNotActivate(t *testing.T) {
-	db := inspectionDB(t)
-	finalizer, err := Setup(Dependencies{Origins: origincore.Service{DB: db}, Recapture: recapturecore.Service{DB: db}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := finalizer.Finalize(t.Context(), db, database.CaptureDraft{TenantID: identity.NewID(), Kind: "ORIGIN", MediaKind: "VIDEO"}, database.SubmissionVersion{}); err != nil {
-		t.Fatalf("video origin submission should await explicit activation: %v", err)
-	}
-}
-
 func TestFinalizeVideoRecaptureReceivesSupplement(t *testing.T) {
 	db := inspectionDB(t)
 	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
@@ -72,7 +60,7 @@ func TestFinalizeVideoRecaptureReceivesSupplement(t *testing.T) {
 	if err := db.Create(&database.MediaObject{ID: mediaID, TenantID: tenant, ResponsibilityID: responsibilityID, ObjectKey: "supplement", RequirementKey: "video:supplement", ContentType: "video/webm", SHA256: strings.Repeat("b", 64), SizeBytes: 10, Status: "RECEIVED", MediaKind: "VIDEO", Flags: []byte("[]")}).Error; err != nil {
 		t.Fatal(err)
 	}
-	f, err := Setup(Dependencies{Origins: origincore.Service{DB: db}, Recapture: recapturecore.Service{DB: db, Now: func() time.Time { return now }}})
+	f, err := Setup(Dependencies{Recapture: recapturecore.Service{DB: db, Now: func() time.Time { return now }}})
 	if err != nil {
 		t.Fatal(err)
 	}

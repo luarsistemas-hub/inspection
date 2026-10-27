@@ -36,14 +36,8 @@ func main() {
 	ctx := context.Background()
 	mediaKind := envOr("INSPECTION_QA_MEDIA_KIND", "PHOTO")
 	scenario := os.Getenv("INSPECTION_QA_SCENARIO")
-	if scenario != "" && scenario != "ORIGIN_VIDEO" && scenario != "FIXED_ORIGIN_VIDEO" {
-		log.Fatal("INSPECTION_QA_SCENARIO must be ORIGIN_VIDEO or FIXED_ORIGIN_VIDEO")
-	}
-	if scenario != "" && os.Getenv("INSPECTION_ENV") != "local" {
-		log.Fatal("video origin QA scenarios can only run in the local environment")
-	}
 	if scenario != "" {
-		mediaKind = "VIDEO"
+		log.Fatal("INSPECTION_QA_SCENARIO is no longer supported; leave it empty")
 	}
 	enableVideoAdmission := os.Getenv("INSPECTION_QA_ENABLE_VIDEO_ADMISSION") == "true"
 	if enableVideoAdmission && os.Getenv("INSPECTION_ENV") != "local" {
@@ -62,17 +56,6 @@ func main() {
 	}
 	if err != nil {
 		log.Fatal(err)
-	}
-	if scenario == "ORIGIN_VIDEO" {
-		url, err = seedqa.SetupOriginVideoInvite(ctx, db, issuer, captureBaseURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	if scenario == "FIXED_ORIGIN_VIDEO" {
-		if err := seedqa.SetupFixedOriginVideo(ctx, db, issuer, os.Getenv("INSPECTION_MINIO_ENDPOINT"), os.Getenv("INSPECTION_MINIO_ACCESS_KEY"), os.Getenv("INSPECTION_MINIO_SECRET_KEY"), os.Getenv("INSPECTION_MINIO_BUCKET"), os.Getenv("INSPECTION_MINIO_SECURE") == "true"); err != nil {
-			log.Fatal(err)
-		}
 	}
 	fmt.Printf("QA data created. Capture URL: %s\n", url)
 	if inspectionID != "" {

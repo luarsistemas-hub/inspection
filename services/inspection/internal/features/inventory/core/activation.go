@@ -6,7 +6,7 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
-	origincore "inspection/services/inspection/internal/features/origins/core"
+
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
@@ -116,7 +116,7 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", in.TenantID, beforeActive).Updates(updates).Error; err != nil {
 				return err
 			}
-			if err := origincore.ReleaseOriginReference(tx, in.TenantID, beforeActive); err != nil {
+			if err := ReleaseOriginReference(tx, in.TenantID, beforeActive); err != nil {
 				return err
 			}
 		}
@@ -211,4 +211,9 @@ func (s Service) Discard(ctx context.Context, tenantID, versionID, actor identit
 
 func inventoryEvent(tenant, version identity.ID, now time.Time) events.Envelope[map[string]any] {
 	return events.Envelope[map[string]any]{ID: identity.NewID(), Type: "inventory.version_activated.v1", SchemaVersion: 1, OccurredAt: now, TenantID: tenant, AggregateID: version, CorrelationID: "inventory-activation-" + version.String(), Payload: map[string]any{"originVersionId": version}}
+}
+
+// ReleaseOriginReference removes retained-video ownership references for a superseded inventory version.
+func ReleaseOriginReference(tx *gorm.DB, tenantID, versionID identity.ID) error {
+	return tx.Where("tenant_id=? AND owner_type='ORIGIN_VERSION' AND owner_id=?", tenantID, versionID).Delete(&database.VideoEvidenceReference{}).Error
 }

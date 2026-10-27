@@ -18,6 +18,7 @@ describe("baseline policy form boundaries", () => {
     expect(buildEnvironmentCaptureV2({ photoMinimum: 2, photoMaximum: 12, videoMaximumClips: 3, suggestedEnvironmentTypes: "LIVING_ROOM, KITCHEN" })).toEqual({ captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 2, maximum: 12 }, video: { maximumClips: 3 } }, suggestedEnvironmentTypes: ["LIVING_ROOM", "KITCHEN"] });
     expect(templateSchemaNotice(1, 4)).toContain("v1 sem inventário");
     expect(templateSchemaNotice(1, 4)).toContain("somente leitura");
+    expect(templateSchemaNotice(2, 5)).toBe("Versão ativa 5 · v2 com captura por ambiente.");
   });
 
   it("UT-363 presents sampled, retained and representative frame counts", () => {

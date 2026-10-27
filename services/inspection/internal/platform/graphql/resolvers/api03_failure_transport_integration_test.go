@@ -190,6 +190,10 @@ func api03FailureOperations() []api03FailureOperation {
 }
 
 func newAPI03FailureFixture(t *testing.T, operation string) api03FailureFixture {
+	return newAPI03FailureFixtureWithOptions(t, operation, harness.Task06FixtureOptions{})
+}
+
+func newAPI03FailureFixtureWithOptions(t *testing.T, operation string, options harness.Task06FixtureOptions) api03FailureFixture {
 	t.Helper()
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
@@ -200,7 +204,7 @@ func newAPI03FailureFixture(t *testing.T, operation string) api03FailureFixture 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	seed, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
+	seed, err := h.SeedTask06Fixture(ctx, options)
 	if err != nil {
 		t.Fatal(err)
 	}

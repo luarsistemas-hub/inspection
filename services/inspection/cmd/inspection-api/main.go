@@ -97,13 +97,8 @@ import (
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardinglogout "inspection/services/inspection/internal/features/onboarding/logout"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
-	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
-	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
@@ -269,9 +264,8 @@ func run() error {
 	}
 	mediaStore := objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient, PublicClient: publicMinioClient}
 	mediaService := mediacore.Service{DB: db, Store: mediaStore}
-	originService := origincore.Service{DB: db}
 	recaptureService := recapturecore.Service{DB: db}
-	submissionFinalizer, err := capturefinalize.Setup(capturefinalize.Dependencies{Origins: originService, Recapture: recaptureService})
+	submissionFinalizer, err := capturefinalize.Setup(capturefinalize.Dependencies{Recapture: recaptureService})
 	if err != nil {
 		return err
 	}
@@ -444,16 +438,7 @@ func run() error {
 			return projectlist.Setup(projectlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
-			return origininvite.Setup(origininvite.Dependencies{DB: db, Bus: bus, Service: originService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
-		},
-		func() error {
-			return originactivate.Setup(originactivate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
-		},
-		func() error {
-			return origininvalidate.Setup(origininvalidate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
-		},
-		func() error {
-			return originclose.Setup(originclose.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+			return origininvalidate.Setup(origininvalidate.Dependencies{DB: db, Bus: bus, Service: &origininvalidate.Service{DB: db}, Authorizer: authorizer})
 		},
 		func() error {
 			return originlist.Setup(originlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -574,9 +559,6 @@ func run() error {
 			return cfg.Environment != "local" || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 		},
 	}); err != nil {
-		return err
-	}
-	if err := onboardingphotos.Setup(mux, onboardingphotos.Dependencies{DB: db, Sessions: onboardingService, Store: mediaStore}); err != nil {
 		return err
 	}
 	if cfg.Notification.EnabledChannels["SMS"] || cfg.Notification.EnabledChannels["WHATSAPP"] {

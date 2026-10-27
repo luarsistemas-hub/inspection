@@ -2,7 +2,6 @@ package begin_video_capture
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -80,27 +79,6 @@ func TestAdmitFreezesLimitsAndExpiresAtUT005(t *testing.T) {
 	}
 	if attempt.MaxDurationSeconds != 900 || attempt.MaxBytes != MaxBytes || attempt.PolicyVersion != 4 || !attempt.ExpiresAt.Equal(now.Add(24*time.Hour)) {
 		t.Fatalf("limits were not frozen: %+v", attempt)
-	}
-}
-
-func TestAdmitRejectsOriginEnvironmentVideoWithStableError(t *testing.T) {
-	db, tenant, responsibility, now := videoCaptureDB(t)
-	var draft database.CaptureDraft
-	if err := db.Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Take(&draft).Error; err != nil {
-		t.Fatal(err)
-	}
-	templateVersionID := identity.NewID()
-	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenant, TemplateID: identity.NewID(), VersionNumber: 1, SchemaVersion: 2, DefinitionJSON: []byte(`{"schemaVersion":2,"isVideo":true}`), CanonicalDigest: "origin-video-v2", Status: "ACTIVE", IdempotencyKey: "origin-video-v2", PublishedAt: now, CreatedBy: identity.NewID()}).Error; err != nil {
-		t.Fatal(err)
-	}
-	requirements, _ := json.Marshal([]capturecore.Requirement{{Key: "env:new:room", EvidenceKind: "VIDEO", MaximumMedia: 3}})
-	if err := db.Model(&draft).Updates(map[string]any{"kind": "ORIGIN", "template_version_id": templateVersionID, "requirements": requirements}).Error; err != nil {
-		t.Fatal(err)
-	}
-	_, err := admit(context.Background(), db, inlineWithin(db), Command{TenantID: tenant, ResponsibilityID: responsibility, AcquisitionSource: "CAMERA", MutationID: "origin-environment-video", RequirementKey: "env:new:room"}, now)
-	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || appErr.Field != "responsibility" || appErr.Safe != "environment video capture is unavailable for origin drafts" {
-		t.Fatalf("origin environment video admission = %v; want stable INVALID_STATE", err)
 	}
 }
 

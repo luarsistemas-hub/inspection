@@ -125,12 +125,6 @@ func (s Service) Activate(ctx context.Context, tenantID, versionID identity.ID, 
 			}
 			return nil
 		}
-		// Every consumer of the active version (inspection creation, schedules,
-		// origin invitations, reports) still reads v1 requirements. Environment
-		// capture (task 03) lifts this gate once those paths understand v2.
-		if out.Version.SchemaVersion >= catalog.EnvironmentSchemaVersion {
-			return apperror.New(apperror.InvalidState, "versionId", "environment capture templates cannot be activated yet")
-		}
 		r := tx.Model(&database.Template{}).Where("tenant_id=? AND id=? AND version=?", tenantID, out.Version.TemplateID, expectedVersion).Updates(map[string]any{"active_version_id": versionID, "version": expectedVersion + 1, "updated_at": time.Now().UTC()})
 		if r.Error != nil {
 			return r.Error

@@ -640,6 +640,23 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     });
   });
 
+  test("lets the asset edit dialog keep, change or clear the inspection template", async ({ page }) => {
+    const mocks = await installMocks(page);
+    await loginAsMockAdmin(page, "/assets");
+    await page.getByRole("button", { name: "Abrir detalhes de Apartamento 101" }).click();
+    await page.getByRole("button", { name: "Editar imóvel" }).click();
+    const template = page.getByLabel("Modelo de vistoria");
+    await expect(template).toHaveValue("template-a");
+    await expect(template.locator("option")).toHaveText(["Nenhum", "Padrão · STANDARD"]);
+    await template.selectOption("");
+    await page.getByRole("textbox", { name: /^CEP/ }).fill("01001-000");
+    await page.getByRole("button", { name: "Buscar CEP" }).click();
+    await expect(page.getByLabel("Logradouro")).toHaveValue("Praça da Sé");
+    await page.getByRole("textbox", { name: "Número *" }).fill("101");
+    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    expect(mocks.calls.find((call) => call.operation === "AdminUpdateAsset")?.variables.input).toMatchObject({ asset: { templateId: null } });
+  });
+
   test("IT-013 shows a forbidden asset relationship error and preserves the entered values", async ({ page }) => {
     const mocks = await installMocks(page);
     mocks.enqueue("AdminRegisterAsset", { errors: [{ message: "Você não tem permissão para esta operação.", extensions: { code: "FORBIDDEN" } }] });

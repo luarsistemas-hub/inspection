@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"inspection/libs/identity"
-	"inspection/services/inspection/internal/features/onboarding/coordinator"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -48,84 +47,10 @@ func TestDeadlineAtRejectsMalformedDate(t *testing.T) {
 	}
 }
 
-func TestPendingResultProjectsOriginStateWithoutCompletedResources(t *testing.T) {
-	result := pendingResult(onboardingsession.Session{State: coordinator.StateParticipantSaved}, coordinator.SubmitResult{
-		State:          coordinator.StateOriginPending,
-		NextAction:     coordinator.NextActionWaitForOrigin,
-		OriginStatus:   "PENDING",
-		DeliveryStatus: deliveryPending,
-	})
-
-	if result.State != coordinator.StateOriginPending || result.NextAction != coordinator.NextActionWaitForOrigin {
-		t.Fatalf("unexpected pending transition: %#v", result)
-	}
-	if result.OriginStatus != "PENDING" || result.Delivery != deliveryPending {
-		t.Fatalf("unexpected pending statuses: %#v", result)
-	}
-	if result.Request.ID.String() != "00000000-0000-0000-0000-000000000000" || result.InspectionID.String() != "00000000-0000-0000-0000-000000000000" {
-		t.Fatalf("pending result claimed completed resources: %#v", result)
-	}
-}
-
-func TestReferencePhotosWaitForScreeningThenActivateOnce(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, schema := range []string{"media", "origins", "capture"} {
-		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, model := range []any{&database.MediaObject{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.CaptureDraft{}} {
-		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
-			t.Fatal(err)
-		}
-	}
-	tenantID, sessionID, assetID, templateVersionID, mediaID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	photo := database.MediaObject{ID: mediaID, TenantID: tenantID, ResponsibilityID: sessionID, Status: "VERIFIED", RequirementKey: "reference", Description: "Quarto", AttentionItems: []byte(`["Torneira"]`), ContentType: "image/jpeg", SHA256: strings.Repeat("a", 64), SizeBytes: 12}
-	if err := db.Create(&photo).Error; err != nil {
-		t.Fatal(err)
-	}
-	service := Service{DB: db, Within: func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
-		return db.WithContext(ctx).Transaction(fn)
-	}}
-	status, err := service.originMediaStatus(context.Background(), tenantID, sessionID, []identity.ID{mediaID})
-	if err != nil || status != "PENDING" {
-		t.Fatalf("unprocessed photo status = %q, %v", status, err)
-	}
-	if err := db.Model(&photo).Update("status", "READY").Error; err != nil {
-		t.Fatal(err)
-	}
-	status, err = service.originMediaStatus(context.Background(), tenantID, sessionID, []identity.ID{mediaID})
-	if err != nil || status != "ACTIVE" {
-		t.Fatalf("screened photo status = %q, %v", status, err)
-	}
-	versionID, err := service.ensureOrigin(context.Background(), tenantID, sessionID, assetID, templateVersionID, []identity.ID{mediaID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var expectedEvidence database.OriginEvidence
-	if err := db.Where("tenant_id=? AND origin_version_id=?", tenantID, versionID).First(&expectedEvidence).Error; err != nil || string(expectedEvidence.AttentionItems) != `["Torneira"]` {
-		t.Fatalf("origin attention items = %s, %v", expectedEvidence.AttentionItems, err)
-	}
-	again, err := service.ensureOrigin(context.Background(), tenantID, sessionID, assetID, templateVersionID, []identity.ID{mediaID})
-	if err != nil || again != versionID {
-		t.Fatalf("origin retry = %s, %v", again, err)
-	}
-	var origin database.Origin
-	var evidence []database.OriginEvidence
-	if err := db.Where("tenant_id=? AND asset_id=?", tenantID, assetID).First(&origin).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Where("tenant_id=? AND origin_version_id=?", tenantID, versionID).Find(&evidence).Error; err != nil {
-		t.Fatal(err)
-	}
-	if origin.ActiveVersionID == nil || *origin.ActiveVersionID != versionID || len(evidence) != 1 || evidence[0].MediaID != mediaID || evidence[0].Description != "Quarto" {
-		t.Fatalf("origin was not activated with the reference photo: %+v %+v", origin, evidence)
-	}
-	if completed := completedResult(onboardingsession.Session{}, database.OnboardingRequest{OriginVersionID: &versionID}, identity.NewID()); completed.OriginStatus != "ACTIVE" {
-		t.Fatalf("completed onboarding hid the active origin: %+v", completed)
+func TestCompletedResultHasNoOriginVersionOrStatus(t *testing.T) {
+	result := completedResult(onboardingsession.Session{}, database.OnboardingRequest{}, identity.NewID())
+	if result.OriginStatus != "NOT_REQUIRED" || result.Request.OriginVersionID != nil {
+		t.Fatalf("onboarding unexpectedly has an origin: %+v", result)
 	}
 }
 

@@ -101,7 +101,7 @@ func TestOnboardingPurposeAndCodeBoundaries(t *testing.T) {
 }
 
 func TestStepRankIsMonotonic(t *testing.T) {
-	steps := []string{StepIdentity, StepAgency, StepProperty, StepOrigin, StepParticipant, StepReady}
+	steps := []string{StepIdentity, StepAgency, StepProperty, StepParticipant, StepReady}
 	for i := 1; i < len(steps); i++ {
 		if stepRank(steps[i]) <= stepRank(steps[i-1]) {
 			t.Fatalf("step %s did not advance", steps[i])

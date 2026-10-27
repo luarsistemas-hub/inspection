@@ -92,9 +92,6 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		if (draft.Status != "OPEN" && !(draft.Status == "SUBMITTED" && cmd.ReplacesMediaID != nil)) || draft.MediaKind != "VIDEO" {
 			return apperror.New(apperror.InvalidState, "responsibility", "video capture is unavailable")
 		}
-		if draft.Kind == "ORIGIN" && strings.HasPrefix(cmd.RequirementKey, "env:") {
-			return apperror.New(apperror.InvalidState, "responsibility", "environment video capture is unavailable for origin drafts")
-		}
 		if cmd.AcquisitionSource == "FILE" {
 			var capturePolicy struct {
 				AllowGallery bool `json:"allowGallery"`
@@ -218,9 +215,7 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 			expires = invitation.ExpiresAt
 		}
 		kind := "CURRENT"
-		if draft.Kind == "ORIGIN" {
-			kind = "ORIGIN"
-		} else if draft.Kind == "RECAPTURE" {
+		if draft.Kind == "RECAPTURE" {
 			kind = "SUPPLEMENT"
 		}
 		var attemptRequirement *string

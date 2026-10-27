@@ -16,7 +16,6 @@ import (
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
-	originservice "inspection/services/inspection/internal/features/origins/core"
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
@@ -91,67 +90,6 @@ func TestUT100UT101UT103UT104UT174InspectionCreatePinsRequirementsAndPromptSnaps
 			t.Fatalf("v2 draft/inspection snapshot mismatch: draft=%+v inspection=%+v", draft, view.Inspection)
 		}
 	})
-	t.Run("UT-104 catalog activation leaves pinned draft immutable", func(t *testing.T) {
-		fx := newTask3CreateFixture(t, h, "PHOTO", 2, true)
-		seedTask3ActiveInventoryOrigin(t, h, fx)
-		wireTask3RealOriginResolver(t, fx)
-		view := fx.create(t, catalog.FixedOrigin, &fx.referenceID, "ut104")
-		before := loadRequirements(t, h, fx.seed.TenantID, view.Responsibility.ID)
-		var pinned database.ReferenceSnapshot
-		if err := h.WithinTenant(ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
-			return tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&pinned).Error
-		}); err != nil {
-			t.Fatal(err)
-		}
-		secondID := identity.NewID()
-		secondResponsibility := identity.NewID()
-		now := time.Now().UTC()
-		if err := h.WithinTenant(ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
-			if err := tx.Create(&database.Responsibility{ID: secondResponsibility, TenantID: fx.seed.TenantID, InspectionID: fx.seed.InspectionID, ParticipantID: fx.seed.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: secondResponsibility, Kind: "ORIGIN", MediaKind: "PHOTO", TemplateVersionID: fx.templateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-				return err
-			}
-			purpose := "MOVE_IN"
-			if err := tx.Create(&database.OriginVersion{ID: secondID, TenantID: fx.seed.TenantID, OriginID: fx.reference.Version.OriginID, VersionNumber: 2, ResponsibilityID: &secondResponsibility, Purpose: &purpose, HasInventory: true, Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "ut104-activated-version-" + secondID.String(), CreatedAt: now, SubmittedAt: &now}).Error; err != nil {
-				return err
-			}
-			mediaID := identity.NewID()
-			if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fx.seed.TenantID, ResponsibilityID: secondResponsibility, ObjectKey: "ut104/" + mediaID.String(), ContentType: "image/jpeg", SHA256: "ut104-photo", SizeBytes: 123, Status: "READY", MediaKind: "PHOTO", RequirementKey: "origin:photo", Description: "Version 2 reference photo", IdempotencyKey: "ut104-media-" + mediaID.String(), AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
-				return err
-			}
-			for index := 0; index < 2; index++ {
-				envID := identity.NewID()
-				if err := tx.Create(&database.InventoryEnvironment{ID: identity.NewID(), TenantID: fx.seed.TenantID, OriginVersionID: secondID, IdentityID: envID, TypeCode: "BEDROOM", Name: "New room " + envID.String()[:8], Expected: true, Decision: "ACCEPTED", Position: index + 1, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-					return err
-				}
-			}
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := (originservice.Service{DB: h.DB, Within: h.WithinTenant}).ActivateCompleted(ctx, fx.seed.TenantID, secondResponsibility); err != nil {
-			t.Fatalf("activate newer catalog version: %v", err)
-		}
-		after := loadRequirements(t, h, fx.seed.TenantID, view.Responsibility.ID)
-		if !requirementsEqual(before, after) || len(after) != 4 {
-			t.Fatalf("created draft requirements changed after newer resolution: before=%+v after=%+v", before, after)
-		}
-		var currentOrigin database.Origin
-		var stillPinned database.ReferenceSnapshot
-		if err := h.WithinTenant(ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
-			if err := tx.Where("tenant_id=? AND id=?", fx.seed.TenantID, fx.reference.Version.OriginID).Take(&currentOrigin).Error; err != nil {
-				return err
-			}
-			return tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&stillPinned).Error
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if currentOrigin.ActiveVersionID == nil || *currentOrigin.ActiveVersionID != secondID || stillPinned.ReferenceVersionID == nil || *stillPinned.ReferenceVersionID != *pinned.ReferenceVersionID {
-			t.Fatalf("catalog activation or draft pin mismatch: active=%v before=%v after=%v", currentOrigin.ActiveVersionID, pinned.ReferenceVersionID, stillPinned.ReferenceVersionID)
-		}
-	})
 	t.Run("UT-174 CATALOG and COMPARE pins", func(t *testing.T) {
 		noReference := newTask3CreateFixture(t, h, "PHOTO", 2, false)
 		without := noReference.create(t, catalog.ChecklistOnly, nil, "ut174-catalog")
@@ -167,181 +105,6 @@ func TestUT100UT101UT103UT104UT174InspectionCreatePinsRequirementsAndPromptSnaps
 			t.Fatalf("v1 template with inventory returned %v; want InvalidState CATALOG_ORIGIN_FIRST", err)
 		}
 	})
-}
-
-func seedTask3ActiveInventoryOrigin(t *testing.T, h *harness.Harness, fx *task3CreateFixture) {
-	t.Helper()
-	now := time.Now().UTC()
-	originID := fx.reference.Version.OriginID
-	if err := h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Create(&database.Origin{ID: originID, TenantID: fx.seed.TenantID, AssetID: fx.seed.AssetID, ActiveVersionID: &fx.referenceID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		purpose := "MOVE_IN"
-		if err := tx.Create(&database.OriginVersion{ID: fx.referenceID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, Purpose: &purpose, HasInventory: true, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "ut104-current-version-" + fx.referenceID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
-			return err
-		}
-		for index, requirement := range fx.requirements {
-			envIdentity, err := identity.ParseID(requirement.EnvironmentIdentityID)
-			if err != nil {
-				return err
-			}
-			if err := tx.Create(&database.InventoryEnvironment{ID: identity.NewID(), TenantID: fx.seed.TenantID, OriginVersionID: fx.referenceID, IdentityID: envIdentity, TypeCode: requirement.EnvironmentTypeCode, Name: requirement.EnvironmentName, Expected: true, Decision: "ACCEPTED", Position: index + 1, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func wireTask3RealOriginResolver(t *testing.T, fx *task3CreateFixture) {
-	t.Helper()
-	bus := mediator.New()
-	if err := bus.RegisterQuery(assetget.Query{}, func(_ context.Context, _ any) (any, error) {
-		return assetcore.View{Asset: database.Asset{ID: fx.seed.AssetID, TenantID: fx.seed.TenantID, BusinessUnitID: fx.seed.BusinessUnitID, TemplateID: &fx.version.Template.ID, Status: "ACTIVE", Version: 1, PolicyOverrides: json.RawMessage(`{}`)}}, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := bus.RegisterQuery(participantget.Query{}, func(_ context.Context, _ any) (any, error) {
-		return participantcore.ParticipantView{Participant: database.Participant{ID: fx.seed.ParticipantID, TenantID: fx.seed.TenantID, BusinessUnitID: fx.seed.BusinessUnitID, Status: "ACTIVE", Version: 1}, Selected: []identity.ID{fx.seed.ContactID}}, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := bus.RegisterQuery(templateresolve.Query{}, func(_ context.Context, _ any) (any, error) { return fx.version, nil }); err != nil {
-		t.Fatal(err)
-	}
-	if err := originresolve.Setup(originresolve.Dependencies{DB: fx.h.DB, Bus: bus}); err != nil {
-		t.Fatal(err)
-	}
-	fx.bus = bus
-	fx.service.Bus = bus
-}
-
-func TestIT012V1PhotoCreateKeepsLegacyDraftAndNoInventoryWork(t *testing.T) {
-	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
-		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
-	}
-	h, err := harness.NewFromEnv(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer h.Close()
-	fx := newTask3CreateFixture(t, h, "PHOTO", 1, false)
-	definition, err := json.Marshal(catalog.TemplateDocument{
-		SchemaVersion: 1, SegmentVersionID: fx.seed.SegmentVersionID.String(),
-		ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: catalog.ChecklistOnly,
-		AnalysisType: "REAL_ESTATE",
-		Requirements: []catalog.CaptureRequirement{
-			{Key: "overview", Section: "General", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, CaptureSourcePolicy: "CAMERA_DEFAULT"},
-			{Key: "detail", Section: "Details", Label: "Detail", EvidenceKind: "PHOTO", MinimumCount: 2, MaximumCount: 5, Required: true, CaptureSourcePolicy: "CAMERA_DEFAULT"},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	fx.resolvedVersion.Version.DefinitionJSON = definition
-	view := fx.create(t, catalog.ChecklistOnly, nil, "it012-v1-photo")
-	var createdEvent database.OutboxIntent
-	if err := h.AdminDB.Where("tenant_id=? AND id=?", fx.seed.TenantID, view.EventID).Take(&createdEvent).Error; err != nil {
-		t.Fatal(err)
-	}
-	var createdEnvelope struct {
-		Payload map[string]json.RawMessage `json:"payload"`
-	}
-	if err := json.Unmarshal(createdEvent.Payload, &createdEnvelope); err != nil {
-		t.Fatal(err)
-	}
-	if _, exists := createdEnvelope.Payload["reviewerMembershipId"]; exists {
-		t.Fatal("v1 inspection.created.v1 added a null reviewerMembershipId")
-	}
-	if err := h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
-		var draft database.CaptureDraft
-		if err := tx.Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, view.Responsibility.ID).Take(&draft).Error; err != nil {
-			return err
-		}
-		var requirements []capturecore.Requirement
-		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
-			return err
-		}
-		if len(requirements) != 2 {
-			t.Errorf("v1 photo requirements=%+v; want two template requirements", requirements)
-		} else if requirements[0].Key != "overview" || requirements[0].MinimumMedia != 1 || requirements[0].MaximumMedia != 2 || requirements[1].Key != "detail" || requirements[1].MinimumMedia != 2 || requirements[1].MaximumMedia != 5 {
-			t.Errorf("v1 photo requirements=%+v; want original keys and limits", requirements)
-		}
-		var inventoryJobs int64
-		if err := tx.Model(&database.OutboxIntent{}).Where("tenant_id=? AND (type LIKE '%inventory%' OR type LIKE '%INVENTORY%')", fx.seed.TenantID).Count(&inventoryJobs).Error; err != nil {
-			return err
-		}
-		if inventoryJobs != 0 {
-			t.Errorf("v1 photo create enqueued %d inventory jobs", inventoryJobs)
-		}
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", fx.seed.TenantID, view.Inspection.ID).Take(&inspection).Error; err != nil {
-			return err
-		}
-		if inspection.InventoryPromptSnapshotID != nil {
-			t.Errorf("v1 photo create pinned inventory prompt %s", inspection.InventoryPromptSnapshotID.String())
-		}
-		var reference database.ReferenceSnapshot
-		if err := tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&reference).Error; err != nil {
-			return err
-		}
-		if reference.ReferenceVersionID != nil || reference.ComparisonMode != string(catalog.ChecklistOnly) {
-			t.Errorf("v1 CHECKLIST_ONLY reference snapshot=%+v; want no pinned version", reference)
-		}
-		var policy database.PolicySnapshot
-		if err := tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&policy).Error; err != nil {
-			return err
-		}
-		if policy.SchemaVersion != 1 {
-			t.Errorf("v1 policy snapshot schemaVersion=%d; want 1", policy.SchemaVersion)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestIT013V1VideoCreateUsesLegacyMainAttempt(t *testing.T) {
-	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
-		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
-	}
-	h, err := harness.NewFromEnv(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer h.Close()
-	fx := newTask3CreateFixture(t, h, "VIDEO", 1, false)
-	view := fx.create(t, catalog.ChecklistOnly, nil, "it013-v1-video")
-	if got := loadRequirements(t, h, fx.seed.TenantID, view.Responsibility.ID); len(got) != 1 || got[0].Key != "video:main" {
-		t.Fatalf("v1 video draft requirements=%+v; want exactly video:main", got)
-	}
-	now := time.Now().UTC()
-	tokenDigest := sha256.Sum256([]byte("it013:" + view.Responsibility.ID.String()))
-	invitation := database.Invitation{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, TokenHash: tokenDigest[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}
-	acceptance := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, DisclosureVersion: "pt-BR-1", PhotoProcessing: true, VideoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
-	if err := fx.h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Create(&invitation).Error; err != nil {
-			return err
-		}
-		return tx.Create(&acceptance).Error
-	}); err != nil {
-		t.Fatal(err)
-	}
-	bus := mediator.New()
-	if err := capturebeginvideo.Setup(capturebeginvideo.Dependencies{DB: fx.h.DB, Bus: bus, Within: fx.h.WithinTenant}); err != nil {
-		t.Fatal(err)
-	}
-	raw, err := bus.Send(context.Background(), capturebeginvideo.Command{TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, AcquisitionSource: "CAMERA", MutationID: "it013-v1-begin"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	attempt := raw.(database.VideoAttempt)
-	if attempt.RequirementKey != nil {
-		t.Fatalf("v1 video attempt requirement key=%q; want NULL legacy main slot", *attempt.RequirementKey)
-	}
 }
 
 type task3CreateFixture struct {
@@ -475,4 +238,129 @@ func requirementsEqual(a, b []capturecore.Requirement) bool {
 	left, _ := json.Marshal(a)
 	right, _ := json.Marshal(b)
 	return string(left) == string(right)
+}
+
+func TestIT012V1PhotoCreateKeepsLegacyDraftAndNoInventoryWork(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	h, err := harness.NewFromEnv(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	fx := newTask3CreateFixture(t, h, "PHOTO", 1, false)
+	definition, err := json.Marshal(catalog.TemplateDocument{
+		SchemaVersion: 1, SegmentVersionID: fx.seed.SegmentVersionID.String(),
+		ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: catalog.ChecklistOnly,
+		AnalysisType: "REAL_ESTATE",
+		Requirements: []catalog.CaptureRequirement{
+			{Key: "overview", Section: "General", Label: "Overview", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 2, Required: true, CaptureSourcePolicy: "CAMERA_DEFAULT"},
+			{Key: "detail", Section: "Details", Label: "Detail", EvidenceKind: "PHOTO", MinimumCount: 2, MaximumCount: 5, Required: true, CaptureSourcePolicy: "CAMERA_DEFAULT"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.resolvedVersion.Version.DefinitionJSON = definition
+	view := fx.create(t, catalog.ChecklistOnly, nil, "it012-v1-photo")
+	var createdEvent database.OutboxIntent
+	if err := h.AdminDB.Where("tenant_id=? AND id=?", fx.seed.TenantID, view.EventID).Take(&createdEvent).Error; err != nil {
+		t.Fatal(err)
+	}
+	var createdEnvelope struct {
+		Payload map[string]json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(createdEvent.Payload, &createdEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := createdEnvelope.Payload["reviewerMembershipId"]; exists {
+		t.Fatal("v1 inspection.created.v1 added a null reviewerMembershipId")
+	}
+	if err := h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", fx.seed.TenantID, view.Responsibility.ID).Take(&draft).Error; err != nil {
+			return err
+		}
+		var requirements []capturecore.Requirement
+		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+			return err
+		}
+		if len(requirements) != 2 {
+			t.Errorf("v1 photo requirements=%+v; want two template requirements", requirements)
+		} else if requirements[0].Key != "overview" || requirements[0].MinimumMedia != 1 || requirements[0].MaximumMedia != 2 || requirements[1].Key != "detail" || requirements[1].MinimumMedia != 2 || requirements[1].MaximumMedia != 5 {
+			t.Errorf("v1 photo requirements=%+v; want original keys and limits", requirements)
+		}
+		var inventoryJobs int64
+		if err := tx.Model(&database.OutboxIntent{}).Where("tenant_id=? AND (type LIKE '%inventory%' OR type LIKE '%INVENTORY%')", fx.seed.TenantID).Count(&inventoryJobs).Error; err != nil {
+			return err
+		}
+		if inventoryJobs != 0 {
+			t.Errorf("v1 photo create enqueued %d inventory jobs", inventoryJobs)
+		}
+		var inspection database.Inspection
+		if err := tx.Where("tenant_id=? AND id=?", fx.seed.TenantID, view.Inspection.ID).Take(&inspection).Error; err != nil {
+			return err
+		}
+		if inspection.InventoryPromptSnapshotID != nil {
+			t.Errorf("v1 photo create pinned inventory prompt %s", inspection.InventoryPromptSnapshotID.String())
+		}
+		var reference database.ReferenceSnapshot
+		if err := tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&reference).Error; err != nil {
+			return err
+		}
+		if reference.ReferenceVersionID != nil || reference.ComparisonMode != string(catalog.ChecklistOnly) {
+			t.Errorf("v1 CHECKLIST_ONLY reference snapshot=%+v; want no pinned version", reference)
+		}
+		var policy database.PolicySnapshot
+		if err := tx.Where("tenant_id=? AND inspection_id=?", fx.seed.TenantID, view.Inspection.ID).Take(&policy).Error; err != nil {
+			return err
+		}
+		if policy.SchemaVersion != 1 {
+			t.Errorf("v1 policy snapshot schemaVersion=%d; want 1", policy.SchemaVersion)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIT013V1VideoCreateUsesLegacyMainAttempt(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	h, err := harness.NewFromEnv(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	fx := newTask3CreateFixture(t, h, "VIDEO", 1, false)
+	view := fx.create(t, catalog.ChecklistOnly, nil, "it013-v1-video")
+	if got := loadRequirements(t, h, fx.seed.TenantID, view.Responsibility.ID); len(got) != 1 || got[0].Key != "video:main" {
+		t.Fatalf("v1 video draft requirements=%+v; want exactly video:main", got)
+	}
+	now := time.Now().UTC()
+	tokenDigest := sha256.Sum256([]byte("it013:" + view.Responsibility.ID.String()))
+	invitation := database.Invitation{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, TokenHash: tokenDigest[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}
+	acceptance := database.ProcessingAcceptance{ID: identity.NewID(), TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, DisclosureVersion: "pt-BR-1", PhotoProcessing: true, VideoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}
+	if err := fx.h.WithinTenant(context.Background(), fx.seed.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Create(&invitation).Error; err != nil {
+			return err
+		}
+		return tx.Create(&acceptance).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bus := mediator.New()
+	if err := capturebeginvideo.Setup(capturebeginvideo.Dependencies{DB: fx.h.DB, Bus: bus, Within: fx.h.WithinTenant}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := bus.Send(context.Background(), capturebeginvideo.Command{TenantID: fx.seed.TenantID, ResponsibilityID: view.Responsibility.ID, AcquisitionSource: "CAMERA", MutationID: "it013-v1-begin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := raw.(database.VideoAttempt)
+	if attempt.RequirementKey != nil {
+		t.Fatalf("v1 video attempt requirement key=%q; want NULL legacy main slot", *attempt.RequirementKey)
+	}
 }

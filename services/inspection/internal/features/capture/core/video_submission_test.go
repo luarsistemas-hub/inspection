@@ -358,27 +358,6 @@ func TestSubmitEnvironmentVideoWithoutClipsEmitsEvaluatedCompleteness(t *testing
 	}
 }
 
-func TestSubmitOriginEnvironmentVideoReturnsStableInvalidState(t *testing.T) {
-	db, service, tenant, responsibility := videoInspectionSubmitFixture(t, nil)
-	var draft database.CaptureDraft
-	if err := db.Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Take(&draft).Error; err != nil {
-		t.Fatal(err)
-	}
-	templateVersionID := identity.NewID()
-	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenant, TemplateID: identity.NewID(), VersionNumber: 1, SchemaVersion: 2, DefinitionJSON: json.RawMessage(`{"schemaVersion":2,"isVideo":true}`), CanonicalDigest: "task3-origin-video-v2", Status: "PUBLISHED", IdempotencyKey: "task3-origin-video-v2", PublishedAt: time.Now().UTC(), CreatedBy: identity.NewID()}).Error; err != nil {
-		t.Fatal(err)
-	}
-	requirements, _ := json.Marshal([]Requirement{{Key: "env:new:room", Required: true, AddedDuringCapture: true, ImpossibilityAllowed: true, MinimumMedia: 1, MaximumMedia: 3}})
-	if err := db.Model(&draft).Updates(map[string]any{"kind": "ORIGIN", "template_version_id": templateVersionID, "requirements": requirements}).Error; err != nil {
-		t.Fatal(err)
-	}
-	_, err := service.Submit(context.Background(), tenant, responsibility, true)
-	var appErr *apperror.Error
-	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidState || appErr.Field != "responsibility" || appErr.Safe != "environment video capture is unavailable for origin drafts" {
-		t.Fatalf("origin v2 video submit = %v; want stable INVALID_STATE", err)
-	}
-}
-
 func stringPtr(value string) *string { return &value }
 
 func TestSaveVideoMetadataAfterUploadReservedRequirement(t *testing.T) {

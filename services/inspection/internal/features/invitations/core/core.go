@@ -261,24 +261,14 @@ func (s Service) VerifyOTP(ctx context.Context, linkToken, code string) (Session
 	return result, rejection
 }
 
-// confirmResponsibleAccess records the first access of an inspection
-// responsible. Origin captures have no inspection responsibility: their
-// invitation uses the synthetic id owned by the origin version and its capture
-// draft, so only that draft is required for them.
+// confirmResponsibleAccess records the first access of an inspection responsible.
 func confirmResponsibleAccess(ctx context.Context, tx *gorm.DB, invitation database.Invitation, now time.Time) error {
 	var responsibilities []database.Responsibility
 	if err := tx.Where("tenant_id=? AND id=?", invitation.TenantID, invitation.ResponsibilityID).Limit(1).Find(&responsibilities).Error; err != nil {
 		return err
 	}
 	if len(responsibilities) == 0 {
-		var origins int64
-		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=? AND kind='ORIGIN'", invitation.TenantID, invitation.ResponsibilityID).Count(&origins).Error; err != nil {
-			return err
-		}
-		if origins != 1 {
-			return safeInvitationError(gorm.ErrRecordNotFound)
-		}
-		return nil
+		return apperror.New(apperror.NotFound, "responsibility", "inspection responsibility not found")
 	}
 	if err := verifyInvitedEmail(tx, invitation, responsibilities[0], now); err != nil {
 		return err

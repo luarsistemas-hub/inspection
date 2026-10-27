@@ -471,10 +471,12 @@ export type CorrectOnboardingResponsibleEmailInput = {
 
 export type CounterpartyBaseline = {
   __typename?: 'CounterpartyBaseline';
+  activatedAt: Maybe<Scalars['String']['output']>;
   adjustmentStatus: Maybe<Scalars['String']['output']>;
   baseline: CounterpartyBaselineInventory;
   deadlineAt: Scalars['String']['output'];
   newerVersionExists: Scalars['Boolean']['output'];
+  purpose: Maybe<Scalars['String']['output']>;
   readOnly: Scalars['Boolean']['output'];
   resolution: Scalars['String']['output'];
   resolutionReason: Maybe<Scalars['String']['output']>;
@@ -493,6 +495,8 @@ export type CounterpartyBaselineEvidence = {
   __typename?: 'CounterpartyBaselineEvidence';
   kind: Scalars['String']['output'];
   position: Scalars['Int']['output'];
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  url: Maybe<Scalars['String']['output']>;
 };
 
 export type CounterpartyBaselineInventory = {

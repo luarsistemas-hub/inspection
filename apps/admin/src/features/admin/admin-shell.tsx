@@ -17,7 +17,7 @@ import { AddressFieldStyles, AddressForm, emptyPostalAddress, type PostalAddress
 import { AssetAttributeFields, normalizeAssetAttributes, type SegmentAttributeSchema } from "./asset-attributes";
 import { VideoOperationsPage } from "./video-operations-page";
 import { isValidBaselinePolicyDays, isValidSupersededRetentionDays } from "./policy-validation";
-import { buildEnvironmentCaptureV2, templateSchemaNotice } from "./template-v2";
+import { buildEnvironmentCaptureV2, defaultSuggestedEnvironmentTypes, suggestedEnvironmentOptions, templateSchemaNotice } from "./template-v2";
 
 type Row = Record<string, string | number | null>;
 type Collection = { title: string; responsibility: string; columns: string[]; rows: Row[]; hasNextPage: boolean; endCursor: string | null };
@@ -214,7 +214,7 @@ export function TemplateEditorPage() {
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [schemaVersion, setSchemaVersion] = useState(2);
   const [photoMinimum, setPhotoMinimum] = useState(1); const [photoMaximum, setPhotoMaximum] = useState(20); const [videoMaximumClips, setVideoMaximumClips] = useState(3);
-  const [suggestedEnvironmentTypes, setSuggestedEnvironmentTypes] = useState("LIVING_ROOM, KITCHEN, BEDROOM, BATHROOM, OTHER");
+  const [suggestedEnvironmentTypes, setSuggestedEnvironmentTypes] = useState<string[]>(defaultSuggestedEnvironmentTypes);
   const [isVideo, setIsVideo] = useState(false);
   const [segmentVersionId, setSegmentVersionId] = useState("");
   const [key, setKey] = useState(""); const [name, setName] = useState("");
@@ -236,9 +236,21 @@ export function TemplateEditorPage() {
   }, []);
   useEffect(() => { void loadCatalogs(); }, [loadCatalogs]);
 
-  const selectedTemplateKey = selectedTemplate?.key; const selectedTemplateName = selectedTemplate?.name; const activeVersionId = selectedTemplate?.activeVersionId;
+  const applyDraftDefaults = useCallback(() => {
+    setSchemaVersion(2); setIsVideo(false); setRequirements([]); setPhotoMinimum(1); setPhotoMaximum(20); setVideoMaximumClips(3); setSuggestedEnvironmentTypes(defaultSuggestedEnvironmentTypes);
+    setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY");
+  }, []);
+  const selectedTemplateKey = selectedTemplate?.key; const selectedTemplateName = selectedTemplate?.name; const selectedSegmentVersionId = selectedTemplate?.segmentVersionId;
+  const activeVersionId = selectedTemplate?.activeVersionId;
   useEffect(() => {
-    if (!activeVersionId) return;
+    if (!activeVersionId) {
+      if (selectedTemplateKey !== undefined) {
+        // Nothing is active to read, so start from clean defaults instead of the previous template's fields.
+        applyDraftDefaults(); setKey(selectedTemplateKey); setName(selectedTemplateName ?? ""); if (selectedSegmentVersionId) setSegmentVersionId(selectedSegmentVersionId); setError("");
+        setStatus("Este modelo ainda não tem versão ativa e não aparece na escolha de imóveis. Configure a captura (inclusive vídeo, se for o caso) e publique para ativá-lo.");
+      }
+      return;
+    }
     let cancelled = false;
     void graphql<G.AdminTemplateVersionQuery>(G.AdminTemplateVersionDocument, { id: activeVersionId }).then((result) => {
       if (cancelled || !result.templateVersion) return;
@@ -248,14 +260,14 @@ export function TemplateEditorPage() {
       setKey(selectedTemplateKey ?? ""); setName(selectedTemplateName ?? ""); setSegmentVersionId(definition.segmentVersionId);
       if (definition.participantRoles?.length) setParticipantRoles(definition.participantRoles); setComparisonMode(definition.defaultComparisonMode || "CHECKLIST_ONLY");
       setRequirements((definition.requirements ?? []).map((requirement) => ({ key: String(requirement.key), section: String(requirement.section), label: String(requirement.label), instructions: String(requirement.instructions ?? ""), minimumCount: Number(requirement.minimumCount ?? 0), maximumCount: Number(requirement.maximumCount ?? 5), preserved: requirement })));
-      setPhotoMinimum(definition.environmentCapture?.photo?.minimum ?? 1); setPhotoMaximum(definition.environmentCapture?.photo?.maximum ?? 20); setVideoMaximumClips(definition.environmentCapture?.video?.maximumClips ?? 3); setSuggestedEnvironmentTypes((definition.suggestedEnvironmentTypes ?? ["LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "OTHER"]).join(", "));
+      setPhotoMinimum(definition.environmentCapture?.photo?.minimum ?? 1); setPhotoMaximum(definition.environmentCapture?.photo?.maximum ?? 20); setVideoMaximumClips(definition.environmentCapture?.video?.maximumClips ?? 3); setSuggestedEnvironmentTypes(definition.suggestedEnvironmentTypes ?? defaultSuggestedEnvironmentTypes);
       setGpsRequired(Boolean(definition.policy?.gpsRequired)); setAllowGallery(Boolean(definition.policy?.allowGallery)); setGeofenceMeters(Number(definition.policy?.geofenceMeters ?? 150));
       setError(""); setStatus(templateSchemaNotice(result.templateVersion.schemaVersion, result.templateVersion.versionNumber));
     }).catch((failure) => { if (!cancelled) setError(failureText(failure)); });
     return () => { cancelled = true; };
-  }, [activeVersionId, selectedTemplateKey, selectedTemplateName]);
+  }, [activeVersionId, selectedTemplateKey, selectedTemplateName, selectedSegmentVersionId, applyDraftDefaults]);
 
-  const resetDraft = () => { setIsEditingTemplate(true); setSelectedTemplateId(""); setKey(""); setName(""); setSchemaVersion(2); setIsVideo(false); setRequirements([]); setPhotoMinimum(1); setPhotoMaximum(20); setVideoMaximumClips(3); setSuggestedEnvironmentTypes("LIVING_ROOM, KITCHEN, BEDROOM, BATHROOM, OTHER"); setGpsRequired(false); setAllowGallery(true); setGeofenceMeters(150); setParticipantRoles(["TENANT_PARTICIPANT", "PROPERTY_OWNER"]); setComparisonMode("CHECKLIST_ONLY"); setError(""); setStatus("Novo modelo v2: configure a captura por ambiente."); };
+  const resetDraft = () => { setIsEditingTemplate(true); setSelectedTemplateId(""); setKey(""); setName(""); applyDraftDefaults(); setError(""); setStatus("Novo modelo v2: configure a captura por ambiente."); };
   const publish = async (event: FormEvent) => {
     event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
@@ -272,8 +284,8 @@ export function TemplateEditorPage() {
       const activated = await graphql<G.AdminActivateTemplateVersionMutation>(G.AdminActivateTemplateVersionDocument, { input: { versionId: payload.version.id, expectedVersion: payload.template.version, clientMutationId: `template-activate-${crypto.randomUUID()}` } });
       if (activated.activateTemplateVersion.userErrors.length) throw new Error(activated.activateTemplateVersion.userErrors[0].message);
       setSelectedTemplateId(activated.activateTemplateVersion.template?.id ?? "");
-      setStatus(`Modelo publicado e ativado na versão ${activated.activateTemplateVersion.version?.versionNumber}.`);
       await loadCatalogs();
+      setStatus(`Modelo publicado e ativado na versão ${activated.activateTemplateVersion.version?.versionNumber}.`);
     } catch (failure) { setError(failureText(failure)); }
     finally { setBusy(false); }
   };
@@ -286,11 +298,11 @@ export function TemplateEditorPage() {
       <Field label="Nome do modelo" required><Input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
       <Field label="Segmento do imóvel" required><Select required value={segmentVersionId} onChange={(event) => setSegmentVersionId(event.target.value)}>{catalogs?.segmentDefinitions.nodes.filter((segment) => segment.activeVersionId).map((segment) => <option key={segment.id} value={segment.activeVersionId!}>{segment.name} · {segment.key}</option>)}</Select></Field>
       <fieldset className="template-policy"><legend>Modalidade</legend><Checkbox label="Inspeção por vídeo" checked={isVideo} onChange={(event) => setIsVideo(event.target.checked)} /><p>A modalidade fica fixa na versão publicada do modelo.</p></fieldset>
-      {schemaVersion === 2 ? <fieldset className="template-policy"><legend>Captura por ambiente · schema v2</legend><Field label="Mínimo de fotos por ambiente"><Input type="number" min={1} max={20} value={photoMinimum} onChange={(event) => setPhotoMinimum(Number(event.target.value))} /></Field><Field label="Máximo de fotos por ambiente"><Input type="number" min={1} max={20} value={photoMaximum} onChange={(event) => setPhotoMaximum(Number(event.target.value))} /></Field><Field label="Máximo de clipes por ambiente"><Input type="number" min={1} max={3} value={videoMaximumClips} onChange={(event) => setVideoMaximumClips(Number(event.target.value))} /></Field><Field label="Tipos de ambiente sugeridos (separados por vírgula)"><Input value={suggestedEnvironmentTypes} onChange={(event) => setSuggestedEnvironmentTypes(event.target.value)} /></Field><p>Modelos v1 permanecem sem inventário. Novas inspeções desta versão usam captura guiada por ambiente.</p></fieldset> : <fieldset className="template-requirements"><legend>Checklist v1 · somente leitura</legend><p>Esta versão antiga continua disponível sem alterações e não cria inventário.</p>{requirements.map((requirement) => <p key={requirement.key}>{requirement.section} · {requirement.label}</p>)}</fieldset>}
+      {schemaVersion === 2 ? <fieldset className="template-policy"><legend>Captura por ambiente · schema v2</legend><Field label="Mínimo de fotos por ambiente"><Input type="number" min={1} max={20} value={photoMinimum} onChange={(event) => setPhotoMinimum(Number(event.target.value))} /></Field><Field label="Máximo de fotos por ambiente"><Input type="number" min={1} max={20} value={photoMaximum} onChange={(event) => setPhotoMaximum(Number(event.target.value))} /></Field><Field label="Máximo de clipes por ambiente"><Input type="number" min={1} max={3} value={videoMaximumClips} onChange={(event) => setVideoMaximumClips(Number(event.target.value))} /></Field><fieldset className="template-environment-options"><legend>Ambientes sugeridos</legend><div>{suggestedEnvironmentOptions.map(({ code, label }) => <Checkbox key={code} label={label} checked={suggestedEnvironmentTypes.includes(code)} onChange={(event) => setSuggestedEnvironmentTypes((current) => { const selected = new Set(current); if (event.target.checked) selected.add(code); else selected.delete(code); return suggestedEnvironmentOptions.filter((option) => selected.has(option.code)).map((option) => option.code); })} />)}</div></fieldset><p>Modelos v1 permanecem sem inventário. Novas inspeções desta versão usam captura guiada por ambiente.</p></fieldset> : <fieldset className="template-requirements"><legend>Checklist v1 · somente leitura</legend><p>Esta versão antiga continua disponível sem alterações e não cria inventário.</p>{requirements.map((requirement) => <p key={requirement.key}>{requirement.section} · {requirement.label}</p>)}</fieldset>}
       <fieldset className="template-policy"><legend>Captura</legend><Checkbox label="Exigir localização GPS" checked={gpsRequired} onChange={(event) => setGpsRequired(event.target.checked)} /><Checkbox label="Permitir escolher fotos da galeria" checked={allowGallery} onChange={(event) => setAllowGallery(event.target.checked)} /><Field label="Raio permitido em metros"><Input type="number" min={25} max={10000} value={geofenceMeters} onChange={(event) => setGeofenceMeters(Number(event.target.value))} /></Field></fieldset>
       {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" isPending={busy} pendingLabel="Publicando e ativando…" disabled={!catalogs?.segmentDefinitions.nodes.some((segment) => segment.activeVersionId === segmentVersionId)}>Publicar nova versão do modelo</Button>
     </form> : <section className="admin-template-summary"><span className="admin-focus-eyebrow">Modelo selecionado</span><h2>{selectedTemplate?.name ?? "Seus modelos de vistoria"}</h2><dl><div><dt>Nome do modelo</dt><dd>{selectedTemplate?.name ?? "Selecione um modelo abaixo ou crie um novo."}</dd></div><div><dt>Chave</dt><dd>{key || "—"}</dd></div></dl><div className="admin-template-checklist"><div className="admin-template-checklist-heading"><h3>{schemaVersion === 2 ? "Captura por ambiente" : "Checklist v1"}</h3>{selectedTemplate && schemaVersion >= 2 && <Button type="button" variant="secondary" onClick={() => setIsEditingTemplate(true)}>Editar v2</Button>}</div><p>{selectedTemplate ? schemaVersion === 1 ? "Sem inventário · schema v1 somente leitura" : `Schema v2 · fotos ${photoMinimum}–${photoMaximum} · até ${videoMaximumClips} clipes por ambiente` : "A configuração aparece após selecionar um modelo."}</p>{selectedTemplate && schemaVersion >= 2 && <button className="admin-template-open" type="button" onClick={() => setIsEditingTemplate(true)}>Abrir configuração →</button>}</div></section>}<aside className="admin-focus-detail admin-template-detail"><span className="admin-focus-eyebrow">Identificação</span><h2>{selectedTemplate?.name ?? "Novo modelo"}</h2><dl><div><dt>Chave</dt><dd>{key || "A definir"}</dd></div><div><dt>Segmento</dt><dd>{catalogs?.segmentDefinitions.nodes.find((segment) => segment.activeVersionId === segmentVersionId)?.name ?? "A definir"}</dd></div><div><dt>Captura</dt><dd>{selectedTemplate ? schemaVersion === 1 ? "Sem inventário · schema v1" : "Por ambiente · schema v2" : "Novo modelo"}</dd></div><div><dt>Versão</dt><dd>{selectedTemplate?.version ?? "Nova"}</dd></div></dl></aside></div>
-    <h2>Modelos ativos</h2><ul className="admin-template-list">{catalogs?.templates.nodes.map((template) => <li key={template.id}><div><strong>{template.name}</strong><span>{template.key} · v{template.version} · {template.activeVersionId ? "Ativo" : "Sem versão ativa"}</span></div><Button type="button" variant="secondary" onClick={() => { setSelectedTemplateId(template.id); setIsEditingTemplate(false); }}>Abrir modelo</Button></li>)}</ul>
+    <h2>Modelos</h2><ul className="admin-template-list">{catalogs?.templates.nodes.map((template) => <li key={template.id}><div><strong>{template.name}</strong><span>{template.key} · v{template.version} · {template.activeVersionId ? "Ativo" : "Sem versão ativa"}</span></div><Button type="button" variant="secondary" onClick={() => { setSelectedTemplateId(template.id); setIsEditingTemplate(false); }}>Abrir modelo</Button></li>)}</ul>
   </div>;
 }
 
@@ -406,7 +418,17 @@ function AssetEditForm({ detail, onClose, onSuccess }: { detail: Row; onClose: (
   const [address, setAddress] = useState<PostalAddress>(() => parse("addressDetails", emptyPostalAddress()));
   const [attributeSchema, setAttributeSchema] = useState<SegmentAttributeSchema>();
   const [attributeValues, setAttributeValues] = useState<Record<string, unknown>>(() => parse("attributes", {}));
+  const currentTemplateId = detail.templateId && detail.templateId !== "—" ? String(detail.templateId) : "";
+  const [templateId, setTemplateId] = useState(currentTemplateId);
+  const [templates, setTemplates] = useState<Array<{ id: string; key: string; name: string }>>([]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const submitting = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    void graphql<G.AdminCatalogsQuery>(G.AdminCatalogsDocument, { first: 100, after: null, search: null }).then((result) => {
+      if (!cancelled) setTemplates(result.templates.nodes.filter((template) => template.segmentVersionId === detail.segmentVersionId && (template.activeVersionId || template.id === currentTemplateId)));
+    }).catch((failure) => { if (!cancelled) setError(failureText(failure)); });
+    return () => { cancelled = true; };
+  }, [detail.segmentVersionId, currentTemplateId]);
   useEffect(() => {
     let cancelled = false;
     void graphql<G.AdminSegmentDefinitionVersionQuery>(G.AdminSegmentDefinitionVersionDocument, { id: String(detail.segmentVersionId) }).then((result) => {
@@ -419,11 +441,11 @@ function AssetEditForm({ detail, onClose, onSuccess }: { detail: Row; onClose: (
     event.preventDefault(); if (submitting.current) return; submitting.current = true; setBusy(true); setError("");
     try {
       if (!attributeSchema) throw new Error("Não foi possível carregar os atributos exigidos pelo segmento.");
-      const result = await graphql<G.AdminUpdateAssetMutation>(G.AdminUpdateAssetDocument, { input: { assetId: String(detail.assetId), expectedVersion: Number(detail.Versão), clientMutationId: `admin-asset-${Date.now()}`, asset: { businessUnitId: String(detail.businessUnitId), segmentVersionId: String(detail.segmentVersionId), templateId: detail.templateId === "—" ? null : String(detail.templateId), name: String(detail.Imóvel), externalKey: String(detail["Código do imóvel"]), address: "", addressDetails: address, latitudeE6: detail.latitudeE6 === "—" ? null : Number(detail.latitudeE6), longitudeE6: detail.longitudeE6 === "—" ? null : Number(detail.longitudeE6), geofenceMeters: Number(detail.geofenceMeters), attributes: normalizeAssetAttributes(attributeSchema, attributeValues), policyOverrides: parse("policyOverrides", {}), assignments: parse<Array<{ participantId: string; role: string }>>("assignments", []).map(({ participantId, role }) => ({ participantId, role })) } } });
+      const result = await graphql<G.AdminUpdateAssetMutation>(G.AdminUpdateAssetDocument, { input: { assetId: String(detail.assetId), expectedVersion: Number(detail.Versão), clientMutationId: `admin-asset-${Date.now()}`, asset: { businessUnitId: String(detail.businessUnitId), segmentVersionId: String(detail.segmentVersionId), templateId: templateId || null, name: String(detail.Imóvel), externalKey: String(detail["Código do imóvel"]), address: "", addressDetails: address, latitudeE6: detail.latitudeE6 === "—" ? null : Number(detail.latitudeE6), longitudeE6: detail.longitudeE6 === "—" ? null : Number(detail.longitudeE6), geofenceMeters: Number(detail.geofenceMeters), attributes: normalizeAssetAttributes(attributeSchema, attributeValues), policyOverrides: parse("policyOverrides", {}), assignments: parse<Array<{ participantId: string; role: string }>>("assignments", []).map(({ participantId, role }) => ({ participantId, role })) } } });
       const errors = result.updateAsset.userErrors; if (errors.length) throw new Error(errors[0].message); onSuccess();
     } catch (failure) { setError(failureText(failure)); } finally { submitting.current = false; setBusy(false); }
   };
-  return <Dialog isOpen onClose={onClose} title={detail["Situação"] === "DRAFT" ? "Completar cadastro do imóvel" : "Editar imóvel"} size="wide" isDismissable={!busy}><form className="admin-form" onSubmit={submit} aria-label="Cadastro do imóvel"><AddressFieldStyles /><p>Revise os atributos do segmento para ativar um imóvel em rascunho.</p>{detail.addressStatus !== "COMPLETE" && <p>Endereço atual: <strong>{detail.Endereço}</strong></p>}<AddressForm value={address} onChange={setAddress} onLookup={lookup} prefix="admin-asset-address" disabled={busy} />{attributeSchema ? <AssetAttributeFields schema={attributeSchema} values={attributeValues} onChange={(key, value) => setAttributeValues((current) => ({ ...current, [key]: value }))} /> : <p role="status">Carregando atributos do segmento…</p>}{error && <Alert tone="danger">{error}</Alert>}<div className="inspection-inline"><Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="submit" isPending={busy} pendingLabel="Salvando…" disabled={!attributeSchema}>Salvar imóvel</Button></div></form></Dialog>;
+  return <Dialog isOpen onClose={onClose} title={detail["Situação"] === "DRAFT" ? "Completar cadastro do imóvel" : "Editar imóvel"} size="wide" isDismissable={!busy}><form className="admin-form" onSubmit={submit} aria-label="Cadastro do imóvel"><AddressFieldStyles /><p>Revise os atributos do segmento para ativar um imóvel em rascunho.</p>{detail.addressStatus !== "COMPLETE" && <p>Endereço atual: <strong>{detail.Endereço}</strong></p>}<AddressForm value={address} onChange={setAddress} onLookup={lookup} prefix="admin-asset-address" disabled={busy} /><Field label="Modelo de vistoria"><Select value={templateId} onChange={(event) => setTemplateId(event.target.value)} disabled={busy}><option value="">Nenhum</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.key}</option>)}</Select></Field>{attributeSchema ? <AssetAttributeFields schema={attributeSchema} values={attributeValues} onChange={(key, value) => setAttributeValues((current) => ({ ...current, [key]: value }))} /> : <p role="status">Carregando atributos do segmento…</p>}{error && <Alert tone="danger">{error}</Alert>}<div className="inspection-inline"><Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="submit" isPending={busy} pendingLabel="Salvando…" disabled={!attributeSchema}>Salvar imóvel</Button></div></form></Dialog>;
 }
 
 function AdminCorrectionForm({ detail, onClose, onSuccess }: { detail: Row; onClose: () => void; onSuccess: () => void }) {

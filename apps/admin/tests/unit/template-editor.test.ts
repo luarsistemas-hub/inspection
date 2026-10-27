@@ -31,8 +31,9 @@ describe("TemplateEditorPage", () => {
     vi.mocked(graphql).mockImplementation(async (document, variables) => {
       const operation = operationName(document) ?? ""; calls.push({ operation, variables });
       if (operation === "AdminCatalogs") return catalogs() as never;
-      if (operation === "AdminPublishTemplateVersion") return { publishTemplateVersion: { template: { id: "template-a", version: 1 }, version: { id: "v2", versionNumber: 2 }, userErrors: [] } } as never;
-      if (operation === "AdminActivateTemplateVersion") return { activateTemplateVersion: { template: { id: "template-a" }, version: { versionNumber: 2 }, userErrors: [] } } as never;
+      if (operation === "AdminPublishTemplateVersion") return { publishTemplateVersion: { template: { id: "template-a", version: 1 }, version: { id: "v2", versionNumber: 2, status: "PUBLISHED" }, userErrors: [] } } as never;
+      if (operation === "AdminActivateTemplateVersion") return { activateTemplateVersion: { template: { id: "template-a", activeVersionId: "v2" }, version: { id: "v2", versionNumber: 2, status: "ACTIVE" }, userErrors: [] } } as never;
+      if (operation === "AdminTemplateVersion") return { templateVersion: { id: "v2", schemaVersion: 2, versionNumber: 2, status: "ACTIVE", definition: { schemaVersion: 2, segmentVersionId: "segment-version-a", participantRoles: ["TENANT_PARTICIPANT"], defaultComparisonMode: "CHECKLIST_ONLY", captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } }, policy: {} } } } as never;
       throw new Error(`Unexpected operation ${operation}`);
     });
     const host = document.createElement("div"); const root = createRoot(host);
@@ -46,6 +47,31 @@ describe("TemplateEditorPage", () => {
     await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
     const published = calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables as { input: { definition: Record<string, unknown> } };
     expect(published.input.definition).toMatchObject({ schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } } });
+    const activation = calls.find((call) => call.operation === "AdminActivateTemplateVersion")?.variables as { input: { versionId: string; expectedVersion: number } } | undefined;
+    expect(activation?.input).toMatchObject({ versionId: "v2", expectedVersion: 1 });
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("Modelo publicado e ativado na versão 2.");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { root.unmount(); });
+  });
+
+  it("starts a template without an active version from clean defaults and activates what it publishes", async () => {
+    const calls: Array<{ operation: string; variables: unknown }> = [];
+    vi.mocked(graphql).mockImplementation(async (document, variables) => {
+      const operation = operationName(document) ?? ""; calls.push({ operation, variables });
+      if (operation === "AdminCatalogs") return catalogs([{ id: "template-pending", key: "video-3", name: "Video 3", segmentVersionId: "segment-version-a", activeVersionId: null, version: 1 }]) as never;
+      if (operation === "AdminPublishTemplateVersion") return { publishTemplateVersion: { template: { id: "template-pending", version: 1 }, version: { id: "v2", versionNumber: 2, status: "PUBLISHED" }, userErrors: [] } } as never;
+      if (operation === "AdminActivateTemplateVersion") return { activateTemplateVersion: { template: { id: "template-pending", activeVersionId: "v2" }, version: { id: "v2", versionNumber: 2, status: "ACTIVE" }, userErrors: [] } } as never;
+      throw new Error(`Unexpected operation ${operation}`);
+    });
+    const host = document.createElement("div"); const root = createRoot(host);
+    await act(async () => { root.render(createElement(TemplateEditorPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("ainda não tem versão ativa");
+    await act(async () => { [...host.querySelectorAll("button")].find((button) => button.textContent === "Editar v2")?.click(); });
+    expect(host.querySelector<HTMLInputElement>("input")?.value).toBe("video-3");
+    await act(async () => { host.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const published = calls.find((call) => call.operation === "AdminPublishTemplateVersion")?.variables as { input: { key: string; definition: Record<string, unknown> } };
+    expect(published.input).toMatchObject({ key: "video-3", definition: { schemaVersion: 2, segmentVersionId: "segment-version-a", captureLayout: "ENVIRONMENTS" } });
+    expect(calls.find((call) => call.operation === "AdminActivateTemplateVersion")?.variables).toMatchObject({ input: { versionId: "v2", expectedVersion: 1 } });
     await act(async () => { root.unmount(); });
   });
 

@@ -17,8 +17,6 @@ import (
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
 	"inspection/services/inspection/internal/features/origins/resolve_reference"
@@ -463,10 +461,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 	if err := resolve_reference.Setup(resolve_reference.Dependencies{DB: h.DB, Bus: bus}); err != nil {
 		t.Fatal(err)
 	}
-	originService := origincore.Service{DB: h.DB}
-	if err := originactivate.Setup(originactivate.Dependencies{DB: h.DB, Bus: bus, Service: originService, Authorizer: auth.Authorizer{}}); err != nil {
-		t.Fatal(err)
-	}
+	originService := &origininvalidate.Service{DB: h.DB}
 	if err := origininvalidate.Setup(origininvalidate.Dependencies{DB: h.DB, Bus: bus, Service: originService, Authorizer: auth.Authorizer{}}); err != nil {
 		t.Fatal(err)
 	}

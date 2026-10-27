@@ -22,6 +22,20 @@ const optionLabels: Record<string, string> = {
   INSURANCE: "Seguro",
 };
 
+// Segments created by onboarding declare these attributes as free strings, so
+// the known vocabulary keeps them a Portuguese combo instead of a text field.
+const knownOptions: Record<string, string[]> = {
+  propertyType: ["APARTMENT", "HOUSE", "COMMERCIAL", "LAND"],
+  purpose: ["SALE", "RENTAL", "MAINTENANCE", "INSURANCE"],
+};
+
+function choicesFor(key: string, property: { type?: string; enum?: string[] }, value: unknown): string[] | undefined {
+  const base = property.enum?.length ? property.enum : (!property.type || property.type === "string") ? knownOptions[key] : undefined;
+  if (!base) return undefined;
+  // A stored value outside the vocabulary stays selectable so editing never drops it.
+  return typeof value === "string" && value !== "" && !base.includes(value) ? [...base, value] : base;
+}
+
 export function AssetAttributeFields({
   schema,
   values,
@@ -36,10 +50,11 @@ export function AssetAttributeFields({
     {Object.entries(schema.properties ?? {}).map(([key, property]) => {
       const label = labels[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (value) => value.toUpperCase());
       const value = values[key];
-      if (property.enum?.length) return <Field key={key} label={label} required={required.has(key)}>
+      const choices = choicesFor(key, property, value);
+      if (choices) return <Field key={key} label={label} required={required.has(key)}>
         <Select required={required.has(key)} value={String(value ?? "")} onChange={(event) => onChange(key, event.target.value)}>
           <option value="">Selecione</option>
-          {property.enum.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option}</option>)}
+          {choices.map((option) => <option key={option} value={option}>{optionLabels[option] ?? option}</option>)}
         </Select>
       </Field>;
       if (property.type === "boolean") return <Field key={key} label={label} required={required.has(key)}>

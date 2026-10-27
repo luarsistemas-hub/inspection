@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	capturecore "inspection/services/inspection/internal/features/capture/core"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
@@ -14,31 +13,22 @@ import (
 )
 
 type Dependencies struct {
-	Origins   origincore.Service
 	Recapture recapturecore.Service
 }
 
 type finalizer struct {
-	origins   origincore.Service
 	recapture recapturecore.Service
 }
 
 func Setup(d Dependencies) (capturecore.SubmissionFinalizer, error) {
-	if d.Origins.DB == nil || d.Recapture.DB == nil {
+	if d.Recapture.DB == nil {
 		return nil, fmt.Errorf("slice capture/finalize_submission: missing dependency")
 	}
-	return finalizer{origins: d.Origins, recapture: d.Recapture}, nil
+	return finalizer{recapture: d.Recapture}, nil
 }
 
 func (f finalizer) Finalize(ctx context.Context, tx *gorm.DB, draft database.CaptureDraft, submission database.SubmissionVersion) error {
 	switch draft.Kind {
-	case "ORIGIN":
-		if draft.MediaKind == "VIDEO" {
-			// Video origins require an explicit activation after durable preparation.
-			return nil
-		}
-		_, err := f.origins.ActivateCompletedTx(tx, draft.TenantID, draft.ResponsibilityID)
-		return err
 	case "RECAPTURE":
 		var request database.RecaptureRequest
 		if err := tx.Where("tenant_id=? AND responsibility_id=?", draft.TenantID, draft.ResponsibilityID).First(&request).Error; err != nil {

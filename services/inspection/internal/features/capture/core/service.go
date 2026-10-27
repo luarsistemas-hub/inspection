@@ -163,9 +163,6 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 		if version.SchemaVersion < 2 {
 			return apperror.New(apperror.InvalidState, "templateVersion", "environment capture is not enabled")
 		}
-		if draft.Kind == "ORIGIN" && draft.MediaKind == "VIDEO" {
-			return apperror.New(apperror.InvalidState, "responsibility", "environment video capture is unavailable for origin drafts")
-		}
 		var definition catalog.TemplateDocument
 		if err := json.Unmarshal(version.DefinitionJSON, &definition); err != nil {
 			return apperror.New(apperror.InvalidState, "templateVersion", "environment capture limits are unavailable")
@@ -708,9 +705,6 @@ func (s Service) Submit(ctx context.Context, tenantID, responsibilityID identity
 			} else {
 				return err
 			}
-		}
-		if schemaVersion >= 2 && draft.Kind == "ORIGIN" && draft.MediaKind == "VIDEO" {
-			return apperror.New(apperror.InvalidState, "responsibility", "environment video capture is unavailable for origin drafts")
 		}
 		if schemaVersion >= 2 && len(draftRequirements) == 0 {
 			return apperror.New(apperror.InvalidState, "requirements", "NO_ENVIRONMENTS")

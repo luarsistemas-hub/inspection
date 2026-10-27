@@ -46,7 +46,8 @@ func newPhotoUploadFixture(t *testing.T, draftKind string) photoUploadFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	seed, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
+	// v1 pinned until template schema 1 is removed
+	seed, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
