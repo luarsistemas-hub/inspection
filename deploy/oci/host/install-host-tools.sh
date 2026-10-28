@@ -13,7 +13,7 @@ target="$root/$version"
 install -d -o root -g root -m 0750 "$root"
 rm -rf "$staging"
 install -d -o root -g root -m 0750 "$staging"
-for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py; do
+for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py ssh-command.sh; do
   install -o root -g root -m 0755 "$source_dir/$name" "$staging/$name"
   case "$name" in
     *.sh) bash -n "$staging/$name" ;;
@@ -23,7 +23,7 @@ install -o root -g root -m 0644 "$source_dir/../components.json" "$staging/compo
 install -o root -g root -m 0644 "$source_dir/component-catalog.sh" "$staging/component-catalog.sh"
 chmod 0755 "$staging/component-catalog.sh"
 if [[ -e "$target" ]]; then
-  for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py; do
+  for name in deploy-release.sh apply-plan.sh stage-and-apply.sh run-deployment.sh export-state.sh deployment-status.sh secrets-refresh.sh smoke.sh prepare-upgrade.sh publish-metrics.py ssh-command.sh; do
     if [[ -e "$target/$name" ]]; then
       cmp -s "$staging/$name" "$target/$name" || { echo "Host-tools version already exists with different content: $version" >&2; exit 1; }
     else
@@ -52,6 +52,7 @@ for pair in \
   "inspection-run-deployment run-deployment.sh" \
   "inspection-export-state export-state.sh" \
   "inspection-deployment-status deployment-status.sh" \
+  "inspection-ssh-command ssh-command.sh" \
   "inspection-secrets-refresh secrets-refresh.sh" \
   "inspection-smoke smoke.sh"; do
   read -r launcher script <<< "$pair"

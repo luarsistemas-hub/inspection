@@ -119,13 +119,13 @@ os.chmod(args[1], 0o755)
         source = root / "bundle/deploy/oci/host"
         source.mkdir(parents=True)
         for name in ("deploy-release.sh", "apply-plan.sh", "stage-and-apply.sh", "run-deployment.sh", "export-state.sh",
-                     "deployment-status.sh", "secrets-refresh.sh", "smoke.sh", "prepare-upgrade.sh", "publish-metrics.py", "component-catalog.sh"):
+                     "deployment-status.sh", "secrets-refresh.sh", "smoke.sh", "prepare-upgrade.sh", "publish-metrics.py", "ssh-command.sh", "component-catalog.sh"):
             shutil.copy2(HOST / (name if name != "component-catalog.sh" else name), source / name)
         (source.parent / "components.json").write_bytes((OCI / "components.json").read_bytes())
         target = root / "opt/inspection/host-tools" / version
         target.mkdir(parents=True)
         for name in ("deploy-release.sh", "apply-plan.sh", "stage-and-apply.sh", "run-deployment.sh", "export-state.sh",
-                     "deployment-status.sh", "secrets-refresh.sh", "smoke.sh"):
+                     "deployment-status.sh", "secrets-refresh.sh", "smoke.sh", "ssh-command.sh"):
             shutil.copy2(source / name, target / name)
         return source, target
 
@@ -168,11 +168,14 @@ else:
             has_catalog = (target / "components.json").is_file()
             has_helper = (target / "component-catalog.sh").is_file()
             has_prepare_upgrade = (target / "prepare-upgrade.sh").is_file()
+            ssh_launcher = root / "usr/local/sbin/inspection-ssh-command"
+            has_ssh_launcher = ssh_launcher.is_symlink() and "export-state[[:space:]]+(current|previous|blocked)" in ssh_launcher.read_text()
             has_publisher = (target / "publish-metrics.py").is_file()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(has_catalog)
         self.assertTrue(has_helper)
         self.assertTrue(has_prepare_upgrade)
+        self.assertTrue(has_ssh_launcher)
         self.assertTrue(has_publisher)
 
     def test_installer_rejects_real_script_divergence(self):
