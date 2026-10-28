@@ -66,7 +66,7 @@ jobs:
       - name: Validate design-system migration inventory
         run: node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json
   design-system:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: packages/inspection-design-system
