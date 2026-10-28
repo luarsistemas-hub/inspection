@@ -98,7 +98,7 @@ func (r *queryResolver) videoPreparationEvidence(ctx context.Context, preparatio
 	for _, scope := range scopes {
 		key := scope.CreatedAt.UTC().Format(time.RFC3339Nano)
 		frameID := scope.FrameID.String()
-		entries = append(entries, preparationEntry{kind: "SCOPE", key: key, id: scope.ID.String(), item: &graphql1.VideoPreparationEvidenceItem{Kind: "SCOPE", ID: scope.ID.String(), FrameID: &frameID, PreparationID: strPtr(prepID.String()), Component: strPtr(scope.ComponentLabel), Label: strPtr(scope.ComponentLabel), Environment: strPtr(scope.EnvironmentCandidate), View: strPtr(scope.ViewLabel)}})
+		entries = append(entries, preparationEntry{kind: "SCOPE", key: key, id: scope.ID.String(), item: &graphql1.VideoPreparationEvidenceItem{Kind: "SCOPE", ID: scope.ID.String(), FrameID: &frameID, PreparationID: strPtr(prepID.String()), Component: strPtr(scope.ComponentLabel), Label: strPtr(scopeDisplayLabel(scope)), Environment: strPtr(scope.EnvironmentCandidate), View: strPtr(scope.ViewLabel)}})
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].kind != entries[j].kind {
@@ -169,3 +169,12 @@ func decodePreparationCursor(value string, tenantID, prepID identity.ID) (kind, 
 	return parts[3], parts[4], parts[5], nil
 }
 func strPtr(value string) *string { return &value }
+
+// scopeDisplayLabel prefers the Portuguese component name for display while
+// Component, Environment and View keep the canonical matching labels.
+func scopeDisplayLabel(scope database.VideoScopeItem) string {
+	if scope.ComponentDisplayName != "" {
+		return scope.ComponentDisplayName
+	}
+	return scope.ComponentLabel
+}

@@ -35,6 +35,17 @@ func TestVideoScopeLabel(t *testing.T) {
 	}
 }
 
+func TestVideoScopeDisplayLabelUsesLocalizedNamesOnlyWhenComplete(t *testing.T) {
+	scope := database.VideoScopeItem{EnvironmentCandidate: "outdoor_kitchen", ComponentLabel: "grill", EnvironmentDisplayName: "Área gourmet", ComponentDisplayName: "Churrasqueira"}
+	if label, localized := VideoScopeDisplayLabel(scope); label != "Área gourmet — Churrasqueira" || !localized {
+		t.Fatalf("display label = %q, localized=%t", label, localized)
+	}
+	scope.ComponentDisplayName = ""
+	if label, localized := VideoScopeDisplayLabel(scope); label != "outdoor_kitchen — grill" || localized {
+		t.Fatalf("incomplete display label = %q, localized=%t", label, localized)
+	}
+}
+
 func TestVideoScopePreparationUsesPinnedOriginForExpectedComponents(t *testing.T) {
 	originPreparationID, currentPreparationID := identity.NewID(), identity.NewID()
 	plan := database.VideoPlan{OriginPreparationID: &originPreparationID, CurrentPreparationID: currentPreparationID}
@@ -120,7 +131,7 @@ func TestVideoPlanRequirementsKeepGapsUnobservedInsteadOfPending(t *testing.T) {
 		"ATTACH DATABASE ':memory:' AS analysis",
 		"ATTACH DATABASE ':memory:' AS media",
 		"CREATE TABLE analysis.video_plan_items (id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT, component_id TEXT, carried_result_job_id TEXT, requirement_key TEXT, outcome TEXT, reason TEXT, input_digest TEXT, origin_frame_ids BLOB, current_frame_ids BLOB, core_groups BLOB, current_groups BLOB, created_at DATETIME)",
-		"CREATE TABLE media.video_scope_items (id TEXT PRIMARY KEY, tenant_id TEXT, preparation_id TEXT, frame_id TEXT, environment_candidate TEXT, component_label TEXT, view_label TEXT, visibility TEXT, identity_status TEXT, landmarks BLOB, created_at DATETIME)",
+		"CREATE TABLE media.video_scope_items (id TEXT PRIMARY KEY, tenant_id TEXT, preparation_id TEXT, frame_id TEXT, environment_candidate TEXT, component_label TEXT, view_label TEXT, environment_display_name TEXT, component_display_name TEXT, view_display_name TEXT, visibility TEXT, identity_status TEXT, landmarks BLOB, created_at DATETIME)",
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -129,18 +140,19 @@ func TestVideoPlanRequirementsKeepGapsUnobservedInsteadOfPending(t *testing.T) {
 	tenantID, originPreparationID := identity.NewID(), identity.NewID()
 	plan := database.VideoPlan{ID: identity.NewID(), TenantID: tenantID, OriginPreparationID: &originPreparationID, CurrentPreparationID: identity.NewID()}
 	components := []struct {
-		key, outcome, reason, environment, label string
+		key, outcome, reason, environment, label, environmentDisplay, componentDisplay, viewDisplay string
 	}{
-		{"video:a-matched", "MATCHED", "", "Cozinha", "Bancada"},
-		{"video:b-sink", "NO_CURRENT_VIEW", "NO_CURRENT_VIEW", "Banheiro", "Pia"},
-		{"video:c-budget", "TECHNICAL_FAILURE", "MATCH_BUDGET_EXHAUSTED", "Sala", "Janela"},
+		{"video:a-matched", "MATCHED", "", "outdoor_kitchen", "grill", "Área gourmet", "Churrasqueira", "ampla"},
+		{"video:b-sink", "NO_CURRENT_VIEW", "NO_CURRENT_VIEW", "bathroom", "sink", "Banheiro", "Pia", "aproximada"},
+		{"video:c-budget", "TECHNICAL_FAILURE", "MATCH_BUDGET_EXHAUSTED", "Sala", "Janela", "", "", ""},
+		{"video:d-no-view-name", "NO_CURRENT_VIEW", "NO_CURRENT_VIEW", "kitchen", "sink", "Cozinha", "Pia", ""},
 	}
 	for _, component := range components {
 		componentID := identity.NewID()
 		if err := db.Exec("INSERT INTO analysis.video_plan_items (id,tenant_id,plan_id,component_id,requirement_key,outcome,reason,input_digest,origin_frame_ids,current_frame_ids,core_groups,current_groups,created_at) VALUES (?,?,?,?,?,?,?,?,X'5B5D',X'5B5D',X'5B5D',X'5B5D',CURRENT_TIMESTAMP)", identity.NewID(), tenantID, plan.ID, componentID, component.key, component.outcome, component.reason, "digest").Error; err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Exec("INSERT INTO media.video_scope_items (id,tenant_id,preparation_id,frame_id,environment_candidate,component_label,view_label,visibility,identity_status,landmarks,created_at) VALUES (?,?,?,?,?,?,'aproximada','VISIBLE','RESOLVED',X'5B5D',CURRENT_TIMESTAMP)", componentID, tenantID, originPreparationID, identity.NewID(), component.environment, component.label).Error; err != nil {
+		if err := db.Exec("INSERT INTO media.video_scope_items (id,tenant_id,preparation_id,frame_id,environment_candidate,component_label,view_label,environment_display_name,component_display_name,view_display_name,visibility,identity_status,landmarks,created_at) VALUES (?,?,?,?,?,?,'close_up',?,?,?, 'VISIBLE','RESOLVED',X'5B5D',CURRENT_TIMESTAMP)", componentID, tenantID, originPreparationID, identity.NewID(), component.environment, component.label, component.environmentDisplay, component.componentDisplay, component.viewDisplay).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -149,17 +161,20 @@ func TestVideoPlanRequirementsKeepGapsUnobservedInsteadOfPending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(requirements) != 3 || len(gaps) != 2 {
+	if len(requirements) != 4 || len(gaps) != 3 {
 		t.Fatalf("requirements=%+v gaps=%+v", requirements, gaps)
 	}
-	if got := requirements[0]; got.AnalysisMode != "COMPARE_ORIGIN_CURRENT" || got.AnalysisStatus != "PENDING" || got.Label != "Cozinha — Bancada" {
+	if got := requirements[0]; got.AnalysisMode != "COMPARE_ORIGIN_CURRENT" || got.AnalysisStatus != "PENDING" || got.Label != "Área gourmet — Churrasqueira" || !got.PresentationLocalized {
 		t.Fatalf("matched requirement = %+v", got)
 	}
-	if got := requirements[1]; got.AnalysisMode != "CURRENT_ONLY" || got.AnalysisStatus != "INCONCLUSIVE" || got.Label != "Banheiro — Pia" || got.Coverage != VideoUnobservedCoverage {
+	if got := requirements[1]; got.AnalysisMode != "CURRENT_ONLY" || got.AnalysisStatus != "INCONCLUSIVE" || got.Label != "Banheiro — Pia" || !got.PresentationLocalized || got.Coverage != VideoUnobservedCoverage {
 		t.Fatalf("sink gap requirement = %+v", got)
 	}
 	if got := requirements[1].Instructions; got != "Para recaptura: filme Banheiro — Pia de perto, com boa luz e sem obstrução, mostrando a vista aproximada." {
 		t.Fatalf("sink gap guidance = %q", got)
+	}
+	if got := requirements[3].Instructions; got != "Para recaptura: filme Cozinha — Pia de perto, com boa luz e sem obstrução, mostrando a vista aproximada." {
+		t.Fatalf("guidance without a display view = %q", got)
 	}
 	if got := requirements[2]; got.AnalysisStatus != "FAILED" || got.Coverage != VideoUnprocessedCoverage || got.Instructions != "" {
 		t.Fatalf("technical failure requirement = %+v", got)

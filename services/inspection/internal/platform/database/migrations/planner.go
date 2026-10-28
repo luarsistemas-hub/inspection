@@ -2473,6 +2473,11 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
 `},
+		{Version: 93, Name: "video_scope_display_names_pt_br", Compatible: true, SQL: `
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS environment_display_name varchar(120);
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS component_display_name varchar(120);
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS view_display_name varchar(120);
+`},
 	}
 }
 

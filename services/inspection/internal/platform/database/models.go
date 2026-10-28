@@ -809,17 +809,20 @@ func (VideoSourceLease) TableName() string { return "media.video_source_leases" 
 
 // VideoScopeItem is one validated observation attached to a retained frame.
 type VideoScopeItem struct {
-	ID                   identity.ID     `gorm:"type:uuid;primaryKey;uniqueIndex:idx_video_scope_tenant_id,priority:2"`
-	TenantID             identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_video_scope_tenant_id,priority:1"`
-	PreparationID        identity.ID     `gorm:"type:uuid;not null;index:idx_video_scope_preparation,priority:1"`
-	FrameID              identity.ID     `gorm:"type:uuid;not null;index:idx_video_scope_preparation,priority:2"`
-	EnvironmentCandidate string          `gorm:"size:120;not null"`
-	ComponentLabel       string          `gorm:"size:120;not null"`
-	ViewLabel            string          `gorm:"size:120;not null"`
-	Visibility           string          `gorm:"size:120;not null"`
-	IdentityStatus       string          `gorm:"size:16;not null;default:RESOLVED"`
-	Landmarks            json.RawMessage `gorm:"type:jsonb;not null"`
-	CreatedAt            time.Time
+	ID                     identity.ID     `gorm:"type:uuid;primaryKey;uniqueIndex:idx_video_scope_tenant_id,priority:2"`
+	TenantID               identity.ID     `gorm:"type:uuid;not null;uniqueIndex:idx_video_scope_tenant_id,priority:1"`
+	PreparationID          identity.ID     `gorm:"type:uuid;not null;index:idx_video_scope_preparation,priority:1"`
+	FrameID                identity.ID     `gorm:"type:uuid;not null;index:idx_video_scope_preparation,priority:2"`
+	EnvironmentCandidate   string          `gorm:"size:120;not null"`
+	ComponentLabel         string          `gorm:"size:120;not null"`
+	ViewLabel              string          `gorm:"size:120;not null"`
+	EnvironmentDisplayName string          `gorm:"size:120"`
+	ComponentDisplayName   string          `gorm:"size:120"`
+	ViewDisplayName        string          `gorm:"size:120"`
+	Visibility             string          `gorm:"size:120;not null"`
+	IdentityStatus         string          `gorm:"size:16;not null;default:RESOLVED"`
+	Landmarks              json.RawMessage `gorm:"type:jsonb;not null"`
+	CreatedAt              time.Time
 }
 
 func (VideoScopeItem) TableName() string { return "media.video_scope_items" }

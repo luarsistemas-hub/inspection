@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -20,6 +19,22 @@ func TestValidateScopeRejectsUnknownFrameUT020(t *testing.T) {
 	err := ValidateScope([]string{"F1"}, []ScopeObservation{{FrameID: "F99", EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "front", Visibility: "VISIBLE"}}, nil)
 	if !errors.Is(err, ErrModelOutputInvalid) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestValidateScopeDropsMissingOrCanonicalDisplayLabels(t *testing.T) {
+	observations := []ScopeObservation{{FrameID: "F1", EnvironmentCandidate: "outdoor_kitchen", ComponentLabel: "sink", ViewLabel: "wide", EnvironmentDisplayName: "Outdoor kitchen", ViewDisplayName: "wide", Visibility: VisibilityVisible}}
+	if err := ValidateScope([]string{"F1"}, observations, nil); err != nil {
+		t.Fatalf("incomplete display labels rejected: %v", err)
+	}
+	if observations[0].EnvironmentDisplayName != "" || observations[0].ComponentDisplayName != "" || observations[0].ViewDisplayName != "" {
+		t.Fatalf("canonical or missing display labels were retained: %+v", observations[0])
+	}
+	observations[0].EnvironmentDisplayName = "Área gourmet"
+	observations[0].ComponentDisplayName = "Churrasqueira"
+	observations[0].ViewDisplayName = "ampla"
+	if err := ValidateScope([]string{"F1"}, observations, nil); err != nil {
+		t.Fatalf("Portuguese display labels rejected: %v", err)
 	}
 }
 
@@ -51,7 +66,7 @@ func TestSelectFramesRetainsBlurredBaselineWithQualityFlagUT023(t *testing.T) {
 
 func TestDiscoverScopeRetriesMalformedResponseOnceUT024(t *testing.T) {
 	calls := 0
-	got, err := DiscoverScope(context.Background(), []string{"F1"}, func(_ context.Context, batch, _ []string) ([]ScopeObservation, []string, error) {
+	got, err := DiscoverScope(context.Background(), []string{"F1"}, func(_ context.Context, batch []string, _ []KnownEnvironment) ([]ScopeObservation, []string, error) {
 		calls++
 		if calls == 1 {
 			return []ScopeObservation{{FrameID: "F99"}}, nil, nil
@@ -62,7 +77,7 @@ func TestDiscoverScopeRetriesMalformedResponseOnceUT024(t *testing.T) {
 		t.Fatalf("calls=%d scope=%+v err=%v", calls, got, err)
 	}
 	calls = 0
-	_, err = DiscoverScope(context.Background(), []string{"F1"}, func(context.Context, []string, []string) ([]ScopeObservation, []string, error) {
+	_, err = DiscoverScope(context.Background(), []string{"F1"}, func(context.Context, []string, []KnownEnvironment) ([]ScopeObservation, []string, error) {
 		calls++
 		return []ScopeObservation{{FrameID: "F99"}}, nil, nil
 	})
@@ -70,7 +85,7 @@ func TestDiscoverScopeRetriesMalformedResponseOnceUT024(t *testing.T) {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 	calls = 0
-	got, err = DiscoverScope(context.Background(), []string{"F1"}, func(_ context.Context, batch, _ []string) ([]ScopeObservation, []string, error) {
+	got, err = DiscoverScope(context.Background(), []string{"F1"}, func(_ context.Context, batch []string, _ []KnownEnvironment) ([]ScopeObservation, []string, error) {
 		calls++
 		if calls == 1 {
 			return nil, nil, ErrModelOutputInvalid
@@ -171,8 +186,8 @@ func TestDiscoverScopeCarriesKnownEnvironmentsToLaterBatches(t *testing.T) {
 	for i := range frames {
 		frames[i] = fmt.Sprintf("F%02d", i)
 	}
-	var received [][]string
-	_, err := DiscoverScope(context.Background(), frames, func(_ context.Context, batch, known []string) ([]ScopeObservation, []string, error) {
+	var received [][]KnownEnvironment
+	_, err := DiscoverScope(context.Background(), frames, func(_ context.Context, batch []string, known []KnownEnvironment) ([]ScopeObservation, []string, error) {
 		received = append(received, known)
 		result := make([]ScopeObservation, 0, len(batch))
 		for i, frameID := range batch {
@@ -183,14 +198,41 @@ func TestDiscoverScopeCarriesKnownEnvironmentsToLaterBatches(t *testing.T) {
 			if len(received) == 1 && i == 0 {
 				environment = "hall"
 			}
-			result = append(result, ScopeObservation{FrameID: frameID, EnvironmentCandidate: environment, ComponentLabel: "sink", ViewLabel: "wide", Visibility: VisibilityVisible})
+			result = append(result, ScopeObservation{FrameID: frameID, EnvironmentCandidate: environment, ComponentLabel: "sink", ViewLabel: "wide", EnvironmentDisplayName: "Cozinha", ComponentDisplayName: "Pia", ViewDisplayName: "ampla", Visibility: VisibilityVisible})
 		}
 		return result, nil, nil
 	})
 	if err != nil || len(received) != 2 {
 		t.Fatalf("batches=%d err=%v", len(received), err)
 	}
-	if len(received[0]) != 0 || strings.Join(received[1], "|") != "hall|kitchen" {
+	if len(received[0]) != 0 || len(received[1]) != 2 || received[1][0].Candidate != "hall" || received[1][1].Candidate != "kitchen" || received[1][1].DisplayName != "Cozinha" {
 		t.Fatalf("known environments were not carried forward: %q", received)
+	}
+}
+
+func TestDiscoverScopeReusesFirstEnvironmentDisplayName(t *testing.T) {
+	frames := make([]string, 0, maxScopeBatchFrames+2)
+	for i := 0; i < maxScopeBatchFrames+2; i++ {
+		frames = append(frames, fmt.Sprintf("F%d", i))
+	}
+	got, err := DiscoverScope(context.Background(), frames, func(_ context.Context, batch []string, known []KnownEnvironment) ([]ScopeObservation, []string, error) {
+		display := "Cozinha integrada"
+		if len(known) > 0 {
+			display = ""
+		}
+		result := make([]ScopeObservation, 0, len(batch))
+		for _, frameID := range batch {
+			result = append(result, ScopeObservation{FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", EnvironmentDisplayName: display, Visibility: VisibilityVisible})
+			display = "Cozinha"
+		}
+		return result, nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, observation := range got {
+		if observation.EnvironmentDisplayName != "Cozinha integrada" {
+			t.Fatalf("%s display name = %q, want the first accepted name", observation.FrameID, observation.EnvironmentDisplayName)
+		}
 	}
 }

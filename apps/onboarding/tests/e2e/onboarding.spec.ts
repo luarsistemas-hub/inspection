@@ -106,8 +106,6 @@ test("completes the real onboarding flow and creates the first vistoria", async 
   await page.reload();
   await onboarding.expectStep("Imóvel");
   await onboarding.saveProperty({ postalCode: "01001-000", street: "Praça da Sé", number: "123", district: "Sé", city: "São Paulo", state: "SP", propertyType: "APARTMENT", purpose: "RENTAL", deadline });
-  await onboarding.expectStep("Fotos de referência");
-  await onboarding.saveChecklistOrigin();
   await onboarding.expectStep("Responsável pela vistoria");
   await onboarding.saveSelfParticipant("Ana E2E", `ana.${suffix}@example.test`);
   await onboarding.submit();

@@ -390,7 +390,7 @@ func TestVV_IT_176NineHundredAdjacentSinkViewsSealOneComponent(t *testing.T) {
 	for i := 1; i < len(frameIDs); i++ {
 		frameIDs[i] = identity.NewID().String()
 	}
-	observations, err := video.DiscoverScope(fixture.ctx, frameIDs, func(_ context.Context, batch, _ []string) ([]video.ScopeObservation, []string, error) {
+	observations, err := video.DiscoverScope(fixture.ctx, frameIDs, func(_ context.Context, batch []string, _ []video.KnownEnvironment) ([]video.ScopeObservation, []string, error) {
 		result := make([]video.ScopeObservation, 0, len(batch))
 		for _, frameID := range batch {
 			result = append(result, video.ScopeObservation{FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE"})
