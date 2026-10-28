@@ -23,7 +23,7 @@ concurrency:
 jobs:
   go-integration:
     name: Go video integration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     services:
       postgres:
@@ -193,7 +193,7 @@ jobs:
 
   capture-e2e:
     name: Capture video Playwright
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -235,7 +235,7 @@ jobs:
 
   upgrade-rehearsal:
     name: Pre-video schema upgrade rehearsal
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
