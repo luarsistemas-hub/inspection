@@ -302,6 +302,7 @@ describe("assigned shared foundation contracts", () => {
     opener.focus();
     const rendered = await mount(<Dialog isOpen title="Detalhe" onClose={() => {}} />);
     await act(async () => rendered.root.render(<Dialog isOpen={false} title="Detalhe" onClose={() => {}} />));
+    await flushFocusRestore();
     expect(document.activeElement).toBe(opener);
     opener.remove();
     await unmount(rendered);
