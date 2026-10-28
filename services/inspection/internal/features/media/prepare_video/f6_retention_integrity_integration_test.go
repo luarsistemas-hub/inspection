@@ -48,7 +48,7 @@ func TestFrameBankCommitFreezesOriginAndCurrentExpiryAtFixedT0IT308(t *testing.T
 	}
 	wantByMedia := map[string]time.Time{
 		origin.mediaID.String(): t0.Add(30 * 24 * time.Hour),
-		// TechSpec v84: without a policy row CURRENT sources use the 30-day default.
+		// Migration v85: without a policy row CURRENT sources use the 30-day default.
 		current.mediaID.String(): t0.Add(30 * 24 * time.Hour),
 	}
 	for _, fixture := range []preparationFixture{origin, current} {

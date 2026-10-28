@@ -2130,7 +2130,12 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
 `},
-		{Version: 79, Name: "inventory_baseline_versions", Compatible: true, SQL: `
+		{Version: 79, Name: "video_scope_display_names_pt_br", Compatible: true, SQL: `
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS environment_display_name varchar(120);
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS component_display_name varchar(120);
+ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS view_display_name varchar(120);
+`},
+		{Version: 80, Name: "inventory_baseline_versions", Compatible: true, SQL: `
 ALTER TABLE origins.origin_versions ALTER COLUMN responsibility_id DROP NOT NULL;
 ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS purpose text;
 ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'CAPTURE';
@@ -2154,7 +2159,7 @@ ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_version_source_vers
 ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_version_activator FOREIGN KEY(tenant_id,activated_by_membership_id) REFERENCES access.memberships(tenant_id,id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_origin_inventory_draft ON origins.origin_versions(tenant_id,origin_id) WHERE has_inventory AND status='DRAFT';
 `},
-		{Version: 80, Name: "inventory_tables", Compatible: true, SQL: `
+		{Version: 81, Name: "inventory_tables", Compatible: true, SQL: `
 CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_environment_tenant_id ON origins.inventory_environments(tenant_id,id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_item_tenant_id ON origins.inventory_items(tenant_id,id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_evidence_tenant_id ON origins.inventory_item_evidence(tenant_id,id);
@@ -2193,7 +2198,7 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON origins.inventory_environments,origins.inve
 REVOKE UPDATE,DELETE ON origins.inventory_decisions FROM inspection_runtime;
 GRANT SELECT,INSERT ON origins.inventory_decisions TO inspection_runtime;
 `},
-		{Version: 81, Name: "analysis_prompt_tasks_and_inventory_jobs", Compatible: true, SQL: `
+		{Version: 82, Name: "analysis_prompt_tasks_and_inventory_jobs", Compatible: true, SQL: `
 ALTER TABLE analysis.prompts ADD COLUMN IF NOT EXISTS task text NOT NULL DEFAULT 'FINDINGS';
 ALTER TABLE analysis.prompt_snapshots ADD COLUMN IF NOT EXISTS task text NOT NULL DEFAULT 'FINDINGS';
 DROP INDEX IF EXISTS analysis.idx_analysis_prompts_analysis_type;
@@ -2260,7 +2265,7 @@ ALTER TABLE analysis.findings ADD CONSTRAINT chk_finding_item_identity CHECK(ite
 ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_comparison_mode;
 ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_comparison_mode CHECK(comparison_mode IS NULL OR comparison_mode IN ('CURRENT_ONLY','COMPARE_ORIGIN_CURRENT','CHECKLIST_ONLY','FIXED_ORIGIN','PLANNED_STAGE','PREVIOUS_INSPECTION','BEFORE_AFTER','VIDEO_SCOPE','VIDEO_MATCH','VIDEO_CONDITION','VIDEO_VERIFY','INVENTORY_CATALOG','INVENTORY_MATCH','INVENTORY_COMPARE'));
 `},
-		{Version: 82, Name: "environment_capture_contracts", Compatible: true, SQL: `
+		{Version: 83, Name: "environment_capture_contracts", Compatible: true, SQL: `
 ALTER TABLE templates.template_versions DROP CONSTRAINT IF EXISTS chk_template_schema_version;
 ALTER TABLE templates.template_versions ADD CONSTRAINT chk_template_schema_version CHECK(schema_version IN (1,2));
 ALTER TABLE invitations.invitations ADD COLUMN IF NOT EXISTS reviewer_membership_id uuid;
@@ -2274,7 +2279,7 @@ ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS representative boolean N
 ALTER TABLE analysis.video_plan_preparations ADD COLUMN IF NOT EXISTS requirement_key text;
 ALTER TABLE capture.video_attempts ADD COLUMN IF NOT EXISTS requirement_key text;
 `},
-		{Version: 83, Name: "counterparty_invitations_and_sessions", Compatible: true, SQL: `
+		{Version: 84, Name: "counterparty_invitations_and_sessions", Compatible: true, SQL: `
 CREATE UNIQUE INDEX IF NOT EXISTS uq_counterparty_tenant_id ON origins.counterparty_invitations(tenant_id,id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_participant_tenant_id ON participants.participants(tenant_id,id);
 ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT fk_counterparty_origin_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
@@ -2303,7 +2308,7 @@ ALTER TABLE invitations.external_sessions ADD CONSTRAINT chk_external_session_ki
 ALTER TABLE invitations.external_sessions ADD CONSTRAINT chk_external_session_owner CHECK((kind='CAPTURE' AND invitation_id IS NOT NULL AND responsibility_id IS NOT NULL AND counterparty_invitation_id IS NULL) OR (kind='COUNTERPARTY' AND invitation_id IS NULL AND responsibility_id IS NULL AND counterparty_invitation_id IS NOT NULL));
 ALTER TABLE invitations.external_sessions ADD CONSTRAINT fk_external_counterparty_invitation FOREIGN KEY(tenant_id,counterparty_invitation_id) REFERENCES origins.counterparty_invitations(tenant_id,id);
 `},
-		{Version: 84, Name: "baseline_video_retention", Compatible: true, SQL: `
+		{Version: 85, Name: "baseline_video_retention", Compatible: true, SQL: `
 ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS retention_anchor text NOT NULL DEFAULT 'FIXED';
 ALTER TABLE media.video_sources ALTER COLUMN source_expiry_at DROP NOT NULL;
 ALTER TABLE media.video_sources ADD CONSTRAINT chk_video_source_retention_anchor CHECK(retention_anchor IN ('FIXED','ACTIVE_BASELINE'));
@@ -2319,20 +2324,20 @@ ALTER TABLE media.video_policies ADD COLUMN IF NOT EXISTS superseded_baseline_re
 ALTER TABLE media.video_policies ALTER COLUMN current_retention_days SET DEFAULT 30;
 ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_superseded_retention CHECK(superseded_baseline_retention_days BETWEEN 1 AND 3650);
 `},
-		{Version: 85, Name: "report_snapshot_schema_v2", Compatible: true, SQL: `
+		{Version: 86, Name: "report_snapshot_schema_v2", Compatible: true, SQL: `
 ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 1;
 ALTER TABLE reports.report_snapshots ADD CONSTRAINT chk_report_snapshot_schema_version CHECK(schema_version IN (1,2));
 `},
 		// Re-analysis appends a new generation of inventory jobs; readers use the
 		// latest generation per requirement while earlier results stay auditable.
-		{Version: 86, Name: "inventory_job_generations", Compatible: true, SQL: `
+		{Version: 87, Name: "inventory_job_generations", Compatible: true, SQL: `
 ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS generation integer NOT NULL DEFAULT 1;
 ALTER TABLE analysis.inventory_jobs DROP CONSTRAINT IF EXISTS chk_inventory_job_generation;
 ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_generation CHECK(generation >= 1);
 DROP INDEX IF EXISTS analysis.uq_inventory_job_input;
 CREATE UNIQUE INDEX uq_inventory_job_input ON analysis.inventory_jobs(tenant_id,inspection_id,kind,requirement_key,generation);
 `},
-		{Version: 87, Name: "baseline_supersession_timestamp", Compatible: true, SQL: `
+		{Version: 88, Name: "baseline_supersession_timestamp", Compatible: true, SQL: `
 ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
 UPDATE origins.origin_versions v SET superseded_at=(
   SELECT successor.activated_at FROM origins.origin_versions successor
@@ -2342,10 +2347,10 @@ UPDATE origins.origin_versions v SET superseded_at=(
   SELECT 1 FROM origins.origin_versions successor WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
 );
 `},
-		{Version: 88, Name: "counterparty_response_idempotency", Compatible: true, SQL: `
+		{Version: 89, Name: "counterparty_response_idempotency", Compatible: true, SQL: `
 ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS response_mutation_id text;
 `},
-		{Version: 89, Name: "counterparty_deadline_scheduler_discovery", Compatible: true, SQL: `
+		{Version: 90, Name: "counterparty_deadline_scheduler_discovery", Compatible: true, SQL: `
 CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
   p_now timestamptz,
   p_terminal_updated_before timestamptz,
@@ -2372,11 +2377,11 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
 `},
-		{Version: 90, Name: "counterparty_delivery_generation", Compatible: true, SQL: `
+		{Version: 91, Name: "counterparty_delivery_generation", Compatible: true, SQL: `
 ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS delivery_generation integer NOT NULL DEFAULT 1;
 ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_delivery_generation CHECK(delivery_generation >= 1);
 `},
-		{Version: 91, Name: "baseline_retention_scheduler_repairs", Compatible: true, SQL: `
+		{Version: 92, Name: "baseline_retention_scheduler_repairs", Compatible: true, SQL: `
 ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS retention_floor_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_video_sources_fixed_expiry ON media.video_sources(source_expiry_at,tenant_id) WHERE status='RETAINED' AND retention_anchor='FIXED';
 CREATE INDEX IF NOT EXISTS idx_deletion_requests_pending ON retention.deletion_requests(tenant_id,status,processed_at,requested_at) WHERE status IN ('REQUESTED','BLOCKED');
@@ -2408,7 +2413,7 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
 `},
-		{Version: 92, Name: "retention_scheduler_due_windows", Compatible: true, SQL: `
+		{Version: 93, Name: "retention_scheduler_due_windows", Compatible: true, SQL: `
 CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
   p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
 ) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -2472,11 +2477,6 @@ CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
 $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
-`},
-		{Version: 93, Name: "video_scope_display_names_pt_br", Compatible: true, SQL: `
-ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS environment_display_name varchar(120);
-ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS component_display_name varchar(120);
-ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS view_display_name varchar(120);
 `},
 	}
 }

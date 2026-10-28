@@ -39,7 +39,7 @@ func newPolicyIT(t *testing.T) (*harness.Harness, harness.Task06Fixture) {
 // TestIntegration_UT318_NewPolicyRowUsesDatabaseDefaults inserts a policy row
 // naming only its tenant (and the NOT NULL audit timestamp, which has no
 // database default on schemas created by AutoMigrate) and reads the retention
-// defaults owned by the schema (migration v84 and the model tags).
+// defaults owned by the schema (migration v85 and the model tags).
 func TestIntegration_UT318_NewPolicyRowUsesDatabaseDefaults(t *testing.T) {
 	h, fixture := newPolicyIT(t)
 	if defaults := Defaults(fixture.TenantID); defaults.CurrentRetentionDays != 30 || defaults.SupersededBaselineRetentionDays != 365 {

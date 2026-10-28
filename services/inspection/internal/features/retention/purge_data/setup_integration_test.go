@@ -91,19 +91,26 @@ func TestInspectionPurgePreservesPhotoEvidenceOfActiveInventoryAndDeletesDiscard
 			if reader != nil {
 				_ = reader.Close()
 			}
-			var mediaRows, evidenceRows int64
+			derivativeReader, _, derivativeErr := (objectstore.VideoStore{Store: h.Store}).Open(ctx, "tenant/"+fixture.TenantID.String()+"/media/"+fixture.MediaID.String()+"/normalized")
+			if derivativeReader != nil {
+				_ = derivativeReader.Close()
+			}
+			var mediaRows, evidenceRows, derivativeRows int64
 			if err := adminDB.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.MediaID).Count(&mediaRows).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err := adminDB.Model(&database.InventoryItemEvidence{}).Where("tenant_id=? AND item_id=?", fixture.TenantID, itemID).Count(&evidenceRows).Error; err != nil {
 				t.Fatal(err)
 			}
+			if err := adminDB.Model(&database.MediaDerivative{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.DerivativeID).Count(&derivativeRows).Error; err != nil {
+				t.Fatal(err)
+			}
 			if tc.wantPresent {
-				if openErr != nil || mediaRows != 1 || evidenceRows != 1 {
-					t.Fatalf("active baseline photo evidence lost: objectErr=%v mediaRows=%d evidenceRows=%d", openErr, mediaRows, evidenceRows)
+				if openErr != nil || mediaRows != 1 || evidenceRows != 1 || derivativeErr != nil || derivativeRows != 1 {
+					t.Fatalf("active baseline photo evidence lost: objectErr=%v mediaRows=%d evidenceRows=%d derivativeErr=%v derivativeRows=%d", openErr, mediaRows, evidenceRows, derivativeErr, derivativeRows)
 				}
-			} else if openErr == nil || mediaRows != 0 || evidenceRows != 0 {
-				t.Fatalf("discarded photo evidence retained: objectErr=%v mediaRows=%d evidenceRows=%d", openErr, mediaRows, evidenceRows)
+			} else if openErr == nil || mediaRows != 0 || evidenceRows != 0 || derivativeErr == nil || derivativeRows != 0 {
+				t.Fatalf("discarded photo evidence retained: objectErr=%v mediaRows=%d evidenceRows=%d derivativeErr=%v derivativeRows=%d", openErr, mediaRows, evidenceRows, derivativeErr, derivativeRows)
 			}
 		})
 	}

@@ -29,16 +29,34 @@ func inventoryID(raw, field string) (identity.ID, error) {
 	return id, nil
 }
 
+// inventoryAuthorize checks the caller's role before revealing whether the
+// asset exists, then checks the caller's scope over that asset.
 func (r *Resolver) inventoryAuthorize(ctx context.Context, assetID identity.ID, access string) error {
+	principal, err := r.inventoryPrincipal(ctx, access)
+	if err != nil {
+		return err
+	}
+	return r.inventoryAssetAllowed(ctx, principal, assetID)
+}
+
+// inventoryAuthorizeVersion is inventoryAuthorize for an inventory version: the
+// role check precedes the version lookup so unauthorized callers cannot probe ids.
+func (r *Resolver) inventoryAuthorizeVersion(ctx context.Context, tenant, versionID identity.ID, access string) (identity.ID, error) {
+	principal, err := r.inventoryPrincipal(ctx, access)
+	if err != nil {
+		return identity.ID{}, err
+	}
+	assetID, err := r.inventoryVersionAsset(ctx, tenant, versionID)
+	if err != nil {
+		return identity.ID{}, err
+	}
+	return assetID, r.inventoryAssetAllowed(ctx, principal, assetID)
+}
+
+func (r *Resolver) inventoryPrincipal(ctx context.Context, access string) (requestctx.Principal, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
-		return unauthenticated()
-	}
-	var asset database.Asset
-	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
-		return tx.Where("tenant_id=? AND id=?", meta.TenantID, assetID).First(&asset).Error
-	}); err != nil {
-		return apperror.New(apperror.NotFound, "assetId", "asset not found")
+		return requestctx.Principal{}, unauthenticated()
 	}
 	// Auditors read baselines; review and draft access stay with operators.
 	roles := []string{auth.Employee, auth.Manager, auth.TenantAdmin, auth.Viewer, auth.CustomerViewer, auth.Auditor}
@@ -55,8 +73,19 @@ func (r *Resolver) inventoryAuthorize(ctx context.Context, assetID identity.ID, 
 	if access == "trail" && apperror.Is(err, apperror.Forbidden) {
 		principal, err = r.Authorizer.Authorize(ctx, auth.AuthorizationRequest{TenantID: meta.TenantID, Product: auth.AdminProduct, Roles: roles, Mutate: false})
 	}
-	if err != nil {
-		return err
+	return principal, err
+}
+
+func (r *Resolver) inventoryAssetAllowed(ctx context.Context, principal requestctx.Principal, assetID identity.ID) error {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return unauthenticated()
+	}
+	var asset database.Asset
+	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND id=?", meta.TenantID, assetID).First(&asset).Error
+	}); err != nil {
+		return apperror.New(apperror.NotFound, "assetId", "asset not found")
 	}
 	if containsInventoryRole(principal.Roles, auth.TenantAdmin) {
 		return nil

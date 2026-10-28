@@ -52,12 +52,8 @@ func (r *mutationResolver) decideInventoryItems(ctx context.Context, input graph
 		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
 		return out, nil
 	}
-	asset, err := r.inventoryVersionAsset(ctx, meta.TenantID, version)
+	_, err = r.inventoryAuthorizeVersion(ctx, meta.TenantID, version, "mutate")
 	if err != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
-		return out, nil
-	}
-	if err = r.inventoryAuthorize(ctx, asset, "mutate"); err != nil {
 		if businessInventoryError(err) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(err))
 			return out, nil
@@ -145,12 +141,8 @@ func (r *mutationResolver) bulkAcceptInventoryEnvironment(ctx context.Context, i
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -189,12 +181,8 @@ func (r *mutationResolver) addInventoryItem(ctx context.Context, input graphql1.
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -258,12 +246,8 @@ func (r *mutationResolver) mergeInventoryItems(ctx context.Context, input graphq
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -312,12 +296,8 @@ func (r *mutationResolver) splitInventoryItem(ctx context.Context, input graphql
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -379,12 +359,8 @@ func (r *mutationResolver) upsertInventoryEnvironment(ctx context.Context, input
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -428,12 +404,8 @@ func (r *mutationResolver) removeInventoryEnvironment(ctx context.Context, input
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -461,12 +433,8 @@ func (r *mutationResolver) activateBaselineVersion(ctx context.Context, input gr
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -510,12 +478,8 @@ func (r *mutationResolver) discardBaselineDraft(ctx context.Context, input graph
 		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 		return out, nil
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, v)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, v, "mutate")
 	if e != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(e))
-		return out, nil
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "mutate"); e != nil {
 		if businessInventoryError(e) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(e))
 			return out, nil
@@ -550,12 +514,8 @@ func (r *mutationResolver) retryInventoryDraft(ctx context.Context, input graphq
 		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
 		return out, nil
 	}
-	assetID, err := r.inventoryVersionAsset(ctx, meta.TenantID, versionID)
+	_, err = r.inventoryAuthorizeVersion(ctx, meta.TenantID, versionID, "mutate")
 	if err != nil {
-		out.UserErrors = append(out.UserErrors, userErrorFrom(err))
-		return out, nil
-	}
-	if err := r.inventoryAuthorize(ctx, assetID, "mutate"); err != nil {
 		if businessInventoryError(err) {
 			out.UserErrors = append(out.UserErrors, userErrorFrom(err))
 			return out, nil
@@ -725,11 +685,8 @@ func (r *queryResolver) inventoryDraft(ctx context.Context, originVersionID stri
 	if e != nil {
 		return nil, e
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, id)
+	asset, e := r.inventoryAuthorizeVersion(ctx, meta.TenantID, id, "draft")
 	if e != nil {
-		return nil, e
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "draft"); e != nil {
 		return nil, e
 	}
 	viewRaw, e := r.Bus.Ask(ctx, inventorydraft.Query{TenantID: meta.TenantID, VersionID: id})
@@ -829,11 +786,8 @@ func (r *queryResolver) inventoryTrail(ctx context.Context, originVersionID stri
 	if e != nil {
 		return nil, e
 	}
-	asset, e := r.inventoryVersionAsset(ctx, meta.TenantID, id)
+	_, e = r.inventoryAuthorizeVersion(ctx, meta.TenantID, id, "trail")
 	if e != nil {
-		return nil, e
-	}
-	if e = r.inventoryAuthorize(ctx, asset, "trail"); e != nil {
 		return nil, e
 	}
 	viewRaw, e := r.Bus.Ask(ctx, inventorytrail.Query{TenantID: meta.TenantID, VersionID: id})

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	"inspection/services/inspection/internal/platform/database/migrations"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -100,7 +101,7 @@ func TestMigratorUpgradeFromV78WithLegacyRows(t *testing.T) {
 
 	migrator := Migrator{DB: db}
 	if err := migrator.Migrate(ctx); err != nil {
-		t.Fatalf("upgrade v78 to v85: %v", err)
+		t.Fatalf("upgrade v78 to latest: %v", err)
 	}
 	if err := migrator.Migrate(ctx); err != nil {
 		t.Fatalf("idempotent second upgrade: %v", err)
@@ -109,8 +110,8 @@ func TestMigratorUpgradeFromV78WithLegacyRows(t *testing.T) {
 	if err := db.Raw(`SELECT MAX(version) FROM platform.schema_migrations`).Scan(&maxVersion).Error; err != nil {
 		t.Fatal(err)
 	}
-	if maxVersion != 86 {
-		t.Fatalf("max migration=%d, want 86", maxVersion)
+	if maxVersion != migrations.LatestVersion() {
+		t.Fatalf("max migration=%d, want %d", maxVersion, migrations.LatestVersion())
 	}
 	assertVideoPlanPreparationCatalog(t, db)
 	var upgradedFinding FindingRecord
@@ -165,7 +166,7 @@ func TestMigratorUpgradeFromV78WithLegacyRows(t *testing.T) {
 	}
 	policyAfter.CurrentRetentionDays, policyAfter.Version = 8, policyAfter.Version+1
 	if err := db.Save(&policyAfter).Error; err != nil {
-		t.Fatalf("video policy update rejects retained v84 field: %v", err)
+		t.Fatalf("video policy update rejects retained v85 field: %v", err)
 	}
 	var savedPolicy VideoPolicy
 	if err := db.First(&savedPolicy, "tenant_id=?", tenantID).Error; err != nil || savedPolicy.SupersededBaselineRetentionDays != 365 {
