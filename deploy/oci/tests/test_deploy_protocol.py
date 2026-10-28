@@ -39,16 +39,18 @@ class DeployProtocolTests(unittest.TestCase):
             self.assertTrue((REPO / path.rstrip("/")).exists(), f"catalog/planner path does not exist: {path}")
 
     @staticmethod
-    def make_source_bundle(directory):
+    def make_source_bundle(directory, installer_body="#!/bin/bash\n"):
         source = directory / "source"
         (source / "deploy/oci/host").mkdir(parents=True)
         (source / "deploy/oci/compose.yaml").write_text("services: {}\n")
         (source / "deploy/oci/host/apply-plan.sh").write_text("#!/bin/bash\n")
+        (source / "deploy/oci/host/install-host-tools.sh").write_text(installer_body)
         (source / "deploy/keycloak").mkdir(parents=True)
         bundle = directory / "bundle.tgz"
         with tarfile.open(bundle, "w:gz") as archive:
             archive.add(source / "deploy/oci/compose.yaml", arcname="deploy/oci/compose.yaml")
             archive.add(source / "deploy/oci/host/apply-plan.sh", arcname="deploy/oci/host/apply-plan.sh")
+            archive.add(source / "deploy/oci/host/install-host-tools.sh", arcname="deploy/oci/host/install-host-tools.sh")
             archive.add(source / "deploy/keycloak", arcname="deploy/keycloak")
         return bundle
 
@@ -107,11 +109,13 @@ class DeployProtocolTests(unittest.TestCase):
             (git_repo / "deploy/oci/host").mkdir(parents=True)
             (git_repo / "deploy/oci/compose.yaml").write_text("services: {}\n")
             (git_repo / "deploy/oci/host/apply-plan.sh").write_text("#!/bin/bash\n")
+            (git_repo / "deploy/oci/host/install-host-tools.sh").write_text("#!/bin/bash\n")
             (git_repo / "deploy/keycloak").mkdir(parents=True)
             subprocess.run(["git", "init", "-q"], cwd=git_repo, check=True)
             apply_oid = subprocess.check_output(["git", "hash-object", "-w", "deploy/oci/host/apply-plan.sh"], cwd=git_repo, text=True).strip()
+            installer_oid = subprocess.check_output(["git", "hash-object", "-w", "deploy/oci/host/install-host-tools.sh"], cwd=git_repo, text=True).strip()
             compose_oid = subprocess.check_output(["git", "hash-object", "-w", "deploy/oci/compose.yaml"], cwd=git_repo, text=True).strip()
-            host_tree = self.git_tree(git_repo, [("100644", "blob", apply_oid, "apply-plan.sh")])
+            host_tree = self.git_tree(git_repo, [("100644", "blob", apply_oid, "apply-plan.sh"), ("100644", "blob", installer_oid, "install-host-tools.sh")])
             oci_tree = self.git_tree(git_repo, [("100644", "blob", compose_oid, "compose.yaml"), ("040000", "tree", host_tree, "host")])
             keycloak_tree = self.git_tree(git_repo, [])
             deploy_tree = self.git_tree(git_repo, [("040000", "tree", oci_tree, "oci"), ("040000", "tree", keycloak_tree, "keycloak")])
@@ -139,6 +143,57 @@ class DeployProtocolTests(unittest.TestCase):
             rejected = self.validate_outer(validator, negative, workflow_plan)
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("outside the expected bundle paths", rejected.stderr)
+
+    def test_stage_uses_candidate_installer_before_activating_host_tools(self):
+        with tempfile.TemporaryDirectory(prefix="inspection-stage-installer-") as directory:
+            root = pathlib.Path(directory)
+            marker = root / "installer-used"
+            bundle = self.make_source_bundle(root, f"#!/bin/bash\necho candidate > {marker}\n")
+            plan_path, plan = self.make_plan(root, bundle)
+            outer = root / "upload.tgz"
+            with tarfile.open(outer, "w:gz") as archive:
+                archive.add(plan_path, arcname="plan.json")
+                archive.add(bundle, arcname="bundle.tgz")
+            for path in (root / "run", root / "run/lock", root / "usr/local/sbin"):
+                path.mkdir(parents=True, exist_ok=True)
+            (root / "usr/local/sbin/inspection-install-host-tools").write_text(f"#!/bin/bash\necho stale > {marker}\n")
+
+            bindir = root / "bin"
+            bindir.mkdir()
+            for name, body in {
+                "id": "#!/bin/sh\necho 0\n",
+                "flock": "#!/bin/sh\nexit 0\n",
+                "systemd-run": "#!/bin/sh\nexit 0\n",
+                "install": """#!/usr/bin/python3
+import os, pathlib, shutil, sys
+args=sys.argv[1:]
+directory='-d' in args
+while args and args[0].startswith('-'):
+    flag=args.pop(0)
+    if flag in ('-o','-g','-m'): args.pop(0)
+if directory:
+    pathlib.Path(args[-1]).mkdir(parents=True, exist_ok=True)
+else:
+    shutil.copyfile(args[-2], args[-1])
+    os.chmod(args[-1], 0o755)
+""",
+            }.items():
+                path = bindir / name
+                path.write_text(body)
+                path.chmod(0o755)
+
+            script = (REPO / "deploy/oci/host/stage-and-apply.sh").read_text()
+            for prefix in ("/run/inspection-stage-", "/run/lock", "/opt/inspection", "/var/lib/inspection-deploy", "/usr/local/sbin"):
+                script = script.replace(prefix, str(root) + prefix)
+            stage = root / "stage-and-apply.sh"
+            stage.write_text(script)
+            result = subprocess.run(
+                ["bash", str(stage), plan["deploymentId"], plan["planSha256"]],
+                input=outer.read_bytes(), env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(marker.read_text().strip(), "candidate")
 
     def test_cleanup_images_accepts_receipt_generations_and_ignores_metadata(self):
         ops = (REPO / "deploy/oci/ops.sh").read_text()

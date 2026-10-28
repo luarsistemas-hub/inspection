@@ -55,7 +55,7 @@ with tarfile.open(bundle_path, "r:gz") as bundle:
 PY
 
 plan_source="$stage/source/deploy/oci"
-[[ -s "$plan_source/compose.yaml" && -s "$plan_source/host/apply-plan.sh" ]] || { echo 'Candidate bundle is incomplete.' >&2; exit 1; }
+[[ -s "$plan_source/compose.yaml" && -s "$plan_source/host/apply-plan.sh" && -s "$plan_source/host/install-host-tools.sh" ]] || { echo 'Candidate bundle is incomplete.' >&2; exit 1; }
 source_sha="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceSha"])' "$stage/plan.json")"
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || { echo 'Deployment requires a source SHA.' >&2; exit 1; }
 release_root=/opt/inspection/releases
@@ -79,6 +79,13 @@ job_dir="$job_root/$deployment_id"
 [[ ! -e "$job_dir" ]] || { echo 'Deployment ID already exists; refusing to replace an operation.' >&2; exit 1; }
 install -d -o root -g root -m 0700 "$job_dir"
 install -o root -g root -m 0600 "$stage/plan.json" "$job_dir/plan.json"
+# Upgrade the installer before activating candidate host tools. An older installer
+# can leave the restricted SSH command behind directories it cannot traverse.
+static_installer=/usr/local/sbin/inspection-install-host-tools
+installer_tmp="$static_installer.new.$$"
+bash -n "$plan_source/host/install-host-tools.sh"
+install -o root -g root -m 0755 "$plan_source/host/install-host-tools.sh" "$installer_tmp"
+mv -f "$installer_tmp" "$static_installer"
 /usr/local/sbin/inspection-install-host-tools "$source_sha" "$release_target/deploy/oci/host"
 # The supervised unit takes the same lock; release it before queueing that unit.
 flock -u 9
