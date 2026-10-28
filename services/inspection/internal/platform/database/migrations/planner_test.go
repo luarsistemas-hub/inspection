@@ -38,7 +38,7 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 func TestBaselineRetentionRepairMigrationUsesSuccessorActivationAndDiscoversWork(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
-		if candidate.Version == 92 {
+		if candidate.Version == 91 {
 			step = candidate
 			break
 		}
@@ -59,7 +59,7 @@ func TestBaselineRetentionRepairMigrationUsesSuccessorActivationAndDiscoversWork
 func TestRetentionSchedulerMigrationUsesDueWindowsAndHoldFilters(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
-		if candidate.Version == 93 {
+		if candidate.Version == 92 {
 			step = candidate
 			break
 		}
@@ -287,7 +287,7 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 
 func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.T) {
 	for _, step := range Foundation() {
-		if step.Version != 79 {
+		if step.Version != 93 {
 			continue
 		}
 		if step.Name != "video_scope_display_names_pt_br" || !step.Compatible {
