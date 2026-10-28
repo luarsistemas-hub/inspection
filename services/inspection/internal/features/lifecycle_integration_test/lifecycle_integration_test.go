@@ -191,9 +191,18 @@ func TestLifecycleIT101ToIT140IT201ToIT220IT380ToIT382(t *testing.T) {
 			t.Errorf("restore active template version: %v", err)
 		}
 	}()
+	var admission database.VideoAdmission
+	if err := admin.Where("id=1").First(&admission).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", false).Error; err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", admission.Enabled).Error; err != nil {
+			t.Errorf("restore legacy video admission: %v", err)
+		}
+	}()
 	if _, err := schedules.Create(ctx, schedulecore.Input{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: fixture.templateID, RRule: "FREQ=DAILY", Timezone: "UTC", StartsAt: fixture.now, DeadlineMinutes: 60, IdempotencyKey: "video-schedule-legacy-disabled"}); err != nil {
 		t.Fatalf("historical disabled admission blocked VIDEO schedule: %v", err)
 	}

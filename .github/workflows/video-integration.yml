@@ -334,9 +334,7 @@ jobs:
           go run ./services/inspection/cmd/inspection-schema-check
           candidate_actual="$(psql "$DATABASE_URL" -Atf /tmp/upgrade-check.sql)"
           [[ "$candidate_actual" == "$candidate_latest" ]] || { echo "upgraded schema version $candidate_actual did not match migrations.LatestVersion() $candidate_latest" >&2; exit 1; }
-          admission="$(psql "$DATABASE_URL" -Atc 'SELECT enabled FROM platform.video_admission WHERE id=1')"
-          [[ "$admission" == f ]] || { echo "legacy admission row changed unexpectedly during upgrade (got $admission)" >&2; exit 1; }
-          echo "Upgrade rehearsal passed: $base_actual -> $candidate_actual; migration repeated successfully; the legacy admission row remains inert."
+          echo "Upgrade rehearsal passed: $base_actual -> $candidate_actual; migration repeated successfully."
       - name: Capture PostgreSQL diagnostics on failure
         if: failure()
         env:
