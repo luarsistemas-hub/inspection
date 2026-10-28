@@ -91,20 +91,6 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 		if oversized > 0 {
 			return apperror.New(apperror.InvalidState, "originVersionId", "LIMIT_ITEMS_PER_ENVIRONMENT")
 		}
-		var activeRows int64
-		if err := tx.Model(&database.InventoryItem{}).Joins("JOIN origins.inventory_environments e ON e.tenant_id=inventory_items.tenant_id AND e.id=inventory_items.environment_id AND e.origin_version_id=inventory_items.origin_version_id AND e.decision<>'REJECTED'").Where("inventory_items.tenant_id=? AND inventory_items.origin_version_id=? AND inventory_items.decision<>'REJECTED' AND inventory_items.merged_into_id IS NULL", in.TenantID, result.ID).Count(&activeRows).Error; err != nil {
-			return err
-		}
-		if activeRows > MaxItemsPerVersion {
-			return apperror.New(apperror.InvalidState, "originVersionId", "LIMIT_ITEMS_PER_VERSION")
-		}
-		var sourceOversized int64
-		if err := tx.Model(&database.InventoryEnvironment{}).Where("tenant_id=? AND origin_version_id=? AND decision<>'REJECTED'", in.TenantID, result.ID).Count(&sourceOversized).Error; err != nil {
-			return err
-		}
-		if sourceOversized > MaxEnvironments {
-			return apperror.New(apperror.InvalidState, "originVersionId", "LIMIT_ENVIRONMENTS")
-		}
 		beforeActive := identity.ID{}
 		now := s.now()
 		if err := retainInventoryVideoEvidence(tx, in.TenantID, result.ID, now); err != nil {

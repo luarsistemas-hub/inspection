@@ -213,7 +213,9 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 						return err
 					}
 				}
-				if protectedVideo {
+				// Baseline evidence is served through its derivatives, so keep them
+				// with the protected original.
+				if protectedVideo || protectedInventory {
 					continue
 				}
 				var derivatives []database.MediaDerivative
@@ -302,7 +304,11 @@ func PurgeWithStore(ctx context.Context, db *gorm.DB, store objectstore.Store, t
 			}
 		}
 		if len(mediaIDs) > 0 {
-			if err := deleteWhere(&database.MediaDerivative{}, "tenant_id=? AND media_id IN ?", tenantID, mediaIDs); err != nil {
+			if len(inventoryMediaIDs) > 0 {
+				if err := deleteWhere(&database.MediaDerivative{}, "tenant_id=? AND media_id IN ? AND media_id NOT IN ?", tenantID, mediaIDs, inventoryMediaIDs); err != nil {
+					return err
+				}
+			} else if err := deleteWhere(&database.MediaDerivative{}, "tenant_id=? AND media_id IN ?", tenantID, mediaIDs); err != nil {
 				return err
 			}
 			if err := deleteWhere(&database.ScreeningRun{}, "tenant_id=? AND media_id IN ?", tenantID, mediaIDs); err != nil {

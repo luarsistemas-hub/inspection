@@ -321,7 +321,7 @@ func (e *Executor) purgeInactiveInventoryEvidence(ctx context.Context, tenantID 
 	var versionIDs []identity.ID
 	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		// The due window and hold filters mirror the inventory branch of
-		// platform.discover_scheduler_tenants (migration v92), so a tenant is
+		// platform.discover_scheduler_tenants (migration v93), so a tenant is
 		// discovered exactly when this purge has work to do.
 		return tx.WithContext(ctx).Raw(`SELECT ov.id FROM origins.origin_versions ov
 			LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id

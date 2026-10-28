@@ -16,11 +16,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV87V91 replays
-// the v87/v91 backfills (and v92, which v91's function body precedes) on a
+// TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV88V92 replays
+// the v88/v92 backfills (and v93, which v92's function body precedes) on a
 // fresh disposable database seeded with pre-migration shapes. It mutates the
 // migration history, so it only runs against its own dedicated database.
-func TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV87V91(t *testing.T) {
+func TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV88V92(t *testing.T) {
 	url, runtimeURL := os.Getenv("INSPECTION_TEST_BACKFILL_DATABASE_URL"), os.Getenv("INSPECTION_TEST_BACKFILL_RUNTIME_DATABASE_URL")
 	if url == "" || runtimeURL == "" {
 		t.Skip("a fresh disposable backfill database (privileged and runtime URLs) is required")
@@ -95,14 +95,14 @@ func TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV87V91(t *te
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.MigrationDB.Exec(`DELETE FROM platform.schema_migrations WHERE version IN (87,91,92)`).Error; err != nil {
+	if err := h.MigrationDB.Exec(`DELETE FROM platform.schema_migrations WHERE version IN (88,92,93)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := (database.Migrator{DB: h.MigrationDB}).Migrate(ctx); err != nil {
-		t.Fatalf("replay v87/v91/v92: %v", err)
+		t.Fatalf("replay v88/v92/v93: %v", err)
 	}
 	var applied int64
-	if err := h.MigrationDB.Raw(`SELECT count(*) FROM platform.schema_migrations WHERE version IN (87,91,92)`).Scan(&applied).Error; err != nil || applied != 3 {
+	if err := h.MigrationDB.Raw(`SELECT count(*) FROM platform.schema_migrations WHERE version IN (88,92,93)`).Scan(&applied).Error; err != nil || applied != 3 {
 		t.Fatalf("replayed migrations recorded=%d err=%v", applied, err)
 	}
 	versions := map[identity.ID]database.OriginVersion{}
@@ -131,9 +131,9 @@ func TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV87V91(t *te
 		id   identity.ID
 		want time.Time
 	}{
-		{"v87 fills a missing superseded_at from the successor activation", v1, day(-20)},
-		{"v91 repairs superseded_at copied from the version's own activation", v2, day(-5)},
-		{"v91 keeps a genuine superseded_at", v4, day(-15)},
+		{"v88 fills a missing superseded_at from the successor activation", v1, day(-20)},
+		{"v92 repairs superseded_at copied from the version's own activation", v2, day(-5)},
+		{"v92 keeps a genuine superseded_at", v4, day(-15)},
 	} {
 		if got := versions[tc.id].SupersededAt; got == nil || !got.Equal(tc.want) {
 			t.Errorf("%s: superseded_at=%v, want %v", tc.name, got, tc.want)
@@ -144,9 +144,9 @@ func TestIntegration_MigrationBackfillsSupersededAtAndRetentionFloorV87V91(t *te
 		mediaID identity.ID
 		want    time.Time
 	}{
-		{"v91 floor from an assigned fixed expiry", fixedMedia, fixedExpiry},
-		{"v91 floor from first readiness plus retention days for an anchored source", anchoredMedia, readyAt.AddDate(0, 0, 10)},
-		{"v91 keeps an existing floor", flooredMedia, existingFloor},
+		{"v92 floor from an assigned fixed expiry", fixedMedia, fixedExpiry},
+		{"v92 floor from first readiness plus retention days for an anchored source", anchoredMedia, readyAt.AddDate(0, 0, 10)},
+		{"v92 keeps an existing floor", flooredMedia, existingFloor},
 	} {
 		if got := sources[tc.mediaID].RetentionFloorAt; got == nil || !got.Equal(tc.want) {
 			t.Errorf("%s: retention_floor_at=%v, want %v", tc.name, got, tc.want)

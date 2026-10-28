@@ -200,6 +200,23 @@ func TestResolver_UT082InventoryDraftForbiddenRoles(t *testing.T) {
 	}
 }
 
+func TestResolver_InventoryMutationChecksRoleBeforeVersionLookup(t *testing.T) {
+	for _, role := range []string{auth.CustomerViewer, auth.Viewer, auth.Auditor} {
+		t.Run(role, func(t *testing.T) {
+			tenantID := identity.NewID()
+			ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{TenantID: tenantID, IdentityID: identity.NewID(), MembershipID: identity.NewID(), Roles: []string{role}, ProductEntitlements: []string{auth.DashboardProduct}}})
+			// No DB: reaching the version lookup would fail instead of returning Forbidden.
+			out, err := (&mutationResolver{&Resolver{}}).DecideInventoryItems(ctx, graphql1.DecideInventoryItemsInput{OriginVersionID: identity.NewID().String()})
+			if err != nil {
+				t.Fatalf("DecideInventoryItems returned top-level error: %v", err)
+			}
+			if len(out.UserErrors) != 1 || out.UserErrors[0].Code != string(apperror.Forbidden) {
+				t.Fatalf("user errors=%+v, want one Forbidden", out.UserErrors)
+			}
+		})
+	}
+}
+
 func TestResolver_UT085BaselineVersionFieldsAndContestationSummary(t *testing.T) {
 	activatedAt := time.Date(2026, 10, 24, 10, 30, 0, 0, time.UTC)
 	activatedBy := identity.NewID()

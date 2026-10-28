@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"errors"
-	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"strings"
 	"time"
 	"unicode"
@@ -11,6 +10,7 @@ import (
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"

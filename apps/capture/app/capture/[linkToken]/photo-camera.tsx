@@ -78,7 +78,12 @@ export function PhotoCamera(props: {
       if (!mountedRef.current || generationRef.current !== generation) { releaseCamera(stream); return; }
       streamRef.current = stream;
       const activeTrack = stream.getVideoTracks()[0];
-      if (!activeTrack || activeTrack.readyState !== "live") { release(); throw new Error("camera-frame-unavailable"); }
+      if (!activeTrack || activeTrack.readyState !== "live") {
+        // Release without bumping the generation so the catch still reports the failure.
+        streamRef.current = undefined;
+        releaseCamera(stream);
+        throw new Error("camera-frame-unavailable");
+      }
       activeTrack.addEventListener("ended", updatePreviewState);
       activeTrack.addEventListener("mute", updatePreviewState);
       const video = videoRef.current;

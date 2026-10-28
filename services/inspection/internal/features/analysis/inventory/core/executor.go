@@ -126,10 +126,18 @@ func (e *Executor) reserve(ctx context.Context, now time.Time) (*lease, bool, er
 			}
 			return e.Processor.Failed(ctx, tx, job, code)
 		}
+		if err := setTenant(tx, job.TenantID); err != nil {
+			return err
+		}
 		token := identity.NewID()
 		until := now.Add(e.leaseDuration())
-		if err := tx.Model(&job).Updates(map[string]any{"status": "RUNNING", "attempts": gorm.Expr("attempts + 1"), "lease_token": token, "lease_until": until, "updated_at": now}).Error; err != nil {
-			return err
+		claimed := tx.Model(&job).Updates(map[string]any{"status": "RUNNING", "attempts": gorm.Expr("attempts + 1"), "lease_token": token, "lease_until": until, "updated_at": now})
+		if claimed.Error != nil {
+			return claimed.Error
+		}
+		if claimed.RowsAffected != 1 {
+			// Nothing was claimed; leave the job for a later poll.
+			return nil
 		}
 		job.Status, job.Attempts, job.LeaseToken, job.LeaseUntil = "RUNNING", job.Attempts+1, &token, &until
 		result = &lease{job: job, token: token}

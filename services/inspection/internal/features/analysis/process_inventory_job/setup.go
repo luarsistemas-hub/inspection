@@ -159,6 +159,12 @@ func (p *Processor) Succeeded(ctx context.Context, tx *gorm.DB, job database.Inv
 }
 
 func (p *Processor) emitCompareCompletion(ctx context.Context, tx *gorm.DB, job database.InventoryJob) error {
+	// Serialize sibling completions on the inspection row. Without it, two jobs
+	// finishing together each count the other as RUNNING and neither emits.
+	var inspection database.Inspection
+	if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("tenant_id=? AND id=?", job.TenantID, job.InspectionID).Take(&inspection).Error; err != nil {
+		return err
+	}
 	var pending int64
 	if err := tx.WithContext(ctx).Model(&database.InventoryJob{}).
 		Where("tenant_id=? AND inspection_id=? AND kind='COMPARE' AND id<>? AND status NOT IN ('SUCCEEDED','FAILED','CANCELED')", job.TenantID, job.InspectionID, job.ID).

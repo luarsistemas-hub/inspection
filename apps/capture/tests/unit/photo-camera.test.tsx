@@ -104,6 +104,16 @@ describe("PhotoCamera", () => {
     expect(props.onCaptureError).toHaveBeenCalledWith(expect.objectContaining({ message: "camera-frame-unavailable" }));
   });
 
+  it("reports a camera stream whose track already ended", async () => {
+    const fixture = streamFixture();
+    Object.defineProperty(fixture.track, "readyState", { configurable: true, value: "ended" });
+    cameraMocks.open.mockResolvedValue(fixture.stream);
+    render();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(cameraMocks.release).toHaveBeenCalledWith(fixture.stream);
+    expect(document.querySelector('[aria-label="Não foi possível abrir a câmera"]')).not.toBeNull();
+  });
+
   it("hides camera failures when a fallback photo is under review and shows notices", async () => {
     cameraMocks.open.mockRejectedValue(new DOMException("blocked", "NotAllowedError"));
     const props = baseProps();
