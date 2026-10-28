@@ -52,6 +52,7 @@ jobs:
   plan:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       plan_sha: ${{ steps.plan.outputs.plan_sha }}
       deployment_id: ${{ steps.plan.outputs.deployment_id }}
