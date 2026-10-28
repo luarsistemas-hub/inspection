@@ -25,6 +25,22 @@ it("UT-330 environment progress and window keep every item reachable for 40 envi
   expect(list.at(-1)?.label).toBe("Quarto 40");
 });
 
+it("falls back to the environment label before instructions when names are absent", () => {
+  const requirement = { ...req("env:custom", "Sala de jantar"), environmentName: null, instructions: "Fotografe o espaço", environmentTypeCode: null };
+  const environment = { requirementKey: requirement.key, identityId: "environment-1", typeCode: "DINING_ROOM", name: "", expected: true, addedDuringCapture: true, mediaCount: 0, status: "PENDING" };
+  expect(environmentListItems([requirement], [], [], [environment], {})).toEqual([
+    { key: requirement.key, label: "Sala de jantar", status: "Pendente", added: "adicionado na vistoria", hasWarning: false }
+  ]);
+});
+
+it("counts resolved environments once when server answers and multiple local photos overlap", () => {
+  const requirement = req("env:sala", "Sala de jantar");
+  const answer: Answer = { requirementKey: requirement.key, mediaIds: ["media-1"], impossibilityReason: null, version: 1 };
+  const localPhotos = [draft(requirement.key, true), draft(requirement.key, true), draft(requirement.key, true)].map((photo, index) => ({ ...photo, id: `photo-${index}`, mediaId: `media-${index + 1}` }));
+
+  expect(environmentProgress([requirement], [answer], localPhotos)).toMatchObject({ completed: 1, total: 1, pending: [] });
+});
+
 it("UT-331 Outro validation rejects whitespace-only names", () => {
   expect(validateEnvironmentName("OTHER", "  \n ")).toBe("Informe o nome do ambiente.");
   expect(validateEnvironmentName("OTHER", "Depósito 🏠")).toBeUndefined();

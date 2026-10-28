@@ -257,7 +257,7 @@ export function VideoCapture({ responsibilityId, kind, recaptureRequestId, recap
       const started = await startVideoRecorder(cameraStream, draft, hashDraft, (update) => {
         if (!mounted.current) return;
         elapsedRef.current = update.elapsedSeconds; setElapsed(update.elapsedSeconds);
-        if (update.error) setNotice(update.error);
+        if (update.error) setNotice(message(new Error(update.error)));
         if (update.limitReached && !limitNotified.current) { limitNotified.current = true; setStoppedAtLimit(true); setNotice("O limite desta gravação foi atingido. Finalize e revise o vídeo."); }
         if (update.finalizing || update.error || update.limitReached) void finish();
       }, Date.now, () => operation !== generation.current || !mounted.current);

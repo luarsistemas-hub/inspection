@@ -4,6 +4,25 @@ import { uploadDraft, type UploadProgress } from "@/pwa/uploads";
 import { loadDraft, type CaptureDraft } from "@/pwa/drafts";
 
 describe("multipart reconciliation", () => {
+  it("keeps an environment requirement attached when creating an upload for a saved draft", async () => {
+    const fetch = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return new Response(null, { status: 200, headers: { etag: "etag" } });
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      if (String(body.query).includes("createMediaUpload")) {
+        return new Response(JSON.stringify({ data: { createMediaUpload: { upload: { mediaId: "media", uploadId: "upload", partSizeBytes: 1024 }, userErrors: [] } } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { presignMediaParts: { parts: [{ partNumber: 1, url: "https://storage.test/part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] }, completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await uploadDraft({ id: "environment-draft", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", parts: [], metadata: { requirementKey: "env:dining-room", description: "", source: "camera", capturedAt: "now" } });
+      const createRequest = fetch.mock.calls.filter((call) => call[1]?.method !== "PUT").map((call) => JSON.parse(String(call[1]?.body))).find((body) => String(body.query).includes("createMediaUpload"));
+      expect(createRequest.variables.input.requirementKey).toBe("env:dining-room");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("logs a failed storage request without exposing the signed URL", async () => {
     const signedURL = "https://storage.test/inspection-private/object?X-Amz-Signature=sensitive";
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);

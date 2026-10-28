@@ -71,8 +71,13 @@ export function environmentListItems(requirements: Requirement[], answers: Answe
   return requirements.filter((item) => item.key.startsWith("env:")).map((item) => {
     const state = requirementState(item, answers, drafts);
     const environment = environments.find((entry) => entry.requirementKey === item.key);
-    return { key: item.key, label: item.environmentName || item.instructions || "Ambiente", status: state === "complete" ? "Concluído" : state === "pending" ? "Envio pendente" : "Pendente", added: environment ? addedEnvironmentLabel(environment) : undefined, hasWarning: Boolean(warnings[item.key]?.length) };
+    return { key: item.key, label: item.environmentName || environment?.name || environmentTypeLabel(item.label) || item.label || environmentTypeLabel(item.environmentTypeCode) || item.instructions || "Ambiente", status: state === "complete" ? "Concluído" : state === "pending" ? "Envio pendente" : "Pendente", added: environment ? addedEnvironmentLabel(environment) : undefined, hasWarning: Boolean(warnings[item.key]?.length) };
   });
+}
+
+export function environmentTypeLabel(typeCode: string | null | undefined): string | undefined {
+  if (!typeCode) return undefined;
+  return ENVIRONMENT_TYPES.find(([code]) => code === typeCode)?.[1];
 }
 
 export function captureReviewURL(handoff: { inspectionId: string; originVersionId: string | null } | null | undefined, dashboardURL: string): string | undefined {
@@ -84,4 +89,3 @@ export function captureReviewURL(handoff: { inspectionId: string; originVersionI
 export function captureReviewPresentation(handoff: { inspectionId: string; originVersionId: string | null } | null | undefined, dashboardURL: string): { href?: string; preparing: boolean } {
   return { href: captureReviewURL(handoff, dashboardURL), preparing: Boolean(handoff && !handoff.originVersionId) };
 }
-

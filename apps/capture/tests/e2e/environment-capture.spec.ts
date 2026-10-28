@@ -74,7 +74,7 @@ async function uploadPhoto(page: import("@playwright/test").Page, name: string, 
     await page.getByRole("button", { name: "Continuar mesmo assim", exact: true }).click();
   }
   await expect(page.getByRole("heading", { name: "Envios" })).toBeVisible();
-  await expect(page.getByText(/\d+ pronta\(s\) · 0 pendente\(s\)/)).toBeVisible();
+  await expect(page.getByText(/\d+ concluído(?:s)? · 0 pendentes/)).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`${name}.*Concluído`) })).toBeVisible();
 }
 

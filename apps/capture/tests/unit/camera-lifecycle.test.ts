@@ -43,7 +43,9 @@ describe("camera lifecycle helpers", () => {
     expect(captureErrorMessage(new DOMException("x", "NotFoundError"))).toBe("Nenhuma câmera disponível neste dispositivo.");
     expect(captureErrorMessage(new DOMException("x", "OverconstrainedError"))).toBe("Nenhuma câmera disponível neste dispositivo.");
     expect(captureErrorMessage(new DOMException("x", "QuotaExceededError"))).toMatch(/sem espaço/);
-    expect(captureErrorMessage(new Error("outra falha"))).toBe("outra falha");
+    expect(captureErrorMessage(new Error("INTERNAL_SERVER_ERROR: recorder failed"))).toMatch(/Revise a gravação/);
+    expect(captureErrorMessage(new Error("O vídeo excede o limite. Grave novamente."))).toBe("O vídeo excede o limite. Grave novamente.");
+    expect(captureErrorMessage(new Error("environment requirement is required"))).toContain("O ambiente escolhido não está disponível");
   });
 
   it("requests and releases the screen wake lock when available", async () => {
