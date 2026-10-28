@@ -976,6 +976,7 @@ func (r *mutationResolver) InviteOriginCapture(ctx context.Context, input graphq
 	return &graphql1.OriginInvitationPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// ActivateOriginVersion is the resolver for the activateOriginVersion field.
 func (r *mutationResolver) ActivateOriginVersion(ctx context.Context, input graphql1.OriginVersionInput) (*graphql1.OriginVersionPayload, error) {
 	return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
 }
@@ -1005,10 +1006,6 @@ func (r *mutationResolver) InvalidateOriginVersion(ctx context.Context, input gr
 // CloseOriginInvitation is the resolver for the closeOriginInvitation field.
 func (r *mutationResolver) CloseOriginInvitation(ctx context.Context, input graphql1.CloseOriginInvitationInput) (*graphql1.OriginVersionPayload, error) {
 	return &graphql1.OriginVersionPayload{UserErrors: []*graphql1.UserError{originUnavailableError()}, ClientMutationID: input.ClientMutationID}, nil
-}
-
-func originUnavailableError() *graphql1.UserError {
-	return &graphql1.UserError{Code: string(apperror.InvalidState), Message: "Recurso indisponível."}
 }
 
 // PromoteInspectionPhotos is the resolver for the promoteInspectionPhotos field.

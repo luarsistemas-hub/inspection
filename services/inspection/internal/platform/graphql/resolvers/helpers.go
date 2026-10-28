@@ -34,6 +34,10 @@ func unauthenticated() error {
 	return apperror.New(apperror.Unauthenticated, "", "authentication required")
 }
 
+func originUnavailableError() *graphql1.UserError {
+	return &graphql1.UserError{Code: string(apperror.InvalidState), Message: "Recurso indisponível."}
+}
+
 func parsePlannedStages(inputs []*graphql1.PlannedProjectStageInput) ([]projectcore.PlannedStageInput, error) {
 	stages := make([]projectcore.PlannedStageInput, 0, len(inputs))
 	for _, input := range inputs {
