@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
 import type { CaptureDraft } from "@/pwa/drafts";
-import { addedEnvironmentLabel, captureReviewPresentation, duplicateEnvironmentHint, environmentListItems, environmentProgress, isDuplicateEnvironment, validateEnvironmentName } from "@/pwa/environment-flow";
+import { addedEnvironmentLabel, captureReviewPresentation, duplicateEnvironmentHint, environmentListItems, environmentProgress, isDuplicateEnvironment, nextEnvironmentAfterSave, validateEnvironmentName } from "@/pwa/environment-flow";
 import { analyzeLumaPixels, clipIsTooShort, clipQualityWarnings, dismissQualityWarnings, failOpenQuality, photoQualityWarnings, setQualityWarnings, submitFailOpen } from "@/pwa/quality";
 import { mergeUploadedAnswer } from "@/pwa/capture-policy";
 import { readyForSubmission } from "@/pwa/drafts";
@@ -39,6 +39,30 @@ it("counts resolved environments once when server answers and multiple local pho
   const localPhotos = [draft(requirement.key, true), draft(requirement.key, true), draft(requirement.key, true)].map((photo, index) => ({ ...photo, id: `photo-${index}`, mediaId: `media-${index + 1}` }));
 
   expect(environmentProgress([requirement], [answer], localPhotos)).toMatchObject({ completed: 1, total: 1, pending: [] });
+});
+
+it("selects the next locally incomplete environment, including offline drafts", () => {
+  const requirements = [req("env:sala", "Sala"), req("env:cozinha", "Cozinha"), req("env:quarto", "Quarto"), req("env:banheiro", "Banheiro")];
+  const localDrafts = [draft("env:sala", false), draft("env:cozinha", false), draft("env:cozinha", false), draft("env:quarto", false)].map((item, index) => ({ ...item, id: `local-${index}`, metadata: { ...item.metadata, requirementKey: ["env:sala", "env:cozinha", "env:cozinha", "env:quarto"][index] } }));
+
+  expect(nextEnvironmentAfterSave(requirements, [], localDrafts, "env:sala")?.key).toBe("env:banheiro");
+});
+
+it("selects the next pending environment for an online capture", () => {
+  const requirements = [req("env:atual", "Atual"), req("env:proximo", "Próximo")];
+  expect(nextEnvironmentAfterSave(requirements, [], [], "env:atual")?.key).toBe("env:proximo");
+});
+
+it("skips impossible environments", () => {
+  const requirements = [req("env:atual", "Atual"), req("env:impossivel", "Impossível"), req("env:feito", "Feito")];
+  const impossible: Answer = { requirementKey: "env:impossivel", mediaIds: [], impossibilityReason: "LOCKED", version: 1 };
+  expect(nextEnvironmentAfterSave(requirements, [impossible], [draft("env:feito", false)], "env:atual")).toBeUndefined();
+  expect(nextEnvironmentAfterSave(requirements, [], [draft("env:feito", false)], "env:atual")?.key).toBe("env:impossivel");
+});
+
+it("returns no next environment when every other environment is complete", () => {
+  const requirements = [req("env:atual", "Atual"), req("env:feito", "Feito")];
+  expect(nextEnvironmentAfterSave(requirements, [], [draft("env:feito", false)], "env:atual")).toBeUndefined();
 });
 
 it("UT-331 Outro validation rejects whitespace-only names", () => {

@@ -10,7 +10,7 @@ import { type CaptureDraft, digest, hasDuplicateDraft, isReadyCaptureDraft, load
 import { getCaptureLocation, MAX_GPS_ACCURACY_METERS } from "@/pwa/capture-location";
 import { prepareCaptureImage } from "@/pwa/prepare-image";
 import { analyzeCapturePhoto, dismissQualityWarnings, failOpenQuality, loadQualityState, photoQualityWarnings, saveQualityState, setQualityWarnings as replaceQualityWarnings, submitFailOpen, type CaptureQualityCode } from "@/pwa/quality";
-import { IMPOSSIBILITY_REASONS, impossibilityReasonLabel, environmentProgress, environmentListItems, duplicateEnvironmentHint, unresolvedEnvironmentNames } from "@/pwa/environment-flow";
+import { IMPOSSIBILITY_REASONS, impossibilityReasonLabel, environmentProgress, environmentListItems, duplicateEnvironmentHint, unresolvedEnvironmentNames, nextEnvironmentAfterSave } from "@/pwa/environment-flow";
 import { type UploadProgress, uploadDraft } from "@/pwa/uploads";
 import { throwOnUserErrors } from "@/pwa/mutation-errors";
 import { buildImpossibilityInput, createDraftResumeGuard, isBlockedMediaStatus, isGalleryAllowed, isTerminalBootstrapStatus, mergeUploadedAnswer, requirementsSatisfied, updateImpossibleAnswer } from "@/pwa/capture-policy";
@@ -21,6 +21,7 @@ import { PhotoComparison } from "./photo-comparison";
 import { VideoCapture } from "./video-capture";
 import { EnvironmentDeclaration } from "./environment-declaration";
 import { ReviewHandoff } from "./review-handoff";
+import { PhotoCamera } from "./photo-camera";
 
 type Props = { params: Promise<{ linkToken: string }> };
 type Stage = "otp" | "consent" | "capture" | "review" | "confirmation" | "unavailable";
@@ -45,13 +46,21 @@ export default function CapturePage({ params }: Props) {
   const [qualityWarnings, setQualityWarnings] = useState<Record<string, CaptureQualityCode[]>>({});
   const [dismissedWarnings, setDismissedWarnings] = useState<Record<string, CaptureQualityCode[]>>({});
   const [locating, setLocating] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraToast, setCameraToast] = useState<{ title: string; text?: string; tone?: "success" | "warning"; action?: { label: string; onPress: () => void } }>();
+  const [savedCameraDraftSignal, setSavedCameraDraftSignal] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const cameraOpenerRef = useRef<HTMLButtonElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const activeResumes = useRef(createDraftResumeGuard());
   const submitPending = useRef(false);
+  const savedCameraDraft = useRef<{ draftId: string; key: string } | undefined>(undefined);
+  const closeCamera = (review = false) => { setCameraOpen(false); if (!review) requestAnimationFrame(() => cameraOpenerRef.current?.focus()); };
+  const cameraToastTimer = useRef<number | undefined>(undefined);
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgress>>({});
   const refresh = async (scope = responsibilityId): Promise<CaptureDraft[]> => { if (!scope) return []; const loaded = await loadDraftsForResponsibility(scope); setDrafts(loaded); return loaded; };
   const pending = useMemo(() => drafts.filter((draft) => !isBlockedMediaStatus(draft.mediaStatus) && !isReadyCaptureDraft(draft)).length, [drafts]);
+  const environmentRequirements = requirements.filter((requirement) => requirement.key.startsWith("env:"));
   const applyBootstrap = (external: ExternalCaptureBootstrapQuery["externalCapture"]) => { setResponsibilityId(external.responsibilityId); const savedQuality = loadQualityState(external.responsibilityId); setQualityWarnings(savedQuality.warnings); setDismissedWarnings(savedQuality.dismissed); setRecaptureRequestId(external.recaptureRequestId ?? undefined); setRecaptureDeadlineAt(external.recaptureDeadlineAt ?? external.replacementDeadlineAt ?? undefined); setKind(external.kind); setMediaKind(external.mediaKind); setCaptureLayout(external.captureLayout ?? null); setEnvironments(external.environments ?? []); setReviewHandoff(external.reviewHandoff ?? undefined); setConfirmationOnly(external.confirmationOnly); setDisclosureVersion(external.disclosureVersion); setPolicy(external.policy); setRequirements(external.requirements); setAnswers(external.answers ?? []); setReferenceItems(external.referenceItems ?? []); setComparisonMode(typeof external.reference === "object" && external.reference !== null && "comparisonMode" in external.reference ? String(external.reference.comparisonMode) : ""); return external; };
   const loadBootstrap = async () => { const bootstrap = await graphql(captureOperations.bootstrap); return applyBootstrap(bootstrap.externalCapture); };
   const returnToReauthentication = (error: unknown): boolean => {
@@ -70,6 +79,36 @@ export default function CapturePage({ params }: Props) {
     const timeout = window.setTimeout(() => setNotice((current) => current === notice ? "" : current), 3000);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) return;
+    const previous = meta.content;
+    meta.content = "#0b1118";
+    return () => { meta.content = previous; };
+  }, [cameraOpen]);
+  useEffect(() => {
+    const pendingSave = savedCameraDraft.current;
+    if (!pendingSave || preview || !drafts.some((draft) => draft.id === pendingSave.draftId)) return;
+    savedCameraDraft.current = undefined;
+    const requirement = environmentRequirements.find((item) => item.key === pendingSave.key);
+    if (!requirement) return;
+    const label = requirement.environmentName || requirement.label;
+    const count = mediaCountForRequirement(pendingSave.key, answers, drafts);
+    const minimum = requirement.minimumMedia;
+    const next = nextEnvironmentAfterSave(environmentRequirements, answers, drafts, pendingSave.key);
+    let text = count < minimum ? (minimum - count === 1 ? "Falta 1 foto neste ambiente" : `Faltam ${minimum - count} fotos neste ambiente`) : next ? `Próximo: ${next.environmentName || next.label}` : "Todos os ambientes têm fotos";
+    if (!online) { text = "Sem conexão: enviaremos quando a internet voltar"; setNotice(""); }
+    if (count >= minimum && next) selectRequirement(next.key, true);
+    const action = count >= minimum && !next ? { label: "Revisar vistoria", onPress: () => { closeCamera(true); setStage("review"); } } : undefined;
+    setCameraToast({ title: `Foto salva · ${label}`, text, tone: "success", action });
+  }, [drafts, answers, preview, savedCameraDraftSignal, online, environmentRequirements]);
+  useEffect(() => {
+    if (!cameraToast) return;
+    if (cameraToastTimer.current !== undefined) window.clearTimeout(cameraToastTimer.current);
+    cameraToastTimer.current = window.setTimeout(() => setCameraToast(undefined), 5000);
+    return () => { if (cameraToastTimer.current !== undefined) window.clearTimeout(cameraToastTimer.current); };
+  }, [cameraToast]);
 
   const selectRequirement = (key: string, afterConfirmation = false) => { if (preview && !afterConfirmation) return setNotice("Confirme a prévia ou tire a foto novamente antes de mudar de etapa."); setReferencePickerOpen(false); setSelected(key); setDescription(""); setDescriptionOpen(false); setReason(""); setReasonOpen(false); setExpandedReference(false); setNotice(""); };
   const retryReference = async (key: string, previousURL?: string) => { setReferenceLoading(true); setFailedReferences((current) => current.filter((item) => item !== key)); try { const external = await loadBootstrap(); const refreshed = external.referenceItems.find((item) => item.requirementKey === key); if (!refreshed?.imageUrl || refreshed.imageUrl === previousURL) setFailedReferences((current) => [...current, key]); } catch (error) { if (!returnToReauthentication(error)) setFailedReferences((current) => [...current, key]); } finally { setReferenceLoading(false); } };
@@ -79,30 +118,30 @@ export default function CapturePage({ params }: Props) {
   const accept = async () => { if (busy) return; if (!disclosureVersion || !(mediaKind === "VIDEO" ? consentChoices.videoProcessing : consentChoices.photoProcessing) || !consentChoices.aiAnalysis || !consentChoices.gpsUse) return setNotice("Confirme todas as opções da divulgação para continuar."); setBusy(true); try { const consent = await graphql(captureOperations.accept, { input: { disclosureVersion, ...consentChoices, clientMutationId: mutationID() } }); throwOnUserErrors(consent.acceptProcessing); if (confirmationOnly) { await removeDraftsForResponsibility(responsibilityId); setStage("confirmation"); return; } const external = await loadBootstrap(); if (external.mediaKind === "VIDEO") { setStage("capture"); return; } const loaded = await refresh(external.responsibilityId); const references = guidedRequirements(external.requirements); const firstOpen = references.find((item) => requirementState(item, external.answers ?? [], loaded) !== "complete"); setSelected(firstOpen?.key ?? references[0]?.key ?? external.requirements[0]?.key ?? ""); setStage("capture"); } catch (error) { if (!returnToReauthentication(error)) { try { const current = await loadBootstrap(); if (isTerminalBootstrapStatus(current.status)) { clearCaptureCsrfToken(); clearCaptureLinkToken(); setStage("unavailable"); setNotice("Este convite não está mais disponível. As mídias salvas neste dispositivo foram preservadas para uma eventual reautenticação."); return; } } catch (reconcileError) { if (returnToReauthentication(reconcileError)) return; } setNotice(presentCaptureError(error, "Não foi possível liberar esta vistoria. Confira sua conexão e tente novamente.")); } } finally { setBusy(false); } };
   const decline = async () => { if (busy) return; setBusy(true); try { const result = await graphql(captureOperations.revoke, { input: { linkToken: token, clientMutationId: mutationID() } }); if (result.revokeInvitation.userErrors[0]) throw new Error(result.revokeInvitation.userErrors[0].message); setNotice("Este convite foi recusado e não está mais disponível."); } catch { setNotice("Este convite não está disponível. Solicite um novo link."); } finally { clearCaptureCsrfToken(); clearCaptureLinkToken(); setStage("unavailable"); setBusy(false); } };
   const resume = async (draft: CaptureDraft, advance = false) => { if (busy || !activeResumes.current.start(draft.id)) return; if (!online) { activeResumes.current.finish(draft.id); return setNotice("Conecte-se para retomar o envio."); } setBusy(true); setUploadingDraftId(draft.id); try { const uploaded = await uploadDraft(draft, (progress) => setUploadProgress((current) => ({ ...current, [draft.id]: progress }))); if (!uploaded.mediaId) throw new Error("A API não retornou a mídia de upload."); const mediaId = uploaded.mediaId; const blocked = isBlockedMediaStatus(uploaded.mediaStatus); if (uploaded.replacesMediaId) { const local = await loadDraftsForResponsibility(uploaded.responsibilityId); await Promise.all(local.filter((item) => item.mediaId === uploaded.replacesMediaId).map((item) => removeDraft(item.id))); } const updatedAnswers = mergeUploadedAnswer(answers, uploaded.metadata.requirementKey, mediaId, blocked, uploaded.replacesMediaId); setAnswers(updatedAnswers); const loaded = await refresh(); if (advance && !blocked) { const next = nextGuidedRequirement(guidedRequirements(requirements), uploaded.metadata.requirementKey, updatedAnswers, loaded); if (next) selectRequirement(next, true); } setNotice(blocked ? "A imagem foi bloqueada e não poderá ser enviada nesta vistoria. Tire outra foto ou aguarde a revisão do gestor." : "Foto salva. Continue com a próxima referência."); } catch (error) { if (!returnToReauthentication(error)) setNotice(presentUploadFailure(error)); } finally { activeResumes.current.finish(draft.id); setUploadingDraftId(undefined); setBusy(false); } };
-  const commitFile = async (file: File, requirementKey: string, capturedAt: string, sourceSha256: string, imageProfile: string, source: "camera" | "gallery", replacesMediaId?: string, replacesDraftId?: string): Promise<boolean> => {
+  const commitFile = async (file: File, requirementKey: string, capturedAt: string, sourceSha256: string, imageProfile: string, source: "camera" | "gallery", replacesMediaId?: string, replacesDraftId?: string): Promise<CaptureDraft | undefined> => {
     const requirement = requirements.find((item) => item.key === requirementKey);
-    if (!requirement || !responsibilityId) return false;
+    if (!requirement || !responsibilityId) return undefined;
     const replaceable = drafts.find((draft) => draft.id === replacesDraftId);
     if (!replacesMediaId && !replacesDraftId && mediaCountForRequirement(requirementKey, answers, drafts) >= requirement.maximumMedia) {
-      setNotice(`Este requisito permite no máximo ${requirement.maximumMedia} mídia(s).`); return false;
+      setNotice(`Este requisito permite no máximo ${requirement.maximumMedia} mídia(s).`); return undefined;
     }
     setBusy(true);
     try {
       const sha256 = await digest(file);
       const duplicate = hasDuplicateDraft(requirementKey, sourceSha256, drafts) || hasDuplicateDraft(requirementKey, sha256, drafts);
-      if (duplicate && replaceable?.sha256 !== sha256 && replaceable?.sourceSha256 !== sourceSha256) { setNotice("Esta é a mesma imagem já enviada para este requisito. Tire ou selecione uma foto diferente."); return false; }
+      if (duplicate && replaceable?.sha256 !== sha256 && replaceable?.sourceSha256 !== sourceSha256) { setNotice("Esta é a mesma imagem já enviada para este requisito. Tire ou selecione uma foto diferente."); return undefined; }
       let gps: CaptureDraft["metadata"]["gps"];
       if (consentChoices.gpsUse) {
         setLocating(true);
         try {
           const location = await getCaptureLocation(capturedAt);
           gps = location.gps;
-          if (policy.gpsRequired === true && location.failure) { setNotice(presentCaptureLocationFailure(location.failure)); return false; }
+          if (policy.gpsRequired === true && location.failure) { setNotice(presentCaptureLocationFailure(location.failure)); return undefined; }
         } finally { setLocating(false); }
       }
       if (policy.gpsRequired === true) {
-        if (!gps) { setNotice(presentCaptureLocationFailure("unavailable")); return false; }
-        if (gps.accuracyMeters > MAX_GPS_ACCURACY_METERS) { setNotice(presentCaptureLocationAccuracy(gps.accuracyMeters)); return false; }
+        if (!gps) { setNotice(presentCaptureLocationFailure("unavailable")); return undefined; }
+        if (gps.accuracyMeters > MAX_GPS_ACCURACY_METERS) { setNotice(presentCaptureLocationAccuracy(gps.accuracyMeters)); return undefined; }
       }
       const deviceContext = { userAgent: navigator.userAgent, platform: navigator.platform, language: navigator.language };
       const draft: CaptureDraft = { id: mutationID(), responsibilityId, blob: new Blob([await file.arrayBuffer()], { type: file.type }), sha256, sourceSha256, imageProfile, parts: [], metadataSaved: false, replacesMediaId, replacesDraftId, metadata: { requirementKey, description, source, capturedAt, gps, deviceContext } };
@@ -116,13 +155,12 @@ export default function CapturePage({ params }: Props) {
         if (next) selectRequirement(next, true);
         setNotice("Foto salva neste dispositivo. Envio pendente até voltar a conexão.");
       }
-      return true;
-    } catch (error) { setNotice(presentDraftPersistenceFailure(error)); return false; }
+      return draft;
+    } catch (error) { setNotice(presentDraftPersistenceFailure(error)); return undefined; }
     finally { setBusy(false); }
   };
-  const addFile = async (event: ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "camera") => {
-    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    if (source === "gallery" && !isGalleryAllowed(policy, requirements.find((requirement) => requirement.key === selected))) return setNotice("A galeria não está disponível para este requisito. Use a câmera permitida.");
+  const preparePhoto = async (file: File, source: "camera" | "gallery", requirementKey = selected) => {
+    if (source === "gallery" && !isGalleryAllowed(policy, requirements.find((requirement) => requirement.key === requirementKey))) return setNotice("A galeria não está disponível para este requisito. Use a câmera permitida.");
     if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type) || file.size > 20 * 1024 * 1024) return setNotice("Use JPEG, PNG, WebP, HEIC ou HEIF de até 20 MB.");
     setBusy(true);
     try {
@@ -130,23 +168,27 @@ export default function CapturePage({ params }: Props) {
       const prepared = process.env.NEXT_PUBLIC_CAPTURE_IMAGE_OPTIMIZATION === "true" ? await prepareCaptureImage(file) : { file, profile: "capture-optimization-disabled-v1" };
       // Quality warnings are part of the environment-guided flow only; v1 capture keeps its original feedback.
       const analysis = captureLayout === "ENVIRONMENTS" ? await failOpenQuality(() => analyzeCapturePhoto(prepared.file)) : undefined;
-      setDismissedWarnings((current) => { const next = { ...current }; delete next[selected]; return next; });
-      const warningCodes = analysis ? photoQualityWarnings(analysis, mediaCountForRequirement(selected, answers, drafts) + 1, requirements.find((item) => item.key === selected)?.minimumMedia ?? 1) : [];
-      setQualityWarnings((current) => replaceQualityWarnings(current, selected, warningCodes));
-      const dismissed = { ...dismissedWarnings }; delete dismissed[selected];
-      saveQualityState(responsibilityId, { warnings: { ...qualityWarnings, [selected]: warningCodes }, dismissed });
+      const warningCodes = analysis ? photoQualityWarnings(analysis, mediaCountForRequirement(requirementKey, answers, drafts) + 1, requirements.find((item) => item.key === requirementKey)?.minimumMedia ?? 1) : [];
+      if (captureLayout === "ENVIRONMENTS" && requirementKey !== selected) return;
+      setDismissedWarnings((current) => { const next = { ...current }; delete next[requirementKey]; return next; });
+      setQualityWarnings((current) => replaceQualityWarnings(current, requirementKey, warningCodes));
+      const dismissed = { ...dismissedWarnings }; delete dismissed[requirementKey];
+      saveQualityState(responsibilityId, { warnings: { ...qualityWarnings, [requirementKey]: warningCodes }, dismissed });
       if (preview) URL.revokeObjectURL(preview.url);
-      const replaceable = selectedDraft;
-      const answeredMediaId = [...(selectedAnswer?.mediaIds ?? [])].reverse().find((mediaId) => !drafts.some((draft) => draft.mediaId === mediaId && isBlockedMediaStatus(draft.mediaStatus)));
+      const replaceable = requirementKey === selected ? selectedDraft : drafts.filter((draft) => draft.metadata.requirementKey === requirementKey && !isBlockedMediaStatus(draft.mediaStatus)).sort((left, right) => Date.parse(right.metadata.capturedAt) - Date.parse(left.metadata.capturedAt))[0];
+      const requirementAnswer = requirementKey === selected ? selectedAnswer : answers.find((answer) => answer.requirementKey === requirementKey);
+      const answeredMediaId = [...(requirementAnswer?.mediaIds ?? [])].reverse().find((mediaId) => !drafts.some((draft) => draft.mediaId === mediaId && isBlockedMediaStatus(draft.mediaStatus)));
       const replacesMediaId = captureLayout === "ENVIRONMENTS" ? undefined : replaceable?.metadataSaved === true ? replaceable.mediaId : replaceable?.replacesMediaId ?? (!replaceable ? answeredMediaId : undefined);
       const replacesDraftId = captureLayout !== "ENVIRONMENTS" && replaceable && replaceable.metadataSaved !== true ? replaceable.id : undefined;
-      setPreview({ file: prepared.file, url: URL.createObjectURL(prepared.file), requirementKey: selected, capturedAt: new Date().toISOString(), sourceSha256, imageProfile: prepared.profile, source, replacesMediaId, replacesDraftId });
+      const url = URL.createObjectURL(prepared.file);
+      if (captureLayout === "ENVIRONMENTS" && requirementKey !== selected) { URL.revokeObjectURL(url); return; }
+      setPreview({ file: prepared.file, url, requirementKey, capturedAt: new Date().toISOString(), sourceSha256, imageProfile: prepared.profile, source, replacesMediaId, replacesDraftId });
       setNotice("");
     } catch (error) { setNotice(presentCaptureError(error, "Não foi possível preparar a foto. Tente escolher outra imagem.")); }
     finally { setBusy(false); }
   };
-  const confirmPreview = async () => { if (!preview || busy) return; setNotice(""); const current = preview; if (await commitFile(current.file, current.requirementKey, current.capturedAt, current.sourceSha256, current.imageProfile, current.source, current.replacesMediaId, current.replacesDraftId)) setPreview(undefined); };
-  const environmentRequirements = requirements.filter((requirement) => requirement.key.startsWith("env:"));
+  const addFile = async (event: ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "camera") => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; await preparePhoto(file, source); };
+  const confirmPreview = async (): Promise<CaptureDraft | undefined> => { if (!preview || busy) return undefined; setNotice(""); const current = preview; const saved = await commitFile(current.file, current.requirementKey, current.capturedAt, current.sourceSha256, current.imageProfile, current.source, current.replacesMediaId, current.replacesDraftId); if (saved) setPreview(undefined); return saved; };
   const environmentItems = environmentListItems(requirements, answers, drafts, environments, qualityWarnings);
   const allRequirementsSatisfied = requirementsSatisfied(requirements, answers, drafts) && (captureLayout !== "ENVIRONMENTS" || environmentRequirements.length > 0);
   const environmentSubmitBlocked = captureLayout === "ENVIRONMENTS" && !allRequirementsSatisfied;
@@ -268,9 +310,10 @@ export default function CapturePage({ params }: Props) {
         {expandedReference && selectedReference?.imageUrl && <Dialog isOpen onClose={() => setExpandedReference(false)} size="wide" title="Foto de referência ampliada"><div className="capture-image-overlay"><img src={selectedReference.imageUrl} alt={`Foto de referência ampliada: ${selectedReference.description || "ambiente"}`} /><p>{selectedReference.description}</p></div></Dialog>}
       </> : <><div className="capture-requirement-picker"><Field label="Requisito"><Select aria-label="Requisito" value={selected} onChange={(event) => selectRequirement(event.target.value)}>{requirements.map((requirement) => <option key={requirement.key} value={requirement.key}>{presentRequirementOption(requirement.section, requirement.label)}</option>)}</Select></Field></div>{selectedRequirement && <div className="capture-requirement-context"><h3>{presentRequirementLabel(selectedRequirement.label)}</h3>{selectedRequirement.instructions && <p>{selectedRequirement.instructions}</p>}<p className="capture-requirement-meta">{selectedRequirement.minimumMedia}–{selectedRequirement.maximumMedia} fotos · {booleanValue(policy.gpsRequired) ? "GPS obrigatório" : "GPS não obrigatório"}</p></div>}</>}
       <div className="capture-description-control"><Button className="capture-disclosure" variant="secondary" aria-expanded={descriptionOpen} onClick={() => setDescriptionOpen((open) => !open)}>{descriptionOpen ? "Ocultar descrição" : "Adicionar descrição"}</Button>{descriptionOpen && <Field hint="Escreva apenas se houver algo importante para registrar." label="Descrição da foto"><Textarea aria-label="Descrição da foto" value={description} onChange={(event) => setDescription(event.target.value)} /></Field>}</div>
-      {!guided && !preview && <><div className="capture-camera-action"><Button className="capture-camera-action__button" disabled={busy} onClick={() => cameraInputRef.current?.click()}>Tirar foto</Button><small>Use a câmera do dispositivo para registrar este requisito.</small><Input ref={cameraInputRef} className="capture-camera-input" aria-label="Tirar foto" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" disabled={busy} onChange={(event) => void addFile(event)} /></div>{isGalleryAllowed(policy, selectedRequirement) && <Button className="capture-gallery-action" variant="secondary" disabled={busy} onClick={() => galleryInputRef.current?.click()}>Escolher da galeria</Button>}</>}
+      {!guided && !preview && <><div className="capture-camera-action">{captureLayout === "ENVIRONMENTS" ? <><Button ref={cameraOpenerRef} className="capture-camera-action__button" disabled={busy || !selectedRequirement} onClick={() => setCameraOpen(true)}>Abrir câmera</Button><small>A câmera abre aqui mesmo. Na primeira vez, o navegador pede permissão.</small></> : <><Button className="capture-camera-action__button" disabled={busy} onClick={() => cameraInputRef.current?.click()}>Tirar foto</Button><small>Use a câmera do dispositivo para registrar este requisito.</small></>}{captureLayout !== "ENVIRONMENTS" && <Input ref={cameraInputRef} className="capture-camera-input" aria-label="Tirar foto" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" disabled={busy} onChange={(event) => void addFile(event)} />}</div>{isGalleryAllowed(policy, selectedRequirement) && <Button className="capture-gallery-action" variant="secondary" disabled={busy} onClick={() => galleryInputRef.current?.click()}>Escolher da galeria</Button>}</>}
+      {captureLayout === "ENVIRONMENTS" && <Input ref={cameraInputRef} className="capture-camera-input" aria-label="Tirar foto" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" disabled={busy} onChange={(event) => void addFile(event)} />}
       {!guided && <Input ref={galleryInputRef} className="capture-camera-input" aria-label="Escolher uma foto da galeria" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" disabled={busy || !isGalleryAllowed(policy, selectedRequirement)} onChange={(event) => void addFile(event, "gallery")} />}
-      {!guided && preview && <div className="capture-photo-preview-card"><img className="capture-photo-preview" src={preview.url} alt="Prévia da sua foto de comparação" /><div className="capture-preview-actions"><Button variant="secondary" disabled={busy} onClick={() => setPreview(undefined)}>Tirar novamente</Button><Button isPending={busy} pendingLabel={locating ? "Obtendo localização…" : "Salvando…"} onClick={() => void confirmPreview()}>Usar esta foto</Button></div></div>}
+      {!guided && preview && !(captureLayout === "ENVIRONMENTS" && cameraOpen) && <div className="capture-photo-preview-card"><img className="capture-photo-preview" src={preview.url} alt="Prévia da sua foto de comparação" /><div className="capture-preview-actions"><Button variant="secondary" disabled={busy} onClick={() => setPreview(undefined)}>Tirar novamente</Button><Button isPending={busy} pendingLabel={locating ? "Obtendo localização…" : "Salvando…"} onClick={() => void confirmPreview()}>Usar esta foto</Button></div></div>}
       {guided && preview && <details className="capture-photo-options"><summary>Mais opções</summary><Button className="capture-discard-photo" variant="text" disabled={busy} onClick={() => { setPreview(undefined); setNotice(""); }}>Descartar foto</Button></details>}
       {(!guided || !preview) && selectedRequirement?.impossibilityAllowed && <div className="capture-impossibility-control"><Button className="capture-disclosure capture-disclosure--quiet" variant="secondary" aria-expanded={reasonOpen} onClick={() => { setReasonOpen((open) => !open); if (!reasonOpen && savedReason) setReason(savedReason); }}>{savedReason ? "Editar justificativa" : "Não consegue fotografar?"}</Button>{savedReason && !reasonOpen && <p className="capture-saved-reason">Justificativa registrada: {savedReason}</p>}{reasonOpen && <div className="capture-reason-editor">{captureLayout === "ENVIRONMENTS" ? <><Field label="Motivo"><Select aria-label="Motivo da impossibilidade" value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>{IMPOSSIBILITY_REASONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</Select></Field><Field hint={reasonCode === "OTHER" ? "Explique o motivo para continuar." : "Opcional"} label="Detalhes"><Textarea aria-label="Detalhes da impossibilidade" value={reason} onChange={(event) => setReason(event.target.value)} /></Field></> : <Field hint="Informe por que este requisito não pode ser fotografado." label="Justificativa"><Textarea aria-label="Justificativa da impossibilidade" value={reason} onChange={(event) => setReason(event.target.value)} /></Field>}<Button isPending={busy} onClick={() => void impossible()}>{savedReason ? "Atualizar justificativa" : "Registrar impossibilidade"}</Button></div>}</div>}
       {(drafts.length > 0 || blockedDrafts > 0) && <div className="capture-media-status"><div className="capture-section-heading"><h3>Envios</h3><span>{readyDrafts} {readyDrafts === 1 ? "concluído" : "concluídos"} · {pending} {pending === 1 ? "pendente" : "pendentes"}</span></div>{drafts.length > 0 ? <ul>{drafts.map((draft) => { const progress = uploadProgress[draft.id]; const requirementLabel = presentRequirementLabel(requirements.find((requirement) => requirement.key === draft.metadata.requirementKey)?.label ?? draft.metadata.requirementKey); const mediaFeedback = isBlockedMediaStatus(draft.mediaStatus) ? presentMediaFeedback(draft.mediaStatus ?? "REJECTED") : undefined; return <li className="capture-media-item" key={draft.id}><span>{requirementLabel}: {mediaState(draft)}</span>{mediaFeedback && <div className={`capture-media-feedback capture-media-feedback--${mediaFeedback.tone}`} role="status"><strong>{mediaFeedback.title}</strong><p>{mediaFeedback.message}</p><p>{mediaFeedback.guidance}</p></div>}{progress && <div className="capture-media-progress"><progress value={progress.percent} max="100" aria-label={`Progresso do envio de ${requirementLabel}`} /><span className="capture-media-progress__status" role="status">{uploadProgressLabel(progress)}</span></div>}{!isBlockedMediaStatus(draft.mediaStatus) && !isReadyCaptureDraft(draft) && <Button variant="secondary" isPending={uploadingDraftId === draft.id} pendingLabel="Retomando envio…" disabled={!online || busy} onClick={() => void resume(draft)}>Retomar envio</Button>}</li>; })}</ul> : <p>Os envios aparecerão aqui após a primeira foto.</p>}</div>}
@@ -289,7 +332,7 @@ export default function CapturePage({ params }: Props) {
     {stage === "unavailable" && <Card className="capture-card capture-finish"><Status tone="warning">Acesso encerrado</Status><h2>Acesso indisponível</h2><p>{notice || "O aceite é necessário para continuar."}</p></Card>}
     {notice && stage !== "unavailable" && <Alert tone="warning">{notice}</Alert>}
     <p className="capture-privacy-note">{stage === "consent" ? "Link pessoal. Não compartilhe." : "Acesso pessoal vinculado ao convite. Não compartilhe este link."}</p>
-  </div></main>;
+  </div>{stage === "capture" && captureLayout === "ENVIRONMENTS" && mediaKind === "PHOTO" && cameraOpen && selectedRequirement && <PhotoCamera environmentLabel={selectedRequirement.environmentName || selectedRequirement.label} photoCount={mediaCountForRequirement(selected, answers, drafts)} minimumMedia={selectedRequirement.minimumMedia} maximumMedia={selectedRequirement.maximumMedia} instructions={selectedRequirement.instructions ?? undefined} items={environmentItems.map((item) => ({ key: item.key, label: item.label, done: item.status === "Concluído", current: item.key === selected, detail: `${mediaCountForRequirement(item.key, answers, drafts)}/${requirements.find((requirement) => requirement.key === item.key)?.minimumMedia ?? 1}` }))} onSelectItem={(key) => selectRequirement(key)} galleryAllowed={isGalleryAllowed(policy, selectedRequirement)} onGallery={() => galleryInputRef.current?.click()} onDeviceCamera={() => cameraInputRef.current?.click()} impossibilityAllowed={Boolean(selectedRequirement.impossibilityAllowed)} onImpossible={() => { closeCamera(); setReasonOpen(true); }} onClose={() => closeCamera()} onCapture={(file, requirementKey) => preparePhoto(file, "camera", requirementKey)} onCaptureError={(error) => setNotice(presentCaptureError(error, "Não foi possível capturar a foto. Tente de novo."))} preview={preview ? { url: preview.url, warnings: (qualityWarnings[selected] ?? []).filter((warning) => warning === "DARK" || warning === "BLURRY") } : undefined} onUsePreview={async () => { const saved = await confirmPreview(); if (saved) { savedCameraDraft.current = { draftId: saved.id, key: saved.metadata.requirementKey }; setSavedCameraDraftSignal((signal) => signal + 1); return true; } return false; }} onRetake={() => { setPreview(undefined); setNotice(""); }} busy={busy} locating={locating} statusPill={uploadingDraftId ? "uploading" : !online && pending > 0 ? "offline" : undefined} lastPhotoURL={savedPhotoURL} toast={notice && notice !== "Foto salva. Continue com a próxima referência." ? { title: notice, tone: "warning" } : cameraToast} notice={notice && notice !== "Foto salva. Continue com a próxima referência." ? notice : undefined} onDismissToast={() => { setNotice(""); setCameraToast(undefined); }} />}</main>;
 }
 
 function CaptureSteps({ current }: { current: number }) {

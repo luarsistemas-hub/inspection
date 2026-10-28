@@ -12,6 +12,7 @@ const findingCategories: Record<string, string> = { CONSERVATION: "Conservação
 export function presentAnalysisMode(value: string | null | undefined) { return analysisModes[value ?? ""] ?? "Modo não informado"; }
 export function presentAnalysisStatus(value: string | null | undefined) { return analysisStatuses[value ?? ""] ?? "Situação não informada"; }
 export function presentFindingCategory(value: string | null | undefined) { return findingCategories[value ?? ""] ?? "Categoria não reconhecida"; }
+export function presentFindingSeverity(value: string | null | undefined) { return ({ NONE: "Sem gravidade", LOW: "Baixa", MEDIUM: "Moderada", HIGH: "Alta", CRITICAL: "Crítica" } as Record<string, string>)[value ?? ""] ?? "Gravidade não informada"; }
 export function presentNoRelevantChange(value: boolean | null | undefined) { return value === null || value === undefined ? "Comparação inconclusiva" : value ? "Sem alteração relevante identificada" : "Alteração relevante identificada"; }
 export function presentNotificationChannel(value: string | null | undefined) { return ({ EMAIL: "E-mail", SMS: "SMS", WHATSAPP: "WhatsApp" } as Record<string, string>)[value ?? ""] ?? "Canal não reconhecido"; }
 export function presentProjectStage(value: string | null | undefined, key?: string | null) { return projectStages[key ?? ""] ?? projectStages[value ?? ""] ?? (value && /^[\u00C0-\u024F\s-]+$/.test(value) ? value : "Etapa da vistoria"); }

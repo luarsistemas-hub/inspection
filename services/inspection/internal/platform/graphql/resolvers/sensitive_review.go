@@ -30,7 +30,17 @@ func (r *queryResolver) attentionMediaID(ctx context.Context, tenantID, inspecti
 		ID string `gorm:"column:media_id"`
 	}
 	err := withTask06Tenant(ctx, r.DB, tenantID, func(tx *gorm.DB) error {
-		return tx.Table("analysis.video_plans vp").Select("vj.media_id").Joins("JOIN media.video_preparation_jobs vj ON vj.tenant_id=vp.tenant_id AND vj.id=vp.current_preparation_id").Where("vp.tenant_id=? AND vp.inspection_id=? AND vp.status='BLOCKED'", tenantID, inspectionID).Order("vp.created_at DESC").Limit(1).Scan(&media).Error
+		if err := tx.Session(&gorm.Session{NewDB: true}).Table("analysis.video_plans vp").Select("vj.media_id").
+			Joins("JOIN analysis.video_plan_preparations link ON link.tenant_id=vp.tenant_id AND link.plan_id=vp.id").
+			Joins("JOIN media.video_preparation_jobs vj ON vj.tenant_id=link.tenant_id AND vj.id=link.preparation_id").
+			Where("vp.tenant_id=? AND vp.inspection_id=? AND vp.status='BLOCKED' AND vj.status='FAILED'", tenantID, inspectionID).
+			Order("vp.created_at DESC, CASE WHEN link.role='MAIN' THEN 0 ELSE 1 END, link.created_at, vj.id").Limit(1).Scan(&media).Error; err != nil {
+			return err
+		}
+		if media.ID != "" {
+			return nil
+		}
+		return tx.Session(&gorm.Session{NewDB: true}).Table("analysis.video_plans vp").Select("vj.media_id").Joins("JOIN media.video_preparation_jobs vj ON vj.tenant_id=vp.tenant_id AND vj.id=vp.current_preparation_id").Where("vp.tenant_id=? AND vp.inspection_id=? AND vp.status='BLOCKED'", tenantID, inspectionID).Order("vp.created_at DESC").Limit(1).Scan(&media).Error
 	})
 	if err != nil || media.ID == "" {
 		return nil

@@ -10,6 +10,12 @@ export type DialogProps = { children: ReactNode; isOpen: boolean; onClose: () =>
 export function Dialog({ children, isOpen, onClose, title, size = "default", isDismissable = true, restoreFocusRef }: DialogProps) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement !== document.body && activeElement !== document.documentElement && !activeElement.closest(".inspection-backdrop, dialog[open]")) {
+      previousFocusRef.current = activeElement;
+    }
+  }
   useEffect(() => {
     const trackFocus = (event: FocusEvent) => {
       const target = event.target;

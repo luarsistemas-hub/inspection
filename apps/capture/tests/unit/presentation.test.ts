@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presentCaptureError, presentCaptureSource, presentCaptureStatus, presentMediaFeedback, presentMediaStatus, presentReplacementNotice, presentRequirementLabel, presentRequirementOption, presentRequirementSection, presentSubmissionBlock, presentUploadFailure, presentUploadProgress } from "../../app/capture/[linkToken]/presentation";
+import { presentCameraFailure, presentCaptureError, presentCaptureSource, presentCaptureStatus, presentMediaFeedback, presentMediaStatus, presentReplacementNotice, presentRequirementLabel, presentRequirementOption, presentRequirementSection, presentSubmissionBlock, presentUploadFailure, presentUploadProgress } from "../../app/capture/[linkToken]/presentation";
 
 describe("capture presenters", () => {
   it("localizes legacy requirements and dynamic states", () => {
@@ -37,6 +37,7 @@ describe("capture presenters", () => {
     expect(presentCaptureError(new Error("A localização não está disponível."), "Não foi possível salvar a foto.")).toBe("A localização não está disponível.");
     expect(presentCaptureError(new Error("invalid Área value"), "Não foi possível salvar a foto.")).toBe("Não foi possível salvar a foto.");
     expect(presentCaptureError(new Error("Image decoding is unavailable"), "Não foi possível preparar a foto.")).toContain("não conseguiu abrir a imagem");
+    expect(presentCaptureError(new Error("camera-frame-unavailable"), "Erro")).toBe("Não foi possível capturar a foto. Aguarde a imagem aparecer e tente de novo.");
     expect(presentUploadProgress({ phase: "preparing", percent: 0, completedParts: 0, totalParts: 1 })).toBe("Preparando envio");
     expect(presentUploadProgress({ phase: "complete", percent: 100, completedParts: 1, totalParts: 1 })).toBe("Envio concluído");
   });
@@ -45,6 +46,24 @@ describe("capture presenters", () => {
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 2, allRequirementsSatisfied: false })).toBe("2 imagens foram bloqueadas pela análise automática. Tire outras fotos ou aguarde a revisão do gestor.");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: false })).toContain("Ainda não há evidências válidas");
     expect(presentSubmissionBlock({ online: true, pending: 0, blocked: 0, allRequirementsSatisfied: true })).toBe("");
+  });
+});
+
+describe("camera failure presenter", () => {
+  it("presents actionable messages for every camera failure", () => {
+    expect(presentCameraFailure("denied", false)).toEqual({ title: "A câmera está bloqueada", message: "Permita o uso da câmera para este site: toque no cadeado ou em \"aA\" na barra de endereço, abra Configurações do site e escolha Permitir em Câmera. Depois toque em Tentar novamente." });
+    expect(presentCameraFailure("busy", false).title).toBe("A câmera está em uso");
+    expect(presentCameraFailure("unavailable", false).title).toBe("Não encontramos uma câmera disponível");
+    expect(presentCameraFailure("insecure", false).title).toBe("Conexão não segura");
+    expect(presentCameraFailure("unsupported", false).title).toBe("Este navegador não abre a câmera");
+    expect(presentCameraFailure("unknown", false).title).toBe("Não foi possível abrir a câmera");
+  });
+
+  it("directs embedded browser users to open the phone browser", () => {
+    expect(presentCameraFailure("denied", true)).toEqual({ title: "Abra no navegador do celular", message: "Este aplicativo não libera a câmera. Toque em ⋮ ou em Compartilhar e escolha Abrir no navegador." });
+    expect(presentCameraFailure("unsupported", true).title).toBe("Abra no navegador do celular");
+    expect(presentCameraFailure("unknown", true).title).toBe("Abra no navegador do celular");
+    expect(presentCameraFailure("busy", true).title).toBe("A câmera está em uso");
   });
 });
 

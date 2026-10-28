@@ -260,9 +260,26 @@ function InspectionForm({ onSubmit, options, busy, pinnedAssetId = "", pinnedVer
 
 function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; canPromoteOrigin: boolean; options: FormOptionsState }) {
   const [message, setMessage] = useState("Carregando detalhes da vistoria…"); const [detail, setDetail] = useState<InspectionDetailQuery["inspection"]>(); const detailRequest = useRef(0);
-  const [retryBusy, setRetryBusy] = useState(false); const [retryMessage, setRetryMessage] = useState(""); const [replacementMessage, setReplacementMessage] = useState(""); const [reloadKey, setReloadKey] = useState(0);
+  const [retryBusy, setRetryBusy] = useState(false); const [retryTracking, setRetryTracking] = useState(false); const [retryMessage, setRetryMessage] = useState(""); const [replacementMessage, setReplacementMessage] = useState(""); const [reloadKey, setReloadKey] = useState(0);
   const reloadDetail = () => setReloadKey((value) => value + 1);
   useEffect(() => { const request = ++detailRequest.current; setDetail(undefined); setMessage("Carregando detalhes da vistoria…"); void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => { if (request !== detailRequest.current) return; setDetail(data.inspection); setMessage(data.inspection ? "" : "Esta vistoria não está disponível neste contexto."); }).catch((error) => { if (request === detailRequest.current) setMessage((error as Error).message); }); }, [id, reloadKey]);
+  useEffect(() => {
+    if (!retryTracking) return;
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void graphql<InspectionDetailQuery, { id: string }>(InspectionDetailDocument, { id }).then((data) => {
+        if (!data.inspection) { setRetryTracking(false); setRetryMessage("Esta vistoria não está disponível neste contexto."); return; }
+        setDetail(data.inspection);
+        if (data.inspection.status !== "ANALYZING") {
+          setRetryTracking(false);
+          setRetryMessage(data.inspection.status === "COMPLETED" ? "Preparação concluída." : "A vistoria ainda precisa de atenção. Confira o estado atualizado.");
+        }
+      }).catch((error) => { setRetryTracking(false); setRetryMessage((error as Error).message); }).finally(() => { inFlight = false; });
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [id, retryTracking]);
   if (!detail) return <section className="inspection-workspace"><p role="status">{message}</p></section>;
   const assetName = detail.assetName?.trim() || "Imóvel indisponível";
   const participantName = detail.participantName?.trim() || "Responsável indisponível";
@@ -277,6 +294,7 @@ function InspectionWorkspace({ id, canPromoteOrigin, options }: { id: string; ca
       const result = await graphql(RetryInspectionVideoPreparationDocument, { input: { mediaId, expectedPreparationVersion: prep.videoPreparation.preparationVersion, clientMutationId: crypto.randomUUID() } });
       if (result.retryVideoPreparation.userErrors.length) throw new Error(result.retryVideoPreparation.userErrors.map((item) => item.message).join(" "));
       setRetryMessage("Nova tentativa de preparação iniciada.");
+      setRetryTracking(true);
       reloadDetail();
     } catch (error) { setRetryMessage((error as Error).message || "Não foi possível repetir a preparação."); }
     finally { setRetryBusy(false); }

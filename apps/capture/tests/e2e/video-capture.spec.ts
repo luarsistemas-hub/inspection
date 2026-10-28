@@ -40,6 +40,45 @@ test("IT-088 / IT-099 shows the current-only baseline explanation without reques
   expect(referenceRequests).toEqual([]);
 });
 
+test("câmera de vídeo em ambientes mantém a faixa desabilitada durante a gravação", async ({ page }) => {
+  await installFakeGetUserMedia(page, { kind: "canvas", width: 640, height: 480 });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.route("**/graphql", async (route) => {
+    const { query = "" } = JSON.parse(route.request().postData() ?? "{}") as { query?: string };
+    const respond = (data: unknown) => route.fulfill({ json: { data } });
+    if (query.includes("requestInvitationOtp")) return respond({ requestInvitationOtp: { status: "SENT", userErrors: [] } });
+    if (query.includes("verifyInvitationOtp")) return respond({ verifyInvitationOtp: { status: "VERIFIED", csrfToken: "csrf", expiresAt: "2099-01-01T00:00:00Z", userErrors: [] } });
+    if (query.includes("externalCapture")) return respond({ externalCapture: {
+      responsibilityId: "environment-video-camera", recaptureRequestId: null, status: "OPEN", confirmationOnly: false,
+      kind: "INSPECTION", mediaKind: "VIDEO", disclosureVersion: "video-v1", captureLayout: "ENVIRONMENTS",
+      reference: { comparisonMode: "CHECKLIST_ONLY", mediaKind: "VIDEO" }, referenceItems: [],
+      policy: { allowGallery: false, maxDurationSeconds: 10 },
+      requirements: ["Sala", "Cozinha"].map((name, index) => ({ key: `env:${index}`, section: "ambientes", label: name, environmentName: name, instructions: name, required: true, minimumMedia: 1, maximumMedia: 3, descriptionRequired: false, captureSourcePolicy: "CAMERA_ONLY", comparisonTarget: "CHECKLIST_ONLY", impossibilityAllowed: false })),
+      environments: [], answers: [],
+    } });
+    if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
+    if (query.includes("beginVideoCapture")) return respond({ beginVideoCapture: { attempt: { id: "environment-attempt", kind: "CURRENT", acquisitionSource: "CAMERA", maxDurationSeconds: 10, maxBytes: 10485760, policyVersion: 1, admittedAt: "2026-10-27T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z", status: "ACTIVE" }, userErrors: [] } });
+    throw new Error(`Operação inesperada: ${query.slice(0, 80)}`);
+  });
+  await page.goto("/capture/environment-video-camera");
+  await page.getByLabel("Código de seis dígitos").fill("123456");
+  await page.getByRole("button", { name: "Confirmar código" }).click();
+  await page.getByLabel("Processamento do vídeo e imagens derivadas").check();
+  await page.getByLabel("Análise por inteligência artificial").check();
+  await page.getByLabel("Localização quando necessária").check();
+  await page.getByRole("button", { name: "Aceitar e continuar" }).click();
+  await page.getByRole("button", { name: "Abrir câmera" }).click();
+  const stage = page.getByRole("dialog", { name: "Câmera de vídeo · Sala" });
+  await expect(stage.getByRole("group", { name: "Ambientes da vistoria" }).getByRole("button", { name: /Sala/ })).toBeEnabled();
+  const activatePreview = stage.getByRole("button", { name: "Ativar prévia" });
+  if (await activatePreview.isVisible()) await activatePreview.click();
+  await expect(stage.getByRole("button", { name: "Iniciar gravação" })).toBeEnabled();
+  await stage.getByRole("button", { name: "Iniciar gravação" }).click();
+  await expect(stage.getByRole("timer")).toContainText("00:00 / 00:10");
+  await expect(stage.getByRole("group", { name: "Ambientes da vistoria" }).getByRole("button", { name: /Sala/ })).toBeDisabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("IT-223 shows the requested video item, reason, deadline and origin frame to the participant", async ({ page }) => {
   await page.route("**/graphql", async (route) => {
     const { query = "" } = JSON.parse(route.request().postData() ?? "{}") as { query?: string };
@@ -161,9 +200,10 @@ test("@camera-focus E2E-008 records, previews and submits one continuous video (
   expect(recorderAdmissions).toBe(0);
   await page.setViewportSize({ width: 320, height: 720 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const buttonHeights = await page.locator(".capture-camera-controls button").evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+  const buttonHeights = await page.locator(".camera-stage__controls button").evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+  expect(buttonHeights.length).toBeGreaterThan(0);
   expect(buttonHeights.every((height) => height >= 48)).toBe(true);
-  const accessibility = await new AxeBuilder({ page: page as never }).include(".capture-camera-card").analyze();
+  const accessibility = await new AxeBuilder({ page: page as never }).include(".camera-stage").analyze();
   expect(accessibility.violations).toEqual([]);
   await page.setViewportSize({ width: 844, height: 390 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

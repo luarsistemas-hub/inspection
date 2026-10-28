@@ -1,5 +1,5 @@
 import type { ExternalCaptureBootstrapQuery } from "@/graphql/generated";
-import type { CaptureDraft } from "./drafts";
+import { mediaCountForRequirement, type CaptureDraft } from "./drafts";
 import { requirementState } from "./guided-flow";
 
 type Requirement = ExternalCaptureBootstrapQuery["externalCapture"]["requirements"][number];
@@ -26,6 +26,13 @@ export function impossibilityReasonLabel(code: string): string {
 export function environmentProgress(requirements: Requirement[], answers: Answer[], drafts: CaptureDraft[]) {
   const completed = requirements.filter((item) => requirementState(item, answers, drafts) === "complete").length;
   return { completed, total: requirements.length, pending: requirements.filter((item) => requirementState(item, answers, drafts) !== "complete") };
+}
+
+/** Finds the next incomplete, possible environment using local and server media counts. */
+export function nextEnvironmentAfterSave(requirements: Requirement[], answers: Answer[], drafts: CaptureDraft[], currentKey: string): Requirement | undefined {
+  return requirements.find((item) => item.key.startsWith("env:") && item.key !== currentKey
+    && !answers.find((answer) => answer.requirementKey === item.key)?.impossibilityReason
+    && mediaCountForRequirement(item.key, answers, drafts) < item.minimumMedia);
 }
 
 export function validateEnvironmentName(typeCode: string, name: string): string | undefined {
