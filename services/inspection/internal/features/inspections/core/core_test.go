@@ -9,8 +9,10 @@ import (
 
 	"inspection/libs/identity"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
+	"inspection/services/inspection/internal/platform/database"
 )
 
 func TestChecklistOnlyRejectsTemplateWithMandatoryFixedOrigin(t *testing.T) {
@@ -21,7 +23,74 @@ func TestChecklistOnlyRejectsTemplateWithMandatoryFixedOrigin(t *testing.T) {
 	}
 }
 
-func TestInspectionCaptureRequirementsUseSingleVideoSlotAndPreservePhotoRequirements(t *testing.T) {
+func TestInventoryPromptTaskUsesPinnedVersionInventoryFlagHelper(t *testing.T) {
+	if got := inventoryPromptTask(nil); got != resolvepromptTaskCatalog {
+		t.Fatalf("without reference task=%s", got)
+	}
+	reference := &originresolve.Result{Version: database.OriginVersion{HasInventory: false}}
+	if got := inventoryPromptTask(reference); got != resolvepromptTaskCatalog {
+		t.Fatalf("legacy reference task=%s", got)
+	}
+	reference.Version.HasInventory = true
+	if got := inventoryPromptTask(reference); got != resolvepromptTaskCompare {
+		t.Fatalf("inventory reference task=%s", got)
+	}
+}
+
+func TestCreateCaptureRequirementsDerivesPinnedPhotoEnvironmentsHelper(t *testing.T) {
+	reference := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: make([]capturecore.Requirement, 4)}
+	for index := range reference.Requirements {
+		reference.Requirements[index] = capturecore.Requirement{Key: "env:" + identity.NewID().String(), EvidenceKind: "PHOTO", MinimumMedia: 1, MaximumMedia: 20, Required: true, Expected: true}
+	}
+	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, reference)
+	if len(got) != 4 {
+		t.Fatalf("photo inspection requirements=%+v; want four pinned environments", got)
+	}
+	for _, requirement := range got {
+		if !strings.HasPrefix(requirement.Key, "env:") || requirement.EvidenceKind != "PHOTO" || requirement.MinimumMedia != 1 || requirement.MaximumMedia != 20 || !requirement.Expected {
+			t.Fatalf("invalid pinned photo environment requirement: %+v", requirement)
+		}
+	}
+}
+
+func TestCreateCaptureRequirementsUsesVideoEnvironmentsHelper(t *testing.T) {
+	reference := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:" + identity.NewID().String(), EvidenceKind: "VIDEO", MaximumMedia: 3, Expected: true}}}
+	limits := catalog.DefaultEnvironmentCapture()
+	limits.Photo.Minimum, limits.Photo.Maximum = 3, 5
+	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, IsVideo: true, EnvironmentCapture: limits}, catalog.FixedOrigin, reference)
+	if len(got) != 1 || !strings.HasPrefix(got[0].Key, "env:") || got[0].EvidenceKind != "VIDEO" || got[0].MaximumMedia != 3 {
+		t.Fatalf("video requirements=%+v", got)
+	}
+	for _, requirement := range got {
+		if requirement.Key == "video:main" {
+			t.Fatal("v2 video inspection created legacy video:main")
+		}
+	}
+	photoReference := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:room", EvidenceKind: "PHOTO", MinimumMedia: 1, MaximumMedia: 20, Expected: true}}}
+	photo := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, EnvironmentCapture: limits}, catalog.FixedOrigin, photoReference)
+	if len(photo) != 1 || photo[0].MinimumMedia != 3 || photo[0].MaximumMedia != 5 {
+		t.Fatalf("custom v2 photo limits=%+v; want minimum 3 and maximum 5", photo)
+	}
+}
+
+func TestCreateCaptureRequirementsWithoutInventoryIsEmptyHelper(t *testing.T) {
+	got := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2, CaptureLayout: "ENVIRONMENTS", Requirements: []catalog.CaptureRequirement{{Key: "legacy", EvidenceKind: "PHOTO"}}}, catalog.ChecklistOnly, nil)
+	if len(got) != 0 {
+		t.Fatalf("v2 no-inventory inspection requirements=%+v; want none until capture declarations", got)
+	}
+}
+
+func TestCreateCaptureRequirementsStayPinnedToResolvedVersionHelper(t *testing.T) {
+	pinned := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:pinned", EvidenceKind: "PHOTO", MaximumMedia: 20, Expected: true}}}
+	created := createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, pinned)
+	newlyActivated := &originresolve.Result{Version: database.OriginVersion{HasInventory: true}, Requirements: []capturecore.Requirement{{Key: "env:new", EvidenceKind: "PHOTO", MaximumMedia: 20, Expected: true}}}
+	_ = createCaptureRequirements(catalog.TemplateDocument{SchemaVersion: 2}, catalog.FixedOrigin, newlyActivated)
+	if len(created) != 1 || created[0].Key != "env:pinned" {
+		t.Fatalf("created draft requirements changed with later activation: %+v", created)
+	}
+}
+
+func TestUT102LegacyVideoCaptureRequirementsKeepSingleMainSlot(t *testing.T) {
 	video := inspectionCaptureRequirements("VIDEO", "FIXED_ORIGIN", []capturecore.Requirement{{Key: "video:" + identity.NewID().String(), EvidenceKind: "VIDEO_FRAME"}})
 	if len(video) != 1 || video[0].Key != "video:main" || video[0].EvidenceKind != "VIDEO" || video[0].MinimumMedia != 1 || video[0].MaximumMedia != 1 || video[0].ComparisonTarget != "FIXED_ORIGIN" {
 		t.Fatalf("video capture requirements = %+v", video)

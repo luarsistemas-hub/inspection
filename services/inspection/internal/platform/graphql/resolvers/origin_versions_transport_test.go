@@ -11,10 +11,7 @@ import (
 	"inspection/libs/identity"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
-	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
-	"inspection/services/inspection/internal/platform/apperror"
-	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
 	graph "inspection/services/inspection/internal/platform/graphql"
 	"inspection/services/inspection/internal/platform/mediator"
@@ -54,34 +51,12 @@ func TestOriginVersionReadinessFieldsGraphQLTransport(t *testing.T) {
 }
 
 func TestCloseOriginInvitationGraphQLTransport(t *testing.T) {
-	tenantID, actorID, versionID, originID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, Principal: requestctx.Principal{IdentityID: actorID, TenantID: tenantID, Roles: []string{auth.TenantAdmin}}})
-	mutation := `mutation { closeOriginInvitation(input:{versionId:"` + versionID.String() + `",reason:"operator closed",clientMutationId:"close-k1"}) { version { id status selectable } userErrors { code field message } clientMutationId } }`
-	body := executeOriginVersionGraphQL(t, mediator.New(), mutation, ctx, func(bus *mediator.Bus) {
-		if err := bus.RegisterCommand(originclose.Command{}, func(context.Context, any) (any, error) {
-			return database.OriginVersion{ID: versionID, OriginID: originID, VersionNumber: 1, Status: "INVALIDATED", MediaKind: "PHOTO"}, nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := bus.RegisterQuery(originlist.VersionDetailsQuery{}, func(context.Context, any) (any, error) {
-			return originlist.Result{Details: map[identity.ID]originlist.Details{versionID: {}}}, nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"status":"INVALIDATED"`) || !strings.Contains(body, `"userErrors":[]`) || !strings.Contains(body, `"clientMutationId":"close-k1"`) {
-		t.Fatalf("unexpected close success response: %s", body)
-	}
-
-	invalidState := executeOriginVersionGraphQL(t, mediator.New(), mutation, ctx, func(bus *mediator.Bus) {
-		if err := bus.RegisterCommand(originclose.Command{}, func(context.Context, any) (any, error) {
-			return nil, apperror.New(apperror.InvalidState, "versionId", "only draft invitations can be closed")
-		}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	if strings.Contains(invalidState, `"errors"`) || !strings.Contains(invalidState, `"version":null`) || !strings.Contains(invalidState, `"code":"INVALID_STATE"`) {
-		t.Fatalf("invalid state did not use userErrors: %s", invalidState)
+	tenantID, versionID := identity.NewID(), identity.NewID()
+	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID})
+	mutation := `mutation { closeOriginInvitation(input:{versionId:"` + versionID.String() + `",reason:"closed",clientMutationId:"close-k1"}) { version { id } userErrors { code message } clientMutationId } }`
+	body := executeOriginVersionGraphQL(t, mediator.New(), mutation, ctx)
+	if strings.Contains(body, `"errors"`) || !strings.Contains(body, `"code":"INVALID_STATE"`) || !strings.Contains(body, `"message":"Recurso indisponível."`) || !strings.Contains(body, `"clientMutationId":"close-k1"`) {
+		t.Fatalf("unexpected tombstone response: %s", body)
 	}
 }
 

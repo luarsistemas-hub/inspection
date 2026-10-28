@@ -95,6 +95,167 @@ func TestValidatePlanRejectsMixedCurrentGeneration(t *testing.T) {
 	}
 }
 
+func TestFilterRequirementFramesDoesNotMutateInput(t *testing.T) {
+	frames := []Frame{{ID: testID("env-one"), RequirementKey: "env:one"}, {ID: testID("env-two"), RequirementKey: "env:two"}}
+	filtered := filterRequirementFrames(frames, "env:two")
+	if len(filtered) != 1 || filtered[0].ID != frames[1].ID {
+		t.Fatalf("filtered frames = %+v", filtered)
+	}
+	if frames[0].RequirementKey != "env:one" || frames[1].RequirementKey != "env:two" {
+		t.Fatalf("filter mutated source frames: %+v", frames)
+	}
+}
+
+func TestMatchingFramesKeepsSameComponentLabelsInSeparateEnvironments(t *testing.T) {
+	component := testID("origin-sink")
+	expected := []Frame{{Environment: "Kitchen", ComponentLabel: "Sink", View: "front"}}
+	kitchenSink := Frame{ID: testID("kitchen-sink"), Environment: "Kitchen", ComponentLabel: "Sink", View: "front", RequirementKey: "env:kitchen"}
+	bathroomSink := Frame{ID: testID("bathroom-sink"), Environment: "Bathroom", ComponentLabel: "Sink", View: "front", RequirementKey: "env:bathroom"}
+	matched := matchingFramesForComponent([]Frame{kitchenSink, bathroomSink}, component, expected)
+	if len(matched) != 1 || matched[0].ID != kitchenSink.ID {
+		t.Fatalf("environment scope matched frames from another room: %+v", matched)
+	}
+}
+
+func TestLegacyUnlabelledFrameRemainsAvailableForLaterMatchingComponent(t *testing.T) {
+	tenant, asset := testID("legacy-reuse-tenant"), testID("legacy-reuse-asset")
+	originPreparationID, currentPreparationID := testID("legacy-reuse-origin"), testID("legacy-reuse-current")
+	componentA, componentB := testID("legacy-door"), testID("legacy-window")
+	originA, originB, current := testID("legacy-origin-door"), testID("legacy-origin-window"), testID("legacy-current-unlabelled")
+	plan := Plan{ID: testID("legacy-reuse-plan"), TenantID: tenant, AssetID: asset, InspectionID: testID("legacy-reuse-inspection"), SubmissionID: testID("legacy-reuse-submission"), ReferenceVersionID: ptr(testID("legacy-reuse-reference")), OriginPreparationID: &originPreparationID, CurrentPreparationID: currentPreparationID, CurrentGeneration: 1, Generation: 1}
+	frames := map[identity.ID][]Frame{
+		originPreparationID: {
+			{ID: originA, TenantID: tenant, AssetID: asset, PreparationID: originPreparationID, Generation: 1, Digest: digest, Component: componentA.String(), ComponentLabel: "Door", View: "front", Visible: true},
+			{ID: originB, TenantID: tenant, AssetID: asset, PreparationID: originPreparationID, Generation: 1, Digest: digest, Component: componentB.String(), ComponentLabel: "Window", View: "front", Visible: true},
+		},
+		currentPreparationID: {{ID: current, TenantID: tenant, AssetID: asset, PreparationID: currentPreparationID, Generation: 1, Digest: digest, ComponentLabel: "", Visible: true, RequirementKey: "video:main"}},
+	}
+	if got := matchingFramesForComponent(frames[currentPreparationID], componentB, frames[originPreparationID][1:]); len(got) != 1 || got[0].ID != current {
+		t.Fatalf("legacy window candidate selection = %+v", got)
+	}
+	proposalCount := 0
+	matcher := proposerFunc(func(_ context.Context, origin, currentFrames []Frame) ([]Pair, error) {
+		proposalCount++
+		if proposalCount == 1 || len(origin) == 0 || len(currentFrames) == 0 {
+			return nil, nil
+		}
+		return []Pair{{ComponentID: componentB, OriginFrameID: origin[0].ID, CurrentFrameID: currentFrames[0].ID, Decision: SameView, Landmarks: []string{"window frame"}}}, nil
+	})
+	verifier := verifierFunc(func(_ context.Context, _, _ []Frame, proposed []Pair) ([]Pair, error) { return proposed, nil })
+	writer := &fakeWriter{}
+	build, err := Setup(Dependencies{Frames: fakeFrames{values: frames}, Matcher: matcher, Verifier: verifier, Plans: writer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := build(context.Background(), PlanRequest{Plan: plan, Components: []Component{{ID: componentA}, {ID: componentB}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 2 || result.Items[0].Outcome != Inconclusive || result.Items[1].Outcome != Matched || len(result.Items[1].CurrentFrames) != 1 || result.Items[1].CurrentFrames[0] != current {
+		t.Fatalf("legacy component outcomes = %+v; later window should match the unlabelled frame", result.Items)
+	}
+}
+
+func TestLegacySharedLabelGapDoesNotConsumeFrameNeededByLaterComponent(t *testing.T) {
+	tenant, asset := testID("legacy-shared-tenant"), testID("legacy-shared-asset")
+	originPreparationID, currentPreparationID := testID("legacy-shared-origin"), testID("legacy-shared-current")
+	componentA, componentB := testID("legacy-bathroom-sink"), testID("legacy-kitchen-sink")
+	originA, originB, current := testID("legacy-origin-bathroom-sink"), testID("legacy-origin-kitchen-sink"), testID("legacy-current-kitchen-sink")
+	plan := Plan{ID: testID("legacy-shared-plan"), TenantID: tenant, AssetID: asset, InspectionID: testID("legacy-shared-inspection"), SubmissionID: testID("legacy-shared-submission"), ReferenceVersionID: ptr(testID("legacy-shared-reference")), OriginPreparationID: &originPreparationID, CurrentPreparationID: currentPreparationID, CurrentGeneration: 1, Generation: 1}
+	frames := map[identity.ID][]Frame{
+		originPreparationID: {
+			{ID: originA, TenantID: tenant, AssetID: asset, PreparationID: originPreparationID, Generation: 1, Digest: digest, Component: componentA.String(), Environment: "Bathroom", ComponentLabel: "Sink", View: "front", Visible: true},
+			{ID: originB, TenantID: tenant, AssetID: asset, PreparationID: originPreparationID, Generation: 1, Digest: digest, Component: componentB.String(), Environment: "Kitchen", ComponentLabel: "Sink", View: "front", Visible: true},
+		},
+		currentPreparationID: {{ID: current, TenantID: tenant, AssetID: asset, PreparationID: currentPreparationID, Generation: 1, Digest: digest, Environment: "Kitchen", ComponentLabel: "Sink", View: "front", Visible: true, RequirementKey: "video:main"}},
+	}
+	matcher := proposerFunc(func(_ context.Context, origin, currentFrames []Frame) ([]Pair, error) {
+		if len(origin) == 0 || len(currentFrames) == 0 || origin[0].Component != componentB.String() {
+			return nil, nil
+		}
+		return []Pair{{ComponentID: componentB, OriginFrameID: origin[0].ID, CurrentFrameID: currentFrames[0].ID, Decision: SameView, Landmarks: []string{"window frame"}}}, nil
+	})
+	verifier := verifierFunc(func(_ context.Context, _, _ []Frame, proposed []Pair) ([]Pair, error) { return proposed, nil })
+	build, err := Setup(Dependencies{Frames: fakeFrames{values: frames}, Matcher: matcher, Verifier: verifier, Plans: &fakeWriter{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := build(context.Background(), PlanRequest{Plan: plan, Components: []Component{{ID: componentA}, {ID: componentB}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 2 || result.Items[0].Outcome != Inconclusive || len(result.Items[0].CurrentFrames) != 0 || result.Items[1].Outcome != Matched || len(result.Items[1].CurrentFrames) != 1 || result.Items[1].CurrentFrames[0] != current {
+		t.Fatalf("shared legacy frame should belong only to later accepted pair: %+v", result.Items)
+	}
+}
+
+func TestValidateCurrentFrameGenerationPerPreparationForReprocessedClip(t *testing.T) {
+	mainPrep, retriedPrep := testID("main-generation-one"), testID("supplement-generation-two")
+	plan := Plan{TenantID: testID("generation-tenant"), AssetID: testID("generation-asset"), CurrentPreparationID: mainPrep, CurrentGeneration: 1, CurrentPreparations: []PreparationRef{{ID: mainPrep, Generation: 1}, {ID: retriedPrep, RequirementKey: "env:bathroom", Role: "SUPPLEMENT", Generation: 2}}}
+	frames := []Frame{{ID: testID("retried-frame"), TenantID: plan.TenantID, AssetID: plan.AssetID, PreparationID: retriedPrep, Generation: 2, Digest: digest}}
+	if err := validateLoadedBank(plan, nil, frames); err != nil {
+		t.Fatalf("reprocessed environment clip generation was rejected: %v", err)
+	}
+}
+
+func TestPlanBuilderGroupsThreeEnvironmentPreparationsWithVideoBaselineUT160(t *testing.T) {
+	tenant, asset, originPrep := testID("tenant-ut160"), testID("asset-ut160"), testID("origin-ut160")
+	plan := Plan{ID: testID("plan-ut160"), TenantID: tenant, AssetID: asset, InspectionID: testID("inspection-ut160"), SubmissionID: testID("submission-ut160"), ReferenceVersionID: ptr(testID("reference-ut160")), OriginPreparationID: &originPrep, CurrentPreparationID: testID("current-ut160"), CurrentGeneration: 1, Generation: 1}
+	refs := make([]PreparationRef, 3)
+	framesByPreparation := map[identity.ID][]Frame{originPrep: {}}
+	components := make([]Component, 3)
+	for i := range refs {
+		key := "env:" + string(rune('a'+i))
+		prepID, componentID := testID("prep-ut160-"+key), testID("component-ut160-"+key)
+		originFrame, currentFrame := testID("origin-frame-ut160-"+key), testID("current-frame-ut160-"+key)
+		refs[i] = PreparationRef{ID: prepID, RequirementKey: key, Role: "MAIN"}
+		components[i] = Component{ID: componentID, RequirementKey: key}
+		framesByPreparation[originPrep] = append(framesByPreparation[originPrep], Frame{ID: originFrame, TenantID: tenant, AssetID: asset, PreparationID: originPrep, Generation: 1, Digest: digest, Component: componentID.String(), Visible: true})
+		framesByPreparation[prepID] = []Frame{{ID: currentFrame, TenantID: tenant, AssetID: asset, PreparationID: prepID, Generation: 1, Digest: digest, Component: componentID.String(), RequirementKey: key, Visible: true}}
+	}
+	plan.CurrentPreparations = refs
+	writer := &fakeWriter{}
+	match := proposerFunc(func(_ context.Context, origin, current []Frame) ([]Pair, error) {
+		componentID, err := identity.ParseID(origin[0].Component)
+		if err != nil {
+			return nil, err
+		}
+		return []Pair{{ComponentID: componentID, OriginFrameID: origin[0].ID, CurrentFrameID: current[0].ID, Decision: SameView, Landmarks: []string{"environment frame"}}}, nil
+	})
+	verify := verifierFunc(func(_ context.Context, _ []Frame, _ []Frame, proposed []Pair) ([]Pair, error) { return proposed, nil })
+	build, err := Setup(Dependencies{Frames: fakeFrames{values: framesByPreparation}, Matcher: match, Verifier: verify, Plans: writer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := build(context.Background(), PlanRequest{Plan: plan, Components: components})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.plan.Items) != 3 || len(result.Items) != 3 {
+		t.Fatalf("sealed plan has %d items: %+v", len(writer.plan.Items), writer.plan.Items)
+	}
+	for i, item := range writer.plan.Items {
+		if item.RequirementKey != refs[i].RequirementKey || len(item.CurrentFrames) != 1 || item.CurrentFrames[0] != framesByPreparation[refs[i].ID][0].ID {
+			t.Fatalf("item %d lost requirement grouping: %+v", i, item)
+		}
+	}
+	if len(writer.plan.CurrentPreparations) != 3 || PlanDigest(writer.plan) != result.Digest {
+		t.Fatalf("sealed plan lost preparation refs or digest: %+v", writer.plan)
+	}
+	for i, ref := range writer.plan.CurrentPreparations {
+		if ref.ID != refs[i].ID || ref.RequirementKey != refs[i].RequirementKey || ref.Role != refs[i].Role {
+			t.Fatalf("preparation %d lost its role or requirement key: %+v", i, ref)
+		}
+	}
+}
+
+func TestPlanDigestPreservesLegacyVideoMainPayloadUT161(t *testing.T) {
+	plan := Plan{ID: testID("legacy-plan"), TenantID: testID("legacy-tenant"), AssetID: testID("legacy-asset"), InspectionID: testID("legacy-inspection"), SubmissionID: testID("legacy-submission"), CurrentPreparationID: testID("legacy-preparation"), Generation: 1, CurrentGeneration: 1, Items: []PlanItem{{ComponentID: testID("legacy-component"), Outcome: CurrentOnly, RequirementKey: "video:main", CurrentFrames: []identity.ID{testID("legacy-frame")}, InputDigest: digest}}}
+	if got := PlanDigest(plan); got != "fd436d0fc39222a3cf53381b323d4ce61a89e39c15808a53304e3eb705799591" {
+		t.Fatalf("legacy plan digest = %s", got)
+	}
+}
+
 func TestGroupPairsExposesExcessInsteadOfDispatchingOverLimit(t *testing.T) {
 	component := testID("sink")
 	pairs := make([]Pair, 4)

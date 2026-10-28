@@ -120,7 +120,7 @@ export function uploadDraft(draft: CaptureDraft, onProgress?: UploadProgressCall
     const totalParts = current.parts.length;
     reportProgress(onProgress, { phase: "preparing", percent: 5, completedParts: current.parts.filter((part) => part.complete).length, totalParts });
     if (!current.mediaId || !current.uploadId) {
-      const created = await graphql(captureOperations.createUpload, { input: { contentType: draft.blob.type, sizeBytes: draft.blob.size, sha256: draft.sha256, attemptId: null, clientMutationId: draft.id } });
+      const created = await graphql(captureOperations.createUpload, { input: { requirementKey: current.metadata.requirementKey, contentType: current.blob.type, sizeBytes: current.blob.size, sha256: current.sha256, attemptId: null, clientMutationId: current.id } });
       throwOnUserErrors(created.createMediaUpload);
       if (!created.createMediaUpload.upload) throw new Error("A API não retornou o upload de mídia.");
       current = { ...draft, ...created.createMediaUpload.upload, parts: partsFor(draft.blob, created.createMediaUpload.upload.partSizeBytes || defaultPartSize) };

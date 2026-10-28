@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	requestinventoryjobs "inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -140,6 +141,23 @@ func queue(ctx context.Context, within func(context.Context, identity.ID, func(*
 			ClientMutationID: command.ClientMutationID, ExpectedPlanID: &active.ID, CreatedAt: createdAt,
 		}
 		if err := tx.WithContext(ctx).Create(&newPlan).Error; err != nil {
+			return err
+		}
+		var preparations []database.VideoPlanPreparation
+		if err := tx.WithContext(ctx).Where("tenant_id=? AND plan_id=? AND role IN ?", command.TenantID, active.ID, []string{"MAIN", "SUPPLEMENT"}).Order("role,created_at,preparation_id").Find(&preparations).Error; err != nil {
+			return err
+		}
+		for i := range preparations {
+			preparations[i].PlanID = newPlan.ID
+			preparations[i].CreatedAt = createdAt
+		}
+		if len(preparations) > 0 {
+			if err := tx.WithContext(ctx).Create(&preparations).Error; err != nil {
+				return err
+			}
+		}
+		// Inventory comparison of the inspection is re-run as a new job generation.
+		if _, err := requestinventoryjobs.Reanalyze(ctx, tx, command.TenantID, inspection.ID, createdAt); err != nil {
 			return err
 		}
 		if meta.Principal.IdentityID != (identity.ID{}) {

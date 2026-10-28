@@ -22,7 +22,10 @@ type Profile struct {
 var ErrUnknownProfile = errors.New("video: unknown deployed profile")
 
 var deployedProfiles = func() map[string]Profile {
-	profiles := []Profile{{Name: "standard", Version: 1, SelectionVersion: 1, MaxWidth: 2048, MaxHeight: 2048, JPEGQuality: 85, MaxFramesPerSecond: 2, AllowRetainedFrames: false}}
+	profiles := []Profile{
+		{Name: "standard", Version: 1, SelectionVersion: 1, MaxWidth: 2048, MaxHeight: 2048, JPEGQuality: 85, MaxFramesPerSecond: 2, AllowRetainedFrames: false},
+		{Name: "standard", Version: 2, SelectionVersion: 2, MaxWidth: 2048, MaxHeight: 2048, JPEGQuality: 85, MaxFramesPerSecond: 2, AllowRetainedFrames: false},
+	}
 	result := make(map[string]Profile, len(profiles))
 	for _, profile := range profiles {
 		result[profile.Digest()] = profile
@@ -37,15 +40,20 @@ func (p Profile) Digest() string {
 	return hex.EncodeToString(sum[:])
 }
 
-// DefaultProfile returns the currently deployed preparation profile.
+// DefaultProfile returns the explicitly selected current preparation profile.
 func DefaultProfile() Profile { return deployedProfiles[defaultProfileDigest] }
 
-var defaultProfileDigest = func() string {
-	for digest := range deployedProfiles {
-		return digest
+var defaultProfileDigest = Profile{Name: "standard", Version: 2, SelectionVersion: 2, MaxWidth: 2048, MaxHeight: 2048, JPEGQuality: 85, MaxFramesPerSecond: 2, AllowRetainedFrames: false}.Digest()
+
+// ProfileByNameVersion resolves a deployed profile without relying on map order.
+func ProfileByNameVersion(name string, version int) (Profile, error) {
+	for _, profile := range deployedProfiles {
+		if profile.Name == name && profile.Version == version {
+			return profile, nil
+		}
 	}
-	return ""
-}()
+	return Profile{}, ErrUnknownProfile
+}
 
 // ProfileByDigest resolves only profiles deployed by this build.
 func ProfileByDigest(digest string) (Profile, error) {

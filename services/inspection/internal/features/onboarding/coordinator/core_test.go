@@ -4,8 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"inspection/libs/identity"
-	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 )
 
@@ -13,13 +11,8 @@ func TestValidateSubmitTruthfulModesAndDigest(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	base := SubmitInput{Now: now, Steps: map[string]StepPayload{
 		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(7 * 24 * time.Hour).Format(time.RFC3339)},
-		"ORIGIN": {}, "PARTICIPANT": {"self": true},
-	}, TemplateMode: catalog.FixedOrigin, OriginStatus: "PENDING", DeliveryState: "READY", IdempotencyKey: "submit-1"}
-	result, err := ValidateSubmit(base)
-	if err != nil || result.NextAction != NextActionWaitForOrigin || result.State != StateOriginPending {
-		t.Fatalf("pending origin = %+v, %v", result, err)
-	}
-	base.TemplateMode, base.OriginStatus = catalog.ChecklistOnly, "NONE"
+		"PARTICIPANT": {"self": true},
+	}, DeliveryState: "READY", IdempotencyKey: "submit-1"}
 	first, err := ValidateSubmit(base)
 	if err != nil || first.Digest == "" {
 		t.Fatalf("checklist submit = %+v, %v", first, err)
@@ -35,11 +28,11 @@ func TestValidateSubmitRejectsExpiredPropertyDeadline(t *testing.T) {
 	in := SubmitInput{
 		Now: now,
 		Steps: map[string]StepPayload{
-			"AGENCY":   {},
-			"PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(-time.Minute).Format(time.RFC3339)},
-			"ORIGIN":   {}, "PARTICIPANT": {"self": true},
+			"AGENCY":      {},
+			"PROPERTY":    {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(-time.Minute).Format(time.RFC3339)},
+			"PARTICIPANT": {"self": true},
 		},
-		TemplateMode: catalog.ChecklistOnly, OriginStatus: "NONE", DeliveryState: "READY", IdempotencyKey: "submit-expired",
+		DeliveryState: "READY", IdempotencyKey: "submit-expired",
 	}
 	if _, err := ValidateSubmit(in); err == nil || code(err) != apperror.InvalidInput {
 		t.Fatalf("expired deadline accepted during submit: %v", err)
@@ -58,9 +51,6 @@ func TestValidatePropertyAndDelegateBoundaries(t *testing.T) {
 	}
 	if err := ValidateDelegate(StepPayload{"name": "Ana", "email": "ana@example.test", "emailConfirmation": "other@example.test"}); code(err) != apperror.InvalidInput {
 		t.Fatalf("divergent confirmation accepted: %v", err)
-	}
-	if err := ValidateOriginMedia("text/plain", 1, "x"); code(err) != apperror.InvalidInput {
-		t.Fatalf("bad media code=%v", err)
 	}
 }
 
@@ -86,8 +76,8 @@ func TestValidateSubmitAcceptsPublicSelfParticipantMode(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	in := SubmitInput{Now: now, Steps: map[string]StepPayload{
 		"AGENCY": {}, "PROPERTY": {"address": "Rua A", "purpose": "SALE", "deadlineAt": now.Add(time.Hour).Format(time.RFC3339)},
-		"ORIGIN": {"mode": "CHECKLIST_ONLY"}, "PARTICIPANT": {"mode": "SELF"},
-	}, TemplateMode: catalog.ChecklistOnly, OriginStatus: "NONE", DeliveryState: "READY", IdempotencyKey: "submit-self"}
+		"PARTICIPANT": {"mode": "SELF"},
+	}, DeliveryState: "READY", IdempotencyKey: "submit-self"}
 	if _, err := ValidateSubmit(in); err != nil {
 		t.Fatalf("self participant rejected: %v", err)
 	}
@@ -119,7 +109,6 @@ func TestValidateCheckpointPayloadRejectsInvalidStepData(t *testing.T) {
 	}{
 		{"agency", "AGENCY", StepPayload{}},
 		{"property", "PROPERTY", StepPayload{}},
-		{"origin", "ORIGIN", StepPayload{"mode": "UNKNOWN"}},
 		{"delegate", "PARTICIPANT", StepPayload{"mode": "DELEGATE", "name": "", "email": "bad"}},
 	}
 	for _, tc := range cases {
@@ -131,24 +120,9 @@ func TestValidateCheckpointPayloadRejectsInvalidStepData(t *testing.T) {
 	}
 }
 
-func TestValidateCheckpointPayloadAcceptsSupportedModes(t *testing.T) {
-	if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "fixed_origin", "mediaIds": []any{identity.NewID().String()}}, time.Now().UTC()); err != nil {
-		t.Fatalf("fixed origin rejected: %v", err)
-	}
+func TestValidateCheckpointPayloadAcceptsSelfParticipantMode(t *testing.T) {
 	if err := ValidateCheckpointPayload("PARTICIPANT", StepPayload{"mode": "self"}, time.Now().UTC()); err != nil {
 		t.Fatalf("self participant rejected: %v", err)
-	}
-}
-
-func TestOriginRequiresDistinctUploadedMediaIdentifiers(t *testing.T) {
-	id := identity.NewID().String()
-	for _, ids := range [][]any{nil, {id, id}, {"not-an-id"}} {
-		if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "FIXED_ORIGIN", "mediaIds": ids}, time.Now().UTC()); code(err) != apperror.InvalidInput {
-			t.Fatalf("invalid reference selection %v accepted: %v", ids, err)
-		}
-	}
-	if err := ValidateCheckpointPayload("ORIGIN", StepPayload{"mode": "CHECKLIST_ONLY", "mediaIds": []any{id}}, time.Now().UTC()); code(err) != apperror.InvalidInput {
-		t.Fatalf("checklist accepted reference media: %v", err)
 	}
 }
 

@@ -66,7 +66,7 @@ func (r DBFrameReader) LoadPreparationFrames(ctx context.Context, tenantID, prep
 		}
 		result = make([]Frame, 0, len(frames))
 		for _, row := range frames {
-			frame := Frame{ID: row.ID, TenantID: tenantID, AssetID: assetID, PreparationID: preparationID, Generation: job.Generation, Digest: row.SHA256, PTS: row.PTSMicros, Quality: row.Quality}
+			frame := Frame{ID: row.ID, TenantID: tenantID, AssetID: assetID, PreparationID: preparationID, Generation: job.Generation, Digest: row.SHA256, PTS: row.PTSMicros, Quality: row.Quality, RequirementKey: media.RequirementKey}
 			if scope, ok := scopes[row.ID]; ok {
 				frame.Environment = scope.EnvironmentCandidate
 				frame.Component = scope.ID.String()

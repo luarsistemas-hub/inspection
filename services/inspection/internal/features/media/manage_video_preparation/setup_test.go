@@ -33,7 +33,7 @@ func TestPreparationStatusAndRetryAreFencedAndAudited(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.VideoPreparationJob{}, &database.MediaObject{}, &database.VideoSource{}, &database.VideoFrame{}, &database.AuditEvent{}, &database.VideoPlan{}, &database.Inspection{}} {
+	for _, model := range []any{&database.VideoPreparationJob{}, &database.MediaObject{}, &database.VideoSource{}, &database.VideoFrame{}, &database.AuditEvent{}, &database.VideoPlan{}, &database.VideoPlanPreparation{}, &database.Inspection{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}

@@ -92,7 +92,7 @@ func testExpiryWithInheritedHold(t *testing.T, holdScope string) {
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.ResponsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "retention-origin-hold-" + versionID.String(), CreatedAt: now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.ResponsibilityID, Status: "INVALIDATED", MediaKind: "VIDEO", VideoPreparationID: &preparationID, IdempotencyKey: "retention-origin-hold-" + versionID.String(), CreatedAt: now}).Error; err != nil {
 				return err
 			}
 			hold.OriginVersionID = &versionID

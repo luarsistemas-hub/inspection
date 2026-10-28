@@ -4,6 +4,7 @@ package callbacks
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -88,7 +89,8 @@ func UpdateDelivery(ctx context.Context, tx *gorm.DB, tenantID, deliveryID ident
 }
 
 func queueTerminalEvent(ctx context.Context, tx *gorm.DB, delivery database.Delivery, state core.State, rows []database.ChannelAttempt, now time.Time) error {
-	if delivery.InspectionID == nil || (delivery.LogicalTemplate != "capture-link" && delivery.LogicalTemplate != "reminder") {
+	isCounterparty := delivery.LogicalTemplate == "baseline-acknowledgment"
+	if !isCounterparty && (delivery.InspectionID == nil || (delivery.LogicalTemplate != "capture-link" && delivery.LogicalTemplate != "reminder")) {
 		return nil
 	}
 	var latest database.ChannelAttempt
@@ -100,17 +102,39 @@ func queueTerminalEvent(ctx context.Context, tx *gorm.DB, delivery database.Deli
 	eventID := identity.ID(uuid.NewSHA1(delivery.ID, []byte("notification.delivery_terminal.v1:"+string(state))))
 	payload := map[string]any{
 		"deliveryId":      delivery.ID,
-		"inspectionId":    *delivery.InspectionID,
 		"logicalTemplate": delivery.LogicalTemplate,
 		"state":           string(state),
 		"failureCode":     latest.LastError,
 		"attempt":         latest.Attempts,
 		"provider":        latest.Provider,
 	}
+	if delivery.InspectionID != nil {
+		payload["inspectionId"] = *delivery.InspectionID
+	}
+	if isCounterparty {
+		value := strings.TrimPrefix(delivery.CorrelationID, "counterparty-")
+		if generation := strings.LastIndex(value, "-g"); generation >= 0 {
+			value = value[:generation]
+		}
+		invitationID, err := identity.ParseID(value)
+		if err == nil {
+			payload["counterpartyInvitationId"] = invitationID
+		}
+	}
 	if delivery.InvitationID != nil {
 		payload["invitationId"] = *delivery.InvitationID
 	}
-	observability.LogDeliveryTransition(ctx, delivery.TenantID, delivery.ID, *delivery.InspectionID, delivery.Status, string(state), latest.LastError, latest.Provider, latest.Attempts)
+	if delivery.InspectionID != nil {
+		observability.LogDeliveryTransition(ctx, delivery.TenantID, delivery.ID, *delivery.InspectionID, delivery.Status, string(state), latest.LastError, latest.Provider, latest.Attempts)
+	} else if isCounterparty {
+		value := strings.TrimPrefix(delivery.CorrelationID, "counterparty-")
+		if generation := strings.LastIndex(value, "-g"); generation >= 0 {
+			value = value[:generation]
+		}
+		if invitationID, err := identity.ParseID(value); err == nil {
+			observability.LogCounterpartyDeliveryTransition(ctx, delivery.TenantID, delivery.ID, invitationID, delivery.Status, string(state), latest.LastError, latest.Provider, latest.Attempts)
+		}
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err

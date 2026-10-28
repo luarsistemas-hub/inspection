@@ -66,6 +66,13 @@ func TestReanalysisQueuesNextGenerationAndReplayIsIdempotent(t *testing.T) {
 	if plan.Status != "BUILDING" || plan.SubmissionID != fixture.submissionID || plan.CurrentPreparationID != fixture.preparationID || plan.ReferenceVersionID == nil || *plan.ReferenceVersionID != fixture.referenceID {
 		t.Fatalf("queued plan lost pinned inputs or wasn't queued: %+v", plan)
 	}
+	var copied []database.VideoPlanPreparation
+	if err := db.Table("analysis.video_plan_preparations").Where("plan_id=?", first.PlanID).Order("role").Find(&copied).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(copied) != 3 || copied[0].RequirementKey == nil || *copied[0].RequirementKey != "env:kitchen" || copied[1].RequirementKey == nil || *copied[1].RequirementKey != "env:bathroom" || copied[2].RequirementKey == nil || *copied[2].RequirementKey != "env:bedroom" {
+		t.Fatalf("reanalysis did not copy all preparation roles and keys: %+v", copied)
+	}
 	var auditCount int64
 	if err := db.Table("audit.events").Where("action=?", "video.inspection_reanalyzed").Count(&auditCount).Error; err != nil {
 		t.Fatal(err)
@@ -176,7 +183,9 @@ func reanalysisDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE assets.assets (id text, tenant_id text, business_unit_id text)`,
 		`CREATE TABLE inspections.inspections (id text, tenant_id text, asset_id text, media_kind text, active_video_plan_id text)`,
 		`CREATE TABLE analysis.video_plans (id text, tenant_id text, inspection_id text, submission_id text, parent_plan_id text, reference_version_id text, origin_preparation_id text, current_preparation_id text, generation integer, plan_digest text, status text, lease_token text, lease_until datetime, attempts integer, next_attempt_at datetime, error_code text, client_mutation_id text, expected_plan_id text, sealed_at datetime, created_at datetime)`,
+		`CREATE TABLE analysis.video_plan_preparations (tenant_id text, plan_id text, preparation_id text, role text, requirement_key text, created_at datetime)`,
 		`CREATE TABLE audit.events (id text, tenant_id text, actor_id text, action text, target_type text, target_id text, outcome text, reason text, correlation_id text, occurred_at datetime)`,
+		`CREATE TABLE analysis.inventory_jobs (id text, tenant_id text, inspection_id text, origin_version_id text, kind text, requirement_key text, environment_identity_id text, generation integer, status text, attempts integer, next_attempt_at datetime, lease_token text, lease_until datetime, error_code text, prompt_snapshot_id text, input_digest text, created_at datetime, updated_at datetime, UNIQUE(tenant_id, inspection_id, kind, requirement_key, generation))`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -200,6 +209,14 @@ func seedReanalysis(t *testing.T, db *gorm.DB) reanalysisFixture {
 			t.Fatal(err)
 		}
 	}
+	for _, link := range []struct {
+		preparation identity.ID
+		role, key   string
+	}{{f.preparationID, "MAIN", "env:kitchen"}, {identity.NewID(), "SUPPLEMENT", "env:bathroom"}, {identity.NewID(), "SUPPLEMENT", "env:bedroom"}} {
+		if err := db.Exec(`INSERT INTO analysis.video_plan_preparations (tenant_id,plan_id,preparation_id,role,requirement_key,created_at) VALUES (?,?,?,?,?,?)`, f.tenantID, f.planID, link.preparation, link.role, link.key, time.Now()).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	return f
 }
 
@@ -211,5 +228,30 @@ func reanalysisContext(f reanalysisFixture) context.Context {
 func sqliteWithin(db *gorm.DB) func(context.Context, identity.ID, func(*gorm.DB) error) error {
 	return func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
 		return db.WithContext(ctx).Transaction(fn)
+	}
+}
+
+func TestReanalysisQueuesNextInventoryCompareGeneration(t *testing.T) {
+	db := reanalysisDB(t)
+	fixture := seedReanalysis(t, db)
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	env := identity.NewID()
+	first := database.InventoryJob{ID: identity.NewID(), TenantID: fixture.tenantID, InspectionID: fixture.inspectionID, OriginVersionID: fixture.referenceID, Kind: "COMPARE", RequirementKey: "env:" + env.String(), EnvironmentIdentityID: &env, Generation: 1, Status: "SUCCEEDED", Attempts: 1, NextAttemptAt: now, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+	bus := mediator.New()
+	if err := Setup(Dependencies{DB: db, Bus: bus, Now: func() time.Time { return now }, Within: sqliteWithin(db)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bus.Send(reanalysisContext(fixture), Command{TenantID: fixture.tenantID, InspectionID: fixture.inspectionID, ExpectedPlanID: fixture.planID, ClientMutationID: "reanalyze-inventory"}); err != nil {
+		t.Fatal(err)
+	}
+	var jobs []database.InventoryJob
+	if err := db.Where("inspection_id=?", fixture.inspectionID).Order("generation").Find(&jobs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 || jobs[0].Status != "SUCCEEDED" || jobs[1].Generation != 2 || jobs[1].Status != "PENDING" || jobs[1].RequirementKey != first.RequirementKey || jobs[1].OriginVersionID != first.OriginVersionID {
+		t.Fatalf("inventory jobs after reanalysis = %+v", jobs)
 	}
 }

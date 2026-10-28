@@ -305,7 +305,7 @@ describe("C03 video capture", () => {
     expect(stopTrack).toHaveBeenCalled();
   });
 
-  it("finalizes once when the time limit is crossed over several ticks", async () => {
+  it("UT-338 finalizes once at the policy max duration and shows the limit message", async () => {
     let clockMs = 0;
     const { stream } = fakeStream();
     const recorders: Array<{ stop: ReturnType<typeof vi.fn> }> = [];

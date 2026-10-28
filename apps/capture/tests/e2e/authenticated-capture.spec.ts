@@ -16,7 +16,10 @@ function seedCaptureURL(mediaKind: "PHOTO" | "VIDEO" = "PHOTO"): string {
   const url = output.match(/Capture URL: (\S+)/)?.[1];
   if (!url) throw new Error("local seed did not return a Capture URL");
   const seeded = new URL(url);
-  const baseURL = new URL(process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3103"}`);
+  const fallbackBaseURL = process.env.INSPECTION_E2E_AUTH === "true"
+    ? "http://localhost:3003"
+    : `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3113"}`;
+  const baseURL = new URL(process.env.PLAYWRIGHT_BASE_URL ?? fallbackBaseURL);
   return new URL(`${seeded.pathname}${seeded.search}`, baseURL).toString();
 }
 

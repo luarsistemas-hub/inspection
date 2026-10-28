@@ -8,6 +8,9 @@ func NewID() ID {
 	return ID(uuid.New())
 }
 
+// Ptr returns a pointer to id for nullable identity columns.
+func Ptr(id ID) *ID { return &id }
+
 // NewDeterministicID derives a stable UUID for an idempotent domain identity.
 // Callers should use a namespaced value and must not treat this as a secret.
 func NewDeterministicID(namespace string, value string) ID {

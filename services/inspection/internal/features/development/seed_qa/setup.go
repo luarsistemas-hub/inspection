@@ -2,7 +2,6 @@
 package seed_qa
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,12 +15,9 @@ import (
 	analysisprompt "inspection/services/inspection/internal/features/analysis/prompt"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/database"
-	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/security"
-	"inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -35,9 +31,9 @@ var ErrLocalOnboardingMissing = errors.New("local admin onboarding missing")
 
 // Setup adds one fresh end-to-end QA scenario to the first active local admin
 // onboarding. Catalog rows are stable across runs; capture scenarios are not.
-func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, enableVideoAdmission bool) (string, error) {
+func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, enableVideoAdmission bool) (string, string, error) {
 	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(captureBaseURL) == "" || (mediaKind != "PHOTO" && mediaKind != "VIDEO") {
-		return "", fmt.Errorf("slice %s: missing dependency", sliceName)
+		return "", "", fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
 
 	var membership database.Membership
@@ -45,18 +41,18 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		Where("issuer = ? AND role = ? AND status = ?", issuer, "TENANT_ADMIN", "ACTIVE").
 		Order("created_at ASC").First(&membership).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return "", fmt.Errorf("%w: slice %s: local admin onboarding not found", ErrLocalOnboardingMissing, sliceName)
+			return "", "", fmt.Errorf("%w: slice %s: local admin onboarding not found", ErrLocalOnboardingMissing, sliceName)
 		}
-		return "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
 	}
 
 	var tenant database.Tenant
 	if err := db.WithContext(ctx).Where("id = ? AND status = ?", membership.TenantID, "ACTIVE").First(&tenant).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find active tenant: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find active tenant: %w", sliceName, err)
 	}
 	var unit database.BusinessUnit
 	if err := db.WithContext(ctx).Where("tenant_id = ? AND status = ?", tenant.ID, "ACTIVE").Order("created_at ASC").First(&unit).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find active business unit: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: find active business unit: %w", sliceName, err)
 	}
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -85,21 +81,22 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	}
 	requirementJSON, err := json.Marshal(requirements)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: encode requirements: %w", sliceName, err)
 	}
 	segmentJSON := json.RawMessage(`{"type":"object","properties":{"propertyType":{"type":"string"}}}`)
 	templateJSON, err := qaTemplateDefinition(ids.segmentVersion, mediaKind)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: encode QA template: %w", sliceName, err)
 	}
 	var promptSnapshot database.AnalysisPromptSnapshot
-	if err := db.WithContext(ctx).Where("analysis_type = ?", analysisprompt.RealEstate).Order("created_at ASC").First(&promptSnapshot).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
+	promptSnapshot, err = findFindingsPromptSnapshot(ctx, db)
+	if err != nil {
+		return "", "", fmt.Errorf("slice %s: find seeded analysis prompt: %w", sliceName, err)
 	}
 
 	token, err := security.NewScopedToken(tenant.ID)
 	if err != nil {
-		return "", fmt.Errorf("slice %s: create invitation token: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: create invitation token: %w", sliceName, err)
 	}
 	tokenHash := security.HashToken(token)
 	scenarioID := identity.NewID()
@@ -215,111 +212,16 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 		return nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("slice %s: persist scenario: %w", sliceName, err)
+		return "", "", fmt.Errorf("slice %s: persist scenario: %w", sliceName, err)
 	}
 
-	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, nil
+	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + token, inspectionID.String(), nil
 }
 
-// SetupOriginVideoInvite adds a disposable VIDEO ORIGIN invitation to the
-// tenant selected by the local QA admin onboarding.
-func SetupOriginVideoInvite(ctx context.Context, db *gorm.DB, issuer, captureBaseURL string) (string, error) {
-	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(captureBaseURL) == "" {
-		return "", fmt.Errorf("slice %s: missing dependency", sliceName)
-	}
-	var membership database.Membership
-	if err := db.WithContext(ctx).Where("issuer = ? AND role = ? AND status = ?", issuer, "TENANT_ADMIN", "ACTIVE").Order("created_at ASC").First(&membership).Error; err != nil {
-		return "", fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
-	}
-	ids := stableIDs(membership.TenantID)
-	invite, err := (origincore.Service{DB: db}).Invite(ctx, origincore.InviteInput{
-		TenantID: membership.TenantID, AssetID: ids.asset, TemplateVersionID: ids.templateVersion,
-		Delivery:     []invitationcore.DeliveryIntent{{Channel: "EMAIL", Destination: "qa.inspection@example.test"}},
-		Requirements: []capturecore.Requirement{{Key: "video:main", Section: "main", Label: "Vídeo principal", Instructions: "Grave um vídeo contínuo do imóvel.", EvidenceKind: "VIDEO", Required: true, MinimumMedia: 1, MaximumMedia: 1, CaptureSourcePolicy: "CAMERA_ONLY", ComparisonTarget: "CHECKLIST_ONLY"}},
-		Policy:       json.RawMessage(`{"gpsRequired":false,"allowGallery":false,"geofenceMeters":150}`),
-		ExpiresAt:    time.Now().UTC().Add(24 * time.Hour), IdempotencyKey: "qa-origin-video-" + identity.NewID().String(),
-	})
-	if err != nil {
-		return "", fmt.Errorf("slice %s: create VIDEO origin invitation: %w", sliceName, err)
-	}
-	if invite.LinkToken == "" {
-		return "", fmt.Errorf("slice %s: origin invitation did not return a disposable link", sliceName)
-	}
-	return strings.TrimRight(captureBaseURL, "/") + "/capture/" + invite.LinkToken, nil
-}
-
-// SetupFixedOriginVideo creates a local O1 VIDEO origin with retained frames
-// and synthetic kitchen and bathroom scope persisted in the configured store.
-func SetupFixedOriginVideo(ctx context.Context, db *gorm.DB, issuer, minioEndpoint, minioAccessKey, minioSecretKey, bucket string, secure bool) error {
-	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(minioEndpoint) == "" || strings.TrimSpace(bucket) == "" {
-		return fmt.Errorf("slice %s: missing dependency", sliceName)
-	}
-	var membership database.Membership
-	if err := db.WithContext(ctx).Where("issuer = ? AND role = ? AND status = ?", issuer, "TENANT_ADMIN", "ACTIVE").Order("created_at ASC").First(&membership).Error; err != nil {
-		return fmt.Errorf("slice %s: find onboarding: %w", sliceName, err)
-	}
-	ids := stableIDs(membership.TenantID)
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	client, err := objectstore.NewMinIO(minioEndpoint, minioAccessKey, minioSecretKey, secure)
-	if err != nil {
-		return fmt.Errorf("slice %s: configure QA object store: %w", sliceName, err)
-	}
-	originID, versionID, responsibilityID, mediaID, preparationID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
-	frameIDs := []identity.ID{identity.NewID(), identity.NewID()}
-	frameBytes, err := hex.DecodeString("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000000020001e221bc330000000049454e44ae426082")
-	if err != nil {
-		return fmt.Errorf("slice %s: encode synthetic frame: %w", sliceName, err)
-	}
-	frameDigest := digest(frameBytes)
-	frameKeys := make([]string, len(frameIDs))
-	for i, frameID := range frameIDs {
-		frameKeys[i] = "tenant/" + membership.TenantID.String() + "/video-frames/" + frameID.String() + ".png"
-		if err := client.Put(ctx, bucket, frameKeys[i], bytes.NewReader(frameBytes), int64(len(frameBytes)), "image/png"); err != nil {
-			return fmt.Errorf("slice %s: persist synthetic frame: %w", sliceName, err)
-		}
-	}
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND asset_id=? AND media_kind='VIDEO'", membership.TenantID, ids.asset).Order("created_at DESC").First(&inspection).Error; err != nil {
-			return err
-		}
-		responsibility := database.Responsibility{ID: responsibilityID, TenantID: membership.TenantID, InspectionID: inspection.ID, ParticipantID: ids.participant, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Create(&responsibility).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: membership.TenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", MediaKind: "VIDEO", TemplateVersionID: ids.templateVersion, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{"gpsRequired":false,"allowGallery":false}`), Requirements: json.RawMessage(`[{"key":"video:main","section":"main","label":"Vídeo principal","evidenceKind":"VIDEO","required":true,"minimumCount":1,"maximumCount":1}]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: membership.TenantID, ResponsibilityID: responsibilityID, ObjectKey: "tenant/" + membership.TenantID.String() + "/media/" + mediaID.String(), ContentType: "video/mp4", SHA256: frameDigest, SizeBytes: 1, Status: "READY", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: membership.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, SourceSHA256: frameDigest, ManifestDigest: frameDigest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.VideoSource{ID: identity.NewID(), TenantID: membership.TenantID, MediaID: mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 1, Height: 1, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.Origin{ID: originID, TenantID: membership.TenantID, AssetID: ids.asset, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: membership.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparationID, ScopeManifestDigest: frameDigest, IdempotencyKey: "qa-fixed-origin-" + versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
-			return err
-		}
-		labels := [][3]string{{"kitchen", "sink", "wide"}, {"bathroom", "shower", "wide"}}
-		for i, frameID := range frameIDs {
-			if err := tx.Create(&database.VideoFrame{ID: frameID, TenantID: membership.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: int64(i) * 500_000, SHA256: frameDigest, ObjectKey: frameKeys[i], Width: 1, Height: 1, Role: "BASELINE", Quality: "GOOD", SizeBytes: int64(len(frameBytes)), CreatedAt: now}).Error; err != nil {
-				return err
-			}
-			if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: membership.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: labels[i][0], ComponentLabel: labels[i][1], ViewLabel: labels[i][2], Visibility: video.VisibilityVisible, IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("slice %s: persist fixed VIDEO origin: %w", sliceName, err)
-	}
-	return nil
+func findFindingsPromptSnapshot(ctx context.Context, db *gorm.DB) (database.AnalysisPromptSnapshot, error) {
+	var snapshot database.AnalysisPromptSnapshot
+	err := db.WithContext(ctx).Where("analysis_type = ? AND task = ?", analysisprompt.RealEstate, analysisprompt.Findings).Order("created_at ASC").First(&snapshot).Error
+	return snapshot, err
 }
 
 func qaTemplateDefinition(segmentVersionID identity.ID, mediaKind string) (json.RawMessage, error) {

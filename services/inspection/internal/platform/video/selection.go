@@ -16,8 +16,10 @@ const (
 	maxScopeLabelRunes  = 120
 	maxScopeItems       = 200
 	// maxKnownEnvironments bounds the labels carried into later scope prompts.
-	maxKnownEnvironments = 32
-	selectionVersion     = 1
+	maxKnownEnvironments    = 32
+	selectionVersion        = 1
+	maxRetainedFrames       = 7200
+	maxRepresentativeFrames = 12
 )
 
 // Candidate is a frame retained during the bounded per-second selection pass.
@@ -32,8 +34,9 @@ type Candidate struct {
 
 // SelectedFrame marks the baseline/detail role and any explicit quality warning.
 type SelectedFrame struct {
-	Candidate     Candidate
-	Role, Quality string
+	Candidate      Candidate
+	Role, Quality  string
+	Representative bool
 }
 
 // SelectFrames chooses the sharpest frame per second and at most one detail
@@ -85,6 +88,155 @@ func SelectFrames(candidates []Candidate, lowQualityBelow float64) []SelectedFra
 		if detail != nil {
 			result = append(result, SelectedFrame{Candidate: *detail, Role: "DETAIL"})
 		}
+	}
+	return result
+}
+
+// SelectFramesV2 applies per-second sampling followed by cross-time dedup.
+// Similar runs retain their sharpest candidate. Distinct-scene and close-view
+// candidates always survive, and every non-empty clip retains at least one frame.
+func SelectFramesV2(candidates []Candidate, lowQualityBelow float64) ([]SelectedFrame, error) {
+	if lowQualityBelow <= 0 {
+		lowQualityBelow = 1
+	}
+	ordered := make([]Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.ID != "" && candidate.PTSMicros >= 0 {
+			ordered = append(ordered, candidate)
+		}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].PTSMicros != ordered[j].PTSMicros {
+			return ordered[i].PTSMicros < ordered[j].PTSMicros
+		}
+		return ordered[i].ID < ordered[j].ID
+	})
+	if len(ordered) == 0 {
+		return nil, nil
+	}
+
+	// Preserve the v1 per-second candidate selection as the sampling stage.
+	sampled := SelectFrames(ordered, 0)
+	result := make([]SelectedFrame, 0, min(len(sampled), maxRetainedFrames))
+	appendFrame := func(frame SelectedFrame) error {
+		if len(result) == maxRetainedFrames {
+			return ErrResourceLimit
+		}
+		if frame.Candidate.Sharpness < lowQualityBelow {
+			frame.Quality = "LOW_QUALITY"
+		}
+		result = append(result, frame)
+		return nil
+	}
+
+	var runBest *SelectedFrame
+	var runAnchor *Candidate
+	var lastRetained *Candidate
+	flushRun := func() error {
+		if runBest == nil {
+			return nil
+		}
+		if err := appendFrame(*runBest); err != nil {
+			return err
+		}
+		candidate := runBest.Candidate
+		lastRetained = &candidate
+		runBest = nil
+		runAnchor = nil
+		return nil
+	}
+	for _, frame := range sampled {
+		candidate := frame.Candidate
+		if candidate.DistinctScene || candidate.CloseView {
+			if err := flushRun(); err != nil {
+				return nil, err
+			}
+			if err := appendFrame(frame); err != nil {
+				return nil, err
+			}
+			copy := candidate
+			lastRetained = &copy
+			runAnchor = nil
+			continue
+		}
+		var reference *Candidate
+		if runAnchor != nil {
+			reference = runAnchor
+		} else {
+			reference = lastRetained
+		}
+		if reference == nil || hammingDistance(candidate.DHash, reference.DHash) <= 10 {
+			if runAnchor == nil {
+				copy := candidate
+				runAnchor = &copy
+			}
+			if runBest == nil || sharper(candidate, runBest.Candidate) {
+				copy := frame
+				runBest = &copy
+			}
+			continue
+		}
+		if err := flushRun(); err != nil {
+			return nil, err
+		}
+		copy := frame
+		runBest = &copy
+		anchor := candidate
+		runAnchor = &anchor
+	}
+	if err := flushRun(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func sharper(candidate, other Candidate) bool {
+	return candidate.Sharpness > other.Sharpness || candidate.Sharpness == other.Sharpness && (candidate.PTSMicros < other.PTSMicros || candidate.PTSMicros == other.PTSMicros && candidate.ID < other.ID)
+}
+
+// SelectRepresentatives marks up to limit frames using greedy max-min dHash
+// diversity, with sharpness as a tie-breaker. The returned slice retains every input frame;
+// callers can persist all frames and send only entries with Representative=true.
+func SelectRepresentatives(frames []SelectedFrame, limit int) []SelectedFrame {
+	result := slices.Clone(frames)
+	for i := range result {
+		result[i].Representative = false
+	}
+	limit = min(max(limit, 0), maxRepresentativeFrames, len(result))
+	if limit == 0 {
+		return result
+	}
+	selected := make([]bool, len(result))
+	first := 0
+	for i := 1; i < len(result); i++ {
+		if sharper(result[i].Candidate, result[first].Candidate) {
+			first = i
+		}
+	}
+	selected[first] = true
+	result[first].Representative = true
+	for count := 1; count < limit; count++ {
+		best, bestDistance, bestSharpness := -1, -1, -1.0
+		for i, frame := range result {
+			if selected[i] {
+				continue
+			}
+			minDistance := 64
+			for chosen, isSelected := range selected {
+				if isSelected {
+					distance := hammingDistance(frame.Candidate.DHash, result[chosen].Candidate.DHash)
+					if distance < minDistance {
+						minDistance = distance
+					}
+				}
+			}
+			sharpness := max(frame.Candidate.Sharpness, 0)
+			if minDistance > bestDistance || minDistance == bestDistance && (sharpness > bestSharpness || sharpness == bestSharpness && (best < 0 || sharper(frame.Candidate, result[best].Candidate))) {
+				best, bestDistance, bestSharpness = i, minDistance, sharpness
+			}
+		}
+		selected[best] = true
+		result[best].Representative = true
 	}
 	return result
 }

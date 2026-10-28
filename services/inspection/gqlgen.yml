@@ -12,6 +12,10 @@ models:
     fields:
       evidence:
         resolver: true
+  OriginVersion:
+    fields:
+      counterpartyInvitations:
+        resolver: true
 resolver:
   layout: follow-schema
   dir: internal/platform/graphql/resolvers

@@ -35,7 +35,7 @@ func Setup(d Dependencies) error {
 			if err != nil {
 				return nil, err
 			}
-			published, err := d.Bus.Send(ctx, publishtemplate.Command{TenantID: cmd.TenantID, Key: seed.TemplateKey, Name: curatedTemplateName(seed.TemplateKey), IdempotencyKey: "curated-seed:" + seed.TemplateKey + ":" + seed.Document.SegmentVersionID, DefinitionJSON: payload})
+			published, err := d.Bus.Send(ctx, publishtemplate.Command{TenantID: cmd.TenantID, Key: seed.TemplateKey, Name: curatedTemplateName(seed.TemplateKey), IdempotencyKey: "curated-seed:v2:" + seed.TemplateKey + ":" + seed.Document.SegmentVersionID, DefinitionJSON: payload})
 			if err != nil {
 				return nil, err
 			}

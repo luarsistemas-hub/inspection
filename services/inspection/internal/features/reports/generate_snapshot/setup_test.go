@@ -188,3 +188,73 @@ func TestConsolidateFindingsMergesRepeatedViewsOfSameComponent(t *testing.T) {
 		t.Fatalf("distinct D2 or other-component D1 were merged: %+v", result)
 	}
 }
+
+func snapshotDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{"ATTACH DATABASE ':memory:' AS reports", "ATTACH DATABASE ':memory:' AS media", "CREATE TABLE media.video_evidence_references (id text, tenant_id text, preparation_id text, owner_type text, owner_id text, created_at datetime, UNIQUE(tenant_id, preparation_id, owner_type, owner_id))"} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.AutoMigrate(&database.ReportSnapshot{}); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func TestUT260And271InventorySnapshotIsV2AndVersionedPerInspection(t *testing.T) {
+	db := snapshotDB(t)
+	tenant, inspection := identity.NewID(), identity.NewID()
+	context := report.Context{Asset: report.AssetContext{ID: "asset", Name: "Imóvel", Address: "Rua 1"}, Participant: report.ParticipantContext{ID: "participant", Name: "Responsável"}, Template: report.TemplateContext{ID: "template", Name: "Modelo", Version: 1}, Inspection: report.InspectionContext{GeneratedAt: "2026-10-25T00:00:00Z"}}
+	inventory := &report.InventorySection{Reference: report.InventoryReference{VersionID: "version-7", VersionNumber: 7, Purpose: "MOVE_IN", ActivatedAt: "2026-01-01T00:00:00Z"}, Coverage: &report.InventoryCoverage{ExpectedItems: 1, AssessedItems: 1}, Problems: []report.InventoryEntry{}, Informational: []report.InventoryEntry{}}
+	input := Input{TenantID: tenant, InspectionID: inspection, Mode: "HISTORICAL", Classification: "NORMAL", TemplateVersionID: "template-v2", ReferenceVersionID: "version-7", PromptDigest: "prompt", Context: context, Inventory: inventory}
+	first, err := Create(t.Context(), db, input, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row database.ReportSnapshot
+	if err := db.First(&row, "id=?", first.SnapshotID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var canonical struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Inventory     struct {
+			Reference report.InventoryReference `json:"reference"`
+		} `json:"inventory"`
+	}
+	if err := json.Unmarshal(row.CanonicalJSON, &canonical); err != nil {
+		t.Fatal(err)
+	}
+	if row.SchemaVersion != 2 || canonical.SchemaVersion != 2 || canonical.Inventory.Reference != inventory.Reference {
+		t.Fatalf("snapshot = v%d/%d reference %+v", row.SchemaVersion, canonical.SchemaVersion, canonical.Inventory.Reference)
+	}
+	firstJSON := string(row.CanonicalJSON)
+	input.Classification = "ATTENTION"
+	second, err := Create(t.Context(), db, input, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Version != first.Version+1 || second.SnapshotID == first.SnapshotID {
+		t.Fatalf("versions = %d then %d, want an increment", first.Version, second.Version)
+	}
+	var unchanged database.ReportSnapshot
+	db.First(&unchanged, "id=?", first.SnapshotID)
+	if string(unchanged.CanonicalJSON) != firstJSON {
+		t.Fatal("previous snapshot row changed")
+	}
+	legacy := input
+	legacy.InspectionID, legacy.Inventory = identity.NewID(), nil
+	v1, err := Create(t.Context(), db, legacy, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v1Row database.ReportSnapshot
+	db.First(&v1Row, "id=?", v1.SnapshotID)
+	if v1Row.SchemaVersion != 1 {
+		t.Fatalf("snapshot without inventory = v%d, want v1", v1Row.SchemaVersion)
+	}
+}

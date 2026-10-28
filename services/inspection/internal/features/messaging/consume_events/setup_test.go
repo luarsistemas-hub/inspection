@@ -31,7 +31,7 @@ func TestLifecycleOutcomesIT106IT127IT129IT551ToIT554(t *testing.T) {
 		`ATTACH DATABASE ':memory:' AS invitations`,
 		`CREATE TABLE messaging.outbox (id blob primary key, tenant_id blob not null, type text not null, schema_version integer not null, payload blob not null, correlation_id text not null, causation_id text, status text not null, attempts integer not null default 0, next_attempt_at datetime not null, claimed_at datetime, last_error text, published_at datetime, created_at datetime)`,
 		`CREATE TABLE schedules.reminder_plans (id blob primary key, tenant_id blob not null, inspection_id blob not null, remind_at datetime not null, status text not null, created_at datetime)`,
-		`CREATE TABLE invitations.external_sessions (id blob primary key, tenant_id blob not null, invitation_id blob not null, responsibility_id blob not null, session_digest blob not null, csrf_digest blob not null, expires_at datetime not null, revoked_at datetime, created_at datetime)`,
+		`CREATE TABLE invitations.external_sessions (id blob primary key, tenant_id blob not null, invitation_id blob not null, responsibility_id blob, kind text not null default 'CAPTURE', counterparty_invitation_id blob, session_digest blob not null, csrf_digest blob not null, expires_at datetime not null, revoked_at datetime, created_at datetime)`,
 	} {
 		if err := db.Exec(statement).Error; err != nil {
 			t.Fatal(err)
@@ -49,10 +49,23 @@ func TestLifecycleOutcomesIT106IT127IT129IT551ToIT554(t *testing.T) {
 	if err := db.Model(&database.OutboxIntent{}).Where("type='origin.invitation_requested.v1'").Count(&invitations).Error; err != nil || invitations != 1 {
 		t.Fatalf("invitation outcome count=%d err=%v", invitations, err)
 	}
+	var invitationEvent database.OutboxIntent
+	if err := db.Where("type='origin.invitation_requested.v1'").Take(&invitationEvent).Error; err != nil {
+		t.Fatal(err)
+	}
+	var invitationEnvelope struct {
+		Payload map[string]json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(invitationEvent.Payload, &invitationEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := invitationEnvelope.Payload["reviewerMembershipId"]; exists {
+		t.Fatal("v1 invitation request added a null reviewerMembershipId")
+	}
 
 	now := time.Now().UTC()
 	plan := database.ReminderPlan{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspectionID, RemindAt: now.Add(time.Hour), Status: "PLANNED", CreatedAt: now}
-	session := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.NewID(), ResponsibilityID: responsibilityID, SessionDigest: []byte("session"), CSRFDigest: []byte("csrf"), ExpiresAt: now.Add(time.Hour), CreatedAt: now}
+	session := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.Ptr(identity.NewID()), ResponsibilityID: identity.Ptr(responsibilityID), Kind: "CAPTURE", SessionDigest: []byte("session"), CSRFDigest: []byte("csrf"), ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	if err := db.Create(&plan).Error; err != nil {
 		t.Fatal(err)
 	}

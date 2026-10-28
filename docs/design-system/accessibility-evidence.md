@@ -71,8 +71,14 @@ evidence.
 | 4.1.2 | A | Pending route/state review | not-tested | E2E-043, E2E-044 |
 | 4.1.3 | AA | Pending route/state review | not-tested | E2E-043, E2E-044 |
 
+Task 7 routes added to the migration inventory: Admin `/baseline-policy`; Dashboard `/baselines`, `/baselines/review/[originVersionId]`, and `/baselines/review/inspection/[inspectionId]`. They follow the same manual execution gate as the other routes: the `ALL-SURFACES` records above stay `not-tested`, and their 55-criterion route/state walkthroughs remain pending. Browser automation alone does not establish the required screen-reader, zoom, and physical-device evidence, so no conformance is claimed for them.
+
 Each executed record must add: inventory surface ID, route, state, persona,
 criterion, browser/OS/AT versions, viewport or zoom, fixture, steps, expected
 and observed behavior, artifact, reviewer and execution date. `not-applicable`
 requires a route/state-specific rationale. A skipped, blocked or untested row
 remains unresolved and cannot be converted into a pass by an axe result.
+
+## Capture counterparty route
+
+`CAP-002` (`/baseline/[token]`) is registered for US-023 and US-024. The reviewer ran E2E-012/E2E-013 in desktop-chrome; both passed and axe reported zero violations. The 55 criterion rows record that run (2026-10-25). The new photo/video capture journeys still need a browser run because this sandbox cannot start Playwright browsers.

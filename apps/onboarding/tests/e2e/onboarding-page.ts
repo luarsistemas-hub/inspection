@@ -3,13 +3,23 @@ import { expect, type Page } from "@playwright/test";
 export class OnboardingPage {
   constructor(private readonly page: Page) {}
 
+  async solveTurnstile(token: string) {
+    await expect.poll(() => this.page.evaluate(() => typeof (window as Window & { turnstileMockSolve?: unknown }).turnstileMockSolve === "function")).toBe(true);
+    await this.page.evaluate((value) => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.(value), token);
+  }
+
+  async expireTurnstile() {
+    await expect.poll(() => this.page.evaluate(() => typeof (window as Window & { turnstileMockExpire?: unknown }).turnstileMockExpire === "function")).toBe(true);
+    await this.page.evaluate(() => (window as Window & { turnstileMockExpire?: () => void }).turnstileMockExpire?.());
+  }
+
   async open({ autoSolve = true, failFirstLoad = false }: { autoSolve?: boolean; failFirstLoad?: boolean } = {}) {
     let scriptLoads = 0;
     await this.page.route("https://challenges.cloudflare.com/turnstile/v0/api.js**", (route) => {
       if (failFirstLoad && scriptLoads++ === 0) return route.abort();
       return route.fulfill({
         contentType: "application/javascript",
-        body: `window.turnstile={render:function(container,options){window.turnstileMockSolve=options.callback;window.turnstileMockExpire=options["expired-callback"];if(${autoSolve ? "true" : "false"})setTimeout(function(){options.callback("XXXX.DUMMY.TOKEN.XXXX")},0);return "playwright-widget"},reset:function(){},remove:function(){}};`,
+        body: `window.turnstile={render:function(container,options){window.turnstileMockSolve=options.callback;window.turnstileMockExpire=options["expired-callback"];if(${autoSolve ? "true" : "false"})setTimeout(function(){options.callback("XXXX.DUMMY.TOKEN.XXXX")},0);return "playwright-widget"},reset:function(){},remove:function(){window.turnstileMockSolve=undefined;window.turnstileMockExpire=undefined}};`,
       });
     });
     await this.page.goto("/");

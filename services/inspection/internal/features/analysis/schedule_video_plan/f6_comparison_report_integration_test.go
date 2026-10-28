@@ -171,7 +171,7 @@ func TestVV_IT_201OriginActivationDuringCurrentOnlyAnalysisKeepsRequestMode(t *t
 	if err := fixture.h.AdminDB.Create(&database.Origin{ID: originID, TenantID: fixture.tenantID, AssetID: fixture.assetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.h.AdminDB.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fixture.responsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &fixture.currentPreparation, ScopeManifestDigest: "current-only", IdempotencyKey: "it201-activation-" + versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+	if err := fixture.h.AdminDB.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.tenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fixture.responsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &fixture.currentPreparation, ScopeManifestDigest: "current-only", IdempotencyKey: "it201-activation-" + versionID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	prepareTask04FrameObjects(t, fixture)

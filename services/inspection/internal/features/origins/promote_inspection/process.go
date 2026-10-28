@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
 	"inspection/services/inspection/internal/platform/tenanttx"
@@ -144,7 +145,7 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			return err
 		}
 		responsibilityID, versionID := identity.NewID(), identity.NewID()
-		version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", IdempotencyKey: "promotion:" + promotion.ID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
+		version := database.OriginVersion{ID: versionID, TenantID: tenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", IdempotencyKey: "promotion:" + promotion.ID.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}
@@ -178,11 +179,18 @@ func finalize(ctx context.Context, db *gorm.DB, tenantID, promotionID identity.I
 			}
 		}
 		if origin.ActiveVersionID != nil {
-			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=?", tenantID, *origin.ActiveVersionID).Update("status", "SUPERSEDED").Error; err != nil {
+			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=?", tenantID, *origin.ActiveVersionID).Updates(map[string]any{"status": "SUPERSEDED", "superseded_at": now}).Error; err != nil {
 				return err
 			}
 		}
 		if err := tx.Model(&origin).Updates(map[string]any{"active_version_id": versionID, "version": origin.Version + 1, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		versionIDs := []identity.ID{versionID}
+		if origin.ActiveVersionID != nil {
+			versionIDs = append(versionIDs, *origin.ActiveVersionID)
+		}
+		if err := (retentioncore.BaselineTransition{Now: func() time.Time { return now }}).TransitionVersions(ctx, tx, tenantID, versionIDs); err != nil {
 			return err
 		}
 		if err := tx.Model(&promotion).Updates(map[string]any{"template_id": inspection.TemplateID, "origin_version_id": versionID, "status": StatusActive, "completed_at": now, "updated_at": now, "failure_reason": ""}).Error; err != nil {

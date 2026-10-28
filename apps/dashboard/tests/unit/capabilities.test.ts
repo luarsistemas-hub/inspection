@@ -10,10 +10,14 @@ describe("Dashboard capability composition", () => {
     expect(composeCapabilities({ roles: ["MANAGER"], entitlements: ["DASHBOARD"] }).canPublish).toBe(true);
     expect(composeCapabilities({ roles: ["EMPLOYEE"], entitlements: ["DASHBOARD"] }).canMutate).toBe(true);
     expect(composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] }).home).toContain("somente leitura");
-    expect(composeCapabilities({ roles: ["CUSTOMER_VIEWER"], entitlements: ["DASHBOARD"] }).links.map(([label]) => label)).toEqual(["Portfólio", "Laudos publicados", "Notificações"]);
+    expect(composeCapabilities({ roles: ["CUSTOMER_VIEWER"], entitlements: ["DASHBOARD"] }).links.map(([label]) => label)).toEqual(["Portfólio", "Inventários", "Laudos publicados", "Notificações"]);
   });
   it("UT-052 never emits mutation or publication controls for VIEWER", () => {
     for (const role of ["VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] })).toMatchObject({ canMutate: false, canPublish: false });
+  });
+  it("UT-359 allows CUSTOMER_VIEWER to see inventory without review actions and keeps VIEWER read-only", () => {
+    expect(composeCapabilities({ roles: ["CUSTOMER_VIEWER"], entitlements: ["DASHBOARD"] })).toMatchObject({ audience: "customer", canMutate: false, canPublish: false, links: expect.arrayContaining([["Inventários", "/baselines"]]) });
+    expect(composeCapabilities({ roles: ["VIEWER"], entitlements: ["DASHBOARD"] })).toMatchObject({ audience: "internal", canMutate: false, canPublish: false, links: expect.arrayContaining([["Inventários", "/baselines"]]) });
   });
   it("shows reference promotion only to tenant admins and managers", () => {
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["DASHBOARD"] }).canPromoteOrigin).toBe(true);
@@ -32,5 +36,15 @@ describe("Dashboard capability composition", () => {
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["ADMIN", "DASHBOARD"] }).canUseAdmin).toBe(true);
     expect(composeCapabilities({ roles: ["TENANT_ADMIN"], entitlements: ["DASHBOARD"] }).canUseAdmin).toBe(false);
     expect(composeCapabilities({ roles: ["MANAGER"], entitlements: ["ADMIN", "DASHBOARD"] }).canUseAdmin).toBe(false);
+  });
+
+  it("opens the inventory audit trail only to auditors, managers and tenant admins", () => {
+    for (const role of ["AUDITOR", "MANAGER", "TENANT_ADMIN"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canReadTrail).toBe(true);
+    for (const role of ["EMPLOYEE", "VIEWER", "CUSTOMER_VIEWER"]) expect(composeCapabilities({ roles: [role], entitlements: ["DASHBOARD"] }).canReadTrail).toBe(false);
+  });
+
+  it("keeps an auditor read-only and focused on inventories", () => {
+    expect(composeCapabilities({ roles: ["AUDITOR"], entitlements: ["DASHBOARD"] })).toMatchObject({ audience: "internal", canMutate: false, canPublish: false, canPromoteOrigin: false, canManageTriage: false, canReadTrail: true, links: [["Inventários", "/baselines"]] });
+    expect(composeCapabilities({ roles: ["AUDITOR", "MANAGER"], entitlements: ["DASHBOARD"] })).toMatchObject({ canMutate: true, canReadTrail: true });
   });
 });

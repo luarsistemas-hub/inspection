@@ -2130,7 +2130,350 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
 `},
-		{Version: 79, Name: "video_scope_display_names_pt_br", Compatible: true, SQL: `
+		{Version: 79, Name: "inventory_baseline_versions", Compatible: true, SQL: `
+ALTER TABLE origins.origin_versions ALTER COLUMN responsibility_id DROP NOT NULL;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS purpose text;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS source_inspection_id uuid;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS source_version_id uuid;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS has_inventory boolean NOT NULL DEFAULT false;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS draft_state text;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS activated_by_membership_id uuid;
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS discarded_at timestamptz;
+ALTER TABLE origins.origin_versions DROP CONSTRAINT IF EXISTS chk_origin_version_status;
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_version_status CHECK (status IN ('DRAFT','SUBMITTED','ACTIVE','SUPERSEDED','INVALIDATED','DISCARDED'));
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_version_purpose CHECK (purpose IS NULL OR purpose IN ('MOVE_IN','CONSTRUCTION_HANDOVER','POST_RENOVATION','INVENTORY_UPDATE','CONTESTATION_ADJUSTMENT'));
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_version_source CHECK (source IN ('CAPTURE','LEGACY_ORIGIN','COMPARATIVE_INSPECTION','CONTESTATION'));
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_version_draft_state CHECK (draft_state IS NULL OR draft_state IN ('PREPARING','READY','FAILED'));
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_inventory_purpose CHECK (NOT (has_inventory AND status IN ('ACTIVE','SUPERSEDED')) OR purpose IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_origin_version_tenant_id ON origins.origin_versions(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_membership_tenant_id ON access.memberships(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inspection_tenant_id ON inspections.inspections(tenant_id,id);
+ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_version_source_inspection FOREIGN KEY(tenant_id,source_inspection_id) REFERENCES inspections.inspections(tenant_id,id);
+ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_version_source_version FOREIGN KEY(tenant_id,source_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.origin_versions ADD CONSTRAINT fk_origin_version_activator FOREIGN KEY(tenant_id,activated_by_membership_id) REFERENCES access.memberships(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_origin_inventory_draft ON origins.origin_versions(tenant_id,origin_id) WHERE has_inventory AND status='DRAFT';
+`},
+		{Version: 80, Name: "inventory_tables", Compatible: true, SQL: `
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_environment_tenant_id ON origins.inventory_environments(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_item_tenant_id ON origins.inventory_items(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_evidence_tenant_id ON origins.inventory_item_evidence(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_decision_tenant_id ON origins.inventory_decisions(tenant_id,id);
+ALTER TABLE origins.inventory_environments ADD CONSTRAINT fk_inventory_environment_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT fk_inventory_item_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT fk_inventory_item_environment FOREIGN KEY(tenant_id,environment_id) REFERENCES origins.inventory_environments(tenant_id,id);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT fk_inventory_item_merged_into FOREIGN KEY(tenant_id,merged_into_id) REFERENCES origins.inventory_items(tenant_id,id);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT fk_inventory_item_decider FOREIGN KEY(tenant_id,decided_by) REFERENCES access.memberships(tenant_id,id);
+ALTER TABLE origins.inventory_item_evidence ADD CONSTRAINT fk_inventory_evidence_item FOREIGN KEY(tenant_id,item_id) REFERENCES origins.inventory_items(tenant_id,id);
+ALTER TABLE origins.inventory_item_evidence ADD CONSTRAINT fk_inventory_evidence_media FOREIGN KEY(tenant_id,media_id) REFERENCES media.media_objects(tenant_id,id);
+ALTER TABLE origins.inventory_item_evidence ADD CONSTRAINT fk_inventory_evidence_frame FOREIGN KEY(tenant_id,frame_id) REFERENCES media.video_frames(tenant_id,id);
+ALTER TABLE origins.inventory_decisions ADD CONSTRAINT fk_inventory_decision_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.inventory_decisions ADD CONSTRAINT fk_inventory_decision_actor FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES access.memberships(tenant_id,id);
+ALTER TABLE origins.inventory_environments ADD CONSTRAINT chk_inventory_environment_name CHECK(char_length(name) BETWEEN 1 AND 80);
+ALTER TABLE origins.inventory_environments ADD CONSTRAINT chk_inventory_environment_decision CHECK(decision IN ('PENDING','ACCEPTED','EDITED','REJECTED','ADDED'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_name CHECK(char_length(name) BETWEEN 1 AND 80);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_condition CHECK(condition IN ('NEW','GOOD','FAIR','POOR','NOT_ASSESSABLE'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_observation CHECK(observation IN ('OBSERVED','PARTIAL','NOT_OBSERVED','NOT_ASSESSABLE'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_quantity CHECK(quantity IS NULL OR quantity BETWEEN 1 AND 999);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_confidence CHECK(confidence_bps IS NULL OR confidence_bps BETWEEN 0 AND 10000);
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_origin CHECK(origin IN ('AI','MANUAL'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_decision CHECK(decision IN ('PENDING','ACCEPTED','EDITED','REJECTED','ADDED'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_rejection_reason CHECK(rejection_reason IS NULL OR rejection_reason IN ('NOT_EXISTS','NOT_RELEVANT','DUPLICATE','PERSONAL_OBJECT','OTHER'));
+ALTER TABLE origins.inventory_items ADD CONSTRAINT chk_inventory_item_rejected_reason CHECK(decision<>'REJECTED' OR rejection_reason IS NOT NULL);
+ALTER TABLE origins.inventory_item_evidence ADD CONSTRAINT chk_inventory_evidence_kind CHECK(kind IN ('PHOTO','VIDEO_FRAME'));
+ALTER TABLE origins.inventory_item_evidence ADD CONSTRAINT chk_inventory_evidence_frame CHECK((kind='VIDEO_FRAME') = (frame_id IS NOT NULL));
+ALTER TABLE origins.inventory_decisions ADD CONSTRAINT chk_inventory_decision_target CHECK(target_type IN ('ENVIRONMENT','ITEM','VERSION'));
+ALTER TABLE origins.inventory_decisions ADD CONSTRAINT chk_inventory_decision_action CHECK(action IN ('ACCEPT','EDIT','REJECT','ADD','MERGE','SPLIT','REMOVE_ENVIRONMENT','ACTIVATE','DISCARD'));
+DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['origins.inventory_environments','origins.inventory_items','origins.inventory_item_evidence','origins.inventory_decisions'] LOOP
+ EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY',t);
+ EXECUTE format('CREATE POLICY tenant_isolation ON %s USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t);
+END LOOP; END $$;
+GRANT SELECT,INSERT,UPDATE,DELETE ON origins.inventory_environments,origins.inventory_items,origins.inventory_item_evidence TO inspection_runtime;
+-- The decision trail is append-only for the runtime role.
+REVOKE UPDATE,DELETE ON origins.inventory_decisions FROM inspection_runtime;
+GRANT SELECT,INSERT ON origins.inventory_decisions TO inspection_runtime;
+`},
+		{Version: 81, Name: "analysis_prompt_tasks_and_inventory_jobs", Compatible: true, SQL: `
+ALTER TABLE analysis.prompts ADD COLUMN IF NOT EXISTS task text NOT NULL DEFAULT 'FINDINGS';
+ALTER TABLE analysis.prompt_snapshots ADD COLUMN IF NOT EXISTS task text NOT NULL DEFAULT 'FINDINGS';
+DROP INDEX IF EXISTS analysis.idx_analysis_prompts_analysis_type;
+DROP INDEX IF EXISTS analysis.analysis_prompts_analysis_type_key;
+DROP INDEX IF EXISTS analysis.idx_analysis_prompt_snapshot_digest;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_analysis_prompt_task ON analysis.prompts(analysis_type,task);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_analysis_prompt_snapshot_task_digest ON analysis.prompt_snapshots(analysis_type,task,canonical_digest);
+ALTER TABLE analysis.prompts ADD CONSTRAINT chk_analysis_prompt_task CHECK(task IN ('FINDINGS','INVENTORY_CATALOG','INVENTORY_COMPARE'));
+ALTER TABLE analysis.prompt_snapshots ADD CONSTRAINT chk_analysis_snapshot_task CHECK(task IN ('FINDINGS','INVENTORY_CATALOG','INVENTORY_COMPARE'));
+ALTER TABLE inspections.inspections ADD COLUMN IF NOT EXISTS inventory_prompt_snapshot_id uuid;
+ALTER TABLE inspections.inspections ADD CONSTRAINT fk_inspection_inventory_prompt_snapshot FOREIGN KEY(inventory_prompt_snapshot_id) REFERENCES analysis.prompt_snapshots(id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_comparison_job_tenant_id ON analysis.comparison_jobs(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_job_tenant_id ON analysis.inventory_jobs(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_pair_tenant_id ON analysis.inventory_evidence_pairs(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_result_tenant_id ON analysis.inventory_item_results(tenant_id,id);
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT fk_inventory_job_inspection FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id);
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT fk_inventory_job_origin_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT fk_inventory_job_prompt_snapshot FOREIGN KEY(prompt_snapshot_id) REFERENCES analysis.prompt_snapshots(id);
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_kind CHECK(kind IN ('CATALOG','COMPARE'));
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_status CHECK(status IN ('PENDING','RUNNING','SUCCEEDED','FAILED','CANCELED'));
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_attempts CHECK(attempts >= 0);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT fk_inventory_pair_job FOREIGN KEY(tenant_id,job_id) REFERENCES analysis.inventory_jobs(tenant_id,id);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT fk_inventory_pair_origin_media FOREIGN KEY(tenant_id,origin_media_id) REFERENCES media.media_objects(tenant_id,id);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT fk_inventory_pair_current_media FOREIGN KEY(tenant_id,current_media_id) REFERENCES media.media_objects(tenant_id,id);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT fk_inventory_pair_origin_frame FOREIGN KEY(tenant_id,origin_frame_id) REFERENCES media.video_frames(tenant_id,id);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT fk_inventory_pair_current_frame FOREIGN KEY(tenant_id,current_frame_id) REFERENCES media.video_frames(tenant_id,id);
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT chk_inventory_pair_decision CHECK(decision IN ('SAME_VIEW','NOT_COMPARABLE','UNCERTAIN'));
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT chk_inventory_pair_origin_frame CHECK(origin_kind IN ('PHOTO','VIDEO_FRAME') AND (origin_kind='VIDEO_FRAME') = (origin_frame_id IS NOT NULL));
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT chk_inventory_pair_current_frame CHECK(current_kind IN ('PHOTO','VIDEO_FRAME') AND (current_kind='VIDEO_FRAME') = (current_frame_id IS NOT NULL));
+ALTER TABLE analysis.inventory_evidence_pairs ADD CONSTRAINT chk_inventory_pair_confirmed CHECK(NOT confirmed OR decision='SAME_VIEW');
+-- Photo evidence has no frame id; NULLS NOT DISTINCT keeps one pair per photo.
+DROP INDEX IF EXISTS analysis.uq_inventory_pair_identity;
+CREATE UNIQUE INDEX uq_inventory_pair_identity ON analysis.inventory_evidence_pairs(tenant_id,job_id,item_identity_id,origin_media_id,origin_frame_id) NULLS NOT DISTINCT;
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT fk_inventory_result_job FOREIGN KEY(tenant_id,job_id) REFERENCES analysis.inventory_jobs(tenant_id,id);
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT fk_inventory_result_inspection FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id);
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_status CHECK(status IN ('PRESENT_UNCHANGED','CONDITION_CHANGED','MISSING','NOT_OBSERVED','OUTSIDE_INVENTORY','IMPROVED'));
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_conditions CHECK((condition_before IS NULL OR condition_before IN ('NEW','GOOD','FAIR','POOR','NOT_ASSESSABLE')) AND (condition_after IS NULL OR condition_after IN ('NEW','GOOD','FAIR','POOR','NOT_ASSESSABLE')));
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_reason CHECK(reason_code IS NULL OR reason_code IN ('OBSTRUCTED','FRAMING','QUALITY','NO_CORRESPONDING_VIEW','ENVIRONMENT_NOT_CAPTURED','ANALYSIS_FAILED'));
+-- Outside-inventory rows describe a new object instead of a baseline item.
+ALTER TABLE analysis.inventory_item_results ALTER COLUMN item_identity_id DROP NOT NULL;
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_outside_identity CHECK((status='OUTSIDE_INVENTORY') = (item_identity_id IS NULL));
+ALTER TABLE analysis.inventory_item_results ADD CONSTRAINT chk_inventory_result_outside_details CHECK((status='OUTSIDE_INVENTORY' AND outside_type_code IS NOT NULL AND char_length(outside_type_code)>0 AND outside_name IS NOT NULL AND char_length(outside_name) BETWEEN 1 AND 80) OR (status<>'OUTSIDE_INVENTORY' AND outside_type_code IS NULL AND outside_name IS NULL));
+DO $$ DECLARE t text; BEGIN FOREACH t IN ARRAY ARRAY['analysis.inventory_jobs','analysis.inventory_evidence_pairs','analysis.inventory_item_results'] LOOP
+ EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY',t);
+ EXECUTE format('CREATE POLICY tenant_isolation ON %s USING (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid) WITH CHECK (tenant_id=nullif(current_setting(''app.tenant_id'',true),'''')::uuid)',t);
+END LOOP; END $$;
+GRANT SELECT,INSERT,UPDATE,DELETE ON analysis.inventory_jobs,analysis.inventory_evidence_pairs,analysis.inventory_item_results TO inspection_runtime;
+
+-- Findings reference exactly one job. Existing findings are attributed to the
+-- comparison job of their analysis run; the immutability trigger is paused
+-- only for this backfill inside the migration transaction.
+ALTER TABLE analysis.findings ADD COLUMN IF NOT EXISTS comparison_job_id uuid;
+ALTER TABLE analysis.findings ADD COLUMN IF NOT EXISTS inventory_job_id uuid;
+ALTER TABLE analysis.findings ADD COLUMN IF NOT EXISTS item_identity_id uuid;
+ALTER TABLE analysis.findings DISABLE TRIGGER immutable_finding;
+UPDATE analysis.findings f SET comparison_job_id=r.job_id FROM analysis.analysis_runs r WHERE f.tenant_id=r.tenant_id AND f.analysis_run_id=r.id AND f.comparison_job_id IS NULL AND f.inventory_job_id IS NULL;
+ALTER TABLE analysis.findings ENABLE TRIGGER immutable_finding;
+ALTER TABLE analysis.findings ADD CONSTRAINT fk_finding_comparison_job FOREIGN KEY(tenant_id,comparison_job_id) REFERENCES analysis.comparison_jobs(tenant_id,id);
+ALTER TABLE analysis.findings ADD CONSTRAINT fk_finding_inventory_job FOREIGN KEY(tenant_id,inventory_job_id) REFERENCES analysis.inventory_jobs(tenant_id,id);
+ALTER TABLE analysis.findings ADD CONSTRAINT chk_finding_one_job CHECK((comparison_job_id IS NULL) <> (inventory_job_id IS NULL));
+ALTER TABLE analysis.findings ADD CONSTRAINT chk_finding_item_identity CHECK(item_identity_id IS NULL OR inventory_job_id IS NOT NULL);
+
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_comparison_mode;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_comparison_mode CHECK(comparison_mode IS NULL OR comparison_mode IN ('CURRENT_ONLY','COMPARE_ORIGIN_CURRENT','CHECKLIST_ONLY','FIXED_ORIGIN','PLANNED_STAGE','PREVIOUS_INSPECTION','BEFORE_AFTER','VIDEO_SCOPE','VIDEO_MATCH','VIDEO_CONDITION','VIDEO_VERIFY','INVENTORY_CATALOG','INVENTORY_MATCH','INVENTORY_COMPARE'));
+`},
+		{Version: 82, Name: "environment_capture_contracts", Compatible: true, SQL: `
+ALTER TABLE templates.template_versions DROP CONSTRAINT IF EXISTS chk_template_schema_version;
+ALTER TABLE templates.template_versions ADD CONSTRAINT chk_template_schema_version CHECK(schema_version IN (1,2));
+ALTER TABLE invitations.invitations ADD COLUMN IF NOT EXISTS reviewer_membership_id uuid;
+ALTER TABLE invitations.invitations ADD CONSTRAINT fk_invitation_reviewer_membership FOREIGN KEY(tenant_id,reviewer_membership_id) REFERENCES access.memberships(tenant_id,id);
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS frames_sampled integer NOT NULL DEFAULT 0;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS frames_retained integer NOT NULL DEFAULT 0;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS frames_representative integer NOT NULL DEFAULT 0;
+ALTER TABLE media.video_preparation_jobs ADD COLUMN IF NOT EXISTS requirement_key text;
+ALTER TABLE media.video_preparation_jobs ADD CONSTRAINT chk_video_preparation_frame_metrics CHECK(frames_sampled >= 0 AND frames_retained >= 0 AND frames_representative >= 0 AND frames_retained <= frames_sampled AND frames_representative <= frames_retained);
+ALTER TABLE media.video_frames ADD COLUMN IF NOT EXISTS representative boolean NOT NULL DEFAULT false;
+ALTER TABLE analysis.video_plan_preparations ADD COLUMN IF NOT EXISTS requirement_key text;
+ALTER TABLE capture.video_attempts ADD COLUMN IF NOT EXISTS requirement_key text;
+`},
+		{Version: 83, Name: "counterparty_invitations_and_sessions", Compatible: true, SQL: `
+CREATE UNIQUE INDEX IF NOT EXISTS uq_counterparty_tenant_id ON origins.counterparty_invitations(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_participant_tenant_id ON participants.participants(tenant_id,id);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT fk_counterparty_origin_version FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT fk_counterparty_participant FOREIGN KEY(tenant_id,participant_id) REFERENCES participants.participants(tenant_id,id);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT fk_counterparty_adjustment_version FOREIGN KEY(tenant_id,adjustment_version_id) REFERENCES origins.origin_versions(tenant_id,id);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT fk_counterparty_resolver FOREIGN KEY(tenant_id,resolved_by) REFERENCES access.memberships(tenant_id,id);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_response CHECK(response IN ('PENDING','ACKNOWLEDGED','CONTESTED','NO_RESPONSE'));
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_resolution CHECK(resolution IN ('OPEN','DECLINED','ACCEPTED'));
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_statement CHECK(statement IS NULL OR char_length(statement)<=4000);
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_otp_attempts CHECK(otp_attempts >= 0);
+ALTER TABLE origins.baseline_policies ADD CONSTRAINT fk_baseline_policy_tenant FOREIGN KEY(tenant_id) REFERENCES tenancy.tenants(tenant_id);
+ALTER TABLE origins.baseline_policies ADD CONSTRAINT chk_baseline_deadline CHECK(contestation_deadline_days BETWEEN 1 AND 90);
+ALTER TABLE origins.counterparty_invitations ENABLE ROW LEVEL SECURITY; ALTER TABLE origins.counterparty_invitations FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON origins.counterparty_invitations USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+ALTER TABLE origins.baseline_policies ENABLE ROW LEVEL SECURITY; ALTER TABLE origins.baseline_policies FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON origins.baseline_policies USING(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK(tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT,INSERT,UPDATE,DELETE ON origins.counterparty_invitations,origins.baseline_policies TO inspection_runtime;
+
+-- A capture session belongs to an invitation and responsibility; a
+-- counterparty session belongs only to its counterparty invitation.
+ALTER TABLE invitations.external_sessions ALTER COLUMN invitation_id DROP NOT NULL;
+ALTER TABLE invitations.external_sessions ALTER COLUMN responsibility_id DROP NOT NULL;
+ALTER TABLE invitations.external_sessions ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'CAPTURE';
+ALTER TABLE invitations.external_sessions ADD COLUMN IF NOT EXISTS counterparty_invitation_id uuid;
+ALTER TABLE invitations.external_sessions ADD CONSTRAINT chk_external_session_kind CHECK(kind IN ('CAPTURE','COUNTERPARTY'));
+ALTER TABLE invitations.external_sessions ADD CONSTRAINT chk_external_session_owner CHECK((kind='CAPTURE' AND invitation_id IS NOT NULL AND responsibility_id IS NOT NULL AND counterparty_invitation_id IS NULL) OR (kind='COUNTERPARTY' AND invitation_id IS NULL AND responsibility_id IS NULL AND counterparty_invitation_id IS NOT NULL));
+ALTER TABLE invitations.external_sessions ADD CONSTRAINT fk_external_counterparty_invitation FOREIGN KEY(tenant_id,counterparty_invitation_id) REFERENCES origins.counterparty_invitations(tenant_id,id);
+`},
+		{Version: 84, Name: "baseline_video_retention", Compatible: true, SQL: `
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS retention_anchor text NOT NULL DEFAULT 'FIXED';
+ALTER TABLE media.video_sources ALTER COLUMN source_expiry_at DROP NOT NULL;
+ALTER TABLE media.video_sources ADD CONSTRAINT chk_video_source_retention_anchor CHECK(retention_anchor IN ('FIXED','ACTIVE_BASELINE'));
+-- Retained sources whose frame bank is ready get the fixed expiry they would
+-- have received at FRAME_BANK_READY; sources still preparing receive it then.
+UPDATE media.video_sources
+SET retention_days=COALESCE(retention_days,30),
+    source_expiry_at=first_frame_ready_at + (COALESCE(retention_days,30) * interval '1 day')
+WHERE status='RETAINED' AND retention_anchor='FIXED'
+  AND first_frame_ready_at IS NOT NULL AND source_expiry_at IS NULL;
+ALTER TABLE media.video_sources ADD CONSTRAINT chk_video_source_retention_expiry CHECK(status<>'RETAINED' OR (retention_anchor='FIXED' AND (source_expiry_at IS NOT NULL OR first_frame_ready_at IS NULL)) OR (retention_anchor='ACTIVE_BASELINE' AND source_expiry_at IS NULL));
+ALTER TABLE media.video_policies ADD COLUMN IF NOT EXISTS superseded_baseline_retention_days integer NOT NULL DEFAULT 365;
+ALTER TABLE media.video_policies ALTER COLUMN current_retention_days SET DEFAULT 30;
+ALTER TABLE media.video_policies ADD CONSTRAINT chk_video_policy_superseded_retention CHECK(superseded_baseline_retention_days BETWEEN 1 AND 3650);
+`},
+		{Version: 85, Name: "report_snapshot_schema_v2", Compatible: true, SQL: `
+ALTER TABLE reports.report_snapshots ADD COLUMN IF NOT EXISTS schema_version integer NOT NULL DEFAULT 1;
+ALTER TABLE reports.report_snapshots ADD CONSTRAINT chk_report_snapshot_schema_version CHECK(schema_version IN (1,2));
+`},
+		// Re-analysis appends a new generation of inventory jobs; readers use the
+		// latest generation per requirement while earlier results stay auditable.
+		{Version: 86, Name: "inventory_job_generations", Compatible: true, SQL: `
+ALTER TABLE analysis.inventory_jobs ADD COLUMN IF NOT EXISTS generation integer NOT NULL DEFAULT 1;
+ALTER TABLE analysis.inventory_jobs DROP CONSTRAINT IF EXISTS chk_inventory_job_generation;
+ALTER TABLE analysis.inventory_jobs ADD CONSTRAINT chk_inventory_job_generation CHECK(generation >= 1);
+DROP INDEX IF EXISTS analysis.uq_inventory_job_input;
+CREATE UNIQUE INDEX uq_inventory_job_input ON analysis.inventory_jobs(tenant_id,inspection_id,kind,requirement_key,generation);
+`},
+		{Version: 87, Name: "baseline_supersession_timestamp", Compatible: true, SQL: `
+ALTER TABLE origins.origin_versions ADD COLUMN IF NOT EXISTS superseded_at timestamptz;
+UPDATE origins.origin_versions v SET superseded_at=(
+  SELECT successor.activated_at FROM origins.origin_versions successor
+  WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+  ORDER BY successor.activated_at DESC LIMIT 1
+) WHERE v.status='SUPERSEDED' AND v.superseded_at IS NULL AND EXISTS (
+  SELECT 1 FROM origins.origin_versions successor WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+);
+`},
+		{Version: 88, Name: "counterparty_response_idempotency", Compatible: true, SQL: `
+ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS response_mutation_id text;
+`},
+		{Version: 89, Name: "counterparty_deadline_scheduler_discovery", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz,
+  p_terminal_updated_before timestamptz,
+  p_deadline_before timestamptz
+) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT s.tenant_id FROM schedules.schedules s
+  WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION
+  SELECT r.tenant_id FROM schedules.reminder_plans r
+  WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION
+  SELECT i.tenant_id FROM inspections.inspections i
+  WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION
+  SELECT c.tenant_id FROM origins.counterparty_invitations c
+  WHERE c.response='PENDING' AND c.deadline_at<=p_now
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz, timestamptz, timestamptz) TO inspection_runtime;
+`},
+		{Version: 90, Name: "counterparty_delivery_generation", Compatible: true, SQL: `
+ALTER TABLE origins.counterparty_invitations ADD COLUMN IF NOT EXISTS delivery_generation integer NOT NULL DEFAULT 1;
+ALTER TABLE origins.counterparty_invitations ADD CONSTRAINT chk_counterparty_delivery_generation CHECK(delivery_generation >= 1);
+`},
+		{Version: 91, Name: "baseline_retention_scheduler_repairs", Compatible: true, SQL: `
+ALTER TABLE media.video_sources ADD COLUMN IF NOT EXISTS retention_floor_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_video_sources_fixed_expiry ON media.video_sources(source_expiry_at,tenant_id) WHERE status='RETAINED' AND retention_anchor='FIXED';
+CREATE INDEX IF NOT EXISTS idx_deletion_requests_pending ON retention.deletion_requests(tenant_id,status,processed_at,requested_at) WHERE status IN ('REQUESTED','BLOCKED');
+CREATE INDEX IF NOT EXISTS idx_origin_inventory_purge ON origins.origin_versions(tenant_id,status,id) WHERE has_inventory AND responsibility_id IS NULL AND status IN ('SUPERSEDED','INVALIDATED','DISCARDED');
+UPDATE media.video_sources SET retention_floor_at=COALESCE(source_expiry_at,first_frame_ready_at + (COALESCE(retention_days,30) * interval '1 day'))
+WHERE retention_floor_at IS NULL AND (source_expiry_at IS NOT NULL OR (retention_anchor='ACTIVE_BASELINE' AND first_frame_ready_at IS NOT NULL));
+UPDATE origins.origin_versions v SET superseded_at=(
+  SELECT successor.activated_at FROM origins.origin_versions successor
+  WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+  ORDER BY successor.activated_at DESC LIMIT 1
+) WHERE v.status='SUPERSEDED' AND EXISTS (
+  SELECT 1 FROM origins.origin_versions successor WHERE successor.tenant_id=v.tenant_id AND successor.supersedes_id=v.id AND successor.activated_at IS NOT NULL
+) AND (v.superseded_at IS NULL OR v.superseded_at=COALESCE(v.activated_at,v.created_at));
+CREATE INDEX IF NOT EXISTS idx_counterparty_pending_deadline ON origins.counterparty_invitations(deadline_at) WHERE response='PENDING';
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
+) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT s.tenant_id FROM schedules.schedules s WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION SELECT r.tenant_id FROM schedules.reminder_plans r WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION SELECT c.tenant_id FROM origins.counterparty_invitations c WHERE c.response='PENDING' AND c.deadline_at<=p_now
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE (v.status='RETAINED' AND v.retention_anchor='FIXED' AND v.source_expiry_at<=p_now) OR (v.status='DELETING' AND (v.delete_lease_until IS NULL OR v.delete_lease_until<=p_now))
+  UNION SELECT d.tenant_id FROM retention.deletion_requests d WHERE d.status='REQUESTED' OR (d.status='BLOCKED' AND COALESCE(d.processed_at,d.requested_at)<=p_now-interval '5 minutes')
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    WHERE ov.has_inventory AND ov.responsibility_id IS NULL AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+      AND EXISTS (SELECT 1 FROM origins.inventory_items i WHERE i.tenant_id=ov.tenant_id AND i.origin_version_id=ov.id)
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
+`},
+		{Version: 92, Name: "retention_scheduler_due_windows", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_scheduler_tenants(
+  p_now timestamptz, p_terminal_updated_before timestamptz, p_deadline_before timestamptz
+) RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT s.tenant_id FROM schedules.schedules s WHERE s.status='ACTIVE' AND s.next_due_at<=p_now
+  UNION SELECT r.tenant_id FROM schedules.reminder_plans r WHERE r.status='PLANNED' AND r.remind_at<=p_now
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('COMPLETED','CANCELED','INVALIDATED') AND i.updated_at<=p_terminal_updated_before
+  UNION SELECT i.tenant_id FROM inspections.inspections i WHERE i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING') AND i.deadline_at<=p_deadline_before
+  UNION SELECT c.tenant_id FROM origins.counterparty_invitations c WHERE c.response='PENDING' AND c.deadline_at<=p_now
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='DELETING' AND (v.delete_lease_until IS NULL OR v.delete_lease_until<=p_now)
+  UNION SELECT v.tenant_id FROM media.video_sources v WHERE v.status='RETAINED' AND v.retention_anchor='FIXED' AND v.source_expiry_at<=p_now
+    AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=v.tenant_id AND h.active AND (h.source_media_id=v.media_id OR h.inspection_id IN (SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id WHERE m.tenant_id=v.tenant_id AND m.id=v.media_id)))
+    AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=v.tenant_id AND c.response='CONTESTED' AND c.resolution='OPEN' AND c.origin_version_id IN (
+      SELECT e.origin_version_id FROM origins.origin_evidence e WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id
+      UNION SELECT i.origin_version_id FROM origins.inventory_item_evidence e JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id JOIN origins.inventory_environments env ON env.tenant_id=i.tenant_id AND env.id=i.environment_id WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND i.decision IN ('ACCEPTED','EDITED','ADDED') AND i.merged_into_id IS NULL AND env.decision<>'REJECTED'
+      UNION SELECT ov.id FROM origins.origin_versions ov JOIN media.video_preparation_jobs p ON p.tenant_id=ov.tenant_id AND p.id=ov.video_preparation_id WHERE ov.tenant_id=v.tenant_id AND p.media_id=v.media_id))
+    AND NOT EXISTS (
+      SELECT 1 FROM origins.origin_evidence e JOIN origins.origin_versions ov ON ov.tenant_id=e.tenant_id AND ov.id=e.origin_version_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+      JOIN origins.origin_versions ov ON ov.tenant_id=it.tenant_id AND ov.id=it.origin_version_id
+      JOIN origins.inventory_environments env ON env.tenant_id=it.tenant_id AND env.id=it.environment_id
+      WHERE e.tenant_id=v.tenant_id AND e.media_id=v.media_id AND it.decision IN ('ACCEPTED','EDITED','ADDED') AND it.merged_into_id IS NULL AND env.decision<>'REJECTED' AND ov.status='ACTIVE'
+      UNION ALL
+      SELECT 1 FROM media.video_preparation_jobs p JOIN origins.origin_versions ov ON ov.tenant_id=p.tenant_id AND ov.video_preparation_id=p.id
+      WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND ov.status='ACTIVE'
+    )
+    AND NOT EXISTS (SELECT 1 FROM media.video_source_leases l WHERE l.tenant_id=v.tenant_id AND l.source_media_id=v.media_id AND l.lease_until>p_now)
+    AND NOT EXISTS (SELECT 1 FROM media.video_preparation_jobs p WHERE p.tenant_id=v.tenant_id AND p.media_id=v.media_id AND p.status='PROCESSING' AND p.lease_expires_at>p_now)
+  UNION SELECT d.tenant_id FROM retention.deletion_requests d WHERE d.status='REQUESTED' OR (d.status='BLOCKED' AND COALESCE(d.processed_at,d.requested_at)<=p_now-interval '5 minutes')
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.has_inventory AND ov.responsibility_id IS NULL AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+      AND COALESCE(ov.superseded_at,ov.invalidated_at,ov.discarded_at,ov.activated_at,ov.created_at)
+        + (CASE WHEN ov.status='SUPERSEDED' THEN COALESCE(p.superseded_baseline_retention_days,365) ELSE COALESCE(p.current_retention_days,30) END) * interval '1 day' <= p_now
+      AND EXISTS (SELECT 1 FROM origins.inventory_items it WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active)
+      AND NOT EXISTS (
+        SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+        JOIN retention.legal_holds h ON h.tenant_id=e.tenant_id AND h.source_media_id=e.media_id AND h.active
+        WHERE e.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id
+      )
+      AND NOT EXISTS (SELECT 1 FROM schedules.schedules s WHERE s.tenant_id=ov.tenant_id AND s.status='ACTIVE' AND s.reference_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM inspections.reference_snapshots r JOIN inspections.inspections i ON i.tenant_id=r.tenant_id AND i.id=r.inspection_id WHERE r.tenant_id=ov.tenant_id AND r.reference_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM analysis.inventory_jobs j JOIN inspections.inspections i ON i.tenant_id=j.tenant_id AND i.id=j.inspection_id WHERE j.tenant_id=ov.tenant_id AND j.origin_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND (h.inspection_id=ov.source_inspection_id OR h.inspection_id IN (
+        SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id
+        JOIN origins.inventory_item_evidence e ON e.tenant_id=m.tenant_id AND e.media_id=m.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)))
+  UNION SELECT ov.tenant_id FROM origins.origin_versions ov
+    LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+    WHERE ov.media_kind='VIDEO' AND ov.status IN ('INVALIDATED','SUPERSEDED')
+      AND ov.video_preparation_id IS NOT NULL
+      AND (ov.status='INVALIDATED' OR (ov.superseded_at IS NOT NULL AND ov.superseded_at + COALESCE(p.superseded_baseline_retention_days,365) * interval '1 day' <= p_now))
+      AND EXISTS (SELECT 1 FROM media.video_frames f WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=ov.tenant_id AND r.preparation_id=ov.video_preparation_id)
+      AND NOT EXISTS (SELECT 1 FROM origins.origin_versions active WHERE active.tenant_id=ov.tenant_id AND active.video_preparation_id=ov.video_preparation_id AND active.status='ACTIVE')
+      AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+      AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active AND h.origin_version_id=ov.id)
+      AND NOT EXISTS (SELECT 1 FROM media.video_frames f JOIN origins.inventory_item_evidence e ON e.tenant_id=f.tenant_id AND e.frame_id=f.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id JOIN origins.origin_versions v ON v.tenant_id=it.tenant_id AND v.id=it.origin_version_id WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id AND v.status<>'DISCARDED')
+$$;
+REVOKE ALL ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_scheduler_tenants(timestamptz,timestamptz,timestamptz) TO inspection_runtime;
+`},
+		{Version: 93, Name: "video_scope_display_names_pt_br", Compatible: true, SQL: `
 ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS environment_display_name varchar(120);
 ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS component_display_name varchar(120);
 ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS view_display_name varchar(120);

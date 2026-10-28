@@ -116,7 +116,10 @@ func (w DBPlanWriter) SealPlan(ctx context.Context, plan Plan) error {
 			itemID := identity.NewDeterministicID("inspection-video-plan-item", plan.ID.String()+":"+item.ComponentID.String())
 			// ComponentID is the stable VideoScopeItem ID selected by the plan
 			// builder; retain it in both the row and public requirement key.
-			requirementKey := "video:" + item.ComponentID.String()
+			requirementKey := item.RequirementKey
+			if requirementKey == "" {
+				requirementKey = "video:" + item.ComponentID.String()
+			}
 			itemRow := database.VideoPlanItem{ID: itemID, TenantID: plan.TenantID, PlanID: plan.ID, ComponentID: item.ComponentID, CarriedResultJobID: item.CarriedResultJobID, RequirementKey: requirementKey, Outcome: item.Outcome, Reason: item.Reason, InputDigest: item.InputDigest, OriginFrameIDs: originIDs, CurrentFrameIDs: currentIDs, CoreGroups: coreGroups, CurrentGroups: currentGroups, CreatedAt: now}
 			if err := tx.Create(&itemRow).Error; err != nil {
 				return err
@@ -177,6 +180,21 @@ func (w DBPlanWriter) SealPlan(ctx context.Context, plan Plan) error {
 
 func persistVideoPlanPreparations(tx *gorm.DB, plan Plan, now time.Time) error {
 	preparations := []database.VideoPlanPreparation{{TenantID: plan.TenantID, PlanID: plan.ID, PreparationID: plan.CurrentPreparationID, Role: "MAIN", CreatedAt: now}}
+	if len(plan.CurrentPreparations) > 0 {
+		preparations = preparations[:0]
+		for i, ref := range plan.CurrentPreparations {
+			role := ref.Role
+			if role == "" {
+				if i == 0 {
+					role = "MAIN"
+				} else {
+					role = "SUPPLEMENT"
+				}
+			}
+			key := ref.RequirementKey
+			preparations = append(preparations, database.VideoPlanPreparation{TenantID: plan.TenantID, PlanID: plan.ID, PreparationID: ref.ID, Role: role, RequirementKey: &key, CreatedAt: now})
+		}
+	}
 	if plan.SupplementPreparationID != nil {
 		preparations = append(preparations, database.VideoPlanPreparation{TenantID: plan.TenantID, PlanID: plan.ID, PreparationID: *plan.SupplementPreparationID, Role: "SUPPLEMENT", CreatedAt: now})
 	}
@@ -210,6 +228,9 @@ func persistVideoPlanPreparations(tx *gorm.DB, plan Plan, now time.Time) error {
 
 func persistPlanEvidenceReferences(tx *gorm.DB, plan Plan, now time.Time) error {
 	preparations := []identity.ID{plan.CurrentPreparationID}
+	for _, ref := range plan.CurrentPreparations {
+		preparations = append(preparations, ref.ID)
+	}
 	if plan.SupplementPreparationID != nil {
 		preparations = append(preparations, *plan.SupplementPreparationID)
 	}
@@ -260,6 +281,17 @@ func validatePersistedFrameDigests(tx *gorm.DB, plan Plan) error {
 	}
 	if plan.ParentPlanID == nil && (currentPreparation.SubmissionID == nil || *currentPreparation.SubmissionID != plan.SubmissionID) {
 		return fmt.Errorf("%w: current preparation is outside the submitted generation", ErrInvalidPlan)
+	}
+	allowedCurrent := map[identity.ID]bool{plan.CurrentPreparationID: true}
+	for _, ref := range plan.CurrentPreparations {
+		allowedCurrent[ref.ID] = true
+		var prep database.VideoPreparationJob
+		if err := tx.Where("tenant_id=? AND id=? AND status='READY'", plan.TenantID, ref.ID).Take(&prep).Error; err != nil {
+			return fmt.Errorf("%w: linked current preparation is not ready", ErrInvalidPlan)
+		}
+		if prep.SubmissionID == nil || *prep.SubmissionID != plan.SubmissionID {
+			return fmt.Errorf("%w: linked preparation is outside submission", ErrInvalidPlan)
+		}
 	}
 	currentFramesPreparation := plan.CurrentPreparationID
 	if plan.ParentPlanID != nil {
@@ -334,7 +366,7 @@ func validatePersistedFrameDigests(tx *gorm.DB, plan Plan) error {
 		}
 		for _, id := range item.CurrentFrames {
 			frame, ok := framesByID[id]
-			if !ok || frame.PreparationID != currentFramesPreparation {
+			if !ok || !allowedCurrent[frame.PreparationID] && frame.PreparationID != currentFramesPreparation {
 				return fmt.Errorf("%w: frame is outside current preparation", ErrInvalidPlan)
 			}
 			current = append(current, frame)

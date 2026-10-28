@@ -100,13 +100,17 @@ func (s Service) RequestVideoReplacement(ctx context.Context, in VideoReplacemen
 		if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO'", in.TenantID, media.ResponsibilityID).Take(&original).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "mediaId", "original video capture was not found")
 		}
-		requirements, err := mainVideoRequirement(original.Requirements)
+		var previousInvitation database.Invitation
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", in.TenantID, original.ResponsibilityID).Order("created_at DESC").Take(&previousInvitation).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		requirements, err := mainVideoRequirement(original.Requirements, media.RequirementKey)
 		if err != nil {
 			return err
 		}
 		responsibility := database.Responsibility{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: in.InspectionID, ParticipantID: inspection.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, Kind: "VIDEO_REPLACEMENT", MediaKind: "VIDEO", TemplateVersionID: original.TemplateVersionID, ReferencePayload: original.ReferencePayload, PolicyPayload: original.PolicyPayload, Requirements: requirements, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
-		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now}
+		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility.ID, ReviewerMembershipID: previousInvitation.ReviewerMembershipID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: deadline, CreatedAt: now}
 		replacement := database.VideoReplacement{ID: identity.NewID(), TenantID: in.TenantID, InspectionID: in.InspectionID, MediaID: in.MediaID, ResponsibilityID: responsibility.ID, InvitationID: invite.ID, DeadlineAt: deadline, Reason: in.Reason, Status: "REQUESTED", IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now}
 		for _, row := range []any{&responsibility, &draft, &invite, &replacement} {
 			if err := tx.Create(row).Error; err != nil {
@@ -209,7 +213,7 @@ func (s Service) ExpireVideoReplacementTx(tx *gorm.DB, tenantID, replacementID i
 func blockedPlanForMedia(tx *gorm.DB, tenantID, inspectionID, mediaID identity.ID) (database.VideoPlan, error) {
 	var plan database.VideoPlan
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Table("analysis.video_plans AS p").Select("p.*").
-		Joins("JOIN media.video_preparation_jobs j ON j.tenant_id=p.tenant_id AND j.id=p.current_preparation_id").
+		Joins("JOIN media.video_preparation_jobs j ON j.tenant_id=p.tenant_id AND (j.id=p.current_preparation_id OR EXISTS (SELECT 1 FROM analysis.video_plan_preparations link WHERE link.tenant_id=p.tenant_id AND link.plan_id=p.id AND link.preparation_id=j.id))").
 		Where("p.tenant_id=? AND p.inspection_id=? AND p.status='BLOCKED' AND j.media_id=?", tenantID, inspectionID, mediaID).
 		Order("p.created_at DESC").Take(&plan).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -218,20 +222,20 @@ func blockedPlanForMedia(tx *gorm.DB, tenantID, inspectionID, mediaID identity.I
 	return plan, err
 }
 
-func mainVideoRequirement(raw json.RawMessage) (json.RawMessage, error) {
+func mainVideoRequirement(raw json.RawMessage, requirementKey string) (json.RawMessage, error) {
 	var requirements []capturecore.Requirement
 	if err := json.Unmarshal(raw, &requirements); err != nil {
 		return nil, apperror.Wrap(apperror.InvalidState, err)
 	}
 	for _, requirement := range requirements {
-		if requirement.Key == "video:main" {
+		if requirement.Key == requirementKey {
 			requirement.Required = true
 			requirement.ImpossibilityAllowed = false
 			encoded, _ := json.Marshal([]capturecore.Requirement{requirement})
 			return encoded, nil
 		}
 	}
-	return nil, apperror.New(apperror.InvalidState, "mediaId", "original capture has no main video requirement")
+	return nil, apperror.New(apperror.InvalidState, "mediaId", "original capture has no matching video requirement")
 }
 
 func scheduleReplacementDeadline(tx *gorm.DB, tenantID identity.ID, replacement database.VideoReplacement, at, now time.Time) error {

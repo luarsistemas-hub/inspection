@@ -113,7 +113,7 @@ func TestVV_IT_518RetentionResourcesAreTenantScopedAndSingletonUsesActorScope(t 
 		if err := tx.Create(&database.Responsibility{ID: responsibilityID, TenantID: foreign.TenantID, InspectionID: foreign.InspectionID, ParticipantID: foreign.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: foreignOriginID, TenantID: foreign.TenantID, OriginID: identity.NewID(), ResponsibilityID: responsibilityID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "vv-it-518-" + foreignOriginID.String(), CreatedAt: time.Now().UTC()}).Error
+		return tx.Create(&database.OriginVersion{ID: foreignOriginID, TenantID: foreign.TenantID, OriginID: identity.NewID(), ResponsibilityID: &responsibilityID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "vv-it-518-" + foreignOriginID.String(), CreatedAt: time.Now().UTC()}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func newAPI14RetentionFixture(t *testing.T) api14RetentionFixture {
 		if err := tx.Create(&database.Responsibility{ID: responsibilityID, TenantID: seed.TenantID, InspectionID: seed.InspectionID, ParticipantID: seed.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: seed.TenantID, OriginID: identity.NewID(), ResponsibilityID: responsibilityID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "vv-api14-" + originVersionID.String(), CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: seed.TenantID, OriginID: identity.NewID(), ResponsibilityID: &responsibilityID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "VIDEO", IdempotencyKey: "vv-api14-" + originVersionID.String(), CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

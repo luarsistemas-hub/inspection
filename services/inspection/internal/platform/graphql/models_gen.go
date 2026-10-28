@@ -18,6 +18,14 @@ type AcceptProcessingInput struct {
 	ClientMutationID  string `json:"clientMutationId"`
 }
 
+type ActivateBaselineVersionInput struct {
+	OriginVersionID            string   `json:"originVersionId"`
+	Purpose                    string   `json:"purpose"`
+	ExpectedOriginVersion      int      `json:"expectedOriginVersion"`
+	CounterpartyParticipantIds []string `json:"counterpartyParticipantIds"`
+	ClientMutationID           string   `json:"clientMutationId"`
+}
+
 type ActivateSegmentDefinitionInput struct {
 	VersionID        string `json:"versionId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
@@ -40,14 +48,30 @@ type AddExceptionalStageInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type AddInventoryItemInput struct {
+	OriginVersionID  string                    `json:"originVersionId"`
+	EnvironmentID    string                    `json:"environmentId"`
+	TypeCode         string                    `json:"typeCode"`
+	Name             string                    `json:"name"`
+	Material         *string                   `json:"material,omitempty"`
+	Color            *string                   `json:"color,omitempty"`
+	Quantity         *int                      `json:"quantity,omitempty"`
+	Condition        *string                   `json:"condition,omitempty"`
+	Observation      *string                   `json:"observation,omitempty"`
+	Limitation       *string                   `json:"limitation,omitempty"`
+	Evidence         []*InventoryEvidenceInput `json:"evidence"`
+	ClientMutationID string                    `json:"clientMutationId"`
+}
+
 type AnalysisPrompt struct {
-	AnalysisType         AnalysisType `json:"analysisType"`
-	SystemPrompt         string       `json:"systemPrompt"`
-	ModelAlias           string       `json:"modelAlias"`
-	MinimumConfidenceBps int          `json:"minimumConfidenceBps"`
-	CanonicalDigest      string       `json:"canonicalDigest"`
-	Revision             int          `json:"revision"`
-	UpdatedAt            string       `json:"updatedAt"`
+	AnalysisType         AnalysisType       `json:"analysisType"`
+	Task                 AnalysisPromptTask `json:"task"`
+	SystemPrompt         string             `json:"systemPrompt"`
+	ModelAlias           string             `json:"modelAlias"`
+	MinimumConfidenceBps int                `json:"minimumConfidenceBps"`
+	CanonicalDigest      string             `json:"canonicalDigest"`
+	Revision             int                `json:"revision"`
+	UpdatedAt            string             `json:"updatedAt"`
 }
 
 type AnalysisPromptPayload struct {
@@ -150,10 +174,55 @@ type AuditEventConnection struct {
 	PageInfo *PageInfo     `json:"pageInfo"`
 }
 
+type BaselineCounterpartyInvitation struct {
+	ID                  string  `json:"id"`
+	ParticipantID       string  `json:"participantId"`
+	Response            string  `json:"response"`
+	DeadlineAt          string  `json:"deadlineAt"`
+	RespondedAt         *string `json:"respondedAt,omitempty"`
+	Statement           *string `json:"statement,omitempty"`
+	Resolution          string  `json:"resolution"`
+	ResolutionReason    *string `json:"resolutionReason,omitempty"`
+	AdjustmentVersionID *string `json:"adjustmentVersionId,omitempty"`
+	DeliveryStatus      *string `json:"deliveryStatus,omitempty"`
+	DeliveryID          *string `json:"deliveryId,omitempty"`
+}
+
+type BaselineInventory struct {
+	HasInventory bool                    `json:"hasInventory"`
+	Version      *OriginVersion          `json:"version,omitempty"`
+	Environments []*InventoryEnvironment `json:"environments"`
+}
+
+type BaselinePolicy struct {
+	ContestationDeadlineDays int `json:"contestationDeadlineDays"`
+	Version                  int `json:"version"`
+}
+
+type BaselinePolicyPayload struct {
+	Policy           *BaselinePolicy `json:"policy,omitempty"`
+	UserErrors       []*UserError    `json:"userErrors"`
+	ClientMutationID string          `json:"clientMutationId"`
+}
+
 type BeginVideoCaptureInput struct {
 	AcquisitionSource string  `json:"acquisitionSource"`
+	RequirementKey    *string `json:"requirementKey,omitempty"`
 	ReplacesMediaID   *string `json:"replacesMediaId,omitempty"`
 	ClientMutationID  string  `json:"clientMutationId"`
+}
+
+type BulkAcceptInventoryEnvironmentInput struct {
+	OriginVersionID      string `json:"originVersionId"`
+	EnvironmentID        string `json:"environmentId"`
+	MinimumConfidenceBps *int   `json:"minimumConfidenceBps,omitempty"`
+	ClientMutationID     string `json:"clientMutationId"`
+}
+
+type BulkAcceptInventoryEnvironmentPayload struct {
+	AcceptedCount    int          `json:"acceptedCount"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
 }
 
 type BusinessUnit struct {
@@ -188,6 +257,23 @@ type CaptureAnswer struct {
 	Version             int      `json:"version"`
 }
 
+type CaptureEnvironment struct {
+	RequirementKey     string `json:"requirementKey"`
+	IdentityID         string `json:"identityId"`
+	TypeCode           string `json:"typeCode"`
+	Name               string `json:"name"`
+	Expected           bool   `json:"expected"`
+	AddedDuringCapture bool   `json:"addedDuringCapture"`
+	MediaCount         int    `json:"mediaCount"`
+	Status             string `json:"status"`
+}
+
+type CaptureEnvironmentPayload struct {
+	Environment      *CaptureEnvironment `json:"environment,omitempty"`
+	UserErrors       []*UserError        `json:"userErrors"`
+	ClientMutationID string              `json:"clientMutationId"`
+}
+
 type CaptureGPSInput struct {
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
@@ -198,6 +284,12 @@ type CaptureGPSInput struct {
 
 type CapturePayload struct {
 	Status           string       `json:"status"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type CaptureQualityWarningPayload struct {
+	Flags            []string     `json:"flags"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
 }
@@ -221,18 +313,28 @@ type CaptureReferenceItem struct {
 }
 
 type CaptureRequirement struct {
-	Key                  string  `json:"key"`
-	Section              string  `json:"section"`
-	Label                string  `json:"label"`
-	Instructions         *string `json:"instructions,omitempty"`
-	EvidenceKind         string  `json:"evidenceKind"`
-	Required             bool    `json:"required"`
-	MinimumMedia         int     `json:"minimumMedia"`
-	MaximumMedia         int     `json:"maximumMedia"`
-	DescriptionRequired  bool    `json:"descriptionRequired"`
-	CaptureSourcePolicy  string  `json:"captureSourcePolicy"`
-	ComparisonTarget     string  `json:"comparisonTarget"`
-	ImpossibilityAllowed bool    `json:"impossibilityAllowed"`
+	Key                   string  `json:"key"`
+	Section               string  `json:"section"`
+	Label                 string  `json:"label"`
+	Instructions          *string `json:"instructions,omitempty"`
+	EvidenceKind          string  `json:"evidenceKind"`
+	Required              bool    `json:"required"`
+	MinimumMedia          int     `json:"minimumMedia"`
+	MaximumMedia          int     `json:"maximumMedia"`
+	DescriptionRequired   bool    `json:"descriptionRequired"`
+	CaptureSourcePolicy   string  `json:"captureSourcePolicy"`
+	ComparisonTarget      string  `json:"comparisonTarget"`
+	ImpossibilityAllowed  bool    `json:"impossibilityAllowed"`
+	EnvironmentIdentityID *string `json:"environmentIdentityId,omitempty"`
+	EnvironmentTypeCode   *string `json:"environmentTypeCode,omitempty"`
+	EnvironmentName       *string `json:"environmentName,omitempty"`
+	Expected              *bool   `json:"expected,omitempty"`
+	AddedDuringCapture    *bool   `json:"addedDuringCapture,omitempty"`
+}
+
+type CaptureReviewHandoff struct {
+	InspectionID    string  `json:"inspectionId"`
+	OriginVersionID *string `json:"originVersionId,omitempty"`
 }
 
 type CloseOriginInvitationInput struct {
@@ -288,16 +390,30 @@ type ConfigureVideoAdmissionInput struct {
 }
 
 type ConfigureVideoPolicyInput struct {
-	MaxDurationMinutes   int    `json:"maxDurationMinutes"`
-	OriginRetentionDays  int    `json:"originRetentionDays"`
-	CurrentRetentionDays int    `json:"currentRetentionDays"`
-	ExpectedVersion      int    `json:"expectedVersion"`
-	ClientMutationID     string `json:"clientMutationId"`
+	MaxDurationMinutes              int    `json:"maxDurationMinutes"`
+	OriginRetentionDays             int    `json:"originRetentionDays"`
+	CurrentRetentionDays            int    `json:"currentRetentionDays"`
+	SupersededBaselineRetentionDays *int   `json:"supersededBaselineRetentionDays,omitempty"`
+	ExpectedVersion                 int    `json:"expectedVersion"`
+	ClientMutationID                string `json:"clientMutationId"`
 }
 
 type ContactInput struct {
 	Channel string `json:"channel"`
 	Value   string `json:"value"`
+}
+
+type ContestBaselineInput struct {
+	Statement        string `json:"statement"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ContestationSummary struct {
+	Pending      int `json:"pending"`
+	Acknowledged int `json:"acknowledged"`
+	Contested    int `json:"contested"`
+	Open         int `json:"open"`
+	NoResponse   int `json:"noResponse"`
 }
 
 type CorrectInspectionResponsibleEmailInput struct {
@@ -315,6 +431,71 @@ type CorrectOnboardingResponsibleEmailInput struct {
 	ClientMutationID              string `json:"clientMutationId"`
 }
 
+type CounterpartyBaseline struct {
+	Baseline           *CounterpartyBaselineInventory `json:"baseline"`
+	Purpose            *string                        `json:"purpose,omitempty"`
+	ActivatedAt        *string                        `json:"activatedAt,omitempty"`
+	DeadlineAt         string                         `json:"deadlineAt"`
+	Response           string                         `json:"response"`
+	RespondedAt        *string                        `json:"respondedAt,omitempty"`
+	Resolution         string                         `json:"resolution"`
+	ResolutionReason   *string                        `json:"resolutionReason,omitempty"`
+	AdjustmentStatus   *string                        `json:"adjustmentStatus,omitempty"`
+	NewerVersionExists bool                           `json:"newerVersionExists"`
+	ReadOnly           bool                           `json:"readOnly"`
+}
+
+type CounterpartyBaselineEnvironment struct {
+	TypeCode string                      `json:"typeCode"`
+	Name     string                      `json:"name"`
+	Items    []*CounterpartyBaselineItem `json:"items"`
+}
+
+type CounterpartyBaselineEvidence struct {
+	Kind        string  `json:"kind"`
+	Position    int     `json:"position"`
+	URL         *string `json:"url,omitempty"`
+	TimestampMs *int    `json:"timestampMs,omitempty"`
+}
+
+type CounterpartyBaselineInventory struct {
+	HasInventory bool                               `json:"hasInventory"`
+	Environments []*CounterpartyBaselineEnvironment `json:"environments"`
+}
+
+type CounterpartyBaselineItem struct {
+	TypeCode    string                          `json:"typeCode"`
+	Name        string                          `json:"name"`
+	Material    *string                         `json:"material,omitempty"`
+	Color       *string                         `json:"color,omitempty"`
+	Quantity    *int                            `json:"quantity,omitempty"`
+	Condition   string                          `json:"condition"`
+	Observation string                          `json:"observation"`
+	Limitation  *string                         `json:"limitation,omitempty"`
+	Evidence    []*CounterpartyBaselineEvidence `json:"evidence"`
+}
+
+type CounterpartyInvitationPayload struct {
+	InvitationID        string       `json:"invitationId"`
+	Response            string       `json:"response"`
+	DeadlineAt          string       `json:"deadlineAt"`
+	Resolution          string       `json:"resolution"`
+	AdjustmentVersionID *string      `json:"adjustmentVersionId,omitempty"`
+	UserErrors          []*UserError `json:"userErrors"`
+	ClientMutationID    string       `json:"clientMutationId"`
+}
+
+type CounterpartyResponseInput struct {
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type CounterpartyResponsePayload struct {
+	Response         string       `json:"response"`
+	RespondedAt      *string      `json:"respondedAt,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type CreateBusinessUnitInput struct {
 	Code                  string `json:"code"`
 	Name                  string `json:"name"`
@@ -323,24 +504,26 @@ type CreateBusinessUnitInput struct {
 }
 
 type CreateInspectionInput struct {
-	AssetID            string                `json:"assetId"`
-	ParticipantID      string                `json:"participantId"`
-	TemplateID         *string               `json:"templateId,omitempty"`
-	ComparisonMode     CaptureComparisonMode `json:"comparisonMode"`
-	ReferenceVersionID *string               `json:"referenceVersionId,omitempty"`
-	ProjectID          *string               `json:"projectId,omitempty"`
-	StageID            *string               `json:"stageId,omitempty"`
-	DueAt              string                `json:"dueAt"`
-	DeadlineAt         string                `json:"deadlineAt"`
-	ReminderInstants   []string              `json:"reminderInstants"`
-	Reason             string                `json:"reason"`
-	ClientMutationID   string                `json:"clientMutationId"`
+	AssetID              string                `json:"assetId"`
+	ParticipantID        string                `json:"participantId"`
+	TemplateID           *string               `json:"templateId,omitempty"`
+	ComparisonMode       CaptureComparisonMode `json:"comparisonMode"`
+	ReferenceVersionID   *string               `json:"referenceVersionId,omitempty"`
+	ReviewerMembershipID *string               `json:"reviewerMembershipId,omitempty"`
+	ProjectID            *string               `json:"projectId,omitempty"`
+	StageID              *string               `json:"stageId,omitempty"`
+	DueAt                string                `json:"dueAt"`
+	DeadlineAt           string                `json:"deadlineAt"`
+	ReminderInstants     []string              `json:"reminderInstants"`
+	Reason               string                `json:"reason"`
+	ClientMutationID     string                `json:"clientMutationId"`
 }
 
 type CreateMediaUploadInput struct {
 	ContentType      string  `json:"contentType"`
 	SizeBytes        int     `json:"sizeBytes"`
 	Sha256           string  `json:"sha256"`
+	RequirementKey   *string `json:"requirementKey,omitempty"`
 	AttemptID        *string `json:"attemptId,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
 }
@@ -415,6 +598,41 @@ type CustomerEvidenceItem struct {
 	URL                *string  `json:"url,omitempty"`
 }
 
+type CustomerInventory struct {
+	ReferenceVersionNumber int                        `json:"referenceVersionNumber"`
+	Purpose                string                     `json:"purpose"`
+	Coverage               *CustomerInventoryCoverage `json:"coverage,omitempty"`
+	Problems               []*CustomerInventoryEntry  `json:"problems"`
+	Informational          []*CustomerInventoryEntry  `json:"informational"`
+}
+
+type CustomerInventoryCoverage struct {
+	ExpectedItems                  int      `json:"expectedItems"`
+	AssessedItems                  int      `json:"assessedItems"`
+	NotObserved                    int      `json:"notObserved"`
+	EnvironmentsNotCaptured        []string `json:"environmentsNotCaptured"`
+	EnvironmentsAddedDuringCapture []string `json:"environmentsAddedDuringCapture"`
+}
+
+type CustomerInventoryEntry struct {
+	Environment     string                   `json:"environment"`
+	Type            string                   `json:"type"`
+	Name            string                   `json:"name"`
+	Status          string                   `json:"status"`
+	ConditionBefore *string                  `json:"conditionBefore,omitempty"`
+	ConditionAfter  *string                  `json:"conditionAfter,omitempty"`
+	Reason          *string                  `json:"reason,omitempty"`
+	Pairs           []*CustomerInventoryPair `json:"pairs"`
+}
+
+type CustomerInventoryPair struct {
+	OriginEvidenceID          string `json:"originEvidenceId"`
+	CurrentEvidenceID         string `json:"currentEvidenceId"`
+	OriginSourceAvailability  string `json:"originSourceAvailability"`
+	CurrentSourceAvailability string `json:"currentSourceAvailability"`
+	TimestampMs               *int   `json:"timestampMs,omitempty"`
+}
+
 type CustomerPortfolioConnection struct {
 	Nodes    []*CustomerPortfolioItem `json:"nodes"`
 	PageInfo *PageInfo                `json:"pageInfo"`
@@ -427,12 +645,15 @@ type CustomerPortfolioFilter struct {
 }
 
 type CustomerPortfolioItem struct {
-	AssetID                 string  `json:"assetId"`
-	ProjectID               *string `json:"projectId,omitempty"`
-	PublishedClassification *string `json:"publishedClassification,omitempty"`
-	Status                  string  `json:"status"`
-	Progress                int     `json:"progress"`
-	UpdatedAt               string  `json:"updatedAt"`
+	AssetID                     string  `json:"assetId"`
+	AssetName                   string  `json:"assetName"`
+	AssetExternalKey            string  `json:"assetExternalKey"`
+	LatestPublishedInspectionID *string `json:"latestPublishedInspectionId,omitempty"`
+	ProjectID                   *string `json:"projectId,omitempty"`
+	PublishedClassification     *string `json:"publishedClassification,omitempty"`
+	Status                      string  `json:"status"`
+	Progress                    int     `json:"progress"`
+	UpdatedAt                   string  `json:"updatedAt"`
 }
 
 type CustomerReport struct {
@@ -445,6 +666,7 @@ type CustomerReport struct {
 	Historical     bool                 `json:"historical"`
 	Context        *ReportContext       `json:"context"`
 	Requirements   []*ReportRequirement `json:"requirements"`
+	Inventory      *CustomerInventory   `json:"inventory,omitempty"`
 }
 
 type CustomerTimelineConnection struct {
@@ -469,16 +691,35 @@ type DashboardSummary struct {
 	Invalidated int `json:"invalidated"`
 }
 
-type DeclareCaptureImpossibilityInput struct {
-	RequirementKey   string `json:"requirementKey"`
-	Reason           string `json:"reason"`
-	ExpectedVersion  *int   `json:"expectedVersion,omitempty"`
+type DecideInventoryItemsInput struct {
+	OriginVersionID  string                    `json:"originVersionId"`
+	Decisions        []*InventoryDecisionInput `json:"decisions"`
+	ClientMutationID string                    `json:"clientMutationId"`
+}
+
+type DeclareCaptureEnvironmentInput struct {
+	TypeCode         string `json:"typeCode"`
+	Name             string `json:"name"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type DeclareCaptureImpossibilityInput struct {
+	RequirementKey   string  `json:"requirementKey"`
+	Reason           *string `json:"reason,omitempty"`
+	ReasonCode       *string `json:"reasonCode,omitempty"`
+	ReasonText       *string `json:"reasonText,omitempty"`
+	ExpectedVersion  *int    `json:"expectedVersion,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type DisableMembershipInput struct {
 	MembershipID     string `json:"membershipId"`
 	ExpectedVersion  int    `json:"expectedVersion"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type DiscardBaselineDraftInput struct {
+	OriginVersionID  string `json:"originVersionId"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -492,10 +733,13 @@ type ExternalCapture struct {
 	Kind                  string                  `json:"kind"`
 	MediaKind             string                  `json:"mediaKind"`
 	TemplateVersionID     string                  `json:"templateVersionId"`
+	CaptureLayout         *string                 `json:"captureLayout,omitempty"`
 	Reference             map[string]any          `json:"reference"`
 	ReferenceItems        []*CaptureReferenceItem `json:"referenceItems"`
 	Policy                map[string]any          `json:"policy"`
 	Requirements          []*CaptureRequirement   `json:"requirements"`
+	Environments          []*CaptureEnvironment   `json:"environments"`
+	ReviewHandoff         *CaptureReviewHandoff   `json:"reviewHandoff,omitempty"`
 	Answers               []*CaptureAnswer        `json:"answers"`
 	DisclosureVersion     string                  `json:"disclosureVersion"`
 }
@@ -652,6 +896,151 @@ type InvalidateReportPublicationInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type InventoryCounts struct {
+	Included    int `json:"included"`
+	Rejected    int `json:"rejected"`
+	NotReviewed int `json:"notReviewed"`
+}
+
+type InventoryDecisionInput struct {
+	ItemID          string                   `json:"itemId"`
+	Action          string                   `json:"action"`
+	ExpectedVersion int                      `json:"expectedVersion"`
+	Patch           *InventoryItemPatchInput `json:"patch,omitempty"`
+	Reason          *string                  `json:"reason,omitempty"`
+	ReasonText      *string                  `json:"reasonText,omitempty"`
+}
+
+type InventoryDraft struct {
+	AssetID      string                  `json:"assetId"`
+	Version      *OriginVersion          `json:"version"`
+	Environments []*InventoryEnvironment `json:"environments"`
+	Progress     *InventoryProgress      `json:"progress"`
+	ReadOnly     bool                    `json:"readOnly"`
+	NoticeCode   *string                 `json:"noticeCode,omitempty"`
+	Warnings     []string                `json:"warnings"`
+}
+
+type InventoryEnvironment struct {
+	ID                 string           `json:"id"`
+	IdentityID         string           `json:"identityId"`
+	TypeCode           string           `json:"typeCode"`
+	Name               string           `json:"name"`
+	Expected           bool             `json:"expected"`
+	AddedDuringCapture bool             `json:"addedDuringCapture"`
+	RequirementKey     *string          `json:"requirementKey,omitempty"`
+	Decision           string           `json:"decision"`
+	Position           int              `json:"position"`
+	Items              []*InventoryItem `json:"items"`
+}
+
+type InventoryEnvironmentPayload struct {
+	Environment      *InventoryEnvironment `json:"environment,omitempty"`
+	UserErrors       []*UserError          `json:"userErrors"`
+	ClientMutationID string                `json:"clientMutationId"`
+}
+
+type InventoryEvidence struct {
+	ID                    string         `json:"id"`
+	Kind                  string         `json:"kind"`
+	MediaID               string         `json:"mediaId"`
+	FrameID               *string        `json:"frameId,omitempty"`
+	TimestampMs           *int           `json:"timestampMs,omitempty"`
+	URL                   *string        `json:"url,omitempty"`
+	Region                map[string]any `json:"region,omitempty"`
+	Position              int            `json:"position"`
+	Availability          string         `json:"availability"`
+	RetentionAvailability *string        `json:"retentionAvailability,omitempty"`
+}
+
+type InventoryEvidenceInput struct {
+	Kind    string         `json:"kind"`
+	MediaID string         `json:"mediaId"`
+	FrameID *string        `json:"frameId,omitempty"`
+	Region  map[string]any `json:"region,omitempty"`
+}
+
+type InventoryItem struct {
+	ID              string               `json:"id"`
+	IdentityID      string               `json:"identityId"`
+	EnvironmentID   string               `json:"environmentId"`
+	TypeCode        string               `json:"typeCode"`
+	Name            string               `json:"name"`
+	Material        *string              `json:"material,omitempty"`
+	Color           *string              `json:"color,omitempty"`
+	Quantity        *int                 `json:"quantity,omitempty"`
+	Condition       string               `json:"condition"`
+	Observation     string               `json:"observation"`
+	Limitation      *string              `json:"limitation,omitempty"`
+	ConfidenceBps   *int                 `json:"confidenceBps,omitempty"`
+	Origin          string               `json:"origin"`
+	Declared        bool                 `json:"declared"`
+	Decision        string               `json:"decision"`
+	RejectionReason *string              `json:"rejectionReason,omitempty"`
+	RejectionText   *string              `json:"rejectionText,omitempty"`
+	Suggested       map[string]any       `json:"suggested,omitempty"`
+	Version         int                  `json:"version"`
+	Evidence        []*InventoryEvidence `json:"evidence"`
+}
+
+type InventoryItemPatchInput struct {
+	EnvironmentID *string `json:"environmentId,omitempty"`
+	TypeCode      *string `json:"typeCode,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Material      *string `json:"material,omitempty"`
+	Color         *string `json:"color,omitempty"`
+	Quantity      *int    `json:"quantity,omitempty"`
+	ClearQuantity *bool   `json:"clearQuantity,omitempty"`
+	Condition     *string `json:"condition,omitempty"`
+	Observation   *string `json:"observation,omitempty"`
+	Limitation    *string `json:"limitation,omitempty"`
+}
+
+type InventoryItemPayload struct {
+	Item             *InventoryItem `json:"item,omitempty"`
+	UserErrors       []*UserError   `json:"userErrors"`
+	ClientMutationID string         `json:"clientMutationId"`
+}
+
+type InventoryItemsPayload struct {
+	Items             []*InventoryItem `json:"items"`
+	EmptyEnvironments []string         `json:"emptyEnvironments"`
+	UserErrors        []*UserError     `json:"userErrors"`
+	ClientMutationID  string           `json:"clientMutationId"`
+}
+
+type InventoryProgress struct {
+	Decided int `json:"decided"`
+	Pending int `json:"pending"`
+}
+
+type InventorySplitPartInput struct {
+	Name        string   `json:"name"`
+	TypeCode    string   `json:"typeCode"`
+	Condition   *string  `json:"condition,omitempty"`
+	EvidenceIds []string `json:"evidenceIds"`
+}
+
+type InventoryTrail struct {
+	Suggestions        []*InventoryTrailEntry `json:"suggestions"`
+	Decisions          []*InventoryTrailEntry `json:"decisions"`
+	CounterpartyEvents []*InventoryTrailEntry `json:"counterpartyEvents"`
+}
+
+type InventoryTrailEntry struct {
+	ID                string         `json:"id"`
+	TargetType        string         `json:"targetType"`
+	TargetID          string         `json:"targetId"`
+	Action            string         `json:"action"`
+	Before            map[string]any `json:"before,omitempty"`
+	After             map[string]any `json:"after,omitempty"`
+	Reason            *string        `json:"reason,omitempty"`
+	Statement         *string        `json:"statement,omitempty"`
+	ResolutionReason  *string        `json:"resolutionReason,omitempty"`
+	ActorMembershipID *string        `json:"actorMembershipId,omitempty"`
+	OccurredAt        string         `json:"occurredAt"`
+}
+
 type InvitationOtpPayload struct {
 	Status           string       `json:"status"`
 	UserErrors       []*UserError `json:"userErrors"`
@@ -673,10 +1062,11 @@ type InviteInternalUserInput struct {
 }
 
 type InviteOriginCaptureInput struct {
-	AssetID          string `json:"assetId"`
-	ParticipantID    string `json:"participantId"`
-	ExpiresAt        string `json:"expiresAt"`
-	ClientMutationID string `json:"clientMutationId"`
+	AssetID              string  `json:"assetId"`
+	ParticipantID        string  `json:"participantId"`
+	ReviewerMembershipID *string `json:"reviewerMembershipId,omitempty"`
+	ExpiresAt            string  `json:"expiresAt"`
+	ClientMutationID     string  `json:"clientMutationId"`
 }
 
 type LLMCallUsage struct {
@@ -824,6 +1214,13 @@ type MembershipPayload struct {
 	Membership       *Membership  `json:"membership,omitempty"`
 	UserErrors       []*UserError `json:"userErrors"`
 	ClientMutationID string       `json:"clientMutationId"`
+}
+
+type MergeInventoryItemsInput struct {
+	OriginVersionID     string   `json:"originVersionId"`
+	ItemIds             []string `json:"itemIds"`
+	ResultEnvironmentID *string  `json:"resultEnvironmentId,omitempty"`
+	ClientMutationID    string   `json:"clientMutationId"`
 }
 
 type Mutation struct {
@@ -1015,20 +1412,30 @@ type OriginPromotionPayload struct {
 }
 
 type OriginVersion struct {
-	ID                  string  `json:"id"`
-	OriginID            string  `json:"originId"`
-	VersionNumber       int     `json:"versionNumber"`
-	Status              string  `json:"status"`
-	MediaKind           string  `json:"mediaKind"`
-	VideoPreparationID  *string `json:"videoPreparationId,omitempty"`
-	PreparationStatus   *string `json:"preparationStatus,omitempty"`
-	CaptureSubmitted    bool    `json:"captureSubmitted"`
-	Selectable          bool    `json:"selectable"`
-	SourceAvailability  *string `json:"sourceAvailability,omitempty"`
-	LimitedCoverage     bool    `json:"limitedCoverage"`
-	ScopeManifestDigest *string `json:"scopeManifestDigest,omitempty"`
-	SupersedesID        *string `json:"supersedesId,omitempty"`
-	ActivatedAt         *string `json:"activatedAt,omitempty"`
+	ID                      string                            `json:"id"`
+	OriginID                string                            `json:"originId"`
+	VersionNumber           int                               `json:"versionNumber"`
+	OriginRevision          int                               `json:"originRevision"`
+	Status                  string                            `json:"status"`
+	MediaKind               string                            `json:"mediaKind"`
+	VideoPreparationID      *string                           `json:"videoPreparationId,omitempty"`
+	PreparationStatus       *string                           `json:"preparationStatus,omitempty"`
+	CaptureSubmitted        bool                              `json:"captureSubmitted"`
+	Selectable              bool                              `json:"selectable"`
+	SourceAvailability      *string                           `json:"sourceAvailability,omitempty"`
+	LimitedCoverage         bool                              `json:"limitedCoverage"`
+	ScopeManifestDigest     *string                           `json:"scopeManifestDigest,omitempty"`
+	SupersedesID            *string                           `json:"supersedesId,omitempty"`
+	ActivatedAt             *string                           `json:"activatedAt,omitempty"`
+	ActivatedBy             *string                           `json:"activatedBy,omitempty"`
+	Purpose                 *string                           `json:"purpose,omitempty"`
+	Source                  *string                           `json:"source,omitempty"`
+	SourceInspectionID      *string                           `json:"sourceInspectionId,omitempty"`
+	HasInventory            bool                              `json:"hasInventory"`
+	DraftState              *string                           `json:"draftState,omitempty"`
+	Counts                  *InventoryCounts                  `json:"counts,omitempty"`
+	ContestationSummary     *ContestationSummary              `json:"contestationSummary,omitempty"`
+	CounterpartyInvitations []*BaselineCounterpartyInvitation `json:"counterpartyInvitations"`
 }
 
 type OriginVersionConnection struct {
@@ -1042,9 +1449,12 @@ type OriginVersionInput struct {
 }
 
 type OriginVersionPayload struct {
-	Version          *OriginVersion `json:"version,omitempty"`
-	UserErrors       []*UserError   `json:"userErrors"`
-	ClientMutationID string         `json:"clientMutationId"`
+	Version  *OriginVersion `json:"version,omitempty"`
+	Warnings []string       `json:"warnings,omitempty"`
+	// Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged.
+	SourcesExpired   *bool        `json:"sourcesExpired,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
 }
 
 type PageInfo struct {
@@ -1094,6 +1504,7 @@ type PlanInspectionInput struct {
 	TemplateID             string                      `json:"templateId"`
 	ComparisonMode         CaptureComparisonMode       `json:"comparisonMode"`
 	ReferenceVersionID     *string                     `json:"referenceVersionId,omitempty"`
+	ReviewerMembershipID   *string                     `json:"reviewerMembershipId,omitempty"`
 	DueAt                  *string                     `json:"dueAt,omitempty"`
 	StartsAt               *string                     `json:"startsAt,omitempty"`
 	Timezone               *string                     `json:"timezone,omitempty"`
@@ -1345,6 +1756,13 @@ type RecipientNotificationPayload struct {
 	ClientMutationID string                 `json:"clientMutationId"`
 }
 
+type RecordCaptureQualityWarningInput struct {
+	RequirementKey   string `json:"requirementKey"`
+	Code             string `json:"code"`
+	Ignored          bool   `json:"ignored"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type RecordDeletionRequestInput struct {
 	InspectionID     *string `json:"inspectionId,omitempty"`
 	SourceMediaID    *string `json:"sourceMediaId,omitempty"`
@@ -1356,6 +1774,13 @@ type RecordDeletionRequestInput struct {
 type RegisterAssetInput struct {
 	Asset            *AssetInput `json:"asset"`
 	ClientMutationID string      `json:"clientMutationId"`
+}
+
+type RemoveInventoryEnvironmentInput struct {
+	OriginVersionID      string `json:"originVersionId"`
+	EnvironmentID        string `json:"environmentId"`
+	ConfirmItemExclusion bool   `json:"confirmItemExclusion"`
+	ClientMutationID     string `json:"clientMutationId"`
 }
 
 type ReopenProjectInput struct {
@@ -1380,6 +1805,7 @@ type Report struct {
 	Advisory       string                    `json:"advisory"`
 	Context        *ReportContext            `json:"context"`
 	Requirements   []*ReportRequirement      `json:"requirements"`
+	Inventory      *CustomerInventory        `json:"inventory,omitempty"`
 	Evidence       *ReportEvidenceConnection `json:"evidence"`
 	Findings       []*ReportFinding          `json:"findings"`
 	Timeline       []*ReportTimelineEntry    `json:"timeline"`
@@ -1533,6 +1959,11 @@ type RequestAdminActivationOtpInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type RequestCounterpartyOtpInput struct {
+	Token            string `json:"token"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type RequestInternalUserActivationOtpInput struct {
 	InvitationToken  *string `json:"invitationToken,omitempty"`
 	ClientMutationID string  `json:"clientMutationId"`
@@ -1550,6 +1981,11 @@ type RequestOnboardingOtpInput struct {
 	ClientMutationID string  `json:"clientMutationId"`
 }
 
+type RequestOriginCatalogingInput struct {
+	AssetID          string `json:"assetId"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
 type RequestRecaptureInput struct {
 	InspectionID     string                `json:"inspectionId"`
 	Items            []*RecaptureItemInput `json:"items"`
@@ -1565,9 +2001,21 @@ type RequestVideoReplacementInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type ResendCounterpartyInvitationInput struct {
+	CounterpartyInvitationID string `json:"counterpartyInvitationId"`
+	ClientMutationID         string `json:"clientMutationId"`
+}
+
 type ResendInternalUserInvitationInput struct {
 	MembershipID     string `json:"membershipId"`
 	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ResolveBaselineContestationInput struct {
+	CounterpartyInvitationID string  `json:"counterpartyInvitationId"`
+	Outcome                  string  `json:"outcome"`
+	Reason                   *string `json:"reason,omitempty"`
+	ClientMutationID         string  `json:"clientMutationId"`
 }
 
 type ResponsibleEmailCorrection struct {
@@ -1614,6 +2062,11 @@ type RetentionPolicyPayload struct {
 	Policy           *RetentionPolicy `json:"policy,omitempty"`
 	UserErrors       []*UserError     `json:"userErrors"`
 	ClientMutationID string           `json:"clientMutationId"`
+}
+
+type RetryInventoryDraftInput struct {
+	OriginVersionID  string `json:"originVersionId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type RetryVideoPreparationInput struct {
@@ -1761,6 +2214,14 @@ type SkipProjectStageInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
+type SplitInventoryItemInput struct {
+	OriginVersionID  string                     `json:"originVersionId"`
+	ItemID           string                     `json:"itemId"`
+	ExpectedVersion  int                        `json:"expectedVersion"`
+	Parts            []*InventorySplitPartInput `json:"parts"`
+	ClientMutationID string                     `json:"clientMutationId"`
+}
+
 type StageTransition struct {
 	ID         string  `json:"id"`
 	StageID    *string `json:"stageId,omitempty"`
@@ -1768,6 +2229,11 @@ type StageTransition struct {
 	ToState    string  `json:"toState"`
 	Reason     *string `json:"reason,omitempty"`
 	OccurredAt string  `json:"occurredAt"`
+}
+
+type StartBaselineDraftFromInspectionInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ClientMutationID string `json:"clientMutationId"`
 }
 
 type StartProjectStageInput struct {
@@ -1940,10 +2406,11 @@ type TriageWorkspace struct {
 }
 
 type UpdateAnalysisPromptInput struct {
-	AnalysisType     AnalysisType `json:"analysisType"`
-	SystemPrompt     string       `json:"systemPrompt"`
-	ExpectedRevision int          `json:"expectedRevision"`
-	ClientMutationID string       `json:"clientMutationId"`
+	AnalysisType     AnalysisType        `json:"analysisType"`
+	Task             *AnalysisPromptTask `json:"task,omitempty"`
+	SystemPrompt     string              `json:"systemPrompt"`
+	ExpectedRevision int                 `json:"expectedRevision"`
+	ClientMutationID string              `json:"clientMutationId"`
 }
 
 type UpdateAssetInput struct {
@@ -1951,6 +2418,11 @@ type UpdateAssetInput struct {
 	ExpectedVersion  int         `json:"expectedVersion"`
 	Asset            *AssetInput `json:"asset"`
 	ClientMutationID string      `json:"clientMutationId"`
+}
+
+type UpdateBaselinePolicyInput struct {
+	ContestationDeadlineDays int    `json:"contestationDeadlineDays"`
+	ClientMutationID         string `json:"clientMutationId"`
 }
 
 type UpdateScheduleInput struct {
@@ -1991,6 +2463,15 @@ type UpsertBusinessUnitInput struct {
 	ClientMutationID      string  `json:"clientMutationId"`
 }
 
+type UpsertInventoryEnvironmentInput struct {
+	OriginVersionID  string  `json:"originVersionId"`
+	EnvironmentID    *string `json:"environmentId,omitempty"`
+	TypeCode         string  `json:"typeCode"`
+	Name             string  `json:"name"`
+	Expected         bool    `json:"expected"`
+	ClientMutationID string  `json:"clientMutationId"`
+}
+
 type UpsertParticipantInput struct {
 	ParticipantID    *string         `json:"participantId,omitempty"`
 	ExpectedVersion  *int            `json:"expectedVersion,omitempty"`
@@ -2011,10 +2492,11 @@ type UsageSummary struct {
 }
 
 type UserError struct {
-	Code          string  `json:"code"`
-	Field         *string `json:"field,omitempty"`
-	Message       string  `json:"message"`
-	CorrelationID string  `json:"correlationId"`
+	Code                   string   `json:"code"`
+	Field                  *string  `json:"field,omitempty"`
+	Message                string   `json:"message"`
+	CorrelationID          string   `json:"correlationId"`
+	PendingRequirementKeys []string `json:"pendingRequirementKeys,omitempty"`
 }
 
 type VerifyAdminActivationOtpInput struct {
@@ -2025,6 +2507,12 @@ type VerifyAdminActivationOtpInput struct {
 type VerifyContactInput struct {
 	ContactID        string `json:"contactId"`
 	Verified         bool   `json:"verified"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type VerifyCounterpartyOtpInput struct {
+	Token            string `json:"token"`
+	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
 }
 
@@ -2077,10 +2565,11 @@ type VideoAttemptPayload struct {
 }
 
 type VideoPolicy struct {
-	MaxDurationMinutes   int `json:"maxDurationMinutes"`
-	OriginRetentionDays  int `json:"originRetentionDays"`
-	CurrentRetentionDays int `json:"currentRetentionDays"`
-	Version              int `json:"version"`
+	MaxDurationMinutes              int `json:"maxDurationMinutes"`
+	OriginRetentionDays             int `json:"originRetentionDays"`
+	CurrentRetentionDays            int `json:"currentRetentionDays"`
+	SupersededBaselineRetentionDays int `json:"supersededBaselineRetentionDays"`
+	Version                         int `json:"version"`
 }
 
 type VideoPolicyPayload struct {
@@ -2121,19 +2610,22 @@ type VideoPreparationPayload struct {
 }
 
 type VideoPreparationStatus struct {
-	MediaID            string  `json:"mediaId"`
-	PreparationID      string  `json:"preparationId"`
-	Status             string  `json:"status"`
-	Stage              string  `json:"stage"`
-	PreparationVersion int     `json:"preparationVersion"`
-	Attempts           int     `json:"attempts"`
-	ProcessedFrames    int     `json:"processedFrames"`
-	ErrorCode          string  `json:"errorCode"`
-	Retryable          bool    `json:"retryable"`
-	SourceAvailable    bool    `json:"sourceAvailable"`
-	ManifestDigest     string  `json:"manifestDigest"`
-	FirstFrameReadyAt  *string `json:"firstFrameReadyAt,omitempty"`
-	SourceExpiryAt     *string `json:"sourceExpiryAt,omitempty"`
+	MediaID              string  `json:"mediaId"`
+	PreparationID        string  `json:"preparationId"`
+	Status               string  `json:"status"`
+	Stage                string  `json:"stage"`
+	PreparationVersion   int     `json:"preparationVersion"`
+	Attempts             int     `json:"attempts"`
+	ProcessedFrames      int     `json:"processedFrames"`
+	FramesSampled        int     `json:"framesSampled"`
+	FramesRetained       int     `json:"framesRetained"`
+	FramesRepresentative int     `json:"framesRepresentative"`
+	ErrorCode            string  `json:"errorCode"`
+	Retryable            bool    `json:"retryable"`
+	SourceAvailable      bool    `json:"sourceAvailable"`
+	ManifestDigest       string  `json:"manifestDigest"`
+	FirstFrameReadyAt    *string `json:"firstFrameReadyAt,omitempty"`
+	SourceExpiryAt       *string `json:"sourceExpiryAt,omitempty"`
 }
 
 type VideoReceivedPart struct {
@@ -2162,6 +2654,63 @@ type VideoUploadStatus struct {
 	ReceivedParts  []int                `json:"receivedParts"`
 	ConfirmedParts []*VideoReceivedPart `json:"confirmedParts"`
 	MissingParts   []int                `json:"missingParts"`
+}
+
+type AnalysisPromptTask string
+
+const (
+	AnalysisPromptTaskFindings         AnalysisPromptTask = "FINDINGS"
+	AnalysisPromptTaskInventoryCatalog AnalysisPromptTask = "INVENTORY_CATALOG"
+	AnalysisPromptTaskInventoryCompare AnalysisPromptTask = "INVENTORY_COMPARE"
+)
+
+var AllAnalysisPromptTask = []AnalysisPromptTask{
+	AnalysisPromptTaskFindings,
+	AnalysisPromptTaskInventoryCatalog,
+	AnalysisPromptTaskInventoryCompare,
+}
+
+func (e AnalysisPromptTask) IsValid() bool {
+	switch e {
+	case AnalysisPromptTaskFindings, AnalysisPromptTaskInventoryCatalog, AnalysisPromptTaskInventoryCompare:
+		return true
+	}
+	return false
+}
+
+func (e AnalysisPromptTask) String() string {
+	return string(e)
+}
+
+func (e *AnalysisPromptTask) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AnalysisPromptTask(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AnalysisPromptTask", str)
+	}
+	return nil
+}
+
+func (e AnalysisPromptTask) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AnalysisPromptTask) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AnalysisPromptTask) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type AnalysisType string

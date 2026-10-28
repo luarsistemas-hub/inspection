@@ -176,6 +176,20 @@ func TestCatalogSlicesIT021ToIT070(t *testing.T) {
 	if _, err := bus.Send(ctx, templateactivate.Command{TenantID: tenantID, VersionID: template.Version.ID, ExpectedVersion: 1}); err != nil {
 		t.Fatal(err)
 	}
+	environmentDocument := catalog.TemplateDocument{SchemaVersion: catalog.EnvironmentSchemaVersion, SegmentVersionID: segment.Version.ID.String(), ParticipantRoles: []string{"TENANT_PARTICIPANT"}, DefaultComparisonMode: catalog.ChecklistOnly, CaptureLayout: catalog.EnvironmentsLayout, EnvironmentCapture: catalog.DefaultEnvironmentCapture(), SuggestedEnvironmentTypes: []string{"LIVING_ROOM", "KITCHEN"}, AnalysisType: "REAL_ESTATE", Policy: catalog.Policy{GPSRequired: true, GeofenceMeters: 150, AllowGallery: true}}
+	environmentJSON, _ := json.Marshal(environmentDocument)
+	environmentRaw, err := bus.Send(ctx, templatepublish.Command{TenantID: tenantID, Key: "environments", Name: "Environments", IdempotencyKey: "template-environments-" + tenantID.String(), DefinitionJSON: environmentJSON})
+	if err != nil {
+		t.Fatal(err)
+	}
+	environmentTemplate := environmentRaw.(templatecore.View)
+	activatedRaw, err := bus.Send(ctx, templateactivate.Command{TenantID: tenantID, VersionID: environmentTemplate.Version.ID, ExpectedVersion: 1})
+	if err != nil {
+		t.Fatalf("schema v2 template activation failed: %v", err)
+	}
+	if activated := activatedRaw.(templatecore.View); activated.Version.Status != "ACTIVE" || activated.Version.SchemaVersion != catalog.EnvironmentSchemaVersion || activated.Template.ActiveVersionID == nil || *activated.Template.ActiveVersionID != environmentTemplate.Version.ID {
+		t.Fatalf("schema v2 template was not activated: %+v", activated)
+	}
 	assetInput := assetcore.Input{TenantID: tenantID, BusinessUnitID: unitID, SegmentVersionID: segment.Version.ID, TemplateID: &template.Template.ID, Name: "Asset", ExternalKey: "asset-1", Address: "Street", IdempotencyKey: "asset-" + tenantID.String(), GeofenceMeters: 150, Attributes: map[string]any{"kind": "house", "identifier": "A1"}, Assignments: []assetcore.AssignmentInput{{ParticipantID: participant.Participant.ID, Role: "TENANT_PARTICIPANT"}}}
 	assetRaw, err := bus.Send(ctx, assetregister.Command(assetInput))
 	if err != nil {

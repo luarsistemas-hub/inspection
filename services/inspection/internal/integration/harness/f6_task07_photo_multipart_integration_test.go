@@ -30,7 +30,8 @@ func TestVV_IT_362InterruptedPhotoMultipartResumesConfirmedParts(t *testing.T) {
 		t.Skipf("integration dependencies unavailable: %v", err)
 	}
 	defer h.Close()
-	fixture, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{})
+	// v1 pinned until template schema 1 is removed
+	fixture, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

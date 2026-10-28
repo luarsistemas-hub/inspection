@@ -15,6 +15,7 @@ import (
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
 	mediacore "inspection/services/inspection/internal/features/media/core"
 	mediacreate "inspection/services/inspection/internal/features/media/create_upload"
+	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/security"
@@ -25,7 +26,8 @@ import (
 // TestVV_IT_126ConcurrentTabsResumeOneAcceptedMedia verifies the public
 // createMediaUpload mutation remains idempotent when two tabs resume together.
 func TestVV_IT_126ConcurrentTabsResumeOneAcceptedMedia(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	service := mediacore.Service{DB: fixture.harness.DB, Store: fixture.harness.Store}
 	if err := mediacreate.Setup(mediacreate.Dependencies{Bus: fixture.bus, Service: service}); err != nil {
 		t.Fatal(err)
@@ -92,7 +94,8 @@ func TestVV_IT_126ConcurrentTabsResumeOneAcceptedMedia(t *testing.T) {
 }
 
 func TestVV_IT_103ThreeRoomSubmissionAdmitsOneContinuousMainVideo(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err := mediacreate.Setup(mediacreate.Dependencies{Bus: fixture.bus, Service: mediacore.Service{DB: fixture.harness.DB, Store: fixture.harness.Store}}); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +150,8 @@ func TestVV_IT_103ThreeRoomSubmissionAdmitsOneContinuousMainVideo(t *testing.T) 
 }
 
 func TestVV_IT_115ExpiredInvitationDuringRecordingRejectsSubmissionWithoutReceipt(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err := mediacreate.Setup(mediacreate.Dependencies{Bus: fixture.bus, Service: mediacore.Service{DB: fixture.harness.DB, Store: fixture.harness.Store}}); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +196,8 @@ func task05CreateVideoUpload(attemptID, key string) string {
 }
 
 func TestVV_IT_125ReauthenticatedResumeCannotAccessRevokedPersistedUpload(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "externalCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "externalCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
 		return tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).Update("status", "OPEN").Error
 	}); err != nil {
@@ -236,7 +241,7 @@ func TestVV_IT_125ReauthenticatedResumeCannotAccessRevokedPersistedUpload(t *tes
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: fixture.invitationID, ResponsibilityID: fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(fixture.invitationID), ResponsibilityID: &fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	response := executeAPI03WithCredentialsValue(t, fixture, `query { externalCapture { responsibilityId status } }`, requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf})

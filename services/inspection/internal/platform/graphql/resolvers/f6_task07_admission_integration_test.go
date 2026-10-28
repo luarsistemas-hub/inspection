@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -53,61 +52,21 @@ func TestVV_IT_374TenantAdministratorCannotConfigurePlatformAdmission(t *testing
 	}
 }
 
-func TestVV_IT_367DisableRejectsNewVideoOriginAndCurrentResponsibilities(t *testing.T) {
-	t.Run("origin invitation", func(t *testing.T) {
-		fx := newAPI06Fixture(t)
-		disableVVAdmission(t, fx, "vv-it-367-origin")
-		before := vvOriginWorkCounts(t, fx)
-		response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api06Query(fx, "inviteOriginCapture", "vv-it-367-origin-invite", ""), fx.ctx, "", "")
-		assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-		if after := vvOriginWorkCounts(t, fx); after != before {
-			t.Fatalf("disabled origin invitation created responsibility work: before=%+v after=%+v", before, after)
-		}
-	})
-	t.Run("current inspection responsibility", func(t *testing.T) {
-		fx := newFixedOriginGraphQLFixture(t, false)
-		setFixedVideoAdmission(t, fx)
-		originVersionID := seedFixedVideoOrigin(t, fx)
-		admissionFixture := api06Fixture{fixedOriginGraphQLFixture: fx}
-		disableVVAdmission(t, admissionFixture, "vv-it-367-current")
-		clientID := "vv-it-367-current-create"
-		response := executeFixedOriginEntryWithReference(t, fx, "createInspection", clientID, originVersionID.String())
-		assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-		assertFixedOriginNoSideEffects(t, fx, clientID)
-	})
-}
-
-func TestVV_IT_372DisabledOriginInviteWithNoPendingJobsCreatesNoWork(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	disableVVAdmission(t, fx, "vv-it-372")
-	var pendingBefore int64
-	if err := fx.h.AdminDB.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND status IN ?", fx.seed.TenantID, []string{"QUEUED", "PROCESSING"}).Count(&pendingBefore).Error; err != nil {
-		t.Fatal(err)
-	}
-	if pendingBefore != 0 {
-		t.Fatalf("fixture has %d pending video jobs, want zero", pendingBefore)
-	}
-	before := vvOriginWorkCounts(t, fx)
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api06Query(fx, "inviteOriginCapture", "vv-it-372-invite", ""), fx.ctx, "", "")
+func TestVV_IT_367DisableRejectsNewCurrentVideoResponsibilities(t *testing.T) {
+	fx := newFixedOriginGraphQLFixture(t, false)
+	setFixedVideoAdmission(t, fx)
+	originVersionID := seedFixedVideoOrigin(t, fx)
+	admissionFixture := api06Fixture{fixedOriginGraphQLFixture: fx}
+	disableVVAdmission(t, admissionFixture, "vv-it-367-current")
+	clientID := "vv-it-367-current-create"
+	response := executeFixedOriginEntryWithReference(t, fx, "createInspection", clientID, originVersionID.String())
 	assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-	if after := vvOriginWorkCounts(t, fx); after != before {
-		t.Fatalf("disabled invitation created fictitious work: before=%+v after=%+v", before, after)
-	}
-}
-
-func TestVV_IT_378DisabledVideoInviteIsRejectedBeforeResponsibilityCreation(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	disableVVAdmission(t, fx, "vv-it-378")
-	before := vvOriginWorkCounts(t, fx)
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api06Query(fx, "inviteOriginCapture", "vv-it-378-invite", ""), fx.ctx, "", "")
-	assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-	if after := vvOriginWorkCounts(t, fx); after != before {
-		t.Fatalf("disabled invitation created a responsibility: before=%+v after=%+v", before, after)
-	}
+	assertFixedOriginNoSideEffects(t, fx, clientID)
 }
 
 func TestVV_IT_379ResumeUsesCurrentPolicyAndKeepsT0PlusFiveDayDeadline(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	t0 := now.Add(-24 * time.Hour)
 	deadline := t0.Add(5 * 24 * time.Hour)
@@ -147,7 +106,8 @@ func TestVV_IT_379ResumeUsesCurrentPolicyAndKeepsT0PlusFiveDayDeadline(t *testin
 }
 
 func TestVV_IT_368AcceptedVideoContinuesAndPermittedRecaptureKeepsVideoKind(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err := fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=1").Updates(map[string]any{"enabled": false, "version": 2, "reason": "suspended after V1 acceptance", "mutation_id": "vv-it-368-suspend"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -225,46 +185,6 @@ func TestVV_IT_369StoppedPreparationRemainsPendingOrFailedInStatus(t *testing.T)
 				t.Fatalf("pending V1 unexpectedly has %d completed report snapshots", snapshots)
 			}
 		})
-	}
-}
-
-func TestVV_IT_375VideoOriginInviteRacesAdmissionDisableWithLinearizedOutcome(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	configureVVAdmissionRow(t, fx, true, 1, "vv-it-375-baseline")
-	operator, operatorServer := vvAdmissionOperator(fx, "vv-it-375")
-	fx.fixedOriginGraphQLFixture.server = operatorServer
-	invitationBefore := vvOriginWorkCounts(t, fx)
-	var start sync.WaitGroup
-	start.Add(1)
-	type result struct{ response string }
-	inviteResult := make(chan result, 1)
-	disableResult := make(chan result, 1)
-	go func() {
-		start.Wait()
-		inviteResult <- result{response: executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, api06Query(fx, "inviteOriginCapture", "vv-it-375-racing-invite", ""), fx.ctx, "", "")}
-	}()
-	go func() {
-		start.Wait()
-		query := `mutation { configureVideoAdmission(input:{enabled:false,expectedVersion:1,reason:"race test",clientMutationId:"vv-it-375-disable"}) { admission { enabled version } } }`
-		disableResult <- result{response: executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, operator, "", "")}
-	}()
-	start.Done()
-	invite := <-inviteResult
-	disabled := <-disableResult
-	if strings.Contains(disabled.response, `"errors"`) || !strings.Contains(disabled.response, `"enabled":false`) {
-		t.Fatalf("admission disable did not commit in the race: %s", disabled.response)
-	}
-	accepted := !strings.Contains(invite.response, "INTEGRATION_DISABLED") && !strings.Contains(invite.response, `"errors"`)
-	if !accepted && !strings.Contains(invite.response, "INTEGRATION_DISABLED") {
-		t.Fatalf("racing invitation returned an unexpected result: %s", invite.response)
-	}
-	after := vvOriginWorkCounts(t, fx)
-	if accepted {
-		if after.Versions != invitationBefore.Versions+1 || after.Invitations != invitationBefore.Invitations+1 || after.Responsibilities != invitationBefore.Responsibilities+1 {
-			t.Fatalf("accepted invite was not fully persisted atomically: before=%+v after=%+v", invitationBefore, after)
-		}
-	} else if after != invitationBefore {
-		t.Fatalf("rejected invite left partial work: before=%+v after=%+v", invitationBefore, after)
 	}
 }
 

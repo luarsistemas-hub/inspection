@@ -24,28 +24,37 @@ type Result struct {
 // The caller supplies its existing transaction so inspection creation and snapshot
 // pinning are atomic.
 func Resolve(ctx context.Context, tx *gorm.DB, analysisType string, now time.Time) (Result, error) {
+	return ResolveTask(ctx, tx, analysisType, string(prompt.Findings), now)
+}
+
+// ResolveTask materializes (or reuses) the immutable snapshot of one task's
+// effective prompt, inside the caller's transaction.
+func ResolveTask(ctx context.Context, tx *gorm.DB, analysisType, task string, now time.Time) (Result, error) {
 	if tx == nil || !prompt.IsKnownType(analysisType) {
 		return Result{}, apperror.New(apperror.InvalidInput, "analysisType", "unknown analysis type")
 	}
 	var current database.AnalysisPrompt
-	if err := tx.WithContext(ctx).Where("analysis_type=?", analysisType).First(&current).Error; err != nil {
+	if !prompt.IsKnownTask(task) {
+		return Result{}, apperror.New(apperror.InvalidInput, "task", "unknown analysis task")
+	}
+	if err := tx.WithContext(ctx).Where("analysis_type=? AND task=?", analysisType, task).First(&current).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return Result{}, apperror.New(apperror.InvalidState, "analysisType", "analysis prompt configuration is required")
 		}
 		return Result{}, err
 	}
-	if _, err := prompt.Parse(current.DefinitionJSON); err != nil {
+	if _, err := prompt.ParseTask(task, current.DefinitionJSON); err != nil {
 		return Result{}, fmt.Errorf("analysis prompt configuration is invalid: %w", err)
 	}
-	candidate := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now.UTC()}
-	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "canonical_digest"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
+	candidate := database.AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: analysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now.UTC()}
+	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "task"}, {Name: "canonical_digest"}}, DoNothing: true}).Create(&candidate).Error; err != nil {
 		return Result{}, err
 	}
 	// Always load a fresh value. PostgreSQL does not hydrate an ignored INSERT,
 	// and reusing candidate would make GORM add its unused generated ID to the
 	// lookup predicate.
 	var snapshot database.AnalysisPromptSnapshot
-	if err := tx.WithContext(ctx).Where("analysis_type=? AND canonical_digest=?", analysisType, current.CanonicalDigest).First(&snapshot).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("analysis_type=? AND task=? AND canonical_digest=?", analysisType, task, current.CanonicalDigest).First(&snapshot).Error; err != nil {
 		return Result{}, err
 	}
 	return Result{Prompt: current, Snapshot: snapshot}, nil

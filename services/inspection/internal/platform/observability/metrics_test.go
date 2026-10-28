@@ -1,9 +1,14 @@
 package observability
 
 import (
+	"bytes"
+	"context"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
+
+	"inspection/libs/identity"
 )
 
 func TestIT047MetricsExposeDeterministicNotificationSignals(t *testing.T) {
@@ -42,6 +47,27 @@ func TestIT047MetricsExposeDeterministicNotificationSignals(t *testing.T) {
 	}
 	if !strings.Contains(output, `channel="sms"`) || !strings.Contains(output, `provider="twilio"`) {
 		t.Fatalf("safe labels missing: %s", output)
+	}
+}
+
+func TestUnit_Issue015_CounterpartyLogsUseIdentifiersAndResponseOnly(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	tenantID, deliveryID, invitationID, versionID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	LogCounterpartyDeliveryTransition(context.Background(), tenantID, deliveryID, invitationID, "QUEUED", "FAILED", "provider_timeout", "smtp", 2)
+	LogCounterpartyResponded(context.Background(), tenantID, invitationID, versionID, "CONTESTED")
+	log := output.String()
+	for _, value := range []string{tenantID.String(), deliveryID.String(), invitationID.String(), versionID.String(), "counterparty_responded", "provider_timeout", "contested"} {
+		if !strings.Contains(log, value) {
+			t.Errorf("issue-015 log does not include %q: %s", value, log)
+		}
+	}
+	for _, forbidden := range []string{"statement", "token", "otp", "secret text"} {
+		if strings.Contains(strings.ToLower(log), forbidden) {
+			t.Errorf("issue-015 log contains forbidden field %q: %s", forbidden, log)
+		}
 	}
 }
 

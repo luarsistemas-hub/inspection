@@ -6,9 +6,106 @@ import (
 	"testing"
 )
 
+func TestTemplateSchemaV2_UT090ToUT095(t *testing.T) {
+	refs := testRefs{}
+	t.Run("UT090 schema v2 defaults", func(t *testing.T) {
+		doc := validDocument()
+		doc.SchemaVersion = 2
+		doc.Requirements = nil
+		doc.CaptureLayout = "ENVIRONMENTS"
+		compiled, err := Compile(encode(t, doc), refs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if compiled.Document.EnvironmentCapture == nil || compiled.Document.EnvironmentCapture.Photo.Minimum != 1 || compiled.Document.EnvironmentCapture.Photo.Maximum != 20 || compiled.Document.EnvironmentCapture.Video.MaximumClips != 3 {
+			t.Fatalf("unexpected defaults: %+v", compiled.Document.EnvironmentCapture)
+		}
+	})
+	t.Run("UT091 v2 rejects requirements", func(t *testing.T) {
+		doc := validDocument()
+		doc.SchemaVersion = 2
+		doc.CaptureLayout = "ENVIRONMENTS"
+		if _, err := Compile(encode(t, doc), refs); err == nil || !strings.Contains(err.Error(), "requirements") {
+			t.Fatalf("wanted requirements error, got %v", err)
+		}
+	})
+	t.Run("UT092 capture limits", func(t *testing.T) {
+		for name, mutate := range map[string]func(*TemplateDocument){"photo maximum": func(d *TemplateDocument) {
+			d.EnvironmentCapture = DefaultEnvironmentCapture()
+			d.EnvironmentCapture.Photo.Maximum = 21
+		}, "video maximum": func(d *TemplateDocument) {
+			d.EnvironmentCapture = DefaultEnvironmentCapture()
+			d.EnvironmentCapture.Video.MaximumClips = 4
+		}} {
+			t.Run(name, func(t *testing.T) {
+				doc := validDocument()
+				doc.SchemaVersion = 2
+				doc.Requirements = nil
+				doc.CaptureLayout = "ENVIRONMENTS"
+				mutate(&doc)
+				if _, err := Compile(encode(t, doc), refs); err == nil {
+					t.Fatal("invalid limit accepted")
+				}
+			})
+		}
+	})
+	t.Run("v1 rejects v2 fields and partial v2 limits use defaults", func(t *testing.T) {
+		v1 := validDocument()
+		v1.CaptureLayout = "ENVIRONMENTS"
+		if _, err := Compile(encode(t, v1), refs); err == nil {
+			t.Fatal("v1 accepted v2 capture fields")
+		}
+		v2 := validDocument()
+		v2.SchemaVersion, v2.Requirements, v2.CaptureLayout = 2, nil, "ENVIRONMENTS"
+		limits := &EnvironmentCapture{}
+		limits.Photo.Maximum = 10
+		v2.EnvironmentCapture = limits
+		compiled, err := Compile(encode(t, v2), refs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if compiled.Document.EnvironmentCapture.Photo.Minimum != 1 || compiled.Document.EnvironmentCapture.Photo.Maximum != 10 || compiled.Document.EnvironmentCapture.Video.MaximumClips != 3 {
+			t.Fatalf("partial defaults not applied: %+v", compiled.Document.EnvironmentCapture)
+		}
+	})
+	t.Run("UT093 v1 canonical digest remains stable", func(t *testing.T) {
+		doc := validDocument()
+		got, err := Compile(encode(t, doc), refs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Digest != "0ef69bb09272476a66d8f0a7a456a7ef1711485e4738effc04fc2ac00b55df35" {
+			t.Fatalf("v1 canonical digest changed: %s", got.Digest)
+		}
+	})
+	t.Run("UT094 unknown suggested environment rejected", func(t *testing.T) {
+		doc := validDocument()
+		doc.SchemaVersion = 2
+		doc.Requirements = nil
+		doc.CaptureLayout = "ENVIRONMENTS"
+		doc.SuggestedEnvironmentTypes = []string{"GARDEN_X"}
+		if _, err := Compile(encode(t, doc), refs); err == nil {
+			t.Fatal("unknown type accepted")
+		}
+	})
+	t.Run("UT095 curated v2 seeds compile", func(t *testing.T) {
+		seeds := CuratedSeeds("REAL_ESTATE", "property-v1", "construction-v1", "cleaning-v1")
+		if err := ValidateSeeds(seeds, refs); err != nil {
+			t.Fatal(err)
+		}
+		for _, seed := range seeds {
+			if seed.Document.SchemaVersion != 2 || seed.Document.CaptureLayout != "ENVIRONMENTS" {
+				t.Errorf("seed %s is not v2", seed.TemplateKey)
+			}
+		}
+	})
+}
+
 type testRefs struct{}
 
-func (testRefs) SegmentExists(value string) bool      { return value == "segment-v1" }
+func (testRefs) SegmentExists(value string) bool {
+	return value == "segment-v1" || value == "property-v1" || value == "construction-v1" || value == "cleaning-v1"
+}
 func (testRefs) AnalysisTypeExists(value string) bool { return value == "REAL_ESTATE" }
 
 func validDocument() TemplateDocument {
@@ -61,6 +158,9 @@ func TestVideoTemplateContractUT001UT002(t *testing.T) {
 	if compiled.Document.Requirements[0].EvidenceKind != "PHOTO" {
 		t.Fatal("video modality must not rewrite participant requirements into photos")
 	}
+	if compiled.Digest != "ff325bc78f14cea68c22e16e0c38f886f4c47d744d8ae0a298b72fc3687dca95" {
+		t.Fatalf("v1 video canonical digest changed: %s", compiled.Digest)
+	}
 	withoutFlag := validDocument()
 	photo, err := Compile(encode(t, withoutFlag), testRefs{})
 	if err != nil || photo.Document.MediaKind() != "PHOTO" || photo.Document.IsVideo {
@@ -101,6 +201,21 @@ func TestCapacityBoundaryUT062(t *testing.T) {
 		if ValidateCapacity(test.assets, test.inspections, test.photos, test.bytes) == nil {
 			t.Fatal("over-capacity value accepted")
 		}
+	}
+}
+
+func TestSchemaVersionCapacityKeepsV1At200AndAllowsV2Aggregate1200(t *testing.T) {
+	if MaxInspectionPhotosForSchema(LegacySchemaVersion) != 200 || MaxInspectionPhotosForSchema(EnvironmentSchemaVersion) != 1200 {
+		t.Fatalf("schema photo caps v1=%d v2=%d", MaxInspectionPhotosForSchema(LegacySchemaVersion), MaxInspectionPhotosForSchema(EnvironmentSchemaVersion))
+	}
+	if err := ValidateCaptureCapacity(EnvironmentSchemaVersion, 1, 1, 1200, 1); err != nil {
+		t.Fatalf("v2 1200 photo cap rejected: %v", err)
+	}
+	if ValidateCaptureCapacity(EnvironmentSchemaVersion, 1, 1, 1201, 1) == nil {
+		t.Fatal("v2 photo cap overflow accepted")
+	}
+	if ValidateCaptureCapacity(LegacySchemaVersion, 1, 1, 201, 1) == nil {
+		t.Fatal("v1 cap was widened by v2 environment limits")
 	}
 }
 

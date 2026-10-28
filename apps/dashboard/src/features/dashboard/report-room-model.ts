@@ -1,4 +1,5 @@
 import type { ReportWorkspaceQuery } from "@/graphql/generated";
+import { environmentTypeLabel, environmentTypeOptions } from "./inventory-presentation";
 
 type Report = NonNullable<ReportWorkspaceQuery["report"]>;
 export type RoomEvidence = Report["evidence"]["nodes"][number] & { snapshotId?: string };
@@ -20,19 +21,54 @@ const videoTerms: Record<string, string> = {
   lower_corner: "canto inferior", upper_corner: "canto superior", full_view: "completa",
   glass_pane: "vidro", wall_and_window: "parede e janela", corner_view: "do canto",
   side_angle: "lateral", front_angle: "frontal",
+  living_room: "Sala de estar", dining_room: "Sala de jantar", kitchen: "Cozinha",
+  bedroom: "Quarto", suite: "Suíte", bathroom: "Banheiro", toilet: "Lavabo",
+  laundry: "Lavanderia", service_area: "Área de serviço", balcony: "Varanda",
+  garage: "Garagem", hallway: "Corredor", entrance: "Entrada", office: "Escritório",
+  storage: "Depósito", external_area: "Área externa", pool_area: "Área da piscina",
+  gourmet_area: "Área gourmet", floor: "Piso", wall: "Parede", ceiling: "Teto",
+  door: "Porta", window: "Janela", countertop: "Bancada", sink: "Pia", faucet: "Torneira",
+  cabinet: "Armário", shower_box: "Box", mirror: "Espelho", stove_cooktop: "Fogão ou cooktop",
+  refrigerator: "Geladeira", air_conditioner: "Ar-condicionado", water_heater: "Aquecedor de água",
+  wardrobe: "Guarda-roupa", sofa: "Sofá", table: "Mesa", chair: "Cadeira",
+  curtains_blinds: "Cortinas ou persianas", additional_evidence: "Evidências adicionais",
+};
+const roomNames: Record<string, string> = {
+  "living room": "Sala de estar", "dining room": "Sala de jantar", kitchen: "Cozinha",
+  bedroom: "Quarto", suite: "Suíte", bathroom: "Banheiro", toilet: "Lavabo",
+  laundry: "Lavanderia", "service area": "Área de serviço", balcony: "Varanda",
+  garage: "Garagem", hallway: "Corredor", entrance: "Entrada", office: "Escritório",
+  storage: "Depósito", "external area": "Área externa", "pool area": "Área da piscina",
+  "gourmet area": "Área gourmet",
 };
 
 function videoText(value: string) {
-  return value.replace(/\b[a-z]+(?:_[a-z]+)*\b/g, (term) => videoTerms[term] ?? term);
+  return value.replace(/\b[a-z]+(?:_[a-z]+)*\b/gi, (term) => videoTerms[term.toLocaleLowerCase()] ?? term);
 }
+
+function roomLabel(value: string) {
+  const normalized = value.trim();
+  if (!normalized) return normalized;
+  const translatedCode = environmentTypeOptions.some(([code]) => code === normalized.toLocaleUpperCase())
+    ? environmentTypeLabel(normalized.toLocaleUpperCase())
+    : undefined;
+  if (translatedCode) return translatedCode;
+  const translatedName = roomNames[normalized.toLocaleLowerCase()];
+  if (translatedName) return translatedName;
+  return videoText(normalized);
+}
+
+export function presentReportSection(value: string) { return roomLabel(value); }
+export function presentReportLabel(value: string) { return videoText(value); }
 
 function location(requirement: Report["requirements"][number]) {
   const label = videoText(requirement.label.trim());
-  const section = requirement.section.trim();
-  const generic = /^(vídeo|video|vistoria|main|geral)$/i.test(section);
+  const rawSection = requirement.section.trim();
+  const section = roomLabel(rawSection);
+  const generic = /^(vídeo|video|vistoria|main|geral)$/i.test(rawSection);
   const parts = label.split(/\s+[—–·]\s+/);
-  if (parts.length > 1 && (generic || parts[0].toLocaleLowerCase() === section.toLocaleLowerCase())) {
-    return { room: generic ? parts[0] : section, title: parts.slice(1).join(" — ") };
+  if (parts.length > 1 && (generic || parts[0].toLocaleLowerCase() === rawSection.toLocaleLowerCase() || parts[0].toLocaleLowerCase() === section.toLocaleLowerCase())) {
+    return { room: generic ? roomLabel(parts[0]) : section, title: videoText(parts.slice(1).join(" — ")) };
   }
   return { room: generic || !section ? "Visão geral" : section, title: label };
 }

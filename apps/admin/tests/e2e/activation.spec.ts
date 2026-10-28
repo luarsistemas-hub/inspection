@@ -42,8 +42,6 @@ test("E2E-007 activates an owner from the real invitation before normal PKCE log
   await page.getByLabel("Finalidade da vistoria").selectOption("RENTAL");
   await page.getByLabel("Prazo para concluir a vistoria").fill(deadline);
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
-  await page.getByLabel("Base de comparação").selectOption("CHECKLIST_ONLY");
-  await page.getByRole("button", { name: "Salvar e continuar" }).click();
   await page.getByLabel("Quem realizará a vistoria?").selectOption("SELF");
   await page.getByRole("button", { name: "Salvar e continuar" }).click();
   await page.getByRole("button", { name: "Criar primeira vistoria" }).click();

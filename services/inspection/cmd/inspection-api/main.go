@@ -34,11 +34,22 @@ import (
 	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	capturedeclareenvironment "inspection/services/inspection/internal/features/capture/declare_environment"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
 	capturefinalize "inspection/services/inspection/internal/features/capture/finalize_submission"
+	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
+	counterpartyacknowledge "inspection/services/inspection/internal/features/counterparty/acknowledge"
+	counterpartycontest "inspection/services/inspection/internal/features/counterparty/contest"
+	counterpartycore "inspection/services/inspection/internal/features/counterparty/core"
+	counterpartyrequestotp "inspection/services/inspection/internal/features/counterparty/request_otp"
+	counterpartyresend "inspection/services/inspection/internal/features/counterparty/resend"
+	counterpartyresolve "inspection/services/inspection/internal/features/counterparty/resolve"
+	counterpartyupdatepolicy "inspection/services/inspection/internal/features/counterparty/update_policy"
+	counterpartyverifyotp "inspection/services/inspection/internal/features/counterparty/verify_otp"
+	counterpartyviewbaseline "inspection/services/inspection/internal/features/counterparty/view_baseline"
 	inspectioncancel "inspection/services/inspection/internal/features/inspections/cancel"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	inspectionmanual "inspection/services/inspection/internal/features/inspections/create_manual"
@@ -46,6 +57,22 @@ import (
 	inspectionget "inspection/services/inspection/internal/features/inspections/get"
 	inspectioninvalidate "inspection/services/inspection/internal/features/inspections/invalidate"
 	inspectionlist "inspection/services/inspection/internal/features/inspections/list"
+	inventoryactivate "inspection/services/inspection/internal/features/inventory/activate_version"
+	inventoryadd "inspection/services/inspection/internal/features/inventory/add_item"
+	inventorybaseline "inspection/services/inspection/internal/features/inventory/baseline"
+	inventorybulk "inspection/services/inspection/internal/features/inventory/bulk_accept_environment"
+	inventorycore "inspection/services/inspection/internal/features/inventory/core"
+	inventorydecide "inspection/services/inspection/internal/features/inventory/decide_items"
+	inventorydiscard "inspection/services/inspection/internal/features/inventory/discard_draft"
+	inventorydraft "inspection/services/inspection/internal/features/inventory/draft"
+	inventorymerge "inspection/services/inspection/internal/features/inventory/merge_items"
+	inventoryremoveenv "inspection/services/inspection/internal/features/inventory/remove_environment"
+	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
+	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
+	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
+	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
+	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
+	inventoryupsertenv "inspection/services/inspection/internal/features/inventory/upsert_environment"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
@@ -70,13 +97,8 @@ import (
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
 	onboardinglogout "inspection/services/inspection/internal/features/onboarding/logout"
 	onboardingbootstrap "inspection/services/inspection/internal/features/onboarding/onboarding_bootstrap"
-	onboardingphotos "inspection/services/inspection/internal/features/onboarding/reference_photos"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	originclose "inspection/services/inspection/internal/features/origins/close_invitation"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
-	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
@@ -102,6 +124,7 @@ import (
 	recapturereplacement "inspection/services/inspection/internal/features/recapture/request_video_replacement"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
 	publication "inspection/services/inspection/internal/features/reports/publication"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	schedulecancel "inspection/services/inspection/internal/features/schedules/cancel_schedule"
 	schedulecore "inspection/services/inspection/internal/features/schedules/core"
 	schedulecreate "inspection/services/inspection/internal/features/schedules/create_schedule"
@@ -140,6 +163,7 @@ import (
 	"inspection/services/inspection/internal/platform/requestctx"
 	process "inspection/services/inspection/internal/platform/runtime"
 	"inspection/services/inspection/internal/platform/security"
+	"inspection/services/inspection/internal/platform/tenanttx"
 	"inspection/services/inspection/internal/platform/testfailure"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -240,13 +264,16 @@ func run() error {
 	}
 	mediaStore := objectstore.Store{Bucket: cfg.MinIOBucket, Client: minioClient, PublicClient: publicMinioClient}
 	mediaService := mediacore.Service{DB: db, Store: mediaStore}
-	originService := origincore.Service{DB: db}
 	recaptureService := recapturecore.Service{DB: db}
-	submissionFinalizer, err := capturefinalize.Setup(capturefinalize.Dependencies{Origins: originService, Recapture: recaptureService})
+	submissionFinalizer, err := capturefinalize.Setup(capturefinalize.Dependencies{Recapture: recaptureService})
 	if err != nil {
 		return err
 	}
 	captureService := capturecore.Service{DB: db, Finalizer: submissionFinalizer, DisableRequiredGPS: cfg.Stage != "production"}
+	inventoryService := inventorycore.Service{DB: db, Within: tenanttx.Runner{DB: db}.Within}
+	counterpartyService := counterpartycore.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: invitationcore.ChannelNotifier{Registry: channelRegistry, CallbackURL: cfg.TwilioCallbackURL, Stage: cfg.Stage}, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Inventory: inventoryService, Stage: cfg.Stage}
+	inventoryService.Retention = retentioncore.BaselineTransition{}
+	inventoryService.Counterparties = counterpartyService
 	postalLookupService := &postallookup.Service{}
 	setups := []func() error{
 		func() error { return postallookup.Setup(bus, postalLookupService) },
@@ -411,16 +438,7 @@ func run() error {
 			return projectlist.Setup(projectlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
 		func() error {
-			return origininvite.Setup(origininvite.Dependencies{DB: db, Bus: bus, Service: originService, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin, Authorizer: authorizer})
-		},
-		func() error {
-			return originactivate.Setup(originactivate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
-		},
-		func() error {
-			return origininvalidate.Setup(origininvalidate.Dependencies{DB: db, Bus: bus, Service: originService, Authorizer: authorizer})
-		},
-		func() error {
-			return originclose.Setup(originclose.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+			return origininvalidate.Setup(origininvalidate.Dependencies{DB: db, Bus: bus, Service: &origininvalidate.Service{DB: db}, Authorizer: authorizer})
 		},
 		func() error {
 			return originlist.Setup(originlist.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
@@ -430,6 +448,45 @@ func run() error {
 		},
 		func() error {
 			return originpromotevideo.Setup(originpromotevideo.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
+		},
+		func() error { return inventorydecide.Setup(bus, inventoryService) },
+		func() error { return inventorybulk.Setup(bus, inventoryService) },
+		func() error { return inventoryadd.Setup(bus, inventoryService) },
+		func() error { return inventorymerge.Setup(bus, inventoryService) },
+		func() error { return inventorysplit.Setup(bus, inventoryService) },
+		func() error { return inventoryupsertenv.Setup(bus, inventoryService) },
+		func() error { return inventoryremoveenv.Setup(bus, inventoryService) },
+		func() error { return inventoryactivate.Setup(bus, inventoryService) },
+		func() error { return inventorydiscard.Setup(bus, inventoryService) },
+		func() error { return inventoryrequest.Setup(bus, inventoryService) },
+		func() error { return inventoryretry.Setup(bus, inventoryService) },
+		func() error { return inventorystart.Setup(bus, inventoryService) },
+		func() error { return inventorydraft.Setup(bus, inventoryService) },
+		func() error { return inventorybaseline.Setup(bus, inventoryService) },
+		func() error { return inventorytrail.Setup(bus, inventoryService) },
+		func() error {
+			return counterpartyrequestotp.Setup(counterpartyrequestotp.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyverifyotp.Setup(counterpartyverifyotp.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyviewbaseline.Setup(counterpartyviewbaseline.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyacknowledge.Setup(counterpartyacknowledge.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartycontest.Setup(counterpartycontest.Dependencies{Bus: bus, Service: counterpartyService})
+		},
+		func() error {
+			return counterpartyresolve.Setup(counterpartyresolve.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
+		},
+		func() error {
+			return counterpartyresend.Setup(counterpartyresend.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
+		},
+		func() error {
+			return counterpartyupdatepolicy.Setup(counterpartyupdatepolicy.Dependencies{Bus: bus, Service: counterpartyService, Authorizer: authorizer})
 		},
 		func() error {
 			return capturebootstrap.Setup(capturebootstrap.Dependencies{Bus: bus, Service: captureService})
@@ -441,6 +498,12 @@ func run() error {
 		func() error { return capturesave.Setup(capturesave.Dependencies{Bus: bus, Service: captureService}) },
 		func() error {
 			return capturedeclare.Setup(capturedeclare.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturedeclareenvironment.Setup(capturedeclareenvironment.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturequalitywarning.Setup(capturequalitywarning.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error {
 			return capturesubmit.Setup(capturesubmit.Dependencies{Bus: bus, Service: captureService, AnalysisDisabled: cfg.LLMMode == "disabled"})
@@ -498,9 +561,6 @@ func run() error {
 	}); err != nil {
 		return err
 	}
-	if err := onboardingphotos.Setup(mux, onboardingphotos.Dependencies{DB: db, Sessions: onboardingService, Store: mediaStore}); err != nil {
-		return err
-	}
 	if cfg.Notification.EnabledChannels["SMS"] || cfg.Notification.EnabledChannels["WHATSAPP"] {
 		if err := receivetwiliostatus.Setup(mux, receivetwiliostatus.Dependencies{DB: db, AuthToken: cfg.TwilioAuthToken, PublicURL: cfg.TwilioCallbackURL, AccountID: cfg.TwilioAccountSID, Metrics: metrics}); err != nil {
 			return err
@@ -511,7 +571,7 @@ func run() error {
 			return err
 		}
 	}
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer, Stage: cfg.Stage}, AdminActivation: activationService, UserActivation: activateinternal.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: inviteinternal.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.InternalUserActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
+	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &resolvers.Resolver{Bus: bus, DB: db, Authorizer: authorizer, Store: mediaStore, Invitations: invitationService, Counterparty: counterpartyService, Onboarding: onboardingService, ResponsibleEmail: responsibleemail.Service{DB: db, Notifications: notificationService, CaptureBaseURL: cfg.CaptureOrigin}, OnboardingDeliveryStatus: deliverystatus.Service{DB: db}, OnboardingComplete: onboardingcomplete.Service{DB: db, Bus: bus, Sessions: onboardingService, ActivationNotifier: onboardingsession.RegistryNotifier{Registry: channelRegistry}, AdminOrigin: cfg.AdminOrigin, OwnerIssuer: cfg.OIDCIssuer, Stage: cfg.Stage}, AdminActivation: activationService, UserActivation: activateinternal.Service{DB: db, Pepper: []byte(cfg.OTPPepper), Limits: limits, Notifier: inviteinternal.RegistryNotifier{Registry: channelRegistry}, Provider: keycloak.InternalUserActivationProvider{Client: keycloakClient}, Stage: cfg.Stage}, OnboardingBootstrap: bootstrapService, OwnerProvider: keycloakClient, OwnerIssuer: cfg.OIDCIssuer, SuperAdminIssuer: cfg.SuperAdminIssuer, SuperAdminSubject: cfg.SuperAdminSubject, ScheduleService: schedulecore.Service{DB: db, Bus: bus, Authorizer: authorizer}, InspectionService: inspectioncore.Service{DB: db, Bus: bus, Authorizer: authorizer}, ProjectService: projectcore.Service{DB: db, Bus: bus, Authorizer: authorizer}, PublicationService: publication.Service{DB: db}}}))
 	server.SetErrorPresenter(graph.PresentError)
 	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && cfg.Environment != "local" {

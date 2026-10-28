@@ -28,6 +28,7 @@ type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
 	Mutation() MutationResolver
+	OriginVersion() OriginVersionResolver
 	Query() QueryResolver
 	Report() ReportResolver
 }
@@ -43,6 +44,7 @@ type ComplexityRoot struct {
 		ModelAlias           func(childComplexity int) int
 		Revision             func(childComplexity int) int
 		SystemPrompt         func(childComplexity int) int
+		Task                 func(childComplexity int) int
 		UpdatedAt            func(childComplexity int) int
 	}
 
@@ -105,6 +107,43 @@ type ComplexityRoot struct {
 		PageInfo func(childComplexity int) int
 	}
 
+	BaselineCounterpartyInvitation struct {
+		AdjustmentVersionID func(childComplexity int) int
+		DeadlineAt          func(childComplexity int) int
+		DeliveryID          func(childComplexity int) int
+		DeliveryStatus      func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		ParticipantID       func(childComplexity int) int
+		Resolution          func(childComplexity int) int
+		ResolutionReason    func(childComplexity int) int
+		RespondedAt         func(childComplexity int) int
+		Response            func(childComplexity int) int
+		Statement           func(childComplexity int) int
+	}
+
+	BaselineInventory struct {
+		Environments func(childComplexity int) int
+		HasInventory func(childComplexity int) int
+		Version      func(childComplexity int) int
+	}
+
+	BaselinePolicy struct {
+		ContestationDeadlineDays func(childComplexity int) int
+		Version                  func(childComplexity int) int
+	}
+
+	BaselinePolicyPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Policy           func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	BulkAcceptInventoryEnvironmentPayload struct {
+		AcceptedCount    func(childComplexity int) int
+		ClientMutationID func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	BusinessUnit struct {
 		Code    func(childComplexity int) int
 		ID      func(childComplexity int) int
@@ -131,9 +170,32 @@ type ComplexityRoot struct {
 		Version             func(childComplexity int) int
 	}
 
+	CaptureEnvironment struct {
+		AddedDuringCapture func(childComplexity int) int
+		Expected           func(childComplexity int) int
+		IdentityID         func(childComplexity int) int
+		MediaCount         func(childComplexity int) int
+		Name               func(childComplexity int) int
+		RequirementKey     func(childComplexity int) int
+		Status             func(childComplexity int) int
+		TypeCode           func(childComplexity int) int
+	}
+
+	CaptureEnvironmentPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Environment      func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	CapturePayload struct {
 		ClientMutationID func(childComplexity int) int
 		Status           func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	CaptureQualityWarningPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Flags            func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 	}
 
@@ -156,18 +218,97 @@ type ComplexityRoot struct {
 	}
 
 	CaptureRequirement struct {
-		CaptureSourcePolicy  func(childComplexity int) int
-		ComparisonTarget     func(childComplexity int) int
-		DescriptionRequired  func(childComplexity int) int
-		EvidenceKind         func(childComplexity int) int
-		ImpossibilityAllowed func(childComplexity int) int
-		Instructions         func(childComplexity int) int
-		Key                  func(childComplexity int) int
-		Label                func(childComplexity int) int
-		MaximumMedia         func(childComplexity int) int
-		MinimumMedia         func(childComplexity int) int
-		Required             func(childComplexity int) int
-		Section              func(childComplexity int) int
+		AddedDuringCapture    func(childComplexity int) int
+		CaptureSourcePolicy   func(childComplexity int) int
+		ComparisonTarget      func(childComplexity int) int
+		DescriptionRequired   func(childComplexity int) int
+		EnvironmentIdentityID func(childComplexity int) int
+		EnvironmentName       func(childComplexity int) int
+		EnvironmentTypeCode   func(childComplexity int) int
+		EvidenceKind          func(childComplexity int) int
+		Expected              func(childComplexity int) int
+		ImpossibilityAllowed  func(childComplexity int) int
+		Instructions          func(childComplexity int) int
+		Key                   func(childComplexity int) int
+		Label                 func(childComplexity int) int
+		MaximumMedia          func(childComplexity int) int
+		MinimumMedia          func(childComplexity int) int
+		Required              func(childComplexity int) int
+		Section               func(childComplexity int) int
+	}
+
+	CaptureReviewHandoff struct {
+		InspectionID    func(childComplexity int) int
+		OriginVersionID func(childComplexity int) int
+	}
+
+	ContestationSummary struct {
+		Acknowledged func(childComplexity int) int
+		Contested    func(childComplexity int) int
+		NoResponse   func(childComplexity int) int
+		Open         func(childComplexity int) int
+		Pending      func(childComplexity int) int
+	}
+
+	CounterpartyBaseline struct {
+		ActivatedAt        func(childComplexity int) int
+		AdjustmentStatus   func(childComplexity int) int
+		Baseline           func(childComplexity int) int
+		DeadlineAt         func(childComplexity int) int
+		NewerVersionExists func(childComplexity int) int
+		Purpose            func(childComplexity int) int
+		ReadOnly           func(childComplexity int) int
+		Resolution         func(childComplexity int) int
+		ResolutionReason   func(childComplexity int) int
+		RespondedAt        func(childComplexity int) int
+		Response           func(childComplexity int) int
+	}
+
+	CounterpartyBaselineEnvironment struct {
+		Items    func(childComplexity int) int
+		Name     func(childComplexity int) int
+		TypeCode func(childComplexity int) int
+	}
+
+	CounterpartyBaselineEvidence struct {
+		Kind        func(childComplexity int) int
+		Position    func(childComplexity int) int
+		TimestampMs func(childComplexity int) int
+		URL         func(childComplexity int) int
+	}
+
+	CounterpartyBaselineInventory struct {
+		Environments func(childComplexity int) int
+		HasInventory func(childComplexity int) int
+	}
+
+	CounterpartyBaselineItem struct {
+		Color       func(childComplexity int) int
+		Condition   func(childComplexity int) int
+		Evidence    func(childComplexity int) int
+		Limitation  func(childComplexity int) int
+		Material    func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Observation func(childComplexity int) int
+		Quantity    func(childComplexity int) int
+		TypeCode    func(childComplexity int) int
+	}
+
+	CounterpartyInvitationPayload struct {
+		AdjustmentVersionID func(childComplexity int) int
+		ClientMutationID    func(childComplexity int) int
+		DeadlineAt          func(childComplexity int) int
+		InvitationID        func(childComplexity int) int
+		Resolution          func(childComplexity int) int
+		Response            func(childComplexity int) int
+		UserErrors          func(childComplexity int) int
+	}
+
+	CounterpartyResponsePayload struct {
+		ClientMutationID func(childComplexity int) int
+		RespondedAt      func(childComplexity int) int
+		Response         func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
 	}
 
 	CreateTenantPayload struct {
@@ -207,18 +348,56 @@ type ComplexityRoot struct {
 		URL                func(childComplexity int) int
 	}
 
+	CustomerInventory struct {
+		Coverage               func(childComplexity int) int
+		Informational          func(childComplexity int) int
+		Problems               func(childComplexity int) int
+		Purpose                func(childComplexity int) int
+		ReferenceVersionNumber func(childComplexity int) int
+	}
+
+	CustomerInventoryCoverage struct {
+		AssessedItems                  func(childComplexity int) int
+		EnvironmentsAddedDuringCapture func(childComplexity int) int
+		EnvironmentsNotCaptured        func(childComplexity int) int
+		ExpectedItems                  func(childComplexity int) int
+		NotObserved                    func(childComplexity int) int
+	}
+
+	CustomerInventoryEntry struct {
+		ConditionAfter  func(childComplexity int) int
+		ConditionBefore func(childComplexity int) int
+		Environment     func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Pairs           func(childComplexity int) int
+		Reason          func(childComplexity int) int
+		Status          func(childComplexity int) int
+		Type            func(childComplexity int) int
+	}
+
+	CustomerInventoryPair struct {
+		CurrentEvidenceID         func(childComplexity int) int
+		CurrentSourceAvailability func(childComplexity int) int
+		OriginEvidenceID          func(childComplexity int) int
+		OriginSourceAvailability  func(childComplexity int) int
+		TimestampMs               func(childComplexity int) int
+	}
+
 	CustomerPortfolioConnection struct {
 		Nodes    func(childComplexity int) int
 		PageInfo func(childComplexity int) int
 	}
 
 	CustomerPortfolioItem struct {
-		AssetID                 func(childComplexity int) int
-		Progress                func(childComplexity int) int
-		ProjectID               func(childComplexity int) int
-		PublishedClassification func(childComplexity int) int
-		Status                  func(childComplexity int) int
-		UpdatedAt               func(childComplexity int) int
+		AssetExternalKey            func(childComplexity int) int
+		AssetID                     func(childComplexity int) int
+		AssetName                   func(childComplexity int) int
+		LatestPublishedInspectionID func(childComplexity int) int
+		Progress                    func(childComplexity int) int
+		ProjectID                   func(childComplexity int) int
+		PublishedClassification     func(childComplexity int) int
+		Status                      func(childComplexity int) int
+		UpdatedAt                   func(childComplexity int) int
 	}
 
 	CustomerReport struct {
@@ -227,6 +406,7 @@ type ComplexityRoot struct {
 		Context        func(childComplexity int) int
 		Historical     func(childComplexity int) int
 		InspectionID   func(childComplexity int) int
+		Inventory      func(childComplexity int) int
 		Requirements   func(childComplexity int) int
 		SnapshotID     func(childComplexity int) int
 		Status         func(childComplexity int) int
@@ -257,8 +437,10 @@ type ComplexityRoot struct {
 
 	ExternalCapture struct {
 		Answers               func(childComplexity int) int
+		CaptureLayout         func(childComplexity int) int
 		ConfirmationOnly      func(childComplexity int) int
 		DisclosureVersion     func(childComplexity int) int
+		Environments          func(childComplexity int) int
 		Kind                  func(childComplexity int) int
 		MediaKind             func(childComplexity int) int
 		Policy                func(childComplexity int) int
@@ -269,6 +451,7 @@ type ComplexityRoot struct {
 		ReplacementDeadlineAt func(childComplexity int) int
 		Requirements          func(childComplexity int) int
 		ResponsibilityID      func(childComplexity int) int
+		ReviewHandoff         func(childComplexity int) int
 		Status                func(childComplexity int) int
 		TemplateVersionID     func(childComplexity int) int
 	}
@@ -405,6 +588,115 @@ type ComplexityRoot struct {
 		UserErrors       func(childComplexity int) int
 	}
 
+	InventoryCounts struct {
+		Included    func(childComplexity int) int
+		NotReviewed func(childComplexity int) int
+		Rejected    func(childComplexity int) int
+	}
+
+	InventoryDraft struct {
+		AssetID      func(childComplexity int) int
+		Environments func(childComplexity int) int
+		NoticeCode   func(childComplexity int) int
+		Progress     func(childComplexity int) int
+		ReadOnly     func(childComplexity int) int
+		Version      func(childComplexity int) int
+		Warnings     func(childComplexity int) int
+	}
+
+	InventoryEnvironment struct {
+		AddedDuringCapture func(childComplexity int) int
+		Decision           func(childComplexity int) int
+		Expected           func(childComplexity int) int
+		ID                 func(childComplexity int) int
+		IdentityID         func(childComplexity int) int
+		Items              func(childComplexity int) int
+		Name               func(childComplexity int) int
+		Position           func(childComplexity int) int
+		RequirementKey     func(childComplexity int) int
+		TypeCode           func(childComplexity int) int
+	}
+
+	InventoryEnvironmentPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Environment      func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	InventoryEvidence struct {
+		Availability          func(childComplexity int) int
+		FrameID               func(childComplexity int) int
+		ID                    func(childComplexity int) int
+		Kind                  func(childComplexity int) int
+		MediaID               func(childComplexity int) int
+		Position              func(childComplexity int) int
+		Region                func(childComplexity int) int
+		RetentionAvailability func(childComplexity int) int
+		TimestampMs           func(childComplexity int) int
+		URL                   func(childComplexity int) int
+	}
+
+	InventoryItem struct {
+		Color           func(childComplexity int) int
+		Condition       func(childComplexity int) int
+		ConfidenceBps   func(childComplexity int) int
+		Decision        func(childComplexity int) int
+		Declared        func(childComplexity int) int
+		EnvironmentID   func(childComplexity int) int
+		Evidence        func(childComplexity int) int
+		ID              func(childComplexity int) int
+		IdentityID      func(childComplexity int) int
+		Limitation      func(childComplexity int) int
+		Material        func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Observation     func(childComplexity int) int
+		Origin          func(childComplexity int) int
+		Quantity        func(childComplexity int) int
+		RejectionReason func(childComplexity int) int
+		RejectionText   func(childComplexity int) int
+		Suggested       func(childComplexity int) int
+		TypeCode        func(childComplexity int) int
+		Version         func(childComplexity int) int
+	}
+
+	InventoryItemPayload struct {
+		ClientMutationID func(childComplexity int) int
+		Item             func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
+	InventoryItemsPayload struct {
+		ClientMutationID  func(childComplexity int) int
+		EmptyEnvironments func(childComplexity int) int
+		Items             func(childComplexity int) int
+		UserErrors        func(childComplexity int) int
+	}
+
+	InventoryProgress struct {
+		Decided func(childComplexity int) int
+		Pending func(childComplexity int) int
+	}
+
+	InventoryTrail struct {
+		CounterpartyEvents func(childComplexity int) int
+		Decisions          func(childComplexity int) int
+		Suggestions        func(childComplexity int) int
+	}
+
+	InventoryTrailEntry struct {
+		Action            func(childComplexity int) int
+		ActorMembershipID func(childComplexity int) int
+		After             func(childComplexity int) int
+		Before            func(childComplexity int) int
+		ID                func(childComplexity int) int
+		OccurredAt        func(childComplexity int) int
+		Reason            func(childComplexity int) int
+		ResolutionReason  func(childComplexity int) int
+		Statement         func(childComplexity int) int
+		TargetID          func(childComplexity int) int
+		TargetType        func(childComplexity int) int
+	}
+
 	InvitationOtpPayload struct {
 		ClientMutationID func(childComplexity int) int
 		Status           func(childComplexity int) int
@@ -535,15 +827,19 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AcceptProcessing                       func(childComplexity int, input AcceptProcessingInput) int
+		AcknowledgeBaseline                    func(childComplexity int, input CounterpartyResponseInput) int
+		ActivateBaselineVersion                func(childComplexity int, input ActivateBaselineVersionInput) int
 		ActivateOriginVersion                  func(childComplexity int, input OriginVersionInput) int
 		ActivateSegmentDefinition              func(childComplexity int, input ActivateSegmentDefinitionInput) int
 		ActivateTemplateVersion                func(childComplexity int, input ActivateTemplateVersionInput) int
 		AddExceptionalStage                    func(childComplexity int, input AddExceptionalStageInput) int
+		AddInventoryItem                       func(childComplexity int, input AddInventoryItemInput) int
 		ApplyLegalHold                         func(childComplexity int, input LegalHoldInput) int
 		ArchiveAsset                           func(childComplexity int, input ArchiveAssetInput) int
 		ArchiveBusinessUnit                    func(childComplexity int, input ArchiveBusinessUnitInput) int
 		AssignRoleScopes                       func(childComplexity int, input AssignRoleScopesInput) int
 		BeginVideoCapture                      func(childComplexity int, input BeginVideoCaptureInput) int
+		BulkAcceptInventoryEnvironment         func(childComplexity int, input BulkAcceptInventoryEnvironmentInput) int
 		CancelInspection                       func(childComplexity int, input InspectionTransitionInput) int
 		CancelSchedule                         func(childComplexity int, input CancelScheduleInput) int
 		CloseOriginInvitation                  func(childComplexity int, input CloseOriginInvitationInput) int
@@ -556,6 +852,7 @@ type ComplexityRoot struct {
 		ConfigureRetentionPolicy               func(childComplexity int, input ConfigureRetentionPolicyInput) int
 		ConfigureVideoAdmission                func(childComplexity int, input ConfigureVideoAdmissionInput) int
 		ConfigureVideoPolicy                   func(childComplexity int, input ConfigureVideoPolicyInput) int
+		ContestBaseline                        func(childComplexity int, input ContestBaselineInput) int
 		CorrectInspectionResponsibleEmail      func(childComplexity int, input CorrectInspectionResponsibleEmailInput) int
 		CorrectOnboardingResponsibleEmail      func(childComplexity int, input CorrectOnboardingResponsibleEmailInput) int
 		CreateBusinessUnit                     func(childComplexity int, input CreateBusinessUnitInput) int
@@ -564,15 +861,19 @@ type ComplexityRoot struct {
 		CreateProject                          func(childComplexity int, input CreateProjectInput) int
 		CreateSchedule                         func(childComplexity int, input CreateScheduleInput) int
 		CreateTenant                           func(childComplexity int, input CreateTenantInput) int
+		DecideInventoryItems                   func(childComplexity int, input DecideInventoryItemsInput) int
+		DeclareCaptureEnvironment              func(childComplexity int, input DeclareCaptureEnvironmentInput) int
 		DeclareCaptureImpossibility            func(childComplexity int, input DeclareCaptureImpossibilityInput) int
 		DeclareSensitiveDetectionFalsePositive func(childComplexity int, input SensitiveFalsePositiveInput) int
 		DisableMembership                      func(childComplexity int, input DisableMembershipInput) int
+		DiscardBaselineDraft                   func(childComplexity int, input DiscardBaselineDraftInput) int
 		InvalidateInspection                   func(childComplexity int, input InvalidateInspectionInput) int
 		InvalidateOriginVersion                func(childComplexity int, input OriginVersionInput) int
 		InvalidateReportPublication            func(childComplexity int, input InvalidateReportPublicationInput) int
 		InviteInternalUser                     func(childComplexity int, input InviteInternalUserInput) int
 		InviteOriginCapture                    func(childComplexity int, input InviteOriginCaptureInput) int
 		MarkNotificationRead                   func(childComplexity int, input MarkNotificationReadInput) int
+		MergeInventoryItems                    func(childComplexity int, input MergeInventoryItemsInput) int
 		PlanInspection                         func(childComplexity int, input PlanInspectionInput) int
 		PresignMediaParts                      func(childComplexity int, input PresignMediaPartsInput) int
 		PromoteInspectionPhotos                func(childComplexity int, input PromoteInspectionPhotosInput) int
@@ -581,18 +882,25 @@ type ComplexityRoot struct {
 		PublishSegmentDefinition               func(childComplexity int, input PublishSegmentDefinitionInput) int
 		PublishTemplateVersion                 func(childComplexity int, input PublishTemplateVersionInput) int
 		ReanalyzeVideoInspection               func(childComplexity int, input ReanalyzeVideoInspectionInput) int
+		RecordCaptureQualityWarning            func(childComplexity int, input RecordCaptureQualityWarningInput) int
 		RecordDeletionRequest                  func(childComplexity int, input RecordDeletionRequestInput) int
 		RegisterAsset                          func(childComplexity int, input RegisterAssetInput) int
 		ReleaseLegalHold                       func(childComplexity int, input LegalHoldInput) int
+		RemoveInventoryEnvironment             func(childComplexity int, input RemoveInventoryEnvironmentInput) int
 		ReopenProject                          func(childComplexity int, input ReopenProjectInput) int
 		ReprocessVideoPreparation              func(childComplexity int, input ReprocessVideoPreparationInput) int
 		RequestAdminActivationOtp              func(childComplexity int, input RequestAdminActivationOtpInput) int
+		RequestCounterpartyOtp                 func(childComplexity int, input RequestCounterpartyOtpInput) int
 		RequestInternalUserActivationOtp       func(childComplexity int, input RequestInternalUserActivationOtpInput) int
 		RequestInvitationOtp                   func(childComplexity int, input RequestInvitationOtpInput) int
 		RequestOnboardingOtp                   func(childComplexity int, input RequestOnboardingOtpInput) int
+		RequestOriginCataloging                func(childComplexity int, input RequestOriginCatalogingInput) int
 		RequestRecapture                       func(childComplexity int, input RequestRecaptureInput) int
 		RequestVideoReplacement                func(childComplexity int, input RequestVideoReplacementInput) int
+		ResendCounterpartyInvitation           func(childComplexity int, input ResendCounterpartyInvitationInput) int
 		ResendInternalUserInvitation           func(childComplexity int, input ResendInternalUserInvitationInput) int
+		ResolveBaselineContestation            func(childComplexity int, input ResolveBaselineContestationInput) int
+		RetryInventoryDraft                    func(childComplexity int, input RetryInventoryDraftInput) int
 		RetryVideoPreparation                  func(childComplexity int, input RetryVideoPreparationInput) int
 		RevokeInvitation                       func(childComplexity int, input RevokeInvitationInput) int
 		SaveCaptureMetadata                    func(childComplexity int, input SaveCaptureMetadataInput) int
@@ -600,18 +908,23 @@ type ComplexityRoot struct {
 		SetAdminInitialPassword                func(childComplexity int, input SetAdminInitialPasswordInput) int
 		SetDeliveryChannels                    func(childComplexity int, input SetDeliveryChannelsInput) int
 		SkipProjectStage                       func(childComplexity int, input SkipProjectStageInput) int
+		SplitInventoryItem                     func(childComplexity int, input SplitInventoryItemInput) int
+		StartBaselineDraftFromInspection       func(childComplexity int, input StartBaselineDraftFromInspectionInput) int
 		StartProjectStage                      func(childComplexity int, input StartProjectStageInput) int
 		SubmitCapture                          func(childComplexity int, input SubmitCaptureInput) int
 		SubmitRecapture                        func(childComplexity int, input SubmitRecaptureInput) int
 		UpdateAnalysisPrompt                   func(childComplexity int, input UpdateAnalysisPromptInput) int
 		UpdateAsset                            func(childComplexity int, input UpdateAssetInput) int
+		UpdateBaselinePolicy                   func(childComplexity int, input UpdateBaselinePolicyInput) int
 		UpdateSchedule                         func(childComplexity int, input UpdateScheduleInput) int
 		UpdateTenant                           func(childComplexity int, input UpdateTenantInput) int
 		UpdateTriageCase                       func(childComplexity int, input UpdateTriageCaseInput) int
 		UpsertBusinessUnit                     func(childComplexity int, input UpsertBusinessUnitInput) int
+		UpsertInventoryEnvironment             func(childComplexity int, input UpsertInventoryEnvironmentInput) int
 		UpsertParticipant                      func(childComplexity int, input UpsertParticipantInput) int
 		VerifyAdminActivationOtp               func(childComplexity int, input VerifyAdminActivationOtpInput) int
 		VerifyContact                          func(childComplexity int, input VerifyContactInput) int
+		VerifyCounterpartyOtp                  func(childComplexity int, input VerifyCounterpartyOtpInput) int
 		VerifyInternalUserActivationOtp        func(childComplexity int, input VerifyInternalUserActivationOtpInput) int
 		VerifyInvitationOtp                    func(childComplexity int, input VerifyInvitationOtpInput) int
 		VerifyOnboardingOtp                    func(childComplexity int, input VerifyOnboardingOtpInput) int
@@ -796,20 +1109,30 @@ type ComplexityRoot struct {
 	}
 
 	OriginVersion struct {
-		ActivatedAt         func(childComplexity int) int
-		CaptureSubmitted    func(childComplexity int) int
-		ID                  func(childComplexity int) int
-		LimitedCoverage     func(childComplexity int) int
-		MediaKind           func(childComplexity int) int
-		OriginID            func(childComplexity int) int
-		PreparationStatus   func(childComplexity int) int
-		ScopeManifestDigest func(childComplexity int) int
-		Selectable          func(childComplexity int) int
-		SourceAvailability  func(childComplexity int) int
-		Status              func(childComplexity int) int
-		SupersedesID        func(childComplexity int) int
-		VersionNumber       func(childComplexity int) int
-		VideoPreparationID  func(childComplexity int) int
+		ActivatedAt             func(childComplexity int) int
+		ActivatedBy             func(childComplexity int) int
+		CaptureSubmitted        func(childComplexity int) int
+		ContestationSummary     func(childComplexity int) int
+		CounterpartyInvitations func(childComplexity int) int
+		Counts                  func(childComplexity int) int
+		DraftState              func(childComplexity int) int
+		HasInventory            func(childComplexity int) int
+		ID                      func(childComplexity int) int
+		LimitedCoverage         func(childComplexity int) int
+		MediaKind               func(childComplexity int) int
+		OriginID                func(childComplexity int) int
+		OriginRevision          func(childComplexity int) int
+		PreparationStatus       func(childComplexity int) int
+		Purpose                 func(childComplexity int) int
+		ScopeManifestDigest     func(childComplexity int) int
+		Selectable              func(childComplexity int) int
+		Source                  func(childComplexity int) int
+		SourceAvailability      func(childComplexity int) int
+		SourceInspectionID      func(childComplexity int) int
+		Status                  func(childComplexity int) int
+		SupersedesID            func(childComplexity int) int
+		VersionNumber           func(childComplexity int) int
+		VideoPreparationID      func(childComplexity int) int
 	}
 
 	OriginVersionConnection struct {
@@ -819,8 +1142,10 @@ type ComplexityRoot struct {
 
 	OriginVersionPayload struct {
 		ClientMutationID func(childComplexity int) int
+		SourcesExpired   func(childComplexity int) int
 		UserErrors       func(childComplexity int) int
 		Version          func(childComplexity int) int
+		Warnings         func(childComplexity int) int
 	}
 
 	PageInfo struct {
@@ -969,11 +1294,15 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		AnalysisPrompt                    func(childComplexity int, typeArg AnalysisType) int
+		AnalysisPrompt                    func(childComplexity int, typeArg AnalysisType, task *AnalysisPromptTask) int
 		Asset                             func(childComplexity int, id string) int
 		Assets                            func(childComplexity int, businessUnitID *string, search *string, first *int, after *string) int
 		AuditEvents                       func(childComplexity int, first *int, after *string) int
+		BaselineInventory                 func(childComplexity int, assetID string, versionID *string) int
+		BaselinePolicy                    func(childComplexity int) int
+		BaselineVersions                  func(childComplexity int, assetID string, first *int, after *string) int
 		BusinessUnits                     func(childComplexity int, first *int, after *string) int
+		CounterpartyBaseline              func(childComplexity int) int
 		CustomerEvidence                  func(childComplexity int, inspectionID string, mode *EvidenceMode, first *int, after *string) int
 		CustomerPortfolio                 func(childComplexity int, filter *CustomerPortfolioFilter, first *int, after *string) int
 		CustomerReport                    func(childComplexity int, inspectionID string, version *int) int
@@ -983,6 +1312,8 @@ type ComplexityRoot struct {
 		Inspection                        func(childComplexity int, id string) int
 		InspectionLLMUsage                func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
 		Inspections                       func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
+		InventoryDraft                    func(childComplexity int, originVersionID string) int
+		InventoryTrail                    func(childComplexity int, originVersionID string) int
 		LlmUsage                          func(childComplexity int, filter *LLMUsageFilter, first *int, after *string) int
 		LlmUsageTenants                   func(childComplexity int, search *string, first *int, after *string) int
 		LookupPostalCode                  func(childComplexity int, postalCode string) int
@@ -1088,6 +1419,7 @@ type ComplexityRoot struct {
 		HTMLDigest     func(childComplexity int) int
 		ID             func(childComplexity int) int
 		InspectionID   func(childComplexity int) int
+		Inventory      func(childComplexity int) int
 		JSONDigest     func(childComplexity int) int
 		Mode           func(childComplexity int) int
 		PDFStatus      func(childComplexity int) int
@@ -1539,10 +1871,11 @@ type ComplexityRoot struct {
 	}
 
 	UserError struct {
-		Code          func(childComplexity int) int
-		CorrelationID func(childComplexity int) int
-		Field         func(childComplexity int) int
-		Message       func(childComplexity int) int
+		Code                   func(childComplexity int) int
+		CorrelationID          func(childComplexity int) int
+		Field                  func(childComplexity int) int
+		Message                func(childComplexity int) int
+		PendingRequirementKeys func(childComplexity int) int
 	}
 
 	VideoAdmission struct {
@@ -1577,10 +1910,11 @@ type ComplexityRoot struct {
 	}
 
 	VideoPolicy struct {
-		CurrentRetentionDays func(childComplexity int) int
-		MaxDurationMinutes   func(childComplexity int) int
-		OriginRetentionDays  func(childComplexity int) int
-		Version              func(childComplexity int) int
+		CurrentRetentionDays            func(childComplexity int) int
+		MaxDurationMinutes              func(childComplexity int) int
+		OriginRetentionDays             func(childComplexity int) int
+		SupersededBaselineRetentionDays func(childComplexity int) int
+		Version                         func(childComplexity int) int
 	}
 
 	VideoPolicyPayload struct {
@@ -1621,19 +1955,22 @@ type ComplexityRoot struct {
 	}
 
 	VideoPreparationStatus struct {
-		Attempts           func(childComplexity int) int
-		ErrorCode          func(childComplexity int) int
-		FirstFrameReadyAt  func(childComplexity int) int
-		ManifestDigest     func(childComplexity int) int
-		MediaID            func(childComplexity int) int
-		PreparationID      func(childComplexity int) int
-		PreparationVersion func(childComplexity int) int
-		ProcessedFrames    func(childComplexity int) int
-		Retryable          func(childComplexity int) int
-		SourceAvailable    func(childComplexity int) int
-		SourceExpiryAt     func(childComplexity int) int
-		Stage              func(childComplexity int) int
-		Status             func(childComplexity int) int
+		Attempts             func(childComplexity int) int
+		ErrorCode            func(childComplexity int) int
+		FirstFrameReadyAt    func(childComplexity int) int
+		FramesRepresentative func(childComplexity int) int
+		FramesRetained       func(childComplexity int) int
+		FramesSampled        func(childComplexity int) int
+		ManifestDigest       func(childComplexity int) int
+		MediaID              func(childComplexity int) int
+		PreparationID        func(childComplexity int) int
+		PreparationVersion   func(childComplexity int) int
+		ProcessedFrames      func(childComplexity int) int
+		Retryable            func(childComplexity int) int
+		SourceAvailable      func(childComplexity int) int
+		SourceExpiryAt       func(childComplexity int) int
+		Stage                func(childComplexity int) int
+		Status               func(childComplexity int) int
 	}
 
 	VideoReceivedPart struct {
@@ -1704,6 +2041,13 @@ type MutationResolver interface {
 	ArchiveAsset(ctx context.Context, input ArchiveAssetInput) (*AssetPayload, error)
 	RequestInvitationOtp(ctx context.Context, input RequestInvitationOtpInput) (*InvitationOtpPayload, error)
 	VerifyInvitationOtp(ctx context.Context, input VerifyInvitationOtpInput) (*ExternalSessionPayload, error)
+	RequestCounterpartyOtp(ctx context.Context, input RequestCounterpartyOtpInput) (*InvitationOtpPayload, error)
+	VerifyCounterpartyOtp(ctx context.Context, input VerifyCounterpartyOtpInput) (*ExternalSessionPayload, error)
+	AcknowledgeBaseline(ctx context.Context, input CounterpartyResponseInput) (*CounterpartyResponsePayload, error)
+	ContestBaseline(ctx context.Context, input ContestBaselineInput) (*CounterpartyResponsePayload, error)
+	ResolveBaselineContestation(ctx context.Context, input ResolveBaselineContestationInput) (*CounterpartyInvitationPayload, error)
+	ResendCounterpartyInvitation(ctx context.Context, input ResendCounterpartyInvitationInput) (*CounterpartyInvitationPayload, error)
+	UpdateBaselinePolicy(ctx context.Context, input UpdateBaselinePolicyInput) (*BaselinePolicyPayload, error)
 	RevokeInvitation(ctx context.Context, input RevokeInvitationInput) (*InvitationPayload, error)
 	InviteOriginCapture(ctx context.Context, input InviteOriginCaptureInput) (*OriginInvitationPayload, error)
 	ActivateOriginVersion(ctx context.Context, input OriginVersionInput) (*OriginVersionPayload, error)
@@ -1711,6 +2055,18 @@ type MutationResolver interface {
 	CloseOriginInvitation(ctx context.Context, input CloseOriginInvitationInput) (*OriginVersionPayload, error)
 	PromoteInspectionPhotos(ctx context.Context, input PromoteInspectionPhotosInput) (*OriginPromotionPayload, error)
 	PromoteInspectionVideo(ctx context.Context, input PromoteInspectionVideoInput) (*OriginVersionPayload, error)
+	DecideInventoryItems(ctx context.Context, input DecideInventoryItemsInput) (*InventoryItemsPayload, error)
+	BulkAcceptInventoryEnvironment(ctx context.Context, input BulkAcceptInventoryEnvironmentInput) (*BulkAcceptInventoryEnvironmentPayload, error)
+	AddInventoryItem(ctx context.Context, input AddInventoryItemInput) (*InventoryItemPayload, error)
+	MergeInventoryItems(ctx context.Context, input MergeInventoryItemsInput) (*InventoryItemPayload, error)
+	SplitInventoryItem(ctx context.Context, input SplitInventoryItemInput) (*InventoryItemsPayload, error)
+	UpsertInventoryEnvironment(ctx context.Context, input UpsertInventoryEnvironmentInput) (*InventoryEnvironmentPayload, error)
+	RemoveInventoryEnvironment(ctx context.Context, input RemoveInventoryEnvironmentInput) (*InventoryEnvironmentPayload, error)
+	ActivateBaselineVersion(ctx context.Context, input ActivateBaselineVersionInput) (*OriginVersionPayload, error)
+	DiscardBaselineDraft(ctx context.Context, input DiscardBaselineDraftInput) (*OriginVersionPayload, error)
+	RequestOriginCataloging(ctx context.Context, input RequestOriginCatalogingInput) (*OriginVersionPayload, error)
+	RetryInventoryDraft(ctx context.Context, input RetryInventoryDraftInput) (*OriginVersionPayload, error)
+	StartBaselineDraftFromInspection(ctx context.Context, input StartBaselineDraftFromInspectionInput) (*OriginVersionPayload, error)
 	CreateSchedule(ctx context.Context, input CreateScheduleInput) (*SchedulePayload, error)
 	UpdateSchedule(ctx context.Context, input UpdateScheduleInput) (*SchedulePayload, error)
 	CancelSchedule(ctx context.Context, input CancelScheduleInput) (*SchedulePayload, error)
@@ -1736,6 +2092,8 @@ type MutationResolver interface {
 	CompleteMediaUpload(ctx context.Context, input CompleteMediaUploadInput) (*MediaPayload, error)
 	SaveCaptureMetadata(ctx context.Context, input SaveCaptureMetadataInput) (*MediaPayload, error)
 	DeclareCaptureImpossibility(ctx context.Context, input DeclareCaptureImpossibilityInput) (*CapturePayload, error)
+	DeclareCaptureEnvironment(ctx context.Context, input DeclareCaptureEnvironmentInput) (*CaptureEnvironmentPayload, error)
+	RecordCaptureQualityWarning(ctx context.Context, input RecordCaptureQualityWarningInput) (*CaptureQualityWarningPayload, error)
 	SubmitCapture(ctx context.Context, input SubmitCaptureInput) (*SubmissionPayload, error)
 	RequestRecapture(ctx context.Context, input RequestRecaptureInput) (*RecapturePayload, error)
 	RequestVideoReplacement(ctx context.Context, input RequestVideoReplacementInput) (*VideoReplacementPayload, error)
@@ -1752,9 +2110,12 @@ type MutationResolver interface {
 	MarkNotificationRead(ctx context.Context, input MarkNotificationReadInput) (*RecipientNotificationPayload, error)
 	ConfigureMyNotificationPreferences(ctx context.Context, input ConfigureNotificationPreferencesInput) (*NotificationPreferencesPayload, error)
 }
+type OriginVersionResolver interface {
+	CounterpartyInvitations(ctx context.Context, obj *OriginVersion) ([]*BaselineCounterpartyInvitation, error)
+}
 type QueryResolver interface {
 	OnboardingDefinition(ctx context.Context, segment string) (*OnboardingDefinition, error)
-	AnalysisPrompt(ctx context.Context, typeArg AnalysisType) (*AnalysisPrompt, error)
+	AnalysisPrompt(ctx context.Context, typeArg AnalysisType, task *AnalysisPromptTask) (*AnalysisPrompt, error)
 	OnboardingSession(ctx context.Context) (*OnboardingSession, error)
 	OnboardingStatus(ctx context.Context) (*OnboardingStatus, error)
 	Me(ctx context.Context) (*Me, error)
@@ -1772,6 +2133,12 @@ type QueryResolver interface {
 	LookupPostalCode(ctx context.Context, postalCode string) (*PostalAddressLookup, error)
 	Asset(ctx context.Context, id string) (*Asset, error)
 	OriginVersions(ctx context.Context, assetID string, first *int, after *string) (*OriginVersionConnection, error)
+	BaselineVersions(ctx context.Context, assetID string, first *int, after *string) (*OriginVersionConnection, error)
+	InventoryDraft(ctx context.Context, originVersionID string) (*InventoryDraft, error)
+	BaselineInventory(ctx context.Context, assetID string, versionID *string) (*BaselineInventory, error)
+	BaselinePolicy(ctx context.Context) (*BaselinePolicy, error)
+	CounterpartyBaseline(ctx context.Context) (*CounterpartyBaseline, error)
+	InventoryTrail(ctx context.Context, originVersionID string) (*InventoryTrail, error)
 	OriginPromotion(ctx context.Context, inspectionID string) (*OriginPromotion, error)
 	Schedules(ctx context.Context, first *int, after *string) (*ScheduleConnection, error)
 	Projects(ctx context.Context, first *int, after *string) (*ProjectConnection, error)
@@ -1868,6 +2235,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.AnalysisPrompt.SystemPrompt(childComplexity), true
+	case "AnalysisPrompt.task":
+		if e.ComplexityRoot.AnalysisPrompt.Task == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AnalysisPrompt.Task(childComplexity), true
 	case "AnalysisPrompt.updatedAt":
 		if e.ComplexityRoot.AnalysisPrompt.UpdatedAt == nil {
 			break
@@ -2110,6 +2483,143 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AuditEventConnection.PageInfo(childComplexity), true
 
+	case "BaselineCounterpartyInvitation.adjustmentVersionId":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.AdjustmentVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.AdjustmentVersionID(childComplexity), true
+	case "BaselineCounterpartyInvitation.deadlineAt":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.DeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.DeadlineAt(childComplexity), true
+	case "BaselineCounterpartyInvitation.deliveryId":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.DeliveryID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.DeliveryID(childComplexity), true
+	case "BaselineCounterpartyInvitation.deliveryStatus":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.DeliveryStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.DeliveryStatus(childComplexity), true
+	case "BaselineCounterpartyInvitation.id":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.ID(childComplexity), true
+	case "BaselineCounterpartyInvitation.participantId":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.ParticipantID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.ParticipantID(childComplexity), true
+	case "BaselineCounterpartyInvitation.resolution":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.Resolution == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.Resolution(childComplexity), true
+	case "BaselineCounterpartyInvitation.resolutionReason":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.ResolutionReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.ResolutionReason(childComplexity), true
+	case "BaselineCounterpartyInvitation.respondedAt":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.RespondedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.RespondedAt(childComplexity), true
+	case "BaselineCounterpartyInvitation.response":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.Response == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.Response(childComplexity), true
+	case "BaselineCounterpartyInvitation.statement":
+		if e.ComplexityRoot.BaselineCounterpartyInvitation.Statement == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineCounterpartyInvitation.Statement(childComplexity), true
+
+	case "BaselineInventory.environments":
+		if e.ComplexityRoot.BaselineInventory.Environments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineInventory.Environments(childComplexity), true
+	case "BaselineInventory.hasInventory":
+		if e.ComplexityRoot.BaselineInventory.HasInventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineInventory.HasInventory(childComplexity), true
+	case "BaselineInventory.version":
+		if e.ComplexityRoot.BaselineInventory.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselineInventory.Version(childComplexity), true
+
+	case "BaselinePolicy.contestationDeadlineDays":
+		if e.ComplexityRoot.BaselinePolicy.ContestationDeadlineDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselinePolicy.ContestationDeadlineDays(childComplexity), true
+	case "BaselinePolicy.version":
+		if e.ComplexityRoot.BaselinePolicy.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselinePolicy.Version(childComplexity), true
+
+	case "BaselinePolicyPayload.clientMutationId":
+		if e.ComplexityRoot.BaselinePolicyPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselinePolicyPayload.ClientMutationID(childComplexity), true
+	case "BaselinePolicyPayload.policy":
+		if e.ComplexityRoot.BaselinePolicyPayload.Policy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselinePolicyPayload.Policy(childComplexity), true
+	case "BaselinePolicyPayload.userErrors":
+		if e.ComplexityRoot.BaselinePolicyPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BaselinePolicyPayload.UserErrors(childComplexity), true
+
+	case "BulkAcceptInventoryEnvironmentPayload.acceptedCount":
+		if e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.AcceptedCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.AcceptedCount(childComplexity), true
+	case "BulkAcceptInventoryEnvironmentPayload.clientMutationId":
+		if e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.ClientMutationID(childComplexity), true
+	case "BulkAcceptInventoryEnvironmentPayload.userErrors":
+		if e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BulkAcceptInventoryEnvironmentPayload.UserErrors(childComplexity), true
+
 	case "BusinessUnit.code":
 		if e.ComplexityRoot.BusinessUnit.Code == nil {
 			break
@@ -2198,6 +2708,74 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CaptureAnswer.Version(childComplexity), true
 
+	case "CaptureEnvironment.addedDuringCapture":
+		if e.ComplexityRoot.CaptureEnvironment.AddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.AddedDuringCapture(childComplexity), true
+	case "CaptureEnvironment.expected":
+		if e.ComplexityRoot.CaptureEnvironment.Expected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Expected(childComplexity), true
+	case "CaptureEnvironment.identityId":
+		if e.ComplexityRoot.CaptureEnvironment.IdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.IdentityID(childComplexity), true
+	case "CaptureEnvironment.mediaCount":
+		if e.ComplexityRoot.CaptureEnvironment.MediaCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.MediaCount(childComplexity), true
+	case "CaptureEnvironment.name":
+		if e.ComplexityRoot.CaptureEnvironment.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Name(childComplexity), true
+	case "CaptureEnvironment.requirementKey":
+		if e.ComplexityRoot.CaptureEnvironment.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.RequirementKey(childComplexity), true
+	case "CaptureEnvironment.status":
+		if e.ComplexityRoot.CaptureEnvironment.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.Status(childComplexity), true
+	case "CaptureEnvironment.typeCode":
+		if e.ComplexityRoot.CaptureEnvironment.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironment.TypeCode(childComplexity), true
+
+	case "CaptureEnvironmentPayload.clientMutationId":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.ClientMutationID(childComplexity), true
+	case "CaptureEnvironmentPayload.environment":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.Environment == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.Environment(childComplexity), true
+	case "CaptureEnvironmentPayload.userErrors":
+		if e.ComplexityRoot.CaptureEnvironmentPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureEnvironmentPayload.UserErrors(childComplexity), true
+
 	case "CapturePayload.clientMutationId":
 		if e.ComplexityRoot.CapturePayload.ClientMutationID == nil {
 			break
@@ -2216,6 +2794,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CapturePayload.UserErrors(childComplexity), true
+
+	case "CaptureQualityWarningPayload.clientMutationId":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.ClientMutationID(childComplexity), true
+	case "CaptureQualityWarningPayload.flags":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.Flags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.Flags(childComplexity), true
+	case "CaptureQualityWarningPayload.userErrors":
+		if e.ComplexityRoot.CaptureQualityWarningPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureQualityWarningPayload.UserErrors(childComplexity), true
 
 	case "CaptureReferenceItem.ambiguous":
 		if e.ComplexityRoot.CaptureReferenceItem.Ambiguous == nil {
@@ -2308,6 +2905,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CaptureReferenceItem.View(childComplexity), true
 
+	case "CaptureRequirement.addedDuringCapture":
+		if e.ComplexityRoot.CaptureRequirement.AddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.AddedDuringCapture(childComplexity), true
 	case "CaptureRequirement.captureSourcePolicy":
 		if e.ComplexityRoot.CaptureRequirement.CaptureSourcePolicy == nil {
 			break
@@ -2326,12 +2929,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.DescriptionRequired(childComplexity), true
+	case "CaptureRequirement.environmentIdentityId":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentIdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentIdentityID(childComplexity), true
+	case "CaptureRequirement.environmentName":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentName(childComplexity), true
+	case "CaptureRequirement.environmentTypeCode":
+		if e.ComplexityRoot.CaptureRequirement.EnvironmentTypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.EnvironmentTypeCode(childComplexity), true
 	case "CaptureRequirement.evidenceKind":
 		if e.ComplexityRoot.CaptureRequirement.EvidenceKind == nil {
 			break
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.EvidenceKind(childComplexity), true
+	case "CaptureRequirement.expected":
+		if e.ComplexityRoot.CaptureRequirement.Expected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureRequirement.Expected(childComplexity), true
 	case "CaptureRequirement.impossibilityAllowed":
 		if e.ComplexityRoot.CaptureRequirement.ImpossibilityAllowed == nil {
 			break
@@ -2380,6 +3007,297 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CaptureRequirement.Section(childComplexity), true
+
+	case "CaptureReviewHandoff.inspectionId":
+		if e.ComplexityRoot.CaptureReviewHandoff.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReviewHandoff.InspectionID(childComplexity), true
+	case "CaptureReviewHandoff.originVersionId":
+		if e.ComplexityRoot.CaptureReviewHandoff.OriginVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CaptureReviewHandoff.OriginVersionID(childComplexity), true
+
+	case "ContestationSummary.acknowledged":
+		if e.ComplexityRoot.ContestationSummary.Acknowledged == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContestationSummary.Acknowledged(childComplexity), true
+	case "ContestationSummary.contested":
+		if e.ComplexityRoot.ContestationSummary.Contested == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContestationSummary.Contested(childComplexity), true
+	case "ContestationSummary.noResponse":
+		if e.ComplexityRoot.ContestationSummary.NoResponse == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContestationSummary.NoResponse(childComplexity), true
+	case "ContestationSummary.open":
+		if e.ComplexityRoot.ContestationSummary.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContestationSummary.Open(childComplexity), true
+	case "ContestationSummary.pending":
+		if e.ComplexityRoot.ContestationSummary.Pending == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ContestationSummary.Pending(childComplexity), true
+
+	case "CounterpartyBaseline.activatedAt":
+		if e.ComplexityRoot.CounterpartyBaseline.ActivatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.ActivatedAt(childComplexity), true
+	case "CounterpartyBaseline.adjustmentStatus":
+		if e.ComplexityRoot.CounterpartyBaseline.AdjustmentStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.AdjustmentStatus(childComplexity), true
+	case "CounterpartyBaseline.baseline":
+		if e.ComplexityRoot.CounterpartyBaseline.Baseline == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.Baseline(childComplexity), true
+	case "CounterpartyBaseline.deadlineAt":
+		if e.ComplexityRoot.CounterpartyBaseline.DeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.DeadlineAt(childComplexity), true
+	case "CounterpartyBaseline.newerVersionExists":
+		if e.ComplexityRoot.CounterpartyBaseline.NewerVersionExists == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.NewerVersionExists(childComplexity), true
+	case "CounterpartyBaseline.purpose":
+		if e.ComplexityRoot.CounterpartyBaseline.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.Purpose(childComplexity), true
+	case "CounterpartyBaseline.readOnly":
+		if e.ComplexityRoot.CounterpartyBaseline.ReadOnly == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.ReadOnly(childComplexity), true
+	case "CounterpartyBaseline.resolution":
+		if e.ComplexityRoot.CounterpartyBaseline.Resolution == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.Resolution(childComplexity), true
+	case "CounterpartyBaseline.resolutionReason":
+		if e.ComplexityRoot.CounterpartyBaseline.ResolutionReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.ResolutionReason(childComplexity), true
+	case "CounterpartyBaseline.respondedAt":
+		if e.ComplexityRoot.CounterpartyBaseline.RespondedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.RespondedAt(childComplexity), true
+	case "CounterpartyBaseline.response":
+		if e.ComplexityRoot.CounterpartyBaseline.Response == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaseline.Response(childComplexity), true
+
+	case "CounterpartyBaselineEnvironment.items":
+		if e.ComplexityRoot.CounterpartyBaselineEnvironment.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEnvironment.Items(childComplexity), true
+	case "CounterpartyBaselineEnvironment.name":
+		if e.ComplexityRoot.CounterpartyBaselineEnvironment.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEnvironment.Name(childComplexity), true
+	case "CounterpartyBaselineEnvironment.typeCode":
+		if e.ComplexityRoot.CounterpartyBaselineEnvironment.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEnvironment.TypeCode(childComplexity), true
+
+	case "CounterpartyBaselineEvidence.kind":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.Kind(childComplexity), true
+	case "CounterpartyBaselineEvidence.position":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.Position == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.Position(childComplexity), true
+	case "CounterpartyBaselineEvidence.timestampMs":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.TimestampMs(childComplexity), true
+	case "CounterpartyBaselineEvidence.url":
+		if e.ComplexityRoot.CounterpartyBaselineEvidence.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineEvidence.URL(childComplexity), true
+
+	case "CounterpartyBaselineInventory.environments":
+		if e.ComplexityRoot.CounterpartyBaselineInventory.Environments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineInventory.Environments(childComplexity), true
+	case "CounterpartyBaselineInventory.hasInventory":
+		if e.ComplexityRoot.CounterpartyBaselineInventory.HasInventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineInventory.HasInventory(childComplexity), true
+
+	case "CounterpartyBaselineItem.color":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Color(childComplexity), true
+	case "CounterpartyBaselineItem.condition":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Condition == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Condition(childComplexity), true
+	case "CounterpartyBaselineItem.evidence":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Evidence == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Evidence(childComplexity), true
+	case "CounterpartyBaselineItem.limitation":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Limitation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Limitation(childComplexity), true
+	case "CounterpartyBaselineItem.material":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Material == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Material(childComplexity), true
+	case "CounterpartyBaselineItem.name":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Name(childComplexity), true
+	case "CounterpartyBaselineItem.observation":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Observation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Observation(childComplexity), true
+	case "CounterpartyBaselineItem.quantity":
+		if e.ComplexityRoot.CounterpartyBaselineItem.Quantity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.Quantity(childComplexity), true
+	case "CounterpartyBaselineItem.typeCode":
+		if e.ComplexityRoot.CounterpartyBaselineItem.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyBaselineItem.TypeCode(childComplexity), true
+
+	case "CounterpartyInvitationPayload.adjustmentVersionId":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.AdjustmentVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.AdjustmentVersionID(childComplexity), true
+	case "CounterpartyInvitationPayload.clientMutationId":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.ClientMutationID(childComplexity), true
+	case "CounterpartyInvitationPayload.deadlineAt":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.DeadlineAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.DeadlineAt(childComplexity), true
+	case "CounterpartyInvitationPayload.invitationId":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.InvitationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.InvitationID(childComplexity), true
+	case "CounterpartyInvitationPayload.resolution":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.Resolution == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.Resolution(childComplexity), true
+	case "CounterpartyInvitationPayload.response":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.Response == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.Response(childComplexity), true
+	case "CounterpartyInvitationPayload.userErrors":
+		if e.ComplexityRoot.CounterpartyInvitationPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyInvitationPayload.UserErrors(childComplexity), true
+
+	case "CounterpartyResponsePayload.clientMutationId":
+		if e.ComplexityRoot.CounterpartyResponsePayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyResponsePayload.ClientMutationID(childComplexity), true
+	case "CounterpartyResponsePayload.respondedAt":
+		if e.ComplexityRoot.CounterpartyResponsePayload.RespondedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyResponsePayload.RespondedAt(childComplexity), true
+	case "CounterpartyResponsePayload.response":
+		if e.ComplexityRoot.CounterpartyResponsePayload.Response == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyResponsePayload.Response(childComplexity), true
+	case "CounterpartyResponsePayload.userErrors":
+		if e.ComplexityRoot.CounterpartyResponsePayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CounterpartyResponsePayload.UserErrors(childComplexity), true
 
 	case "CreateTenantPayload.clientMutationId":
 		if e.ComplexityRoot.CreateTenantPayload.ClientMutationID == nil {
@@ -2552,6 +3470,148 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CustomerEvidenceItem.URL(childComplexity), true
 
+	case "CustomerInventory.coverage":
+		if e.ComplexityRoot.CustomerInventory.Coverage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventory.Coverage(childComplexity), true
+	case "CustomerInventory.informational":
+		if e.ComplexityRoot.CustomerInventory.Informational == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventory.Informational(childComplexity), true
+	case "CustomerInventory.problems":
+		if e.ComplexityRoot.CustomerInventory.Problems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventory.Problems(childComplexity), true
+	case "CustomerInventory.purpose":
+		if e.ComplexityRoot.CustomerInventory.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventory.Purpose(childComplexity), true
+	case "CustomerInventory.referenceVersionNumber":
+		if e.ComplexityRoot.CustomerInventory.ReferenceVersionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventory.ReferenceVersionNumber(childComplexity), true
+
+	case "CustomerInventoryCoverage.assessedItems":
+		if e.ComplexityRoot.CustomerInventoryCoverage.AssessedItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryCoverage.AssessedItems(childComplexity), true
+	case "CustomerInventoryCoverage.environmentsAddedDuringCapture":
+		if e.ComplexityRoot.CustomerInventoryCoverage.EnvironmentsAddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryCoverage.EnvironmentsAddedDuringCapture(childComplexity), true
+	case "CustomerInventoryCoverage.environmentsNotCaptured":
+		if e.ComplexityRoot.CustomerInventoryCoverage.EnvironmentsNotCaptured == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryCoverage.EnvironmentsNotCaptured(childComplexity), true
+	case "CustomerInventoryCoverage.expectedItems":
+		if e.ComplexityRoot.CustomerInventoryCoverage.ExpectedItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryCoverage.ExpectedItems(childComplexity), true
+	case "CustomerInventoryCoverage.notObserved":
+		if e.ComplexityRoot.CustomerInventoryCoverage.NotObserved == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryCoverage.NotObserved(childComplexity), true
+
+	case "CustomerInventoryEntry.conditionAfter":
+		if e.ComplexityRoot.CustomerInventoryEntry.ConditionAfter == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.ConditionAfter(childComplexity), true
+	case "CustomerInventoryEntry.conditionBefore":
+		if e.ComplexityRoot.CustomerInventoryEntry.ConditionBefore == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.ConditionBefore(childComplexity), true
+	case "CustomerInventoryEntry.environment":
+		if e.ComplexityRoot.CustomerInventoryEntry.Environment == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Environment(childComplexity), true
+	case "CustomerInventoryEntry.name":
+		if e.ComplexityRoot.CustomerInventoryEntry.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Name(childComplexity), true
+	case "CustomerInventoryEntry.pairs":
+		if e.ComplexityRoot.CustomerInventoryEntry.Pairs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Pairs(childComplexity), true
+	case "CustomerInventoryEntry.reason":
+		if e.ComplexityRoot.CustomerInventoryEntry.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Reason(childComplexity), true
+	case "CustomerInventoryEntry.status":
+		if e.ComplexityRoot.CustomerInventoryEntry.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Status(childComplexity), true
+	case "CustomerInventoryEntry.type":
+		if e.ComplexityRoot.CustomerInventoryEntry.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryEntry.Type(childComplexity), true
+
+	case "CustomerInventoryPair.currentEvidenceId":
+		if e.ComplexityRoot.CustomerInventoryPair.CurrentEvidenceID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryPair.CurrentEvidenceID(childComplexity), true
+	case "CustomerInventoryPair.currentSourceAvailability":
+		if e.ComplexityRoot.CustomerInventoryPair.CurrentSourceAvailability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryPair.CurrentSourceAvailability(childComplexity), true
+	case "CustomerInventoryPair.originEvidenceId":
+		if e.ComplexityRoot.CustomerInventoryPair.OriginEvidenceID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryPair.OriginEvidenceID(childComplexity), true
+	case "CustomerInventoryPair.originSourceAvailability":
+		if e.ComplexityRoot.CustomerInventoryPair.OriginSourceAvailability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryPair.OriginSourceAvailability(childComplexity), true
+	case "CustomerInventoryPair.timestampMs":
+		if e.ComplexityRoot.CustomerInventoryPair.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerInventoryPair.TimestampMs(childComplexity), true
+
 	case "CustomerPortfolioConnection.nodes":
 		if e.ComplexityRoot.CustomerPortfolioConnection.Nodes == nil {
 			break
@@ -2565,12 +3625,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CustomerPortfolioConnection.PageInfo(childComplexity), true
 
+	case "CustomerPortfolioItem.assetExternalKey":
+		if e.ComplexityRoot.CustomerPortfolioItem.AssetExternalKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.AssetExternalKey(childComplexity), true
 	case "CustomerPortfolioItem.assetId":
 		if e.ComplexityRoot.CustomerPortfolioItem.AssetID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.CustomerPortfolioItem.AssetID(childComplexity), true
+	case "CustomerPortfolioItem.assetName":
+		if e.ComplexityRoot.CustomerPortfolioItem.AssetName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.AssetName(childComplexity), true
+	case "CustomerPortfolioItem.latestPublishedInspectionId":
+		if e.ComplexityRoot.CustomerPortfolioItem.LatestPublishedInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerPortfolioItem.LatestPublishedInspectionID(childComplexity), true
 	case "CustomerPortfolioItem.progress":
 		if e.ComplexityRoot.CustomerPortfolioItem.Progress == nil {
 			break
@@ -2632,6 +3710,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CustomerReport.InspectionID(childComplexity), true
+	case "CustomerReport.inventory":
+		if e.ComplexityRoot.CustomerReport.Inventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CustomerReport.Inventory(childComplexity), true
 	case "CustomerReport.requirements":
 		if e.ComplexityRoot.CustomerReport.Requirements == nil {
 			break
@@ -2744,6 +3828,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.Answers(childComplexity), true
+	case "ExternalCapture.captureLayout":
+		if e.ComplexityRoot.ExternalCapture.CaptureLayout == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.CaptureLayout(childComplexity), true
 	case "ExternalCapture.confirmationOnly":
 		if e.ComplexityRoot.ExternalCapture.ConfirmationOnly == nil {
 			break
@@ -2756,6 +3846,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.DisclosureVersion(childComplexity), true
+	case "ExternalCapture.environments":
+		if e.ComplexityRoot.ExternalCapture.Environments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.Environments(childComplexity), true
 	case "ExternalCapture.kind":
 		if e.ComplexityRoot.ExternalCapture.Kind == nil {
 			break
@@ -2816,6 +3912,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ExternalCapture.ResponsibilityID(childComplexity), true
+	case "ExternalCapture.reviewHandoff":
+		if e.ComplexityRoot.ExternalCapture.ReviewHandoff == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ExternalCapture.ReviewHandoff(childComplexity), true
 	case "ExternalCapture.status":
 		if e.ComplexityRoot.ExternalCapture.Status == nil {
 			break
@@ -3468,6 +4570,473 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InternalUserActivationPayload.UserErrors(childComplexity), true
 
+	case "InventoryCounts.included":
+		if e.ComplexityRoot.InventoryCounts.Included == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryCounts.Included(childComplexity), true
+	case "InventoryCounts.notReviewed":
+		if e.ComplexityRoot.InventoryCounts.NotReviewed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryCounts.NotReviewed(childComplexity), true
+	case "InventoryCounts.rejected":
+		if e.ComplexityRoot.InventoryCounts.Rejected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryCounts.Rejected(childComplexity), true
+
+	case "InventoryDraft.assetId":
+		if e.ComplexityRoot.InventoryDraft.AssetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.AssetID(childComplexity), true
+	case "InventoryDraft.environments":
+		if e.ComplexityRoot.InventoryDraft.Environments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.Environments(childComplexity), true
+	case "InventoryDraft.noticeCode":
+		if e.ComplexityRoot.InventoryDraft.NoticeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.NoticeCode(childComplexity), true
+	case "InventoryDraft.progress":
+		if e.ComplexityRoot.InventoryDraft.Progress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.Progress(childComplexity), true
+	case "InventoryDraft.readOnly":
+		if e.ComplexityRoot.InventoryDraft.ReadOnly == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.ReadOnly(childComplexity), true
+	case "InventoryDraft.version":
+		if e.ComplexityRoot.InventoryDraft.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.Version(childComplexity), true
+	case "InventoryDraft.warnings":
+		if e.ComplexityRoot.InventoryDraft.Warnings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryDraft.Warnings(childComplexity), true
+
+	case "InventoryEnvironment.addedDuringCapture":
+		if e.ComplexityRoot.InventoryEnvironment.AddedDuringCapture == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.AddedDuringCapture(childComplexity), true
+	case "InventoryEnvironment.decision":
+		if e.ComplexityRoot.InventoryEnvironment.Decision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.Decision(childComplexity), true
+	case "InventoryEnvironment.expected":
+		if e.ComplexityRoot.InventoryEnvironment.Expected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.Expected(childComplexity), true
+	case "InventoryEnvironment.id":
+		if e.ComplexityRoot.InventoryEnvironment.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.ID(childComplexity), true
+	case "InventoryEnvironment.identityId":
+		if e.ComplexityRoot.InventoryEnvironment.IdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.IdentityID(childComplexity), true
+	case "InventoryEnvironment.items":
+		if e.ComplexityRoot.InventoryEnvironment.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.Items(childComplexity), true
+	case "InventoryEnvironment.name":
+		if e.ComplexityRoot.InventoryEnvironment.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.Name(childComplexity), true
+	case "InventoryEnvironment.position":
+		if e.ComplexityRoot.InventoryEnvironment.Position == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.Position(childComplexity), true
+	case "InventoryEnvironment.requirementKey":
+		if e.ComplexityRoot.InventoryEnvironment.RequirementKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.RequirementKey(childComplexity), true
+	case "InventoryEnvironment.typeCode":
+		if e.ComplexityRoot.InventoryEnvironment.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironment.TypeCode(childComplexity), true
+
+	case "InventoryEnvironmentPayload.clientMutationId":
+		if e.ComplexityRoot.InventoryEnvironmentPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironmentPayload.ClientMutationID(childComplexity), true
+	case "InventoryEnvironmentPayload.environment":
+		if e.ComplexityRoot.InventoryEnvironmentPayload.Environment == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironmentPayload.Environment(childComplexity), true
+	case "InventoryEnvironmentPayload.userErrors":
+		if e.ComplexityRoot.InventoryEnvironmentPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEnvironmentPayload.UserErrors(childComplexity), true
+
+	case "InventoryEvidence.availability":
+		if e.ComplexityRoot.InventoryEvidence.Availability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.Availability(childComplexity), true
+	case "InventoryEvidence.frameId":
+		if e.ComplexityRoot.InventoryEvidence.FrameID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.FrameID(childComplexity), true
+	case "InventoryEvidence.id":
+		if e.ComplexityRoot.InventoryEvidence.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.ID(childComplexity), true
+	case "InventoryEvidence.kind":
+		if e.ComplexityRoot.InventoryEvidence.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.Kind(childComplexity), true
+	case "InventoryEvidence.mediaId":
+		if e.ComplexityRoot.InventoryEvidence.MediaID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.MediaID(childComplexity), true
+	case "InventoryEvidence.position":
+		if e.ComplexityRoot.InventoryEvidence.Position == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.Position(childComplexity), true
+	case "InventoryEvidence.region":
+		if e.ComplexityRoot.InventoryEvidence.Region == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.Region(childComplexity), true
+	case "InventoryEvidence.retentionAvailability":
+		if e.ComplexityRoot.InventoryEvidence.RetentionAvailability == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.RetentionAvailability(childComplexity), true
+	case "InventoryEvidence.timestampMs":
+		if e.ComplexityRoot.InventoryEvidence.TimestampMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.TimestampMs(childComplexity), true
+	case "InventoryEvidence.url":
+		if e.ComplexityRoot.InventoryEvidence.URL == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryEvidence.URL(childComplexity), true
+
+	case "InventoryItem.color":
+		if e.ComplexityRoot.InventoryItem.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Color(childComplexity), true
+	case "InventoryItem.condition":
+		if e.ComplexityRoot.InventoryItem.Condition == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Condition(childComplexity), true
+	case "InventoryItem.confidenceBps":
+		if e.ComplexityRoot.InventoryItem.ConfidenceBps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.ConfidenceBps(childComplexity), true
+	case "InventoryItem.decision":
+		if e.ComplexityRoot.InventoryItem.Decision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Decision(childComplexity), true
+	case "InventoryItem.declared":
+		if e.ComplexityRoot.InventoryItem.Declared == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Declared(childComplexity), true
+	case "InventoryItem.environmentId":
+		if e.ComplexityRoot.InventoryItem.EnvironmentID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.EnvironmentID(childComplexity), true
+	case "InventoryItem.evidence":
+		if e.ComplexityRoot.InventoryItem.Evidence == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Evidence(childComplexity), true
+	case "InventoryItem.id":
+		if e.ComplexityRoot.InventoryItem.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.ID(childComplexity), true
+	case "InventoryItem.identityId":
+		if e.ComplexityRoot.InventoryItem.IdentityID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.IdentityID(childComplexity), true
+	case "InventoryItem.limitation":
+		if e.ComplexityRoot.InventoryItem.Limitation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Limitation(childComplexity), true
+	case "InventoryItem.material":
+		if e.ComplexityRoot.InventoryItem.Material == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Material(childComplexity), true
+	case "InventoryItem.name":
+		if e.ComplexityRoot.InventoryItem.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Name(childComplexity), true
+	case "InventoryItem.observation":
+		if e.ComplexityRoot.InventoryItem.Observation == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Observation(childComplexity), true
+	case "InventoryItem.origin":
+		if e.ComplexityRoot.InventoryItem.Origin == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Origin(childComplexity), true
+	case "InventoryItem.quantity":
+		if e.ComplexityRoot.InventoryItem.Quantity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Quantity(childComplexity), true
+	case "InventoryItem.rejectionReason":
+		if e.ComplexityRoot.InventoryItem.RejectionReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.RejectionReason(childComplexity), true
+	case "InventoryItem.rejectionText":
+		if e.ComplexityRoot.InventoryItem.RejectionText == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.RejectionText(childComplexity), true
+	case "InventoryItem.suggested":
+		if e.ComplexityRoot.InventoryItem.Suggested == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Suggested(childComplexity), true
+	case "InventoryItem.typeCode":
+		if e.ComplexityRoot.InventoryItem.TypeCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.TypeCode(childComplexity), true
+	case "InventoryItem.version":
+		if e.ComplexityRoot.InventoryItem.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItem.Version(childComplexity), true
+
+	case "InventoryItemPayload.clientMutationId":
+		if e.ComplexityRoot.InventoryItemPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemPayload.ClientMutationID(childComplexity), true
+	case "InventoryItemPayload.item":
+		if e.ComplexityRoot.InventoryItemPayload.Item == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemPayload.Item(childComplexity), true
+	case "InventoryItemPayload.userErrors":
+		if e.ComplexityRoot.InventoryItemPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemPayload.UserErrors(childComplexity), true
+
+	case "InventoryItemsPayload.clientMutationId":
+		if e.ComplexityRoot.InventoryItemsPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemsPayload.ClientMutationID(childComplexity), true
+	case "InventoryItemsPayload.emptyEnvironments":
+		if e.ComplexityRoot.InventoryItemsPayload.EmptyEnvironments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemsPayload.EmptyEnvironments(childComplexity), true
+	case "InventoryItemsPayload.items":
+		if e.ComplexityRoot.InventoryItemsPayload.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemsPayload.Items(childComplexity), true
+	case "InventoryItemsPayload.userErrors":
+		if e.ComplexityRoot.InventoryItemsPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryItemsPayload.UserErrors(childComplexity), true
+
+	case "InventoryProgress.decided":
+		if e.ComplexityRoot.InventoryProgress.Decided == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryProgress.Decided(childComplexity), true
+	case "InventoryProgress.pending":
+		if e.ComplexityRoot.InventoryProgress.Pending == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryProgress.Pending(childComplexity), true
+
+	case "InventoryTrail.counterpartyEvents":
+		if e.ComplexityRoot.InventoryTrail.CounterpartyEvents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrail.CounterpartyEvents(childComplexity), true
+	case "InventoryTrail.decisions":
+		if e.ComplexityRoot.InventoryTrail.Decisions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrail.Decisions(childComplexity), true
+	case "InventoryTrail.suggestions":
+		if e.ComplexityRoot.InventoryTrail.Suggestions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrail.Suggestions(childComplexity), true
+
+	case "InventoryTrailEntry.action":
+		if e.ComplexityRoot.InventoryTrailEntry.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.Action(childComplexity), true
+	case "InventoryTrailEntry.actorMembershipId":
+		if e.ComplexityRoot.InventoryTrailEntry.ActorMembershipID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.ActorMembershipID(childComplexity), true
+	case "InventoryTrailEntry.after":
+		if e.ComplexityRoot.InventoryTrailEntry.After == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.After(childComplexity), true
+	case "InventoryTrailEntry.before":
+		if e.ComplexityRoot.InventoryTrailEntry.Before == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.Before(childComplexity), true
+	case "InventoryTrailEntry.id":
+		if e.ComplexityRoot.InventoryTrailEntry.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.ID(childComplexity), true
+	case "InventoryTrailEntry.occurredAt":
+		if e.ComplexityRoot.InventoryTrailEntry.OccurredAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.OccurredAt(childComplexity), true
+	case "InventoryTrailEntry.reason":
+		if e.ComplexityRoot.InventoryTrailEntry.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.Reason(childComplexity), true
+	case "InventoryTrailEntry.resolutionReason":
+		if e.ComplexityRoot.InventoryTrailEntry.ResolutionReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.ResolutionReason(childComplexity), true
+	case "InventoryTrailEntry.statement":
+		if e.ComplexityRoot.InventoryTrailEntry.Statement == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.Statement(childComplexity), true
+	case "InventoryTrailEntry.targetId":
+		if e.ComplexityRoot.InventoryTrailEntry.TargetID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.TargetID(childComplexity), true
+	case "InventoryTrailEntry.targetType":
+		if e.ComplexityRoot.InventoryTrailEntry.TargetType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InventoryTrailEntry.TargetType(childComplexity), true
+
 	case "InvitationOtpPayload.clientMutationId":
 		if e.ComplexityRoot.InvitationOtpPayload.ClientMutationID == nil {
 			break
@@ -4043,6 +5612,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AcceptProcessing(childComplexity, args["input"].(AcceptProcessingInput)), true
+	case "Mutation.acknowledgeBaseline":
+		if e.ComplexityRoot.Mutation.AcknowledgeBaseline == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_acknowledgeBaseline_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AcknowledgeBaseline(childComplexity, args["input"].(CounterpartyResponseInput)), true
+	case "Mutation.activateBaselineVersion":
+		if e.ComplexityRoot.Mutation.ActivateBaselineVersion == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_activateBaselineVersion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ActivateBaselineVersion(childComplexity, args["input"].(ActivateBaselineVersionInput)), true
 	case "Mutation.activateOriginVersion":
 		if e.ComplexityRoot.Mutation.ActivateOriginVersion == nil {
 			break
@@ -4087,6 +5678,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddExceptionalStage(childComplexity, args["input"].(AddExceptionalStageInput)), true
+	case "Mutation.addInventoryItem":
+		if e.ComplexityRoot.Mutation.AddInventoryItem == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addInventoryItem_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddInventoryItem(childComplexity, args["input"].(AddInventoryItemInput)), true
 	case "Mutation.applyLegalHold":
 		if e.ComplexityRoot.Mutation.ApplyLegalHold == nil {
 			break
@@ -4142,6 +5744,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.BeginVideoCapture(childComplexity, args["input"].(BeginVideoCaptureInput)), true
+	case "Mutation.bulkAcceptInventoryEnvironment":
+		if e.ComplexityRoot.Mutation.BulkAcceptInventoryEnvironment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_bulkAcceptInventoryEnvironment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.BulkAcceptInventoryEnvironment(childComplexity, args["input"].(BulkAcceptInventoryEnvironmentInput)), true
 	case "Mutation.cancelInspection":
 		if e.ComplexityRoot.Mutation.CancelInspection == nil {
 			break
@@ -4274,6 +5887,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ConfigureVideoPolicy(childComplexity, args["input"].(ConfigureVideoPolicyInput)), true
+	case "Mutation.contestBaseline":
+		if e.ComplexityRoot.Mutation.ContestBaseline == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_contestBaseline_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ContestBaseline(childComplexity, args["input"].(ContestBaselineInput)), true
 	case "Mutation.correctInspectionResponsibleEmail":
 		if e.ComplexityRoot.Mutation.CorrectInspectionResponsibleEmail == nil {
 			break
@@ -4362,6 +5986,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateTenant(childComplexity, args["input"].(CreateTenantInput)), true
+	case "Mutation.decideInventoryItems":
+		if e.ComplexityRoot.Mutation.DecideInventoryItems == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_decideInventoryItems_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DecideInventoryItems(childComplexity, args["input"].(DecideInventoryItemsInput)), true
+	case "Mutation.declareCaptureEnvironment":
+		if e.ComplexityRoot.Mutation.DeclareCaptureEnvironment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_declareCaptureEnvironment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeclareCaptureEnvironment(childComplexity, args["input"].(DeclareCaptureEnvironmentInput)), true
 	case "Mutation.declareCaptureImpossibility":
 		if e.ComplexityRoot.Mutation.DeclareCaptureImpossibility == nil {
 			break
@@ -4395,6 +6041,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DisableMembership(childComplexity, args["input"].(DisableMembershipInput)), true
+	case "Mutation.discardBaselineDraft":
+		if e.ComplexityRoot.Mutation.DiscardBaselineDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_discardBaselineDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DiscardBaselineDraft(childComplexity, args["input"].(DiscardBaselineDraftInput)), true
 	case "Mutation.invalidateInspection":
 		if e.ComplexityRoot.Mutation.InvalidateInspection == nil {
 			break
@@ -4461,6 +6118,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.MarkNotificationRead(childComplexity, args["input"].(MarkNotificationReadInput)), true
+	case "Mutation.mergeInventoryItems":
+		if e.ComplexityRoot.Mutation.MergeInventoryItems == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_mergeInventoryItems_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MergeInventoryItems(childComplexity, args["input"].(MergeInventoryItemsInput)), true
 	case "Mutation.planInspection":
 		if e.ComplexityRoot.Mutation.PlanInspection == nil {
 			break
@@ -4549,6 +6217,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ReanalyzeVideoInspection(childComplexity, args["input"].(ReanalyzeVideoInspectionInput)), true
+	case "Mutation.recordCaptureQualityWarning":
+		if e.ComplexityRoot.Mutation.RecordCaptureQualityWarning == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_recordCaptureQualityWarning_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RecordCaptureQualityWarning(childComplexity, args["input"].(RecordCaptureQualityWarningInput)), true
 	case "Mutation.recordDeletionRequest":
 		if e.ComplexityRoot.Mutation.RecordDeletionRequest == nil {
 			break
@@ -4582,6 +6261,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ReleaseLegalHold(childComplexity, args["input"].(LegalHoldInput)), true
+	case "Mutation.removeInventoryEnvironment":
+		if e.ComplexityRoot.Mutation.RemoveInventoryEnvironment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeInventoryEnvironment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RemoveInventoryEnvironment(childComplexity, args["input"].(RemoveInventoryEnvironmentInput)), true
 	case "Mutation.reopenProject":
 		if e.ComplexityRoot.Mutation.ReopenProject == nil {
 			break
@@ -4615,6 +6305,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestAdminActivationOtp(childComplexity, args["input"].(RequestAdminActivationOtpInput)), true
+	case "Mutation.requestCounterpartyOtp":
+		if e.ComplexityRoot.Mutation.RequestCounterpartyOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestCounterpartyOtp_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestCounterpartyOtp(childComplexity, args["input"].(RequestCounterpartyOtpInput)), true
 	case "Mutation.requestInternalUserActivationOtp":
 		if e.ComplexityRoot.Mutation.RequestInternalUserActivationOtp == nil {
 			break
@@ -4648,6 +6349,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestOnboardingOtp(childComplexity, args["input"].(RequestOnboardingOtpInput)), true
+	case "Mutation.requestOriginCataloging":
+		if e.ComplexityRoot.Mutation.RequestOriginCataloging == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestOriginCataloging_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RequestOriginCataloging(childComplexity, args["input"].(RequestOriginCatalogingInput)), true
 	case "Mutation.requestRecapture":
 		if e.ComplexityRoot.Mutation.RequestRecapture == nil {
 			break
@@ -4670,6 +6382,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestVideoReplacement(childComplexity, args["input"].(RequestVideoReplacementInput)), true
+	case "Mutation.resendCounterpartyInvitation":
+		if e.ComplexityRoot.Mutation.ResendCounterpartyInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resendCounterpartyInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResendCounterpartyInvitation(childComplexity, args["input"].(ResendCounterpartyInvitationInput)), true
 	case "Mutation.resendInternalUserInvitation":
 		if e.ComplexityRoot.Mutation.ResendInternalUserInvitation == nil {
 			break
@@ -4681,6 +6404,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResendInternalUserInvitation(childComplexity, args["input"].(ResendInternalUserInvitationInput)), true
+	case "Mutation.resolveBaselineContestation":
+		if e.ComplexityRoot.Mutation.ResolveBaselineContestation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resolveBaselineContestation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResolveBaselineContestation(childComplexity, args["input"].(ResolveBaselineContestationInput)), true
+	case "Mutation.retryInventoryDraft":
+		if e.ComplexityRoot.Mutation.RetryInventoryDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_retryInventoryDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RetryInventoryDraft(childComplexity, args["input"].(RetryInventoryDraftInput)), true
 	case "Mutation.retryVideoPreparation":
 		if e.ComplexityRoot.Mutation.RetryVideoPreparation == nil {
 			break
@@ -4758,6 +6503,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SkipProjectStage(childComplexity, args["input"].(SkipProjectStageInput)), true
+	case "Mutation.splitInventoryItem":
+		if e.ComplexityRoot.Mutation.SplitInventoryItem == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_splitInventoryItem_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SplitInventoryItem(childComplexity, args["input"].(SplitInventoryItemInput)), true
+	case "Mutation.startBaselineDraftFromInspection":
+		if e.ComplexityRoot.Mutation.StartBaselineDraftFromInspection == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_startBaselineDraftFromInspection_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.StartBaselineDraftFromInspection(childComplexity, args["input"].(StartBaselineDraftFromInspectionInput)), true
 	case "Mutation.startProjectStage":
 		if e.ComplexityRoot.Mutation.StartProjectStage == nil {
 			break
@@ -4813,6 +6580,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateAsset(childComplexity, args["input"].(UpdateAssetInput)), true
+	case "Mutation.updateBaselinePolicy":
+		if e.ComplexityRoot.Mutation.UpdateBaselinePolicy == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateBaselinePolicy_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateBaselinePolicy(childComplexity, args["input"].(UpdateBaselinePolicyInput)), true
 	case "Mutation.updateSchedule":
 		if e.ComplexityRoot.Mutation.UpdateSchedule == nil {
 			break
@@ -4857,6 +6635,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpsertBusinessUnit(childComplexity, args["input"].(UpsertBusinessUnitInput)), true
+	case "Mutation.upsertInventoryEnvironment":
+		if e.ComplexityRoot.Mutation.UpsertInventoryEnvironment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_upsertInventoryEnvironment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpsertInventoryEnvironment(childComplexity, args["input"].(UpsertInventoryEnvironmentInput)), true
 	case "Mutation.upsertParticipant":
 		if e.ComplexityRoot.Mutation.UpsertParticipant == nil {
 			break
@@ -4890,6 +6679,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.VerifyContact(childComplexity, args["input"].(VerifyContactInput)), true
+	case "Mutation.verifyCounterpartyOtp":
+		if e.ComplexityRoot.Mutation.VerifyCounterpartyOtp == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_verifyCounterpartyOtp_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.VerifyCounterpartyOtp(childComplexity, args["input"].(VerifyCounterpartyOtpInput)), true
 	case "Mutation.verifyInternalUserActivationOtp":
 		if e.ComplexityRoot.Mutation.VerifyInternalUserActivationOtp == nil {
 			break
@@ -5658,12 +7458,48 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersion.ActivatedAt(childComplexity), true
+	case "OriginVersion.activatedBy":
+		if e.ComplexityRoot.OriginVersion.ActivatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.ActivatedBy(childComplexity), true
 	case "OriginVersion.captureSubmitted":
 		if e.ComplexityRoot.OriginVersion.CaptureSubmitted == nil {
 			break
 		}
 
 		return e.ComplexityRoot.OriginVersion.CaptureSubmitted(childComplexity), true
+	case "OriginVersion.contestationSummary":
+		if e.ComplexityRoot.OriginVersion.ContestationSummary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.ContestationSummary(childComplexity), true
+	case "OriginVersion.counterpartyInvitations":
+		if e.ComplexityRoot.OriginVersion.CounterpartyInvitations == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.CounterpartyInvitations(childComplexity), true
+	case "OriginVersion.counts":
+		if e.ComplexityRoot.OriginVersion.Counts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.Counts(childComplexity), true
+	case "OriginVersion.draftState":
+		if e.ComplexityRoot.OriginVersion.DraftState == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.DraftState(childComplexity), true
+	case "OriginVersion.hasInventory":
+		if e.ComplexityRoot.OriginVersion.HasInventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.HasInventory(childComplexity), true
 	case "OriginVersion.id":
 		if e.ComplexityRoot.OriginVersion.ID == nil {
 			break
@@ -5688,12 +7524,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersion.OriginID(childComplexity), true
+	case "OriginVersion.originRevision":
+		if e.ComplexityRoot.OriginVersion.OriginRevision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.OriginRevision(childComplexity), true
 	case "OriginVersion.preparationStatus":
 		if e.ComplexityRoot.OriginVersion.PreparationStatus == nil {
 			break
 		}
 
 		return e.ComplexityRoot.OriginVersion.PreparationStatus(childComplexity), true
+	case "OriginVersion.purpose":
+		if e.ComplexityRoot.OriginVersion.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.Purpose(childComplexity), true
 	case "OriginVersion.scopeManifestDigest":
 		if e.ComplexityRoot.OriginVersion.ScopeManifestDigest == nil {
 			break
@@ -5706,12 +7554,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersion.Selectable(childComplexity), true
+	case "OriginVersion.source":
+		if e.ComplexityRoot.OriginVersion.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.Source(childComplexity), true
 	case "OriginVersion.sourceAvailability":
 		if e.ComplexityRoot.OriginVersion.SourceAvailability == nil {
 			break
 		}
 
 		return e.ComplexityRoot.OriginVersion.SourceAvailability(childComplexity), true
+	case "OriginVersion.sourceInspectionId":
+		if e.ComplexityRoot.OriginVersion.SourceInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersion.SourceInspectionID(childComplexity), true
 	case "OriginVersion.status":
 		if e.ComplexityRoot.OriginVersion.Status == nil {
 			break
@@ -5756,6 +7616,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersionPayload.ClientMutationID(childComplexity), true
+	case "OriginVersionPayload.sourcesExpired":
+		if e.ComplexityRoot.OriginVersionPayload.SourcesExpired == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersionPayload.SourcesExpired(childComplexity), true
 	case "OriginVersionPayload.userErrors":
 		if e.ComplexityRoot.OriginVersionPayload.UserErrors == nil {
 			break
@@ -5768,6 +7634,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OriginVersionPayload.Version(childComplexity), true
+	case "OriginVersionPayload.warnings":
+		if e.ComplexityRoot.OriginVersionPayload.Warnings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OriginVersionPayload.Warnings(childComplexity), true
 
 	case "PageInfo.endCursor":
 		if e.ComplexityRoot.PageInfo.EndCursor == nil {
@@ -6326,7 +8198,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.AnalysisPrompt(childComplexity, args["type"].(AnalysisType)), true
+		return e.ComplexityRoot.Query.AnalysisPrompt(childComplexity, args["type"].(AnalysisType), args["task"].(*AnalysisPromptTask)), true
 	case "Query.asset":
 		if e.ComplexityRoot.Query.Asset == nil {
 			break
@@ -6360,6 +8232,34 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.AuditEvents(childComplexity, args["first"].(*int), args["after"].(*string)), true
+	case "Query.baselineInventory":
+		if e.ComplexityRoot.Query.BaselineInventory == nil {
+			break
+		}
+
+		args, err := ec.field_Query_baselineInventory_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.BaselineInventory(childComplexity, args["assetId"].(string), args["versionId"].(*string)), true
+	case "Query.baselinePolicy":
+		if e.ComplexityRoot.Query.BaselinePolicy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.BaselinePolicy(childComplexity), true
+	case "Query.baselineVersions":
+		if e.ComplexityRoot.Query.BaselineVersions == nil {
+			break
+		}
+
+		args, err := ec.field_Query_baselineVersions_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.BaselineVersions(childComplexity, args["assetId"].(string), args["first"].(*int), args["after"].(*string)), true
 	case "Query.businessUnits":
 		if e.ComplexityRoot.Query.BusinessUnits == nil {
 			break
@@ -6371,6 +8271,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.BusinessUnits(childComplexity, args["first"].(*int), args["after"].(*string)), true
+	case "Query.counterpartyBaseline":
+		if e.ComplexityRoot.Query.CounterpartyBaseline == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.CounterpartyBaseline(childComplexity), true
 	case "Query.customerEvidence":
 		if e.ComplexityRoot.Query.CustomerEvidence == nil {
 			break
@@ -6466,6 +8372,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Inspections(childComplexity, args["first"].(*int), args["after"].(*string), args["history"].(*bool), args["search"].(*string), args["statusGroup"].(*InspectionStatusGroup)), true
 
+	case "Query.inventoryDraft":
+		if e.ComplexityRoot.Query.InventoryDraft == nil {
+			break
+		}
+
+		args, err := ec.field_Query_inventoryDraft_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.InventoryDraft(childComplexity, args["originVersionId"].(string)), true
+	case "Query.inventoryTrail":
+		if e.ComplexityRoot.Query.InventoryTrail == nil {
+			break
+		}
+
+		args, err := ec.field_Query_inventoryTrail_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.InventoryTrail(childComplexity, args["originVersionId"].(string)), true
 	case "Query.llmUsage":
 		if e.ComplexityRoot.Query.LlmUsage == nil {
 			break
@@ -7147,6 +9075,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Report.InspectionID(childComplexity), true
+	case "Report.inventory":
+		if e.ComplexityRoot.Report.Inventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Report.Inventory(childComplexity), true
 	case "Report.jsonDigest":
 		if e.ComplexityRoot.Report.JSONDigest == nil {
 			break
@@ -8976,6 +10910,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.UserError.Message(childComplexity), true
+	case "UserError.pendingRequirementKeys":
+		if e.ComplexityRoot.UserError.PendingRequirementKeys == nil {
+			break
+		}
+
+		return e.ComplexityRoot.UserError.PendingRequirementKeys(childComplexity), true
 
 	case "VideoAdmission.changedAt":
 		if e.ComplexityRoot.VideoAdmission.ChangedAt == nil {
@@ -9113,6 +11053,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.VideoPolicy.OriginRetentionDays(childComplexity), true
+	case "VideoPolicy.supersededBaselineRetentionDays":
+		if e.ComplexityRoot.VideoPolicy.SupersededBaselineRetentionDays == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPolicy.SupersededBaselineRetentionDays(childComplexity), true
 	case "VideoPolicy.version":
 		if e.ComplexityRoot.VideoPolicy.Version == nil {
 			break
@@ -9275,6 +11221,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.VideoPreparationStatus.FirstFrameReadyAt(childComplexity), true
+	case "VideoPreparationStatus.framesRepresentative":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesRepresentative == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesRepresentative(childComplexity), true
+	case "VideoPreparationStatus.framesRetained":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesRetained == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesRetained(childComplexity), true
+	case "VideoPreparationStatus.framesSampled":
+		if e.ComplexityRoot.VideoPreparationStatus.FramesSampled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.VideoPreparationStatus.FramesSampled(childComplexity), true
 	case "VideoPreparationStatus.manifestDigest":
 		if e.ComplexityRoot.VideoPreparationStatus.ManifestDigest == nil {
 			break
@@ -9445,15 +11409,18 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAcceptProcessingInput,
+		ec.unmarshalInputActivateBaselineVersionInput,
 		ec.unmarshalInputActivateSegmentDefinitionInput,
 		ec.unmarshalInputActivateTemplateVersionInput,
 		ec.unmarshalInputAddExceptionalStageInput,
+		ec.unmarshalInputAddInventoryItemInput,
 		ec.unmarshalInputArchiveAssetInput,
 		ec.unmarshalInputArchiveBusinessUnitInput,
 		ec.unmarshalInputAssetAssignmentInput,
 		ec.unmarshalInputAssetInput,
 		ec.unmarshalInputAssignRoleScopesInput,
 		ec.unmarshalInputBeginVideoCaptureInput,
+		ec.unmarshalInputBulkAcceptInventoryEnvironmentInput,
 		ec.unmarshalInputCancelScheduleInput,
 		ec.unmarshalInputCaptureGPSInput,
 		ec.unmarshalInputCloseOriginInvitationInput,
@@ -9467,8 +11434,10 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputConfigureVideoAdmissionInput,
 		ec.unmarshalInputConfigureVideoPolicyInput,
 		ec.unmarshalInputContactInput,
+		ec.unmarshalInputContestBaselineInput,
 		ec.unmarshalInputCorrectInspectionResponsibleEmailInput,
 		ec.unmarshalInputCorrectOnboardingResponsibleEmailInput,
+		ec.unmarshalInputCounterpartyResponseInput,
 		ec.unmarshalInputCreateBusinessUnitInput,
 		ec.unmarshalInputCreateInspectionInput,
 		ec.unmarshalInputCreateMediaUploadInput,
@@ -9476,16 +11445,24 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreateScheduleInput,
 		ec.unmarshalInputCreateTenantInput,
 		ec.unmarshalInputCustomerPortfolioFilter,
+		ec.unmarshalInputDecideInventoryItemsInput,
+		ec.unmarshalInputDeclareCaptureEnvironmentInput,
 		ec.unmarshalInputDeclareCaptureImpossibilityInput,
 		ec.unmarshalInputDisableMembershipInput,
+		ec.unmarshalInputDiscardBaselineDraftInput,
 		ec.unmarshalInputInspectionTransitionInput,
 		ec.unmarshalInputInvalidateInspectionInput,
 		ec.unmarshalInputInvalidateReportPublicationInput,
+		ec.unmarshalInputInventoryDecisionInput,
+		ec.unmarshalInputInventoryEvidenceInput,
+		ec.unmarshalInputInventoryItemPatchInput,
+		ec.unmarshalInputInventorySplitPartInput,
 		ec.unmarshalInputInviteInternalUserInput,
 		ec.unmarshalInputInviteOriginCaptureInput,
 		ec.unmarshalInputLLMUsageFilter,
 		ec.unmarshalInputLegalHoldInput,
 		ec.unmarshalInputMarkNotificationReadInput,
+		ec.unmarshalInputMergeInventoryItemsInput,
 		ec.unmarshalInputOnboardingStepInput,
 		ec.unmarshalInputOriginVersionInput,
 		ec.unmarshalInputPlanInspectionInput,
@@ -9500,17 +11477,24 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPublishTemplateVersionInput,
 		ec.unmarshalInputReanalyzeVideoInspectionInput,
 		ec.unmarshalInputRecaptureItemInput,
+		ec.unmarshalInputRecordCaptureQualityWarningInput,
 		ec.unmarshalInputRecordDeletionRequestInput,
 		ec.unmarshalInputRegisterAssetInput,
+		ec.unmarshalInputRemoveInventoryEnvironmentInput,
 		ec.unmarshalInputReopenProjectInput,
 		ec.unmarshalInputReprocessVideoPreparationInput,
 		ec.unmarshalInputRequestAdminActivationOtpInput,
+		ec.unmarshalInputRequestCounterpartyOtpInput,
 		ec.unmarshalInputRequestInternalUserActivationOtpInput,
 		ec.unmarshalInputRequestInvitationOtpInput,
 		ec.unmarshalInputRequestOnboardingOtpInput,
+		ec.unmarshalInputRequestOriginCatalogingInput,
 		ec.unmarshalInputRequestRecaptureInput,
 		ec.unmarshalInputRequestVideoReplacementInput,
+		ec.unmarshalInputResendCounterpartyInvitationInput,
 		ec.unmarshalInputResendInternalUserInvitationInput,
+		ec.unmarshalInputResolveBaselineContestationInput,
+		ec.unmarshalInputRetryInventoryDraftInput,
 		ec.unmarshalInputRetryVideoPreparationInput,
 		ec.unmarshalInputRevokeInvitationInput,
 		ec.unmarshalInputSaveCaptureMetadataInput,
@@ -9519,18 +11503,23 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputSetAdminInitialPasswordInput,
 		ec.unmarshalInputSetDeliveryChannelsInput,
 		ec.unmarshalInputSkipProjectStageInput,
+		ec.unmarshalInputSplitInventoryItemInput,
+		ec.unmarshalInputStartBaselineDraftFromInspectionInput,
 		ec.unmarshalInputStartProjectStageInput,
 		ec.unmarshalInputSubmitCaptureInput,
 		ec.unmarshalInputSubmitRecaptureInput,
 		ec.unmarshalInputUpdateAnalysisPromptInput,
 		ec.unmarshalInputUpdateAssetInput,
+		ec.unmarshalInputUpdateBaselinePolicyInput,
 		ec.unmarshalInputUpdateScheduleInput,
 		ec.unmarshalInputUpdateTenantInput,
 		ec.unmarshalInputUpdateTriageCaseInput,
 		ec.unmarshalInputUpsertBusinessUnitInput,
+		ec.unmarshalInputUpsertInventoryEnvironmentInput,
 		ec.unmarshalInputUpsertParticipantInput,
 		ec.unmarshalInputVerifyAdminActivationOtpInput,
 		ec.unmarshalInputVerifyContactInput,
+		ec.unmarshalInputVerifyCounterpartyOtpInput,
 		ec.unmarshalInputVerifyInternalUserActivationOtpInput,
 		ec.unmarshalInputVerifyInvitationOtpInput,
 		ec.unmarshalInputVerifyOnboardingOtpInput,
@@ -9613,7 +11602,7 @@ var sources = []*ast.Source{
 
 type Query {
 	 onboardingDefinition(segment: String!): OnboardingDefinition!
-	 analysisPrompt(type: AnalysisType!): AnalysisPrompt!
+	 analysisPrompt(type: AnalysisType!, task: AnalysisPromptTask = FINDINGS): AnalysisPrompt!
 	 onboardingSession: OnboardingSession
 	 onboardingStatus: OnboardingStatus
   me: Me!
@@ -9631,6 +11620,12 @@ type Query {
 	lookupPostalCode(postalCode: String!): PostalAddressLookup!
   asset(id: ID!): Asset
   originVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
+	baselineVersions(assetId: ID!, first: Int = 25, after: String): OriginVersionConnection!
+	inventoryDraft(originVersionId: ID!): InventoryDraft
+	baselineInventory(assetId: ID!, versionId: ID): BaselineInventory
+  baselinePolicy: BaselinePolicy!
+	counterpartyBaseline: CounterpartyBaseline!
+	inventoryTrail(originVersionId: ID!): InventoryTrail!
   originPromotion(inspectionId: ID!): OriginPromotion
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
@@ -9727,6 +11722,13 @@ type Mutation {
   archiveAsset(input: ArchiveAssetInput!): AssetPayload!
   requestInvitationOtp(input: RequestInvitationOtpInput!): InvitationOtpPayload!
   verifyInvitationOtp(input: VerifyInvitationOtpInput!): ExternalSessionPayload!
+  requestCounterpartyOtp(input: RequestCounterpartyOtpInput!): InvitationOtpPayload!
+  verifyCounterpartyOtp(input: VerifyCounterpartyOtpInput!): ExternalSessionPayload!
+  acknowledgeBaseline(input: CounterpartyResponseInput!): CounterpartyResponsePayload!
+  contestBaseline(input: ContestBaselineInput!): CounterpartyResponsePayload!
+  resolveBaselineContestation(input: ResolveBaselineContestationInput!): CounterpartyInvitationPayload!
+  resendCounterpartyInvitation(input: ResendCounterpartyInvitationInput!): CounterpartyInvitationPayload!
+  updateBaselinePolicy(input: UpdateBaselinePolicyInput!): BaselinePolicyPayload!
   revokeInvitation(input: RevokeInvitationInput!): InvitationPayload!
   inviteOriginCapture(input: InviteOriginCaptureInput!): OriginInvitationPayload!
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
@@ -9734,6 +11736,18 @@ type Mutation {
   closeOriginInvitation(input: CloseOriginInvitationInput!): OriginVersionPayload!
   promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
   promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload!
+  decideInventoryItems(input: DecideInventoryItemsInput!): InventoryItemsPayload!
+  bulkAcceptInventoryEnvironment(input: BulkAcceptInventoryEnvironmentInput!): BulkAcceptInventoryEnvironmentPayload!
+  addInventoryItem(input: AddInventoryItemInput!): InventoryItemPayload!
+  mergeInventoryItems(input: MergeInventoryItemsInput!): InventoryItemPayload!
+  splitInventoryItem(input: SplitInventoryItemInput!): InventoryItemsPayload!
+  upsertInventoryEnvironment(input: UpsertInventoryEnvironmentInput!): InventoryEnvironmentPayload!
+  removeInventoryEnvironment(input: RemoveInventoryEnvironmentInput!): InventoryEnvironmentPayload!
+  activateBaselineVersion(input: ActivateBaselineVersionInput!): OriginVersionPayload!
+  discardBaselineDraft(input: DiscardBaselineDraftInput!): OriginVersionPayload!
+  requestOriginCataloging(input: RequestOriginCatalogingInput!): OriginVersionPayload!
+  retryInventoryDraft(input: RetryInventoryDraftInput!): OriginVersionPayload!
+  startBaselineDraftFromInspection(input: StartBaselineDraftFromInspectionInput!): OriginVersionPayload!
   createSchedule(input: CreateScheduleInput!): SchedulePayload!
   updateSchedule(input: UpdateScheduleInput!): SchedulePayload!
   cancelSchedule(input: CancelScheduleInput!): SchedulePayload!
@@ -9759,6 +11773,8 @@ type Mutation {
   completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
   saveCaptureMetadata(input: SaveCaptureMetadataInput!): MediaPayload!
   declareCaptureImpossibility(input: DeclareCaptureImpossibilityInput!): CapturePayload!
+  declareCaptureEnvironment(input: DeclareCaptureEnvironmentInput!): CaptureEnvironmentPayload!
+  recordCaptureQualityWarning(input: RecordCaptureQualityWarningInput!): CaptureQualityWarningPayload!
   submitCapture(input: SubmitCaptureInput!): SubmissionPayload!
   requestRecapture(input: RequestRecaptureInput!): RecapturePayload!
   requestVideoReplacement(input: RequestVideoReplacementInput!): VideoReplacementPayload!
@@ -9791,7 +11807,7 @@ type BusinessUnitPayload { businessUnit: BusinessUnit userErrors: [UserError!]! 
 type AuditEvent { id: ID! action: String! targetType: String! targetId: String! outcome: String! reason: String correlationId: String! occurredAt: String! }
 type AuditEventConnection { nodes: [AuditEvent!]! pageInfo: PageInfo! }
 type PageInfo { endCursor: String hasNextPage: Boolean! }
-type UserError { code: String! field: String message: String! correlationId: String! }
+type UserError { code: String! field: String message: String! correlationId: String! pendingRequirementKeys: [String!] }
 
 type Participant { id: ID! businessUnitId: ID! name: String! segmentRole: String! status: String! version: Int! contacts: [ParticipantContact!]! selectedContactIds: [ID!]! }
 type ParticipantContact { id: ID! channel: String! value: String! active: Boolean! verified: Boolean! }
@@ -9803,15 +11819,63 @@ type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeV
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! isVideo: Boolean! mediaKind: String! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
+enum AnalysisPromptTask { FINDINGS INVENTORY_CATALOG INVENTORY_COMPARE }
 enum CaptureComparisonMode { CHECKLIST_ONLY FIXED_ORIGIN }
-type AnalysisPrompt { analysisType: AnalysisType! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
+type AnalysisPrompt { analysisType: AnalysisType! task: AnalysisPromptTask! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
 type Asset { id: ID! businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String! addressDetails: PostalAddress addressStatus: String! latitudeE6: Int longitudeE6: Int geofenceMeters: Int! attributes: JSON! policyOverrides: JSON! status: String! version: Int! assignments: [AssetAssignment!]! }
 type PostalAddress { countryCode: String! postalCode: String! street: String! number: String! withoutNumber: Boolean! complement: String! district: String! city: String! state: String! municipalityCode: String! reference: String! }
 type PostalAddressLookup { found: Boolean! postalCode: String! street: String district: String city: String state: String municipalityCode: String }
 type AssetAssignment { participantId: ID! role: String! active: Boolean! }
 type AssetConnection { nodes: [Asset!]! pageInfo: PageInfo! }
-type OriginVersion { id: ID! originId: ID! versionNumber: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String }
+type OriginVersion { id: ID! originId: ID! versionNumber: Int! originRevision: Int! status: String! mediaKind: String! videoPreparationId: ID preparationStatus: String captureSubmitted: Boolean! selectable: Boolean! sourceAvailability: String limitedCoverage: Boolean! scopeManifestDigest: String supersedesId: ID activatedAt: String activatedBy: ID purpose: String source: String sourceInspectionId: ID hasInventory: Boolean! draftState: String counts: InventoryCounts contestationSummary: ContestationSummary counterpartyInvitations: [BaselineCounterpartyInvitation!]! }
+type InventoryCounts { included: Int! rejected: Int! notReviewed: Int! }
+type ContestationSummary { pending: Int! acknowledged: Int! contested: Int! open: Int! noResponse: Int! }
+type BaselineCounterpartyInvitation { id: ID! participantId: ID! response: String! deadlineAt: String! respondedAt: String statement: String resolution: String! resolutionReason: String adjustmentVersionId: ID deliveryStatus: String deliveryId: ID }
 type OriginVersionConnection { nodes: [OriginVersion!]! pageInfo: PageInfo! }
+type InventoryDraft { assetId: ID! version: OriginVersion! environments: [InventoryEnvironment!]! progress: InventoryProgress! readOnly: Boolean! noticeCode: String warnings: [String!]! }
+type InventoryProgress { decided: Int! pending: Int! }
+type InventoryEnvironment { id: ID! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! requirementKey: String decision: String! position: Int! items: [InventoryItem!]! }
+type InventoryItem { id: ID! identityId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String confidenceBps: Int origin: String! declared: Boolean! decision: String! rejectionReason: String rejectionText: String suggested: JSON version: Int! evidence: [InventoryEvidence!]! }
+type InventoryEvidence { id: ID! kind: String! mediaId: ID! frameId: ID timestampMs: Int url: String region: JSON position: Int! availability: String! retentionAvailability: String }
+type BaselineInventory { hasInventory: Boolean! version: OriginVersion environments: [InventoryEnvironment!]! }
+type CounterpartyBaselineEvidence { kind: String! position: Int! url: String timestampMs: Int }
+type CounterpartyBaselineItem { typeCode: String! name: String! material: String color: String quantity: Int condition: String! observation: String! limitation: String evidence: [CounterpartyBaselineEvidence!]! }
+type CounterpartyBaselineEnvironment { typeCode: String! name: String! items: [CounterpartyBaselineItem!]! }
+type CounterpartyBaselineInventory { hasInventory: Boolean! environments: [CounterpartyBaselineEnvironment!]! }
+type CounterpartyBaseline { baseline: CounterpartyBaselineInventory! purpose: String activatedAt: String deadlineAt: String! response: String! respondedAt: String resolution: String! resolutionReason: String adjustmentStatus: String newerVersionExists: Boolean! readOnly: Boolean! }
+type CounterpartyResponsePayload { response: String! respondedAt: String userErrors: [UserError!]! clientMutationId: String! }
+type CounterpartyInvitationPayload { invitationId: ID! response: String! deadlineAt: String! resolution: String! adjustmentVersionId: ID userErrors: [UserError!]! clientMutationId: String! }
+type BaselinePolicy { contestationDeadlineDays: Int! version: Int! }
+type BaselinePolicyPayload { policy: BaselinePolicy userErrors: [UserError!]! clientMutationId: String! }
+type InventoryTrail { suggestions: [InventoryTrailEntry!]! decisions: [InventoryTrailEntry!]! counterpartyEvents: [InventoryTrailEntry!]! }
+type InventoryTrailEntry { id: ID! targetType: String! targetId: ID! action: String! before: JSON after: JSON reason: String statement: String resolutionReason: String actorMembershipId: ID occurredAt: String! }
+input InventoryItemPatchInput { environmentId: ID typeCode: String name: String material: String color: String quantity: Int clearQuantity: Boolean condition: String observation: String limitation: String }
+input InventoryDecisionInput { itemId: ID! action: String! expectedVersion: Int! patch: InventoryItemPatchInput reason: String reasonText: String }
+input InventoryEvidenceInput { kind: String! mediaId: ID! frameId: ID region: JSON }
+input InventorySplitPartInput { name: String! typeCode: String! condition: String evidenceIds: [ID!]! }
+input DecideInventoryItemsInput { originVersionId: ID! decisions: [InventoryDecisionInput!]! clientMutationId: String! }
+input BulkAcceptInventoryEnvironmentInput { originVersionId: ID! environmentId: ID! minimumConfidenceBps: Int = 8500 clientMutationId: String! }
+input AddInventoryItemInput { originVersionId: ID! environmentId: ID! typeCode: String! name: String! material: String color: String quantity: Int condition: String observation: String limitation: String evidence: [InventoryEvidenceInput!]! clientMutationId: String! }
+input MergeInventoryItemsInput { originVersionId: ID! itemIds: [ID!]! resultEnvironmentId: ID clientMutationId: String! }
+input SplitInventoryItemInput { originVersionId: ID! itemId: ID! expectedVersion: Int! parts: [InventorySplitPartInput!]! clientMutationId: String! }
+input UpsertInventoryEnvironmentInput { originVersionId: ID! environmentId: ID typeCode: String! name: String! expected: Boolean! clientMutationId: String! }
+input RemoveInventoryEnvironmentInput { originVersionId: ID! environmentId: ID! confirmItemExclusion: Boolean! clientMutationId: String! }
+input ActivateBaselineVersionInput { originVersionId: ID! purpose: String! expectedOriginVersion: Int! counterpartyParticipantIds: [ID!]! clientMutationId: String! }
+input RequestCounterpartyOtpInput { token: String! clientMutationId: String! }
+input VerifyCounterpartyOtpInput { token: String! code: String! clientMutationId: String! }
+input CounterpartyResponseInput { clientMutationId: String! }
+input ContestBaselineInput { statement: String! clientMutationId: String! }
+input ResolveBaselineContestationInput { counterpartyInvitationId: ID! outcome: String! reason: String clientMutationId: String! }
+input ResendCounterpartyInvitationInput { counterpartyInvitationId: ID! clientMutationId: String! }
+input UpdateBaselinePolicyInput { contestationDeadlineDays: Int! clientMutationId: String! }
+input DiscardBaselineDraftInput { originVersionId: ID! clientMutationId: String! }
+input RequestOriginCatalogingInput { assetId: ID! clientMutationId: String! }
+input RetryInventoryDraftInput { originVersionId: ID! clientMutationId: String! }
+input StartBaselineDraftFromInspectionInput { inspectionId: ID! clientMutationId: String! }
+type InventoryItemsPayload { items: [InventoryItem!]! emptyEnvironments: [ID!]! userErrors: [UserError!]! clientMutationId: String! }
+type InventoryItemPayload { item: InventoryItem userErrors: [UserError!]! clientMutationId: String! }
+type InventoryEnvironmentPayload { environment: InventoryEnvironment userErrors: [UserError!]! clientMutationId: String! }
+type BulkAcceptInventoryEnvironmentPayload { acceptedCount: Int! userErrors: [UserError!]! clientMutationId: String! }
 type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
 type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
@@ -9842,11 +11906,18 @@ type CaptureRequirement {
   captureSourcePolicy: String!
   comparisonTarget: String!
   impossibilityAllowed: Boolean!
+  environmentIdentityId: ID
+  environmentTypeCode: String
+  environmentName: String
+  expected: Boolean
+  addedDuringCapture: Boolean
 }
+type CaptureEnvironment { requirementKey: String! identityId: ID! typeCode: String! name: String! expected: Boolean! addedDuringCapture: Boolean! mediaCount: Int! status: String! }
+type CaptureReviewHandoff { inspectionId: ID! originVersionId: ID }
 type CaptureAnswer { requirementKey: String! mediaIds: [ID!]! impossibilityReason: String version: Int! }
 type CaptureReferenceItem { mediaId: ID! evidenceId: ID sourceMediaId: ID timestampMs: Int environment: String component: String view: String ambiguous: Boolean gap: Boolean requirementKey: String! description: String! reason: String availability: String! imageUrl: String imageUrlExpiresAt: String }
-type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! answers: [CaptureAnswer!]! disclosureVersion: String! }
-type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! version: Int! }
+type ExternalCapture { responsibilityId: ID! recaptureRequestId: ID recaptureDeadlineAt: String replacementDeadlineAt: String status: String! confirmationOnly: Boolean! kind: String! mediaKind: String! templateVersionId: ID! captureLayout: String reference: JSON! referenceItems: [CaptureReferenceItem!]! policy: JSON! requirements: [CaptureRequirement!]! environments: [CaptureEnvironment!]! reviewHandoff: CaptureReviewHandoff answers: [CaptureAnswer!]! disclosureVersion: String! }
+type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int! version: Int! }
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
 type VideoAttemptPayload { attempt: VideoAttempt userErrors: [UserError!]! clientMutationId: String! }
@@ -9854,7 +11925,7 @@ type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason:
 type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
 type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
 type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
-type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
+type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! framesSampled: Int! framesRetained: Int! framesRepresentative: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
 type VideoPreparationConnection { nodes: [VideoPreparationStatus!]! pageInfo: PageInfo! }
 input RetryVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! clientMutationId: String! }
 input ReprocessVideoPreparationInput { mediaId: ID! expectedPreparationVersion: Int! profileDigest: String! clientMutationId: String! }
@@ -9876,18 +11947,22 @@ type ReportEvidence { id: ID! requirementKey: String! role: String! description:
 type ReportEvidenceConnection { nodes: [ReportEvidence!]! pageInfo: PageInfo! }
 type ReportFinding { id: ID category: String! title: String! description: String! severity: String! confidence: Float! quality: String! recommendedAction: String! evidenceIds: [ID!]! }
 type ReportTimelineEntry { stageId: ID! classification: String status: String! position: Int! }
-type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
+type Report { id: ID! inspectionId: ID! projectId: ID version: Int! mode: String! classification: String! jsonDigest: String! htmlDigest: String! canonicalJSON: JSON! html: String! createdAt: String! advisory: String! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory evidence(first: Int = 25, after: String): ReportEvidenceConnection! findings: [ReportFinding!]! timeline: [ReportTimelineEntry!]! pdfStatus: String! }
 type ReportSummary { id: ID! inspectionId: ID! assetName: String! assetAddress: String! assetExternalKey: String! participantName: String! generatedAt: String! classification: String! version: Int! }
 type ReportConnection { nodes: [ReportSummary!]! pageInfo: PageInfo! }
 type PublicationPolicy { mode: String! version: Int! }
 type PublicationPolicyPayload { policy: PublicationPolicy userErrors: [UserError!]! clientMutationId: String! }
 type ReportPublication { id: ID! snapshotId: ID! inspectionId: ID! status: String! version: Int! publishedAt: String invalidatedAt: String }
 type ReportPublicationPayload { publication: ReportPublication userErrors: [UserError!]! clientMutationId: String! }
-type CustomerPortfolioItem { assetId: ID! projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
+type CustomerPortfolioItem { assetId: ID! assetName: String! assetExternalKey: String! latestPublishedInspectionId: ID projectId: ID publishedClassification: String status: String! progress: Int! updatedAt: String! }
 type CustomerPortfolioConnection { nodes: [CustomerPortfolioItem!]! pageInfo: PageInfo! }
 type CustomerTimelineEntry { id: ID! kind: String! status: String! occurredAt: String! historical: Boolean! }
 type CustomerTimelineConnection { nodes: [CustomerTimelineEntry!]! pageInfo: PageInfo! }
-type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! }
+type CustomerReport { inspectionId: ID! snapshotId: ID! version: Int! classification: String! advisory: String! status: String! historical: Boolean! context: ReportContext! requirements: [ReportRequirement!]! inventory: CustomerInventory }
+type CustomerInventory { referenceVersionNumber: Int! purpose: String! coverage: CustomerInventoryCoverage problems: [CustomerInventoryEntry!]! informational: [CustomerInventoryEntry!]! }
+type CustomerInventoryCoverage { expectedItems: Int! assessedItems: Int! notObserved: Int! environmentsNotCaptured: [String!]! environmentsAddedDuringCapture: [String!]! }
+type CustomerInventoryEntry { environment: String! type: String! name: String! status: String! conditionBefore: String conditionAfter: String reason: String pairs: [CustomerInventoryPair!]! }
+type CustomerInventoryPair { originEvidenceId: ID! currentEvidenceId: ID! originSourceAvailability: String! currentSourceAvailability: String! timestampMs: Int }
 enum EvidenceMode { SIMPLE ADVANCED }
 type CustomerEvidenceItem { id: ID! requirementKey: String! section: String label: String role: String! description: String captureSource: String capturedAt: String state: String! lineageId: ID! replacedBy: ID mediaAvailability: String! sourceAvailability: String evidenceKind: String frameId: ID timestampMs: Int ptsMicros: String preparationId: ID planId: ID sourceMediaId: ID component: String flags: [String!]! url: String }
 type CustomerEvidenceConnection { nodes: [CustomerEvidenceItem!]! pageInfo: PageInfo! }
@@ -10071,7 +12146,7 @@ input PublishSegmentDefinitionInput { key: String! name: String! schema: JSON! u
 input ActivateSegmentDefinitionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
 input PublishTemplateVersionInput { key: String! name: String! definition: JSON! clientMutationId: String! }
 input ActivateTemplateVersionInput { versionId: ID! expectedVersion: Int! clientMutationId: String! }
-input UpdateAnalysisPromptInput { analysisType: AnalysisType!, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
+input UpdateAnalysisPromptInput { analysisType: AnalysisType!, task: AnalysisPromptTask = FINDINGS, systemPrompt: String!, expectedRevision: Int!, clientMutationId: String! }
 input AssetAssignmentInput { participantId: ID! role: String! }
 input PostalAddressInput { countryCode: String postalCode: String! street: String! number: String withoutNumber: Boolean! complement: String district: String city: String! state: String! municipalityCode: String reference: String }
 input AssetInput { businessUnitId: ID! segmentVersionId: ID! templateId: ID name: String! externalKey: String! address: String addressDetails: PostalAddressInput latitudeE6: Int longitudeE6: Int geofenceMeters: Int = 150 attributes: JSON! policyOverrides: JSON assignments: [AssetAssignmentInput!]! }
@@ -10081,7 +12156,7 @@ input ArchiveAssetInput { assetId: ID! expectedVersion: Int! clientMutationId: S
 input RequestInvitationOtpInput { linkToken: String! clientMutationId: String! }
 input VerifyInvitationOtpInput { linkToken: String! code: String! clientMutationId: String! }
 input RevokeInvitationInput { linkToken: String! clientMutationId: String! }
-input InviteOriginCaptureInput { assetId: ID! participantId: ID! expiresAt: String! clientMutationId: String! }
+input InviteOriginCaptureInput { assetId: ID! participantId: ID! reviewerMembershipId: ID expiresAt: String! clientMutationId: String! }
 input OriginVersionInput { versionId: ID! clientMutationId: String! }
 input CloseOriginInvitationInput { versionId: ID! reason: String! clientMutationId: String! }
 input PromoteInspectionPhotosInput { inspectionId: ID! mediaIds: [ID!]! expectedAssetVersion: Int! clientMutationId: String! }
@@ -10089,28 +12164,30 @@ input PromoteInspectionVideoInput { inspectionId: ID! clientMutationId: String! 
 input CreateScheduleInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String! timezone: String! startsAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! clientMutationId: String! }
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
-input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
+input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
 input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
 input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
-input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
+input PlanInspectionInput { assetId: ID! participantId: ID! templateId: ID! comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID dueAt: String startsAt: String timezone: String rrule: String deadlineAt: String deadlineMinutes: Int reminderInstants: [String!] reminderOffsetsMinutes: [Int!] reason: String projectId: ID projectName: String createProject: Boolean = false orderedStages: Boolean = false stages: [PlannedProjectStageInput!] stageId: ID clientMutationId: String! }
 input AddExceptionalStageInput { projectId: ID! expectedVersion: Int! key: String! label: String! reason: String! plannedAt: String clientMutationId: String! }
 input StartProjectStageInput { projectId: ID! stageId: ID! expectedProjectVersion: Int! expectedStageVersion: Int! clientMutationId: String! }
 input SkipProjectStageInput { projectId: ID! stageId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input ProjectTransitionInput { projectId: ID! expectedVersion: Int! clientMutationId: String! }
 input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
-input BeginVideoCaptureInput { acquisitionSource: String! replacesMediaId: ID clientMutationId: String! }
-input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! expectedVersion: Int! clientMutationId: String! }
+input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
+input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
 input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
-input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! attemptId: ID clientMutationId: String! }
+input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }
 input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clientMutationId: String! }
 input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
 input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON replacesMediaId: ID clientMutationId: String! }
-input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String! expectedVersion: Int clientMutationId: String! }
+input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String reasonCode: String reasonText: String expectedVersion: Int clientMutationId: String! }
+input DeclareCaptureEnvironmentInput { typeCode: String! name: String! clientMutationId: String! }
+input RecordCaptureQualityWarningInput { requirementKey: String! code: String! ignored: Boolean! clientMutationId: String! }
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
 input RequestRecaptureInput { inspectionId: ID! items: [RecaptureItemInput!]! deadlineAt: String! clientMutationId: String! }
@@ -10140,7 +12217,14 @@ type InvitationOtpPayload { status: String! userErrors: [UserError!]! clientMuta
 type ExternalSessionPayload { status: String! csrfToken: String! expiresAt: String! userErrors: [UserError!]! clientMutationId: String! }
 type InvitationPayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
 type OriginInvitationPayload { invitationId: ID originVersionId: ID status: String! userErrors: [UserError!]! clientMutationId: String! }
-type OriginVersionPayload { version: OriginVersion userErrors: [UserError!]! clientMutationId: String! }
+type OriginVersionPayload {
+  version: OriginVersion
+  warnings: [String!]
+  "Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged."
+  sourcesExpired: Boolean
+  userErrors: [UserError!]!
+  clientMutationId: String!
+}
 type OriginPromotionPayload { promotion: OriginPromotion userErrors: [UserError!]! clientMutationId: String! }
 type SchedulePayload { schedule: Schedule userErrors: [UserError!]! clientMutationId: String! }
 type InspectionPayload { inspection: Inspection userErrors: [UserError!]! clientMutationId: String! }
@@ -10150,6 +12234,8 @@ type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection,
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type PlanInspectionPayload { inspection: Inspection schedule: Schedule project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
+type CaptureEnvironmentPayload { environment: CaptureEnvironment userErrors: [UserError!]! clientMutationId: String! }
+type CaptureQualityWarningPayload { flags: [String!]! userErrors: [UserError!]! clientMutationId: String! }
 type MediaUploadPayload { upload: MediaUpload userErrors: [UserError!]! clientMutationId: String! }
 type PresignedPartsPayload { parts: [PresignedPart!]! userErrors: [UserError!]! clientMutationId: String! }
 type MediaPayload { media: Media userErrors: [UserError!]! clientMutationId: String! }
@@ -10171,6 +12257,8 @@ func (ec *executionContext) childFields_AnalysisPrompt(ctx context.Context, fiel
 	switch field.Name {
 	case "analysisType":
 		return ec.fieldContext_AnalysisPrompt_analysisType(ctx, field)
+	case "task":
+		return ec.fieldContext_AnalysisPrompt_task(ctx, field)
 	case "systemPrompt":
 		return ec.fieldContext_AnalysisPrompt_systemPrompt(ctx, field)
 	case "modelAlias":
@@ -10305,6 +12393,80 @@ func (ec *executionContext) childFields_AuditEventConnection(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type AuditEventConnection", field.Name)
 }
 
+func (ec *executionContext) childFields_BaselineCounterpartyInvitation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_BaselineCounterpartyInvitation_id(ctx, field)
+	case "participantId":
+		return ec.fieldContext_BaselineCounterpartyInvitation_participantId(ctx, field)
+	case "response":
+		return ec.fieldContext_BaselineCounterpartyInvitation_response(ctx, field)
+	case "deadlineAt":
+		return ec.fieldContext_BaselineCounterpartyInvitation_deadlineAt(ctx, field)
+	case "respondedAt":
+		return ec.fieldContext_BaselineCounterpartyInvitation_respondedAt(ctx, field)
+	case "statement":
+		return ec.fieldContext_BaselineCounterpartyInvitation_statement(ctx, field)
+	case "resolution":
+		return ec.fieldContext_BaselineCounterpartyInvitation_resolution(ctx, field)
+	case "resolutionReason":
+		return ec.fieldContext_BaselineCounterpartyInvitation_resolutionReason(ctx, field)
+	case "adjustmentVersionId":
+		return ec.fieldContext_BaselineCounterpartyInvitation_adjustmentVersionId(ctx, field)
+	case "deliveryStatus":
+		return ec.fieldContext_BaselineCounterpartyInvitation_deliveryStatus(ctx, field)
+	case "deliveryId":
+		return ec.fieldContext_BaselineCounterpartyInvitation_deliveryId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BaselineCounterpartyInvitation", field.Name)
+}
+
+func (ec *executionContext) childFields_BaselineInventory(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "hasInventory":
+		return ec.fieldContext_BaselineInventory_hasInventory(ctx, field)
+	case "version":
+		return ec.fieldContext_BaselineInventory_version(ctx, field)
+	case "environments":
+		return ec.fieldContext_BaselineInventory_environments(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BaselineInventory", field.Name)
+}
+
+func (ec *executionContext) childFields_BaselinePolicy(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "contestationDeadlineDays":
+		return ec.fieldContext_BaselinePolicy_contestationDeadlineDays(ctx, field)
+	case "version":
+		return ec.fieldContext_BaselinePolicy_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BaselinePolicy", field.Name)
+}
+
+func (ec *executionContext) childFields_BaselinePolicyPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "policy":
+		return ec.fieldContext_BaselinePolicyPayload_policy(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_BaselinePolicyPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_BaselinePolicyPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BaselinePolicyPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_BulkAcceptInventoryEnvironmentPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "acceptedCount":
+		return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_acceptedCount(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BulkAcceptInventoryEnvironmentPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_BusinessUnit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -10357,6 +12519,40 @@ func (ec *executionContext) childFields_CaptureAnswer(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type CaptureAnswer", field.Name)
 }
 
+func (ec *executionContext) childFields_CaptureEnvironment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "requirementKey":
+		return ec.fieldContext_CaptureEnvironment_requirementKey(ctx, field)
+	case "identityId":
+		return ec.fieldContext_CaptureEnvironment_identityId(ctx, field)
+	case "typeCode":
+		return ec.fieldContext_CaptureEnvironment_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_CaptureEnvironment_name(ctx, field)
+	case "expected":
+		return ec.fieldContext_CaptureEnvironment_expected(ctx, field)
+	case "addedDuringCapture":
+		return ec.fieldContext_CaptureEnvironment_addedDuringCapture(ctx, field)
+	case "mediaCount":
+		return ec.fieldContext_CaptureEnvironment_mediaCount(ctx, field)
+	case "status":
+		return ec.fieldContext_CaptureEnvironment_status(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureEnvironment", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureEnvironmentPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "environment":
+		return ec.fieldContext_CaptureEnvironmentPayload_environment(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CaptureEnvironmentPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CaptureEnvironmentPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureEnvironmentPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_CapturePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "status":
@@ -10367,6 +12563,18 @@ func (ec *executionContext) childFields_CapturePayload(ctx context.Context, fiel
 		return ec.fieldContext_CapturePayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CapturePayload", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureQualityWarningPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "flags":
+		return ec.fieldContext_CaptureQualityWarningPayload_flags(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CaptureQualityWarningPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CaptureQualityWarningPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureQualityWarningPayload", field.Name)
 }
 
 func (ec *executionContext) childFields_CaptureReferenceItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10431,8 +12639,166 @@ func (ec *executionContext) childFields_CaptureRequirement(ctx context.Context, 
 		return ec.fieldContext_CaptureRequirement_comparisonTarget(ctx, field)
 	case "impossibilityAllowed":
 		return ec.fieldContext_CaptureRequirement_impossibilityAllowed(ctx, field)
+	case "environmentIdentityId":
+		return ec.fieldContext_CaptureRequirement_environmentIdentityId(ctx, field)
+	case "environmentTypeCode":
+		return ec.fieldContext_CaptureRequirement_environmentTypeCode(ctx, field)
+	case "environmentName":
+		return ec.fieldContext_CaptureRequirement_environmentName(ctx, field)
+	case "expected":
+		return ec.fieldContext_CaptureRequirement_expected(ctx, field)
+	case "addedDuringCapture":
+		return ec.fieldContext_CaptureRequirement_addedDuringCapture(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CaptureRequirement", field.Name)
+}
+
+func (ec *executionContext) childFields_CaptureReviewHandoff(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_CaptureReviewHandoff_inspectionId(ctx, field)
+	case "originVersionId":
+		return ec.fieldContext_CaptureReviewHandoff_originVersionId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CaptureReviewHandoff", field.Name)
+}
+
+func (ec *executionContext) childFields_ContestationSummary(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "pending":
+		return ec.fieldContext_ContestationSummary_pending(ctx, field)
+	case "acknowledged":
+		return ec.fieldContext_ContestationSummary_acknowledged(ctx, field)
+	case "contested":
+		return ec.fieldContext_ContestationSummary_contested(ctx, field)
+	case "open":
+		return ec.fieldContext_ContestationSummary_open(ctx, field)
+	case "noResponse":
+		return ec.fieldContext_ContestationSummary_noResponse(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ContestationSummary", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyBaseline(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "baseline":
+		return ec.fieldContext_CounterpartyBaseline_baseline(ctx, field)
+	case "purpose":
+		return ec.fieldContext_CounterpartyBaseline_purpose(ctx, field)
+	case "activatedAt":
+		return ec.fieldContext_CounterpartyBaseline_activatedAt(ctx, field)
+	case "deadlineAt":
+		return ec.fieldContext_CounterpartyBaseline_deadlineAt(ctx, field)
+	case "response":
+		return ec.fieldContext_CounterpartyBaseline_response(ctx, field)
+	case "respondedAt":
+		return ec.fieldContext_CounterpartyBaseline_respondedAt(ctx, field)
+	case "resolution":
+		return ec.fieldContext_CounterpartyBaseline_resolution(ctx, field)
+	case "resolutionReason":
+		return ec.fieldContext_CounterpartyBaseline_resolutionReason(ctx, field)
+	case "adjustmentStatus":
+		return ec.fieldContext_CounterpartyBaseline_adjustmentStatus(ctx, field)
+	case "newerVersionExists":
+		return ec.fieldContext_CounterpartyBaseline_newerVersionExists(ctx, field)
+	case "readOnly":
+		return ec.fieldContext_CounterpartyBaseline_readOnly(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaseline", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyBaselineEnvironment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "typeCode":
+		return ec.fieldContext_CounterpartyBaselineEnvironment_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_CounterpartyBaselineEnvironment_name(ctx, field)
+	case "items":
+		return ec.fieldContext_CounterpartyBaselineEnvironment_items(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaselineEnvironment", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyBaselineEvidence(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_CounterpartyBaselineEvidence_kind(ctx, field)
+	case "position":
+		return ec.fieldContext_CounterpartyBaselineEvidence_position(ctx, field)
+	case "url":
+		return ec.fieldContext_CounterpartyBaselineEvidence_url(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_CounterpartyBaselineEvidence_timestampMs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaselineEvidence", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyBaselineInventory(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "hasInventory":
+		return ec.fieldContext_CounterpartyBaselineInventory_hasInventory(ctx, field)
+	case "environments":
+		return ec.fieldContext_CounterpartyBaselineInventory_environments(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaselineInventory", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyBaselineItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "typeCode":
+		return ec.fieldContext_CounterpartyBaselineItem_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_CounterpartyBaselineItem_name(ctx, field)
+	case "material":
+		return ec.fieldContext_CounterpartyBaselineItem_material(ctx, field)
+	case "color":
+		return ec.fieldContext_CounterpartyBaselineItem_color(ctx, field)
+	case "quantity":
+		return ec.fieldContext_CounterpartyBaselineItem_quantity(ctx, field)
+	case "condition":
+		return ec.fieldContext_CounterpartyBaselineItem_condition(ctx, field)
+	case "observation":
+		return ec.fieldContext_CounterpartyBaselineItem_observation(ctx, field)
+	case "limitation":
+		return ec.fieldContext_CounterpartyBaselineItem_limitation(ctx, field)
+	case "evidence":
+		return ec.fieldContext_CounterpartyBaselineItem_evidence(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyBaselineItem", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyInvitationPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "invitationId":
+		return ec.fieldContext_CounterpartyInvitationPayload_invitationId(ctx, field)
+	case "response":
+		return ec.fieldContext_CounterpartyInvitationPayload_response(ctx, field)
+	case "deadlineAt":
+		return ec.fieldContext_CounterpartyInvitationPayload_deadlineAt(ctx, field)
+	case "resolution":
+		return ec.fieldContext_CounterpartyInvitationPayload_resolution(ctx, field)
+	case "adjustmentVersionId":
+		return ec.fieldContext_CounterpartyInvitationPayload_adjustmentVersionId(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CounterpartyInvitationPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CounterpartyInvitationPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyInvitationPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_CounterpartyResponsePayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "response":
+		return ec.fieldContext_CounterpartyResponsePayload_response(ctx, field)
+	case "respondedAt":
+		return ec.fieldContext_CounterpartyResponsePayload_respondedAt(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_CounterpartyResponsePayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_CounterpartyResponsePayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CounterpartyResponsePayload", field.Name)
 }
 
 func (ec *executionContext) childFields_CreateTenantPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -10509,6 +12875,76 @@ func (ec *executionContext) childFields_CustomerEvidenceItem(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type CustomerEvidenceItem", field.Name)
 }
 
+func (ec *executionContext) childFields_CustomerInventory(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "referenceVersionNumber":
+		return ec.fieldContext_CustomerInventory_referenceVersionNumber(ctx, field)
+	case "purpose":
+		return ec.fieldContext_CustomerInventory_purpose(ctx, field)
+	case "coverage":
+		return ec.fieldContext_CustomerInventory_coverage(ctx, field)
+	case "problems":
+		return ec.fieldContext_CustomerInventory_problems(ctx, field)
+	case "informational":
+		return ec.fieldContext_CustomerInventory_informational(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CustomerInventory", field.Name)
+}
+
+func (ec *executionContext) childFields_CustomerInventoryCoverage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "expectedItems":
+		return ec.fieldContext_CustomerInventoryCoverage_expectedItems(ctx, field)
+	case "assessedItems":
+		return ec.fieldContext_CustomerInventoryCoverage_assessedItems(ctx, field)
+	case "notObserved":
+		return ec.fieldContext_CustomerInventoryCoverage_notObserved(ctx, field)
+	case "environmentsNotCaptured":
+		return ec.fieldContext_CustomerInventoryCoverage_environmentsNotCaptured(ctx, field)
+	case "environmentsAddedDuringCapture":
+		return ec.fieldContext_CustomerInventoryCoverage_environmentsAddedDuringCapture(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CustomerInventoryCoverage", field.Name)
+}
+
+func (ec *executionContext) childFields_CustomerInventoryEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "environment":
+		return ec.fieldContext_CustomerInventoryEntry_environment(ctx, field)
+	case "type":
+		return ec.fieldContext_CustomerInventoryEntry_type(ctx, field)
+	case "name":
+		return ec.fieldContext_CustomerInventoryEntry_name(ctx, field)
+	case "status":
+		return ec.fieldContext_CustomerInventoryEntry_status(ctx, field)
+	case "conditionBefore":
+		return ec.fieldContext_CustomerInventoryEntry_conditionBefore(ctx, field)
+	case "conditionAfter":
+		return ec.fieldContext_CustomerInventoryEntry_conditionAfter(ctx, field)
+	case "reason":
+		return ec.fieldContext_CustomerInventoryEntry_reason(ctx, field)
+	case "pairs":
+		return ec.fieldContext_CustomerInventoryEntry_pairs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CustomerInventoryEntry", field.Name)
+}
+
+func (ec *executionContext) childFields_CustomerInventoryPair(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "originEvidenceId":
+		return ec.fieldContext_CustomerInventoryPair_originEvidenceId(ctx, field)
+	case "currentEvidenceId":
+		return ec.fieldContext_CustomerInventoryPair_currentEvidenceId(ctx, field)
+	case "originSourceAvailability":
+		return ec.fieldContext_CustomerInventoryPair_originSourceAvailability(ctx, field)
+	case "currentSourceAvailability":
+		return ec.fieldContext_CustomerInventoryPair_currentSourceAvailability(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_CustomerInventoryPair_timestampMs(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CustomerInventoryPair", field.Name)
+}
+
 func (ec *executionContext) childFields_CustomerPortfolioConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "nodes":
@@ -10523,6 +12959,12 @@ func (ec *executionContext) childFields_CustomerPortfolioItem(ctx context.Contex
 	switch field.Name {
 	case "assetId":
 		return ec.fieldContext_CustomerPortfolioItem_assetId(ctx, field)
+	case "assetName":
+		return ec.fieldContext_CustomerPortfolioItem_assetName(ctx, field)
+	case "assetExternalKey":
+		return ec.fieldContext_CustomerPortfolioItem_assetExternalKey(ctx, field)
+	case "latestPublishedInspectionId":
+		return ec.fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(ctx, field)
 	case "projectId":
 		return ec.fieldContext_CustomerPortfolioItem_projectId(ctx, field)
 	case "publishedClassification":
@@ -10557,6 +12999,8 @@ func (ec *executionContext) childFields_CustomerReport(ctx context.Context, fiel
 		return ec.fieldContext_CustomerReport_context(ctx, field)
 	case "requirements":
 		return ec.fieldContext_CustomerReport_requirements(ctx, field)
+	case "inventory":
+		return ec.fieldContext_CustomerReport_inventory(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CustomerReport", field.Name)
 }
@@ -10625,6 +13069,8 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_mediaKind(ctx, field)
 	case "templateVersionId":
 		return ec.fieldContext_ExternalCapture_templateVersionId(ctx, field)
+	case "captureLayout":
+		return ec.fieldContext_ExternalCapture_captureLayout(ctx, field)
 	case "reference":
 		return ec.fieldContext_ExternalCapture_reference(ctx, field)
 	case "referenceItems":
@@ -10633,6 +13079,10 @@ func (ec *executionContext) childFields_ExternalCapture(ctx context.Context, fie
 		return ec.fieldContext_ExternalCapture_policy(ctx, field)
 	case "requirements":
 		return ec.fieldContext_ExternalCapture_requirements(ctx, field)
+	case "environments":
+		return ec.fieldContext_ExternalCapture_environments(ctx, field)
+	case "reviewHandoff":
+		return ec.fieldContext_ExternalCapture_reviewHandoff(ctx, field)
 	case "answers":
 		return ec.fieldContext_ExternalCapture_answers(ctx, field)
 	case "disclosureVersion":
@@ -10903,6 +13353,224 @@ func (ec *executionContext) childFields_InternalUserActivationPayload(ctx contex
 		return ec.fieldContext_InternalUserActivationPayload_clientMutationId(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InternalUserActivationPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryCounts(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "included":
+		return ec.fieldContext_InventoryCounts_included(ctx, field)
+	case "rejected":
+		return ec.fieldContext_InventoryCounts_rejected(ctx, field)
+	case "notReviewed":
+		return ec.fieldContext_InventoryCounts_notReviewed(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryCounts", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryDraft(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "assetId":
+		return ec.fieldContext_InventoryDraft_assetId(ctx, field)
+	case "version":
+		return ec.fieldContext_InventoryDraft_version(ctx, field)
+	case "environments":
+		return ec.fieldContext_InventoryDraft_environments(ctx, field)
+	case "progress":
+		return ec.fieldContext_InventoryDraft_progress(ctx, field)
+	case "readOnly":
+		return ec.fieldContext_InventoryDraft_readOnly(ctx, field)
+	case "noticeCode":
+		return ec.fieldContext_InventoryDraft_noticeCode(ctx, field)
+	case "warnings":
+		return ec.fieldContext_InventoryDraft_warnings(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryDraft", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryEnvironment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InventoryEnvironment_id(ctx, field)
+	case "identityId":
+		return ec.fieldContext_InventoryEnvironment_identityId(ctx, field)
+	case "typeCode":
+		return ec.fieldContext_InventoryEnvironment_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_InventoryEnvironment_name(ctx, field)
+	case "expected":
+		return ec.fieldContext_InventoryEnvironment_expected(ctx, field)
+	case "addedDuringCapture":
+		return ec.fieldContext_InventoryEnvironment_addedDuringCapture(ctx, field)
+	case "requirementKey":
+		return ec.fieldContext_InventoryEnvironment_requirementKey(ctx, field)
+	case "decision":
+		return ec.fieldContext_InventoryEnvironment_decision(ctx, field)
+	case "position":
+		return ec.fieldContext_InventoryEnvironment_position(ctx, field)
+	case "items":
+		return ec.fieldContext_InventoryEnvironment_items(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryEnvironment", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryEnvironmentPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "environment":
+		return ec.fieldContext_InventoryEnvironmentPayload_environment(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_InventoryEnvironmentPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_InventoryEnvironmentPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryEnvironmentPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryEvidence(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InventoryEvidence_id(ctx, field)
+	case "kind":
+		return ec.fieldContext_InventoryEvidence_kind(ctx, field)
+	case "mediaId":
+		return ec.fieldContext_InventoryEvidence_mediaId(ctx, field)
+	case "frameId":
+		return ec.fieldContext_InventoryEvidence_frameId(ctx, field)
+	case "timestampMs":
+		return ec.fieldContext_InventoryEvidence_timestampMs(ctx, field)
+	case "url":
+		return ec.fieldContext_InventoryEvidence_url(ctx, field)
+	case "region":
+		return ec.fieldContext_InventoryEvidence_region(ctx, field)
+	case "position":
+		return ec.fieldContext_InventoryEvidence_position(ctx, field)
+	case "availability":
+		return ec.fieldContext_InventoryEvidence_availability(ctx, field)
+	case "retentionAvailability":
+		return ec.fieldContext_InventoryEvidence_retentionAvailability(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryEvidence", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryItem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InventoryItem_id(ctx, field)
+	case "identityId":
+		return ec.fieldContext_InventoryItem_identityId(ctx, field)
+	case "environmentId":
+		return ec.fieldContext_InventoryItem_environmentId(ctx, field)
+	case "typeCode":
+		return ec.fieldContext_InventoryItem_typeCode(ctx, field)
+	case "name":
+		return ec.fieldContext_InventoryItem_name(ctx, field)
+	case "material":
+		return ec.fieldContext_InventoryItem_material(ctx, field)
+	case "color":
+		return ec.fieldContext_InventoryItem_color(ctx, field)
+	case "quantity":
+		return ec.fieldContext_InventoryItem_quantity(ctx, field)
+	case "condition":
+		return ec.fieldContext_InventoryItem_condition(ctx, field)
+	case "observation":
+		return ec.fieldContext_InventoryItem_observation(ctx, field)
+	case "limitation":
+		return ec.fieldContext_InventoryItem_limitation(ctx, field)
+	case "confidenceBps":
+		return ec.fieldContext_InventoryItem_confidenceBps(ctx, field)
+	case "origin":
+		return ec.fieldContext_InventoryItem_origin(ctx, field)
+	case "declared":
+		return ec.fieldContext_InventoryItem_declared(ctx, field)
+	case "decision":
+		return ec.fieldContext_InventoryItem_decision(ctx, field)
+	case "rejectionReason":
+		return ec.fieldContext_InventoryItem_rejectionReason(ctx, field)
+	case "rejectionText":
+		return ec.fieldContext_InventoryItem_rejectionText(ctx, field)
+	case "suggested":
+		return ec.fieldContext_InventoryItem_suggested(ctx, field)
+	case "version":
+		return ec.fieldContext_InventoryItem_version(ctx, field)
+	case "evidence":
+		return ec.fieldContext_InventoryItem_evidence(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryItem", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryItemPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "item":
+		return ec.fieldContext_InventoryItemPayload_item(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_InventoryItemPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_InventoryItemPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryItemPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryItemsPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_InventoryItemsPayload_items(ctx, field)
+	case "emptyEnvironments":
+		return ec.fieldContext_InventoryItemsPayload_emptyEnvironments(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_InventoryItemsPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_InventoryItemsPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryItemsPayload", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryProgress(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "decided":
+		return ec.fieldContext_InventoryProgress_decided(ctx, field)
+	case "pending":
+		return ec.fieldContext_InventoryProgress_pending(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryProgress", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryTrail(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "suggestions":
+		return ec.fieldContext_InventoryTrail_suggestions(ctx, field)
+	case "decisions":
+		return ec.fieldContext_InventoryTrail_decisions(ctx, field)
+	case "counterpartyEvents":
+		return ec.fieldContext_InventoryTrail_counterpartyEvents(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryTrail", field.Name)
+}
+
+func (ec *executionContext) childFields_InventoryTrailEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InventoryTrailEntry_id(ctx, field)
+	case "targetType":
+		return ec.fieldContext_InventoryTrailEntry_targetType(ctx, field)
+	case "targetId":
+		return ec.fieldContext_InventoryTrailEntry_targetId(ctx, field)
+	case "action":
+		return ec.fieldContext_InventoryTrailEntry_action(ctx, field)
+	case "before":
+		return ec.fieldContext_InventoryTrailEntry_before(ctx, field)
+	case "after":
+		return ec.fieldContext_InventoryTrailEntry_after(ctx, field)
+	case "reason":
+		return ec.fieldContext_InventoryTrailEntry_reason(ctx, field)
+	case "statement":
+		return ec.fieldContext_InventoryTrailEntry_statement(ctx, field)
+	case "resolutionReason":
+		return ec.fieldContext_InventoryTrailEntry_resolutionReason(ctx, field)
+	case "actorMembershipId":
+		return ec.fieldContext_InventoryTrailEntry_actorMembershipId(ctx, field)
+	case "occurredAt":
+		return ec.fieldContext_InventoryTrailEntry_occurredAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InventoryTrailEntry", field.Name)
 }
 
 func (ec *executionContext) childFields_InvitationOtpPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -11525,6 +14193,8 @@ func (ec *executionContext) childFields_OriginVersion(ctx context.Context, field
 		return ec.fieldContext_OriginVersion_originId(ctx, field)
 	case "versionNumber":
 		return ec.fieldContext_OriginVersion_versionNumber(ctx, field)
+	case "originRevision":
+		return ec.fieldContext_OriginVersion_originRevision(ctx, field)
 	case "status":
 		return ec.fieldContext_OriginVersion_status(ctx, field)
 	case "mediaKind":
@@ -11547,6 +14217,24 @@ func (ec *executionContext) childFields_OriginVersion(ctx context.Context, field
 		return ec.fieldContext_OriginVersion_supersedesId(ctx, field)
 	case "activatedAt":
 		return ec.fieldContext_OriginVersion_activatedAt(ctx, field)
+	case "activatedBy":
+		return ec.fieldContext_OriginVersion_activatedBy(ctx, field)
+	case "purpose":
+		return ec.fieldContext_OriginVersion_purpose(ctx, field)
+	case "source":
+		return ec.fieldContext_OriginVersion_source(ctx, field)
+	case "sourceInspectionId":
+		return ec.fieldContext_OriginVersion_sourceInspectionId(ctx, field)
+	case "hasInventory":
+		return ec.fieldContext_OriginVersion_hasInventory(ctx, field)
+	case "draftState":
+		return ec.fieldContext_OriginVersion_draftState(ctx, field)
+	case "counts":
+		return ec.fieldContext_OriginVersion_counts(ctx, field)
+	case "contestationSummary":
+		return ec.fieldContext_OriginVersion_contestationSummary(ctx, field)
+	case "counterpartyInvitations":
+		return ec.fieldContext_OriginVersion_counterpartyInvitations(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type OriginVersion", field.Name)
 }
@@ -11565,6 +14253,10 @@ func (ec *executionContext) childFields_OriginVersionPayload(ctx context.Context
 	switch field.Name {
 	case "version":
 		return ec.fieldContext_OriginVersionPayload_version(ctx, field)
+	case "warnings":
+		return ec.fieldContext_OriginVersionPayload_warnings(ctx, field)
+	case "sourcesExpired":
+		return ec.fieldContext_OriginVersionPayload_sourcesExpired(ctx, field)
 	case "userErrors":
 		return ec.fieldContext_OriginVersionPayload_userErrors(ctx, field)
 	case "clientMutationId":
@@ -11991,6 +14683,8 @@ func (ec *executionContext) childFields_Report(ctx context.Context, field graphq
 		return ec.fieldContext_Report_context(ctx, field)
 	case "requirements":
 		return ec.fieldContext_Report_requirements(ctx, field)
+	case "inventory":
+		return ec.fieldContext_Report_inventory(ctx, field)
 	case "evidence":
 		return ec.fieldContext_Report_evidence(ctx, field)
 	case "findings":
@@ -12895,6 +15589,8 @@ func (ec *executionContext) childFields_UserError(ctx context.Context, field gra
 		return ec.fieldContext_UserError_message(ctx, field)
 	case "correlationId":
 		return ec.fieldContext_UserError_correlationId(ctx, field)
+	case "pendingRequirementKeys":
+		return ec.fieldContext_UserError_pendingRequirementKeys(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type UserError", field.Name)
 }
@@ -12969,6 +15665,8 @@ func (ec *executionContext) childFields_VideoPolicy(ctx context.Context, field g
 		return ec.fieldContext_VideoPolicy_originRetentionDays(ctx, field)
 	case "currentRetentionDays":
 		return ec.fieldContext_VideoPolicy_currentRetentionDays(ctx, field)
+	case "supersededBaselineRetentionDays":
+		return ec.fieldContext_VideoPolicy_supersededBaselineRetentionDays(ctx, field)
 	case "version":
 		return ec.fieldContext_VideoPolicy_version(ctx, field)
 	}
@@ -13065,6 +15763,12 @@ func (ec *executionContext) childFields_VideoPreparationStatus(ctx context.Conte
 		return ec.fieldContext_VideoPreparationStatus_attempts(ctx, field)
 	case "processedFrames":
 		return ec.fieldContext_VideoPreparationStatus_processedFrames(ctx, field)
+	case "framesSampled":
+		return ec.fieldContext_VideoPreparationStatus_framesSampled(ctx, field)
+	case "framesRetained":
+		return ec.fieldContext_VideoPreparationStatus_framesRetained(ctx, field)
+	case "framesRepresentative":
+		return ec.fieldContext_VideoPreparationStatus_framesRepresentative(ctx, field)
 	case "errorCode":
 		return ec.fieldContext_VideoPreparationStatus_errorCode(ctx, field)
 	case "retryable":
@@ -13267,6 +15971,34 @@ func (ec *executionContext) field_Mutation_acceptProcessing_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_acknowledgeBaseline_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (CounterpartyResponseInput, error) {
+			return ec.unmarshalNCounterpartyResponseInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyResponseInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_activateBaselineVersion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ActivateBaselineVersionInput, error) {
+			return ec.unmarshalNActivateBaselineVersionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐActivateBaselineVersionInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_activateOriginVersion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13315,6 +16047,20 @@ func (ec *executionContext) field_Mutation_addExceptionalStage_args(ctx context.
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (AddExceptionalStageInput, error) {
 			return ec.unmarshalNAddExceptionalStageInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAddExceptionalStageInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addInventoryItem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AddInventoryItemInput, error) {
+			return ec.unmarshalNAddInventoryItemInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAddInventoryItemInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13385,6 +16131,20 @@ func (ec *executionContext) field_Mutation_beginVideoCapture_args(ctx context.Co
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (BeginVideoCaptureInput, error) {
 			return ec.unmarshalNBeginVideoCaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBeginVideoCaptureInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_bulkAcceptInventoryEnvironment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (BulkAcceptInventoryEnvironmentInput, error) {
+			return ec.unmarshalNBulkAcceptInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBulkAcceptInventoryEnvironmentInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13561,6 +16321,20 @@ func (ec *executionContext) field_Mutation_configureVideoPolicy_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_contestBaseline_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ContestBaselineInput, error) {
+			return ec.unmarshalNContestBaselineInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐContestBaselineInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_correctInspectionResponsibleEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13673,6 +16447,34 @@ func (ec *executionContext) field_Mutation_createTenant_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_decideInventoryItems_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DecideInventoryItemsInput, error) {
+			return ec.unmarshalNDecideInventoryItemsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDecideInventoryItemsInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_declareCaptureEnvironment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DeclareCaptureEnvironmentInput, error) {
+			return ec.unmarshalNDeclareCaptureEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDeclareCaptureEnvironmentInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_declareCaptureImpossibility_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13707,6 +16509,20 @@ func (ec *executionContext) field_Mutation_disableMembership_args(ctx context.Co
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (DisableMembershipInput, error) {
 			return ec.unmarshalNDisableMembershipInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDisableMembershipInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_discardBaselineDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (DiscardBaselineDraftInput, error) {
+			return ec.unmarshalNDiscardBaselineDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDiscardBaselineDraftInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13791,6 +16607,20 @@ func (ec *executionContext) field_Mutation_markNotificationRead_args(ctx context
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (MarkNotificationReadInput, error) {
 			return ec.unmarshalNMarkNotificationReadInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMarkNotificationReadInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_mergeInventoryItems_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (MergeInventoryItemsInput, error) {
+			return ec.unmarshalNMergeInventoryItemsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMergeInventoryItemsInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13911,6 +16741,20 @@ func (ec *executionContext) field_Mutation_reanalyzeVideoInspection_args(ctx con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_recordCaptureQualityWarning_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RecordCaptureQualityWarningInput, error) {
+			return ec.unmarshalNRecordCaptureQualityWarningInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordCaptureQualityWarningInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_recordDeletionRequest_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13945,6 +16789,20 @@ func (ec *executionContext) field_Mutation_releaseLegalHold_args(ctx context.Con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (LegalHoldInput, error) {
 			return ec.unmarshalNLegalHoldInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐLegalHoldInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_removeInventoryEnvironment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RemoveInventoryEnvironmentInput, error) {
+			return ec.unmarshalNRemoveInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRemoveInventoryEnvironmentInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -13995,6 +16853,20 @@ func (ec *executionContext) field_Mutation_requestAdminActivationOtp_args(ctx co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_requestCounterpartyOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RequestCounterpartyOtpInput, error) {
+			return ec.unmarshalNRequestCounterpartyOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestCounterpartyOtpInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_requestInternalUserActivationOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14037,6 +16909,20 @@ func (ec *executionContext) field_Mutation_requestOnboardingOtp_args(ctx context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_requestOriginCataloging_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RequestOriginCatalogingInput, error) {
+			return ec.unmarshalNRequestOriginCatalogingInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestOriginCatalogingInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_requestRecapture_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14065,12 +16951,54 @@ func (ec *executionContext) field_Mutation_requestVideoReplacement_args(ctx cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_resendCounterpartyInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ResendCounterpartyInvitationInput, error) {
+			return ec.unmarshalNResendCounterpartyInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendCounterpartyInvitationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_resendInternalUserInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {
 			return ec.unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_resolveBaselineContestation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ResolveBaselineContestationInput, error) {
+			return ec.unmarshalNResolveBaselineContestationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResolveBaselineContestationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_retryInventoryDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RetryInventoryDraftInput, error) {
+			return ec.unmarshalNRetryInventoryDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryInventoryDraftInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -14177,6 +17105,34 @@ func (ec *executionContext) field_Mutation_skipProjectStage_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_splitInventoryItem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (SplitInventoryItemInput, error) {
+			return ec.unmarshalNSplitInventoryItemInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSplitInventoryItemInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_startBaselineDraftFromInspection_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (StartBaselineDraftFromInspectionInput, error) {
+			return ec.unmarshalNStartBaselineDraftFromInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐStartBaselineDraftFromInspectionInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_startProjectStage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14247,6 +17203,20 @@ func (ec *executionContext) field_Mutation_updateAsset_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateBaselinePolicy_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (UpdateBaselinePolicyInput, error) {
+			return ec.unmarshalNUpdateBaselinePolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateBaselinePolicyInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateSchedule_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14303,6 +17273,20 @@ func (ec *executionContext) field_Mutation_upsertBusinessUnit_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_upsertInventoryEnvironment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (UpsertInventoryEnvironmentInput, error) {
+			return ec.unmarshalNUpsertInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpsertInventoryEnvironmentInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_upsertParticipant_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14337,6 +17321,20 @@ func (ec *executionContext) field_Mutation_verifyContact_args(ctx context.Contex
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (VerifyContactInput, error) {
 			return ec.unmarshalNVerifyContactInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyContactInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_verifyCounterpartyOtp_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (VerifyCounterpartyOtpInput, error) {
+			return ec.unmarshalNVerifyCounterpartyOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyCounterpartyOtpInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -14412,6 +17410,14 @@ func (ec *executionContext) field_Query_analysisPrompt_args(ctx context.Context,
 		return nil, err
 	}
 	args["type"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "task",
+		func(ctx context.Context, v any) (*AnalysisPromptTask, error) {
+			return ec.unmarshalOAnalysisPromptTask2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["task"] = arg1
 	return args, nil
 }
 
@@ -14486,6 +17492,58 @@ func (ec *executionContext) field_Query_auditEvents_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["after"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_baselineInventory_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "assetId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["assetId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "versionId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["versionId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_baselineVersions_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "assetId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["assetId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
 	return args, nil
 }
 
@@ -14756,6 +17814,34 @@ func (ec *executionContext) field_Query_inspections_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["statusGroup"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_inventoryDraft_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "originVersionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["originVersionId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_inventoryTrail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "originVersionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["originVersionId"] = arg0
 	return args, nil
 }
 
@@ -15644,6 +18730,29 @@ func (ec *executionContext) _AnalysisPrompt_analysisType(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_AnalysisPrompt_analysisType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type AnalysisType does not have child fields"))
+}
+
+func (ec *executionContext) _AnalysisPrompt_task(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AnalysisPrompt_task(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Task, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v AnalysisPromptTask) graphql.Marshaler {
+			return ec.marshalNAnalysisPromptTask2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AnalysisPrompt_task(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AnalysisPrompt", field, false, false, errors.New("field of type AnalysisPromptTask does not have child fields"))
 }
 
 func (ec *executionContext) _AnalysisPrompt_systemPrompt(ctx context.Context, field graphql.CollectedField, obj *AnalysisPrompt) (ret graphql.Marshaler) {
@@ -16748,6 +19857,557 @@ func (ec *executionContext) fieldContext_AuditEventConnection_pageInfo(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _BaselineCounterpartyInvitation_id(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_participantId(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_participantId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ParticipantID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_participantId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_response(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_response(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Response, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_response(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_deadlineAt(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_deadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_deadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_respondedAt(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_respondedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RespondedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_respondedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_statement(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_statement(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Statement, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_statement(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_resolution(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_resolution(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Resolution, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_resolution(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_resolutionReason(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_resolutionReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResolutionReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_resolutionReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_adjustmentVersionId(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_adjustmentVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AdjustmentVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_adjustmentVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_deliveryStatus(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_deliveryStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_deliveryStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation_deliveryId(ctx context.Context, field graphql.CollectedField, obj *BaselineCounterpartyInvitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineCounterpartyInvitation_deliveryId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineCounterpartyInvitation_deliveryId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineCounterpartyInvitation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineInventory_hasInventory(ctx context.Context, field graphql.CollectedField, obj *BaselineInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineInventory_hasInventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasInventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineInventory_hasInventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselineInventory", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _BaselineInventory_version(ctx context.Context, field graphql.CollectedField, obj *BaselineInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineInventory_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersion) graphql.Marshaler {
+			return ec.marshalOOriginVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineInventory_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BaselineInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BaselineInventory_environments(ctx context.Context, field graphql.CollectedField, obj *BaselineInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselineInventory_environments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryEnvironment) graphql.Marshaler {
+			return ec.marshalNInventoryEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselineInventory_environments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BaselineInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BaselinePolicy_contestationDeadlineDays(ctx context.Context, field graphql.CollectedField, obj *BaselinePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselinePolicy_contestationDeadlineDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ContestationDeadlineDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselinePolicy_contestationDeadlineDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselinePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _BaselinePolicy_version(ctx context.Context, field graphql.CollectedField, obj *BaselinePolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselinePolicy_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselinePolicy_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselinePolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _BaselinePolicyPayload_policy(ctx context.Context, field graphql.CollectedField, obj *BaselinePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselinePolicyPayload_policy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Policy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+			return ec.marshalOBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BaselinePolicyPayload_policy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BaselinePolicyPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselinePolicy(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BaselinePolicyPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *BaselinePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselinePolicyPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselinePolicyPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BaselinePolicyPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BaselinePolicyPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *BaselinePolicyPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BaselinePolicyPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BaselinePolicyPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BaselinePolicyPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _BulkAcceptInventoryEnvironmentPayload_acceptedCount(ctx context.Context, field graphql.CollectedField, obj *BulkAcceptInventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_acceptedCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AcceptedCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BulkAcceptInventoryEnvironmentPayload_acceptedCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BulkAcceptInventoryEnvironmentPayload", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _BulkAcceptInventoryEnvironmentPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *BulkAcceptInventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BulkAcceptInventoryEnvironmentPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BulkAcceptInventoryEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BulkAcceptInventoryEnvironmentPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *BulkAcceptInventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BulkAcceptInventoryEnvironmentPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BulkAcceptInventoryEnvironmentPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BulkAcceptInventoryEnvironmentPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _BusinessUnit_id(ctx context.Context, field graphql.CollectedField, obj *BusinessUnit) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17106,6 +20766,277 @@ func (ec *executionContext) fieldContext_CaptureAnswer_version(_ context.Context
 	return graphql.NewScalarFieldContext("CaptureAnswer", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _CaptureEnvironment_requirementKey(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_identityId(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_identityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_identityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_typeCode(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_name(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_expected(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_expected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Expected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_addedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_addedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_addedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_mediaCount(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_mediaCount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaCount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_mediaCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironment_status(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironment_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironment_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_environment(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_environment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environment, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+			return ec.marshalOCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_environment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureEnvironmentPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CaptureEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureEnvironmentPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureEnvironmentPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureEnvironmentPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CapturePayload_status(ctx context.Context, field graphql.CollectedField, obj *CapturePayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17182,6 +21113,84 @@ func (ec *executionContext) _CapturePayload_clientMutationId(ctx context.Context
 }
 func (ec *executionContext) fieldContext_CapturePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CapturePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_flags(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_flags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Flags, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_flags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureQualityWarningPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CaptureQualityWarningPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CaptureQualityWarningPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CaptureQualityWarningPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureQualityWarningPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureQualityWarningPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureQualityWarningPayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CaptureReferenceItem_mediaId(ctx context.Context, field graphql.CollectedField, obj *CaptureReferenceItem) (ret graphql.Marshaler) {
@@ -17803,6 +21812,1256 @@ func (ec *executionContext) _CaptureRequirement_impossibilityAllowed(ctx context
 }
 func (ec *executionContext) fieldContext_CaptureRequirement_impossibilityAllowed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentIdentityId(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentIdentityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentIdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentIdentityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentTypeCode(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentTypeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentTypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentTypeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_environmentName(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_environmentName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_environmentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_expected(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_expected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Expected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureRequirement_addedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *CaptureRequirement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureRequirement_addedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureRequirement_addedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureRequirement", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReviewHandoff_inspectionId(ctx context.Context, field graphql.CollectedField, obj *CaptureReviewHandoff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReviewHandoff_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReviewHandoff_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReviewHandoff", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CaptureReviewHandoff_originVersionId(ctx context.Context, field graphql.CollectedField, obj *CaptureReviewHandoff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CaptureReviewHandoff_originVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CaptureReviewHandoff_originVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CaptureReviewHandoff", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ContestationSummary_pending(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContestationSummary_pending(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pending, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContestationSummary_pending(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContestationSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContestationSummary_acknowledged(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContestationSummary_acknowledged(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Acknowledged, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContestationSummary_acknowledged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContestationSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContestationSummary_contested(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContestationSummary_contested(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Contested, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContestationSummary_contested(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContestationSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContestationSummary_open(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContestationSummary_open(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContestationSummary_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContestationSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ContestationSummary_noResponse(ctx context.Context, field graphql.CollectedField, obj *ContestationSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ContestationSummary_noResponse(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoResponse, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ContestationSummary_noResponse(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ContestationSummary", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_baseline(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_baseline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Baseline, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyBaselineInventory) graphql.Marshaler {
+			return ec.marshalNCounterpartyBaselineInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineInventory(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_baseline(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyBaseline",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyBaselineInventory(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyBaseline_purpose(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_purpose(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_activatedAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_activatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActivatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_activatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_deadlineAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_deadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_deadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_response(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_response(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Response, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_response(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_respondedAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_respondedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RespondedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_respondedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_resolution(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_resolution(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Resolution, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_resolution(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_resolutionReason(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_resolutionReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResolutionReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_resolutionReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_adjustmentStatus(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_adjustmentStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AdjustmentStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_adjustmentStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_newerVersionExists(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_newerVersionExists(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewerVersionExists, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_newerVersionExists(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaseline_readOnly(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaseline) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaseline_readOnly(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReadOnly, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaseline_readOnly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaseline", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEnvironment_typeCode(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEnvironment_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEnvironment_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEnvironment_name(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEnvironment_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEnvironment_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEnvironment_items(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEnvironment_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CounterpartyBaselineItem) graphql.Marshaler {
+			return ec.marshalNCounterpartyBaselineItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEnvironment_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyBaselineEnvironment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyBaselineItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_kind(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_position(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_position(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Position, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_url(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence_timestampMs(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineEvidence_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineEvidence_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineInventory_hasInventory(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineInventory_hasInventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasInventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineInventory_hasInventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineInventory", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineInventory_environments(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineInventory_environments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CounterpartyBaselineEnvironment) graphql.Marshaler {
+			return ec.marshalNCounterpartyBaselineEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEnvironmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineInventory_environments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyBaselineInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyBaselineEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_typeCode(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_name(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_material(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_material(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Material, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_material(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_color(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_color(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_quantity(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_quantity(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Quantity, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_quantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_condition(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_condition(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Condition, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_condition(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_observation(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_observation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Observation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_observation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_limitation(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_limitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Limitation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_limitation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyBaselineItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyBaselineItem_evidence(ctx context.Context, field graphql.CollectedField, obj *CounterpartyBaselineItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyBaselineItem_evidence(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Evidence, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CounterpartyBaselineEvidence) graphql.Marshaler {
+			return ec.marshalNCounterpartyBaselineEvidence2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEvidenceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyBaselineItem_evidence(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyBaselineItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyBaselineEvidence(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_invitationId(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_invitationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InvitationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_invitationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_response(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_response(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Response, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_response(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_deadlineAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_deadlineAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeadlineAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_deadlineAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_resolution(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_resolution(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Resolution, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_resolution(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_adjustmentVersionId(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_adjustmentVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AdjustmentVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_adjustmentVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyInvitationPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyInvitationPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CounterpartyInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyInvitationPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyInvitationPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyResponsePayload_response(ctx context.Context, field graphql.CollectedField, obj *CounterpartyResponsePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyResponsePayload_response(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Response, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyResponsePayload_response(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyResponsePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyResponsePayload_respondedAt(ctx context.Context, field graphql.CollectedField, obj *CounterpartyResponsePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyResponsePayload_respondedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RespondedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyResponsePayload_respondedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyResponsePayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CounterpartyResponsePayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *CounterpartyResponsePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyResponsePayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyResponsePayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CounterpartyResponsePayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CounterpartyResponsePayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *CounterpartyResponsePayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CounterpartyResponsePayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CounterpartyResponsePayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CounterpartyResponsePayload", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CreateTenantPayload_tenant(ctx context.Context, field graphql.CollectedField, obj *CreateTenantPayload) (ret graphql.Marshaler) {
@@ -18485,6 +23744,571 @@ func (ec *executionContext) fieldContext_CustomerEvidenceItem_url(_ context.Cont
 	return graphql.NewScalarFieldContext("CustomerEvidenceItem", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _CustomerInventory_referenceVersionNumber(ctx context.Context, field graphql.CollectedField, obj *CustomerInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventory_referenceVersionNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReferenceVersionNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventory_referenceVersionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventory", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventory_purpose(ctx context.Context, field graphql.CollectedField, obj *CustomerInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventory_purpose(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventory_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventory", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventory_coverage(ctx context.Context, field graphql.CollectedField, obj *CustomerInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventory_coverage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Coverage, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CustomerInventoryCoverage) graphql.Marshaler {
+			return ec.marshalOCustomerInventoryCoverage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryCoverage(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventory_coverage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventoryCoverage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CustomerInventory_problems(ctx context.Context, field graphql.CollectedField, obj *CustomerInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventory_problems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Problems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CustomerInventoryEntry) graphql.Marshaler {
+			return ec.marshalNCustomerInventoryEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventory_problems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventoryEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CustomerInventory_informational(ctx context.Context, field graphql.CollectedField, obj *CustomerInventory) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventory_informational(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Informational, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CustomerInventoryEntry) graphql.Marshaler {
+			return ec.marshalNCustomerInventoryEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventory_informational(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerInventory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventoryEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CustomerInventoryCoverage_expectedItems(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryCoverage_expectedItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpectedItems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryCoverage_expectedItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryCoverage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryCoverage_assessedItems(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryCoverage_assessedItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssessedItems, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryCoverage_assessedItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryCoverage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryCoverage_notObserved(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryCoverage_notObserved(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotObserved, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryCoverage_notObserved(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryCoverage", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryCoverage_environmentsNotCaptured(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryCoverage_environmentsNotCaptured(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentsNotCaptured, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryCoverage_environmentsNotCaptured(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryCoverage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryCoverage_environmentsAddedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryCoverage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryCoverage_environmentsAddedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentsAddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryCoverage_environmentsAddedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryCoverage", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_environment(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_environment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environment, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_environment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_type(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_type(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_name(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_status(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_conditionBefore(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_conditionBefore(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConditionBefore, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_conditionBefore(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_conditionAfter(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_conditionAfter(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConditionAfter, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_conditionAfter(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_reason(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_reason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryEntry_pairs(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryEntry_pairs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pairs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CustomerInventoryPair) graphql.Marshaler {
+			return ec.marshalNCustomerInventoryPair2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryPairᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryEntry_pairs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerInventoryEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventoryPair(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CustomerInventoryPair_originEvidenceId(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryPair) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryPair_originEvidenceId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginEvidenceID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryPair_originEvidenceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryPair", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryPair_currentEvidenceId(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryPair) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryPair_currentEvidenceId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentEvidenceID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryPair_currentEvidenceId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryPair", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryPair_originSourceAvailability(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryPair) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryPair_originSourceAvailability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginSourceAvailability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryPair_originSourceAvailability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryPair", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryPair_currentSourceAvailability(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryPair) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryPair_currentSourceAvailability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentSourceAvailability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryPair_currentSourceAvailability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryPair", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerInventoryPair_timestampMs(ctx context.Context, field graphql.CollectedField, obj *CustomerInventoryPair) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerInventoryPair_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerInventoryPair_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerInventoryPair", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _CustomerPortfolioConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18569,6 +24393,75 @@ func (ec *executionContext) _CustomerPortfolioItem_assetId(ctx context.Context, 
 	)
 }
 func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerPortfolioItem_assetName(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_assetName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerPortfolioItem_assetExternalKey(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_assetExternalKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetExternalKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_assetExternalKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CustomerPortfolioItem_latestPublishedInspectionId(ctx context.Context, field graphql.CollectedField, obj *CustomerPortfolioItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LatestPublishedInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerPortfolioItem_latestPublishedInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CustomerPortfolioItem", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
@@ -18907,6 +24800,38 @@ func (ec *executionContext) fieldContext_CustomerReport_requirements(_ context.C
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ReportRequirement(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CustomerReport_inventory(ctx context.Context, field graphql.CollectedField, obj *CustomerReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CustomerReport_inventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Inventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CustomerInventory) graphql.Marshaler {
+			return ec.marshalOCustomerInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventory(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CustomerReport_inventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CustomerReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventory(ctx, field)
 		},
 	}
 	return fc, nil
@@ -19436,6 +25361,29 @@ func (ec *executionContext) fieldContext_ExternalCapture_templateVersionId(_ con
 	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _ExternalCapture_captureLayout(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_captureLayout(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CaptureLayout, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_captureLayout(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ExternalCapture", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _ExternalCapture_reference(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19541,6 +25489,70 @@ func (ec *executionContext) fieldContext_ExternalCapture_requirements(_ context.
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_CaptureRequirement(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExternalCapture_environments(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_environments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*CaptureEnvironment) graphql.Marshaler {
+			return ec.marshalNCaptureEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_environments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExternalCapture",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExternalCapture_reviewHandoff(ctx context.Context, field graphql.CollectedField, obj *ExternalCapture) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ExternalCapture_reviewHandoff(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewHandoff, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureReviewHandoff) graphql.Marshaler {
+			return ec.marshalOCaptureReviewHandoff2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReviewHandoff(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ExternalCapture_reviewHandoff(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExternalCapture",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureReviewHandoff(ctx, field)
 		},
 	}
 	return fc, nil
@@ -22104,6 +28116,1880 @@ func (ec *executionContext) _InternalUserActivationPayload_clientMutationId(ctx 
 }
 func (ec *executionContext) fieldContext_InternalUserActivationPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("InternalUserActivationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryCounts_included(ctx context.Context, field graphql.CollectedField, obj *InventoryCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryCounts_included(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Included, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryCounts_included(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryCounts_rejected(ctx context.Context, field graphql.CollectedField, obj *InventoryCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryCounts_rejected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Rejected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryCounts_rejected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryCounts_notReviewed(ctx context.Context, field graphql.CollectedField, obj *InventoryCounts) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryCounts_notReviewed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotReviewed, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryCounts_notReviewed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryCounts", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryDraft_assetId(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_assetId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_assetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryDraft_version(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersion) graphql.Marshaler {
+			return ec.marshalNOriginVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersion(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryDraft_environments(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_environments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryEnvironment) graphql.Marshaler {
+			return ec.marshalNInventoryEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_environments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryDraft_progress(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_progress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Progress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryProgress) graphql.Marshaler {
+			return ec.marshalNInventoryProgress2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryProgress(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_progress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryDraft",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryProgress(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryDraft_readOnly(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_readOnly(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReadOnly, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_readOnly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryDraft_noticeCode(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_noticeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoticeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_noticeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryDraft_warnings(ctx context.Context, field graphql.CollectedField, obj *InventoryDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryDraft_warnings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Warnings, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryDraft_warnings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryDraft", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_id(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_identityId(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_identityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_identityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_typeCode(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_name(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_expected(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_expected(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Expected, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_expected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_addedDuringCapture(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_addedDuringCapture(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AddedDuringCapture, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_addedDuringCapture(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_requirementKey(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_requirementKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequirementKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_requirementKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_decision(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_decision(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Decision, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_decision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_position(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_position(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Position, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironment", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEnvironment_items(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironment_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryItem) graphql.Marshaler {
+			return ec.marshalNInventoryItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironment_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryEnvironment",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryEnvironmentPayload_environment(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironmentPayload_environment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Environment, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryEnvironment) graphql.Marshaler {
+			return ec.marshalOInventoryEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironment(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironmentPayload_environment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEnvironment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryEnvironmentPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironmentPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironmentPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryEnvironmentPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryEnvironmentPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *InventoryEnvironmentPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEnvironmentPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEnvironmentPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEnvironmentPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_id(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_kind(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_mediaId(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_mediaId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_mediaId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_frameId(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_frameId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FrameID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_frameId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_timestampMs(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_timestampMs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampMs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_timestampMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_url(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_url(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.URL, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_url(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_region(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_region(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Region, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalOJSON2map(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_region(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_position(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_position(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Position, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_position(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_availability(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_availability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Availability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_availability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryEvidence_retentionAvailability(ctx context.Context, field graphql.CollectedField, obj *InventoryEvidence) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryEvidence_retentionAvailability(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RetentionAvailability, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryEvidence_retentionAvailability(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryEvidence", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_id(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_identityId(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_identityId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.IdentityID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_identityId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_environmentId(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_environmentId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EnvironmentID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_environmentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_typeCode(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_typeCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TypeCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_typeCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_name(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_material(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_material(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Material, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_material(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_color(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_color(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_quantity(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_quantity(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Quantity, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_quantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_condition(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_condition(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Condition, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_condition(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_observation(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_observation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Observation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_observation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_limitation(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_limitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Limitation, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_limitation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_confidenceBps(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_confidenceBps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConfidenceBps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_confidenceBps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_origin(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_origin(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Origin, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_origin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_declared(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_declared(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Declared, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_declared(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_decision(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_decision(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Decision, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_decision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_rejectionReason(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_rejectionReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RejectionReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_rejectionReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_rejectionText(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_rejectionText(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RejectionText, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_rejectionText(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_suggested(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_suggested(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Suggested, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalOJSON2map(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_suggested(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_version(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItem", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItem_evidence(ctx context.Context, field graphql.CollectedField, obj *InventoryItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItem_evidence(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Evidence, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryEvidence) graphql.Marshaler {
+			return ec.marshalNInventoryEvidence2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItem_evidence(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEvidence(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItemPayload_item(ctx context.Context, field graphql.CollectedField, obj *InventoryItemPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemPayload_item(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Item, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryItem) graphql.Marshaler {
+			return ec.marshalOInventoryItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItem(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemPayload_item(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItemPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItemPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *InventoryItemPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItemPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItemPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *InventoryItemPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItemPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItemsPayload_items(ctx context.Context, field graphql.CollectedField, obj *InventoryItemsPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemsPayload_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryItem) graphql.Marshaler {
+			return ec.marshalNInventoryItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemsPayload_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItemsPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItem(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItemsPayload_emptyEnvironments(ctx context.Context, field graphql.CollectedField, obj *InventoryItemsPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemsPayload_emptyEnvironments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EmptyEnvironments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNID2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemsPayload_emptyEnvironments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItemsPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryItemsPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *InventoryItemsPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemsPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemsPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryItemsPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryItemsPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *InventoryItemsPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryItemsPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryItemsPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryItemsPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryProgress_decided(ctx context.Context, field graphql.CollectedField, obj *InventoryProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryProgress_decided(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Decided, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryProgress_decided(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryProgress", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryProgress_pending(ctx context.Context, field graphql.CollectedField, obj *InventoryProgress) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryProgress_pending(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pending, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryProgress_pending(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryProgress", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrail_suggestions(ctx context.Context, field graphql.CollectedField, obj *InventoryTrail) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrail_suggestions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Suggestions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryTrailEntry) graphql.Marshaler {
+			return ec.marshalNInventoryTrailEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrail_suggestions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryTrail",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryTrailEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryTrail_decisions(ctx context.Context, field graphql.CollectedField, obj *InventoryTrail) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrail_decisions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Decisions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryTrailEntry) graphql.Marshaler {
+			return ec.marshalNInventoryTrailEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrail_decisions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryTrail",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryTrailEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryTrail_counterpartyEvents(ctx context.Context, field graphql.CollectedField, obj *InventoryTrail) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrail_counterpartyEvents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CounterpartyEvents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InventoryTrailEntry) graphql.Marshaler {
+			return ec.marshalNInventoryTrailEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrail_counterpartyEvents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InventoryTrail",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryTrailEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InventoryTrailEntry_id(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_targetType(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_targetType(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetType, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_targetType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_targetId(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_targetId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TargetID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_targetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_action(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_action(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_before(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_before(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Before, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalOJSON2map(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_after(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_after(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.After, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalOJSON2map(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_after(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type JSON does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_reason(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_reason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_statement(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_statement(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Statement, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_statement(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_resolutionReason(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_resolutionReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ResolutionReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_resolutionReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_actorMembershipId(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_actorMembershipId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActorMembershipID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_actorMembershipId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InventoryTrailEntry_occurredAt(ctx context.Context, field graphql.CollectedField, obj *InventoryTrailEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InventoryTrailEntry_occurredAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OccurredAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InventoryTrailEntry_occurredAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InventoryTrailEntry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _InvitationOtpPayload_status(ctx context.Context, field graphql.CollectedField, obj *InvitationOtpPayload) (ret graphql.Marshaler) {
@@ -25853,6 +33739,314 @@ func (ec *executionContext) fieldContext_Mutation_verifyInvitationOtp(ctx contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_requestCounterpartyOtp(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestCounterpartyOtp(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestCounterpartyOtp(ctx, fc.Args["input"].(RequestCounterpartyOtpInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InvitationOtpPayload) graphql.Marshaler {
+			return ec.marshalNInvitationOtpPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInvitationOtpPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestCounterpartyOtp(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InvitationOtpPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestCounterpartyOtp_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_verifyCounterpartyOtp(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_verifyCounterpartyOtp(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().VerifyCounterpartyOtp(ctx, fc.Args["input"].(VerifyCounterpartyOtpInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ExternalSessionPayload) graphql.Marshaler {
+			return ec.marshalNExternalSessionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐExternalSessionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_verifyCounterpartyOtp(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ExternalSessionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_verifyCounterpartyOtp_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_acknowledgeBaseline(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_acknowledgeBaseline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AcknowledgeBaseline(ctx, fc.Args["input"].(CounterpartyResponseInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyResponsePayload) graphql.Marshaler {
+			return ec.marshalNCounterpartyResponsePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyResponsePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_acknowledgeBaseline(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyResponsePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_acknowledgeBaseline_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_contestBaseline(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_contestBaseline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ContestBaseline(ctx, fc.Args["input"].(ContestBaselineInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyResponsePayload) graphql.Marshaler {
+			return ec.marshalNCounterpartyResponsePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyResponsePayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_contestBaseline(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyResponsePayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_contestBaseline_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_resolveBaselineContestation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_resolveBaselineContestation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResolveBaselineContestation(ctx, fc.Args["input"].(ResolveBaselineContestationInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyInvitationPayload) graphql.Marshaler {
+			return ec.marshalNCounterpartyInvitationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyInvitationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_resolveBaselineContestation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyInvitationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resolveBaselineContestation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_resendCounterpartyInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_resendCounterpartyInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResendCounterpartyInvitation(ctx, fc.Args["input"].(ResendCounterpartyInvitationInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyInvitationPayload) graphql.Marshaler {
+			return ec.marshalNCounterpartyInvitationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyInvitationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_resendCounterpartyInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyInvitationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resendCounterpartyInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateBaselinePolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateBaselinePolicy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateBaselinePolicy(ctx, fc.Args["input"].(UpdateBaselinePolicyInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BaselinePolicyPayload) graphql.Marshaler {
+			return ec.marshalNBaselinePolicyPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicyPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateBaselinePolicy(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselinePolicyPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateBaselinePolicy_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_revokeInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26155,6 +34349,534 @@ func (ec *executionContext) fieldContext_Mutation_promoteInspectionVideo(ctx con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_promoteInspectionVideo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_decideInventoryItems(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_decideInventoryItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DecideInventoryItems(ctx, fc.Args["input"].(DecideInventoryItemsInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryItemsPayload) graphql.Marshaler {
+			return ec.marshalNInventoryItemsPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemsPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_decideInventoryItems(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItemsPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_decideInventoryItems_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_bulkAcceptInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_bulkAcceptInventoryEnvironment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().BulkAcceptInventoryEnvironment(ctx, fc.Args["input"].(BulkAcceptInventoryEnvironmentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BulkAcceptInventoryEnvironmentPayload) graphql.Marshaler {
+			return ec.marshalNBulkAcceptInventoryEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBulkAcceptInventoryEnvironmentPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_bulkAcceptInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BulkAcceptInventoryEnvironmentPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_bulkAcceptInventoryEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addInventoryItem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addInventoryItem(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddInventoryItem(ctx, fc.Args["input"].(AddInventoryItemInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryItemPayload) graphql.Marshaler {
+			return ec.marshalNInventoryItemPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addInventoryItem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItemPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addInventoryItem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_mergeInventoryItems(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_mergeInventoryItems(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MergeInventoryItems(ctx, fc.Args["input"].(MergeInventoryItemsInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryItemPayload) graphql.Marshaler {
+			return ec.marshalNInventoryItemPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_mergeInventoryItems(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItemPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_mergeInventoryItems_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_splitInventoryItem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_splitInventoryItem(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SplitInventoryItem(ctx, fc.Args["input"].(SplitInventoryItemInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryItemsPayload) graphql.Marshaler {
+			return ec.marshalNInventoryItemsPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemsPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_splitInventoryItem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryItemsPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_splitInventoryItem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_upsertInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_upsertInventoryEnvironment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpsertInventoryEnvironment(ctx, fc.Args["input"].(UpsertInventoryEnvironmentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryEnvironmentPayload) graphql.Marshaler {
+			return ec.marshalNInventoryEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_upsertInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEnvironmentPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_upsertInventoryEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_removeInventoryEnvironment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RemoveInventoryEnvironment(ctx, fc.Args["input"].(RemoveInventoryEnvironmentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryEnvironmentPayload) graphql.Marshaler {
+			return ec.marshalNInventoryEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_removeInventoryEnvironment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryEnvironmentPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeInventoryEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_activateBaselineVersion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_activateBaselineVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ActivateBaselineVersion(ctx, fc.Args["input"].(ActivateBaselineVersionInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionPayload) graphql.Marshaler {
+			return ec.marshalNOriginVersionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_activateBaselineVersion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_activateBaselineVersion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_discardBaselineDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_discardBaselineDraft(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DiscardBaselineDraft(ctx, fc.Args["input"].(DiscardBaselineDraftInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionPayload) graphql.Marshaler {
+			return ec.marshalNOriginVersionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_discardBaselineDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_discardBaselineDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_requestOriginCataloging(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_requestOriginCataloging(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RequestOriginCataloging(ctx, fc.Args["input"].(RequestOriginCatalogingInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionPayload) graphql.Marshaler {
+			return ec.marshalNOriginVersionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_requestOriginCataloging(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_requestOriginCataloging_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_retryInventoryDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_retryInventoryDraft(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RetryInventoryDraft(ctx, fc.Args["input"].(RetryInventoryDraftInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionPayload) graphql.Marshaler {
+			return ec.marshalNOriginVersionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_retryInventoryDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_retryInventoryDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_startBaselineDraftFromInspection(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_startBaselineDraftFromInspection(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().StartBaselineDraftFromInspection(ctx, fc.Args["input"].(StartBaselineDraftFromInspectionInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionPayload) graphql.Marshaler {
+			return ec.marshalNOriginVersionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_startBaselineDraftFromInspection(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_startBaselineDraftFromInspection_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -27255,6 +35977,94 @@ func (ec *executionContext) fieldContext_Mutation_declareCaptureImpossibility(ct
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_declareCaptureImpossibility_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_declareCaptureEnvironment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_declareCaptureEnvironment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeclareCaptureEnvironment(ctx, fc.Args["input"].(DeclareCaptureEnvironmentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureEnvironmentPayload) graphql.Marshaler {
+			return ec.marshalNCaptureEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_declareCaptureEnvironment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureEnvironmentPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_declareCaptureEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_recordCaptureQualityWarning(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_recordCaptureQualityWarning(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RecordCaptureQualityWarning(ctx, fc.Args["input"].(RecordCaptureQualityWarningInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CaptureQualityWarningPayload) graphql.Marshaler {
+			return ec.marshalNCaptureQualityWarningPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureQualityWarningPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_recordCaptureQualityWarning(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CaptureQualityWarningPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_recordCaptureQualityWarning_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -30875,6 +39685,29 @@ func (ec *executionContext) fieldContext_OriginVersion_versionNumber(_ context.C
 	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _OriginVersion_originRevision(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_originRevision(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginRevision, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_originRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _OriginVersion_status(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31128,6 +39961,240 @@ func (ec *executionContext) fieldContext_OriginVersion_activatedAt(_ context.Con
 	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _OriginVersion_activatedBy(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_activatedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActivatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_activatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_purpose(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_purpose(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_source(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_sourceInspectionId(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_sourceInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_sourceInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_hasInventory(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_hasInventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasInventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_hasInventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_draftState(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_draftState(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DraftState, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_draftState(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersion_counts(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_counts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Counts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryCounts) graphql.Marshaler {
+			return ec.marshalOInventoryCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryCounts(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_counts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginVersion",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryCounts(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OriginVersion_contestationSummary(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_contestationSummary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ContestationSummary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ContestationSummary) graphql.Marshaler {
+			return ec.marshalOContestationSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐContestationSummary(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_contestationSummary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginVersion",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ContestationSummary(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OriginVersion_counterpartyInvitations(ctx context.Context, field graphql.CollectedField, obj *OriginVersion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersion_counterpartyInvitations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.OriginVersion().CounterpartyInvitations(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*BaselineCounterpartyInvitation) graphql.Marshaler {
+			return ec.marshalNBaselineCounterpartyInvitation2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineCounterpartyInvitationᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersion_counterpartyInvitations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OriginVersion",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselineCounterpartyInvitation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OriginVersionConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *OriginVersionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31222,6 +40289,52 @@ func (ec *executionContext) fieldContext_OriginVersionPayload_version(_ context.
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _OriginVersionPayload_warnings(ctx context.Context, field graphql.CollectedField, obj *OriginVersionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersionPayload_warnings(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Warnings, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersionPayload_warnings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersionPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _OriginVersionPayload_sourcesExpired(ctx context.Context, field graphql.CollectedField, obj *OriginVersionPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OriginVersionPayload_sourcesExpired(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourcesExpired, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *bool) graphql.Marshaler {
+			return ec.marshalOBoolean2ᚖbool(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_OriginVersionPayload_sourcesExpired(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("OriginVersionPayload", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _OriginVersionPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *OriginVersionPayload) (ret graphql.Marshaler) {
@@ -33555,7 +42668,7 @@ func (ec *executionContext) _Query_analysisPrompt(ctx context.Context, field gra
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().AnalysisPrompt(ctx, fc.Args["type"].(AnalysisType))
+			return ec.Resolvers.Query().AnalysisPrompt(ctx, fc.Args["type"].(AnalysisType), fc.Args["task"].(*AnalysisPromptTask))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *AnalysisPrompt) graphql.Marshaler {
@@ -34283,6 +43396,246 @@ func (ec *executionContext) fieldContext_Query_originVersions(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_originVersions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_baselineVersions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_baselineVersions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().BaselineVersions(ctx, fc.Args["assetId"].(string), fc.Args["first"].(*int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersionConnection) graphql.Marshaler {
+			return ec.marshalNOriginVersionConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersionConnection(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_baselineVersions(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersionConnection(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_baselineVersions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_inventoryDraft(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_inventoryDraft(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().InventoryDraft(ctx, fc.Args["originVersionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryDraft) graphql.Marshaler {
+			return ec.marshalOInventoryDraft2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDraft(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_inventoryDraft(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryDraft(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_inventoryDraft_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_baselineInventory(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_baselineInventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().BaselineInventory(ctx, fc.Args["assetId"].(string), fc.Args["versionId"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BaselineInventory) graphql.Marshaler {
+			return ec.marshalOBaselineInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineInventory(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_baselineInventory(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselineInventory(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_baselineInventory_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_baselinePolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_baselinePolicy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().BaselinePolicy(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+			return ec.marshalNBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_baselinePolicy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BaselinePolicy(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_counterpartyBaseline(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_counterpartyBaseline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().CounterpartyBaseline(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CounterpartyBaseline) graphql.Marshaler {
+			return ec.marshalNCounterpartyBaseline2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaseline(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_counterpartyBaseline(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CounterpartyBaseline(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_inventoryTrail(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_inventoryTrail(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().InventoryTrail(ctx, fc.Args["originVersionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InventoryTrail) graphql.Marshaler {
+			return ec.marshalNInventoryTrail2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrail(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_inventoryTrail(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InventoryTrail(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_inventoryTrail_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -37023,6 +46376,38 @@ func (ec *executionContext) fieldContext_Report_requirements(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ReportRequirement(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Report_inventory(ctx context.Context, field graphql.CollectedField, obj *Report) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Report_inventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Inventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CustomerInventory) graphql.Marshaler {
+			return ec.marshalOCustomerInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventory(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Report_inventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Report",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CustomerInventory(ctx, field)
 		},
 	}
 	return fc, nil
@@ -44238,6 +53623,29 @@ func (ec *executionContext) fieldContext_UserError_correlationId(_ context.Conte
 	return graphql.NewScalarFieldContext("UserError", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _UserError_pendingRequirementKeys(ctx context.Context, field graphql.CollectedField, obj *UserError) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_UserError_pendingRequirementKeys(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PendingRequirementKeys, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_UserError_pendingRequirementKeys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("UserError", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _VideoAdmission_enabled(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -44777,6 +54185,29 @@ func (ec *executionContext) _VideoPolicy_currentRetentionDays(ctx context.Contex
 	)
 }
 func (ec *executionContext) fieldContext_VideoPolicy_currentRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPolicy", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPolicy_supersededBaselineRetentionDays(ctx context.Context, field graphql.CollectedField, obj *VideoPolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPolicy_supersededBaselineRetentionDays(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SupersededBaselineRetentionDays, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPolicy_supersededBaselineRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("VideoPolicy", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -45539,6 +54970,75 @@ func (ec *executionContext) _VideoPreparationStatus_processedFrames(ctx context.
 	)
 }
 func (ec *executionContext) fieldContext_VideoPreparationStatus_processedFrames(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPreparationStatus_framesSampled(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesSampled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesSampled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesSampled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPreparationStatus_framesRetained(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesRetained(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesRetained, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesRetained(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _VideoPreparationStatus_framesRepresentative(ctx context.Context, field graphql.CollectedField, obj *VideoPreparationStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_VideoPreparationStatus_framesRepresentative(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FramesRepresentative, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_VideoPreparationStatus_framesRepresentative(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("VideoPreparationStatus", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
@@ -47203,6 +56703,64 @@ func (ec *executionContext) unmarshalInputAcceptProcessingInput(ctx context.Cont
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputActivateBaselineVersionInput(ctx context.Context, obj any) (ActivateBaselineVersionInput, error) {
+	var it ActivateBaselineVersionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "purpose", "expectedOriginVersion", "counterpartyParticipantIds", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "purpose":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("purpose"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Purpose = data
+		case "expectedOriginVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedOriginVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedOriginVersion = data
+		case "counterpartyParticipantIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("counterpartyParticipantIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CounterpartyParticipantIds = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputActivateSegmentDefinitionInput(ctx context.Context, obj any) (ActivateSegmentDefinitionInput, error) {
 	var it ActivateSegmentDefinitionInput
 	if obj == nil {
@@ -47351,6 +56909,113 @@ func (ec *executionContext) unmarshalInputAddExceptionalStageInput(ctx context.C
 				return it, err
 			}
 			it.PlannedAt = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputAddInventoryItemInput(ctx context.Context, obj any) (AddInventoryItemInput, error) {
+	var it AddInventoryItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "environmentId", "typeCode", "name", "material", "color", "quantity", "condition", "observation", "limitation", "evidence", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "material":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("material"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Material = data
+		case "color":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("color"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Color = data
+		case "quantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Quantity = data
+		case "condition":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("condition"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Condition = data
+		case "observation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("observation"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Observation = data
+		case "limitation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limitation"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Limitation = data
+		case "evidence":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("evidence"))
+			data, err := ec.unmarshalNInventoryEvidenceInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Evidence = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -47675,7 +57340,7 @@ func (ec *executionContext) unmarshalInputBeginVideoCaptureInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"acquisitionSource", "replacesMediaId", "clientMutationId"}
+	fieldsInOrder := [...]string{"acquisitionSource", "requirementKey", "replacesMediaId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -47689,6 +57354,13 @@ func (ec *executionContext) unmarshalInputBeginVideoCaptureInput(ctx context.Con
 				return it, err
 			}
 			it.AcquisitionSource = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
 		case "replacesMediaId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("replacesMediaId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -47696,6 +57368,61 @@ func (ec *executionContext) unmarshalInputBeginVideoCaptureInput(ctx context.Con
 				return it, err
 			}
 			it.ReplacesMediaID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputBulkAcceptInventoryEnvironmentInput(ctx context.Context, obj any) (BulkAcceptInventoryEnvironmentInput, error) {
+	var it BulkAcceptInventoryEnvironmentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["minimumConfidenceBps"]; !present {
+		asMap["minimumConfidenceBps"] = 8500
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "environmentId", "minimumConfidenceBps", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "minimumConfidenceBps":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minimumConfidenceBps"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MinimumConfidenceBps = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -48203,7 +57930,7 @@ func (ec *executionContext) unmarshalInputConfigureVideoPolicyInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"maxDurationMinutes", "originRetentionDays", "currentRetentionDays", "expectedVersion", "clientMutationId"}
+	fieldsInOrder := [...]string{"maxDurationMinutes", "originRetentionDays", "currentRetentionDays", "supersededBaselineRetentionDays", "expectedVersion", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -48231,6 +57958,13 @@ func (ec *executionContext) unmarshalInputConfigureVideoPolicyInput(ctx context.
 				return it, err
 			}
 			it.CurrentRetentionDays = data
+		case "supersededBaselineRetentionDays":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("supersededBaselineRetentionDays"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SupersededBaselineRetentionDays = data
 		case "expectedVersion":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
 			data, err := ec.unmarshalNInt2int(ctx, v)
@@ -48282,6 +58016,43 @@ func (ec *executionContext) unmarshalInputContactInput(ctx context.Context, obj 
 				return it, err
 			}
 			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputContestBaselineInput(ctx context.Context, obj any) (ContestBaselineInput, error) {
+	var it ContestBaselineInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"statement", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "statement":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("statement"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Statement = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
 		}
 	}
 	return it, nil
@@ -48396,6 +58167,36 @@ func (ec *executionContext) unmarshalInputCorrectOnboardingResponsibleEmailInput
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCounterpartyResponseInput(ctx context.Context, obj any) (CounterpartyResponseInput, error) {
+	var it CounterpartyResponseInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateBusinessUnitInput(ctx context.Context, obj any) (CreateBusinessUnitInput, error) {
 	var it CreateBusinessUnitInput
 	if obj == nil {
@@ -48458,7 +58259,7 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "projectId", "stageId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "reviewerMembershipId", "projectId", "stageId", "dueAt", "deadlineAt", "reminderInstants", "reason", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -48500,6 +58301,13 @@ func (ec *executionContext) unmarshalInputCreateInspectionInput(ctx context.Cont
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "projectId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -48565,7 +58373,7 @@ func (ec *executionContext) unmarshalInputCreateMediaUploadInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"contentType", "sizeBytes", "sha256", "attemptId", "clientMutationId"}
+	fieldsInOrder := [...]string{"contentType", "sizeBytes", "sha256", "requirementKey", "attemptId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -48593,6 +58401,13 @@ func (ec *executionContext) unmarshalInputCreateMediaUploadInput(ctx context.Con
 				return it, err
 			}
 			it.Sha256 = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
 		case "attemptId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("attemptId"))
 			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
@@ -48904,6 +58719,94 @@ func (ec *executionContext) unmarshalInputCustomerPortfolioFilter(ctx context.Co
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputDecideInventoryItemsInput(ctx context.Context, obj any) (DecideInventoryItemsInput, error) {
+	var it DecideInventoryItemsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "decisions", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "decisions":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("decisions"))
+			data, err := ec.unmarshalNInventoryDecisionInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDecisionInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Decisions = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputDeclareCaptureEnvironmentInput(ctx context.Context, obj any) (DeclareCaptureEnvironmentInput, error) {
+	var it DeclareCaptureEnvironmentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"typeCode", "name", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx context.Context, obj any) (DeclareCaptureImpossibilityInput, error) {
 	var it DeclareCaptureImpossibilityInput
 	if obj == nil {
@@ -48915,7 +58818,7 @@ func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx c
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"requirementKey", "reason", "expectedVersion", "clientMutationId"}
+	fieldsInOrder := [...]string{"requirementKey", "reason", "reasonCode", "reasonText", "expectedVersion", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -48931,11 +58834,25 @@ func (ec *executionContext) unmarshalInputDeclareCaptureImpossibilityInput(ctx c
 			it.RequirementKey = data
 		case "reason":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Reason = data
+		case "reasonCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasonCode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReasonCode = data
+		case "reasonText":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasonText"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReasonText = data
 		case "expectedVersion":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
 			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
@@ -48987,6 +58904,43 @@ func (ec *executionContext) unmarshalInputDisableMembershipInput(ctx context.Con
 				return it, err
 			}
 			it.ExpectedVersion = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputDiscardBaselineDraftInput(ctx context.Context, obj any) (DiscardBaselineDraftInput, error) {
+	var it DiscardBaselineDraftInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -49145,6 +59099,266 @@ func (ec *executionContext) unmarshalInputInvalidateReportPublicationInput(ctx c
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputInventoryDecisionInput(ctx context.Context, obj any) (InventoryDecisionInput, error) {
+	var it InventoryDecisionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"itemId", "action", "expectedVersion", "patch", "reason", "reasonText"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "itemId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("itemId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ItemID = data
+		case "action":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("action"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Action = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "patch":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("patch"))
+			data, err := ec.unmarshalOInventoryItemPatchInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemPatchInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Patch = data
+		case "reason":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Reason = data
+		case "reasonText":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasonText"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReasonText = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputInventoryEvidenceInput(ctx context.Context, obj any) (InventoryEvidenceInput, error) {
+	var it InventoryEvidenceInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"kind", "mediaId", "frameId", "region"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "mediaId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mediaId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MediaID = data
+		case "frameId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("frameId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FrameID = data
+		case "region":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("region"))
+			data, err := ec.unmarshalOJSON2map(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Region = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputInventoryItemPatchInput(ctx context.Context, obj any) (InventoryItemPatchInput, error) {
+	var it InventoryItemPatchInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"environmentId", "typeCode", "name", "material", "color", "quantity", "clearQuantity", "condition", "observation", "limitation"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "material":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("material"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Material = data
+		case "color":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("color"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Color = data
+		case "quantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("quantity"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Quantity = data
+		case "clearQuantity":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearQuantity"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearQuantity = data
+		case "condition":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("condition"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Condition = data
+		case "observation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("observation"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Observation = data
+		case "limitation":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limitation"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Limitation = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputInventorySplitPartInput(ctx context.Context, obj any) (InventorySplitPartInput, error) {
+	var it InventorySplitPartInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "typeCode", "condition", "evidenceIds"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "condition":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("condition"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Condition = data
+		case "evidenceIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("evidenceIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EvidenceIds = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputInviteInternalUserInput(ctx context.Context, obj any) (InviteInternalUserInput, error) {
 	var it InviteInternalUserInput
 	if obj == nil {
@@ -49214,7 +59428,7 @@ func (ec *executionContext) unmarshalInputInviteOriginCaptureInput(ctx context.C
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "expiresAt", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "reviewerMembershipId", "expiresAt", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -49235,6 +59449,13 @@ func (ec *executionContext) unmarshalInputInviteOriginCaptureInput(ctx context.C
 				return it, err
 			}
 			it.ParticipantID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "expiresAt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -49485,6 +59706,57 @@ func (ec *executionContext) unmarshalInputMarkNotificationReadInput(ctx context.
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMergeInventoryItemsInput(ctx context.Context, obj any) (MergeInventoryItemsInput, error) {
+	var it MergeInventoryItemsInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "itemIds", "resultEnvironmentId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "itemIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("itemIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ItemIds = data
+		case "resultEnvironmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resultEnvironmentId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ResultEnvironmentID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputOnboardingStepInput(ctx context.Context, obj any) (OnboardingStepInput, error) {
 	var it OnboardingStepInput
 	if obj == nil {
@@ -49591,7 +59863,7 @@ func (ec *executionContext) unmarshalInputPlanInspectionInput(ctx context.Contex
 		asMap["orderedStages"] = false
 	}
 
-	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "dueAt", "startsAt", "timezone", "rrule", "deadlineAt", "deadlineMinutes", "reminderInstants", "reminderOffsetsMinutes", "reason", "projectId", "projectName", "createProject", "orderedStages", "stages", "stageId", "clientMutationId"}
+	fieldsInOrder := [...]string{"assetId", "participantId", "templateId", "comparisonMode", "referenceVersionId", "reviewerMembershipId", "dueAt", "startsAt", "timezone", "rrule", "deadlineAt", "deadlineMinutes", "reminderInstants", "reminderOffsetsMinutes", "reason", "projectId", "projectName", "createProject", "orderedStages", "stages", "stageId", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -49633,6 +59905,13 @@ func (ec *executionContext) unmarshalInputPlanInspectionInput(ctx context.Contex
 				return it, err
 			}
 			it.ReferenceVersionID = data
+		case "reviewerMembershipId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reviewerMembershipId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReviewerMembershipID = data
 		case "dueAt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("dueAt"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -50311,6 +60590,57 @@ func (ec *executionContext) unmarshalInputRecaptureItemInput(ctx context.Context
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRecordCaptureQualityWarningInput(ctx context.Context, obj any) (RecordCaptureQualityWarningInput, error) {
+	var it RecordCaptureQualityWarningInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"requirementKey", "code", "ignored", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
+		case "code":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Code = data
+		case "ignored":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("ignored"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Ignored = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRecordDeletionRequestInput(ctx context.Context, obj any) (RecordDeletionRequestInput, error) {
 	var it RecordDeletionRequestInput
 	if obj == nil {
@@ -50394,6 +60724,57 @@ func (ec *executionContext) unmarshalInputRegisterAssetInput(ctx context.Context
 				return it, err
 			}
 			it.Asset = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputRemoveInventoryEnvironmentInput(ctx context.Context, obj any) (RemoveInventoryEnvironmentInput, error) {
+	var it RemoveInventoryEnvironmentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "environmentId", "confirmItemExclusion", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "confirmItemExclusion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("confirmItemExclusion"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ConfirmItemExclusion = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -50545,6 +60926,43 @@ func (ec *executionContext) unmarshalInputRequestAdminActivationOtpInput(ctx con
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRequestCounterpartyOtpInput(ctx context.Context, obj any) (RequestCounterpartyOtpInput, error) {
+	var it RequestCounterpartyOtpInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"token", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "token":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("token"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Token = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRequestInternalUserActivationOtpInput(ctx context.Context, obj any) (RequestInternalUserActivationOtpInput, error) {
 	var it RequestInternalUserActivationOtpInput
 	if obj == nil {
@@ -50670,6 +61088,43 @@ func (ec *executionContext) unmarshalInputRequestOnboardingOtpInput(ctx context.
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRequestOriginCatalogingInput(ctx context.Context, obj any) (RequestOriginCatalogingInput, error) {
+	var it RequestOriginCatalogingInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"assetId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "assetId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assetId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AssetID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRequestRecaptureInput(ctx context.Context, obj any) (RequestRecaptureInput, error) {
 	var it RequestRecaptureInput
 	if obj == nil {
@@ -50779,6 +61234,43 @@ func (ec *executionContext) unmarshalInputRequestVideoReplacementInput(ctx conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputResendCounterpartyInvitationInput(ctx context.Context, obj any) (ResendCounterpartyInvitationInput, error) {
+	var it ResendCounterpartyInvitationInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"counterpartyInvitationId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "counterpartyInvitationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("counterpartyInvitationId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CounterpartyInvitationID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputResendInternalUserInvitationInput(ctx context.Context, obj any) (ResendInternalUserInvitationInput, error) {
 	var it ResendInternalUserInvitationInput
 	if obj == nil {
@@ -50804,6 +61296,94 @@ func (ec *executionContext) unmarshalInputResendInternalUserInvitationInput(ctx 
 				return it, err
 			}
 			it.MembershipID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputResolveBaselineContestationInput(ctx context.Context, obj any) (ResolveBaselineContestationInput, error) {
+	var it ResolveBaselineContestationInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"counterpartyInvitationId", "outcome", "reason", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "counterpartyInvitationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("counterpartyInvitationId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CounterpartyInvitationID = data
+		case "outcome":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("outcome"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Outcome = data
+		case "reason":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Reason = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputRetryInventoryDraftInput(ctx context.Context, obj any) (RetryInventoryDraftInput, error) {
+	var it RetryInventoryDraftInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -51203,6 +61783,101 @@ func (ec *executionContext) unmarshalInputSkipProjectStageInput(ctx context.Cont
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputSplitInventoryItemInput(ctx context.Context, obj any) (SplitInventoryItemInput, error) {
+	var it SplitInventoryItemInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "itemId", "expectedVersion", "parts", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "itemId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("itemId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ItemID = data
+		case "expectedVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedVersion = data
+		case "parts":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("parts"))
+			data, err := ec.unmarshalNInventorySplitPartInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventorySplitPartInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Parts = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputStartBaselineDraftFromInspectionInput(ctx context.Context, obj any) (StartBaselineDraftFromInspectionInput, error) {
+	var it StartBaselineDraftFromInspectionInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputStartProjectStageInput(ctx context.Context, obj any) (StartProjectStageInput, error) {
 	var it StartProjectStageInput
 	if obj == nil {
@@ -51353,7 +62028,11 @@ func (ec *executionContext) unmarshalInputUpdateAnalysisPromptInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"analysisType", "systemPrompt", "expectedRevision", "clientMutationId"}
+	if _, present := asMap["task"]; !present {
+		asMap["task"] = "FINDINGS"
+	}
+
+	fieldsInOrder := [...]string{"analysisType", "task", "systemPrompt", "expectedRevision", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -51367,6 +62046,13 @@ func (ec *executionContext) unmarshalInputUpdateAnalysisPromptInput(ctx context.
 				return it, err
 			}
 			it.AnalysisType = data
+		case "task":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("task"))
+			data, err := ec.unmarshalOAnalysisPromptTask2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Task = data
 		case "systemPrompt":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("systemPrompt"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -51432,6 +62118,43 @@ func (ec *executionContext) unmarshalInputUpdateAssetInput(ctx context.Context, 
 				return it, err
 			}
 			it.Asset = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputUpdateBaselinePolicyInput(ctx context.Context, obj any) (UpdateBaselinePolicyInput, error) {
+	var it UpdateBaselinePolicyInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"contestationDeadlineDays", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "contestationDeadlineDays":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("contestationDeadlineDays"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ContestationDeadlineDays = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -51718,6 +62441,71 @@ func (ec *executionContext) unmarshalInputUpsertBusinessUnitInput(ctx context.Co
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpsertInventoryEnvironmentInput(ctx context.Context, obj any) (UpsertInventoryEnvironmentInput, error) {
+	var it UpsertInventoryEnvironmentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"originVersionId", "environmentId", "typeCode", "name", "expected", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "originVersionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("originVersionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OriginVersionID = data
+		case "environmentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("environmentId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnvironmentID = data
+		case "typeCode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TypeCode = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "expected":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expected"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Expected = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUpsertParticipantInput(ctx context.Context, obj any) (UpsertParticipantInput, error) {
 	var it UpsertParticipantInput
 	if obj == nil {
@@ -51859,6 +62647,50 @@ func (ec *executionContext) unmarshalInputVerifyContactInput(ctx context.Context
 				return it, err
 			}
 			it.Verified = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputVerifyCounterpartyOtpInput(ctx context.Context, obj any) (VerifyCounterpartyOtpInput, error) {
+	var it VerifyCounterpartyOtpInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"token", "code", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "token":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("token"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Token = data
+		case "code":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("code"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Code = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -52018,6 +62850,11 @@ func (ec *executionContext) _AnalysisPrompt(ctx context.Context, sel ast.Selecti
 			out.Values[i] = graphql.MarshalString("AnalysisPrompt")
 		case "analysisType":
 			out.Values[i] = ec._AnalysisPrompt_analysisType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "task":
+			out.Values[i] = ec._AnalysisPrompt_task(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -52493,6 +63330,281 @@ func (ec *executionContext) _AuditEventConnection(ctx context.Context, sel ast.S
 	return out
 }
 
+var baselineCounterpartyInvitationImplementors = []string{"BaselineCounterpartyInvitation"}
+
+func (ec *executionContext) _BaselineCounterpartyInvitation(ctx context.Context, sel ast.SelectionSet, obj *BaselineCounterpartyInvitation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, baselineCounterpartyInvitationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BaselineCounterpartyInvitation")
+		case "id":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "participantId":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_participantId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "response":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_response(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deadlineAt":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_deadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "respondedAt":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_respondedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "statement":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_statement(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "resolution":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_resolution(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolutionReason":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_resolutionReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "adjustmentVersionId":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_adjustmentVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deliveryStatus":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_deliveryStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deliveryId":
+			out.Values[i] = ec._BaselineCounterpartyInvitation_deliveryId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var baselineInventoryImplementors = []string{"BaselineInventory"}
+
+func (ec *executionContext) _BaselineInventory(ctx context.Context, sel ast.SelectionSet, obj *BaselineInventory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, baselineInventoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BaselineInventory")
+		case "hasInventory":
+			out.Values[i] = ec._BaselineInventory_hasInventory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._BaselineInventory_version(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "environments":
+			out.Values[i] = ec._BaselineInventory_environments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var baselinePolicyImplementors = []string{"BaselinePolicy"}
+
+func (ec *executionContext) _BaselinePolicy(ctx context.Context, sel ast.SelectionSet, obj *BaselinePolicy) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, baselinePolicyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BaselinePolicy")
+		case "contestationDeadlineDays":
+			out.Values[i] = ec._BaselinePolicy_contestationDeadlineDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._BaselinePolicy_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var baselinePolicyPayloadImplementors = []string{"BaselinePolicyPayload"}
+
+func (ec *executionContext) _BaselinePolicyPayload(ctx context.Context, sel ast.SelectionSet, obj *BaselinePolicyPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, baselinePolicyPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BaselinePolicyPayload")
+		case "policy":
+			out.Values[i] = ec._BaselinePolicyPayload_policy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._BaselinePolicyPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._BaselinePolicyPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var bulkAcceptInventoryEnvironmentPayloadImplementors = []string{"BulkAcceptInventoryEnvironmentPayload"}
+
+func (ec *executionContext) _BulkAcceptInventoryEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, obj *BulkAcceptInventoryEnvironmentPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, bulkAcceptInventoryEnvironmentPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BulkAcceptInventoryEnvironmentPayload")
+		case "acceptedCount":
+			out.Values[i] = ec._BulkAcceptInventoryEnvironmentPayload_acceptedCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._BulkAcceptInventoryEnvironmentPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._BulkAcceptInventoryEnvironmentPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var businessUnitImplementors = []string{"BusinessUnit"}
 
 func (ec *executionContext) _BusinessUnit(ctx context.Context, sel ast.SelectionSet, obj *BusinessUnit) graphql.Marshaler {
@@ -52695,6 +63807,127 @@ func (ec *executionContext) _CaptureAnswer(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var captureEnvironmentImplementors = []string{"CaptureEnvironment"}
+
+func (ec *executionContext) _CaptureEnvironment(ctx context.Context, sel ast.SelectionSet, obj *CaptureEnvironment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureEnvironmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureEnvironment")
+		case "requirementKey":
+			out.Values[i] = ec._CaptureEnvironment_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "identityId":
+			out.Values[i] = ec._CaptureEnvironment_identityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "typeCode":
+			out.Values[i] = ec._CaptureEnvironment_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CaptureEnvironment_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expected":
+			out.Values[i] = ec._CaptureEnvironment_expected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addedDuringCapture":
+			out.Values[i] = ec._CaptureEnvironment_addedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaCount":
+			out.Values[i] = ec._CaptureEnvironment_mediaCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CaptureEnvironment_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureEnvironmentPayloadImplementors = []string{"CaptureEnvironmentPayload"}
+
+func (ec *executionContext) _CaptureEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, obj *CaptureEnvironmentPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureEnvironmentPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureEnvironmentPayload")
+		case "environment":
+			out.Values[i] = ec._CaptureEnvironmentPayload_environment(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CaptureEnvironmentPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CaptureEnvironmentPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var capturePayloadImplementors = []string{"CapturePayload"}
 
 func (ec *executionContext) _CapturePayload(ctx context.Context, sel ast.SelectionSet, obj *CapturePayload) graphql.Marshaler {
@@ -52719,6 +63952,54 @@ func (ec *executionContext) _CapturePayload(ctx context.Context, sel ast.Selecti
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._CapturePayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureQualityWarningPayloadImplementors = []string{"CaptureQualityWarningPayload"}
+
+func (ec *executionContext) _CaptureQualityWarningPayload(ctx context.Context, sel ast.SelectionSet, obj *CaptureQualityWarningPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureQualityWarningPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureQualityWarningPayload")
+		case "flags":
+			out.Values[i] = ec._CaptureQualityWarningPayload_flags(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CaptureQualityWarningPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CaptureQualityWarningPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -52920,6 +64201,563 @@ func (ec *executionContext) _CaptureRequirement(ctx context.Context, sel ast.Sel
 			}
 		case "impossibilityAllowed":
 			out.Values[i] = ec._CaptureRequirement_impossibilityAllowed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentIdentityId":
+			out.Values[i] = ec._CaptureRequirement_environmentIdentityId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "environmentTypeCode":
+			out.Values[i] = ec._CaptureRequirement_environmentTypeCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "environmentName":
+			out.Values[i] = ec._CaptureRequirement_environmentName(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "expected":
+			out.Values[i] = ec._CaptureRequirement_expected(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "addedDuringCapture":
+			out.Values[i] = ec._CaptureRequirement_addedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var captureReviewHandoffImplementors = []string{"CaptureReviewHandoff"}
+
+func (ec *executionContext) _CaptureReviewHandoff(ctx context.Context, sel ast.SelectionSet, obj *CaptureReviewHandoff) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, captureReviewHandoffImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CaptureReviewHandoff")
+		case "inspectionId":
+			out.Values[i] = ec._CaptureReviewHandoff_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "originVersionId":
+			out.Values[i] = ec._CaptureReviewHandoff_originVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var contestationSummaryImplementors = []string{"ContestationSummary"}
+
+func (ec *executionContext) _ContestationSummary(ctx context.Context, sel ast.SelectionSet, obj *ContestationSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, contestationSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ContestationSummary")
+		case "pending":
+			out.Values[i] = ec._ContestationSummary_pending(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "acknowledged":
+			out.Values[i] = ec._ContestationSummary_acknowledged(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "contested":
+			out.Values[i] = ec._ContestationSummary_contested(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._ContestationSummary_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "noResponse":
+			out.Values[i] = ec._ContestationSummary_noResponse(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyBaselineImplementors = []string{"CounterpartyBaseline"}
+
+func (ec *executionContext) _CounterpartyBaseline(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyBaseline) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyBaselineImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyBaseline")
+		case "baseline":
+			out.Values[i] = ec._CounterpartyBaseline_baseline(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purpose":
+			out.Values[i] = ec._CounterpartyBaseline_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "activatedAt":
+			out.Values[i] = ec._CounterpartyBaseline_activatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deadlineAt":
+			out.Values[i] = ec._CounterpartyBaseline_deadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "response":
+			out.Values[i] = ec._CounterpartyBaseline_response(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "respondedAt":
+			out.Values[i] = ec._CounterpartyBaseline_respondedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "resolution":
+			out.Values[i] = ec._CounterpartyBaseline_resolution(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolutionReason":
+			out.Values[i] = ec._CounterpartyBaseline_resolutionReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "adjustmentStatus":
+			out.Values[i] = ec._CounterpartyBaseline_adjustmentStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "newerVersionExists":
+			out.Values[i] = ec._CounterpartyBaseline_newerVersionExists(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "readOnly":
+			out.Values[i] = ec._CounterpartyBaseline_readOnly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyBaselineEnvironmentImplementors = []string{"CounterpartyBaselineEnvironment"}
+
+func (ec *executionContext) _CounterpartyBaselineEnvironment(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyBaselineEnvironment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyBaselineEnvironmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyBaselineEnvironment")
+		case "typeCode":
+			out.Values[i] = ec._CounterpartyBaselineEnvironment_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CounterpartyBaselineEnvironment_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "items":
+			out.Values[i] = ec._CounterpartyBaselineEnvironment_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyBaselineEvidenceImplementors = []string{"CounterpartyBaselineEvidence"}
+
+func (ec *executionContext) _CounterpartyBaselineEvidence(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyBaselineEvidence) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyBaselineEvidenceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyBaselineEvidence")
+		case "kind":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "position":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._CounterpartyBaselineEvidence_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyBaselineInventoryImplementors = []string{"CounterpartyBaselineInventory"}
+
+func (ec *executionContext) _CounterpartyBaselineInventory(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyBaselineInventory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyBaselineInventoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyBaselineInventory")
+		case "hasInventory":
+			out.Values[i] = ec._CounterpartyBaselineInventory_hasInventory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environments":
+			out.Values[i] = ec._CounterpartyBaselineInventory_environments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyBaselineItemImplementors = []string{"CounterpartyBaselineItem"}
+
+func (ec *executionContext) _CounterpartyBaselineItem(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyBaselineItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyBaselineItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyBaselineItem")
+		case "typeCode":
+			out.Values[i] = ec._CounterpartyBaselineItem_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CounterpartyBaselineItem_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "material":
+			out.Values[i] = ec._CounterpartyBaselineItem_material(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "color":
+			out.Values[i] = ec._CounterpartyBaselineItem_color(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "quantity":
+			out.Values[i] = ec._CounterpartyBaselineItem_quantity(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "condition":
+			out.Values[i] = ec._CounterpartyBaselineItem_condition(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "observation":
+			out.Values[i] = ec._CounterpartyBaselineItem_observation(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "limitation":
+			out.Values[i] = ec._CounterpartyBaselineItem_limitation(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "evidence":
+			out.Values[i] = ec._CounterpartyBaselineItem_evidence(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyInvitationPayloadImplementors = []string{"CounterpartyInvitationPayload"}
+
+func (ec *executionContext) _CounterpartyInvitationPayload(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyInvitationPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyInvitationPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyInvitationPayload")
+		case "invitationId":
+			out.Values[i] = ec._CounterpartyInvitationPayload_invitationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "response":
+			out.Values[i] = ec._CounterpartyInvitationPayload_response(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deadlineAt":
+			out.Values[i] = ec._CounterpartyInvitationPayload_deadlineAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolution":
+			out.Values[i] = ec._CounterpartyInvitationPayload_resolution(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "adjustmentVersionId":
+			out.Values[i] = ec._CounterpartyInvitationPayload_adjustmentVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CounterpartyInvitationPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CounterpartyInvitationPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var counterpartyResponsePayloadImplementors = []string{"CounterpartyResponsePayload"}
+
+func (ec *executionContext) _CounterpartyResponsePayload(ctx context.Context, sel ast.SelectionSet, obj *CounterpartyResponsePayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, counterpartyResponsePayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CounterpartyResponsePayload")
+		case "response":
+			out.Values[i] = ec._CounterpartyResponsePayload_response(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "respondedAt":
+			out.Values[i] = ec._CounterpartyResponsePayload_respondedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._CounterpartyResponsePayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._CounterpartyResponsePayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -53183,6 +65021,253 @@ func (ec *executionContext) _CustomerEvidenceItem(ctx context.Context, sel ast.S
 	return out
 }
 
+var customerInventoryImplementors = []string{"CustomerInventory"}
+
+func (ec *executionContext) _CustomerInventory(ctx context.Context, sel ast.SelectionSet, obj *CustomerInventory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, customerInventoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CustomerInventory")
+		case "referenceVersionNumber":
+			out.Values[i] = ec._CustomerInventory_referenceVersionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purpose":
+			out.Values[i] = ec._CustomerInventory_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "coverage":
+			out.Values[i] = ec._CustomerInventory_coverage(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "problems":
+			out.Values[i] = ec._CustomerInventory_problems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "informational":
+			out.Values[i] = ec._CustomerInventory_informational(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var customerInventoryCoverageImplementors = []string{"CustomerInventoryCoverage"}
+
+func (ec *executionContext) _CustomerInventoryCoverage(ctx context.Context, sel ast.SelectionSet, obj *CustomerInventoryCoverage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, customerInventoryCoverageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CustomerInventoryCoverage")
+		case "expectedItems":
+			out.Values[i] = ec._CustomerInventoryCoverage_expectedItems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assessedItems":
+			out.Values[i] = ec._CustomerInventoryCoverage_assessedItems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "notObserved":
+			out.Values[i] = ec._CustomerInventoryCoverage_notObserved(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentsNotCaptured":
+			out.Values[i] = ec._CustomerInventoryCoverage_environmentsNotCaptured(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentsAddedDuringCapture":
+			out.Values[i] = ec._CustomerInventoryCoverage_environmentsAddedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var customerInventoryEntryImplementors = []string{"CustomerInventoryEntry"}
+
+func (ec *executionContext) _CustomerInventoryEntry(ctx context.Context, sel ast.SelectionSet, obj *CustomerInventoryEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, customerInventoryEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CustomerInventoryEntry")
+		case "environment":
+			out.Values[i] = ec._CustomerInventoryEntry_environment(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._CustomerInventoryEntry_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CustomerInventoryEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CustomerInventoryEntry_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "conditionBefore":
+			out.Values[i] = ec._CustomerInventoryEntry_conditionBefore(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "conditionAfter":
+			out.Values[i] = ec._CustomerInventoryEntry_conditionAfter(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._CustomerInventoryEntry_reason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "pairs":
+			out.Values[i] = ec._CustomerInventoryEntry_pairs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var customerInventoryPairImplementors = []string{"CustomerInventoryPair"}
+
+func (ec *executionContext) _CustomerInventoryPair(ctx context.Context, sel ast.SelectionSet, obj *CustomerInventoryPair) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, customerInventoryPairImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CustomerInventoryPair")
+		case "originEvidenceId":
+			out.Values[i] = ec._CustomerInventoryPair_originEvidenceId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentEvidenceId":
+			out.Values[i] = ec._CustomerInventoryPair_currentEvidenceId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "originSourceAvailability":
+			out.Values[i] = ec._CustomerInventoryPair_originSourceAvailability(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentSourceAvailability":
+			out.Values[i] = ec._CustomerInventoryPair_currentSourceAvailability(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._CustomerInventoryPair_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var customerPortfolioConnectionImplementors = []string{"CustomerPortfolioConnection"}
 
 func (ec *executionContext) _CustomerPortfolioConnection(ctx context.Context, sel ast.SelectionSet, obj *CustomerPortfolioConnection) graphql.Marshaler {
@@ -53241,6 +65326,21 @@ func (ec *executionContext) _CustomerPortfolioItem(ctx context.Context, sel ast.
 		case "assetId":
 			out.Values[i] = ec._CustomerPortfolioItem_assetId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetName":
+			out.Values[i] = ec._CustomerPortfolioItem_assetName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assetExternalKey":
+			out.Values[i] = ec._CustomerPortfolioItem_assetExternalKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "latestPublishedInspectionId":
+			out.Values[i] = ec._CustomerPortfolioItem_latestPublishedInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "projectId":
@@ -53344,6 +65444,11 @@ func (ec *executionContext) _CustomerReport(ctx context.Context, sel ast.Selecti
 		case "requirements":
 			out.Values[i] = ec._CustomerReport_requirements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inventory":
+			out.Values[i] = ec._CustomerReport_inventory(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -53588,6 +65693,11 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "captureLayout":
+			out.Values[i] = ec._ExternalCapture_captureLayout(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "reference":
 			out.Values[i] = ec._ExternalCapture_reference(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -53606,6 +65716,16 @@ func (ec *executionContext) _ExternalCapture(ctx context.Context, sel ast.Select
 		case "requirements":
 			out.Values[i] = ec._ExternalCapture_requirements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environments":
+			out.Values[i] = ec._ExternalCapture_environments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewHandoff":
+			out.Values[i] = ec._ExternalCapture_reviewHandoff(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "answers":
@@ -54437,6 +66557,749 @@ func (ec *executionContext) _InternalUserActivationPayload(ctx context.Context, 
 			}
 		case "clientMutationId":
 			out.Values[i] = ec._InternalUserActivationPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryCountsImplementors = []string{"InventoryCounts"}
+
+func (ec *executionContext) _InventoryCounts(ctx context.Context, sel ast.SelectionSet, obj *InventoryCounts) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryCountsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryCounts")
+		case "included":
+			out.Values[i] = ec._InventoryCounts_included(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rejected":
+			out.Values[i] = ec._InventoryCounts_rejected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "notReviewed":
+			out.Values[i] = ec._InventoryCounts_notReviewed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryDraftImplementors = []string{"InventoryDraft"}
+
+func (ec *executionContext) _InventoryDraft(ctx context.Context, sel ast.SelectionSet, obj *InventoryDraft) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryDraftImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryDraft")
+		case "assetId":
+			out.Values[i] = ec._InventoryDraft_assetId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._InventoryDraft_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environments":
+			out.Values[i] = ec._InventoryDraft_environments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "progress":
+			out.Values[i] = ec._InventoryDraft_progress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "readOnly":
+			out.Values[i] = ec._InventoryDraft_readOnly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "noticeCode":
+			out.Values[i] = ec._InventoryDraft_noticeCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "warnings":
+			out.Values[i] = ec._InventoryDraft_warnings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryEnvironmentImplementors = []string{"InventoryEnvironment"}
+
+func (ec *executionContext) _InventoryEnvironment(ctx context.Context, sel ast.SelectionSet, obj *InventoryEnvironment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryEnvironmentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryEnvironment")
+		case "id":
+			out.Values[i] = ec._InventoryEnvironment_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "identityId":
+			out.Values[i] = ec._InventoryEnvironment_identityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "typeCode":
+			out.Values[i] = ec._InventoryEnvironment_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._InventoryEnvironment_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expected":
+			out.Values[i] = ec._InventoryEnvironment_expected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addedDuringCapture":
+			out.Values[i] = ec._InventoryEnvironment_addedDuringCapture(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requirementKey":
+			out.Values[i] = ec._InventoryEnvironment_requirementKey(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "decision":
+			out.Values[i] = ec._InventoryEnvironment_decision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "position":
+			out.Values[i] = ec._InventoryEnvironment_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "items":
+			out.Values[i] = ec._InventoryEnvironment_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryEnvironmentPayloadImplementors = []string{"InventoryEnvironmentPayload"}
+
+func (ec *executionContext) _InventoryEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, obj *InventoryEnvironmentPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryEnvironmentPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryEnvironmentPayload")
+		case "environment":
+			out.Values[i] = ec._InventoryEnvironmentPayload_environment(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._InventoryEnvironmentPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._InventoryEnvironmentPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryEvidenceImplementors = []string{"InventoryEvidence"}
+
+func (ec *executionContext) _InventoryEvidence(ctx context.Context, sel ast.SelectionSet, obj *InventoryEvidence) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryEvidenceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryEvidence")
+		case "id":
+			out.Values[i] = ec._InventoryEvidence_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._InventoryEvidence_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaId":
+			out.Values[i] = ec._InventoryEvidence_mediaId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "frameId":
+			out.Values[i] = ec._InventoryEvidence_frameId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "timestampMs":
+			out.Values[i] = ec._InventoryEvidence_timestampMs(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "url":
+			out.Values[i] = ec._InventoryEvidence_url(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "region":
+			out.Values[i] = ec._InventoryEvidence_region(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "position":
+			out.Values[i] = ec._InventoryEvidence_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "availability":
+			out.Values[i] = ec._InventoryEvidence_availability(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "retentionAvailability":
+			out.Values[i] = ec._InventoryEvidence_retentionAvailability(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryItemImplementors = []string{"InventoryItem"}
+
+func (ec *executionContext) _InventoryItem(ctx context.Context, sel ast.SelectionSet, obj *InventoryItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryItem")
+		case "id":
+			out.Values[i] = ec._InventoryItem_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "identityId":
+			out.Values[i] = ec._InventoryItem_identityId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "environmentId":
+			out.Values[i] = ec._InventoryItem_environmentId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "typeCode":
+			out.Values[i] = ec._InventoryItem_typeCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._InventoryItem_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "material":
+			out.Values[i] = ec._InventoryItem_material(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "color":
+			out.Values[i] = ec._InventoryItem_color(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "quantity":
+			out.Values[i] = ec._InventoryItem_quantity(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "condition":
+			out.Values[i] = ec._InventoryItem_condition(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "observation":
+			out.Values[i] = ec._InventoryItem_observation(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "limitation":
+			out.Values[i] = ec._InventoryItem_limitation(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "confidenceBps":
+			out.Values[i] = ec._InventoryItem_confidenceBps(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "origin":
+			out.Values[i] = ec._InventoryItem_origin(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "declared":
+			out.Values[i] = ec._InventoryItem_declared(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "decision":
+			out.Values[i] = ec._InventoryItem_decision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rejectionReason":
+			out.Values[i] = ec._InventoryItem_rejectionReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "rejectionText":
+			out.Values[i] = ec._InventoryItem_rejectionText(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "suggested":
+			out.Values[i] = ec._InventoryItem_suggested(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._InventoryItem_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "evidence":
+			out.Values[i] = ec._InventoryItem_evidence(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryItemPayloadImplementors = []string{"InventoryItemPayload"}
+
+func (ec *executionContext) _InventoryItemPayload(ctx context.Context, sel ast.SelectionSet, obj *InventoryItemPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryItemPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryItemPayload")
+		case "item":
+			out.Values[i] = ec._InventoryItemPayload_item(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._InventoryItemPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._InventoryItemPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryItemsPayloadImplementors = []string{"InventoryItemsPayload"}
+
+func (ec *executionContext) _InventoryItemsPayload(ctx context.Context, sel ast.SelectionSet, obj *InventoryItemsPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryItemsPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryItemsPayload")
+		case "items":
+			out.Values[i] = ec._InventoryItemsPayload_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "emptyEnvironments":
+			out.Values[i] = ec._InventoryItemsPayload_emptyEnvironments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._InventoryItemsPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._InventoryItemsPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryProgressImplementors = []string{"InventoryProgress"}
+
+func (ec *executionContext) _InventoryProgress(ctx context.Context, sel ast.SelectionSet, obj *InventoryProgress) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryProgressImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryProgress")
+		case "decided":
+			out.Values[i] = ec._InventoryProgress_decided(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pending":
+			out.Values[i] = ec._InventoryProgress_pending(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryTrailImplementors = []string{"InventoryTrail"}
+
+func (ec *executionContext) _InventoryTrail(ctx context.Context, sel ast.SelectionSet, obj *InventoryTrail) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryTrailImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryTrail")
+		case "suggestions":
+			out.Values[i] = ec._InventoryTrail_suggestions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "decisions":
+			out.Values[i] = ec._InventoryTrail_decisions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "counterpartyEvents":
+			out.Values[i] = ec._InventoryTrail_counterpartyEvents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inventoryTrailEntryImplementors = []string{"InventoryTrailEntry"}
+
+func (ec *executionContext) _InventoryTrailEntry(ctx context.Context, sel ast.SelectionSet, obj *InventoryTrailEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inventoryTrailEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InventoryTrailEntry")
+		case "id":
+			out.Values[i] = ec._InventoryTrailEntry_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "targetType":
+			out.Values[i] = ec._InventoryTrailEntry_targetType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "targetId":
+			out.Values[i] = ec._InventoryTrailEntry_targetId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "action":
+			out.Values[i] = ec._InventoryTrailEntry_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "before":
+			out.Values[i] = ec._InventoryTrailEntry_before(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "after":
+			out.Values[i] = ec._InventoryTrailEntry_after(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._InventoryTrailEntry_reason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "statement":
+			out.Values[i] = ec._InventoryTrailEntry_statement(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "resolutionReason":
+			out.Values[i] = ec._InventoryTrailEntry_resolutionReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "actorMembershipId":
+			out.Values[i] = ec._InventoryTrailEntry_actorMembershipId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "occurredAt":
+			out.Values[i] = ec._InventoryTrailEntry_occurredAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -55575,6 +68438,55 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "requestCounterpartyOtp":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestCounterpartyOtp(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "verifyCounterpartyOtp":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_verifyCounterpartyOtp(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "acknowledgeBaseline":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_acknowledgeBaseline(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "contestBaseline":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_contestBaseline(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolveBaselineContestation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resolveBaselineContestation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resendCounterpartyInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resendCounterpartyInvitation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateBaselinePolicy":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateBaselinePolicy(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "revokeInvitation":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_revokeInvitation(ctx, field)
@@ -55620,6 +68532,90 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "promoteInspectionVideo":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_promoteInspectionVideo(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "decideInventoryItems":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_decideInventoryItems(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bulkAcceptInventoryEnvironment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_bulkAcceptInventoryEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addInventoryItem":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addInventoryItem(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mergeInventoryItems":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_mergeInventoryItems(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "splitInventoryItem":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_splitInventoryItem(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "upsertInventoryEnvironment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_upsertInventoryEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "removeInventoryEnvironment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeInventoryEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "activateBaselineVersion":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_activateBaselineVersion(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "discardBaselineDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_discardBaselineDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requestOriginCataloging":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_requestOriginCataloging(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "retryInventoryDraft":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_retryInventoryDraft(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startBaselineDraftFromInspection":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_startBaselineDraftFromInspection(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -55795,6 +68791,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "declareCaptureImpossibility":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_declareCaptureImpossibility(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "declareCaptureEnvironment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_declareCaptureEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recordCaptureQualityWarning":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_recordCaptureQualityWarning(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -57190,73 +70200,156 @@ func (ec *executionContext) _OriginVersion(ctx context.Context, sel ast.Selectio
 		case "id":
 			out.Values[i] = ec._OriginVersion_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "originId":
 			out.Values[i] = ec._OriginVersion_originId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "versionNumber":
 			out.Values[i] = ec._OriginVersion_versionNumber(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "originRevision":
+			out.Values[i] = ec._OriginVersion_originRevision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "status":
 			out.Values[i] = ec._OriginVersion_status(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "mediaKind":
 			out.Values[i] = ec._OriginVersion_mediaKind(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "videoPreparationId":
 			out.Values[i] = ec._OriginVersion_videoPreparationId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "preparationStatus":
 			out.Values[i] = ec._OriginVersion_preparationStatus(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "captureSubmitted":
 			out.Values[i] = ec._OriginVersion_captureSubmitted(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "selectable":
 			out.Values[i] = ec._OriginVersion_selectable(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "sourceAvailability":
 			out.Values[i] = ec._OriginVersion_sourceAvailability(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "limitedCoverage":
 			out.Values[i] = ec._OriginVersion_limitedCoverage(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "scopeManifestDigest":
 			out.Values[i] = ec._OriginVersion_scopeManifestDigest(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "supersedesId":
 			out.Values[i] = ec._OriginVersion_supersedesId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "activatedAt":
 			out.Values[i] = ec._OriginVersion_activatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "activatedBy":
+			out.Values[i] = ec._OriginVersion_activatedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "purpose":
+			out.Values[i] = ec._OriginVersion_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "source":
+			out.Values[i] = ec._OriginVersion_source(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "sourceInspectionId":
+			out.Values[i] = ec._OriginVersion_sourceInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "hasInventory":
+			out.Values[i] = ec._OriginVersion_hasInventory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "draftState":
+			out.Values[i] = ec._OriginVersion_draftState(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "counts":
+			out.Values[i] = ec._OriginVersion_counts(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "contestationSummary":
+			out.Values[i] = ec._OriginVersion_contestationSummary(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "counterpartyInvitations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._OriginVersion_counterpartyInvitations(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.IsDeferred() {
+				deferredFieldSet.AddField(field)
+				fieldIndex := len(deferredFieldSet.Values) - 1
+				deferredFieldSet.Concurrently(fieldIndex, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, deferredFieldSet)
+				})
+
+				for _, deferrable := range field.Deferrables {
+					view, ok := deferLabelToView[deferrable.Label]
+					if !ok {
+						view = deferredFieldSet.NewView()
+						deferLabelToView[deferrable.Label] = view
+					}
+					view.AddIndices(fieldIndex)
+				}
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -57335,6 +70428,16 @@ func (ec *executionContext) _OriginVersionPayload(ctx context.Context, sel ast.S
 			out.Values[i] = graphql.MarshalString("OriginVersionPayload")
 		case "version":
 			out.Values[i] = ec._OriginVersionPayload_version(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "warnings":
+			out.Values[i] = ec._OriginVersionPayload_warnings(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "sourcesExpired":
+			out.Values[i] = ec._OriginVersionPayload_sourcesExpired(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -58874,6 +71977,138 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "baselineVersions":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_baselineVersions(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "inventoryDraft":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_inventoryDraft(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "baselineInventory":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_baselineInventory(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "baselinePolicy":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_baselinePolicy(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "counterpartyBaseline":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_counterpartyBaseline(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "inventoryTrail":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_inventoryTrail(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "originPromotion":
 			field := field
 
@@ -60156,6 +73391,11 @@ func (ec *executionContext) _Report(ctx context.Context, sel ast.SelectionSet, o
 		case "requirements":
 			out.Values[i] = ec._Report_requirements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "inventory":
+			out.Values[i] = ec._Report_inventory(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "evidence":
@@ -63405,6 +76645,11 @@ func (ec *executionContext) _UserError(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "pendingRequirementKeys":
+			out.Values[i] = ec._UserError_pendingRequirementKeys(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -63677,6 +76922,11 @@ func (ec *executionContext) _VideoPolicy(ctx context.Context, sel ast.SelectionS
 			}
 		case "currentRetentionDays":
 			out.Values[i] = ec._VideoPolicy_currentRetentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "supersededBaselineRetentionDays":
+			out.Values[i] = ec._VideoPolicy_supersededBaselineRetentionDays(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -64025,6 +77275,21 @@ func (ec *executionContext) _VideoPreparationStatus(ctx context.Context, sel ast
 			}
 		case "processedFrames":
 			out.Values[i] = ec._VideoPreparationStatus_processedFrames(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesSampled":
+			out.Values[i] = ec._VideoPreparationStatus_framesSampled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesRetained":
+			out.Values[i] = ec._VideoPreparationStatus_framesRetained(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "framesRepresentative":
+			out.Values[i] = ec._VideoPreparationStatus_framesRepresentative(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -64688,6 +77953,11 @@ func (ec *executionContext) unmarshalNAcceptProcessingInput2inspectionᚋservice
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNActivateBaselineVersionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐActivateBaselineVersionInput(ctx context.Context, v any) (ActivateBaselineVersionInput, error) {
+	res, err := ec.unmarshalInputActivateBaselineVersionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNActivateSegmentDefinitionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐActivateSegmentDefinitionInput(ctx context.Context, v any) (ActivateSegmentDefinitionInput, error) {
 	res, err := ec.unmarshalInputActivateSegmentDefinitionInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -64700,6 +77970,11 @@ func (ec *executionContext) unmarshalNActivateTemplateVersionInput2inspectionᚋ
 
 func (ec *executionContext) unmarshalNAddExceptionalStageInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAddExceptionalStageInput(ctx context.Context, v any) (AddExceptionalStageInput, error) {
 	res, err := ec.unmarshalInputAddExceptionalStageInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNAddInventoryItemInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAddInventoryItemInput(ctx context.Context, v any) (AddInventoryItemInput, error) {
+	res, err := ec.unmarshalInputAddInventoryItemInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -64721,6 +77996,16 @@ func (ec *executionContext) marshalNAnalysisPromptPayload2ᚖinspectionᚋservic
 		return graphql.Null
 	}
 	return ec._AnalysisPromptPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNAnalysisPromptTask2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx context.Context, v any) (AnalysisPromptTask, error) {
+	var res AnalysisPromptTask
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAnalysisPromptTask2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx context.Context, sel ast.SelectionSet, v AnalysisPromptTask) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNAnalysisType2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisType(ctx context.Context, v any) (AnalysisType, error) {
@@ -64880,6 +78165,52 @@ func (ec *executionContext) marshalNAuditEventConnection2ᚖinspectionᚋservice
 	return ec._AuditEventConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBaselineCounterpartyInvitation2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineCounterpartyInvitationᚄ(ctx context.Context, sel ast.SelectionSet, v []*BaselineCounterpartyInvitation) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBaselineCounterpartyInvitation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineCounterpartyInvitation(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBaselineCounterpartyInvitation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineCounterpartyInvitation(ctx context.Context, sel ast.SelectionSet, v *BaselineCounterpartyInvitation) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BaselineCounterpartyInvitation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx context.Context, sel ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BaselinePolicy(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNBaselinePolicyPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicyPayload(ctx context.Context, sel ast.SelectionSet, v *BaselinePolicyPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BaselinePolicyPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBeginVideoCaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBeginVideoCaptureInput(ctx context.Context, v any) (BeginVideoCaptureInput, error) {
 	res, err := ec.unmarshalInputBeginVideoCaptureInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -64899,6 +78230,21 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNBulkAcceptInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBulkAcceptInventoryEnvironmentInput(ctx context.Context, v any) (BulkAcceptInventoryEnvironmentInput, error) {
+	res, err := ec.unmarshalInputBulkAcceptInventoryEnvironmentInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNBulkAcceptInventoryEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBulkAcceptInventoryEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, v *BulkAcceptInventoryEnvironmentPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BulkAcceptInventoryEnvironmentPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBusinessUnit2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBusinessUnitᚄ(ctx context.Context, sel ast.SelectionSet, v []*BusinessUnit) graphql.Marshaler {
@@ -64988,6 +78334,42 @@ func (ec *executionContext) marshalNCaptureComparisonMode2inspectionᚋservices�
 	return v
 }
 
+func (ec *executionContext) marshalNCaptureEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureEnvironment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureEnvironment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCaptureEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironmentPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureEnvironmentPayload(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCapturePayload(ctx context.Context, sel ast.SelectionSet, v *CapturePayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -64996,6 +78378,16 @@ func (ec *executionContext) marshalNCapturePayload2ᚖinspectionᚋservicesᚋin
 		return graphql.Null
 	}
 	return ec._CapturePayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCaptureQualityWarningPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureQualityWarningPayload(ctx context.Context, sel ast.SelectionSet, v *CaptureQualityWarningPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CaptureQualityWarningPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNCaptureReferenceItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReferenceItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*CaptureReferenceItem) graphql.Marshaler {
@@ -65133,6 +78525,11 @@ func (ec *executionContext) unmarshalNContactInput2ᚖinspectionᚋservicesᚋin
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNContestBaselineInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐContestBaselineInput(ctx context.Context, v any) (ContestBaselineInput, error) {
+	res, err := ec.unmarshalInputContestBaselineInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCorrectInspectionResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectInspectionResponsibleEmailInput(ctx context.Context, v any) (CorrectInspectionResponsibleEmailInput, error) {
 	res, err := ec.unmarshalInputCorrectInspectionResponsibleEmailInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -65141,6 +78538,129 @@ func (ec *executionContext) unmarshalNCorrectInspectionResponsibleEmailInput2ins
 func (ec *executionContext) unmarshalNCorrectOnboardingResponsibleEmailInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCorrectOnboardingResponsibleEmailInput(ctx context.Context, v any) (CorrectOnboardingResponsibleEmailInput, error) {
 	res, err := ec.unmarshalInputCorrectOnboardingResponsibleEmailInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCounterpartyBaseline2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaseline(ctx context.Context, sel ast.SelectionSet, v *CounterpartyBaseline) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyBaseline(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEnvironmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*CounterpartyBaselineEnvironment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCounterpartyBaselineEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEnvironment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEnvironment(ctx context.Context, sel ast.SelectionSet, v *CounterpartyBaselineEnvironment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyBaselineEnvironment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineEvidence2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEvidenceᚄ(ctx context.Context, sel ast.SelectionSet, v []*CounterpartyBaselineEvidence) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCounterpartyBaselineEvidence2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEvidence(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineEvidence2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineEvidence(ctx context.Context, sel ast.SelectionSet, v *CounterpartyBaselineEvidence) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyBaselineEvidence(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineInventory(ctx context.Context, sel ast.SelectionSet, v *CounterpartyBaselineInventory) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyBaselineInventory(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*CounterpartyBaselineItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCounterpartyBaselineItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCounterpartyBaselineItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyBaselineItem(ctx context.Context, sel ast.SelectionSet, v *CounterpartyBaselineItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyBaselineItem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCounterpartyInvitationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyInvitationPayload(ctx context.Context, sel ast.SelectionSet, v *CounterpartyInvitationPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyInvitationPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCounterpartyResponseInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyResponseInput(ctx context.Context, v any) (CounterpartyResponseInput, error) {
+	res, err := ec.unmarshalInputCounterpartyResponseInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCounterpartyResponsePayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCounterpartyResponsePayload(ctx context.Context, sel ast.SelectionSet, v *CounterpartyResponsePayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CounterpartyResponsePayload(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCreateBusinessUnitInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCreateBusinessUnitInput(ctx context.Context, v any) (CreateBusinessUnitInput, error) {
@@ -65217,6 +78737,58 @@ func (ec *executionContext) marshalNCustomerEvidenceItem2ᚖinspectionᚋservice
 		return graphql.Null
 	}
 	return ec._CustomerEvidenceItem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCustomerInventoryEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*CustomerInventoryEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCustomerInventoryEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCustomerInventoryEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryEntry(ctx context.Context, sel ast.SelectionSet, v *CustomerInventoryEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CustomerInventoryEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCustomerInventoryPair2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryPairᚄ(ctx context.Context, sel ast.SelectionSet, v []*CustomerInventoryPair) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCustomerInventoryPair2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryPair(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCustomerInventoryPair2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryPair(ctx context.Context, sel ast.SelectionSet, v *CustomerInventoryPair) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CustomerInventoryPair(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNCustomerPortfolioConnection2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerPortfolioConnection(ctx context.Context, sel ast.SelectionSet, v *CustomerPortfolioConnection) graphql.Marshaler {
@@ -65301,6 +78873,16 @@ func (ec *executionContext) marshalNDashboardSummary2ᚖinspectionᚋservicesᚋ
 	return ec._DashboardSummary(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNDecideInventoryItemsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDecideInventoryItemsInput(ctx context.Context, v any) (DecideInventoryItemsInput, error) {
+	res, err := ec.unmarshalInputDecideInventoryItemsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNDeclareCaptureEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDeclareCaptureEnvironmentInput(ctx context.Context, v any) (DeclareCaptureEnvironmentInput, error) {
+	res, err := ec.unmarshalInputDeclareCaptureEnvironmentInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNDeclareCaptureImpossibilityInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDeclareCaptureImpossibilityInput(ctx context.Context, v any) (DeclareCaptureImpossibilityInput, error) {
 	res, err := ec.unmarshalInputDeclareCaptureImpossibilityInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -65308,6 +78890,11 @@ func (ec *executionContext) unmarshalNDeclareCaptureImpossibilityInput2inspectio
 
 func (ec *executionContext) unmarshalNDisableMembershipInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDisableMembershipInput(ctx context.Context, v any) (DisableMembershipInput, error) {
 	res, err := ec.unmarshalInputDisableMembershipInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNDiscardBaselineDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐDiscardBaselineDraftInput(ctx context.Context, v any) (DiscardBaselineDraftInput, error) {
+	res, err := ec.unmarshalInputDiscardBaselineDraftInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -65554,6 +79141,217 @@ func (ec *executionContext) unmarshalNInvalidateReportPublicationInput2inspectio
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNInventoryDecisionInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDecisionInputᚄ(ctx context.Context, v any) ([]*InventoryDecisionInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*InventoryDecisionInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInventoryDecisionInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDecisionInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNInventoryDecisionInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDecisionInput(ctx context.Context, v any) (*InventoryDecisionInput, error) {
+	res, err := ec.unmarshalInputInventoryDecisionInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInventoryEnvironment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryEnvironment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironment(ctx context.Context, sel ast.SelectionSet, v *InventoryEnvironment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryEnvironment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryEnvironmentPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironmentPayload(ctx context.Context, sel ast.SelectionSet, v *InventoryEnvironmentPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryEnvironmentPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryEvidence2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryEvidence) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryEvidence2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidence(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryEvidence2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidence(ctx context.Context, sel ast.SelectionSet, v *InventoryEvidence) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryEvidence(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNInventoryEvidenceInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceInputᚄ(ctx context.Context, v any) ([]*InventoryEvidenceInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*InventoryEvidenceInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInventoryEvidenceInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNInventoryEvidenceInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEvidenceInput(ctx context.Context, v any) (*InventoryEvidenceInput, error) {
+	res, err := ec.unmarshalInputInventoryEvidenceInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInventoryItem2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryItem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItem(ctx context.Context, sel ast.SelectionSet, v *InventoryItem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryItem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryItemPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemPayload(ctx context.Context, sel ast.SelectionSet, v *InventoryItemPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryItemPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryItemsPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemsPayload(ctx context.Context, sel ast.SelectionSet, v *InventoryItemsPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryItemsPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryProgress2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryProgress(ctx context.Context, sel ast.SelectionSet, v *InventoryProgress) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryProgress(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNInventorySplitPartInput2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventorySplitPartInputᚄ(ctx context.Context, v any) ([]*InventorySplitPartInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*InventorySplitPartInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNInventorySplitPartInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventorySplitPartInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNInventorySplitPartInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventorySplitPartInput(ctx context.Context, v any) (*InventorySplitPartInput, error) {
+	res, err := ec.unmarshalInputInventorySplitPartInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInventoryTrail2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrail(ctx context.Context, sel ast.SelectionSet, v *InventoryTrail) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryTrail(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInventoryTrailEntry2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*InventoryTrailEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInventoryTrailEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInventoryTrailEntry2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryTrailEntry(ctx context.Context, sel ast.SelectionSet, v *InventoryTrailEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InventoryTrailEntry(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInvitationOtpPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInvitationOtpPayload(ctx context.Context, sel ast.SelectionSet, v *InvitationOtpPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -65746,6 +79544,11 @@ func (ec *executionContext) marshalNMembershipPayload2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return ec._MembershipPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNMergeInventoryItemsInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐMergeInventoryItemsInput(ctx context.Context, v any) (MergeInventoryItemsInput, error) {
+	res, err := ec.unmarshalInputMergeInventoryItemsInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNNotificationChannelDelivery2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐNotificationChannelDeliveryᚄ(ctx context.Context, sel ast.SelectionSet, v []*NotificationChannelDelivery) graphql.Marshaler {
@@ -66481,6 +80284,11 @@ func (ec *executionContext) marshalNRecipientNotificationPayload2ᚖinspection�
 	return ec._RecipientNotificationPayload(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNRecordCaptureQualityWarningInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordCaptureQualityWarningInput(ctx context.Context, v any) (RecordCaptureQualityWarningInput, error) {
+	res, err := ec.unmarshalInputRecordCaptureQualityWarningInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRecordDeletionRequestInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRecordDeletionRequestInput(ctx context.Context, v any) (RecordDeletionRequestInput, error) {
 	res, err := ec.unmarshalInputRecordDeletionRequestInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -66488,6 +80296,11 @@ func (ec *executionContext) unmarshalNRecordDeletionRequestInput2inspectionᚋse
 
 func (ec *executionContext) unmarshalNRegisterAssetInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRegisterAssetInput(ctx context.Context, v any) (RegisterAssetInput, error) {
 	res, err := ec.unmarshalInputRegisterAssetInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNRemoveInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRemoveInventoryEnvironmentInput(ctx context.Context, v any) (RemoveInventoryEnvironmentInput, error) {
+	res, err := ec.unmarshalInputRemoveInventoryEnvironmentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -66716,6 +80529,11 @@ func (ec *executionContext) unmarshalNRequestAdminActivationOtpInput2inspection�
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNRequestCounterpartyOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestCounterpartyOtpInput(ctx context.Context, v any) (RequestCounterpartyOtpInput, error) {
+	res, err := ec.unmarshalInputRequestCounterpartyOtpInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRequestInternalUserActivationOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestInternalUserActivationOtpInput(ctx context.Context, v any) (RequestInternalUserActivationOtpInput, error) {
 	res, err := ec.unmarshalInputRequestInternalUserActivationOtpInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -66731,6 +80549,11 @@ func (ec *executionContext) unmarshalNRequestOnboardingOtpInput2inspectionᚋser
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNRequestOriginCatalogingInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestOriginCatalogingInput(ctx context.Context, v any) (RequestOriginCatalogingInput, error) {
+	res, err := ec.unmarshalInputRequestOriginCatalogingInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNRequestRecaptureInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRequestRecaptureInput(ctx context.Context, v any) (RequestRecaptureInput, error) {
 	res, err := ec.unmarshalInputRequestRecaptureInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -66741,8 +80564,18 @@ func (ec *executionContext) unmarshalNRequestVideoReplacementInput2inspectionᚋ
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNResendCounterpartyInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendCounterpartyInvitationInput(ctx context.Context, v any) (ResendCounterpartyInvitationInput, error) {
+	res, err := ec.unmarshalInputResendCounterpartyInvitationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {
 	res, err := ec.unmarshalInputResendInternalUserInvitationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNResolveBaselineContestationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResolveBaselineContestationInput(ctx context.Context, v any) (ResolveBaselineContestationInput, error) {
+	res, err := ec.unmarshalInputResolveBaselineContestationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -66810,6 +80643,11 @@ func (ec *executionContext) marshalNRetentionPolicyPayload2ᚖinspectionᚋservi
 		return graphql.Null
 	}
 	return ec._RetentionPolicyPayload(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRetryInventoryDraftInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryInventoryDraftInput(ctx context.Context, v any) (RetryInventoryDraftInput, error) {
+	res, err := ec.unmarshalInputRetryInventoryDraftInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNRetryVideoPreparationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐRetryVideoPreparationInput(ctx context.Context, v any) (RetryVideoPreparationInput, error) {
@@ -67030,6 +80868,11 @@ func (ec *executionContext) unmarshalNSkipProjectStageInput2inspectionᚋservice
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNSplitInventoryItemInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐSplitInventoryItemInput(ctx context.Context, v any) (SplitInventoryItemInput, error) {
+	res, err := ec.unmarshalInputSplitInventoryItemInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNStageTransition2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐStageTransitionᚄ(ctx context.Context, sel ast.SelectionSet, v []*StageTransition) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -67054,6 +80897,11 @@ func (ec *executionContext) marshalNStageTransition2ᚖinspectionᚋservicesᚋi
 		return graphql.Null
 	}
 	return ec._StageTransition(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNStartBaselineDraftFromInspectionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐStartBaselineDraftFromInspectionInput(ctx context.Context, v any) (StartBaselineDraftFromInspectionInput, error) {
+	res, err := ec.unmarshalInputStartBaselineDraftFromInspectionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNStartProjectStageInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐStartProjectStageInput(ctx context.Context, v any) (StartProjectStageInput, error) {
@@ -67402,6 +81250,11 @@ func (ec *executionContext) unmarshalNUpdateAssetInput2inspectionᚋservicesᚋi
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNUpdateBaselinePolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateBaselinePolicyInput(ctx context.Context, v any) (UpdateBaselinePolicyInput, error) {
+	res, err := ec.unmarshalInputUpdateBaselinePolicyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNUpdateScheduleInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpdateScheduleInput(ctx context.Context, v any) (UpdateScheduleInput, error) {
 	res, err := ec.unmarshalInputUpdateScheduleInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -67419,6 +81272,11 @@ func (ec *executionContext) unmarshalNUpdateTriageCaseInput2inspectionᚋservice
 
 func (ec *executionContext) unmarshalNUpsertBusinessUnitInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpsertBusinessUnitInput(ctx context.Context, v any) (UpsertBusinessUnitInput, error) {
 	res, err := ec.unmarshalInputUpsertBusinessUnitInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNUpsertInventoryEnvironmentInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUpsertInventoryEnvironmentInput(ctx context.Context, v any) (UpsertInventoryEnvironmentInput, error) {
+	res, err := ec.unmarshalInputUpsertInventoryEnvironmentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -67470,6 +81328,11 @@ func (ec *executionContext) unmarshalNVerifyAdminActivationOtpInput2inspection�
 
 func (ec *executionContext) unmarshalNVerifyContactInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyContactInput(ctx context.Context, v any) (VerifyContactInput, error) {
 	res, err := ec.unmarshalInputVerifyContactInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNVerifyCounterpartyOtpInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVerifyCounterpartyOtpInput(ctx context.Context, v any) (VerifyCounterpartyOtpInput, error) {
+	res, err := ec.unmarshalInputVerifyCounterpartyOtpInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -67813,11 +81676,41 @@ func (ec *executionContext) marshalOAnalysisPrompt2ᚖinspectionᚋservicesᚋin
 	return ec._AnalysisPrompt(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOAnalysisPromptTask2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx context.Context, v any) (*AnalysisPromptTask, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(AnalysisPromptTask)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAnalysisPromptTask2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAnalysisPromptTask(ctx context.Context, sel ast.SelectionSet, v *AnalysisPromptTask) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) marshalOAsset2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐAsset(ctx context.Context, sel ast.SelectionSet, v *Asset) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Asset(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOBaselineInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselineInventory(ctx context.Context, sel ast.SelectionSet, v *BaselineInventory) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._BaselineInventory(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOBaselinePolicy2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐBaselinePolicy(ctx context.Context, sel ast.SelectionSet, v *BaselinePolicy) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._BaselinePolicy(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
@@ -67857,12 +81750,47 @@ func (ec *executionContext) marshalOBusinessUnit2ᚖinspectionᚋservicesᚋinsp
 	return ec._BusinessUnit(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOCaptureEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureEnvironment(ctx context.Context, sel ast.SelectionSet, v *CaptureEnvironment) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CaptureEnvironment(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOCaptureGPSInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureGPSInput(ctx context.Context, v any) (*CaptureGPSInput, error) {
 	if v == nil {
 		return nil, nil
 	}
 	res, err := ec.unmarshalInputCaptureGPSInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOCaptureReviewHandoff2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCaptureReviewHandoff(ctx context.Context, sel ast.SelectionSet, v *CaptureReviewHandoff) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CaptureReviewHandoff(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOContestationSummary2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐContestationSummary(ctx context.Context, sel ast.SelectionSet, v *ContestationSummary) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ContestationSummary(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCustomerInventory2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventory(ctx context.Context, sel ast.SelectionSet, v *CustomerInventory) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CustomerInventory(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCustomerInventoryCoverage2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerInventoryCoverage(ctx context.Context, sel ast.SelectionSet, v *CustomerInventoryCoverage) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CustomerInventoryCoverage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOCustomerPortfolioFilter2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐCustomerPortfolioFilter(ctx context.Context, v any) (*CustomerPortfolioFilter, error) {
@@ -68019,6 +81947,42 @@ func (ec *executionContext) marshalOInternalUserActivation2ᚖinspectionᚋservi
 		return graphql.Null
 	}
 	return ec._InternalUserActivation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInventoryCounts2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryCounts(ctx context.Context, sel ast.SelectionSet, v *InventoryCounts) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InventoryCounts(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInventoryDraft2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryDraft(ctx context.Context, sel ast.SelectionSet, v *InventoryDraft) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InventoryDraft(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInventoryEnvironment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryEnvironment(ctx context.Context, sel ast.SelectionSet, v *InventoryEnvironment) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InventoryEnvironment(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInventoryItem2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItem(ctx context.Context, sel ast.SelectionSet, v *InventoryItem) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InventoryItem(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOInventoryItemPatchInput2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInventoryItemPatchInput(ctx context.Context, v any) (*InventoryItemPatchInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputInventoryItemPatchInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOJSON2map(ctx context.Context, v any) (map[string]any, error) {

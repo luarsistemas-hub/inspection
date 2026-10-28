@@ -9,6 +9,7 @@ export function supportedVideoMime(): string | undefined {
 
 export type RecorderUpdate = { elapsedSeconds: number; limitReached: boolean; error?: string; finalizing?: boolean };
 export type VideoRecorderSession = { stop: () => Promise<VideoDraft>; active: () => boolean };
+export const videoDurationReachedLimit = (elapsedSeconds: number, maxDurationSeconds: number): boolean => elapsedSeconds >= maxDurationSeconds;
 
 /**
  * Starts recording an already opened stream. Until `recorder.start()` succeeds the caller owns the stream and
@@ -104,7 +105,7 @@ export async function startVideoRecorder(
   startedAt = now();
   timerRef.value = setInterval(() => {
     const duration = elapsed();
-    const limitReached = duration >= draft.maxDurationSeconds;
+    const limitReached = videoDurationReachedLimit(duration, draft.maxDurationSeconds);
     onUpdate({ elapsedSeconds: Math.min(duration, draft.maxDurationSeconds), limitReached });
     if (limitReached) finalizeQuietly();
   }, 250);

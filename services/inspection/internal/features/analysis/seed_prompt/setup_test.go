@@ -22,6 +22,7 @@ func TestReplaceIsExplicitAndIdempotent(t *testing.T) {
 		CREATE TABLE analysis.prompts (
 			id TEXT PRIMARY KEY,
 			analysis_type TEXT NOT NULL,
+			task TEXT NOT NULL DEFAULT 'FINDINGS',
 			definition_json BLOB NOT NULL,
 			canonical_digest TEXT NOT NULL,
 			revision INTEGER NOT NULL,
@@ -29,7 +30,7 @@ func TestReplaceIsExplicitAndIdempotent(t *testing.T) {
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL
 		);
-		CREATE UNIQUE INDEX analysis.idx_analysis_prompts_analysis_type ON prompts (analysis_type);
+		CREATE UNIQUE INDEX analysis.uq_analysis_prompt_task ON prompts (analysis_type,task);
 	`).Error)
 
 	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)

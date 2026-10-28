@@ -1,5 +1,5 @@
 /** Every application-owned route, including the public activation and prompt journeys. */
-export const adminRoutes = ["/", "/activate", "/auth/callback", "/overview", "/tenants/[tenantId]", "/organization", "/access", "/catalogs", "/assets", "/templates", "/video", "/video-operations", "/governance", "/audit", "/prompts", "/llm-usage"] as const;
+export const adminRoutes = ["/", "/activate", "/auth/callback", "/overview", "/tenants/[tenantId]", "/organization", "/access", "/catalogs", "/assets", "/templates", "/video", "/video-operations", "/baseline-policy", "/governance", "/audit", "/prompts", "/llm-usage"] as const;
 
 export function legacyRedirects(dashboardOrigin: string, captureOrigin: string) {
   return [

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
-	origincore "inspection/services/inspection/internal/features/origins/core"
+	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 
@@ -110,11 +110,11 @@ func TestVV_IT_323SweepOriginSourceKeepsF01ProvenanceForActiveOriginAndReport(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claimed, err := executor.RunDue(ctx, fixture.TenantID, time.Now().UTC(), 10); err != nil || claimed != 1 {
-		t.Fatalf("O1 source sweep claimed=%d err=%v; want 1", claimed, err)
+	if claimed, err := executor.RunDue(ctx, fixture.TenantID, time.Now().UTC(), 10); err != nil || claimed != 0 {
+		t.Fatalf("O1 ACTIVE_BASELINE source sweep claimed=%d err=%v; want 0", claimed, err)
 	}
-	if status := task04SourceStatus(t, h, fixture.TenantID, fixture.MediaID); status != "EXPIRED" {
-		t.Fatalf("O1 source status=%s, want EXPIRED", status)
+	if status := task04SourceStatus(t, h, fixture.TenantID, fixture.MediaID); status != "RETAINED" {
+		t.Fatalf("O1 ACTIVE_BASELINE source status=%s, want RETAINED", status)
 	}
 	if purged, err := executor.PurgeInactiveOriginBanks(ctx, fixture.TenantID, 10); err != nil || purged != 0 {
 		t.Fatalf("bank purge for active O1 = %d, %v; want 0", purged, err)
@@ -145,7 +145,7 @@ func TestVV_IT_336InvalidateOriginWhileV1PinnedAndRPT1RetainedKeepsFrames(t *tes
 		t.Fatal(err)
 	}
 	addTask07ReportReferences(t, h, fixture, 1)
-	if _, err := (origincore.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
+	if _, err := (origininvalidate.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
 		t.Fatal(err)
 	}
 	var version database.OriginVersion
@@ -173,7 +173,7 @@ func TestVV_IT_337ReleasingNewestOfHundredReportReferencesKeepsP1Protected(t *te
 	h, fixture := newTask07OriginHarness(t)
 	ctx := context.Background()
 	reports := addTask07ReportReferences(t, h, fixture, 100)
-	if _, err := (origincore.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
+	if _, err := (origininvalidate.Service{DB: h.DB}).Invalidate(ctx, fixture.TenantID, fixture.OriginVersionID); err != nil {
 		t.Fatal(err)
 	}
 	newest := reports[len(reports)-1]
@@ -238,7 +238,7 @@ func TestVV_IT_175SupersededP1StaysProtectedWhileRPT1ReferencesIt(t *testing.T) 
 		if err := tx.Create(&responsibility).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: v2, TenantID: fixture.TenantID, OriginID: fixture.OriginID, VersionNumber: 2, ResponsibilityID: responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &p2, ScopeManifestDigest: v1.ScopeManifestDigest, IdempotencyKey: "it175-v2-" + v2.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: v2, TenantID: fixture.TenantID, OriginID: fixture.OriginID, VersionNumber: 2, ResponsibilityID: &responsibility.ID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &p2, ScopeManifestDigest: v1.ScopeManifestDigest, IdempotencyKey: "it175-v2-" + v2.String(), CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&database.Origin{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.OriginID).Update("active_version_id", v2).Error; err != nil {

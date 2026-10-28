@@ -111,6 +111,10 @@ func (r *queryResolver) triageWorkspace(ctx context.Context, first *int, after *
 		base := triageScopeQuery(tx, meta)
 		if classification != nil && *classification != "" {
 			base = base.Where("dashboard.triage_cases.classification=?", *classification)
+		} else {
+			// The triage queue is an exception-only workflow. Keep normal reports
+			// out of both the page and its counters before applying pagination.
+			base = base.Where("dashboard.triage_cases.classification IN ?", []string{"ATTENTION", "CRITICAL"})
 		}
 		if search != nil && strings.TrimSpace(*search) != "" {
 			term := "%" + strings.TrimSpace(*search) + "%"

@@ -17,9 +17,9 @@ import (
 	capturefinalizer "inspection/services/inspection/internal/features/capture/finalize_submission"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
 	capturesubmit "inspection/services/inspection/internal/features/capture/submit"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturesubmit "inspection/services/inspection/internal/features/recapture/submit"
+	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/security"
@@ -142,7 +142,8 @@ func TestVV_IT_436API05CaptureMutationsRejectInvalidCSRFBeforeMutation(t *testin
 
 func newAPI05CaptureFixture(t *testing.T) api03FailureFixture {
 	t.Helper()
-	fixture := newAPI03FailureFixture(t, "submitCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "submitCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	// The Task06 seed stores the template document; an open video draft carries
 	// the frozen requirement list that bootstrap and capture validation read.
 	if err := fixture.harness.AdminDB.Model(&database.CaptureDraft{}).
@@ -158,7 +159,7 @@ func newAPI05CaptureFixture(t *testing.T) api03FailureFixture {
 		t.Fatal(err)
 	}
 	capture := capturecore.Service{DB: fixture.harness.DB}
-	finalizer, err := capturefinalizer.Setup(capturefinalizer.Dependencies{Origins: origincore.Service{DB: fixture.harness.DB}, Recapture: recapturecore.Service{DB: fixture.harness.DB}})
+	finalizer, err := capturefinalizer.Setup(capturefinalizer.Dependencies{Recapture: recapturecore.Service{DB: fixture.harness.DB}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +476,7 @@ func TestVV_IT_424VideoCaptureAndRecaptureSubmissionJourney(t *testing.T) {
 	if err := fixture.harness.AdminDB.Create(&database.Invitation{ID: invitationID, TenantID: fixture.tenantID, ResponsibilityID: newResponsibilityID, TokenHash: hash[:], DeliveryIntents: []byte(`[]`), Status: "ACTIVE", ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: invitationID, ResponsibilityID: newResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &newResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	fixture.credentials = requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf}

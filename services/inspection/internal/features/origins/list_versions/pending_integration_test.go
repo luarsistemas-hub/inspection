@@ -31,7 +31,8 @@ func TestSubmittedVideoOriginListsPendingAndUnselectable(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
+	// v1 pinned until template schema 1 is removed
+	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestSubmittedVideoOriginListsPendingAndUnselectable(t *testing.T) {
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it032-origin", CreatedAt: now}).Error
+		return tx.Create(&database.OriginVersion{ID: versionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "it032-origin", CreatedAt: now}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

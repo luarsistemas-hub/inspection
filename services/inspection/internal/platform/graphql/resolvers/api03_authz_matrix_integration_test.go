@@ -116,12 +116,14 @@ func TestAPI03InternalPrincipalWithoutParticipantSessionIsForbiddenIT400(t *test
 }
 
 func TestAPI03ForeignReplacementMediaIsNotFoundIT401(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	other, err := fixture.harness.SeedTask06Fixture(context.Background(), harness.Task06FixtureOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreignMedia := database.MediaObject{ID: identity.NewID(), TenantID: other.TenantID, ResponsibilityID: other.ResponsibilityID, ObjectKey: "it401/foreign-video", ContentType: "video/mp4", SHA256: strings.Repeat("b", 64), SizeBytes: 1, Status: "FAILED", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`)}
+	foreignMediaID := identity.NewID()
+	foreignMedia := database.MediaObject{ID: foreignMediaID, TenantID: other.TenantID, ResponsibilityID: other.ResponsibilityID, ObjectKey: "it401/foreign-video/" + foreignMediaID.String(), ContentType: "video/mp4", SHA256: strings.Repeat("b", 64), SizeBytes: 1, Status: "FAILED", MediaKind: "VIDEO", RequirementKey: "video:main", AttentionItems: json.RawMessage(`[]`)}
 	if err := fixture.harness.WithinTenant(context.Background(), other.TenantID, func(tx *gorm.DB) error { return tx.Create(&foreignMedia).Error }); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +219,8 @@ func TestVVIT115ExpiredInvitationDuringRecordingRejectsVideoAdmission(t *testing
 }
 
 func TestVVIT129OldPhotoConsentRequiresCurrentVideoDisclosure(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
 		return tx.Model(&database.ProcessingAcceptance{}).
 			Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).
@@ -244,7 +247,7 @@ func TestVVIT129OldPhotoConsentRequiresCurrentVideoDisclosure(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: fixture.invitationID, ResponsibilityID: fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(fixture.invitationID), ResponsibilityID: &fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	credentials := requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf}
@@ -320,7 +323,7 @@ func TestVVIT125RevokedInvitationRejectsReauthenticatedResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: fixture.invitationID, ResponsibilityID: fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.tenantID, InvitationID: identity.Ptr(fixture.invitationID), ResponsibilityID: &fixture.responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	credentials := requestctx.ExternalCredentials{SessionToken: token, CSRFToken: csrf}
@@ -338,7 +341,8 @@ func TestVVIT125RevokedInvitationRejectsReauthenticatedResume(t *testing.T) {
 }
 
 func TestAPI03CompetingAttemptRejectedIT406(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	now := time.Now().UTC()
 	attempt := database.VideoAttempt{ID: identity.NewID(), TenantID: fixture.tenantID, ResponsibilityID: fixture.responsibilityID, Kind: "CURRENT", PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: 1 << 30, AcquisitionSource: "CAMERA", Status: "ACTIVE", IdempotencyKey: "it406-live", PayloadDigest: strings.Repeat("a", 64), AdmittedAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now}
 	if err := fixture.harness.AdminDB.Create(&attempt).Error; err != nil {

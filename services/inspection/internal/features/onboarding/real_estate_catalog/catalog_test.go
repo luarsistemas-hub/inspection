@@ -1,6 +1,10 @@
 package real_estate_catalog
 
-import "testing"
+import (
+	"testing"
+
+	templatecatalog "inspection/services/inspection/internal/features/templates/catalog"
+)
 
 func TestResolveSupportedDefinition(t *testing.T) {
 	got, err := Resolve("real_estate")
@@ -10,21 +14,21 @@ func TestResolveSupportedDefinition(t *testing.T) {
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 4 || len(got.OriginModes) != 2 {
+	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || len(got.Steps) != 3 {
 		t.Fatalf("unexpected definition: %+v", got)
 	}
-	if got.OriginModes[0].TemplateKey != got.OriginModes[1].TemplateKey || len(got.Templates) != 1 {
-		t.Fatal("comparison choice must reuse the same inspection model")
+	if len(got.Templates) != 1 {
+		t.Fatalf("unexpected templates: %+v", got.Templates)
 	}
 }
 
-func TestResolveVersionPreservesTheLegacyAddressContract(t *testing.T) {
+func TestResolveVersionUsesCurrentContract(t *testing.T) {
 	got, err := ResolveVersion(Segment, DefinitionVersion-1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SchemaVersion != 1 || got.Version != 4 || got.Steps[1].Fields[0].Key != "address" || got.Steps[1].Fields[0].Type != "textarea" {
-		t.Fatalf("legacy onboarding definition changed: %+v", got)
+	if got.SchemaVersion != DefinitionSchema || got.Version != DefinitionVersion || got.Steps[1].Fields[0].Key != "addressDetails" {
+		t.Fatalf("current onboarding definition changed: %+v", got)
 	}
 }
 
@@ -38,7 +42,6 @@ func TestDefinitionChoicesKeepInternalValuesAndPortugueseLabels(t *testing.T) {
 	}{
 		{"property", "propertyType", "APARTMENT", "Apartamento"},
 		{"property", "purpose", "RENTAL", "Locação"},
-		{"origin", "mode", "CHECKLIST_ONLY", "Registrar estado inicial"},
 		{"participant", "mode", "SELF", "Eu farei a vistoria"},
 	}
 	for _, check := range checks {
@@ -98,6 +101,33 @@ func TestCuratedTemplateLeavesComparisonChoiceToInspection(t *testing.T) {
 	refs := templateRefs{}
 	if err := ValidateTemplates(refs); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOnboardingPublishesV2ButKeepsLegacyConsumerTemplateV1(t *testing.T) {
+	refs := templateRefs{}
+	for label, documents := range map[string]map[string]templatecatalog.TemplateDocument{
+		"published v2":     TemplateDocuments("production"),
+		"legacy active v1": LegacyTemplateDocuments("production"),
+	} {
+		document, ok := documents[ChecklistTemplateKey]
+		if !ok {
+			t.Fatalf("%s document missing", label)
+		}
+		payload, _, err := templatecatalog.CanonicalJSON(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		compiled, err := templatecatalog.Compile(payload, refs)
+		if err != nil {
+			t.Fatalf("%s document did not compile: %v", label, err)
+		}
+		if label == "published v2" && compiled.Document.SchemaVersion != templatecatalog.EnvironmentSchemaVersion {
+			t.Fatalf("published onboarding template schemaVersion=%d", compiled.Document.SchemaVersion)
+		}
+		if label == "legacy active v1" && (compiled.Document.SchemaVersion != TemplateSchema || len(compiled.Document.Requirements) == 0) {
+			t.Fatalf("legacy onboarding template is not capturable v1: %+v", compiled.Document)
+		}
 	}
 }
 

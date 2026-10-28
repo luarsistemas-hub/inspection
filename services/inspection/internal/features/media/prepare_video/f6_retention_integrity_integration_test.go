@@ -47,8 +47,9 @@ func TestFrameBankCommitFreezesOriginAndCurrentExpiryAtFixedT0IT308(t *testing.T
 		}
 	}
 	wantByMedia := map[string]time.Time{
-		origin.mediaID.String():  t0.Add(30 * 24 * time.Hour),
-		current.mediaID.String(): t0.Add(5 * 24 * time.Hour),
+		origin.mediaID.String(): t0.Add(30 * 24 * time.Hour),
+		// TechSpec v84: without a policy row CURRENT sources use the 30-day default.
+		current.mediaID.String(): t0.Add(30 * 24 * time.Hour),
 	}
 	for _, fixture := range []preparationFixture{origin, current} {
 		if err := h.WithinTenant(ctx, fixture.tenantID, func(tx *gorm.DB) error {

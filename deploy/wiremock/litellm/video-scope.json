@@ -1,0 +1,22 @@
+{
+  "priority": 2,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/chat/completions",
+    "bodyPatterns": [{ "contains": "\"comparison_mode\":\"VIDEO_SCOPE\"" }]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": "stub-video-scope",
+      "provider": "stub",
+      "model": "stub/vision",
+      "choices": [{ "message": {
+        "content": "{\"observations\":[{{#each (jsonPath request.body '$.messages[1].content[?(@.text =~ /evidenceId=.*/)].text')}}{{#unless @first}},{{/unless}}{\"frameId\":\"{{regexExtract this 'evidenceId=([^;]+)' 'frame'}}{{frame.0}}\",{{#if (jsonPath request.body '$.response_format.json_schema.schema.properties.observations.items.properties.environmentCandidate' default='')}}\"environmentCandidate\":\"Ambiente\",{{/if}}\"componentLabel\":\"visão geral\",\"viewLabel\":\"vista geral\",\"visibility\":\"VISIBLE\",\"landmarks\":[]}{{/each}}],\"unresolvedFrameIds\":[]}"
+      }}],
+      "usage": { "prompt_tokens": 12, "completion_tokens": 4 },
+      "cost": 0.0
+    }
+  }
+}

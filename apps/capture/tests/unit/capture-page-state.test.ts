@@ -22,7 +22,7 @@ describe("capture page answer state", () => {
 
   it("uses the current answer version for impossibility and preserves its media", () => {
     const current = answer(["media-1"]);
-    expect(buildImpossibilityInput("front", "inacessível", current, "mutation-1")).toEqual({ requirementKey: "front", reason: "inacessível", expectedVersion: 2, clientMutationId: "mutation-1" });
+    expect(buildImpossibilityInput("front", "inacessível", current, "mutation-1")).toEqual({ requirementKey: "front", reason: "inacessível", reasonCode: null, reasonText: null, expectedVersion: 2, clientMutationId: "mutation-1" });
     expect(updateImpossibleAnswer([current], "front", "inacessível")).toEqual([{ ...current, impossibilityReason: "inacessível", version: 3 }]);
   });
 

@@ -46,7 +46,7 @@ func mapOnboardingRequest(value database.OnboardingRequest) *graphql1.Onboarding
 	}
 	return &graphql1.OnboardingRequest{
 		ID: value.ID.String(), Status: value.Status, AssetID: optionalOnboardingID(value.AssetID),
-		ParticipantID: optionalOnboardingID(value.ParticipantID), OriginVersionID: optionalOnboardingID(value.OriginVersionID), TemplateID: templateID,
+		ParticipantID: optionalOnboardingID(value.ParticipantID), OriginVersionID: nil, TemplateID: templateID,
 	}
 }
 
@@ -110,7 +110,7 @@ func mapOnboardingSession(value onboardingsession.Session) *graphql1.OnboardingS
 			"segmentVersion": definition.SegmentVersion,
 			"steps":          definition.Steps,
 			"purposes":       definition.Purposes,
-			"originModes":    definition.OriginModes,
+			"originModes":    []any{},
 			"templates":      definition.Templates,
 			"analysisType":   definition.AnalysisType,
 		},

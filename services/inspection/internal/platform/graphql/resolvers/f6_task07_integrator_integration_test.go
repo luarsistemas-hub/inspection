@@ -376,7 +376,7 @@ func TestVV_IT_352RateLimitDoesNotExposeOtherTenantQueueMetadata(t *testing.T) {
 	if err := fx.h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()

@@ -116,6 +116,11 @@ func TestEffectiveSourceHeldIncludesInspectionAndOriginHolds(t *testing.T) {
 		`CREATE TABLE media.video_preparation_jobs (id text, tenant_id text, media_id text)`,
 		`CREATE TABLE media.video_evidence_references (id text, tenant_id text, preparation_id text, owner_type text, owner_id text)`,
 		`CREATE TABLE origins.origin_versions (id text, tenant_id text, video_preparation_id text)`,
+		// Origin holds resolve ownership through the shared retention reference query.
+		`CREATE TABLE origins.origin_evidence (id text, tenant_id text, origin_version_id text, media_id text)`,
+		`CREATE TABLE origins.inventory_items (id text, tenant_id text, origin_version_id text, environment_id text, decision text, merged_into_id text)`,
+		`CREATE TABLE origins.inventory_environments (id text, tenant_id text, decision text)`,
+		`CREATE TABLE origins.inventory_item_evidence (id text, tenant_id text, item_id text, media_id text)`,
 	}
 	for _, statement := range statements {
 		if err := db.Exec(statement).Error; err != nil {

@@ -9,7 +9,6 @@ import (
 
 	"inspection/libs/identity"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
-	"inspection/services/inspection/internal/features/onboarding/coordinator"
 	real_estate_catalog "inspection/services/inspection/internal/features/onboarding/real_estate_catalog"
 	onboardingsession "inspection/services/inspection/internal/features/onboarding/session"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -34,7 +33,7 @@ func TestIT031AndIT032OnboardingDefinitionGraphQLBoundary(t *testing.T) {
 	}
 
 	supported := request("REAL_ESTATE")
-	if !strings.Contains(supported, `"schemaVersion":2`) || !strings.Contains(supported, "addressDetails") || !strings.Contains(supported, "CHECKLIST_ONLY") || !strings.Contains(supported, "FIXED_ORIGIN") {
+	if !strings.Contains(supported, `"schemaVersion":2`) || !strings.Contains(supported, "addressDetails") || !strings.Contains(supported, `"originModes":[]`) {
 		t.Fatalf("supported definition response: %s", supported)
 	}
 	unsupported := request("UNKNOWN")
@@ -152,24 +151,13 @@ func TestOnboardingAgencyProvisioningKeyIsStablePerSessionVersion(t *testing.T) 
 	}
 }
 
-func TestMapOnboardingCompletionKeepsPendingOriginResourceIDsNull(t *testing.T) {
-	request, status := mapOnboardingCompletion(onboardingcomplete.Result{
-		State: coordinator.StateOriginPending, NextAction: coordinator.NextActionWaitForOrigin,
-		OriginStatus: "PENDING", Delivery: "PENDING",
-	})
-	if request != nil || status.RequestID != nil || status.InspectionID != nil {
-		t.Fatalf("pending origin claimed completed resources: request=%#v status=%#v", request, status)
-	}
-	if status.State != coordinator.StateOriginPending || status.NextAction != coordinator.NextActionWaitForOrigin || status.OriginStatus != "PENDING" {
-		t.Fatalf("unexpected pending status: %#v", status)
-	}
-
+func TestMapOnboardingCompletionProjectsSubmittedResources(t *testing.T) {
 	id := identity.NewID()
-	request, status = mapOnboardingCompletion(onboardingcomplete.Result{
+	request, status := mapOnboardingCompletion(onboardingcomplete.Result{
 		Request: database.OnboardingRequest{ID: id}, InspectionID: id,
-		State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", Delivery: "PENDING",
+		State: "SUBMITTED", NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", Delivery: "PENDING",
 	})
-	if request == nil || status.RequestID == nil || status.InspectionID == nil || *status.RequestID != id.String() || *status.InspectionID != id.String() {
+	if request == nil || status.RequestID == nil || status.InspectionID == nil || *status.RequestID != id.String() || *status.InspectionID != id.String() || status.OriginStatus != "NOT_REQUIRED" {
 		t.Fatalf("submitted resources were not projected: request=%#v status=%#v", request, status)
 	}
 }

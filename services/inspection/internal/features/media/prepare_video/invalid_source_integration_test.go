@@ -30,7 +30,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestInvalidOriginalFailsBeforeFramePublicationIT049IT137IT152(t *testing.T) {
+func TestInvalidOriginalFailsBeforeFramePublicationIT137IT152(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg is required only to synthesize the truncated MP4 fixture")
+	}
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
 	}
@@ -63,7 +66,7 @@ func TestInvalidOriginalFailsBeforeFramePublicationIT049IT137IT152(t *testing.T)
 		name, filename, contentType string
 		body                        []byte
 	}{
-		{name: "IT-049 truncated MP4", filename: "broken.mp4", contentType: "video/mp4", body: validMP4[:len(validMP4)/8]},
+		{name: "truncated MP4", filename: "broken.mp4", contentType: "video/mp4", body: validMP4[:len(validMP4)/8]},
 		{name: "IT-137 JPEG disguised as MP4", filename: "tour.mp4", contentType: "video/mp4", body: jpegBytes.Bytes()},
 		{name: "IT-343 PNG disguised as MP4", filename: "tour.mp4", contentType: "video/mp4", body: pngBytes.Bytes()},
 		{name: "IT-152 invalid WebM", filename: "broken.webm", contentType: "video/webm", body: []byte("\x1a\x45\xdf\xa3broken-webm")},
@@ -149,5 +152,5 @@ func TestInvalidOriginalFailsBeforeFramePublicationIT049IT137IT152(t *testing.T)
 // transport adapter against a real PNG body stored with an MP4 name and MIME
 // type; the matrix assertion above requires SOURCE_INVALID before publication.
 func TestVV_IT_343PngContentDeclaredAsMp4IsSourceInvalid(t *testing.T) {
-	TestInvalidOriginalFailsBeforeFramePublicationIT049IT137IT152(t)
+	TestInvalidOriginalFailsBeforeFramePublicationIT137IT152(t)
 }

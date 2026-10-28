@@ -12,6 +12,7 @@ import (
 type Command struct {
 	TenantID, ResponsibilityID identity.ID
 	RequirementKey, Reason     string
+	ReasonCode, ReasonText     string
 	ExpectedVersion            int64
 }
 type Dependencies struct {
@@ -25,6 +26,9 @@ func Setup(d Dependencies) error {
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 		command := raw.(Command)
+		if command.ReasonCode != "" {
+			return true, d.Service.DeclareImpossibilityWithCode(ctx, command.TenantID, command.ResponsibilityID, command.RequirementKey, command.ReasonCode, command.ReasonText, command.ExpectedVersion)
+		}
 		return true, d.Service.DeclareImpossibility(ctx, command.TenantID, command.ResponsibilityID, command.RequirementKey, command.Reason, command.ExpectedVersion)
 	})
 }

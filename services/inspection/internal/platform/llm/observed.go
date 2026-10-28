@@ -101,6 +101,9 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	}
 	if g.Metrics != nil {
 		g.Metrics.LLMCallFinished(g.Mode, request.Mode, request.ModelAlias, outcome, duration, result.TransportDelivered, result.InputTokens, result.OutputTokens, result.CachedInputTokens, len(request.Images), result.RequestBodyBytes)
+		if purpose, ok := map[string]string{"INVENTORY_CATALOG": "inventory_catalog", "INVENTORY_MATCH": "inventory_match", "INVENTORY_COMPARE": "inventory_compare"}[request.Mode]; ok {
+			g.Metrics.AnalysisGateway(purpose, outcome, result.InputTokens, result.OutputTokens)
+		}
 		if request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH" || request.Mode == "VIDEO_VERIFY" {
 			purpose := map[string]string{"VIDEO_SCOPE": "scope", "VIDEO_MATCH": "matching", "VIDEO_VERIFY": "verification"}[request.Mode]
 			g.Metrics.VideoGateway(purpose, outcome, result.InputTokens, result.OutputTokens)

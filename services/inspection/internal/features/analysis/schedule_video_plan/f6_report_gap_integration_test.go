@@ -186,7 +186,7 @@ func TestVV_IT_255SnapshotWithFrameOutsidePlanFailsFrameIntegrity(t *testing.T) 
 	if err := fixture.h.AdminDB.Where("tenant_id=? AND id IN (SELECT frame_id FROM analysis.video_plan_item_frames WHERE tenant_id=? AND plan_item_id IN (SELECT id FROM analysis.video_plan_items WHERE tenant_id=? AND plan_id=?))", fixture.tenantID, fixture.tenantID, fixture.tenantID, plan.ID).Order("pts_us DESC").First(&member).Error; err != nil {
 		t.Fatal(err)
 	}
-	f99 := database.VideoFrame{ID: identity.NewID(), TenantID: fixture.tenantID, SourceMediaID: member.SourceMediaID, PreparationID: member.PreparationID, PTSMicros: 99_000_000, SHA256: member.SHA256, ObjectKey: "f6-current-frame/F99", Width: 1, Height: 1, Role: "CURRENT", SizeBytes: 1, CreatedAt: time.Now().UTC()}
+	f99 := database.VideoFrame{ID: identity.NewID(), TenantID: fixture.tenantID, SourceMediaID: member.SourceMediaID, PreparationID: member.PreparationID, PTSMicros: 99_000_000, SHA256: member.SHA256, ObjectKey: "f6-current-frame/F99-" + identity.NewID().String(), Width: 1, Height: 1, Role: "CURRENT", SizeBytes: 1, CreatedAt: time.Now().UTC()}
 	if err := fixture.h.WithinTenant(fixture.ctx, fixture.tenantID, func(tx *gorm.DB) error { return tx.Create(&f99).Error }); err != nil {
 		t.Fatal(err)
 	}

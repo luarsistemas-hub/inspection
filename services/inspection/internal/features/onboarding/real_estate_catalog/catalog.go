@@ -13,7 +13,7 @@ import (
 const (
 	Segment              = "REAL_ESTATE"
 	DefinitionSchema     = 2
-	DefinitionVersion    = 5
+	DefinitionVersion    = 6
 	TemplateSchema       = 1
 	ChecklistTemplateKey = "real-estate-checklist"
 	OriginTemplateKey    = ChecklistTemplateKey
@@ -39,23 +39,15 @@ type Step struct {
 	Fields   []Field `json:"fields"`
 }
 
-type OriginMode struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	TemplateKey string `json:"templateKey"`
-	Required    bool   `json:"required"`
-}
-
 type Definition struct {
-	SchemaVersion  int          `json:"schemaVersion"`
-	Version        int          `json:"version"`
-	Segment        string       `json:"segment"`
-	SegmentVersion string       `json:"segmentVersion"`
-	Steps          []Step       `json:"steps"`
-	Purposes       []string     `json:"purposes"`
-	OriginModes    []OriginMode `json:"originModes"`
-	Templates      []string     `json:"templates"`
-	AnalysisType   string       `json:"analysisType"`
+	SchemaVersion  int      `json:"schemaVersion"`
+	Version        int      `json:"version"`
+	Segment        string   `json:"segment"`
+	SegmentVersion string   `json:"segmentVersion"`
+	Steps          []Step   `json:"steps"`
+	Purposes       []string `json:"purposes"`
+	Templates      []string `json:"templates"`
+	AnalysisType   string   `json:"analysisType"`
 }
 
 var definition = Definition{
@@ -70,15 +62,13 @@ var definition = Definition{
 			{Key: "purpose", Label: "Finalidade da vistoria", Type: "select", Required: true, Options: []string{"SALE", "RENTAL", "MAINTENANCE", "INSURANCE"}, OptionLabels: map[string]string{"SALE": "Venda", "RENTAL": "Locação", "MAINTENANCE": "Manutenção", "INSURANCE": "Seguro"}},
 			{Key: "deadline", Label: "Prazo para concluir a vistoria", Type: "date", Required: true},
 		}},
-		{Key: "origin", Label: "Fotos de referência", Position: 3, Required: true, Fields: []Field{{Key: "mode", Label: "Base de comparação", Type: "select", Required: true, Options: []string{"CHECKLIST_ONLY", "FIXED_ORIGIN"}, OptionLabels: map[string]string{"CHECKLIST_ONLY": "Registrar estado inicial", "FIXED_ORIGIN": "Comparar com fotos de referência"}}}},
-		{Key: "participant", Label: "Responsável pela vistoria", Position: 4, Required: true, Fields: []Field{
+		{Key: "participant", Label: "Responsável pela vistoria", Position: 3, Required: true, Fields: []Field{
 			{Key: "mode", Label: "Quem realizará a vistoria?", Type: "select", Required: true, Options: []string{"SELF", "DELEGATE"}, OptionLabels: map[string]string{"SELF": "Eu farei a vistoria", "DELEGATE": "Outra pessoa fará a vistoria"}},
 			{Key: "name", Label: "Nome do responsável", Type: "text", Required: false},
 			{Key: "email", Label: "E-mail do responsável", Type: "email", Required: false},
 			{Key: "emailConfirmation", Label: "Confirme o e-mail do responsável", Type: "email", Required: false},
 		}},
 	},
-	OriginModes: []OriginMode{{Key: "CHECKLIST_ONLY", Label: "Registrar estado inicial", TemplateKey: ChecklistTemplateKey, Required: false}, {Key: "FIXED_ORIGIN", Label: "Comparar com fotos de referência", TemplateKey: OriginTemplateKey, Required: true}},
 }
 
 // Resolve returns a copy of a supported definition. Unsupported schema
@@ -97,27 +87,7 @@ func Resolve(segment string) (Definition, error) {
 // ResolveVersion returns the immutable public onboarding contract associated
 // with a session version. Existing sessions keep the original text field.
 func ResolveVersion(segment string, version int) (Definition, error) {
-	resolved, err := Resolve(segment)
-	if err != nil {
-		return Definition{}, err
-	}
-	if version >= DefinitionVersion {
-		return resolved, nil
-	}
-	resolved.SchemaVersion = 1
-	resolved.Version = 4
-	for i := range resolved.Steps {
-		if resolved.Steps[i].Key != "property" {
-			continue
-		}
-		for j := range resolved.Steps[i].Fields {
-			if resolved.Steps[i].Fields[j].Key == "addressDetails" {
-				resolved.Steps[i].Fields[j].Key = "address"
-				resolved.Steps[i].Fields[j].Type = "textarea"
-			}
-		}
-	}
-	return resolved, nil
+	return Resolve(segment)
 }
 
 // Validate rejects malformed definitions, including future schema versions.
@@ -125,7 +95,7 @@ func Validate(value Definition) error {
 	if value.SchemaVersion != DefinitionSchema {
 		return ErrUnsupportedSchemaVersion
 	}
-	if value.Version <= 0 || value.Segment == "" || len(value.Steps) == 0 || len(value.OriginModes) != 2 {
+	if value.Version <= 0 || value.Segment == "" || len(value.Steps) == 0 {
 		return fmt.Errorf("invalid onboarding definition")
 	}
 	for i, step := range value.Steps {
@@ -146,9 +116,9 @@ func TemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument
 	allowGallery := stage != "" && !strings.EqualFold(strings.TrimSpace(stage), "production")
 	base := func() templatecatalog.TemplateDocument {
 		return templatecatalog.TemplateDocument{
-			SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
+			SchemaVersion: templatecatalog.EnvironmentSchemaVersion, SegmentVersionID: "real-estate-v1",
 			ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
-			Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+			CaptureLayout: templatecatalog.EnvironmentsLayout, EnvironmentCapture: templatecatalog.DefaultEnvironmentCapture(), SuggestedEnvironmentTypes: []string{"LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "LAUNDRY", "BALCONY", "OTHER"},
 			AnalysisType: "REAL_ESTATE",
 			Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: allowGallery},
 		}
@@ -156,16 +126,31 @@ func TemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument
 	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: base()}
 }
 
-// ValidateTemplates compiles both curated documents against the supplied
-// segment and analysis-type references before they are published.
+// LegacyTemplateDocuments returns the v1 onboarding template used by the
+// existing inspection and capture flow until environment capture is enabled.
+func LegacyTemplateDocuments(stage string) map[string]templatecatalog.TemplateDocument {
+	allowGallery := stage != "" && !strings.EqualFold(strings.TrimSpace(stage), "production")
+	return map[string]templatecatalog.TemplateDocument{ChecklistTemplateKey: {
+		SchemaVersion: TemplateSchema, SegmentVersionID: "real-estate-v1",
+		ParticipantRoles: []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, DefaultComparisonMode: templatecatalog.ChecklistOnly,
+		Requirements: []templatecatalog.CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: true, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+		AnalysisType: "REAL_ESTATE",
+		Policy:       templatecatalog.Policy{GPSRequired: true, GeofenceMeters: templatecatalog.DefaultGeofence, AllowGallery: allowGallery},
+	}}
+}
+
+// ValidateTemplates compiles the legacy and schemaVersion 2 documents against
+// the supplied segment and analysis-type references before they are published.
 func ValidateTemplates(refs templatecatalog.References) error {
-	for key, document := range TemplateDocuments("production") {
-		payload, _, err := templatecatalog.CanonicalJSON(document)
-		if err != nil {
-			return fmt.Errorf("template %s: canonicalize: %w", key, err)
-		}
-		if _, err := templatecatalog.Compile(payload, refs); err != nil {
-			return fmt.Errorf("template %s: %w", key, err)
+	for _, documents := range []map[string]templatecatalog.TemplateDocument{LegacyTemplateDocuments("production"), TemplateDocuments("production")} {
+		for key, document := range documents {
+			payload, _, err := templatecatalog.CanonicalJSON(document)
+			if err != nil {
+				return fmt.Errorf("template %s v%d: canonicalize: %w", key, document.SchemaVersion, err)
+			}
+			if _, err := templatecatalog.Compile(payload, refs); err != nil {
+				return fmt.Errorf("template %s v%d: %w", key, document.SchemaVersion, err)
+			}
 		}
 	}
 	return nil
@@ -188,6 +173,5 @@ func clone(value Definition) Definition {
 	}
 	result.Purposes = append([]string(nil), value.Purposes...)
 	result.Templates = append([]string(nil), value.Templates...)
-	result.OriginModes = append([]OriginMode(nil), value.OriginModes...)
 	return result
 }

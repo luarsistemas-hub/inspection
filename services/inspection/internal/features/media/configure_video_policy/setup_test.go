@@ -18,8 +18,15 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestUnit_UT318_NewVideoPolicyDefaults(t *testing.T) {
+	policy := Defaults(identity.NewID())
+	if policy.CurrentRetentionDays != 30 || policy.SupersededBaselineRetentionDays != 365 {
+		t.Fatalf("UT-318 defaults current=%d superseded=%d, want 30/365", policy.CurrentRetentionDays, policy.SupersededBaselineRetentionDays)
+	}
+}
+
 func TestPolicyDefaultsAndBoundsUT001UT003(t *testing.T) {
-	if p := Defaults([16]byte{1}); p.MaxDurationMinutes != 15 || p.OriginRetentionDays != 30 || p.CurrentRetentionDays != 5 || p.Version != 1 {
+	if p := Defaults([16]byte{1}); p.MaxDurationMinutes != 15 || p.OriginRetentionDays != 30 || p.CurrentRetentionDays != 30 || p.SupersededBaselineRetentionDays != 365 || p.Version != 1 {
 		t.Fatalf("unexpected defaults: %#v", p)
 	}
 	for _, tc := range []struct {
@@ -30,6 +37,33 @@ func TestPolicyDefaultsAndBoundsUT001UT003(t *testing.T) {
 		if (err == nil) != tc.valid {
 			t.Fatalf("Validate(%d,%d,%d) err=%v", tc.duration, tc.origin, tc.current, err)
 		}
+	}
+}
+
+func TestUnit_UT315_SupersededRetentionBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		days  int
+		valid bool
+	}{
+		{name: "UT-315 rejects zero", days: 0},
+		{name: "UT-315 accepts one", days: 1, valid: true},
+		{name: "UT-315 accepts maximum", days: 3650, valid: true},
+		{name: "UT-315 rejects above maximum", days: 3651},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateSupersededBaselineRetention(tc.days)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, err=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestUnit_UT318_VideoPolicyDefaults(t *testing.T) {
+	policy := Defaults([16]byte{1})
+	if policy.CurrentRetentionDays != 30 || policy.SupersededBaselineRetentionDays != 365 {
+		t.Fatalf("new policy defaults = current %d/superseded %d, want 30/365", policy.CurrentRetentionDays, policy.SupersededBaselineRetentionDays)
 	}
 }
 
@@ -66,6 +100,9 @@ func TestPolicyQueriesAreTenantScopedAcrossOneHundredTenantsIT029(t *testing.T) 
 	if err := db.Create(&policies).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Model(&database.VideoPolicy{}).Where("tenant_id=?", policies[0].TenantID).Update("superseded_baseline_retention_days", 730).Error; err != nil {
+		t.Fatal(err)
+	}
 	bus := mediator.New()
 	if err := Setup(Dependencies{DB: db, Bus: bus, Authorizer: auth.Authorizer{}, Within: func(ctx context.Context, _ identity.ID, fn func(*gorm.DB) error) error {
 		return fn(db.WithContext(ctx))
@@ -97,6 +134,9 @@ func TestPolicyQueriesAreTenantScopedAcrossOneHundredTenantsIT029(t *testing.T) 
 	first, err := bus.Send(ctx, command)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if first.(database.VideoPolicy).SupersededBaselineRetentionDays != 730 {
+		t.Fatalf("policy update lost superseded retention value: %+v", first)
 	}
 	replay, err := bus.Send(ctx, command)
 	if err != nil || replay.(database.VideoPolicy).Version != first.(database.VideoPolicy).Version {

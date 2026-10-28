@@ -49,19 +49,22 @@ type ReprocessCommand struct {
 }
 
 type Status struct {
-	MediaID            identity.ID
-	PreparationID      identity.ID
-	Status             string
-	Stage              string
-	PreparationVersion int
-	Attempts           int
-	ProcessedFrames    int
-	ErrorCode          string
-	Retryable          bool
-	SourceAvailable    bool
-	ManifestDigest     string
-	FirstFrameReadyAt  *time.Time
-	SourceExpiryAt     *time.Time
+	MediaID              identity.ID
+	PreparationID        identity.ID
+	Status               string
+	Stage                string
+	PreparationVersion   int
+	Attempts             int
+	ProcessedFrames      int
+	FramesSampled        int
+	FramesRetained       int
+	FramesRepresentative int
+	ErrorCode            string
+	Retryable            bool
+	SourceAvailable      bool
+	ManifestDigest       string
+	FirstFrameReadyAt    *time.Time
+	SourceExpiryAt       *time.Time
 }
 
 type Dependencies struct {
@@ -164,8 +167,10 @@ func load(ctx context.Context, db *gorm.DB, within func(context.Context, identit
 			MediaID: job.MediaID, PreparationID: job.ID, Status: job.Status, Stage: job.Phase,
 			PreparationVersion: job.PreparationVersion, Attempts: job.Attempts,
 			ProcessedFrames: job.ProcessedFrames, ErrorCode: job.ErrorCode,
-			Retryable:       job.Status == "FAILED" && (sourceAvailable || retainedBank) && !sourceBlocked,
-			SourceAvailable: sourceAvailable, ManifestDigest: job.ManifestDigest,
+			FramesSampled: job.FramesSampled, FramesRetained: job.FramesRetained,
+			FramesRepresentative: job.FramesRepresentative,
+			Retryable:            job.Status == "FAILED" && (sourceAvailable || retainedBank) && !sourceBlocked,
+			SourceAvailable:      sourceAvailable, ManifestDigest: job.ManifestDigest,
 			FirstFrameReadyAt: job.FirstReadyAt,
 		}
 		if source.ID != (identity.ID{}) {
@@ -285,7 +290,7 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 		if anchor == nil {
 			anchor = source.FirstFrameReadyAt
 		}
-		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: c.TenantID, MediaID: c.MediaID, SubmissionID: sourceJob.SubmissionID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: lastGeneration + 1, ProfileDigest: c.ProfileDigest, ClientMutationID: c.MutationID, NextAttemptAt: now, FirstReadyAt: anchor, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: c.TenantID, MediaID: c.MediaID, SubmissionID: sourceJob.SubmissionID, RequirementKey: sourceJob.RequirementKey, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: lastGeneration + 1, ProfileDigest: c.ProfileDigest, ClientMutationID: c.MutationID, NextAttemptAt: now, FirstReadyAt: anchor, PendingObjectKeys: []byte("[]"), CreatedAt: now}
 		if err := tx.WithContext(ctx).Create(&job).Error; err != nil {
 			return err
 		}
@@ -304,26 +309,7 @@ func reprocess(ctx context.Context, db *gorm.DB, within func(context.Context, id
 }
 
 func resumeBlockedPlans(tx *gorm.DB, tenantID, previousPreparationID, nextPreparationID identity.ID, now time.Time) error {
-	var plans []database.VideoPlan
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND status='BLOCKED' AND (current_preparation_id=? OR origin_preparation_id=?)", tenantID, previousPreparationID, previousPreparationID).Find(&plans).Error; err != nil {
-		return err
-	}
-	for _, plan := range plans {
-		updates := map[string]any{"status": "BUILDING", "next_attempt_at": now.UTC(), "attempts": 0, "error_code": "", "lease_token": nil, "lease_until": nil}
-		if plan.CurrentPreparationID == previousPreparationID {
-			updates["current_preparation_id"] = nextPreparationID
-		}
-		if plan.OriginPreparationID != nil && *plan.OriginPreparationID == previousPreparationID {
-			updates["origin_preparation_id"] = nextPreparationID
-		}
-		if err := tx.Model(&database.VideoPlan{}).Where("tenant_id=? AND id=? AND status='BLOCKED'", tenantID, plan.ID).Updates(updates).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=? AND status IN ('REVIEW_REQUIRED','PROCESSING_FAILED')", tenantID, plan.InspectionID).Updates(map[string]any{"status": "ANALYZING", "updated_at": now.UTC(), "version": gorm.Expr("version + 1")}).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+	return mediacore.ResumeBlockedPlans(tx, tenantID, previousPreparationID, nextPreparationID, now)
 }
 
 func statusForJob(job database.VideoPreparationJob) Status {

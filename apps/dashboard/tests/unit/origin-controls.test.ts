@@ -9,6 +9,7 @@ function origin(overrides: Partial<OriginVersion> = {}): OriginVersion {
     id: "origin-a", originId: "origin-root-a", versionNumber: 1, status: "ACTIVE", mediaKind: "VIDEO",
     preparationStatus: "READY", captureSubmitted: true, selectable: true, sourceAvailability: "RETAINED",
     scopeManifestDigest: "digest", supersedesId: null, activatedAt: "2030-05-10T12:00:00Z", ...overrides,
+    purpose: overrides.purpose ?? null, hasInventory: overrides.hasInventory ?? false,
     limitedCoverage: overrides.limitedCoverage ?? false,
   };
 }

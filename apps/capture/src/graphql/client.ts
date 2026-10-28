@@ -6,9 +6,11 @@ import {
   CompleteMediaUploadDocument,
   CreateMediaUploadDocument,
   DeclareCaptureImpossibilityDocument,
+  DeclareCaptureEnvironmentDocument,
   ExternalCaptureBootstrapDocument,
   PresignMediaPartsDocument,
   RequestInvitationOtpDocument,
+  RecordCaptureQualityWarningDocument,
   RevokeInvitationDocument,
   SaveCaptureMetadataDocument,
   SubmitCaptureDocument,
@@ -80,6 +82,8 @@ export const captureOperations = {
   completeUpload: CompleteMediaUploadDocument,
   metadata: SaveCaptureMetadataDocument,
   impossibility: DeclareCaptureImpossibilityDocument,
+  declareEnvironment: DeclareCaptureEnvironmentDocument,
+  qualityWarning: RecordCaptureQualityWarningDocument,
   submit: SubmitCaptureDocument,
   submitRecapture: SubmitRecaptureDocument
 };

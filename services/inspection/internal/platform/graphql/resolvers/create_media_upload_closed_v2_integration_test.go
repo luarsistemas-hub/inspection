@@ -105,7 +105,7 @@ func TestVV_IT_373HundredUnfinishedReceiptsRateLimitWithoutCompletion(t *testing
 	if err := fx.h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()
@@ -206,7 +206,7 @@ func assertCurrentOnlyMediaUploadRejected(t *testing.T, label, closedStatus stri
 	if err := fx.h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := fx.h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fx.seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()

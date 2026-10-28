@@ -45,7 +45,7 @@ Every row must end in one of these verified outcomes:
 | 23 | `projectTimeline` | Dashboard | Missing UI | Ordered stage/inspection timeline with state, occurrence time, and navigable relationships. |
 | 24 | `notificationDeliveries` | Admin | Missing UI | Delivery collection with intent, channel attempts, partial failure, retry state, and related resource. |
 | 25 | `publicationPolicy` | Admin | Used as generic data | Governance form/detail with restrictive default, version, scope, customer effect, and history. |
-| 26 | `customerPortfolio` | Dashboard customer | Placeholder/partial | Real authorized customer-safe portfolio with filters, progress, published classification, and pagination. |
+| 26 | `customerPortfolio` | Dashboard customer | Implemented with scoped assets | Customer-safe portfolio includes only assets with a published report or active inventory; scopes, search and cursor pagination are enforced. |
 | 27 | `customerTimeline` | Dashboard customer | Placeholder | Real customer-safe chronological projection with no internal notes or hidden state. |
 | 28 | `customerReport` | Dashboard customer | Placeholder | Active policy-approved report with safe unavailable/invalidated behavior. |
 | 29 | `customerEvidence` | Dashboard customer | Placeholder | Policy-approved evidence allowlist, lineage, availability, pagination, and time-limited media access. |
@@ -60,6 +60,11 @@ Every row must end in one of these verified outcomes:
 | 38 | `videoPreparation` | Admin; Dashboard | New contract | Authorized operators inspect durable preparation stage, frame counts, safe failure state, and original availability. |
 | 39 | `videoPreparationEvidence` | Admin; Dashboard | New contract | Authorized operators page scope observations and retained frames within one immutable preparation cursor. |
 | 40 | `videoPreparations` | Admin | New contract | Tenant operators filter durable video preparations by status and page stage, attempts, safe errors, retryability, and source availability. |
+| 41 | `baselineVersions` | Dashboard | New contract | Internal operators browse purpose-bearing inventory versions, activation state, counts, and contestation summary for one asset. |
+| 42 | `inventoryDraft` | Dashboard | New contract | Internal reviewers inspect grouped draft items, evidence availability, progress, and read-only state. |
+| 43 | `baselineInventory` | Dashboard; customer Dashboard | New contract | Internal users read the full baseline while customer viewers receive only the allowlisted projection. |
+| 44 | `inventoryTrail` | Dashboard audit | New contract | Auditors inspect append-only item decisions, activation, and counterparty events. |
+| 45 | `baselinePolicy` | Policy Admin | Implemented | Read the contestation deadline under the Admin product for `TENANT_ADMIN` and `INSPECTION_CONFIG_ADMIN`. |
 
 ## Mutations
 
@@ -136,11 +141,30 @@ Every row must end in one of these verified outcomes:
 | 66 | `reprocessVideoPreparation` | Admin | New contract | Authorized operators create an immutable preparation generation using a deployed profile digest while preserving the original first-readiness anchor. |
 | 67 | `reanalyzeVideoInspection` | Dashboard | New contract | Authorized operators queue an audited video plan generation against the active plan's pinned submission and reference. |
 | 68 | `closeOriginInvitation` | Admin | New contract | Close a draft origin invitation by version, revoke scoped access, and preserve audit history. |
+| 69 | `decideInventoryItems` | Dashboard | New contract | Employees, managers, and tenant administrators decide draft items with optimistic item versions and an audit trail. |
+| 70 | `bulkAcceptInventoryEnvironment` | Dashboard | New contract | Reviewers accept pending items that meet the environment confidence threshold. |
+| 71 | `addInventoryItem` | Dashboard | New contract | Reviewers add a declared or evidence-backed item to a draft environment. |
+| 72 | `mergeInventoryItems` | Dashboard | New contract | Reviewers merge duplicate items while preserving evidence lineage. |
+| 73 | `splitInventoryItem` | Dashboard | New contract | Reviewers split an item into separately reviewed parts. |
+| 74 | `upsertInventoryEnvironment` | Dashboard | New contract | Reviewers create or edit expected inventory environments. |
+| 75 | `removeInventoryEnvironment` | Dashboard | New contract | Reviewers remove an environment after confirming item exclusion. |
+| 76 | `activateBaselineVersion` | Dashboard | New contract | Reviewers activate a purpose-bearing baseline and supersede the previous version. |
+| 77 | `discardBaselineDraft` | Dashboard | New contract | Reviewers discard a draft while preserving its audit history. |
+| 78 | `requestOriginCataloging` | Dashboard | New contract | Reviewers request a catalog draft from an existing legacy origin. |
+| 79 | `startBaselineDraftFromInspection` | Dashboard | New contract | Reviewers start a draft from a completed comparative inspection. |
+| 80 | `retryInventoryDraft` | Dashboard | New contract | Reviewers retry an eligible failed inventory preparation. |
+| 81 | `resolveBaselineContestation` | Dashboard | New contract | Authorized operators accept a contestation into a new draft or decline it with a reason. |
+| 82 | `resendCounterpartyInvitation` | Dashboard | New contract | Authorized operators retry delivery after a failed counterparty invitation. |
+| 83 | `updateBaselinePolicy` | Admin | New contract | Tenant administrators configure contestation deadlines for future invitations. |
 
 ## Required Backend Capabilities Not Yet Represented Adequately
 
 Names below describe product capabilities. Final GraphQL field names and shapes
 are decided in the TechSpec, but each capability is mandatory.
+
+`Report.inventory` already carries the comparative inventory projection, including
+coverage, exceptions, evidence pairs, and availability. The Dashboard uses that
+field, so no duplicate `inspectionInventoryResults(inspectionId)` query is added.
 
 | Capability gap | Primary owner | Required behavior |
 | --- | --- | --- |

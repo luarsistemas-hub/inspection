@@ -101,6 +101,48 @@ func TestHTTPGatewayAllowsVideoFramesOnlyForAuxiliaryModes(t *testing.T) {
 	}
 }
 
+func TestHTTPGatewayAdmitsInventorySourcesAndAppliesVideoCaps(t *testing.T) {
+	for _, mode := range []string{"INVENTORY_CATALOG", "INVENTORY_MATCH", "INVENTORY_COMPARE"} {
+		for _, source := range []string{"ORIGIN", "CURRENT", "VIDEO_FRAME"} {
+			request := StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", Mode: mode, SystemPrompt: "system", UserPrompt: "data", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{{EvidenceID: "evidence-1", Source: source, Digest: "digest", DataURL: "data:image/jpeg;base64,AAAA"}}}
+			_, err := (HTTPGateway{BaseURL: "http://127.0.0.1:1"}).CompleteStructured(context.Background(), request)
+			var typed *Error
+			if !errors.As(err, &typed) || typed.Code != CodeTransport {
+				t.Fatalf("mode=%s source=%s err=%v", mode, source, err)
+			}
+		}
+		request := StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", Mode: mode, SystemPrompt: "system", UserPrompt: "data", JSONSchema: []byte(`{"type":"object"}`), Images: make([]NormalizedImage, 25)}
+		_, err := (HTTPGateway{BaseURL: "http://127.0.0.1:1"}).CompleteStructured(context.Background(), request)
+		var typed *Error
+		if !errors.As(err, &typed) || typed.Code != CodeInvalidInput {
+			t.Fatalf("mode=%s image cap not enforced: %v", mode, err)
+		}
+	}
+}
+
+func TestHTTPGatewaySendsInventoryModeForWireMockRouting(t *testing.T) {
+	for _, mode := range []string{"INVENTORY_CATALOG", "INVENTORY_MATCH", "INVENTORY_COMPARE"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Metadata map[string]string `json:"metadata"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Metadata["comparison_mode"] != mode {
+				t.Fatalf("comparison_mode=%q want %q", body.Metadata["comparison_mode"], mode)
+			}
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{}"}}]}`))
+		}))
+		image := NormalizedImage{EvidenceID: "evidence", Source: "CURRENT", Digest: "digest", DataURL: "data:image/jpeg;base64,AAAA"}
+		_, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), StructuredRequest{ModelAlias: "inspection-vision", PromptDigest: "digest", Mode: mode, SystemPrompt: "system", UserPrompt: "data", JSONSchema: []byte(`{"type":"object"}`), Images: []NormalizedImage{image}})
+		server.Close()
+		if err != nil {
+			t.Fatalf("mode=%s error=%v", mode, err)
+		}
+	}
+}
+
 func TestVideoScopeGatewayPreservesKnownFrameObservationsUT080(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any

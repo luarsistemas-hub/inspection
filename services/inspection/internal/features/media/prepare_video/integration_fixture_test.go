@@ -11,10 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
 	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
@@ -26,6 +28,7 @@ type preparationFixture struct {
 	tenantID, mediaID, preparationID identity.ID
 	originID                         identity.ID
 	responsibilityID                 identity.ID
+	actorID                          identity.ID
 	now                              time.Time
 }
 
@@ -43,7 +46,35 @@ func syntheticH264Clip(t *testing.T) []byte {
 	return clip
 }
 
-func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, contentType, kind, acquisition string) preparationFixture {
+func staticH264Clip(t *testing.T) []byte {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "static-clip.mp4")
+	command := exec.Command("ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=96x64:r=5:d=3", "-threads", "1", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", path)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generate static H.264 fixture: %v: %s", err, output)
+	}
+	clip, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return clip
+}
+
+func variedH264Clip(t *testing.T) []byte {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "varied-clip.mp4")
+	command := exec.Command("ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=96x64:rate=5:duration=12", "-vf", "hue=h=45*t", "-threads", "1", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", path)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generate varied H.264 fixture: %v: %s", err, output)
+	}
+	clip, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return clip
+}
+
+func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, contentType, kind, acquisition string, environmentRequirement ...string) preparationFixture {
 	t.Helper()
 	ctx := context.Background()
 	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
@@ -107,7 +138,7 @@ func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, conte
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: fixture.TenantID, AssetID: fixture.AssetID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: responsibilityID, Status: "SUBMITTED", MediaKind: "VIDEO", IdempotencyKey: "fixture-origin-" + originID.String(), CreatedAt: now, SubmittedAt: &now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: originVersionID, TenantID: fixture.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &responsibilityID, Status: "SUBMITTED", MediaKind: "VIDEO", IdempotencyKey: "fixture-origin-" + originID.String(), CreatedAt: now, SubmittedAt: &now}).Error; err != nil {
 				return err
 			}
 			if err := tx.Create(&database.CaptureDraft{ID: draftID, TenantID: fixture.TenantID, ResponsibilityID: responsibilityID, Kind: "ORIGIN", MediaKind: "VIDEO", TemplateVersionID: fixture.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -121,13 +152,31 @@ func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, conte
 		if kind == "SUPPLEMENT" {
 			requirementKey = "video:supplement"
 		}
+		if len(environmentRequirement) > 0 {
+			requirementKey = environmentRequirement[0]
+			requirements, _ := json.Marshal([]capturecore.Requirement{{Key: requirementKey, EnvironmentIdentityID: strings.TrimPrefix(requirementKey, "env:"), EnvironmentTypeCode: "LIVING_ROOM", EnvironmentName: "Sala de estar 7", EvidenceKind: "VIDEO", Required: true, Expected: true, MinimumMedia: 1, MaximumMedia: 3}})
+			if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fixture.TenantID, responsibilityID).Update("requirements", requirements).Error; err != nil {
+				return err
+			}
+		}
+		var attemptRequirement *string
+		if strings.HasPrefix(requirementKey, "env:") {
+			attemptRequirement = &requirementKey
+		}
+		if err := tx.Model(&database.VideoAttempt{}).Where("tenant_id=? AND id=?", fixture.TenantID, attemptID).Update("requirement_key", attemptRequirement).Error; err != nil {
+			return err
+		}
 		if err := tx.Create(&database.MediaObject{ID: mediaID, TenantID: fixture.TenantID, ResponsibilityID: responsibilityID, ObjectKey: objectKey, ContentType: contentType, SHA256: digest, SizeBytes: int64(len(clip)), Status: "RECEIVED", MediaKind: "VIDEO", VideoAttemptID: &attemptID, RequirementKey: requirementKey, IdempotencyKey: "fixture-media-" + mediaID.String(), AttentionItems: json.RawMessage(`[]`), Flags: json.RawMessage(`[]`), CaptureSource: acquisition, CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.SubmissionVersion{ID: submissionID, TenantID: fixture.TenantID, DraftID: draftID, ResponsibilityID: responsibilityID, VersionNumber: 1, Complete: true, Payload: json.RawMessage(`{}`), PayloadDigest: digest, SubmittedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, SubmissionID: &submissionID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}).Error; err != nil {
+		var jobRequirement *string
+		if strings.HasPrefix(requirementKey, "env:") {
+			jobRequirement = &requirementKey
+		}
+		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, SubmissionID: &submissionID, RequirementKey: jobRequirement, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		if kind == "ORIGIN" {
@@ -138,7 +187,7 @@ func seedPreparationFixture(t *testing.T, h *harness.Harness, clip []byte, conte
 	if err != nil {
 		t.Fatal(err)
 	}
-	return preparationFixture{tenantID: fixture.TenantID, mediaID: mediaID, preparationID: preparationID, originID: originID, responsibilityID: responsibilityID, now: now}
+	return preparationFixture{tenantID: fixture.TenantID, mediaID: mediaID, preparationID: preparationID, originID: originID, responsibilityID: responsibilityID, actorID: fixture.IdentityID, now: now}
 }
 
 func markPreparationAsSupplement(t *testing.T, h *harness.Harness, fixture preparationFixture) identity.ID {

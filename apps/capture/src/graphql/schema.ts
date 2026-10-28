@@ -19,6 +19,14 @@ export type AcceptProcessingInput = {
   videoProcessing: InputMaybe<Scalars['Boolean']['input']>;
 };
 
+export type ActivateBaselineVersionInput = {
+  clientMutationId: Scalars['String']['input'];
+  counterpartyParticipantIds: Array<Scalars['ID']['input']>;
+  expectedOriginVersion: Scalars['Int']['input'];
+  originVersionId: Scalars['ID']['input'];
+  purpose: Scalars['String']['input'];
+};
+
 export type ActivateSegmentDefinitionInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: Scalars['Int']['input'];
@@ -41,6 +49,21 @@ export type AddExceptionalStageInput = {
   reason: Scalars['String']['input'];
 };
 
+export type AddInventoryItemInput = {
+  clientMutationId: Scalars['String']['input'];
+  color: InputMaybe<Scalars['String']['input']>;
+  condition: InputMaybe<Scalars['String']['input']>;
+  environmentId: Scalars['ID']['input'];
+  evidence: Array<InventoryEvidenceInput>;
+  limitation: InputMaybe<Scalars['String']['input']>;
+  material: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  observation: InputMaybe<Scalars['String']['input']>;
+  originVersionId: Scalars['ID']['input'];
+  quantity: InputMaybe<Scalars['Int']['input']>;
+  typeCode: Scalars['String']['input'];
+};
+
 export type AnalysisPrompt = {
   __typename?: 'AnalysisPrompt';
   analysisType: AnalysisType;
@@ -49,6 +72,7 @@ export type AnalysisPrompt = {
   modelAlias: Scalars['String']['output'];
   revision: Scalars['Int']['output'];
   systemPrompt: Scalars['String']['output'];
+  task: AnalysisPromptTask;
   updatedAt: Scalars['String']['output'];
 };
 
@@ -58,6 +82,11 @@ export type AnalysisPromptPayload = {
   prompt: Maybe<AnalysisPrompt>;
   userErrors: Array<UserError>;
 };
+
+export type AnalysisPromptTask =
+  | 'FINDINGS'
+  | 'INVENTORY_CATALOG'
+  | 'INVENTORY_COMPARE';
 
 export type AnalysisType =
   | 'REAL_ESTATE';
@@ -162,10 +191,60 @@ export type AuditEventConnection = {
   pageInfo: PageInfo;
 };
 
+export type BaselineCounterpartyInvitation = {
+  __typename?: 'BaselineCounterpartyInvitation';
+  adjustmentVersionId: Maybe<Scalars['ID']['output']>;
+  deadlineAt: Scalars['String']['output'];
+  deliveryId: Maybe<Scalars['ID']['output']>;
+  deliveryStatus: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  participantId: Scalars['ID']['output'];
+  resolution: Scalars['String']['output'];
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+  statement: Maybe<Scalars['String']['output']>;
+};
+
+export type BaselineInventory = {
+  __typename?: 'BaselineInventory';
+  environments: Array<InventoryEnvironment>;
+  hasInventory: Scalars['Boolean']['output'];
+  version: Maybe<OriginVersion>;
+};
+
+export type BaselinePolicy = {
+  __typename?: 'BaselinePolicy';
+  contestationDeadlineDays: Scalars['Int']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type BaselinePolicyPayload = {
+  __typename?: 'BaselinePolicyPayload';
+  clientMutationId: Scalars['String']['output'];
+  policy: Maybe<BaselinePolicy>;
+  userErrors: Array<UserError>;
+};
+
 export type BeginVideoCaptureInput = {
   acquisitionSource: Scalars['String']['input'];
   clientMutationId: Scalars['String']['input'];
   replacesMediaId: InputMaybe<Scalars['ID']['input']>;
+  requirementKey: InputMaybe<Scalars['String']['input']>;
+};
+
+export type BulkAcceptInventoryEnvironmentInput = {
+  clientMutationId: Scalars['String']['input'];
+  environmentId: Scalars['ID']['input'];
+  minimumConfidenceBps: InputMaybe<Scalars['Int']['input']>;
+  originVersionId: Scalars['ID']['input'];
+};
+
+export type BulkAcceptInventoryEnvironmentPayload = {
+  __typename?: 'BulkAcceptInventoryEnvironmentPayload';
+  acceptedCount: Scalars['Int']['output'];
+  clientMutationId: Scalars['String']['output'];
+  userErrors: Array<UserError>;
 };
 
 export type BusinessUnit = {
@@ -208,6 +287,25 @@ export type CaptureComparisonMode =
   | 'CHECKLIST_ONLY'
   | 'FIXED_ORIGIN';
 
+export type CaptureEnvironment = {
+  __typename?: 'CaptureEnvironment';
+  addedDuringCapture: Scalars['Boolean']['output'];
+  expected: Scalars['Boolean']['output'];
+  identityId: Scalars['ID']['output'];
+  mediaCount: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+  requirementKey: Scalars['String']['output'];
+  status: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+};
+
+export type CaptureEnvironmentPayload = {
+  __typename?: 'CaptureEnvironmentPayload';
+  clientMutationId: Scalars['String']['output'];
+  environment: Maybe<CaptureEnvironment>;
+  userErrors: Array<UserError>;
+};
+
 export type CaptureGpsInput = {
   accuracyMeters: Scalars['Float']['input'];
   capturedAt: Scalars['String']['input'];
@@ -220,6 +318,13 @@ export type CapturePayload = {
   __typename?: 'CapturePayload';
   clientMutationId: Scalars['String']['output'];
   status: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type CaptureQualityWarningPayload = {
+  __typename?: 'CaptureQualityWarningPayload';
+  clientMutationId: Scalars['String']['output'];
+  flags: Array<Scalars['String']['output']>;
   userErrors: Array<UserError>;
 };
 
@@ -244,10 +349,15 @@ export type CaptureReferenceItem = {
 
 export type CaptureRequirement = {
   __typename?: 'CaptureRequirement';
+  addedDuringCapture: Maybe<Scalars['Boolean']['output']>;
   captureSourcePolicy: Scalars['String']['output'];
   comparisonTarget: Scalars['String']['output'];
   descriptionRequired: Scalars['Boolean']['output'];
+  environmentIdentityId: Maybe<Scalars['ID']['output']>;
+  environmentName: Maybe<Scalars['String']['output']>;
+  environmentTypeCode: Maybe<Scalars['String']['output']>;
   evidenceKind: Scalars['String']['output'];
+  expected: Maybe<Scalars['Boolean']['output']>;
   impossibilityAllowed: Scalars['Boolean']['output'];
   instructions: Maybe<Scalars['String']['output']>;
   key: Scalars['String']['output'];
@@ -256,6 +366,12 @@ export type CaptureRequirement = {
   minimumMedia: Scalars['Int']['output'];
   required: Scalars['Boolean']['output'];
   section: Scalars['String']['output'];
+};
+
+export type CaptureReviewHandoff = {
+  __typename?: 'CaptureReviewHandoff';
+  inspectionId: Scalars['ID']['output'];
+  originVersionId: Maybe<Scalars['ID']['output']>;
 };
 
 export type CloseOriginInvitationInput = {
@@ -316,11 +432,26 @@ export type ConfigureVideoPolicyInput = {
   expectedVersion: Scalars['Int']['input'];
   maxDurationMinutes: Scalars['Int']['input'];
   originRetentionDays: Scalars['Int']['input'];
+  supersededBaselineRetentionDays: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type ContactInput = {
   channel: Scalars['String']['input'];
   value: Scalars['String']['input'];
+};
+
+export type ContestBaselineInput = {
+  clientMutationId: Scalars['String']['input'];
+  statement: Scalars['String']['input'];
+};
+
+export type ContestationSummary = {
+  __typename?: 'ContestationSummary';
+  acknowledged: Scalars['Int']['output'];
+  contested: Scalars['Int']['output'];
+  noResponse: Scalars['Int']['output'];
+  open: Scalars['Int']['output'];
+  pending: Scalars['Int']['output'];
 };
 
 export type CorrectInspectionResponsibleEmailInput = {
@@ -336,6 +467,78 @@ export type CorrectOnboardingResponsibleEmailInput = {
   email: Scalars['String']['input'];
   emailConfirmation: Scalars['String']['input'];
   expectedResponsibilityVersion: Scalars['Int']['input'];
+};
+
+export type CounterpartyBaseline = {
+  __typename?: 'CounterpartyBaseline';
+  activatedAt: Maybe<Scalars['String']['output']>;
+  adjustmentStatus: Maybe<Scalars['String']['output']>;
+  baseline: CounterpartyBaselineInventory;
+  deadlineAt: Scalars['String']['output'];
+  newerVersionExists: Scalars['Boolean']['output'];
+  purpose: Maybe<Scalars['String']['output']>;
+  readOnly: Scalars['Boolean']['output'];
+  resolution: Scalars['String']['output'];
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+};
+
+export type CounterpartyBaselineEnvironment = {
+  __typename?: 'CounterpartyBaselineEnvironment';
+  items: Array<CounterpartyBaselineItem>;
+  name: Scalars['String']['output'];
+  typeCode: Scalars['String']['output'];
+};
+
+export type CounterpartyBaselineEvidence = {
+  __typename?: 'CounterpartyBaselineEvidence';
+  kind: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type CounterpartyBaselineInventory = {
+  __typename?: 'CounterpartyBaselineInventory';
+  environments: Array<CounterpartyBaselineEnvironment>;
+  hasInventory: Scalars['Boolean']['output'];
+};
+
+export type CounterpartyBaselineItem = {
+  __typename?: 'CounterpartyBaselineItem';
+  color: Maybe<Scalars['String']['output']>;
+  condition: Scalars['String']['output'];
+  evidence: Array<CounterpartyBaselineEvidence>;
+  limitation: Maybe<Scalars['String']['output']>;
+  material: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  observation: Scalars['String']['output'];
+  quantity: Maybe<Scalars['Int']['output']>;
+  typeCode: Scalars['String']['output'];
+};
+
+export type CounterpartyInvitationPayload = {
+  __typename?: 'CounterpartyInvitationPayload';
+  adjustmentVersionId: Maybe<Scalars['ID']['output']>;
+  clientMutationId: Scalars['String']['output'];
+  deadlineAt: Scalars['String']['output'];
+  invitationId: Scalars['ID']['output'];
+  resolution: Scalars['String']['output'];
+  response: Scalars['String']['output'];
+  userErrors: Array<UserError>;
+};
+
+export type CounterpartyResponseInput = {
+  clientMutationId: Scalars['String']['input'];
+};
+
+export type CounterpartyResponsePayload = {
+  __typename?: 'CounterpartyResponsePayload';
+  clientMutationId: Scalars['String']['output'];
+  respondedAt: Maybe<Scalars['String']['output']>;
+  response: Scalars['String']['output'];
+  userErrors: Array<UserError>;
 };
 
 export type CreateBusinessUnitInput = {
@@ -356,6 +559,7 @@ export type CreateInspectionInput = {
   reason: Scalars['String']['input'];
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: Array<Scalars['String']['input']>;
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
   stageId: InputMaybe<Scalars['ID']['input']>;
   templateId: InputMaybe<Scalars['ID']['input']>;
 };
@@ -364,6 +568,7 @@ export type CreateMediaUploadInput = {
   attemptId: InputMaybe<Scalars['ID']['input']>;
   clientMutationId: Scalars['String']['input'];
   contentType: Scalars['String']['input'];
+  requirementKey: InputMaybe<Scalars['String']['input']>;
   sha256: Scalars['String']['input'];
   sizeBytes: Scalars['Int']['input'];
 };
@@ -441,6 +646,45 @@ export type CustomerEvidenceItem = {
   url: Maybe<Scalars['String']['output']>;
 };
 
+export type CustomerInventory = {
+  __typename?: 'CustomerInventory';
+  coverage: Maybe<CustomerInventoryCoverage>;
+  informational: Array<CustomerInventoryEntry>;
+  problems: Array<CustomerInventoryEntry>;
+  purpose: Scalars['String']['output'];
+  referenceVersionNumber: Scalars['Int']['output'];
+};
+
+export type CustomerInventoryCoverage = {
+  __typename?: 'CustomerInventoryCoverage';
+  assessedItems: Scalars['Int']['output'];
+  environmentsAddedDuringCapture: Array<Scalars['String']['output']>;
+  environmentsNotCaptured: Array<Scalars['String']['output']>;
+  expectedItems: Scalars['Int']['output'];
+  notObserved: Scalars['Int']['output'];
+};
+
+export type CustomerInventoryEntry = {
+  __typename?: 'CustomerInventoryEntry';
+  conditionAfter: Maybe<Scalars['String']['output']>;
+  conditionBefore: Maybe<Scalars['String']['output']>;
+  environment: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  pairs: Array<CustomerInventoryPair>;
+  reason: Maybe<Scalars['String']['output']>;
+  status: Scalars['String']['output'];
+  type: Scalars['String']['output'];
+};
+
+export type CustomerInventoryPair = {
+  __typename?: 'CustomerInventoryPair';
+  currentEvidenceId: Scalars['ID']['output'];
+  currentSourceAvailability: Scalars['String']['output'];
+  originEvidenceId: Scalars['ID']['output'];
+  originSourceAvailability: Scalars['String']['output'];
+  timestampMs: Maybe<Scalars['Int']['output']>;
+};
+
 export type CustomerPortfolioConnection = {
   __typename?: 'CustomerPortfolioConnection';
   nodes: Array<CustomerPortfolioItem>;
@@ -455,7 +699,10 @@ export type CustomerPortfolioFilter = {
 
 export type CustomerPortfolioItem = {
   __typename?: 'CustomerPortfolioItem';
+  assetExternalKey: Scalars['String']['output'];
   assetId: Scalars['ID']['output'];
+  assetName: Scalars['String']['output'];
+  latestPublishedInspectionId: Maybe<Scalars['ID']['output']>;
   progress: Scalars['Int']['output'];
   projectId: Maybe<Scalars['ID']['output']>;
   publishedClassification: Maybe<Scalars['String']['output']>;
@@ -470,6 +717,7 @@ export type CustomerReport = {
   context: ReportContext;
   historical: Scalars['Boolean']['output'];
   inspectionId: Scalars['ID']['output'];
+  inventory: Maybe<CustomerInventory>;
   requirements: Array<ReportRequirement>;
   snapshotId: Scalars['ID']['output'];
   status: Scalars['String']['output'];
@@ -501,10 +749,24 @@ export type DashboardSummary = {
   total: Scalars['Int']['output'];
 };
 
+export type DecideInventoryItemsInput = {
+  clientMutationId: Scalars['String']['input'];
+  decisions: Array<InventoryDecisionInput>;
+  originVersionId: Scalars['ID']['input'];
+};
+
+export type DeclareCaptureEnvironmentInput = {
+  clientMutationId: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+  typeCode: Scalars['String']['input'];
+};
+
 export type DeclareCaptureImpossibilityInput = {
   clientMutationId: Scalars['String']['input'];
   expectedVersion: InputMaybe<Scalars['Int']['input']>;
-  reason: Scalars['String']['input'];
+  reason: InputMaybe<Scalars['String']['input']>;
+  reasonCode: InputMaybe<Scalars['String']['input']>;
+  reasonText: InputMaybe<Scalars['String']['input']>;
   requirementKey: Scalars['String']['input'];
 };
 
@@ -514,6 +776,11 @@ export type DisableMembershipInput = {
   membershipId: Scalars['ID']['input'];
 };
 
+export type DiscardBaselineDraftInput = {
+  clientMutationId: Scalars['String']['input'];
+  originVersionId: Scalars['ID']['input'];
+};
+
 export type EvidenceMode =
   | 'ADVANCED'
   | 'SIMPLE';
@@ -521,8 +788,10 @@ export type EvidenceMode =
 export type ExternalCapture = {
   __typename?: 'ExternalCapture';
   answers: Array<CaptureAnswer>;
+  captureLayout: Maybe<Scalars['String']['output']>;
   confirmationOnly: Scalars['Boolean']['output'];
   disclosureVersion: Scalars['String']['output'];
+  environments: Array<CaptureEnvironment>;
   kind: Scalars['String']['output'];
   mediaKind: Scalars['String']['output'];
   policy: Scalars['JSON']['output'];
@@ -533,6 +802,7 @@ export type ExternalCapture = {
   replacementDeadlineAt: Maybe<Scalars['String']['output']>;
   requirements: Array<CaptureRequirement>;
   responsibilityId: Scalars['ID']['output'];
+  reviewHandoff: Maybe<CaptureReviewHandoff>;
   status: Scalars['String']['output'];
   templateVersionId: Scalars['ID']['output'];
 };
@@ -710,6 +980,162 @@ export type InvalidateReportPublicationInput = {
   reason: Scalars['String']['input'];
 };
 
+export type InventoryCounts = {
+  __typename?: 'InventoryCounts';
+  included: Scalars['Int']['output'];
+  notReviewed: Scalars['Int']['output'];
+  rejected: Scalars['Int']['output'];
+};
+
+export type InventoryDecisionInput = {
+  action: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  itemId: Scalars['ID']['input'];
+  patch: InputMaybe<InventoryItemPatchInput>;
+  reason: InputMaybe<Scalars['String']['input']>;
+  reasonText: InputMaybe<Scalars['String']['input']>;
+};
+
+export type InventoryDraft = {
+  __typename?: 'InventoryDraft';
+  assetId: Scalars['ID']['output'];
+  environments: Array<InventoryEnvironment>;
+  noticeCode: Maybe<Scalars['String']['output']>;
+  progress: InventoryProgress;
+  readOnly: Scalars['Boolean']['output'];
+  version: OriginVersion;
+  warnings: Array<Scalars['String']['output']>;
+};
+
+export type InventoryEnvironment = {
+  __typename?: 'InventoryEnvironment';
+  addedDuringCapture: Scalars['Boolean']['output'];
+  decision: Scalars['String']['output'];
+  expected: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  identityId: Scalars['ID']['output'];
+  items: Array<InventoryItem>;
+  name: Scalars['String']['output'];
+  position: Scalars['Int']['output'];
+  requirementKey: Maybe<Scalars['String']['output']>;
+  typeCode: Scalars['String']['output'];
+};
+
+export type InventoryEnvironmentPayload = {
+  __typename?: 'InventoryEnvironmentPayload';
+  clientMutationId: Scalars['String']['output'];
+  environment: Maybe<InventoryEnvironment>;
+  userErrors: Array<UserError>;
+};
+
+export type InventoryEvidence = {
+  __typename?: 'InventoryEvidence';
+  availability: Scalars['String']['output'];
+  frameId: Maybe<Scalars['ID']['output']>;
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  mediaId: Scalars['ID']['output'];
+  position: Scalars['Int']['output'];
+  region: Maybe<Scalars['JSON']['output']>;
+  retentionAvailability: Maybe<Scalars['String']['output']>;
+  timestampMs: Maybe<Scalars['Int']['output']>;
+  url: Maybe<Scalars['String']['output']>;
+};
+
+export type InventoryEvidenceInput = {
+  frameId: InputMaybe<Scalars['ID']['input']>;
+  kind: Scalars['String']['input'];
+  mediaId: Scalars['ID']['input'];
+  region: InputMaybe<Scalars['JSON']['input']>;
+};
+
+export type InventoryItem = {
+  __typename?: 'InventoryItem';
+  color: Maybe<Scalars['String']['output']>;
+  condition: Scalars['String']['output'];
+  confidenceBps: Maybe<Scalars['Int']['output']>;
+  decision: Scalars['String']['output'];
+  declared: Scalars['Boolean']['output'];
+  environmentId: Scalars['ID']['output'];
+  evidence: Array<InventoryEvidence>;
+  id: Scalars['ID']['output'];
+  identityId: Scalars['ID']['output'];
+  limitation: Maybe<Scalars['String']['output']>;
+  material: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  observation: Scalars['String']['output'];
+  origin: Scalars['String']['output'];
+  quantity: Maybe<Scalars['Int']['output']>;
+  rejectionReason: Maybe<Scalars['String']['output']>;
+  rejectionText: Maybe<Scalars['String']['output']>;
+  suggested: Maybe<Scalars['JSON']['output']>;
+  typeCode: Scalars['String']['output'];
+  version: Scalars['Int']['output'];
+};
+
+export type InventoryItemPatchInput = {
+  clearQuantity: InputMaybe<Scalars['Boolean']['input']>;
+  color: InputMaybe<Scalars['String']['input']>;
+  condition: InputMaybe<Scalars['String']['input']>;
+  environmentId: InputMaybe<Scalars['ID']['input']>;
+  limitation: InputMaybe<Scalars['String']['input']>;
+  material: InputMaybe<Scalars['String']['input']>;
+  name: InputMaybe<Scalars['String']['input']>;
+  observation: InputMaybe<Scalars['String']['input']>;
+  quantity: InputMaybe<Scalars['Int']['input']>;
+  typeCode: InputMaybe<Scalars['String']['input']>;
+};
+
+export type InventoryItemPayload = {
+  __typename?: 'InventoryItemPayload';
+  clientMutationId: Scalars['String']['output'];
+  item: Maybe<InventoryItem>;
+  userErrors: Array<UserError>;
+};
+
+export type InventoryItemsPayload = {
+  __typename?: 'InventoryItemsPayload';
+  clientMutationId: Scalars['String']['output'];
+  emptyEnvironments: Array<Scalars['ID']['output']>;
+  items: Array<InventoryItem>;
+  userErrors: Array<UserError>;
+};
+
+export type InventoryProgress = {
+  __typename?: 'InventoryProgress';
+  decided: Scalars['Int']['output'];
+  pending: Scalars['Int']['output'];
+};
+
+export type InventorySplitPartInput = {
+  condition: InputMaybe<Scalars['String']['input']>;
+  evidenceIds: Array<Scalars['ID']['input']>;
+  name: Scalars['String']['input'];
+  typeCode: Scalars['String']['input'];
+};
+
+export type InventoryTrail = {
+  __typename?: 'InventoryTrail';
+  counterpartyEvents: Array<InventoryTrailEntry>;
+  decisions: Array<InventoryTrailEntry>;
+  suggestions: Array<InventoryTrailEntry>;
+};
+
+export type InventoryTrailEntry = {
+  __typename?: 'InventoryTrailEntry';
+  action: Scalars['String']['output'];
+  actorMembershipId: Maybe<Scalars['ID']['output']>;
+  after: Maybe<Scalars['JSON']['output']>;
+  before: Maybe<Scalars['JSON']['output']>;
+  id: Scalars['ID']['output'];
+  occurredAt: Scalars['String']['output'];
+  reason: Maybe<Scalars['String']['output']>;
+  resolutionReason: Maybe<Scalars['String']['output']>;
+  statement: Maybe<Scalars['String']['output']>;
+  targetId: Scalars['ID']['output'];
+  targetType: Scalars['String']['output'];
+};
+
 export type InvitationOtpPayload = {
   __typename?: 'InvitationOtpPayload';
   clientMutationId: Scalars['String']['output'];
@@ -737,6 +1163,7 @@ export type InviteOriginCaptureInput = {
   clientMutationId: Scalars['String']['input'];
   expiresAt: Scalars['String']['input'];
   participantId: Scalars['ID']['input'];
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type LlmCallState =
@@ -908,18 +1335,29 @@ export type MembershipPayload = {
   userErrors: Array<UserError>;
 };
 
+export type MergeInventoryItemsInput = {
+  clientMutationId: Scalars['String']['input'];
+  itemIds: Array<Scalars['ID']['input']>;
+  originVersionId: Scalars['ID']['input'];
+  resultEnvironmentId: InputMaybe<Scalars['ID']['input']>;
+};
+
 export type Mutation = {
   __typename?: 'Mutation';
   acceptProcessing: CapturePayload;
+  acknowledgeBaseline: CounterpartyResponsePayload;
+  activateBaselineVersion: OriginVersionPayload;
   activateOriginVersion: OriginVersionPayload;
   activateSegmentDefinition: SegmentDefinitionPayload;
   activateTemplateVersion: TemplatePayload;
   addExceptionalStage: ProjectPayload;
+  addInventoryItem: InventoryItemPayload;
   applyLegalHold: RetentionMutationPayload;
   archiveAsset: AssetPayload;
   archiveBusinessUnit: BusinessUnitPayload;
   assignRoleScopes: MembershipPayload;
   beginVideoCapture: VideoAttemptPayload;
+  bulkAcceptInventoryEnvironment: BulkAcceptInventoryEnvironmentPayload;
   cancelInspection: InspectionPayload;
   cancelSchedule: SchedulePayload;
   closeOriginInvitation: OriginVersionPayload;
@@ -932,6 +1370,7 @@ export type Mutation = {
   configureRetentionPolicy: RetentionPolicyPayload;
   configureVideoAdmission: VideoAdmissionPayload;
   configureVideoPolicy: VideoPolicyPayload;
+  contestBaseline: CounterpartyResponsePayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
   correctOnboardingResponsibleEmail: OnboardingPayload;
   createBusinessUnit: BusinessUnitPayload;
@@ -940,15 +1379,19 @@ export type Mutation = {
   createProject: ProjectPayload;
   createSchedule: SchedulePayload;
   createTenant: CreateTenantPayload;
+  decideInventoryItems: InventoryItemsPayload;
+  declareCaptureEnvironment: CaptureEnvironmentPayload;
   declareCaptureImpossibility: CapturePayload;
   declareSensitiveDetectionFalsePositive: MediaPayload;
   disableMembership: MembershipPayload;
+  discardBaselineDraft: OriginVersionPayload;
   invalidateInspection: InspectionPayload;
   invalidateOriginVersion: OriginVersionPayload;
   invalidateReportPublication: ReportPublicationPayload;
   inviteInternalUser: MembershipPayload;
   inviteOriginCapture: OriginInvitationPayload;
   markNotificationRead: RecipientNotificationPayload;
+  mergeInventoryItems: InventoryItemPayload;
   planInspection: PlanInspectionPayload;
   presignMediaParts: PresignedPartsPayload;
   promoteInspectionPhotos: OriginPromotionPayload;
@@ -957,18 +1400,25 @@ export type Mutation = {
   publishSegmentDefinition: SegmentDefinitionPayload;
   publishTemplateVersion: TemplatePayload;
   reanalyzeVideoInspection: ReanalyzeVideoInspectionPayload;
+  recordCaptureQualityWarning: CaptureQualityWarningPayload;
   recordDeletionRequest: RetentionMutationPayload;
   registerAsset: AssetPayload;
   releaseLegalHold: RetentionMutationPayload;
+  removeInventoryEnvironment: InventoryEnvironmentPayload;
   reopenProject: ProjectPayload;
   reprocessVideoPreparation: VideoPreparationPayload;
   requestAdminActivationOtp: OnboardingPayload;
+  requestCounterpartyOtp: InvitationOtpPayload;
   requestInternalUserActivationOtp: InternalUserActivationPayload;
   requestInvitationOtp: InvitationOtpPayload;
   requestOnboardingOtp: OnboardingPayload;
+  requestOriginCataloging: OriginVersionPayload;
   requestRecapture: RecapturePayload;
   requestVideoReplacement: VideoReplacementPayload;
+  resendCounterpartyInvitation: CounterpartyInvitationPayload;
   resendInternalUserInvitation: MembershipPayload;
+  resolveBaselineContestation: CounterpartyInvitationPayload;
+  retryInventoryDraft: OriginVersionPayload;
   retryVideoPreparation: VideoPreparationPayload;
   revokeInvitation: InvitationPayload;
   saveCaptureMetadata: MediaPayload;
@@ -976,18 +1426,23 @@ export type Mutation = {
   setAdminInitialPassword: OnboardingPayload;
   setDeliveryChannels: ParticipantPayload;
   skipProjectStage: ProjectPayload;
+  splitInventoryItem: InventoryItemsPayload;
+  startBaselineDraftFromInspection: OriginVersionPayload;
   startProjectStage: ProjectPayload;
   submitCapture: SubmissionPayload;
   submitRecapture: RecapturePayload;
   updateAnalysisPrompt: AnalysisPromptPayload;
   updateAsset: AssetPayload;
+  updateBaselinePolicy: BaselinePolicyPayload;
   updateSchedule: SchedulePayload;
   updateTenant: TenantPayload;
   updateTriageCase: TriageCasePayload;
   upsertBusinessUnit: BusinessUnitPayload;
+  upsertInventoryEnvironment: InventoryEnvironmentPayload;
   upsertParticipant: ParticipantPayload;
   verifyAdminActivationOtp: OnboardingPayload;
   verifyContact: ParticipantContactPayload;
+  verifyCounterpartyOtp: ExternalSessionPayload;
   verifyInternalUserActivationOtp: InternalUserActivationPayload;
   verifyInvitationOtp: ExternalSessionPayload;
   verifyOnboardingOtp: OnboardingPayload;
@@ -996,6 +1451,16 @@ export type Mutation = {
 
 export type MutationAcceptProcessingArgs = {
   input: AcceptProcessingInput;
+};
+
+
+export type MutationAcknowledgeBaselineArgs = {
+  input: CounterpartyResponseInput;
+};
+
+
+export type MutationActivateBaselineVersionArgs = {
+  input: ActivateBaselineVersionInput;
 };
 
 
@@ -1016,6 +1481,11 @@ export type MutationActivateTemplateVersionArgs = {
 
 export type MutationAddExceptionalStageArgs = {
   input: AddExceptionalStageInput;
+};
+
+
+export type MutationAddInventoryItemArgs = {
+  input: AddInventoryItemInput;
 };
 
 
@@ -1041,6 +1511,11 @@ export type MutationAssignRoleScopesArgs = {
 
 export type MutationBeginVideoCaptureArgs = {
   input: BeginVideoCaptureInput;
+};
+
+
+export type MutationBulkAcceptInventoryEnvironmentArgs = {
+  input: BulkAcceptInventoryEnvironmentInput;
 };
 
 
@@ -1104,6 +1579,11 @@ export type MutationConfigureVideoPolicyArgs = {
 };
 
 
+export type MutationContestBaselineArgs = {
+  input: ContestBaselineInput;
+};
+
+
 export type MutationCorrectInspectionResponsibleEmailArgs = {
   input: CorrectInspectionResponsibleEmailInput;
 };
@@ -1144,6 +1624,16 @@ export type MutationCreateTenantArgs = {
 };
 
 
+export type MutationDecideInventoryItemsArgs = {
+  input: DecideInventoryItemsInput;
+};
+
+
+export type MutationDeclareCaptureEnvironmentArgs = {
+  input: DeclareCaptureEnvironmentInput;
+};
+
+
 export type MutationDeclareCaptureImpossibilityArgs = {
   input: DeclareCaptureImpossibilityInput;
 };
@@ -1156,6 +1646,11 @@ export type MutationDeclareSensitiveDetectionFalsePositiveArgs = {
 
 export type MutationDisableMembershipArgs = {
   input: DisableMembershipInput;
+};
+
+
+export type MutationDiscardBaselineDraftArgs = {
+  input: DiscardBaselineDraftInput;
 };
 
 
@@ -1186,6 +1681,11 @@ export type MutationInviteOriginCaptureArgs = {
 
 export type MutationMarkNotificationReadArgs = {
   input: MarkNotificationReadInput;
+};
+
+
+export type MutationMergeInventoryItemsArgs = {
+  input: MergeInventoryItemsInput;
 };
 
 
@@ -1229,6 +1729,11 @@ export type MutationReanalyzeVideoInspectionArgs = {
 };
 
 
+export type MutationRecordCaptureQualityWarningArgs = {
+  input: RecordCaptureQualityWarningInput;
+};
+
+
 export type MutationRecordDeletionRequestArgs = {
   input: RecordDeletionRequestInput;
 };
@@ -1241,6 +1746,11 @@ export type MutationRegisterAssetArgs = {
 
 export type MutationReleaseLegalHoldArgs = {
   input: LegalHoldInput;
+};
+
+
+export type MutationRemoveInventoryEnvironmentArgs = {
+  input: RemoveInventoryEnvironmentInput;
 };
 
 
@@ -1259,6 +1769,11 @@ export type MutationRequestAdminActivationOtpArgs = {
 };
 
 
+export type MutationRequestCounterpartyOtpArgs = {
+  input: RequestCounterpartyOtpInput;
+};
+
+
 export type MutationRequestInternalUserActivationOtpArgs = {
   input: RequestInternalUserActivationOtpInput;
 };
@@ -1274,6 +1789,11 @@ export type MutationRequestOnboardingOtpArgs = {
 };
 
 
+export type MutationRequestOriginCatalogingArgs = {
+  input: RequestOriginCatalogingInput;
+};
+
+
 export type MutationRequestRecaptureArgs = {
   input: RequestRecaptureInput;
 };
@@ -1284,8 +1804,23 @@ export type MutationRequestVideoReplacementArgs = {
 };
 
 
+export type MutationResendCounterpartyInvitationArgs = {
+  input: ResendCounterpartyInvitationInput;
+};
+
+
 export type MutationResendInternalUserInvitationArgs = {
   input: ResendInternalUserInvitationInput;
+};
+
+
+export type MutationResolveBaselineContestationArgs = {
+  input: ResolveBaselineContestationInput;
+};
+
+
+export type MutationRetryInventoryDraftArgs = {
+  input: RetryInventoryDraftInput;
 };
 
 
@@ -1324,6 +1859,16 @@ export type MutationSkipProjectStageArgs = {
 };
 
 
+export type MutationSplitInventoryItemArgs = {
+  input: SplitInventoryItemInput;
+};
+
+
+export type MutationStartBaselineDraftFromInspectionArgs = {
+  input: StartBaselineDraftFromInspectionInput;
+};
+
+
 export type MutationStartProjectStageArgs = {
   input: StartProjectStageInput;
 };
@@ -1349,6 +1894,11 @@ export type MutationUpdateAssetArgs = {
 };
 
 
+export type MutationUpdateBaselinePolicyArgs = {
+  input: UpdateBaselinePolicyInput;
+};
+
+
 export type MutationUpdateScheduleArgs = {
   input: UpdateScheduleInput;
 };
@@ -1369,6 +1919,11 @@ export type MutationUpsertBusinessUnitArgs = {
 };
 
 
+export type MutationUpsertInventoryEnvironmentArgs = {
+  input: UpsertInventoryEnvironmentInput;
+};
+
+
 export type MutationUpsertParticipantArgs = {
   input: UpsertParticipantInput;
 };
@@ -1381,6 +1936,11 @@ export type MutationVerifyAdminActivationOtpArgs = {
 
 export type MutationVerifyContactArgs = {
   input: VerifyContactInput;
+};
+
+
+export type MutationVerifyCounterpartyOtpArgs = {
+  input: VerifyCounterpartyOtpInput;
 };
 
 
@@ -1607,15 +2167,25 @@ export type OriginPromotionPayload = {
 export type OriginVersion = {
   __typename?: 'OriginVersion';
   activatedAt: Maybe<Scalars['String']['output']>;
+  activatedBy: Maybe<Scalars['ID']['output']>;
   captureSubmitted: Scalars['Boolean']['output'];
+  contestationSummary: Maybe<ContestationSummary>;
+  counterpartyInvitations: Array<BaselineCounterpartyInvitation>;
+  counts: Maybe<InventoryCounts>;
+  draftState: Maybe<Scalars['String']['output']>;
+  hasInventory: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
   limitedCoverage: Scalars['Boolean']['output'];
   mediaKind: Scalars['String']['output'];
   originId: Scalars['ID']['output'];
+  originRevision: Scalars['Int']['output'];
   preparationStatus: Maybe<Scalars['String']['output']>;
+  purpose: Maybe<Scalars['String']['output']>;
   scopeManifestDigest: Maybe<Scalars['String']['output']>;
   selectable: Scalars['Boolean']['output'];
+  source: Maybe<Scalars['String']['output']>;
   sourceAvailability: Maybe<Scalars['String']['output']>;
+  sourceInspectionId: Maybe<Scalars['ID']['output']>;
   status: Scalars['String']['output'];
   supersedesId: Maybe<Scalars['ID']['output']>;
   versionNumber: Scalars['Int']['output'];
@@ -1636,8 +2206,11 @@ export type OriginVersionInput = {
 export type OriginVersionPayload = {
   __typename?: 'OriginVersionPayload';
   clientMutationId: Scalars['String']['output'];
+  /** Set by requestOriginCataloging: true when the legacy video source expired and only retained frames are cataloged. */
+  sourcesExpired: Maybe<Scalars['Boolean']['output']>;
   userErrors: Array<UserError>;
   version: Maybe<OriginVersion>;
+  warnings: Maybe<Array<Scalars['String']['output']>>;
 };
 
 export type PageInfo = {
@@ -1703,6 +2276,7 @@ export type PlanInspectionInput = {
   referenceVersionId: InputMaybe<Scalars['ID']['input']>;
   reminderInstants: InputMaybe<Array<Scalars['String']['input']>>;
   reminderOffsetsMinutes: InputMaybe<Array<Scalars['Int']['input']>>;
+  reviewerMembershipId: InputMaybe<Scalars['ID']['input']>;
   rrule: InputMaybe<Scalars['String']['input']>;
   stageId: InputMaybe<Scalars['ID']['input']>;
   stages: InputMaybe<Array<PlannedProjectStageInput>>;
@@ -1899,7 +2473,11 @@ export type Query = {
   asset: Maybe<Asset>;
   assets: AssetConnection;
   auditEvents: AuditEventConnection;
+  baselineInventory: Maybe<BaselineInventory>;
+  baselinePolicy: BaselinePolicy;
+  baselineVersions: OriginVersionConnection;
   businessUnits: BusinessUnitConnection;
+  counterpartyBaseline: CounterpartyBaseline;
   customerEvidence: CustomerEvidenceConnection;
   customerPortfolio: CustomerPortfolioConnection;
   customerReport: Maybe<CustomerReport>;
@@ -1909,6 +2487,8 @@ export type Query = {
   inspection: Maybe<Inspection>;
   inspectionLLMUsage: InspectionLlmUsage;
   inspections: InspectionConnection;
+  inventoryDraft: Maybe<InventoryDraft>;
+  inventoryTrail: InventoryTrail;
   llmUsage: LlmUsage;
   llmUsageTenants: TenantConnection;
   lookupPostalCode: PostalAddressLookup;
@@ -1955,6 +2535,7 @@ export type Query = {
 
 
 export type QueryAnalysisPromptArgs = {
+  task?: InputMaybe<AnalysisPromptTask>;
   type: AnalysisType;
 };
 
@@ -1974,6 +2555,19 @@ export type QueryAssetsArgs = {
 
 export type QueryAuditEventsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryBaselineInventoryArgs = {
+  assetId: Scalars['ID']['input'];
+  versionId: InputMaybe<Scalars['ID']['input']>;
+};
+
+
+export type QueryBaselineVersionsArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  assetId: Scalars['ID']['input'];
   first?: InputMaybe<Scalars['Int']['input']>;
 };
 
@@ -2038,6 +2632,16 @@ export type QueryInspectionsArgs = {
   history?: InputMaybe<Scalars['Boolean']['input']>;
   search: InputMaybe<Scalars['String']['input']>;
   statusGroup: InputMaybe<InspectionStatusGroup>;
+};
+
+
+export type QueryInventoryDraftArgs = {
+  originVersionId: Scalars['ID']['input'];
+};
+
+
+export type QueryInventoryTrailArgs = {
+  originVersionId: Scalars['ID']['input'];
 };
 
 
@@ -2312,6 +2916,13 @@ export type RecipientNotificationPayload = {
   userErrors: Array<UserError>;
 };
 
+export type RecordCaptureQualityWarningInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+  ignored: Scalars['Boolean']['input'];
+  requirementKey: Scalars['String']['input'];
+};
+
 export type RecordDeletionRequestInput = {
   clientMutationId: Scalars['String']['input'];
   inspectionId: InputMaybe<Scalars['ID']['input']>;
@@ -2323,6 +2934,13 @@ export type RecordDeletionRequestInput = {
 export type RegisterAssetInput = {
   asset: AssetInput;
   clientMutationId: Scalars['String']['input'];
+};
+
+export type RemoveInventoryEnvironmentInput = {
+  clientMutationId: Scalars['String']['input'];
+  confirmItemExclusion: Scalars['Boolean']['input'];
+  environmentId: Scalars['ID']['input'];
+  originVersionId: Scalars['ID']['input'];
 };
 
 export type ReopenProjectInput = {
@@ -2345,6 +2963,7 @@ export type Report = {
   htmlDigest: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   inspectionId: Scalars['ID']['output'];
+  inventory: Maybe<CustomerInventory>;
   jsonDigest: Scalars['String']['output'];
   mode: Scalars['String']['output'];
   pdfStatus: Scalars['String']['output'];
@@ -2522,6 +3141,11 @@ export type RequestAdminActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
 };
 
+export type RequestCounterpartyOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  token: Scalars['String']['input'];
+};
+
 export type RequestInternalUserActivationOtpInput = {
   clientMutationId: Scalars['String']['input'];
   invitationToken: InputMaybe<Scalars['String']['input']>;
@@ -2539,6 +3163,11 @@ export type RequestOnboardingOtpInput = {
   turnstileToken: InputMaybe<Scalars['String']['input']>;
 };
 
+export type RequestOriginCatalogingInput = {
+  assetId: Scalars['ID']['input'];
+  clientMutationId: Scalars['String']['input'];
+};
+
 export type RequestRecaptureInput = {
   clientMutationId: Scalars['String']['input'];
   deadlineAt: Scalars['String']['input'];
@@ -2554,9 +3183,21 @@ export type RequestVideoReplacementInput = {
   reason: Scalars['String']['input'];
 };
 
+export type ResendCounterpartyInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  counterpartyInvitationId: Scalars['ID']['input'];
+};
+
 export type ResendInternalUserInvitationInput = {
   clientMutationId: Scalars['String']['input'];
   membershipId: Scalars['ID']['input'];
+};
+
+export type ResolveBaselineContestationInput = {
+  clientMutationId: Scalars['String']['input'];
+  counterpartyInvitationId: Scalars['ID']['input'];
+  outcome: Scalars['String']['input'];
+  reason: InputMaybe<Scalars['String']['input']>;
 };
 
 export type ResponsibleEmailCorrection = {
@@ -2609,6 +3250,11 @@ export type RetentionPolicyPayload = {
   clientMutationId: Scalars['String']['output'];
   policy: Maybe<RetentionPolicy>;
   userErrors: Array<UserError>;
+};
+
+export type RetryInventoryDraftInput = {
+  clientMutationId: Scalars['String']['input'];
+  originVersionId: Scalars['ID']['input'];
 };
 
 export type RetryVideoPreparationInput = {
@@ -2771,6 +3417,14 @@ export type SkipProjectStageInput = {
   stageId: Scalars['ID']['input'];
 };
 
+export type SplitInventoryItemInput = {
+  clientMutationId: Scalars['String']['input'];
+  expectedVersion: Scalars['Int']['input'];
+  itemId: Scalars['ID']['input'];
+  originVersionId: Scalars['ID']['input'];
+  parts: Array<InventorySplitPartInput>;
+};
+
 export type StageTransition = {
   __typename?: 'StageTransition';
   fromState: Maybe<Scalars['String']['output']>;
@@ -2779,6 +3433,11 @@ export type StageTransition = {
   reason: Maybe<Scalars['String']['output']>;
   stageId: Maybe<Scalars['ID']['output']>;
   toState: Scalars['String']['output'];
+};
+
+export type StartBaselineDraftFromInspectionInput = {
+  clientMutationId: Scalars['String']['input'];
+  inspectionId: Scalars['ID']['input'];
 };
 
 export type StartProjectStageInput = {
@@ -2993,6 +3652,7 @@ export type UpdateAnalysisPromptInput = {
   clientMutationId: Scalars['String']['input'];
   expectedRevision: Scalars['Int']['input'];
   systemPrompt: Scalars['String']['input'];
+  task: InputMaybe<AnalysisPromptTask>;
 };
 
 export type UpdateAssetInput = {
@@ -3000,6 +3660,11 @@ export type UpdateAssetInput = {
   assetId: Scalars['ID']['input'];
   clientMutationId: Scalars['String']['input'];
   expectedVersion: Scalars['Int']['input'];
+};
+
+export type UpdateBaselinePolicyInput = {
+  clientMutationId: Scalars['String']['input'];
+  contestationDeadlineDays: Scalars['Int']['input'];
 };
 
 export type UpdateScheduleInput = {
@@ -3040,6 +3705,15 @@ export type UpsertBusinessUnitInput = {
   name: Scalars['String']['input'];
 };
 
+export type UpsertInventoryEnvironmentInput = {
+  clientMutationId: Scalars['String']['input'];
+  environmentId: InputMaybe<Scalars['ID']['input']>;
+  expected: Scalars['Boolean']['input'];
+  name: Scalars['String']['input'];
+  originVersionId: Scalars['ID']['input'];
+  typeCode: Scalars['String']['input'];
+};
+
 export type UpsertParticipantInput = {
   businessUnitId: Scalars['ID']['input'];
   clientMutationId: Scalars['String']['input'];
@@ -3066,6 +3740,7 @@ export type UserError = {
   correlationId: Scalars['String']['output'];
   field: Maybe<Scalars['String']['output']>;
   message: Scalars['String']['output'];
+  pendingRequirementKeys: Maybe<Array<Scalars['String']['output']>>;
 };
 
 export type VerifyAdminActivationOtpInput = {
@@ -3077,6 +3752,12 @@ export type VerifyContactInput = {
   clientMutationId: Scalars['String']['input'];
   contactId: Scalars['ID']['input'];
   verified: Scalars['Boolean']['input'];
+};
+
+export type VerifyCounterpartyOtpInput = {
+  clientMutationId: Scalars['String']['input'];
+  code: Scalars['String']['input'];
+  token: Scalars['String']['input'];
 };
 
 export type VerifyInternalUserActivationOtpInput = {
@@ -3136,6 +3817,7 @@ export type VideoPolicy = {
   currentRetentionDays: Scalars['Int']['output'];
   maxDurationMinutes: Scalars['Int']['output'];
   originRetentionDays: Scalars['Int']['output'];
+  supersededBaselineRetentionDays: Scalars['Int']['output'];
   version: Scalars['Int']['output'];
 };
 
@@ -3186,6 +3868,9 @@ export type VideoPreparationStatus = {
   attempts: Scalars['Int']['output'];
   errorCode: Scalars['String']['output'];
   firstFrameReadyAt: Maybe<Scalars['String']['output']>;
+  framesRepresentative: Scalars['Int']['output'];
+  framesRetained: Scalars['Int']['output'];
+  framesSampled: Scalars['Int']['output'];
   manifestDigest: Scalars['String']['output'];
   mediaId: Scalars['ID']['output'];
   preparationId: Scalars['ID']['output'];

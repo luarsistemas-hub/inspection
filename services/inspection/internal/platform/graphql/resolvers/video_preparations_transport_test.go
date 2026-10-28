@@ -133,6 +133,9 @@ func TestVideoPreparationErrorCodeIsAllowlisted(t *testing.T) {
 	if got := safeVideoPreparationError("STORE_UNAVAILABLE"); got != "STORE_UNAVAILABLE" {
 		t.Fatalf("known safe error code changed: %q", got)
 	}
+	if got := safeVideoPreparationError("NO_FRAMES"); got != "NO_FRAMES" {
+		t.Fatalf("no-frame error code changed: %q", got)
+	}
 	if got := safeVideoPreparationError("QA_SECRET_123"); got != "PREPARATION_FAILED" {
 		t.Fatalf("unexpected error text was exposed: %q", got)
 	}

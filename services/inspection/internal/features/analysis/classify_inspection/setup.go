@@ -6,11 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/contracts/events"
 	analysis "inspection/services/inspection/internal/features/analysis/core"
+	inventoryexecutor "inspection/services/inspection/internal/features/analysis/inventory/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/messaging"
 
@@ -96,6 +98,14 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 					break
 				}
 			}
+			if !fresh && inspection.InventoryPromptSnapshotID != nil {
+				// A re-analysis may change only inventory results.
+				var changed int64
+				if err := tx.WithContext(ctx).Model(&database.InventoryJob{}).Where("tenant_id=? AND inspection_id=? AND kind='COMPARE' AND updated_at>?", envelope.TenantID, payload.InspectionID, existing.CreatedAt).Count(&changed).Error; err != nil {
+					return err
+				}
+				fresh = changed > 0
+			}
 			if !fresh && !payload.Force {
 				return nil
 			}
@@ -147,8 +157,13 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 					return answerErr
 				} else {
 					var flags []string
-					if err := json.Unmarshal(answer.Flags, &flags); err == nil && len(flags) > 0 {
-						fact.Flagged = true
+					if err := json.Unmarshal(answer.Flags, &flags); err == nil {
+						for _, flag := range flags {
+							if strings.HasPrefix(job.RequirementKey, "env:") || !isEnvironmentOnlyFlag(flag) {
+								fact.Flagged = true
+								break
+							}
+						}
 					}
 					if answer.ImpossibilityReason != "" {
 						fact.Missing = true
@@ -196,6 +211,21 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			}
 		}
 		decision := analysis.Classify(facts)
+		if inspection.InventoryPromptSnapshotID != nil {
+			inventoryDecision, hasInventory, err := classifyInventoryJobs(ctx, tx, envelope.TenantID, inspection, deps.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if hasInventory {
+				if !inventoryDecision.Terminal {
+					// Inventory jobs have their own bounded retry schedule. Do not
+					// exhaust the comparison consumer's shorter retry budget; the
+					// terminal inventory job emits this event again on completion.
+					return nil
+				}
+				decision = analysis.ClassifyInventory(decision, inventoryDecision.Facts)
+			}
+		}
 		reasons, _ := json.Marshal(decision.ReasonCodes)
 		now := deps.Now().UTC()
 		row := database.ClassificationRun{ID: identity.NewID(), TenantID: envelope.TenantID, InspectionID: payload.InspectionID, PromptSnapshotID: inspection.AnalysisPromptSnapshotID, VideoPlanID: nil, Classification: decision.Classification, ReasonCodes: reasons, CreatedAt: now}
@@ -219,6 +249,91 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		}
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "inspection.classified.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: eventPayload})
 	}, nil
+}
+
+func isEnvironmentOnlyFlag(flag string) bool {
+	return strings.HasPrefix(flag, "IMPOSSIBILITY:") || strings.HasPrefix(flag, "QUALITY_WARNING")
+}
+
+type inventoryClassification struct {
+	Terminal bool
+	Facts    analysis.InventoryFacts
+}
+
+func classifyInventoryJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, now time.Time) (inventoryClassification, bool, error) {
+	var reference database.ReferenceSnapshot
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=?", tenantID, inspection.ID).Take(&reference).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return inventoryClassification{}, false, nil
+		}
+		return inventoryClassification{}, false, err
+	}
+	if reference.ReferenceVersionID == nil {
+		return inventoryClassification{}, false, nil
+	}
+	var version database.OriginVersion
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND id=? AND has_inventory", tenantID, *reference.ReferenceVersionID).Take(&version).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return inventoryClassification{}, false, nil
+		}
+		return inventoryClassification{}, false, err
+	}
+	var jobs []database.InventoryJob
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND kind='COMPARE'", tenantID, inspection.ID).Find(&jobs).Error; err != nil {
+		return inventoryClassification{}, true, err
+	}
+	jobs = inventoryexecutor.LatestGeneration(jobs)
+	result := inventoryClassification{Terminal: true}
+	if len(jobs) == 0 {
+		// Every environment of the pinned version receives a COMPARE job once
+		// the capture is submitted (and, for video, every clip is prepared). No
+		// job yet means the request is still pending; the last terminal job
+		// emits analysis.comparison_completed.v1 again.
+		result.Terminal = false
+		return result, true, nil
+	}
+	jobIDs := make([]identity.ID, 0, len(jobs))
+	for _, job := range jobs {
+		jobIDs = append(jobIDs, job.ID)
+		if job.Status != "SUCCEEDED" && job.Status != "FAILED" && job.Status != "CANCELED" {
+			result.Terminal = false
+		}
+	}
+	if !result.Terminal {
+		return result, true, nil
+	}
+	var rows []database.InventoryItemResult
+	if err := tx.WithContext(ctx).Where("tenant_id=? AND inspection_id=? AND job_id IN ?", tenantID, inspection.ID, jobIDs).Find(&rows).Error; err != nil {
+		return result, true, err
+	}
+	for _, row := range rows {
+		switch row.Status {
+		case "MISSING":
+			result.Facts.Missing++
+		case "CONDITION_CHANGED":
+			result.Facts.Worsened++
+		case "NOT_OBSERVED":
+			result.Facts.NotObserved++
+		}
+	}
+	assessedIDs := make(map[identity.ID]struct{}, len(rows))
+	for _, row := range rows {
+		if row.ItemIdentityID != nil {
+			assessedIDs[*row.ItemIdentityID] = struct{}{}
+		}
+	}
+	var baselineCount int64
+	if err := tx.WithContext(ctx).Model(&database.InventoryItem{}).Where("tenant_id=? AND origin_version_id=? AND decision IN ('ACCEPTED','EDITED','ADDED')", tenantID, version.ID).Count(&baselineCount).Error; err != nil {
+		return result, true, err
+	}
+	result.Facts.BaselineItems = int(baselineCount)
+	result.Facts.NotObserved += max(0, int(baselineCount)-len(assessedIDs))
+	var impossibleCount int64
+	if err := tx.WithContext(ctx).Table("capture.requirement_answers AS a").Joins("JOIN capture.capture_drafts AS d ON d.tenant_id=a.tenant_id AND d.id=a.draft_id").Joins("JOIN inspections.responsibilities AS r ON r.tenant_id=d.tenant_id AND r.id=d.responsibility_id").Where("a.tenant_id=? AND r.inspection_id=? AND a.impossibility_reason<>'' AND a.requirement_key LIKE 'env:%'", tenantID, inspection.ID).Count(&impossibleCount).Error; err != nil {
+		return result, true, err
+	}
+	result.Facts.EnvironmentsNotCaptured = int(impossibleCount)
+	return result, true, nil
 }
 
 func hasPendingVideoRecapture(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.ID) (bool, error) {

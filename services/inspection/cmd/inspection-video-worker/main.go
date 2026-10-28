@@ -18,6 +18,7 @@ import (
 	buildrequest "inspection/services/inspection/internal/features/analysis/build_request"
 	preparecomparisons "inspection/services/inspection/internal/features/analysis/prepare_video_comparisons"
 	processcomparison "inspection/services/inspection/internal/features/analysis/process_comparison"
+	requestinventoryjobs "inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	scheduleplan "inspection/services/inspection/internal/features/analysis/schedule_video_plan"
 	preparevideo "inspection/services/inspection/internal/features/media/prepare_video"
 	evaluatecoverage "inspection/services/inspection/internal/features/recapture/evaluate_video_coverage"
@@ -131,6 +132,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	inventoryRequest, err := requestinventoryjobs.Setup(requestinventoryjobs.Dependencies{Now: time.Now})
+	if err != nil {
+		return err
+	}
 	connection, err := amqp.Dial(cfg.RabbitMQURL)
 	if err != nil {
 		return fmt.Errorf("video worker rabbitmq: %w", err)
@@ -157,7 +162,7 @@ func run() error {
 	if err := declareVideoQueueMigration(channel, legacyChannel, contract, legacyContract); err != nil {
 		return fmt.Errorf("video worker rabbitmq topology: %w", err)
 	}
-	for _, key := range []string{"media.video_prepared.v1", "capture.video_submitted.v1"} {
+	for _, key := range []string{"media.video_prepared.v1", "capture.video_submitted.v1", "capture.video_submitted.v2", "inventory.job_requested.v1"} {
 		if err := channel.QueueBind(contract.Name, key, messaging.Exchange, false, nil); err != nil {
 			return fmt.Errorf("video worker event binding: %w", err)
 		}
@@ -168,14 +173,27 @@ func run() error {
 		if envelope.Type == "analysis.video_comparison_requested.v1" {
 			return processcomparison.VideoRequestHandler(processJob)(ctx, tx, envelope)
 		}
+		if envelope.Type == "inventory.job_requested.v1" {
+			// A clip preparation failed terminally: re-evaluate the readiness gate.
+			return inventoryRequest(ctx, tx, envelope)
+		}
 		if envelope.Type == "media.video_prepared.v1" {
 			err := coverageEvaluator.HandlePrepared(ctx, tx, envelope)
 			if !errors.Is(err, evaluatecoverage.ErrNotApplicable) {
 				return err
 			}
-			return planScheduler.Handle(ctx, tx, envelope)
+			if err := planScheduler.Handle(ctx, tx, envelope); err != nil {
+				return err
+			}
+			return inventoryRequest(ctx, tx, envelope)
 		}
-		return planScheduler.Handle(ctx, tx, envelope)
+		if err := planScheduler.Handle(ctx, tx, envelope); err != nil {
+			return err
+		}
+		if envelope.Type == "capture.video_submitted.v2" {
+			return inventoryRequest(ctx, tx, envelope)
+		}
+		return nil
 	}, observer)
 	rabbit := messaging.RabbitConsumer{Channel: channel, Contract: contract, Handler: permittedDelivery{permit: executor, inner: consumer}, ConsumerName: contract.Name, Observer: observer}
 	legacyRabbit := messaging.RabbitConsumer{Channel: legacyChannel, Contract: legacyContract, Handler: permittedDelivery{permit: executor, inner: consumer}, ConsumerName: legacyContract.Name, Observer: observer}

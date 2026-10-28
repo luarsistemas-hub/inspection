@@ -113,27 +113,8 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 	}
 
 	now := s.now()
-	originMode := strings.ToUpper(stepString(submission.Steps[onboardingsession.StepOrigin], "mode"))
-	templateMode := templatecatalog.ChecklistOnly
-	originStatus := "NOT_REQUIRED"
-	var originMediaIDs []identity.ID
-	if originMode == string(templatecatalog.FixedOrigin) {
-		templateMode = templatecatalog.FixedOrigin
-		originMediaIDs, err = coordinator.OriginMediaIDs(submission.Steps[onboardingsession.StepOrigin])
-		if err != nil || len(originMediaIDs) == 0 {
-			return Result{}, apperror.New(apperror.InvalidState, "referencePhotos", "As fotos deste cadastro não foram enviadas. Inicie um novo cadastro e selecione-as novamente.")
-		}
-		originStatus, err = s.originMediaStatus(ctx, tenantID, submission.Session.ID, originMediaIDs)
-		if err != nil {
-			return Result{}, err
-		}
-	}
-	decision, err := coordinator.ValidateSubmit(coordinator.SubmitInput{Now: now, Steps: submission.Steps, OriginStatus: originStatus, DeliveryState: deliveryPending, TemplateMode: templateMode, IdempotencyKey: idempotencyKey})
-	if err != nil {
+	if _, err := coordinator.ValidateSubmit(coordinator.SubmitInput{Now: now, Steps: submission.Steps, DeliveryState: deliveryPending, IdempotencyKey: idempotencyKey}); err != nil {
 		return Result{}, err
-	}
-	if decision.State == coordinator.StateOriginPending {
-		return pendingResult(submission.Session, decision), nil
 	}
 
 	unit, member, err := s.onboardingOwner(ctx, tenantID, submission.Session.Owner.Subject)
@@ -151,7 +132,7 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		CorrelationID: correlationID(ctx), StartedAt: now,
 	})
 
-	segment, analysisType, template, err := s.ensureCatalog(domainCtx, tenantID, member.IdentityID, templateMode)
+	segment, analysisType, template, err := s.ensureCatalog(domainCtx, tenantID)
 	if err != nil {
 		return Result{}, fmt.Errorf("prepare onboarding catalog: %w", err)
 	}
@@ -181,22 +162,12 @@ func (s Service) Complete(ctx context.Context, locator, csrf, idempotencyKey str
 		return Result{}, fmt.Errorf("prepare onboarding asset: %w", err)
 	}
 	var referenceVersionID *identity.ID
-	if templateMode == templatecatalog.FixedOrigin {
-		if template.ActiveVersionID == nil {
-			return Result{}, errors.New("onboarding origin template has no active version")
-		}
-		versionID, err := s.ensureOrigin(ctx, tenantID, submission.Session.ID, asset.Asset.ID, *template.ActiveVersionID, originMediaIDs)
-		if err != nil {
-			return Result{}, fmt.Errorf("prepare onboarding origin: %w", err)
-		}
-		referenceVersionID = &versionID
-	}
 	deadline, err := deadlineAt(property)
 	if err != nil {
 		return Result{}, err
 	}
 	inspection, err := (inspectioncore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}, Now: s.Now}).Create(domainCtx, inspectioncore.CreateInput{
-		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: templateMode, ReferenceVersionID: referenceVersionID,
+		TenantID: tenantID, AssetID: asset.Asset.ID, ParticipantID: participant.Participant.ID, TemplateID: &template.ID, ComparisonMode: templatecatalog.ChecklistOnly,
 		Source: inspectioncore.SourceManual, SourceKey: "onboarding:" + submission.Session.ID.String(),
 		Reason: "Primeira vistoria criada pelo onboarding", DueAt: now, DeadlineAt: deadline,
 	})
@@ -297,7 +268,7 @@ func (s Service) ensureActivationInvitation(ctx context.Context, current onboard
 	return nil
 }
 
-func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.ID, mode templatecatalog.ComparisonMode) (database.SegmentDefinitionVersion, string, database.Template, error) {
+func (s Service) ensureCatalog(ctx context.Context, tenantID identity.ID) (database.SegmentDefinitionVersion, string, database.Template, error) {
 	segmentService := segmentcore.Service{DB: s.DB, Authorizer: auth.Authorizer{}}
 	segmentView, err := segmentService.Publish(ctx, tenantID, "real-estate", "Imóveis", "onboarding:segment:v2", []byte(`{"type":"object","properties":{"propertyType":{"type":"string","maxLength":100},"purpose":{"type":"string","maxLength":100}},"required":["propertyType","purpose"],"additionalProperties":false}`), []byte(`{}`))
 	if err != nil {
@@ -307,16 +278,14 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 	}
 	templates := templatecore.Service{DB: s.DB, Bus: s.Bus, Authorizer: auth.Authorizer{}}
-	documents := onboardingcatalog.TemplateDocuments(s.Stage)
-	templatesByKey := make(map[string]database.Template, len(documents))
-	for key, document := range documents {
+	var templateView templatecore.View
+	for key, document := range onboardingcatalog.TemplateDocuments(s.Stage) {
 		document.SegmentVersionID = segmentView.Version.ID.String()
 		payload, err := json.Marshal(document)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
-		templateName := "Primeira vistoria do imóvel"
-		templateView, err := templates.Publish(ctx, tenantID, key, templateName, "onboarding:template:"+key+":v4", payload)
+		templateView, err = templates.Publish(ctx, tenantID, key, "Primeira vistoria do imóvel", "onboarding:template:"+key+":v6", payload)
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
@@ -324,11 +293,8 @@ func (s Service) ensureCatalog(ctx context.Context, tenantID, actorID identity.I
 		if err != nil {
 			return database.SegmentDefinitionVersion{}, "", database.Template{}, err
 		}
-		templatesByKey[key] = templateView.Template
 	}
-	_ = actorID
-	_ = mode
-	return segmentView.Version, "REAL_ESTATE", templatesByKey[onboardingcatalog.ChecklistTemplateKey], nil
+	return segmentView.Version, "REAL_ESTATE", templateView.Template, nil
 }
 
 func (s Service) ensureParticipant(ctx context.Context, tenantID, unitID identity.ID, submission onboardingsession.Submission) (participantcore.ParticipantView, error) {
@@ -398,21 +364,7 @@ func (s Service) within(ctx context.Context, tenantID identity.ID, fn func(*gorm
 }
 
 func completedResult(session onboardingsession.Session, request database.OnboardingRequest, inspectionID identity.ID) Result {
-	originStatus := "NOT_REQUIRED"
-	if request.OriginVersionID != nil {
-		originStatus = "ACTIVE"
-	}
-	return Result{Session: session, Request: request, InspectionID: inspectionID, State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: originStatus, Delivery: deliveryPending}
-}
-
-func pendingResult(session onboardingsession.Session, decision coordinator.SubmitResult) Result {
-	return Result{
-		Session:      session,
-		State:        decision.State,
-		NextAction:   decision.NextAction,
-		OriginStatus: decision.OriginStatus,
-		Delivery:     decision.DeliveryStatus,
-	}
+	return Result{Session: session, Request: request, InspectionID: inspectionID, State: coordinator.StateSubmitted, NextAction: "WAIT_FOR_DELIVERY", OriginStatus: "NOT_REQUIRED", Delivery: deliveryPending}
 }
 
 func correlationID(ctx context.Context) string {

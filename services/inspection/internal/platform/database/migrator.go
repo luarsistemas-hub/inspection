@@ -56,16 +56,19 @@ func (m Migrator) Migrate(ctx context.Context) error {
 	if err := db.AutoMigrate(models...); err != nil {
 		return fmt.Errorf("additive migration: %w", err)
 	}
-	if err := ensureAnalysisPromptSeed(db); err != nil {
-		return err
-	}
 	if err := ensureLegacyAnalysisPromptColumns(db); err != nil {
 		return err
 	}
 	if err := db.Exec(`CREATE TABLE IF NOT EXISTS platform.schema_migrations(version integer PRIMARY KEY, name text NOT NULL, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`).Error; err != nil {
 		return err
 	}
-	return db.Transaction(func(tx *gorm.DB) error {
+	// v37 backfills prompt snapshot references, so the legacy FINDINGS seed must
+	// exist before planner execution. Inventory task seeds wait until v81 drops
+	// the old single-column unique indexes.
+	if err := ensureAnalysisPromptSeedTasks(db, []string{string(analysisprompt.Findings)}); err != nil {
+		return err
+	}
+	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`SELECT pg_advisory_xact_lock(73190421)`).Error; err != nil {
 			return err
 		}
@@ -96,31 +99,45 @@ func (m Migrator) Migrate(ctx context.Context) error {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	// Prompt task uniqueness is introduced by v81. Seed only after the planner
+	// has removed the legacy single-column unique indexes on upgraded databases.
+	if err := ensureAnalysisPromptSeed(db); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ensureAnalysisPromptSeed(db *gorm.DB) error {
-	definition, digest, err := analysisprompt.Canonicalize(analysisprompt.DefaultDefinition())
-	if err != nil {
-		return fmt.Errorf("canonicalize analysis prompt seed: %w", err)
-	}
+	return ensureAnalysisPromptSeedTasks(db, []string{string(analysisprompt.Findings), string(analysisprompt.InventoryCatalog), string(analysisprompt.InventoryCompare)})
+}
+
+func ensureAnalysisPromptSeedTasks(db *gorm.DB, tasks []string) error {
 	now := time.Now().UTC()
-	row := AnalysisPrompt{ID: identity.NewID(), AnalysisType: analysisprompt.RealEstate, DefinitionJSON: definition, CanonicalDigest: digest, Revision: 1, UpdatedBy: identity.ID{}, CreatedAt: now, UpdatedAt: now}
-	if err := db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}}, DoNothing: true}).Create(&row).Error; err != nil {
-		return fmt.Errorf("seed analysis prompt: %w", err)
-	}
-	var current AnalysisPrompt
-	if err := db.Where("analysis_type=?", analysisprompt.RealEstate).First(&current).Error; err != nil {
-		return fmt.Errorf("find analysis prompt seed: %w", err)
-	}
-	var snapshot AnalysisPromptSnapshot
-	if err := db.Where("analysis_type=? AND canonical_digest=?", current.AnalysisType, current.CanonicalDigest).First(&snapshot).Error; err == gorm.ErrRecordNotFound {
-		snapshot = AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: current.AnalysisType, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now}
-		if err := db.Create(&snapshot).Error; err != nil {
-			return fmt.Errorf("seed analysis prompt snapshot: %w", err)
+	for _, task := range tasks {
+		definition, digest, err := analysisprompt.CanonicalizeTask(task, analysisprompt.DefaultDefinitionForTask(task))
+		if err != nil {
+			return fmt.Errorf("canonicalize analysis prompt seed %s: %w", task, err)
 		}
-	} else if err != nil {
-		return fmt.Errorf("find analysis prompt snapshot: %w", err)
+		row := AnalysisPrompt{ID: identity.NewID(), AnalysisType: analysisprompt.RealEstate, Task: task, DefinitionJSON: definition, CanonicalDigest: digest, Revision: 1, UpdatedBy: identity.ID{}, CreatedAt: now, UpdatedAt: now}
+		if err := db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "analysis_type"}, {Name: "task"}}, DoNothing: true}).Create(&row).Error; err != nil {
+			return fmt.Errorf("seed analysis prompt: %w", err)
+		}
+		var current AnalysisPrompt
+		if err := db.Where("analysis_type=? AND task=?", analysisprompt.RealEstate, task).First(&current).Error; err != nil {
+			return fmt.Errorf("find analysis prompt seed: %w", err)
+		}
+		var snapshot AnalysisPromptSnapshot
+		if err := db.Where("analysis_type=? AND task=? AND canonical_digest=?", current.AnalysisType, task, current.CanonicalDigest).First(&snapshot).Error; err == gorm.ErrRecordNotFound {
+			snapshot = AnalysisPromptSnapshot{ID: identity.NewID(), AnalysisType: current.AnalysisType, Task: task, DefinitionJSON: current.DefinitionJSON, CanonicalDigest: current.CanonicalDigest, CreatedAt: now}
+			if err := db.Create(&snapshot).Error; err != nil {
+				return fmt.Errorf("seed analysis prompt snapshot: %w", err)
+			}
+		} else if err != nil {
+			return fmt.Errorf("find analysis prompt snapshot: %w", err)
+		}
 	}
 	return nil
 }

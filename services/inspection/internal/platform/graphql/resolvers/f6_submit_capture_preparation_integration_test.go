@@ -33,7 +33,8 @@ func TestVV_IT_219SubmitCaptureBeforeQualityChecksReturnsPreparationPending(t *t
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{})
+	// v1 pinned until template schema 1 is removed
+	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestVV_IT_219SubmitCaptureBeforeQualityChecksReturnsPreparationPending(t *t
 	if err := h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.TenantID, InvitationID: invitationID, ResponsibilityID: fixture.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expiresAt, CreatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: fixture.TenantID, InvitationID: identity.Ptr(invitationID), ResponsibilityID: &fixture.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: expiresAt, CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()

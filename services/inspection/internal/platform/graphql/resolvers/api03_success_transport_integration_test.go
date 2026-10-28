@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/requestctx"
 )
 
 func TestAPI03VideoConsentAndFrozenCameraAttemptIT398(t *testing.T) {
-	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
+	// v1 pinned until template schema 1 is removed
+	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	accept := executeAPI03Success(t, fixture, `mutation { acceptProcessing(input:{disclosureVersion:"pt-BR-1",photoProcessing:true,videoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"it398-consent"}) { status } }`)
 	if !strings.Contains(accept, `"status":"ACCEPTED"`) {
 		t.Fatalf("acceptProcessing did not persist video disclosure v2: %s", accept)

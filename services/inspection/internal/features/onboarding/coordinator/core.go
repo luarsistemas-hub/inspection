@@ -10,9 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"inspection/libs/identity"
 	assetaddress "inspection/services/inspection/internal/features/assets/address"
-	capturecore "inspection/services/inspection/internal/features/capture/core"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
@@ -21,15 +19,12 @@ import (
 const (
 	StateAgencySaved      = "AGENCY_SAVED"
 	StatePropertySaved    = "PROPERTY_SAVED"
-	StateOriginPending    = "ORIGIN_PENDING"
-	StateOriginReady      = "ORIGIN_READY"
 	StateParticipantSaved = "PARTICIPANT_SAVED"
 	StateReadyToSubmit    = "READY_TO_SUBMIT"
 	StateDeliveryPending  = "DELIVERY_PENDING"
 	StateSubmitted        = "SUBMITTED"
 	StateFailed           = "FAILED"
 
-	NextActionWaitForOrigin = "WAIT_FOR_ORIGIN"
 	NextActionRetryDelivery = "RETRY_DELIVERY"
 	NextActionOpenCapture   = "OPEN_CAPTURE"
 )
@@ -41,16 +36,14 @@ type StepPayload map[string]any
 type SubmitInput struct {
 	Now            time.Time
 	Steps          map[string]StepPayload
-	OriginStatus   string
 	DeliveryState  string
-	TemplateMode   catalog.ComparisonMode
 	IdempotencyKey string
 }
 
 // SubmitResult is safe to project to GraphQL while dependencies are pending.
 type SubmitResult struct {
-	State, NextAction, OriginStatus, DeliveryStatus string
-	Digest                                          string
+	State, NextAction, DeliveryStatus string
+	Digest                            string
 }
 
 // ValidateProperty validates the fields owned by the property checkpoint.
@@ -104,21 +97,6 @@ func ValidateDelegate(payload StepPayload) error {
 	return nil
 }
 
-// ValidateOriginMedia applies the private-origin media contract at the
-// coordinator boundary, before an upload can be submitted for activation.
-func ValidateOriginMedia(contentType string, size int64, description string) error {
-	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "image/") {
-		return apperror.New(apperror.InvalidInput, "contentType", "origin media must be an image")
-	}
-	if size <= 0 || size > catalog.MaxOriginalBytes {
-		return apperror.New(apperror.InvalidInput, "sizeBytes", "origin media exceeds the size limit")
-	}
-	if strings.TrimSpace(description) == "" || utf8.RuneCountInString(strings.TrimSpace(description)) > catalog.MaxTextCodePoints {
-		return apperror.New(apperror.InvalidInput, "description", "origin media description is required within the text limit")
-	}
-	return nil
-}
-
 // ValidateCheckpointPayload validates the payload owned by a checkpoint
 // before it can be persisted or trigger any external provisioning work.
 func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) error {
@@ -133,21 +111,6 @@ func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) 
 		}
 	case "PROPERTY":
 		return ValidateProperty(payload, now)
-	case "ORIGIN":
-		mode := strings.ToUpper(stringValue(payload, "mode"))
-		if mode != "CHECKLIST_ONLY" && mode != "FIXED_ORIGIN" {
-			return apperror.New(apperror.InvalidInput, "mode", "invalid origin mode")
-		}
-		ids, err := OriginMediaIDs(payload)
-		if err != nil {
-			return err
-		}
-		if mode == "FIXED_ORIGIN" && len(ids) == 0 {
-			return apperror.New(apperror.InvalidInput, "referencePhotos", "reference photos are required")
-		}
-		if mode == "CHECKLIST_ONLY" && len(ids) != 0 {
-			return apperror.New(apperror.InvalidInput, "referencePhotos", "checklist-only cannot include reference photos")
-		}
 	case "PARTICIPANT":
 		mode := strings.ToUpper(stringValue(payload, "mode"))
 		switch mode {
@@ -164,40 +127,13 @@ func ValidateCheckpointPayload(step string, payload StepPayload, now time.Time) 
 	return nil
 }
 
-// OriginMediaIDs parses the immutable identifiers saved in the origin step.
-func OriginMediaIDs(payload StepPayload) ([]identity.ID, error) {
-	raw, ok := payload["mediaIds"]
-	if !ok {
-		return nil, nil
-	}
-	values, ok := raw.([]any)
-	if !ok || len(values) > capturecore.MaxActivePhotos {
-		return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
-	}
-	ids := make([]identity.ID, 0, len(values))
-	seen := make(map[identity.ID]bool, len(values))
-	for _, value := range values {
-		formatted, ok := value.(string)
-		if !ok {
-			return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
-		}
-		id, err := identity.ParseID(formatted)
-		if err != nil || seen[id] {
-			return nil, apperror.New(apperror.InvalidInput, "referencePhotos", "invalid reference photos")
-		}
-		seen[id] = true
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
 // ValidateSubmit enforces ordering and truthful pending states. It is pure so
 // the GraphQL and worker boundaries can share the same transition contract.
 func ValidateSubmit(in SubmitInput) (SubmitResult, error) {
 	if strings.TrimSpace(in.IdempotencyKey) == "" {
 		return SubmitResult{}, apperror.New(apperror.InvalidInput, "clientMutationId", "idempotency key is required")
 	}
-	for _, step := range []string{"AGENCY", "PROPERTY", "ORIGIN", "PARTICIPANT"} {
+	for _, step := range []string{"AGENCY", "PROPERTY", "PARTICIPANT"} {
 		if _, ok := in.Steps[step]; !ok {
 			return SubmitResult{}, apperror.New(apperror.InvalidState, "step", "incomplete step: "+strings.ToLower(step))
 		}
@@ -216,24 +152,17 @@ func ValidateSubmit(in SubmitInput) (SubmitResult, error) {
 	} else {
 		return SubmitResult{}, apperror.New(apperror.InvalidInput, "mode", "invalid participant mode")
 	}
-	if in.TemplateMode == catalog.FixedOrigin && in.OriginStatus != "ACTIVE" {
-		return SubmitResult{State: StateOriginPending, NextAction: NextActionWaitForOrigin, OriginStatus: "PENDING", DeliveryStatus: in.DeliveryState}, nil
-	}
-	if in.TemplateMode == catalog.ChecklistOnly && in.OriginStatus == "ACTIVE" {
-		return SubmitResult{}, apperror.New(apperror.InvalidInput, "originMode", "checklist-only cannot include an origin")
-	}
 	state, action := StateReadyToSubmit, NextActionOpenCapture
 	if in.DeliveryState == "PENDING" || in.DeliveryState == "FAILED" {
 		state, action = StateDeliveryPending, NextActionRetryDelivery
 	}
-	return SubmitResult{State: state, NextAction: action, OriginStatus: in.OriginStatus, DeliveryStatus: in.DeliveryState, Digest: digest(in)}, nil
+	return SubmitResult{State: state, NextAction: action, DeliveryStatus: in.DeliveryState, Digest: digest(in)}, nil
 }
 
 func digest(in SubmitInput) string {
 	raw, _ := json.Marshal(struct {
 		Steps map[string]StepPayload `json:"steps"`
-		Mode  catalog.ComparisonMode `json:"mode"`
-	}{in.Steps, in.TemplateMode})
+	}{in.Steps})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
@@ -275,7 +204,7 @@ func propertyDeadline(payload StepPayload) (time.Time, bool) {
 
 // ValidateCheckpointOrder reports the first prerequisite that is missing.
 func ValidateCheckpointOrder(current, requested string) error {
-	ranks := map[string]int{"AGENCY": 1, "PROPERTY": 2, "ORIGIN": 3, "PARTICIPANT": 4, "READY_TO_SUBMIT": 5}
+	ranks := map[string]int{"AGENCY": 1, "PROPERTY": 2, "PARTICIPANT": 3, "READY_TO_SUBMIT": 4}
 	if ranks[strings.ToUpper(requested)] == 0 {
 		return fmt.Errorf("unknown onboarding step %q", requested)
 	}

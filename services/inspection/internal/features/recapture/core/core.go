@@ -112,6 +112,10 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 		if err := tx.Where("tenant_id=? AND kind='INSPECTION' AND responsibility_id IN (?)", in.TenantID, responsibilityIDs).First(&originalDraft).Error; err != nil {
 			return apperror.New(apperror.InvalidState, "inspectionId", "inspection evidence responsibility was not found")
 		}
+		var previousInvitation database.Invitation
+		if err := tx.Where("tenant_id=? AND responsibility_id=?", in.TenantID, originalDraft.ResponsibilityID).Order("created_at DESC").Take(&previousInvitation).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
 		var originalRequirements []capturecore.Requirement
 		if err := json.Unmarshal(originalDraft.Requirements, &originalRequirements); err != nil {
 			return apperror.Wrap(apperror.InvalidState, err)
@@ -186,7 +190,7 @@ func (s Service) Request(ctx context.Context, in RequestInput) (Result, error) {
 		}
 		draft := database.CaptureDraft{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, Kind: "RECAPTURE", MediaKind: originalDraft.MediaKind, TemplateVersionID: originalDraft.TemplateVersionID, ReferencePayload: reference, PolicyPayload: originalDraft.PolicyPayload, Requirements: reqJSON, Status: "OPEN", Version: 1, CreatedAt: now, UpdatedAt: now}
 		responsibilityRow := database.Responsibility{ID: responsibility, TenantID: in.TenantID, InspectionID: in.InspectionID, ParticipantID: inspection.ParticipantID, Status: "PENDING", Version: 1, CreatedAt: now, UpdatedAt: now}
-		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.DeadlineAt, CreatedAt: now}
+		invite := database.Invitation{ID: identity.NewID(), TenantID: in.TenantID, ResponsibilityID: responsibility, ReviewerMembershipID: previousInvitation.ReviewerMembershipID, TokenHash: hash[:], DeliveryIntents: deliveries, Status: "ACTIVE", ExpiresAt: in.DeadlineAt, CreatedAt: now}
 		for _, row := range []any{&request, &responsibilityRow, &draft, &invite} {
 			if err := tx.Create(row).Error; err != nil {
 				return err
@@ -473,7 +477,8 @@ func (s Service) FinalizeVideoTx(tx *gorm.DB, tenantID, requestID identity.ID, c
 	}
 	selected := make(map[identity.ID]string, len(reference.VideoRecapture.Selected))
 	for _, item := range reference.VideoRecapture.Selected {
-		if item.ComponentID == (identity.ID{}) || item.RequirementKey != "video:"+item.ComponentID.String() {
+		legacyKey := "video:" + item.ComponentID.String()
+		if item.ComponentID == (identity.ID{}) || (item.RequirementKey != legacyKey && !strings.HasPrefix(item.RequirementKey, "env:")) {
 			return result, apperror.New(apperror.InvalidState, "requestId", "video recapture selection is invalid")
 		}
 		selected[item.ComponentID] = item.RequirementKey

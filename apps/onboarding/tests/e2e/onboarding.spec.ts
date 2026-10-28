@@ -31,20 +31,20 @@ test("requires a fresh Turnstile token before requesting an onboarding code", as
   await onboarding.open({ autoSolve: false });
   const requestButton = page.getByRole("button", { name: "Enviar código" });
   await expect(requestButton).toBeDisabled();
-  await page.evaluate(() => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.("expired-token"));
+  await onboarding.solveTurnstile("expired-token");
   await expect(requestButton).toBeEnabled();
-  await page.evaluate(() => (window as Window & { turnstileMockExpire?: () => void }).turnstileMockExpire?.());
+  await onboarding.expireTurnstile();
   await expect(requestButton).toBeDisabled();
   await expect(page.getByText("A verificação expirou. Faça a verificação novamente.")).toBeVisible();
   await page.getByRole("button", { name: "Tentar novamente" }).click();
-  await page.evaluate(() => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.("token-1"));
+  await onboarding.solveTurnstile("token-1");
   await expect(requestButton).toBeEnabled();
   await page.getByLabel("Seu nome").fill("Ana Teste");
   await page.getByLabel("Seu e-mail").fill("ana@example.test");
   await requestButton.click();
   await expect(page.getByText("Conclua a verificação de segurança e tente novamente.")).toBeVisible();
   await expect(requestButton).toBeDisabled();
-  await page.evaluate(() => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.("token-2"));
+  await onboarding.solveTurnstile("token-2");
   await expect(requestButton).toBeEnabled();
   await requestButton.click();
   await expect(page.getByLabel("Código de confirmação")).toBeVisible();
@@ -70,11 +70,12 @@ test("reloads the Turnstile script after its first network failure", async ({ pa
   await expect(requestButton).toBeDisabled();
   await page.getByRole("button", { name: "Tentar novamente" }).click();
   await expect.poll(() => loads).toBe(2);
-  await page.evaluate(() => (window as Window & { turnstileMockSolve?: (token: string) => void }).turnstileMockSolve?.("retry-token"));
+  await new OnboardingPage(page).solveTurnstile("retry-token");
   await expect(requestButton).toBeEnabled();
 });
 
 test("completes the real onboarding flow and creates the first vistoria", async ({ page }, testInfo) => {
+  test.skip(process.env.INSPECTION_E2E_AUTH !== "true", "requires the local Inspection API, Keycloak and Mailpit stack");
   const onboarding = new OnboardingPage(page);
   const suffix = `${Date.now()}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "-")}`;
   const deadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -105,8 +106,6 @@ test("completes the real onboarding flow and creates the first vistoria", async 
   await page.reload();
   await onboarding.expectStep("Imóvel");
   await onboarding.saveProperty({ postalCode: "01001-000", street: "Praça da Sé", number: "123", district: "Sé", city: "São Paulo", state: "SP", propertyType: "APARTMENT", purpose: "RENTAL", deadline });
-  await onboarding.expectStep("Fotos de referência");
-  await onboarding.saveChecklistOrigin();
   await onboarding.expectStep("Responsável pela vistoria");
   await onboarding.saveSelfParticipant("Ana E2E", `ana.${suffix}@example.test`);
   await onboarding.submit();

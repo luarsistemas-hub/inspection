@@ -16,6 +16,7 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/notifications"
 	"inspection/services/inspection/internal/platform/observability"
+	"inspection/services/inspection/internal/platform/security"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -302,15 +303,27 @@ func (e *Executor) hydrateSensitiveLink(ctx context.Context, delivery database.D
 	if execution.ExpiresAt > 0 && !now.Before(time.Unix(execution.ExpiresAt, 0).UTC()) {
 		return errLinkUnavailable
 	}
-	var invitation database.Invitation
-	if err := e.db.WithContext(ctx).Where("tenant_id=? AND id=? AND status='ACTIVE' AND revoked_at IS NULL AND expires_at>?", delivery.TenantID, execution.InvitationID, now).First(&invitation).Error; err != nil {
-		return errLinkUnavailable
+	if delivery.LogicalTemplate == "baseline-acknowledgment" {
+		var invitation database.CounterpartyInvitation
+		tokenHash := security.HashToken(execution.Token)
+		if err := e.db.WithContext(ctx).Where("tenant_id=? AND id=? AND response='PENDING' AND deadline_at>? AND token_hash=?", delivery.TenantID, execution.InvitationID, now, tokenHash[:]).First(&invitation).Error; err != nil {
+			return errLinkUnavailable
+		}
+	} else {
+		var invitation database.Invitation
+		if err := e.db.WithContext(ctx).Where("tenant_id=? AND id=? AND status='ACTIVE' AND revoked_at IS NULL AND expires_at>?", delivery.TenantID, execution.InvitationID, now).First(&invitation).Error; err != nil {
+			return errLinkUnavailable
+		}
 	}
 	base := strings.TrimRight(execution.BaseURL, "/")
 	if base == "" || execution.URLVariable == "" || execution.Token == "" {
 		return errLinkUnavailable
 	}
-	(*variables)[execution.URLVariable] = base + "/capture/" + execution.Token
+	route := "/capture/"
+	if delivery.LogicalTemplate == "baseline-acknowledgment" {
+		route = "/baseline/"
+	}
+	(*variables)[execution.URLVariable] = base + route + execution.Token
 	return nil
 }
 

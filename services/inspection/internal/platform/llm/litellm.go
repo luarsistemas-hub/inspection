@@ -25,7 +25,7 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	if g.BaseURL == "" || request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("invalid structured request"))
 	}
-	if (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH") && len(request.Images) > 24 {
+	if isCappedImageMode(request.Mode) && len(request.Images) > 24 {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("video image request limit exceeded"))
 	}
 	client := g.Client
@@ -36,11 +36,12 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	content = append(content, map[string]any{"type": "text", "text": request.UserPrompt})
 	var videoEncodedBytes int64
 	for _, image := range request.Images {
-		videoSource := image.Source == "VIDEO_FRAME" && (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH")
-		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN" && !videoSource) {
+		videoSource := image.Source == "VIDEO_FRAME" && isCappedImageMode(request.Mode)
+		inventorySource := isInventoryMode(request.Mode) && (image.Source == "ORIGIN" || image.Source == "CURRENT" || image.Source == "VIDEO_FRAME")
+		if !strings.HasPrefix(image.DataURL, "data:image/") || image.Digest == "" || image.EvidenceID == "" || (image.Source != "CURRENT" && image.Source != "ORIGIN" && !videoSource) || (isInventoryMode(request.Mode) && !inventorySource) {
 			return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("unauthorized image"))
 		}
-		if request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH" {
+		if isCappedImageMode(request.Mode) {
 			_, encoded, ok := strings.Cut(image.DataURL, ",")
 			if !ok {
 				return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("invalid video image data"))
@@ -65,11 +66,11 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		content = append(content, map[string]any{"type": "text", "text": label})
 		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": image.DataURL, "detail": "high"}})
 	}
-	body, err := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "system", "content": request.SystemPrompt}, map[string]any{"role": "user", "content": content}}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
+	body, err := json.Marshal(map[string]any{"model": request.ModelAlias, "messages": []any{map[string]any{"role": "system", "content": request.SystemPrompt}, map[string]any{"role": "user", "content": content}}, "metadata": map[string]string{"comparison_mode": request.Mode}, "response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "inspection_analysis", "strict": true, "schema": json.RawMessage(request.JSONSchema)}}})
 	if err != nil {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, err)
 	}
-	if (request.Mode == "VIDEO_SCOPE" || request.Mode == "VIDEO_MATCH") && len(body) > 24<<20 {
+	if isCappedImageMode(request.Mode) && len(body) > 24<<20 {
 		return StructuredResult{}, NewError(CodeInvalidInput, 0, fmt.Errorf("video request payload limit exceeded"))
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(g.BaseURL, "/")+"/v1/chat/completions", bytes.NewReader(body))
@@ -137,4 +138,12 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	}
 	result.JSON = []byte(wire.Choices[0].Message.Content)
 	return result, nil
+}
+
+func isInventoryMode(mode string) bool {
+	return mode == "INVENTORY_CATALOG" || mode == "INVENTORY_MATCH" || mode == "INVENTORY_COMPARE"
+}
+
+func isCappedImageMode(mode string) bool {
+	return mode == "VIDEO_SCOPE" || mode == "VIDEO_MATCH" || isInventoryMode(mode)
 }

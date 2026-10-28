@@ -105,9 +105,8 @@ func TestVV_IT_347DirectIntegratorRejectsSecondLiveMainAttempt(t *testing.T) {
 	TestAPI03CompetingAttemptRejectedIT406(t)
 }
 
-// TestVV_IT_340DirectFixedOriginVideoRejectsPhotoBaseline delegates to the
-// GraphQL matrix that seeds a PHOTO origin for a VIDEO template and asserts
-// INVALID_INPUT with no creation side effects.
-func TestVV_IT_340DirectFixedOriginVideoRejectsPhotoBaseline(t *testing.T) {
-	TestFixedOriginPhotoReferenceForVideoGraphQLIT454(t)
+// TestDirectFixedOriginVideoRejectsPhotoBaseline delegates to the GraphQL
+// matrix that enforces the catalog-first error for cross-modality baselines.
+func TestDirectFixedOriginVideoRejectsPhotoBaseline(t *testing.T) {
+	TestFixedOriginPhotoReferenceForVideoGraphQL(t)
 }

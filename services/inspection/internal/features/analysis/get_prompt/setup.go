@@ -17,6 +17,7 @@ import (
 type Query struct {
 	TenantID     identity.ID
 	AnalysisType string
+	Task         string
 }
 type Dependencies struct {
 	DB                                  *gorm.DB
@@ -37,8 +38,14 @@ func Setup(d Dependencies) error {
 		if !prompt.IsKnownType(q.AnalysisType) {
 			return nil, fmt.Errorf("unknown analysis type")
 		}
+		if q.Task == "" {
+			q.Task = string(prompt.Findings)
+		}
+		if !prompt.IsKnownTask(q.Task) {
+			return nil, fmt.Errorf("unknown analysis task")
+		}
 		var row database.AnalysisPrompt
-		if err := d.DB.WithContext(ctx).Where("analysis_type=?", q.AnalysisType).First(&row).Error; err != nil {
+		if err := d.DB.WithContext(ctx).Where("analysis_type=? AND task=?", q.AnalysisType, q.Task).First(&row).Error; err != nil {
 			return nil, err
 		}
 		return row, nil

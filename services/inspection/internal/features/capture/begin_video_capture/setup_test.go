@@ -28,12 +28,12 @@ func videoCaptureDB(t *testing.T) (*gorm.DB, identity.ID, identity.ID, time.Time
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	for _, schema := range []string{"capture", "media", "invitations", "inspections", "reports", "audit", "platform", "messaging"} {
+	for _, schema := range []string{"capture", "media", "invitations", "inspections", "reports", "audit", "platform", "messaging", "templates"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.CaptureDraft{}, &database.VideoAttempt{}, &database.VideoPolicy{}, &database.VideoAdmission{}, &database.ProcessingAcceptance{}, &database.Invitation{}, &database.ExternalSession{}, &database.MediaObject{}, &database.Responsibility{}, &database.ReportSnapshot{}, &database.SubmissionVersion{}, &database.VideoPreparationJob{}, &database.OutboxIntent{}, &database.AuditEvent{}} {
+	for _, model := range []any{&database.CaptureDraft{}, &database.TemplateVersion{}, &database.VideoAttempt{}, &database.VideoPolicy{}, &database.VideoAdmission{}, &database.ProcessingAcceptance{}, &database.Invitation{}, &database.ExternalSession{}, &database.MediaObject{}, &database.Responsibility{}, &database.ReportSnapshot{}, &database.SubmissionVersion{}, &database.VideoPreparationJob{}, &database.OutboxIntent{}, &database.AuditEvent{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
@@ -44,7 +44,11 @@ func videoCaptureDB(t *testing.T) (*gorm.DB, identity.ID, identity.ID, time.Time
 	if err := db.Create(&database.Responsibility{ID: responsibility, TenantID: tenant, InspectionID: inspectionID, Status: "ACTIVE"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: identity.NewID(), ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
+	templateVersionID := identity.NewID()
+	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenant, TemplateID: identity.NewID(), VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: []byte(`{}`), CanonicalDigest: "v1", Status: "ACTIVE", IdempotencyKey: "legacy-v1", PublishedAt: now, CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: templateVersionID, ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1}).Error; err != nil {

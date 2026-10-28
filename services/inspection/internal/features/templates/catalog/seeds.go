@@ -9,15 +9,16 @@ type Seed struct {
 }
 
 func CuratedSeeds(analysisType, propertySegment, constructionSegment, cleaningSegment string) []Seed {
-	base := func(segment string, roles []string) TemplateDocument {
-		return TemplateDocument{SchemaVersion: SchemaVersion, SegmentVersionID: segment, ParticipantRoles: roles, DefaultComparisonMode: ChecklistOnly,
-			Requirements: []CaptureRequirement{{Key: "overview", Section: "property", Label: "Visão geral do imóvel", Instructions: "Fotografe o imóvel de forma ampla, com boa iluminação e sem ocultar áreas relevantes.", EvidenceKind: "PHOTO", MinimumCount: 1, MaximumCount: 10, Required: true, DescriptionRequired: false, CaptureSourcePolicy: "CAMERA_DEFAULT"}},
+	base := func(segment string, roles, environments []string) TemplateDocument {
+		limits := DefaultEnvironmentCapture()
+		return TemplateDocument{SchemaVersion: EnvironmentSchemaVersion, SegmentVersionID: segment, ParticipantRoles: roles, DefaultComparisonMode: ChecklistOnly,
+			CaptureLayout: EnvironmentsLayout, EnvironmentCapture: limits, SuggestedEnvironmentTypes: environments,
 			AnalysisType: analysisType, Policy: Policy{GPSRequired: true, GeofenceMeters: DefaultGeofence, AllowGallery: true}}
 	}
 	return []Seed{
-		{SegmentKey: "property", TemplateKey: "property-periodic", Document: base(propertySegment, []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"})},
-		{SegmentKey: "construction", TemplateKey: "construction-progress", Document: base(constructionSegment, []string{"CONSTRUCTION_RESPONSIBLE", "CONTRACTOR"})},
-		{SegmentKey: "cleaning", TemplateKey: "cleaning-quality", Document: base(cleaningSegment, []string{"CLEANING_EXECUTOR", "CLEANING_SUPERVISOR"})},
+		{SegmentKey: "property", TemplateKey: "property-periodic", Document: base(propertySegment, []string{"TENANT_PARTICIPANT", "PROPERTY_OWNER"}, []string{"LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "LAUNDRY", "BALCONY", "OTHER"})},
+		{SegmentKey: "construction", TemplateKey: "construction-progress", Document: base(constructionSegment, []string{"CONSTRUCTION_RESPONSIBLE", "CONTRACTOR"}, []string{"LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "EXTERNAL_AREA", "OTHER"})},
+		{SegmentKey: "cleaning", TemplateKey: "cleaning-quality", Document: base(cleaningSegment, []string{"CLEANING_EXECUTOR", "CLEANING_SUPERVISOR"}, []string{"LIVING_ROOM", "KITCHEN", "BEDROOM", "BATHROOM", "TOILET", "SERVICE_AREA", "OTHER"})},
 	}
 }
 

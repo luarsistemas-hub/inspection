@@ -58,6 +58,65 @@ func TestVideoScopePreparationUsesPinnedOriginForExpectedComponents(t *testing.T
 	}
 }
 
+func TestCurrentOnlyVideoScopeResolvesFromItsOwnPreparationUT007(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE media.video_scope_items (id TEXT, tenant_id TEXT, preparation_id TEXT, frame_id TEXT, environment_candidate TEXT, component_label TEXT, view_label TEXT, visibility TEXT, identity_status TEXT, landmarks BLOB, created_at DATETIME)").Error; err != nil {
+		t.Fatal(err)
+	}
+	tenant, currentPrep, component := identity.NewID(), identity.NewID(), identity.NewID()
+	originPrep := identity.NewID()
+	if err := db.Exec("INSERT INTO media.video_scope_items (id,tenant_id,preparation_id,component_label) VALUES (?,?,?,?)", component, tenant, currentPrep, "Pia").Error; err != nil {
+		t.Fatal(err)
+	}
+	plan := database.VideoPlan{CurrentPreparationID: currentPrep, OriginPreparationID: &originPrep}
+	scope, found, err := videoPlanScope(context.Background(), db, tenant, plan, database.VideoPlanItem{ComponentID: component, Outcome: "CURRENT_ONLY"})
+	if err != nil || !found || scope.PreparationID != currentPrep || scope.ComponentLabel != "Pia" {
+		t.Fatalf("current-only scope = %+v, found=%v, err=%v", scope, found, err)
+	}
+}
+
+func TestInconclusiveV2VideoScopeResolvesFromSupplementPreparation(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE analysis.video_plan_preparations (tenant_id TEXT, plan_id TEXT, preparation_id TEXT, role TEXT, requirement_key TEXT)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE TABLE media.video_scope_items (id TEXT, tenant_id TEXT, preparation_id TEXT, component_label TEXT, environment_candidate TEXT, view_label TEXT)").Error; err != nil {
+		t.Fatal(err)
+	}
+	tenantID, planID := identity.NewID(), identity.NewID()
+	mainPreparationID, supplementPreparationID, componentID := identity.NewID(), identity.NewID(), identity.NewID()
+	if err := db.Exec("INSERT INTO analysis.video_plan_preparations (tenant_id,plan_id,preparation_id,role,requirement_key) VALUES (?,?,?,?,?)", tenantID, planID, mainPreparationID, "MAIN", "env:kitchen").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO analysis.video_plan_preparations (tenant_id,plan_id,preparation_id,role,requirement_key) VALUES (?,?,?,?,?)", tenantID, planID, supplementPreparationID, "SUPPLEMENT", "env:bathroom").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO media.video_scope_items (id,tenant_id,preparation_id,component_label,environment_candidate,view_label) VALUES (?,?,?,?,?,?)", componentID, tenantID, supplementPreparationID, "Pia", "Banheiro", "frontal").Error; err != nil {
+		t.Fatal(err)
+	}
+	plan := database.VideoPlan{ID: planID, TenantID: tenantID, CurrentPreparationID: mainPreparationID}
+	item := database.VideoPlanItem{ComponentID: componentID, Outcome: "INCONCLUSIVE"}
+	scope, found, err := videoPlanScope(context.Background(), db, tenantID, plan, item)
+	if err != nil || !found || scope.PreparationID != supplementPreparationID || VideoScopeLabel(scope) != "Banheiro — Pia" {
+		t.Fatalf("supplement scope=%+v found=%t err=%v", scope, found, err)
+	}
+}
+
 func TestVideoPlanRequirementsKeepGapsUnobservedInsteadOfPending(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -127,6 +186,43 @@ func TestVideoPlanRequirementsKeepGapsUnobservedInsteadOfPending(t *testing.T) {
 	}
 	if _, ok := gaps["video:b-sink"]; !ok {
 		t.Fatalf("sink gap key missing from gap set: %+v", gaps)
+	}
+}
+
+func TestB10EnvironmentVideoPlanItemsGroupByRequirementKey(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+identity.NewID().String()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS analysis").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS media").Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"CREATE TABLE analysis.video_plan_preparations (tenant_id TEXT, plan_id TEXT, preparation_id TEXT, role TEXT, requirement_key TEXT)",
+		"CREATE TABLE analysis.video_plan_items (id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT, component_id TEXT, carried_result_job_id TEXT, requirement_key TEXT, outcome TEXT, reason TEXT, input_digest TEXT, origin_frame_ids BLOB, current_frame_ids BLOB, core_groups BLOB, current_groups BLOB, created_at DATETIME)",
+		"CREATE TABLE media.video_scope_items (id TEXT PRIMARY KEY, tenant_id TEXT, preparation_id TEXT, frame_id TEXT, environment_candidate TEXT, component_label TEXT, view_label TEXT, visibility TEXT, identity_status TEXT, landmarks BLOB, created_at DATETIME)",
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	tenantID, currentPreparationID := identity.NewID(), identity.NewID()
+	plan := database.VideoPlan{ID: identity.NewID(), TenantID: tenantID, CurrentPreparationID: currentPreparationID}
+	for _, component := range []string{"Pia", "Bancada"} {
+		id := identity.NewID()
+		if err := db.Exec("INSERT INTO analysis.video_plan_items (id,tenant_id,plan_id,component_id,requirement_key,outcome,reason,input_digest,origin_frame_ids,current_frame_ids,core_groups,current_groups,created_at) VALUES (?,?,?,?,?,'CURRENT_ONLY','','digest',X'5B5D',X'5B5D',X'5B5D',X'5B5D',CURRENT_TIMESTAMP)", identity.NewID(), tenantID, plan.ID, id, "env:room").Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec("INSERT INTO media.video_scope_items (id,tenant_id,preparation_id,frame_id,environment_candidate,component_label,view_label,visibility,identity_status,landmarks,created_at) VALUES (?,?,?,?,?,?,'wide','VISIBLE','RESOLVED',X'5B5D',CURRENT_TIMESTAMP)", id, tenantID, currentPreparationID, identity.NewID(), "Kitchen", component).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, gaps, err := VideoPlanRequirements(context.Background(), db, tenantID, plan, false)
+	if err != nil || len(got) != 1 || got[0].Key != "env:room" || !strings.Contains(got[0].Label, "Pia") || !strings.Contains(got[0].Label, "Bancada") || len(gaps) != 0 {
+		t.Fatalf("environment requirements were not grouped: requirements=%+v gaps=%v err=%v", got, gaps, err)
 	}
 }
 

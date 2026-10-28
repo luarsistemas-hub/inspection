@@ -124,6 +124,46 @@ type Decision struct {
 	ReasonCodes    []string
 }
 
+// InventoryFacts contains deterministic item-level facts for one inspection.
+// It is deliberately independent of the database and LLM response prose.
+type InventoryFacts struct {
+	Missing, Worsened, NotObserved, EnvironmentsNotCaptured, BaselineItems int
+}
+
+// ClassifyInventory applies the inventory priority rules to an existing
+// findings classification. Informational and improved items do not affect it.
+func ClassifyInventory(base Decision, facts InventoryFacts) Decision {
+	if facts.Missing > 0 {
+		base.Classification = ClassificationCritical
+		base.ReasonCodes = appendReason(base.ReasonCodes, "INVENTORY_ITEM_MISSING")
+	}
+	if facts.Worsened > 0 {
+		base.Classification = maxClassification(base.Classification, ClassificationAttention)
+		base.ReasonCodes = appendReason(base.ReasonCodes, "INVENTORY_CONDITION_WORSENED")
+	}
+	if facts.NotObserved > 0 {
+		base.Classification = maxClassification(base.Classification, ClassificationAttention)
+		base.ReasonCodes = appendReason(base.ReasonCodes, "INVENTORY_ITEM_NOT_OBSERVED")
+	}
+	if facts.EnvironmentsNotCaptured > 0 {
+		base.Classification = maxClassification(base.Classification, ClassificationAttention)
+		base.ReasonCodes = appendReason(base.ReasonCodes, "INVENTORY_ENVIRONMENT_NOT_CAPTURED")
+	}
+	if facts.BaselineItems == 0 {
+		base.Classification = maxClassification(base.Classification, ClassificationAttention)
+		base.ReasonCodes = appendReason(base.ReasonCodes, "INVENTORY_EMPTY_BASELINE")
+	}
+	return base
+}
+
+func maxClassification(a, b string) string {
+	rank := map[string]int{ClassificationNormal: 0, ClassificationAttention: 1, ClassificationCritical: 2}
+	if rank[b] > rank[a] {
+		return b
+	}
+	return a
+}
+
 // ValidateResult rejects malformed findings independently of comparison mode.
 func ValidateResult(result Result) error {
 	for _, finding := range result.Findings {

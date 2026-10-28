@@ -1,8 +1,10 @@
 query ExternalCaptureBootstrap {
   externalCapture {
-    responsibilityId recaptureRequestId recaptureDeadlineAt replacementDeadlineAt status confirmationOnly kind mediaKind disclosureVersion reference policy
+    responsibilityId recaptureRequestId recaptureDeadlineAt replacementDeadlineAt status confirmationOnly kind mediaKind disclosureVersion captureLayout reference policy
+    environments { requirementKey identityId typeCode name expected addedDuringCapture mediaCount status }
+    reviewHandoff { inspectionId originVersionId }
     referenceItems { mediaId evidenceId sourceMediaId timestampMs environment component view ambiguous gap requirementKey description reason availability imageUrl imageUrlExpiresAt }
-    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed }
+    requirements { key section label instructions required minimumMedia maximumMedia descriptionRequired captureSourcePolicy comparisonTarget impossibilityAllowed environmentIdentityId environmentTypeCode environmentName expected addedDuringCapture }
     answers { requirementKey mediaIds impossibilityReason version }
   }
 }
@@ -31,7 +33,21 @@ mutation SaveCaptureMetadata($input: SaveCaptureMetadataInput!) { saveCaptureMet
 
 mutation DeclareCaptureImpossibility($input: DeclareCaptureImpossibilityInput!) { declareCaptureImpossibility(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
 
+mutation DeclareCaptureEnvironment($input: DeclareCaptureEnvironmentInput!) { declareCaptureEnvironment(input: $input) { environment { requirementKey identityId typeCode name expected addedDuringCapture mediaCount status } userErrors { code field message correlationId } clientMutationId } }
+
+mutation RecordCaptureQualityWarning($input: RecordCaptureQualityWarningInput!) { recordCaptureQualityWarning(input: $input) { flags userErrors { code field message correlationId } clientMutationId } }
+
 
 mutation SubmitCapture($input: SubmitCaptureInput!) { submitCapture(input: $input) { submission { id complete requiresAttention submittedAt } userErrors { code field message correlationId } clientMutationId } }
 
 mutation SubmitRecapture($input: SubmitRecaptureInput!) { submitRecapture(input: $input) { recapture { id status } userErrors { code field message correlationId } clientMutationId } }
+
+query CounterpartyBaseline { counterpartyBaseline { purpose activatedAt deadlineAt response respondedAt resolution resolutionReason adjustmentStatus newerVersionExists readOnly baseline { hasInventory environments { typeCode name items { typeCode name material color quantity condition observation limitation evidence { kind position url timestampMs } } } } } }
+
+mutation RequestCounterpartyOtp($input: RequestCounterpartyOtpInput!) { requestCounterpartyOtp(input: $input) { status userErrors { code field message correlationId } clientMutationId } }
+
+mutation VerifyCounterpartyOtp($input: VerifyCounterpartyOtpInput!) { verifyCounterpartyOtp(input: $input) { status csrfToken expiresAt userErrors { code field message correlationId } clientMutationId } }
+
+mutation AcknowledgeBaseline($input: CounterpartyResponseInput!) { acknowledgeBaseline(input: $input) { response respondedAt userErrors { code field message correlationId } clientMutationId } }
+
+mutation ContestBaseline($input: ContestBaselineInput!) { contestBaseline(input: $input) { response respondedAt userErrors { code field message correlationId } clientMutationId } }

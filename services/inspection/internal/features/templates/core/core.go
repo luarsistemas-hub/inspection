@@ -91,7 +91,7 @@ func (s Service) Publish(ctx context.Context, tenantID identity.ID, key, name, i
 			return err
 		}
 		meta, _ := requestctx.FromContext(ctx)
-		version := database.TemplateVersion{ID: identity.NewID(), TenantID: tenantID, TemplateID: template.ID, VersionNumber: int(count) + 1, SchemaVersion: 1, DefinitionJSON: compiled.Canonical, CanonicalDigest: compiled.Digest, Status: "PUBLISHED", IdempotencyKey: idempotencyKey, PublishedAt: now, CreatedBy: meta.Principal.IdentityID}
+		version := database.TemplateVersion{ID: identity.NewID(), TenantID: tenantID, TemplateID: template.ID, VersionNumber: int(count) + 1, SchemaVersion: compiled.Document.SchemaVersion, DefinitionJSON: compiled.Canonical, CanonicalDigest: compiled.Digest, Status: "PUBLISHED", IdempotencyKey: idempotencyKey, PublishedAt: now, CreatedBy: meta.Principal.IdentityID}
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}

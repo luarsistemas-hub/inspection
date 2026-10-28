@@ -35,6 +35,45 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestBaselineRetentionRepairMigrationUsesSuccessorActivationAndDiscoversWork(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 91 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "baseline_retention_scheduler_repairs" {
+		t.Fatalf("migration=%+v", step)
+	}
+	for _, required := range []string{"successor.supersedes_id=v.id", "successor.activated_at", "idx_counterparty_pending_deadline", "media.video_sources", "retention.deletion_requests", "has_inventory", "responsibility_id IS NULL"} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration is missing retention/scheduler repair %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "COALESCE(activated_at,created_at,CURRENT_TIMESTAMP)") {
+		t.Fatal("superseded_at backfill must not use a version's own activation timestamp")
+	}
+}
+
+func TestRetentionSchedulerMigrationUsesDueWindowsAndHoldFilters(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 92 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "retention_scheduler_due_windows" {
+		t.Fatalf("migration=%+v", step)
+	}
+	for _, required := range []string{"superseded_at", "superseded_baseline_retention_days", "retention.legal_holds", "counterparty_invitations", "ov.status='ACTIVE'", "source_expiry_at<=p_now"} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("migration is missing scheduler predicate %q", required)
+		}
+	}
+}
+
 func TestSensitiveReviewMigrationReconcilesTerminalPreparationGenerically(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
@@ -124,8 +163,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}
@@ -151,8 +190,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}
@@ -172,8 +211,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}
@@ -198,8 +237,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}
@@ -238,8 +277,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}
@@ -248,7 +287,7 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 
 func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.T) {
 	for _, step := range Foundation() {
-		if step.Version != 79 {
+		if step.Version != 93 {
 			continue
 		}
 		if step.Name != "video_scope_display_names_pt_br" || !step.Compatible {
@@ -263,8 +302,8 @@ func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.
 				t.Fatalf("display-name migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 79 {
-			t.Fatalf("LatestVersion()=%d, want 79", LatestVersion())
+		if LatestVersion() != 93 {
+			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
 		}
 		return
 	}

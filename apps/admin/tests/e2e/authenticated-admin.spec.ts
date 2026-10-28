@@ -6,7 +6,7 @@ test.describe("authenticated Admin against the local stack", () => {
 
   test("E2E-008 creates and reloads a unit in the active tenant", async ({ page }) => {
     await loginAsLocalAdmin(page, "/organization");
-    await expect(page.getByRole("status")).toContainText("Organização atualizado");
+    await expect(page.locator(".status-line")).toContainText("Organização atualizado");
 
     const existingUnit = collectionRows(page).filter({ hasText: "UN01" });
     if (await existingUnit.count() === 0) {
@@ -22,19 +22,21 @@ test.describe("authenticated Admin against the local stack", () => {
     await expect(collectionRows(page).filter({ hasText: "UN01" })).toContainText("Unidade Norte");
   });
 
-  test("E2E-009 invites an internal employee and shows the pending membership", async ({ page }) => {
+  test("E2E-009 invites an internal employee and shows the pending membership", async ({ page }, testInfo) => {
     await loginAsLocalAdmin(page, "/access");
     await expect(page.locator(".status-line")).toContainText("atualizado");
     await page.getByRole("button", { name: "Convidar usuário" }).click();
     await page.getByLabel("Nome do usuário").fill("Operador QA");
-    const inviteEmail = process.env.INSPECTION_E2E_INVITE_EMAIL ?? "qa-inspection-employee@example.test";
-    await page.getByLabel("E-mail", { exact: true }).fill(inviteEmail);
+    const configuredInviteEmail = process.env.INSPECTION_E2E_INVITE_EMAIL ?? "qa-inspection-employee@example.test";
+    const [localPart, domain] = configuredInviteEmail.split("@");
+    const inviteEmail = `${localPart}-${Date.now()}-${testInfo.project.name.replace(/[^a-z0-9]/gi, "-")}@${domain}`;
+    await page.getByRole("textbox", { name: "E-mail", exact: true }).fill(inviteEmail);
     await page.getByLabel("Confirme o e-mail").fill(inviteEmail);
     await page.getByLabel("Perfil de acesso").selectOption("EMPLOYEE");
     await page.getByRole("button", { name: "Salvar operação" }).click();
-    const employee = collectionRows(page).filter({ hasText: "Operador" });
+    const employee = collectionRows(page).filter({ hasText: inviteEmail });
     await expect(employee).toContainText("Imobiliária");
-    await expect(employee).toContainText("Pendente");
+    await expect(employee).toContainText("Aguardando ativação");
   });
 
   test("E2E-010 creates a participant under an active unit", async ({ page }) => {
@@ -46,7 +48,7 @@ test.describe("authenticated Admin against the local stack", () => {
       await expect(unit.locator("option").nth(1)).toBeAttached();
       await unit.selectOption({ index: 1 });
       await page.getByLabel("Nome do responsável").fill("Ana QA");
-      await page.getByLabel("E-mail", { exact: true }).fill("ana-qa@example.test");
+      await page.getByRole("textbox", { name: "E-mail", exact: true }).fill("ana-qa@example.test");
       await page.getByLabel("Confirme o e-mail").fill("ana-qa@example.test");
       await page.getByLabel("Função no segmento").fill("OWNER");
       await page.getByRole("button", { name: "Salvar operação" }).click();
@@ -97,7 +99,7 @@ test.describe("authenticated Admin against the local stack", () => {
     await loginAsLocalAdmin(page, "/audit");
     await expect(page.locator(".status-line")).toContainText("atualizado");
     const firstRow = collectionRows(page).first();
-    const details = firstRow.getByRole("button", { name: "Abrir detalhes" });
+    const details = firstRow.getByRole("button", { name: /^Abrir detalhes de/ });
     await details.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("button", { name: "Fechar detalhe" }).click();
@@ -138,20 +140,24 @@ test.describe("authenticated Admin against the local stack", () => {
     await page.getByRole("button", { name: "Aplicar" }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("tenantId")).toBeTruthy();
 
-    const calls = page.getByRole("table", { name: "Chamadas de LLM" });
-    const seededCall = calls.getByRole("row").filter({ hasText: "qa-vision-model" });
+    const calls = page.getByRole("list", { name: "Chamadas de LLM" });
+    const seededCall = calls.getByRole("listitem").filter({ hasText: "qa-inspection-vision" });
     await expect(seededCall.first()).toBeVisible();
-    const inspectionId = await seededCall.first().locator('[data-label="Inspeção"]').innerText();
+    await seededCall.first().getByRole("button", { name: /^Abrir detalhes da chamada/ }).click();
+    const initialDetail = page.getByRole("dialog", { name: /Detalhes da chamada/ });
+    const inspectionId = await initialDetail.locator("dt").filter({ hasText: "Inspection ID" }).locator("xpath=following-sibling::dd").innerText();
+    await initialDetail.getByRole("button", { name: "Fechar detalhe" }).click();
     const inspectionFilter = page.getByLabel("Inspection ID");
     await inspectionFilter.fill(inspectionId);
     await expect(inspectionFilter).toHaveValue(inspectionId);
     await inspectionFilter.press("Enter");
     await expect.poll(() => new URL(page.url()).searchParams.get("inspectionId")).toBe(inspectionId);
-    const selectedCall = calls.getByRole("row").filter({ hasText: inspectionId });
-    await expect(selectedCall.first()).toContainText("qa-vision-model");
-    await selectedCall.first().getByRole("button", { name: "Abrir detalhes" }).click();
-    const detail = page.getByRole("dialog", { name: "Detalhes da chamada de LLM" });
-    await expect(detail).toContainText("qa-vision-model");
+    await expect(calls.getByRole("listitem")).toHaveCount(1);
+    await expect(page.locator(".llm-focus-detail")).toContainText("qa-inspection-vision");
+    const selectedCall = calls.getByRole("listitem").first();
+    await selectedCall.getByRole("button", { name: /^Abrir detalhes da chamada/ }).click();
+    const detail = page.getByRole("dialog", { name: /Detalhes da chamada/ });
+    await expect(detail).toContainText("qa-inspection-vision");
     await expect(detail).toContainText("LIVE");
     await expect(detail).toContainText(inspectionId);
   });
@@ -160,11 +166,11 @@ test.describe("authenticated Admin against the local stack", () => {
     test.setTimeout(90_000);
     const assertRuntimeClean = installRuntimeGuards(page);
     await loginAsLocalAdmin(page, "/organization");
-    await expect(page.locator(".admin-header")).toContainText("Inspeção · Admin");
+    await expect(page.locator(".admin-header")).toContainText(/Administração \/ Minha operação/);
     await expect(page.getByRole("navigation", { name: "Navegação administrativa" }).getByRole("link", { name: "Organização" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("columnheader", { name: "Unidade" }).or(page.getByRole("list", { name: "Organização: registros" }))).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Abrir detalhes" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Abrir detalhes de/ }).first()).toBeVisible();
     await expect(page.getByText("Você não tem permissão para acessar este recurso neste escopo.")).toHaveCount(0);
     for (const [label, route] of [["Visão geral", "/overview"], ["Organização", "/organization"], ["Usuários e acessos", "/access"], ["Responsáveis pela vistoria", "/catalogs"], ["Configuração", "/assets"], ["Governança", "/governance"], ["Auditoria", "/audit"], ["Consumo de LLM", "/llm-usage"]] as const) {
       await navigateAdmin(page, label);
@@ -174,7 +180,7 @@ test.describe("authenticated Admin against the local stack", () => {
         await page.getByRole("combobox", { name: "Modo" }).selectOption("MOCK");
         await page.getByRole("button", { name: "Aplicar" }).click();
         await expect(page.getByLabel("Resumo do consumo de LLM")).toBeVisible();
-        await expect(page.getByRole("table", { name: "Chamadas de LLM" }).or(page.getByRole("heading", { name: "Nenhuma chamada encontrada" }))).toBeVisible();
+        await expect(page.getByRole("list", { name: "Chamadas de LLM" }).or(page.getByRole("heading", { name: "Nenhuma chamada encontrada" }))).toBeVisible();
       } else await expect(page.locator(".status-line")).toContainText("atualizado");
       await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
     }

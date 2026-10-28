@@ -23,7 +23,8 @@ func TestVV_IT_365PhotoRecaptureAfterCompletionKeepsPhotoRequirementsAndLifecycl
 		t.Skipf("integration dependencies unavailable: %v", err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	fixture, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{InspectionStatus: "COMPLETED"})
+	// v1 pinned until template schema 1 is removed
+	fixture, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{InspectionStatus: "COMPLETED", SchemaVersion: 1, RequirementKey: "room-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

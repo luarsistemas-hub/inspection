@@ -265,7 +265,7 @@ test("IT-147 reaching the existing media maximum explains the limit", async ({ p
   await enterConsent(page);
   await acceptPurposes(page);
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await expect(page.getByText("1–1 foto(s) · GPS conforme a política")).toBeVisible();
+  await expect(page.getByText("1–1 fotos · GPS não obrigatório")).toBeVisible();
   await expect(page.getByLabel("Resumo da captura")).toHaveText("1/1");
 });
 

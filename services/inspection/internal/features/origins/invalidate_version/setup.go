@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"inspection/libs/identity"
-	"inspection/services/inspection/internal/features/origins/core"
+
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -21,12 +21,12 @@ type Command struct{ TenantID, VersionID identity.ID }
 type Dependencies struct {
 	DB         *gorm.DB
 	Bus        *mediator.Bus
-	Service    core.Service
+	Service    *Service
 	Authorizer auth.Authorizer
 }
 
 func Setup(d Dependencies) error {
-	if d.DB == nil || d.Bus == nil || d.Service.DB == nil {
+	if d.DB == nil || d.Bus == nil || d.Service == nil || d.Service.DB == nil {
 		return fmt.Errorf("slice origins/invalidate_version: missing dependency")
 	}
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {

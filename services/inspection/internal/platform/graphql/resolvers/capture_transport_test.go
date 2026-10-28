@@ -14,6 +14,7 @@ import (
 	"inspection/libs/identity"
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
+	capturebeginvideo "inspection/services/inspection/internal/features/capture/begin_video_capture"
 	capturebootstrap "inspection/services/inspection/internal/features/capture/bootstrap"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
@@ -28,10 +29,7 @@ import (
 	mediafalsepositive "inspection/services/inspection/internal/features/media/declare_false_positive"
 	mediavideoprep "inspection/services/inspection/internal/features/media/manage_video_preparation"
 	mediapresign "inspection/services/inspection/internal/features/media/presign_parts"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
-	origininvite "inspection/services/inspection/internal/features/origins/invite_capture"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	recapturecore "inspection/services/inspection/internal/features/recapture/core"
 	recapturerequest "inspection/services/inspection/internal/features/recapture/request"
@@ -61,8 +59,6 @@ func TestTask5GraphQLTransportIT411ToIT412IT473ToIT478IT509ToIT526(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	register(origininvite.Command{}, origincore.Invitation{InvitationID: ids[0], VersionID: ids[1]})
-	register(originactivate.Command{}, database.OriginVersion{ID: ids[1], OriginID: ids[2], VersionNumber: 1, Status: "ACTIVE"})
 	register(origininvalidate.Command{}, database.OriginVersion{ID: ids[1], OriginID: ids[2], VersionNumber: 1, Status: "INVALIDATED"})
 	register(acceptprocessing.Command{}, acceptprocessing.Result{Status: "ACCEPTED"})
 	register(mediacreate.Command{}, mediacore.Upload{MediaID: ids[3], UploadID: "upload", ExpiresAt: time.Now().Add(time.Hour)})
@@ -100,8 +96,8 @@ func TestTask5GraphQLTransportIT411ToIT412IT473ToIT478IT509ToIT526(t *testing.T)
 		name, failureName, query, expected string
 	}{
 		{"IT-411 origin versions", "IT-412 origin versions safe failure", `query { originVersions(assetId:"` + validID + `") { nodes { status } pageInfo { hasNextPage } } }`, "ACTIVE"},
-		{"IT-473 invite origin", "IT-474 invite origin safe failure", `mutation { inviteOriginCapture(input:{assetId:"` + validID + `",participantId:"` + validID + `",expiresAt:"2030-01-01T00:00:00Z",clientMutationId:"c"}) { status } }`, "SENT"},
-		{"IT-475 activate origin", "IT-476 activate origin safe failure", `mutation { activateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { version { status } } }`, "ACTIVE"},
+		{"IT-473 invite origin tombstone", "", `mutation { inviteOriginCapture(input:{assetId:"` + validID + `",participantId:"` + validID + `",expiresAt:"2030-01-01T00:00:00Z",clientMutationId:"c"}) { userErrors { code message } } }`, "INVALID_STATE"},
+		{"IT-475 activate origin tombstone", "", `mutation { activateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { userErrors { code message } } }`, "INVALID_STATE"},
 		{"IT-477 invalidate origin", "IT-478 invalidate origin safe failure", `mutation { invalidateOriginVersion(input:{versionId:"` + versionID + `",clientMutationId:"c"}) { version { status } } }`, "INVALIDATED"},
 		{"accept processing", "", `mutation { acceptProcessing(input:{disclosureVersion:"v1",photoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"c"}) { status } }`, "ACCEPTED"},
 		{"IT-509 create media", "IT-510 create media safe failure", `mutation { createMediaUpload(input:{contentType:"image/jpeg",sizeBytes:3,sha256:"` + strings.Repeat("a", 64) + `",clientMutationId:"c"}) { upload { uploadId } } }`, "upload"},
@@ -195,7 +191,7 @@ func TestSensitiveFalsePositiveUnavailableAdapterIT472(t *testing.T) {
 	}
 }
 
-func TestExternalCaptureShowsEffectiveVideoLimitBeforeConsent(t *testing.T) {
+func TestUT103ExternalCaptureShowsEffectiveVideoLimitAndEnvironmentLayout(t *testing.T) {
 	tenantID, responsibilityID := identity.NewID(), identity.NewID()
 	invitations, credentials := captureSessionFixture(t, tenantID, responsibilityID)
 	if err := invitations.DB.Exec(`ATTACH DATABASE ':memory:' AS capture`).Error; err != nil {
@@ -204,12 +200,13 @@ func TestExternalCaptureShowsEffectiveVideoLimitBeforeConsent(t *testing.T) {
 	if err := invitations.DB.Exec(`CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob,media_kind text)`).Error; err != nil {
 		t.Fatal(err)
 	}
+	templateVersionID := identity.NewID()
 	if err := invitations.DB.Exec(`INSERT INTO capture.capture_drafts (id,tenant_id,responsibility_id,media_kind) VALUES (?,?,?,?)`, identity.NewID(), tenantID, responsibilityID, "VIDEO").Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()
 	if err := bus.RegisterQuery(capturebootstrap.Query{}, func(context.Context, any) (any, error) {
-		return capturecore.Bootstrap{Draft: database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: identity.NewID(), Status: "OPEN", ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{"allowGallery":false}`)}}, nil
+		return capturecore.Bootstrap{Draft: database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: templateVersionID, Status: "OPEN", ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{"allowGallery":false}`)}, SchemaVersion: 2}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -218,9 +215,29 @@ func TestExternalCaptureShowsEffectiveVideoLimitBeforeConsent(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	response := executeCaptureGraphQL(t, captureGraphQLServer(bus, invitations), `query { externalCapture { status mediaKind policy } }`, tenantID, credentials, true)
-	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"maxDurationSeconds":600`) || !strings.Contains(response, `"ACCEPTANCE_REQUIRED"`) {
+	response := executeCaptureGraphQL(t, captureGraphQLServer(bus, invitations), `query { externalCapture { status mediaKind captureLayout requirements { key } policy } }`, tenantID, credentials, true)
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"maxDurationSeconds":600`) || !strings.Contains(response, `"ACCEPTANCE_REQUIRED"`) || !strings.Contains(response, `"captureLayout":"ENVIRONMENTS"`) || !strings.Contains(response, `"requirements":[]`) {
 		t.Fatalf("effective video policy absent before consent: %s", response)
+	}
+}
+
+func TestB1BeginVideoCapturePassesEnvironmentRequirementToCommand(t *testing.T) {
+	tenantID, responsibilityID := identity.NewID(), identity.NewID()
+	requirementKey := "env:" + identity.NewID().String()
+	bus := mediator.New()
+	var got capturebeginvideo.Command
+	if err := bus.RegisterCommand(capturebeginvideo.Command{}, func(_ context.Context, raw any) (any, error) {
+		got = raw.(capturebeginvideo.Command)
+		return database.VideoAttempt{ID: identity.NewID(), Kind: "MAIN", Status: "ACTIVE", AcquisitionSource: "CAMERA", MaxDurationSeconds: 180, MaxBytes: 1024, PolicyVersion: 1, AdmittedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	invitations, credentials := captureSessionFixture(t, tenantID, responsibilityID)
+	server := captureGraphQLServer(bus, invitations)
+	query := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",requirementKey:"` + requirementKey + `",clientMutationId:"b1-capture"}) { attempt { id } } }`
+	response := executeCaptureGraphQL(t, server, query, tenantID, credentials, true)
+	if strings.Contains(response, `"errors"`) || got.RequirementKey != requirementKey {
+		t.Fatalf("environment requirement was not passed to beginVideoCapture command: command=%+v response=%s", got, response)
 	}
 }
 
@@ -290,8 +307,8 @@ func captureSessionFixture(t *testing.T, tenantID, responsibilityID identity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	row := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.NewID(), ResponsibilityID: responsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
-	invitation := database.Invitation{ID: row.InvitationID, TenantID: tenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt}
+	row := database.ExternalSession{ID: identity.NewID(), TenantID: tenantID, InvitationID: identity.Ptr(identity.NewID()), ResponsibilityID: identity.Ptr(responsibilityID), Kind: "CAPTURE", SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
+	invitation := database.Invitation{ID: *row.InvitationID, TenantID: tenantID, ResponsibilityID: responsibilityID, TokenHash: hash[:], DeliveryIntents: json.RawMessage(`[]`), Status: "ACTIVE", ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt}
 	if err := db.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -318,6 +335,27 @@ func captureGraphQLServerWithDB(bus *mediator.Bus, invitations invitationcore.Se
 	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{Bus: bus, Invitations: invitations, DB: db}}))
 	server.SetErrorPresenter(graph.PresentError)
 	return server
+}
+
+func TestSubmitCaptureKeepsExternalCookieForReviewHandoffRead(t *testing.T) {
+	tenantID, responsibilityID := identity.NewID(), identity.NewID()
+	invitations, credentials := captureSessionFixture(t, tenantID, responsibilityID)
+	bus := mediator.New()
+	if err := bus.RegisterCommand(capturesubmit.Command{}, func(context.Context, any) (any, error) {
+		return database.SubmissionVersion{ID: identity.NewID(), Complete: true, Payload: json.RawMessage(`{}`), SubmittedAt: time.Now().UTC()}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	ctx := requestctx.WithExternalCredentials(context.Background(), credentials)
+	ctx = requestctx.WithResponseWriter(ctx, response)
+	_, err := (&Resolver{Bus: bus, Invitations: invitations}).Mutation().SubmitCapture(ctx, graph.SubmitCaptureInput{ClientMutationID: "review-handoff-cookie"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cookies := response.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("successful submit changed external cookies: %+v", cookies)
+	}
 }
 
 func executeCaptureGraphQL(t *testing.T, server http.Handler, query string, tenantID identity.ID, credentials requestctx.ExternalCredentials, authenticated bool) string {

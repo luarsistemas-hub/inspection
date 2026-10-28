@@ -53,6 +53,13 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 		if err := mediavideopolicy.Validate(command.MaxDurationMinutes, command.OriginRetentionDays, command.CurrentRetentionDays); err != nil {
 			return nil, err
 		}
+		supersededDays := 365
+		if command.SupersededBaselineRetentionDays != nil {
+			supersededDays = *command.SupersededBaselineRetentionDays
+			if err := mediavideopolicy.ValidateSupersededBaselineRetention(supersededDays); err != nil {
+				return nil, err
+			}
+		}
 		if !tenantEnabled {
 			return nil, apperror.New(apperror.InvalidState, "tenant", "inactive tenant cannot change video policy")
 		}
@@ -63,7 +70,7 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 			return nil, apperror.New(apperror.InvalidInput, "maxDurationMinutes", "duration must be between 1 and 60 minutes")
 		}
 		policyVersion++
-		return database.VideoPolicy{TenantID: command.TenantID, MaxDurationMinutes: command.MaxDurationMinutes, OriginRetentionDays: command.OriginRetentionDays, CurrentRetentionDays: command.CurrentRetentionDays, Version: policyVersion}, nil
+		return database.VideoPolicy{TenantID: command.TenantID, MaxDurationMinutes: command.MaxDurationMinutes, OriginRetentionDays: command.OriginRetentionDays, CurrentRetentionDays: command.CurrentRetentionDays, SupersededBaselineRetentionDays: supersededDays, Version: policyVersion}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -71,15 +78,15 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 	server.SetErrorPresenter(graph.PresentError)
 
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: tenantID, CorrelationID: "video-policy-test"})
-	response := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }`, ctx)
-	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":5`, `"version":1`} {
+	response := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } }`, ctx)
+	for _, expected := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"supersededBaselineRetentionDays":365`, `"version":1`} {
 		if !strings.Contains(response, expected) {
 			t.Fatalf("default policy response missing %s: %s", expected, response)
 		}
 	}
 
-	response = executeVideoPolicyGraphQL(t, server, `mutation { configureVideoPolicy(input:{maxDurationMinutes:10,originRetentionDays:40,currentRetentionDays:7,expectedVersion:1,clientMutationId:"k1"}) { policy { maxDurationMinutes originRetentionDays currentRetentionDays version } clientMutationId userErrors { field message } } }`, ctx)
-	for _, expected := range []string{`"maxDurationMinutes":10`, `"originRetentionDays":40`, `"currentRetentionDays":7`, `"version":2`, `"clientMutationId":"k1"`} {
+	response = executeVideoPolicyGraphQL(t, server, `mutation { configureVideoPolicy(input:{maxDurationMinutes:10,originRetentionDays:40,currentRetentionDays:7,supersededBaselineRetentionDays:730,expectedVersion:1,clientMutationId:"k1"}) { policy { maxDurationMinutes originRetentionDays currentRetentionDays supersededBaselineRetentionDays version } clientMutationId userErrors { field message } } }`, ctx)
+	for _, expected := range []string{`"maxDurationMinutes":10`, `"originRetentionDays":40`, `"currentRetentionDays":7`, `"supersededBaselineRetentionDays":730`, `"version":2`, `"clientMutationId":"k1"`} {
 		if !strings.Contains(response, expected) {
 			t.Fatalf("configured policy response missing %s: %s", expected, response)
 		}
@@ -120,7 +127,7 @@ func TestVideoPolicyGraphQLTransport(t *testing.T) {
 	}
 }
 
-func TestCreateMediaUploadGraphQLTransportIT012ReturnsInvalidInputAndNullResult(t *testing.T) {
+func TestCreateMediaUploadGraphQLTransportReturnsInvalidInputAndNullResult(t *testing.T) {
 	tenantID, responsibilityID := identity.NewID(), identity.NewID()
 	invitations, credentials := captureSessionFixture(t, tenantID, responsibilityID)
 	bus := mediator.New()
@@ -452,7 +459,7 @@ func TestVideoPolicyGraphQLUsesRealTenantSliceAndCapabilities(t *testing.T) {
 	server.SetErrorPresenter(graph.PresentError)
 	adminCtx := policyTransportContext(tenantA, adminID)
 	initial := executeVideoPolicyGraphQL(t, server, `query { videoPolicy { maxDurationMinutes originRetentionDays currentRetentionDays version } }`, adminCtx)
-	for _, value := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":5`, `"version":1`} {
+	for _, value := range []string{`"maxDurationMinutes":15`, `"originRetentionDays":30`, `"currentRetentionDays":30`, `"version":1`} {
 		if !strings.Contains(initial, value) {
 			t.Fatalf("default policy missing %s: %s", value, initial)
 		}
@@ -543,10 +550,13 @@ func TestVideoUploadGraphQLUsesRealMediaSlicesAndPersistsReceiptIT624(t *testing
 	if err := db.Exec("ATTACH DATABASE ':memory:' AS inspections").Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec("ATTACH DATABASE ':memory:' AS templates").Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Exec("CREATE TABLE inspections.responsibilities (id TEXT PRIMARY KEY, tenant_id TEXT, status TEXT)").Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, model := range []any{&database.CaptureDraft{}, &database.VideoAttempt{}, &database.VideoAdmission{}, &database.VideoPolicy{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.UploadPart{}, &database.OutboxIntent{}, &database.VideoPreparationJob{}, &database.AuditEvent{}} {
+	for _, model := range []any{&database.CaptureDraft{}, &database.VideoAttempt{}, &database.VideoAdmission{}, &database.VideoPolicy{}, &database.MediaObject{}, &database.MultipartUpload{}, &database.UploadPart{}, &database.OutboxIntent{}, &database.VideoPreparationJob{}, &database.AuditEvent{}, &database.TemplateVersion{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
@@ -559,7 +569,11 @@ func TestVideoUploadGraphQLUsesRealMediaSlicesAndPersistsReceiptIT624(t *testing
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: identity.NewID(), ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{"allowGallery":true}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
+	templateVersionID := identity.NewID()
+	if err := db.Create(&database.TemplateVersion{ID: templateVersionID, TenantID: tenantID, TemplateID: identity.NewID(), VersionNumber: 1, SchemaVersion: 1, DefinitionJSON: []byte(`{}`), CanonicalDigest: strings.Repeat("a", 64), Status: "ACTIVE", IdempotencyKey: "video-transport-v1", PublishedAt: now, CreatedBy: identity.NewID()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: templateVersionID, ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{"allowGallery":true}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1, ChangedAt: now}).Error; err != nil {

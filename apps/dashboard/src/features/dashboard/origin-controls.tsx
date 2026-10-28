@@ -9,9 +9,12 @@ import {
   InvalidateOriginVersionDocument,
   InviteOriginCaptureDocument,
   type DashboardOriginVersionsQuery,
+  type DashboardReviewersQuery,
 } from "@/graphql/generated";
 import { graphql } from "@/graphql/client";
 import { Dialog } from "@inspection/design-system";
+import { purposeLabel } from "./inventory-presentation";
+import { loadDashboardReviewers } from "./reviewer-options";
 
 type OriginVersion = DashboardOriginVersionsQuery["originVersions"]["nodes"][number];
 
@@ -34,7 +37,7 @@ export function originVersionStatus(status: string, preparationStatus?: string |
 
 export function selectableOriginVersions(versions: OriginVersion[], mediaKind?: string | null): OriginVersion[] {
   if (!mediaKind) return [];
-  return versions.filter((version) => version.selectable && version.mediaKind === mediaKind && version.status === "ACTIVE");
+  return versions.filter((version) => (version.status === "ACTIVE" && version.selectable || version.hasInventory && version.status === "SUPERSEDED") && (version.hasInventory || version.mediaKind === mediaKind));
 }
 
 export function useTemplateMediaKind(templateVersionId?: string | null) {
@@ -80,21 +83,24 @@ export function FixedOriginSelector({ assetId, mediaKind, value, onChange }: {
   return <div>
     <label>Origem<select aria-label="Origem" required value={value} onChange={(event) => onChange(event.target.value)} disabled={!mediaKind}>
       <option value="">Selecione {label}</option>
-      {choices.map((origin) => <option key={origin.id} value={origin.id}>Versão {origin.versionNumber} · {origin.mediaKind === "VIDEO" ? "Vídeo" : "Fotos"}</option>)}
+      {choices.map((origin) => <option key={origin.id} value={origin.id}>Versão {origin.versionNumber}{origin.purpose ? ` · ${purposeLabel(origin.purpose)}` : ""}{origin.status === "SUPERSEDED" ? " · anterior" : " · ativa"} · {origin.mediaKind === "VIDEO" ? "Vídeo" : "Fotos"}</option>)}
     </select></label>
     <p role="status">{!mediaKind ? "Carregando a modalidade do modelo…" : choices.length ? `${choices.length} origem(ns) pronta(s) para este modelo.` : `Não há ${label} prontas para seleção.`}</p>
     <span className="visually-hidden" aria-live="polite">{status}</span>
   </div>;
 }
 
-export function OriginManagement({ assetId, templateVersionId, participants }: {
+export function OriginManagement({ assetId, businessUnitId, templateVersionId, participants }: {
   assetId: string;
+  businessUnitId?: string | null;
   templateVersionId?: string | null;
   participants: Array<{ id: string; name: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<OriginVersion[]>([]);
   const [participantId, setParticipantId] = useState("");
+  const [reviewerMemberships, setReviewerMemberships] = useState<DashboardReviewersQuery["memberships"]["nodes"]>([]);
+  const [reviewerMembershipId, setReviewerMembershipId] = useState("");
   const [message, setMessage] = useState("Carregando origens do imóvel…");
   const [busy, setBusy] = useState(false);
   const mediaKind = useTemplateMediaKind(templateVersionId);
@@ -108,6 +114,9 @@ export function OriginManagement({ assetId, templateVersionId, participants }: {
     }
   };
   useEffect(() => { void refresh(); }, [assetId]);
+  const [reviewersUnavailable, setReviewersUnavailable] = useState(false);
+  // Roles without access to the membership list can still invite without a reviewer.
+  useEffect(() => { void loadDashboardReviewers().then((memberships) => { setReviewersUnavailable(false); setReviewerMemberships(memberships.filter((membership) => membership.role === "TENANT_ADMIN" || membership.scopes.some((scope) => scope.resourceId === assetId || scope.resourceId === businessUnitId))); }).catch(() => { setReviewersUnavailable(true); setReviewerMemberships([]); }); }, [assetId, businessUnitId]);
 
   const mutate = async (action: "invite" | "activate" | "invalidate" | "close", version?: OriginVersion) => {
     if (busy) return;
@@ -116,7 +125,7 @@ export function OriginManagement({ assetId, templateVersionId, participants }: {
     try {
       if (action === "invite") {
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-        const result = await graphql(InviteOriginCaptureDocument, { input: { assetId, participantId, expiresAt, clientMutationId: mutationId() } });
+        const result = await graphql(InviteOriginCaptureDocument, { input: { assetId, participantId, expiresAt, reviewerMembershipId: reviewerMembershipId || null, clientMutationId: mutationId() } });
         const payload = result.inviteOriginCapture;
         feedback = payload.userErrors[0]?.message ?? (payload.originVersionId ? `Convite de ${mediaKind === "VIDEO" ? "vídeo" : "fotos"} enviado; a origem aparecerá após o envio.` : "Não foi possível criar o convite.");
       } else if (version) {
@@ -145,6 +154,8 @@ export function OriginManagement({ assetId, templateVersionId, participants }: {
       <label>Responsável<select aria-label="Responsável pela origem" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
         <option value="">Selecione</option>{participants.filter((participant) => participant.id).map((participant) => <option key={participant.id} value={participant.id}>{participant.name}</option>)}
       </select></label>
+      <label>Revisor responsável<select aria-label="Revisor responsável" value={reviewerMembershipId} onChange={(event) => setReviewerMembershipId(event.target.value)}><option value="">Sem revisor específico</option>{reviewerMemberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.name || membership.email || membership.role}</option>)}</select></label>
+      {reviewersUnavailable ? <p role="status">A lista de revisores não está disponível para o seu perfil; o convite seguirá sem revisor definido.</p> : !reviewerMemberships.length && <p role="status">Nenhum revisor com acesso a este imóvel ou unidade está disponível.</p>}
       <button type="button" disabled={busy || !participantId || !mediaKind} onClick={() => void mutate("invite")}>Convidar origem{mediaKind ? ` (${mediaKind === "VIDEO" ? "vídeo" : "fotos"})` : ""}</button>
     </div>
     {versions.length > 0 ? <><p role="status" aria-live="polite">{message}</p><ul>{versions.map((version) => <li key={version.id}>

@@ -15,6 +15,8 @@ export type VideoDraft = {
   sha256?: string;
   mediaId?: string;
   replacesMediaId?: string;
+  requirementKey?: string;
+  durationSeconds?: number;
   uploadId?: string;
   partSizeBytes?: number;
   parts: VideoPart[];

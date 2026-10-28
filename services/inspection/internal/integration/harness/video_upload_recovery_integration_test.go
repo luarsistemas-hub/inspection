@@ -17,6 +17,7 @@ import (
 	mediacore "inspection/services/inspection/internal/features/media/core"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/objectstore"
+	videoplatform "inspection/services/inspection/internal/platform/video"
 
 	"gorm.io/gorm"
 )
@@ -146,5 +147,96 @@ func TestTask05VideoMultipartRecoveryIT119IT127(t *testing.T) {
 	}
 	if mediaCount != 1 {
 		t.Fatalf("IT-127 created %d video media objects", mediaCount)
+	}
+}
+
+func TestIT051VideoCompletionReplayCreatesOneMediaAndPreparation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	h, err := NewFromEnv(ctx)
+	if err != nil {
+		t.Fatalf("IT-051 requires isolated PostgreSQL and MinIO: %v", err)
+	}
+	defer h.Close()
+	fixture, err := h.SeedTask06Fixture(ctx, Task06FixtureOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	attemptID := identity.NewID()
+	requirementKey := "env:" + identity.NewID().String()
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		requirements := []byte(`[{"key":"` + requirementKey + `","evidenceKind":"VIDEO","maximumMedia":3}]`)
+		if err := tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.DraftID).Updates(map[string]any{"media_kind": "VIDEO", "status": "OPEN", "requirements": requirements}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&database.VideoAttempt{ID: attemptID, TenantID: fixture.TenantID, ResponsibilityID: fixture.ResponsibilityID, Kind: "CURRENT", RequirementKey: &requirementKey, PolicyVersion: 1, MaxDurationSeconds: 900, MaxBytes: objectstore.MaxVideoBytes, AcquisitionSource: "CAMERA", Status: "ACTIVE", IdempotencyKey: "it051-attempt", PayloadDigest: "it051-attempt-payload", AdmittedAt: now, ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("IT-051 multipart completion replay")
+	digest := sha256.Sum256(body)
+	service := mediacore.Service{DB: h.DB, Store: h.Store, Within: h.WithinTenant}
+	upload, err := service.CreateVideoWithAttempt(ctx, fixture.TenantID, fixture.ResponsibilityID, attemptID, "video/mp4", hex.EncodeToString(digest[:]), int64(len(body)), "it051-upload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := false
+	t.Cleanup(func() {
+		if completed {
+			if deleter, ok := h.Store.Client.(objectstore.Deleter); ok {
+				_ = deleter.Delete(context.Background(), h.Store.Bucket, upload.ObjectKey)
+			}
+		} else {
+			_ = h.Store.Client.AbortMultipart(context.Background(), h.Store.Bucket, upload.ObjectKey, upload.UploadID)
+		}
+	})
+	signed, err := service.Presign(ctx, fixture.TenantID, fixture.ResponsibilityID, upload.MediaID, []int{1})
+	if err != nil || len(signed) != 1 {
+		t.Fatalf("presign part: %v (URLs=%d)", err, len(signed))
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, signed[0].URL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := h.HTTP.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("put video part returned HTTP %d", response.StatusCode)
+	}
+	parts := []objectstore.Part{{Number: 1, ETag: response.Header.Get("ETag")}}
+	if parts[0].ETag == "" {
+		t.Fatal("video part response had no ETag")
+	}
+	for i := 0; i < 2; i++ {
+		media, err := service.Complete(ctx, fixture.TenantID, fixture.ResponsibilityID, upload.MediaID, parts)
+		if err != nil || media.Status != "RECEIVED" {
+			t.Fatalf("completion replay %d: media status=%s err=%v", i+1, media.Status, err)
+		}
+	}
+	completed = true
+	var mediaCount, jobCount int64
+	var attempt database.VideoAttempt
+	var job database.VideoPreparationJob
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND id=?", fixture.TenantID, fixture.ResponsibilityID, upload.MediaID).Count(&mediaCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.VideoPreparationJob{}).Where("tenant_id=? AND media_id=?", fixture.TenantID, upload.MediaID).Count(&jobCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id=? AND media_id=?", fixture.TenantID, upload.MediaID).Take(&job).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id=? AND id=?", fixture.TenantID, attemptID).Take(&attempt).Error
+	}); err != nil {
+		t.Fatal(err)
+	}
+	profile := videoplatform.DefaultProfile()
+	if mediaCount != 1 || jobCount != 1 || attempt.Status != "RECEIVED" || attempt.RequirementKey == nil || *attempt.RequirementKey != requirementKey || job.ProfileDigest != profile.Digest() || job.RequirementKey == nil || *job.RequirementKey != requirementKey {
+		t.Fatalf("IT-051 media=%d preparations=%d attempt=%s attemptRequirement=%v profile=%s jobRequirement=%v; want one env clip, one preparation with profile v2 and the environment requirement", mediaCount, jobCount, attempt.Status, attempt.RequirementKey, job.ProfileDigest, job.RequirementKey)
 	}
 }

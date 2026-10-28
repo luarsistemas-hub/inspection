@@ -63,7 +63,7 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 	if err := db.Exec(`ATTACH DATABASE ':memory:' AS platform`).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob,disclosure_version text,photo_processing integer,video_processing integer NOT NULL DEFAULT 0,ai_analysis integer,gps_use integer,accepted_at datetime,unique(tenant_id,responsibility_id))`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`, `CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob unique,media_kind text,kind text)`} {
+	for _, sql := range []string{`CREATE TABLE invitations.invitations (id blob primary key,tenant_id blob,responsibility_id blob,reviewer_membership_id blob,token_hash blob unique,previous_token_hash blob,delivery_intents blob,status text,expires_at datetime,revoked_at datetime,created_at datetime,idempotency_key text)`, `CREATE TABLE invitations.otp_challenges (id blob primary key,tenant_id blob,invitation_id blob,code_hmac blob,attempts integer,send_count integer,last_sent_at datetime,expires_at datetime,verified_at datetime,created_at datetime)`, `CREATE TABLE invitations.external_sessions (id blob primary key,tenant_id blob,invitation_id blob,responsibility_id blob,kind text NOT NULL DEFAULT 'CAPTURE',counterparty_invitation_id blob,session_digest blob unique,csrf_digest blob,expires_at datetime,revoked_at datetime,created_at datetime)`, `CREATE TABLE invitations.processing_acceptances (id blob primary key,tenant_id blob,responsibility_id blob,disclosure_version text,photo_processing integer,video_processing integer NOT NULL DEFAULT 0,ai_analysis integer,gps_use integer,accepted_at datetime,unique(tenant_id,responsibility_id))`, `CREATE TABLE inspections.responsibilities (id blob primary key,tenant_id blob,inspection_id blob,participant_id blob,status text,version integer,created_at datetime,updated_at datetime)`, `CREATE TABLE participants.contacts (id blob primary key,tenant_id blob,participant_id blob,channel text,value text,active boolean)`, `CREATE TABLE capture.capture_drafts (id blob primary key,tenant_id blob,responsibility_id blob unique,media_kind text,kind text)`} {
 		if err := db.Exec(sql).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -283,11 +283,11 @@ func TestIT369IT383IT385InvitationSessionFlow(t *testing.T) {
 		t.Fatalf("exact expiry accepted: %v", err)
 	}
 }
-func TestVerifyOTPAcceptsOriginInvitationWithoutInspectionResponsibility(t *testing.T) {
+func TestVerifyOTPRejectsInvitationWithoutInspectionResponsibility(t *testing.T) {
 	for _, tc := range []struct {
 		name, kind string
 		valid      bool
-	}{{"origin draft", "ORIGIN", true}, {"dangling responsibility", "INSPECTION", false}} {
+	}{{"dangling responsibility", "INSPECTION", false}} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, token := invitationDB(t)
 			if err := db.Exec(`DELETE FROM inspections.responsibilities`).Error; err != nil {
@@ -302,18 +302,12 @@ func TestVerifyOTPAcceptsOriginInvitationWithoutInspectionResponsibility(t *test
 			if err := service.RequestOTP(context.Background(), token); err != nil {
 				t.Fatal(err)
 			}
-			session, err := service.VerifyOTP(context.Background(), token, notifier.code)
+			_, err := service.VerifyOTP(context.Background(), token, notifier.code)
 			if !tc.valid {
-				if appCode(err) != apperror.InvalidInput {
-					t.Fatalf("dangling responsibility accepted: %v", err)
+				if appCode(err) != apperror.NotFound {
+					t.Fatalf("dangling responsibility error = %v, want NotFound", err)
 				}
 				return
-			}
-			if err != nil || session.Token == "" {
-				t.Fatalf("origin invitation rejected: %v", err)
-			}
-			if responsibility, err := service.ValidateSession(context.Background(), session.Token, session.CSRF); err != nil || responsibility != session.ResponsibilityID {
-				t.Fatalf("origin session: %v %v", responsibility, err)
 			}
 		})
 	}

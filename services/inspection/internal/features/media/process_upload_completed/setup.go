@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"inspection/libs/identity"
@@ -81,7 +82,21 @@ func Setup(d Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelope) 
 			return err
 		}
 		now := d.Now().UTC()
-		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: envelope.TenantID, MediaID: payload.MediaID, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: video.DefaultProfile().Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
+		requirementKey := media.RequirementKey
+		if attempt.RequirementKey != nil {
+			requirementKey = *attempt.RequirementKey
+		}
+		profile, profileErr := video.ProfileByNameVersion("standard", 1)
+		if strings.HasPrefix(requirementKey, "env:") {
+			profile = video.DefaultProfile()
+		} else if profileErr != nil {
+			return profileErr
+		}
+		var requirementKeyPointer *string
+		if requirementKey != "" {
+			requirementKeyPointer = &requirementKey
+		}
+		job := database.VideoPreparationJob{ID: identity.NewID(), TenantID: envelope.TenantID, MediaID: payload.MediaID, RequirementKey: requirementKeyPointer, Status: "QUEUED", Phase: "RECEIVED", PreparationVersion: 1, Generation: 1, ProfileDigest: profile.Digest(), NextAttemptAt: now, PendingObjectKeys: []byte("[]"), CreatedAt: now}
 		return tx.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error
 	}, nil
 }

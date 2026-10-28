@@ -62,7 +62,7 @@ func TestPreparedVideoSchedulesOneSealedPlanIT559IT560IT561IT563IT564IT565IT566I
 		if err := tx.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: mediaID, SubmissionID: &submissionID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, Attempts: 1, NextAttemptAt: now, ManifestDigest: digest, PendingObjectKeys: []byte("[]"), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.VideoFrame{ID: frameID, TenantID: fixture.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: digest, ObjectKey: "it559/frame.jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&database.VideoFrame{ID: frameID, TenantID: fixture.TenantID, SourceMediaID: mediaID, PreparationID: preparationID, PTSMicros: 0, SHA256: digest, ObjectKey: "it559/frame-" + identity.NewID().String() + ".jpg", Width: 1, Height: 1, Role: "BASELINE", SizeBytes: 1, CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		return tx.Create(&database.VideoScopeItem{ID: componentID, TenantID: fixture.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", IdentityStatus: "RESOLVED", Landmarks: json.RawMessage(`[]`), CreatedAt: now}).Error
@@ -221,6 +221,114 @@ func TestPreparedVideoSchedulesOneSealedPlanIT559IT560IT561IT563IT564IT565IT566I
 	err = h.AdminDB.Create(&database.VideoPlanPreparation{TenantID: identity.NewID(), PlanID: sealedPlan.ID, PreparationID: preparationID, Role: "MAIN", CreatedAt: now}).Error
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "foreign key constraint") {
 		t.Fatalf("cross-tenant plan preparation should fail its composite foreign key, got %v", err)
+	}
+}
+
+func TestEnvironmentVideoReplacementPlanKeepsOtherClipsIT_R2_002(t *testing.T) {
+	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
+		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
+	}
+	ctx := context.Background()
+	h, err := harness.NewFromEnv(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	if err := h.AdminDB.Model(&database.VideoPlan{}).Where("submission_id IN (SELECT id FROM capture.submission_versions WHERE payload_digest='replacement-new') AND status='BUILDING'").Update("status", "FAILED").Error; err != nil {
+		t.Fatal(err)
+	}
+	fixture, err := h.SeedTask06Fixture(ctx, harness.Task06FixtureOptions{InspectionStatus: "ANALYZING"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	oldSubmissionID, newSubmissionID, newDraftID, replacementResponsibilityID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	if err := h.AdminDB.Create(&database.Responsibility{ID: replacementResponsibilityID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, ParticipantID: fixture.ParticipantID, Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := h.AdminDB.Create(&database.CaptureDraft{ID: newDraftID, TenantID: fixture.TenantID, ResponsibilityID: replacementResponsibilityID, Kind: "VIDEO_REPLACEMENT", MediaKind: "VIDEO", TemplateVersionID: fixture.TemplateVersionID, ReferencePayload: json.RawMessage(`{}`), PolicyPayload: json.RawMessage(`{}`), Requirements: json.RawMessage(`[]`), Status: "SUBMITTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, submission := range []database.SubmissionVersion{
+		{ID: oldSubmissionID, TenantID: fixture.TenantID, DraftID: fixture.DraftID, ResponsibilityID: fixture.ResponsibilityID, VersionNumber: 1, Complete: true, Payload: json.RawMessage(`{}`), PayloadDigest: "replacement-old", SubmittedAt: now},
+		{ID: newSubmissionID, TenantID: fixture.TenantID, DraftID: newDraftID, ResponsibilityID: replacementResponsibilityID, VersionNumber: 1, Complete: true, Payload: json.RawMessage(`{}`), PayloadDigest: "replacement-new", SubmittedAt: now.Add(time.Second)},
+	} {
+		if err := h.AdminDB.Create(&submission).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldPlanID, newPlanID := identity.NewID(), identity.NewID()
+	oldPreparationIDs := []identity.ID{identity.NewID(), identity.NewID(), identity.NewID()}
+	newBathroomPreparationID := identity.NewID()
+	keys, roles := []string{"env:kitchen", "env:bathroom", "env:bedroom"}, []string{"MAIN", "SUPPLEMENT", "SUPPLEMENT"}
+	for i, preparationID := range oldPreparationIDs {
+		key := keys[i]
+		status := "READY"
+		if key == "env:bathroom" {
+			status = "FAILED"
+		}
+		if err := h.AdminDB.Create(&database.VideoPreparationJob{ID: preparationID, TenantID: fixture.TenantID, MediaID: fixture.MediaID, SubmissionID: &oldSubmissionID, RequirementKey: &key, Status: status, Phase: status, PreparationVersion: 1, Generation: i + 1, NextAttemptAt: now, PendingObjectKeys: []byte(`[]`), CreatedAt: now.Add(time.Duration(i) * time.Second)}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	newKey := "env:bathroom"
+	if err := h.AdminDB.Create(&database.VideoPreparationJob{ID: newBathroomPreparationID, TenantID: fixture.TenantID, MediaID: fixture.MediaID, SubmissionID: &newSubmissionID, RequirementKey: &newKey, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 4, NextAttemptAt: now, PendingObjectKeys: []byte(`[]`), CreatedAt: now.Add(4 * time.Second)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	oldPlan := database.VideoPlan{ID: oldPlanID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: oldSubmissionID, CurrentPreparationID: oldPreparationIDs[0], Generation: 1, Status: "FAILED", ErrorCode: "REPLACED", NextAttemptAt: now, CreatedAt: now}
+	newPlan := database.VideoPlan{ID: newPlanID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: newSubmissionID, CurrentPreparationID: newBathroomPreparationID, Generation: 1, Status: "BUILDING", NextAttemptAt: now, CreatedAt: now.Add(time.Second)}
+	t.Cleanup(func() {
+		_ = h.AdminDB.Model(&database.VideoPlan{}).Where("tenant_id=? AND id=?", fixture.TenantID, newPlanID).Update("status", "FAILED").Error
+	})
+	for _, plan := range []*database.VideoPlan{&oldPlan, &newPlan} {
+		if err := h.AdminDB.Create(plan).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, preparationID := range oldPreparationIDs {
+		key, role := keys[i], roles[i]
+		if err := h.AdminDB.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: oldPlanID, PreparationID: preparationID, Role: role, RequirementKey: &key, CreatedAt: now}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var currentUser string
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Raw("SELECT current_user").Scan(&currentUser).Error; err != nil {
+			return err
+		}
+		return inheritReplacementPlanPreparations(ctx, tx, fixture.TenantID, fixture.InspectionID, newPlan, fixture.MediaID, []events.CaptureVideoClip{{RequirementKey: "env:bathroom"}}, []database.VideoPreparationJob{{ID: newBathroomPreparationID}}, now.Add(5*time.Second))
+	}); err != nil {
+		t.Fatalf("inherit replacement links with runtime connection: %v", err)
+	}
+	if currentUser != "inspection_runtime" {
+		t.Fatalf("integration connection role=%q, want inspection_runtime", currentUser)
+	}
+	if err := h.WithinTenant(ctx, fixture.TenantID, func(tx *gorm.DB) error {
+		var links []database.VideoPlanPreparation
+		if err := tx.Where("tenant_id=? AND plan_id=?", fixture.TenantID, newPlanID).Order("requirement_key").Find(&links).Error; err != nil {
+			return err
+		}
+		if len(links) != 3 {
+			t.Errorf("replacement plan link count=%d, want three: %+v", len(links), links)
+			return nil
+		}
+		got := make(map[string]database.VideoPlanPreparation, len(links))
+		for _, link := range links {
+			got[*link.RequirementKey] = link
+		}
+		if got["env:kitchen"].PreparationID != oldPreparationIDs[0] || got["env:bathroom"].PreparationID != newBathroomPreparationID || got["env:bedroom"].PreparationID != oldPreparationIDs[2] || got["env:bathroom"].Role != "SUPPLEMENT" {
+			t.Errorf("replacement changed unrelated environment links: %+v", got)
+		}
+		var plan database.VideoPlan
+		if err := tx.Where("tenant_id=? AND id=?", fixture.TenantID, newPlanID).Take(&plan).Error; err != nil {
+			return err
+		}
+		if plan.CurrentPreparationID != oldPreparationIDs[0] {
+			t.Errorf("replacement plan current preparation=%s, want MAIN %s", plan.CurrentPreparationID, oldPreparationIDs[0])
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

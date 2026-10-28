@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -91,7 +92,7 @@ func Setup(d Dependencies) error {
 				return apperror.New(apperror.InvalidState, "inspectionId", "sealed video analysis plan is not ready")
 			}
 			var source database.VideoSource
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=?", command.TenantID, media.ID).Take(&source).Error; err != nil || source.FirstFrameReadyAt == nil || source.SourceExpiryAt == nil {
+			if err := tx.Where("tenant_id=? AND media_id=?", command.TenantID, media.ID).Take(&source).Error; err != nil || source.FirstFrameReadyAt == nil || (source.RetentionAnchor != "ACTIVE_BASELINE" && source.SourceExpiryAt == nil) {
 				return apperror.New(apperror.InvalidState, "inspectionId", "video source has no retained evidence anchor")
 			}
 			if source.ScreeningStatus != "APPROVED" && source.ScreeningStatus != "DISABLED" {
@@ -123,12 +124,13 @@ func Setup(d Dependencies) error {
 				return err
 			}
 			versionID := identity.NewID()
-			promoted = database.OriginVersion{ID: versionID, TenantID: command.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: media.ResponsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparation.ID, VideoPlanID: &analysisPlan.ID, ScopeManifestDigest: preparation.ManifestDigest, IdempotencyKey: idempotency, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
+			responsibilityID := media.ResponsibilityID
+			promoted = database.OriginVersion{ID: versionID, TenantID: command.TenantID, OriginID: origin.ID, VersionNumber: int(count) + 1, ResponsibilityID: &responsibilityID, SupersedesID: origin.ActiveVersionID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &preparation.ID, VideoPlanID: &analysisPlan.ID, ScopeManifestDigest: preparation.ManifestDigest, IdempotencyKey: idempotency, CreatedAt: now, SubmittedAt: &now, ActivatedAt: &now}
 			if err := tx.Create(&promoted).Error; err != nil {
 				return err
 			}
 			if origin.ActiveVersionID != nil {
-				if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", command.TenantID, *origin.ActiveVersionID).Update("status", "SUPERSEDED").Error; err != nil {
+				if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='ACTIVE'", command.TenantID, *origin.ActiveVersionID).Updates(map[string]any{"status": "SUPERSEDED", "superseded_at": now}).Error; err != nil {
 					return err
 				}
 			}
@@ -139,7 +141,7 @@ func Setup(d Dependencies) error {
 			if err := tx.Where("tenant_id=? AND preparation_id=? AND owner_type=? AND owner_id=?", command.TenantID, preparation.ID, reference.OwnerType, reference.OwnerID).FirstOrCreate(&reference).Error; err != nil {
 				return err
 			}
-			if source.Status != "EXPIRED" {
+			if source.Status != "EXPIRED" && source.RetentionAnchor != "ACTIVE_BASELINE" && source.SourceExpiryAt != nil {
 				days := 30
 				var policy database.VideoPolicy
 				if err := tx.Where("tenant_id=?", command.TenantID).Take(&policy).Error; err == nil && policy.OriginRetentionDays > 0 {
@@ -155,7 +157,11 @@ func Setup(d Dependencies) error {
 					}
 				}
 			}
-			return nil
+			versions := []identity.ID{promoted.ID}
+			if promoted.SupersedesID != nil {
+				versions = append(versions, *promoted.SupersedesID)
+			}
+			return (retentioncore.BaselineTransition{Now: d.Now}).TransitionVersions(ctx, tx, command.TenantID, versions)
 		})
 		return promoted, err
 	})

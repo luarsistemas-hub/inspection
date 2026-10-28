@@ -17,8 +17,6 @@ import (
 	assetcore "inspection/services/inspection/internal/features/assets/core"
 	assetget "inspection/services/inspection/internal/features/assets/get_asset"
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
-	originactivate "inspection/services/inspection/internal/features/origins/activate_version"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
 	"inspection/services/inspection/internal/features/origins/resolve_reference"
@@ -52,15 +50,22 @@ func TestFixedOriginMissingReferenceGraphQLIT455(t *testing.T) {
 	}
 }
 
-func TestFixedOriginPhotoReferenceForVideoGraphQLIT454(t *testing.T) {
+func TestFixedOriginPhotoReferenceForVideoGraphQL(t *testing.T) {
 	for _, entryPoint := range []string{"createInspection", "createSchedule", "planInspection"} {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, true)
 			clientID := "IT-454-" + entryPoint
 			response := executeFixedOriginEntry(t, fx, entryPoint, clientID)
-			assertFixedOriginInvalidInput(t, response)
+			assertFixedOriginCatalogOriginFirst(t, response)
 			assertFixedOriginNoSideEffects(t, fx, clientID)
 		})
+	}
+}
+
+func assertFixedOriginCatalogOriginFirst(t *testing.T, response string) {
+	t.Helper()
+	if !strings.Contains(response, `"code":"INVALID_STATE"`) || !strings.Contains(response, `"field":"referenceVersionId"`) || !strings.Contains(response, "CATALOG_ORIGIN_FIRST") {
+		t.Fatalf("expected CATALOG_ORIGIN_FIRST on referenceVersionId, got %s", response)
 	}
 }
 
@@ -351,7 +356,7 @@ func seedFixedVideoOrigin(t *testing.T, fx fixedOriginGraphQLFixture) identity.I
 		if err := tx.Create(&database.VideoPreparationJob{ID: prepID, TenantID: fx.seed.TenantID, MediaID: mediaID, Status: "READY", Phase: "READY", PreparationVersion: 1, Generation: 1, SourceSHA256: digest, ManifestDigest: digest, PendingObjectKeys: []byte(`[]`), FirstReadyAt: &now, CreatedAt: now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "vv-it-448-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
+		if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: fx.seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &fx.seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &prepID, ScopeManifestDigest: digest, IdempotencyKey: "vv-it-448-" + versionID.String(), CreatedAt: now, ActivatedAt: &now}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&database.Origin{ID: originID, TenantID: fx.seed.TenantID, AssetID: fx.seed.AssetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -413,7 +418,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 			if err := tx.Create(&database.Origin{ID: originID, TenantID: seed.TenantID, AssetID: seed.AssetID, ActiveVersionID: &versionID, Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 				return err
 			}
-			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it454-photo-origin", CreatedAt: now}).Error; err != nil {
+			if err := tx.Create(&database.OriginVersion{ID: versionID, TenantID: seed.TenantID, OriginID: originID, VersionNumber: 1, ResponsibilityID: &seed.ResponsibilityID, Status: "ACTIVE", MediaKind: "PHOTO", IdempotencyKey: "it454-photo-origin", CreatedAt: now}).Error; err != nil {
 				return err
 			}
 			return tx.Create(&database.OriginEvidence{ID: identity.NewID(), TenantID: seed.TenantID, OriginVersionID: versionID, MediaID: seed.MediaID, Category: "ROOM", Description: "Existing photo baseline", AttentionItems: json.RawMessage("[]"), CreatedAt: now}).Error
@@ -456,10 +461,7 @@ func newInspectionModeGraphQLFixture(t *testing.T, photoOrigin bool, mode catalo
 	if err := resolve_reference.Setup(resolve_reference.Dependencies{DB: h.DB, Bus: bus}); err != nil {
 		t.Fatal(err)
 	}
-	originService := origincore.Service{DB: h.DB}
-	if err := originactivate.Setup(originactivate.Dependencies{DB: h.DB, Bus: bus, Service: originService, Authorizer: auth.Authorizer{}}); err != nil {
-		t.Fatal(err)
-	}
+	originService := &origininvalidate.Service{DB: h.DB}
 	if err := origininvalidate.Setup(origininvalidate.Dependencies{DB: h.DB, Bus: bus, Service: originService, Authorizer: auth.Authorizer{}}); err != nil {
 		t.Fatal(err)
 	}

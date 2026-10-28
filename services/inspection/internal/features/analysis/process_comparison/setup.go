@@ -394,7 +394,8 @@ func persistAccepted(ctx context.Context, tx *gorm.DB, tenantID identity.ID, job
 	}
 	for _, finding := range result.Findings {
 		evidence, _ := json.Marshal(finding.EvidenceIDs)
-		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
+		comparisonJobID := job.ID
+		row := database.FindingRecord{ID: identity.NewID(), TenantID: tenantID, AnalysisRunID: run.ID, ComparisonJobID: &comparisonJobID, Category: finding.Category, Title: finding.Title, Description: finding.Description, Severity: finding.Severity, Quality: finding.Quality, RecommendedAction: finding.RecommendedAction, Confidence: finding.Confidence, Evidence: evidence, CreatedAt: now}
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}

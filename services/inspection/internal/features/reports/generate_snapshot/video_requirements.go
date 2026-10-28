@@ -45,6 +45,7 @@ func VideoPlanRequirements(ctx context.Context, tx *gorm.DB, tenantID identity.I
 	}
 	requirements := make([]report.Requirement, 0, len(items))
 	gaps := make(map[string]struct{})
+	indexes := make(map[string]int, len(items))
 	for _, item := range items {
 		scope, found, err := videoPlanScope(ctx, tx, tenantID, plan, item)
 		if err != nil {
@@ -59,7 +60,15 @@ func VideoPlanRequirements(ctx context.Context, tx *gorm.DB, tenantID identity.I
 				viewLabel = report.LocalizeVideoView(scope.ViewLabel)
 			}
 		}
-		requirement := report.Requirement{Key: item.RequirementKey, Section: "Vídeo", Label: label, PresentationLocalized: presentationLocalized, Coverage: item.Reason, AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "PENDING"}
+		index, exists := indexes[item.RequirementKey]
+		if !exists {
+			index = len(requirements)
+			indexes[item.RequirementKey] = index
+			requirements = append(requirements, report.Requirement{Key: item.RequirementKey, Section: "Vídeo", Label: label, PresentationLocalized: presentationLocalized, Coverage: item.Reason, AnalysisMode: "CURRENT_ONLY", AnalysisStatus: "PENDING"})
+		} else if label != "" && !strings.Contains(" · "+requirements[index].Label+" · ", " · "+label+" · ") {
+			requirements[index].Label += " · " + label
+		}
+		requirement := &requirements[index]
 		if hasReference && item.Outcome == "MATCHED" {
 			requirement.AnalysisMode = "COMPARE_ORIGIN_CURRENT"
 		}
@@ -69,11 +78,12 @@ func VideoPlanRequirements(ctx context.Context, tx *gorm.DB, tenantID identity.I
 			requirement.AnalysisStatus, requirement.Coverage = "FAILED", VideoUnprocessedCoverage
 			gaps[item.RequirementKey] = struct{}{}
 		default:
-			requirement.AnalysisStatus = "INCONCLUSIVE"
-			requirement.Coverage, requirement.Instructions = VideoGapGuidance(item.Reason, label, viewLabel)
+			if requirement.AnalysisStatus != "FAILED" {
+				requirement.AnalysisStatus = "INCONCLUSIVE"
+				requirement.Coverage, requirement.Instructions = VideoGapGuidance(item.Reason, label, viewLabel)
+			}
 			gaps[item.RequirementKey] = struct{}{}
 		}
-		requirements = append(requirements, requirement)
 	}
 	return requirements, gaps, nil
 }
@@ -97,7 +107,13 @@ func VideoGapGuidance(reason, label, view string) (coverage, instructions string
 // preparation pinned for it.
 func videoPlanScope(ctx context.Context, tx *gorm.DB, tenantID identity.ID, plan database.VideoPlan, item database.VideoPlanItem) (database.VideoScopeItem, bool, error) {
 	var scope database.VideoScopeItem
-	err := tx.WithContext(ctx).Where("tenant_id=? AND preparation_id=? AND id=?", tenantID, VideoScopePreparationID(plan, item), item.ComponentID).Take(&scope).Error
+	query := tx.WithContext(ctx).Where("tenant_id=? AND id=?", tenantID, item.ComponentID)
+	if plan.OriginPreparationID == nil {
+		query = query.Where("preparation_id=? OR preparation_id IN (SELECT preparation_id FROM analysis.video_plan_preparations WHERE tenant_id=? AND plan_id=?)", plan.CurrentPreparationID, tenantID, plan.ID)
+	} else if item.Outcome != "CURRENT_ONLY" {
+		query = query.Where("preparation_id=?", VideoScopePreparationID(plan, item))
+	}
+	err := query.Take(&scope).Error
 	if err == gorm.ErrRecordNotFound {
 		return database.VideoScopeItem{}, false, nil
 	}

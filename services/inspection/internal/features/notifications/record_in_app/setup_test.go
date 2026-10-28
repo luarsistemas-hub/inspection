@@ -106,3 +106,65 @@ func notificationDB(t *testing.T) *gorm.DB {
 	}
 	return db
 }
+
+func TestInventoryDraftReadyNotifiesScopedInternalRecipientsOnce(t *testing.T) {
+	db := notificationDB(t)
+	tenantID, assetID, versionID, originID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	admin, employee, viewer, outsider := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	for _, statement := range []string{
+		"ATTACH DATABASE ':memory:' AS origins",
+		`CREATE TABLE origins.origins (id blob PRIMARY KEY, tenant_id blob NOT NULL, asset_id blob NOT NULL)`,
+		`CREATE TABLE origins.origin_versions (id blob PRIMARY KEY, tenant_id blob NOT NULL, origin_id blob NOT NULL, source_inspection_id blob)`,
+	} {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	businessUnit := identity.NewID()
+	inserts := []struct {
+		sql  string
+		args []any
+	}{
+		{"INSERT INTO assets.assets (id, tenant_id, name, address) VALUES (?, ?, ?, ?)", []any{assetID, tenantID, "Casa QA", "Rua Um"}},
+		{"INSERT INTO origins.origins (id, tenant_id, asset_id) VALUES (?, ?, ?)", []any{originID, tenantID, assetID}},
+		{"INSERT INTO origins.origin_versions (id, tenant_id, origin_id) VALUES (?, ?, ?)", []any{versionID, tenantID, originID}},
+		{"INSERT INTO access.memberships (id, tenant_id, role, status) VALUES (?, ?, 'TENANT_ADMIN', 'ACTIVE')", []any{admin, tenantID}},
+		{"INSERT INTO access.memberships (id, tenant_id, role, status) VALUES (?, ?, 'EMPLOYEE', 'ACTIVE')", []any{employee, tenantID}},
+		{"INSERT INTO access.memberships (id, tenant_id, role, status) VALUES (?, ?, 'CUSTOMER_VIEWER', 'ACTIVE')", []any{viewer, tenantID}},
+		{"INSERT INTO access.memberships (id, tenant_id, role, status) VALUES (?, ?, 'EMPLOYEE', 'ACTIVE')", []any{outsider, tenantID}},
+		{"INSERT INTO access.resource_scopes (id, tenant_id, membership_id, kind, resource_id) VALUES (?, ?, ?, 'ASSET', ?)", []any{identity.NewID(), tenantID, employee, assetID}},
+		{"INSERT INTO access.resource_scopes (id, tenant_id, membership_id, kind, resource_id) VALUES (?, ?, ?, 'ASSET', ?)", []any{identity.NewID(), tenantID, viewer, assetID}},
+		{"INSERT INTO access.resource_scopes (id, tenant_id, membership_id, kind, resource_id) VALUES (?, ?, ?, 'BUSINESS_UNIT', ?)", []any{identity.NewID(), tenantID, outsider, businessUnit}},
+	}
+	for _, insert := range inserts {
+		if err := db.Exec(insert.sql, insert.args...).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload, _ := json.Marshal(events.InventoryDraftReadyPayload{OriginVersionID: versionID})
+	handler := Setup()
+	for i := 0; i < 2; i++ {
+		envelope := events.RawEnvelope{ID: identity.NewID(), Type: "inventory.draft_ready.v1", OccurredAt: time.Now().UTC(), TenantID: tenantID, Payload: payload}
+		if err := handler(context.Background(), db, envelope); err != nil {
+			t.Fatalf("record draft ready: %v", err)
+		}
+	}
+	var rows []struct {
+		RecipientMembershipID identity.ID
+		ResourceKind          string
+		ResourceID            identity.ID
+	}
+	if err := db.Table("notifications.recipient_notifications").Where("tenant_id=? AND kind='INVENTORY_DRAFT_READY'", tenantID).Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	recipients := map[identity.ID]bool{}
+	for _, row := range rows {
+		if row.ResourceKind != "BASELINE_DRAFT" || row.ResourceID != versionID {
+			t.Fatalf("notification resource = %s %s", row.ResourceKind, row.ResourceID)
+		}
+		recipients[row.RecipientMembershipID] = true
+	}
+	if len(rows) != 2 || !recipients[admin] || !recipients[employee] || recipients[viewer] || recipients[outsider] {
+		t.Fatalf("recipients = %v, want the tenant admin and the scoped employee once each", recipients)
+	}
+}

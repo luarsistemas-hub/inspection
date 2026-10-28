@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
 	revokeinvitation "inspection/services/inspection/internal/features/invitations/revoke_invitation"
 	notificationcore "inspection/services/inspection/internal/features/notifications/core"
-	origincore "inspection/services/inspection/internal/features/origins/core"
 	participantcore "inspection/services/inspection/internal/features/participants/core"
 	participantget "inspection/services/inspection/internal/features/participants/get_participant"
 	"inspection/services/inspection/internal/features/templates/catalog"
@@ -287,15 +285,6 @@ func (f6DisabledNotifications) Send(context.Context, notificationcore.Notificati
 	return notificationcore.NotificationResult{}, apperror.New(apperror.IntegrationDisabled, "channel", "notification channel disabled for isolated test")
 }
 
-func TestActivateOriginAfterV2CreationLeavesChecklistOnlyIT091(t *testing.T) {
-	fx := newOriginChecklistOnlyTransportFixture(t)
-	id := fx.create(t, "IT-091")
-	if _, err := (origincore.Service{DB: fx.h.DB, Within: fx.h.WithinTenant}).ActivateCompleted(fx.ctx, fx.origin.TenantID, fx.origin.ResponsibilityID); err != nil {
-		t.Fatalf("activate O1: %v", err)
-	}
-	fx.assertNullChecklistReference(t, id)
-}
-
 func TestCreateChecklistOnlyWithoutAssetBusinessUnitScopeReturnsNotFoundIT095(t *testing.T) {
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
 	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated IT-095 fixture", "vv-it095").Error; err != nil {
@@ -416,7 +405,7 @@ func TestRevokedInspectionInvitationRejectsOldVideoSessionWithoutAttemptIT086(t 
 	if err := h.AdminDB.Create(&invitation).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: invitation.ID, ResponsibilityID: seed.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
+	if err := h.AdminDB.Create(&database.ExternalSession{ID: identity.NewID(), TenantID: seed.TenantID, InvitationID: identity.Ptr(invitation.ID), ResponsibilityID: &seed.ResponsibilityID, SessionDigest: hash[:], CSRFDigest: proof[:], ExpiresAt: now.Add(time.Hour), CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	bus := mediator.New()
@@ -450,34 +439,6 @@ func TestRevokedInspectionInvitationRejectsOldVideoSessionWithoutAttemptIT086(t 
 		return nil
 	}); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestOriginActivationRacesChecklistOnlyCreationIT096(t *testing.T) {
-	for n := 0; n < 3; n++ {
-		t.Run(fmt.Sprintf("race_%d", n+1), func(t *testing.T) {
-			fx := newOriginChecklistOnlyTransportFixture(t)
-			var wg sync.WaitGroup
-			wg.Add(2)
-			var inspectionID identity.ID
-			var createErr, activationErr error
-			go func() {
-				defer wg.Done()
-				inspectionID, createErr = fx.createResult(t, "IT-096-"+identity.NewID().String())
-			}()
-			go func() {
-				defer wg.Done()
-				_, activationErr = (origincore.Service{DB: fx.h.DB, Within: fx.h.WithinTenant}).ActivateCompleted(fx.ctx, fx.origin.TenantID, fx.origin.ResponsibilityID)
-			}()
-			wg.Wait()
-			if createErr != nil {
-				t.Fatalf("create V2 during O1 activation: %v", createErr)
-			}
-			if activationErr != nil {
-				t.Fatalf("activate O1 during V2 creation: %v", activationErr)
-			}
-			fx.assertNullChecklistReference(t, inspectionID)
-		})
 	}
 }
 

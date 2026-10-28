@@ -12,10 +12,13 @@ import (
 	"time"
 
 	"inspection/libs/identity"
+	capturecore "inspection/services/inspection/internal/features/capture/core"
+	"inspection/services/inspection/internal/features/templates/catalog"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/tenanttx"
+	"inspection/services/inspection/internal/platform/video_admission"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -26,6 +29,7 @@ const MaxBytes int64 = 1 << 30
 type Command struct {
 	TenantID, ResponsibilityID    identity.ID
 	AcquisitionSource, MutationID string
+	RequirementKey                string
 	ReplacesMediaID               *identity.ID
 }
 type Dependencies struct {
@@ -57,6 +61,9 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		return database.VideoAttempt{}, apperror.New(apperror.InvalidInput, "input", "invalid video capture request")
 	}
 	payload := cmd.AcquisitionSource
+	if cmd.RequirementKey != "" {
+		payload += ":" + cmd.RequirementKey
+	}
 	if cmd.ReplacesMediaID != nil {
 		payload += ":" + cmd.ReplacesMediaID.String()
 	}
@@ -109,7 +116,7 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		}
 		var policy database.VideoPolicy
 		if err := tx.Where("tenant_id=?", cmd.TenantID).First(&policy).Error; err == gorm.ErrRecordNotFound {
-			policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: 5, Version: 1}
+			policy = database.VideoPolicy{TenantID: cmd.TenantID, MaxDurationMinutes: 15, OriginRetentionDays: 30, CurrentRetentionDays: 30, SupersededBaselineRetentionDays: 365, Version: 1}
 		} else if err != nil {
 			return err
 		}
@@ -117,16 +124,53 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 		if draft.Kind == "RECAPTURE" {
 			requirementKey = "video:supplement"
 		}
+		maximum := 1
+		var requirements []capturecore.Requirement
+		templateVersion := database.TemplateVersion{}
+		if err := tx.Select("schema_version").Where("tenant_id=? AND id=?", cmd.TenantID, draft.TemplateVersionID).Take(&templateVersion).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		v2 := templateVersion.SchemaVersion >= catalog.EnvironmentSchemaVersion
+		if v2 || (len(draft.Requirements) > 0 && draft.Requirements[0] == '[') {
+			if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+				return err
+			}
+		}
+		if v2 || (len(requirements) > 0 && strings.HasPrefix(requirements[0].Key, "env:")) {
+			if err := video_admission.RequireEnabled(tx); err != nil {
+				return err
+			}
+			if !strings.HasPrefix(cmd.RequirementKey, "env:") {
+				return apperror.New(apperror.InvalidInput, "requirementKey", "environment video requirement is required")
+			}
+			found := false
+			maximum = 3
+			for _, req := range requirements {
+				if req.Key == cmd.RequirementKey && req.EvidenceKind == "VIDEO" {
+					found = true
+					maximum = req.MaximumMedia
+				}
+			}
+			if !found {
+				return apperror.New(apperror.InvalidInput, "requirementKey", "environment requirement is not part of this capture")
+			}
+			requirementKey = cmd.RequirementKey
+		}
 		var priorMedia []database.MediaObject
 		if err := tx.Where("tenant_id=? AND responsibility_id=? AND media_kind='VIDEO' AND requirement_key=? AND status NOT IN ?", cmd.TenantID, cmd.ResponsibilityID, requirementKey, []string{"REJECTED", "FAILED", "ABORTED", "PURGED"}).Find(&priorMedia).Error; err != nil {
 			return err
 		}
 		if len(priorMedia) > 0 {
-			return apperror.New(apperror.Conflict, "responsibility", "the main video has already been received")
+			if len(requirements) == 0 || !strings.HasPrefix(requirementKey, "env:") || len(priorMedia) >= maximum {
+				if len(requirements) == 0 || !strings.HasPrefix(requirementKey, "env:") {
+					return apperror.New(apperror.Conflict, "responsibility", "the main video has already been received")
+				}
+				return apperror.New(apperror.Conflict, "responsibility", "video requirement has reached its clip limit")
+			}
 		}
 		if cmd.ReplacesMediaID != nil {
 			var old database.MediaObject
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND id=? AND media_kind='VIDEO' AND requirement_key='video:main'", cmd.TenantID, cmd.ResponsibilityID, *cmd.ReplacesMediaID).First(&old).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=? AND id=? AND media_kind='VIDEO' AND requirement_key=?", cmd.TenantID, cmd.ResponsibilityID, *cmd.ReplacesMediaID, requirementKey).First(&old).Error; err != nil {
 				if err == gorm.ErrRecordNotFound {
 					return apperror.New(apperror.NotFound, "replacesMediaId", "media not found")
 				}
@@ -171,12 +215,14 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 			expires = invitation.ExpiresAt
 		}
 		kind := "CURRENT"
-		if draft.Kind == "ORIGIN" {
-			kind = "ORIGIN"
-		} else if draft.Kind == "RECAPTURE" {
+		if draft.Kind == "RECAPTURE" {
 			kind = "SUPPLEMENT"
 		}
-		result = database.VideoAttempt{ID: identity.NewID(), TenantID: cmd.TenantID, ResponsibilityID: cmd.ResponsibilityID, Kind: kind, PolicyVersion: policy.Version, MaxDurationSeconds: policy.MaxDurationMinutes * 60, MaxBytes: MaxBytes, AcquisitionSource: cmd.AcquisitionSource, Status: "ACTIVE", IdempotencyKey: cmd.MutationID, PayloadDigest: digest, AdmittedAt: at, ExpiresAt: expires, CreatedAt: at}
+		var attemptRequirement *string
+		if strings.HasPrefix(requirementKey, "env:") {
+			attemptRequirement = &requirementKey
+		}
+		result = database.VideoAttempt{ID: identity.NewID(), TenantID: cmd.TenantID, ResponsibilityID: cmd.ResponsibilityID, Kind: kind, RequirementKey: attemptRequirement, PolicyVersion: policy.Version, MaxDurationSeconds: policy.MaxDurationMinutes * 60, MaxBytes: MaxBytes, AcquisitionSource: cmd.AcquisitionSource, Status: "ACTIVE", IdempotencyKey: cmd.MutationID, PayloadDigest: digest, AdmittedAt: at, ExpiresAt: expires, CreatedAt: at}
 		if err := tx.Create(&result).Error; err != nil {
 			return err
 		}

@@ -30,6 +30,11 @@ type Dependencies struct {
 	Now            func() time.Time
 }
 
+type requirementAnalysis struct {
+	mode, status     string
+	noRelevantChange *bool
+}
+
 // ErrClassifiedPrerequisitePending makes the inbox retry a premature event.
 var ErrClassifiedPrerequisitePending = errors.New("classified report prerequisites are pending")
 
@@ -152,10 +157,6 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			}
 		}
 		findings := make([]reportcore.Finding, 0)
-		type requirementAnalysis struct {
-			mode, status     string
-			noRelevantChange *bool
-		}
 		analysisStatuses := make(map[string]requirementAnalysis)
 		evidence := make([]reportcore.Evidence, 0)
 		for _, job := range jobs {
@@ -183,7 +184,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 				} else if reference.ReferenceVersionID != nil && reference.ComparisonMode == "FIXED_ORIGIN" && strings.HasPrefix(job.RequirementKey, "origin:") {
 					analysisMode = "COMPARE_ORIGIN_CURRENT"
 				}
-				analysisStatuses[job.RequirementKey] = requirementAnalysis{mode: analysisMode, status: job.Status, noRelevantChange: output.NoRelevantChange}
+				analysisStatuses[job.RequirementKey] = mergeRequirementAnalysis(analysisStatuses[job.RequirementKey], requirementAnalysis{mode: analysisMode, status: job.Status, noRelevantChange: output.NoRelevantChange})
 				var rows []database.FindingRecord
 				if err := tx.Where("tenant_id=? AND analysis_run_id=?", envelope.TenantID, run.ID).Order("created_at ASC").Find(&rows).Error; err != nil {
 					return err
@@ -210,6 +211,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			_ = json.Unmarshal(answer.MediaIDs, &mediaIDs)
 			var flags []string
 			_ = json.Unmarshal(answer.Flags, &flags)
+			flags = reportFlags(job.RequirementKey, flags)
 			for _, mediaID := range mediaIDs {
 				item := reportcore.Evidence{ID: mediaID.String(), RequirementKey: job.RequirementKey, Role: "CURRENT", Flags: append([]string(nil), flags...)}
 				var media database.MediaObject
@@ -228,7 +230,7 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 					}
 					var mediaFlags []string
 					if json.Unmarshal(media.Flags, &mediaFlags) == nil && len(mediaFlags) > 0 {
-						item.Flags = append(item.Flags, mediaFlags...)
+						item.Flags = append(item.Flags, reportFlags(job.RequirementKey, mediaFlags)...)
 					}
 				} else if err != gorm.ErrRecordNotFound {
 					return err
@@ -260,11 +262,12 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			videoGaps = gaps
 		}
 		for i := range requirements {
-			if result, ok := analysisStatuses[requirements[i].Key]; ok {
+			_, isGap := videoGaps[requirements[i].Key]
+			if result, ok := analysisStatuses[requirements[i].Key]; ok && !isGap {
 				requirements[i].AnalysisMode = result.mode
 				requirements[i].AnalysisStatus = result.status
 				requirements[i].NoRelevantChange = result.noRelevantChange
-			} else if _, gap := videoGaps[requirements[i].Key]; !gap {
+			} else if !isGap {
 				requirements[i].AnalysisMode = "CURRENT_ONLY"
 				requirements[i].AnalysisStatus = "PENDING"
 			}
@@ -274,7 +277,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 			return err
 		}
 		evidence = append(referenceEvidence, evidence...)
-		result, err := deps.CreateSnapshot(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence})
+		inventorySection, err := buildInventoryReport(ctx, tx, envelope.TenantID, inspection, reference, &evidence)
+		if err != nil {
+			return err
+		}
+		result, err := deps.CreateSnapshot(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection})
 		if errors.Is(err, generatesnapshot.ErrFrameIntegrity) {
 			return messaging.ErrPermanent
 		}
@@ -289,6 +296,43 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		return messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "report.snapshot_created.v1", SchemaVersion: 1, OccurredAt: now, TenantID: envelope.TenantID, AggregateID: payload.InspectionID, CorrelationID: envelope.CorrelationID, CausationID: envelope.ID.String(), Payload: map[string]any{"snapshotId": result.SnapshotID, "inspectionId": payload.InspectionID, "version": result.Version}})
 
 	}, nil
+}
+
+func mergeRequirementAnalysis(current, next requirementAnalysis) requirementAnalysis {
+	if current.status == "" {
+		return next
+	}
+	rank := func(status string) int {
+		switch status {
+		case "FAILED":
+			return 3
+		case "INCONCLUSIVE":
+			return 2
+		case "COMPLETED":
+			return 1
+		default:
+			return 0
+		}
+	}
+	if rank(next.status) > rank(current.status) {
+		current.status = next.status
+	}
+	currentIsComparison := current.mode == "COMPARE_ORIGIN_CURRENT"
+	nextIsComparison := next.mode == "COMPARE_ORIGIN_CURRENT"
+	if nextIsComparison {
+		if !currentIsComparison {
+			current.noRelevantChange = next.noRelevantChange
+		} else if current.noRelevantChange == nil || next.noRelevantChange == nil {
+			current.noRelevantChange = nil
+		} else {
+			unchanged := *current.noRelevantChange && *next.noRelevantChange
+			current.noRelevantChange = &unchanged
+		}
+		current.mode = "COMPARE_ORIGIN_CURRENT"
+	} else if !currentIsComparison {
+		current.noRelevantChange = nil
+	}
+	return current
 }
 
 func resolveClassifiedVideoPlan(tx *gorm.DB, tenantID, inspectionID identity.ID, videoPlanID *identity.ID) (database.VideoPlan, error) {
@@ -386,10 +430,24 @@ func reportSnapshotContext(ctx context.Context, tx *gorm.DB, tenantID identity.I
 		}
 		var flags []string
 		_ = json.Unmarshal(media.Flags, &flags)
-		value.Flags = flags
+		value.Flags = reportFlags(requirementKey, flags)
 		evidence = append(evidence, value)
 	}
 	return context, requirements, evidence, nil
+}
+
+func reportFlags(requirementKey string, flags []string) []string {
+	if strings.HasPrefix(requirementKey, "env:") {
+		return flags
+	}
+	filtered := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		if strings.HasPrefix(flag, "IMPOSSIBILITY:") || strings.HasPrefix(flag, "QUALITY_WARNING") {
+			continue
+		}
+		filtered = append(filtered, flag)
+	}
+	return filtered
 }
 
 func reportVideoPlanEvidence(ctx context.Context, tx *gorm.DB, tenantID, planItemID identity.ID) ([]reportcore.Evidence, error) {

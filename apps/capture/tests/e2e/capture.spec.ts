@@ -78,7 +78,7 @@ test("IT-153; IT-155; IT-194; E2E-031; E2E-054 persisted evidence resumes once a
   await expect(page.getByText(/aguardando (envio|verificação)/i).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Retomar envio" })).toBeVisible();
   await page.getByRole("button", { name: "Retomar envio" }).dblclick();
-  await expect(page.getByRole("status").filter({ hasText: "Upload concluído" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("status").filter({ hasText: "Envio concluído" })).toBeVisible({ timeout: 15_000 });
   expect(metadataAttempts).toBe(2);
   expect(uploadAttempts).toBe(2);
 });

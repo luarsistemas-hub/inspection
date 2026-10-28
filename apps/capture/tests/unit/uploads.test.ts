@@ -4,6 +4,25 @@ import { uploadDraft, type UploadProgress } from "@/pwa/uploads";
 import { loadDraft, type CaptureDraft } from "@/pwa/drafts";
 
 describe("multipart reconciliation", () => {
+  it("keeps an environment requirement attached when creating an upload for a saved draft", async () => {
+    const fetch = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+      if (init?.method === "PUT") return new Response(null, { status: 200, headers: { etag: "etag" } });
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      if (String(body.query).includes("createMediaUpload")) {
+        return new Response(JSON.stringify({ data: { createMediaUpload: { upload: { mediaId: "media", uploadId: "upload", partSizeBytes: 1024 }, userErrors: [] } } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { presignMediaParts: { parts: [{ partNumber: 1, url: "https://storage.test/part", expiresAt: "2099-01-01T00:00:00Z" }], userErrors: [] }, completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await uploadDraft({ id: "environment-draft", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", parts: [], metadata: { requirementKey: "env:dining-room", description: "", source: "camera", capturedAt: "now" } });
+      const createRequest = fetch.mock.calls.filter((call) => call[1]?.method !== "PUT").map((call) => JSON.parse(String(call[1]?.body))).find((body) => String(body.query).includes("createMediaUpload"));
+      expect(createRequest.variables.input.requirementKey).toBe("env:dining-room");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("logs a failed storage request without exposing the signed URL", async () => {
     const signedURL = "https://storage.test/inspection-private/object?X-Amz-Signature=sensitive";
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -45,6 +64,42 @@ describe("multipart reconciliation", () => {
     const draft: CaptureDraft = { id: "d", responsibilityId: "r", blob: new Blob(["image"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", parts: [{ number: 1, complete: true, etag: "done" }], metadata: { requirementKey: "k", description: "d", source: "camera", capturedAt: "now" } };
     const fetch = vi.fn().mockImplementation(() => new Response(JSON.stringify({ data: { presignMediaParts: { parts: [], userErrors: [] }, completeMediaUpload: { userErrors: [] }, saveCaptureMetadata: { userErrors: [] } } }), { status: 200 }));
     vi.stubGlobal("fetch", fetch); await uploadDraft(draft); const calls = fetch.mock.calls.map((call) => String(call[1]?.body)); expect(calls.some((body) => body.includes("presignMediaParts") && body.includes("[1]"))).toBe(false); vi.unstubAllGlobals();
+  });
+
+  it("UT-343 persists completed offline parts and resumes only the remaining photo bytes", async () => {
+    let partTwoFails = true;
+    const fetch = vi.fn().mockImplementation(async (_input: string, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        const part = Number(new Headers(init.headers).get("X-Test-Part") ?? 0);
+        if (part === 2 && partTwoFails) { partTwoFails = false; throw new TypeError("Failed to fetch"); }
+        return new Response(null, { status: 200, headers: { etag: `part-${part}` } });
+      }
+      const body = String(init?.body ?? "");
+      if (body.includes("presignMediaParts")) {
+        const numbers = JSON.parse(body).variables.input.partNumbers as number[];
+        return new Response(JSON.stringify({ data: { presignMediaParts: { parts: numbers.map((partNumber) => ({ partNumber, url: `https://storage.test/${partNumber}`, expiresAt: "2099-01-01T00:00:00Z" })), userErrors: [] } } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { completeMediaUpload: { media: { id: "media", status: "VERIFIED" }, userErrors: [] }, saveCaptureMetadata: { media: { id: "media", status: "READY" }, userErrors: [] } } }), { status: 200 });
+    });
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        const url = String(input);
+        const part = Number(url.split("/").at(-1));
+        const headers = new Headers(init.headers); headers.set("X-Test-Part", String(part));
+        return fetch(input, { ...init, headers });
+      }
+      return fetch(input, init);
+    });
+    try {
+      const draft: CaptureDraft = { id: "offline-resume", responsibilityId: "r", blob: new Blob(["four"], { type: "image/jpeg" }), sha256: "hash", mediaId: "media", uploadId: "upload", partSizeBytes: 2, parts: [{ number: 1, complete: false }, { number: 2, complete: false }], metadata: { requirementKey: "env:sala", description: "", source: "camera", capturedAt: "now" } };
+      await expect(uploadDraft(draft)).rejects.toThrow("Failed to fetch");
+      expect((await loadDraft(draft.id))?.parts).toEqual([{ number: 1, complete: true, etag: "part-1" }, { number: 2, complete: false }]);
+      const resumed = await uploadDraft(draft);
+      expect(resumed.metadataSaved).toBe(true);
+      const presigned = fetch.mock.calls.filter((call) => call[1]?.method !== "PUT").map((call) => JSON.parse(String(call[1]?.body))).filter((body) => String(body.query).includes("presignMediaParts"));
+      expect(presigned.map((body) => body.variables.input.partNumbers)).toEqual([[1, 2], [2]]);
+    } finally { vi.stubGlobal("fetch", originalFetch); }
   });
 
   it("retries metadata while media processing is pending and persists the verified state", async () => {

@@ -154,8 +154,8 @@ func (h *Handler) source(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusGone)
 		return
 	}
-	if r.Method == http.MethodHead && (item.source.SourceExpiryAt == nil || !item.source.SourceExpiryAt.After(h.deps.Now())) {
-		held, err := h.sourceHeld(r.Context(), item.metadata.TenantID, item.media.ID)
+	if r.Method == http.MethodHead && item.source.RetentionAnchor != "ACTIVE_BASELINE" && (item.source.SourceExpiryAt == nil || !item.source.SourceExpiryAt.After(h.deps.Now())) {
+		held, err := h.sourceProtected(r.Context(), item.metadata.TenantID, item.media.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -206,6 +206,7 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 	}
 	var item access
 	item.metadata = metadata
+	originEvidence := false
 	var err error
 	err = (tenanttx.Runner{DB: h.deps.DB}).Within(r.Context(), metadata.TenantID, func(tx *gorm.DB) error {
 		var mediaID identity.ID
@@ -253,13 +254,55 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 				return gorm.ErrRecordNotFound
 			}
 			var snapshot database.ReportSnapshot
-			if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=?", metadata.TenantID, snapshotID).Take(&snapshot).Error; err != nil {
+			if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=?", metadata.TenantID, snapshotID).Take(&snapshot).Error; err == nil {
+				if !snapshotContainsEvidence(snapshot.CanonicalJSON, item.frame, mediaID) {
+					return gorm.ErrRecordNotFound
+				}
+				item.inspection = snapshot.InspectionID
+			} else if frame && errors.Is(err, gorm.ErrRecordNotFound) {
+				// Inventory review links carry an origin-version id. A retained frame
+				// can be read through the same endpoint when it is attached to that
+				// inventory version and the caller has read access to its asset.
+				var version database.OriginVersion
+				if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=? AND has_inventory=true", metadata.TenantID, snapshotID).Take(&version).Error; err != nil {
+					return err
+				}
+				var decisions []string
+				if err := tx.WithContext(r.Context()).Model(&database.InventoryItemEvidence{}).
+					Joins("JOIN origins.inventory_items ON inventory_items.tenant_id=inventory_item_evidence.tenant_id AND inventory_items.id=inventory_item_evidence.item_id").
+					Where("inventory_item_evidence.tenant_id=? AND inventory_item_evidence.media_id=? AND inventory_item_evidence.frame_id=? AND inventory_items.origin_version_id=?", metadata.TenantID, mediaID, item.frame.ID, version.ID).
+					Pluck("inventory_items.decision", &decisions).Error; err != nil || len(decisions) == 0 {
+					return gorm.ErrRecordNotFound
+				}
+				var origin database.Origin
+				if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=?", metadata.TenantID, version.OriginID).Take(&origin).Error; err != nil {
+					return err
+				}
+				var asset database.Asset
+				if err := tx.WithContext(r.Context()).Where("tenant_id=? AND id=?", metadata.TenantID, origin.AssetID).Take(&asset).Error; err != nil {
+					return err
+				}
+				principal, err := h.deps.Authorizer.Authorize(r.Context(), auth.AuthorizationRequest{TenantID: metadata.TenantID, Product: auth.DashboardProduct, Roles: []string{auth.TenantAdmin, auth.OrganizationAdmin, auth.Manager, auth.Employee, auth.Viewer, auth.CustomerViewer}})
+				if err != nil {
+					return err
+				}
+				if !inventoryFrameVisible(principal.Roles, version, origin, decisions) {
+					return gorm.ErrRecordNotFound
+				}
+				allowed, err := inventoryPrincipalCoversAsset(tx.WithContext(r.Context()), metadata.TenantID, principal, asset)
+				if err != nil {
+					return err
+				}
+				if !allowed {
+					return gorm.ErrRecordNotFound
+				}
+				// The asset authorization above replaces the inspection checks
+				// below: inventory frames are not tied to one inspection.
+				originEvidence = true
+				return nil
+			} else {
 				return err
 			}
-			if !snapshotContainsEvidence(snapshot.CanonicalJSON, item.frame, mediaID) {
-				return gorm.ErrRecordNotFound
-			}
-			item.inspection = snapshot.InspectionID
 		} else {
 			responsibilityID, parseErr := identity.ParseID(responsibilityText)
 			if parseErr != nil {
@@ -298,6 +341,9 @@ func (h *Handler) resolve(r *http.Request, id identity.ID, frame bool) (access, 
 		}
 		return nil
 	})
+	if originEvidence && err == nil {
+		return item, http.StatusOK
+	}
 	if errors.Is(err, errNotReady) {
 		return access{}, http.StatusConflict
 	}
@@ -498,11 +544,16 @@ func (h *Handler) acquireSourceLease(ctx context.Context, item access) (identity
 		if source.Status == "DELETING" || source.Status == "EXPIRED" {
 			return objectstore.ErrExpired
 		}
-		if source.SourceExpiryAt == nil || !source.SourceExpiryAt.After(now) {
+		if source.RetentionAnchor != "ACTIVE_BASELINE" && (source.SourceExpiryAt == nil || !source.SourceExpiryAt.After(now)) {
 			held, err := retentioncore.EffectiveSourceHeld(tx, item.metadata.TenantID, item.media.ID)
 			if err != nil {
 				return err
 			}
+			active, err := retentioncore.ActiveBaselineReferences(tx, item.metadata.TenantID, item.media.ID)
+			if err != nil {
+				return err
+			}
+			held = held || active
 			if !held {
 				return objectstore.ErrExpired
 			}
@@ -521,6 +572,20 @@ func (h *Handler) sourceHeld(ctx context.Context, tenantID, mediaID identity.ID)
 		return err
 	})
 	return held, err
+}
+
+func (h *Handler) sourceProtected(ctx context.Context, tenantID, mediaID identity.ID) (bool, error) {
+	var protected bool
+	err := (tenanttx.Runner{DB: h.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, mediaID)
+		if err != nil {
+			return err
+		}
+		active, err := retentioncore.ActiveBaselineReferences(tx, tenantID, mediaID)
+		protected = held || active
+		return err
+	})
+	return protected, err
 }
 
 func (h *Handler) releaseSourceLease(ctx context.Context, tenantID, leaseID identity.ID) {

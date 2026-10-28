@@ -68,7 +68,9 @@ func TestManifestCommitRejectsOutOfRangePTSAndWrongSourceDigestIT167(t *testing.
 			leaseToken := identity.NewID()
 			leaseExpiry := now.Add(time.Minute)
 			if err := h.WithinTenant(ctx, fixture.tenantID, func(tx *gorm.DB) error {
-				source := database.VideoSource{ID: identity.NewID(), TenantID: fixture.tenantID, MediaID: fixture.mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 2, Height: 2, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, Status: "RETAINED", CreatedAt: now, UpdatedAt: now}
+				days := 30
+				expiresAt := now.Add(30 * 24 * time.Hour)
+				source := database.VideoSource{ID: identity.NewID(), TenantID: fixture.tenantID, MediaID: fixture.mediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1_000_000, Width: 2, Height: 2, FrameRate: 1, ScreeningStatus: "APPROVED", FirstFrameReadyAt: &now, RetentionDays: &days, SourceExpiryAt: &expiresAt, RetentionAnchor: "FIXED", Status: "RETAINED", CreatedAt: now, UpdatedAt: now}
 				if err := tx.Create(&source).Error; err != nil {
 					return err
 				}

@@ -34,6 +34,10 @@ func unauthenticated() error {
 	return apperror.New(apperror.Unauthenticated, "", "authentication required")
 }
 
+func originUnavailableError() *graphql1.UserError {
+	return &graphql1.UserError{Code: string(apperror.InvalidState), Message: "Recurso indisponível."}
+}
+
 func parsePlannedStages(inputs []*graphql1.PlannedProjectStageInput) ([]projectcore.PlannedStageInput, error) {
 	stages := make([]projectcore.PlannedStageInput, 0, len(inputs))
 	for _, input := range inputs {
@@ -106,7 +110,12 @@ func userErrorFrom(err error) *graphql1.UserError {
 	if field != "" {
 		fieldValue = &field
 	}
-	return &graphql1.UserError{Code: string(code), Field: fieldValue, Message: message}
+	userError := &graphql1.UserError{Code: string(code), Field: fieldValue, Message: message}
+	var pending interface{ PendingRequirementKeys() []string }
+	if errors.As(err, &pending) {
+		userError.PendingRequirementKeys = pending.PendingRequirementKeys()
+	}
+	return userError
 }
 
 func maskEmail(value string) string {
@@ -345,6 +354,8 @@ func optionalString(value string) *string {
 	return &value
 }
 
+func boolPointer(value bool) *bool { return &value }
+
 func mapParticipant(view participantcore.ParticipantView) *graphql1.Participant {
 	contacts := make([]*graphql1.ParticipantContact, 0, len(view.Contacts))
 	for _, contact := range view.Contacts {
@@ -383,7 +394,7 @@ func mapTemplateVersion(row database.TemplateVersion) *graphql1.TemplateVersion 
 }
 
 func mapVideoPolicy(row database.VideoPolicy) *graphql1.VideoPolicy {
-	return &graphql1.VideoPolicy{MaxDurationMinutes: row.MaxDurationMinutes, OriginRetentionDays: row.OriginRetentionDays, CurrentRetentionDays: row.CurrentRetentionDays, Version: int(row.Version)}
+	return &graphql1.VideoPolicy{MaxDurationMinutes: row.MaxDurationMinutes, OriginRetentionDays: row.OriginRetentionDays, CurrentRetentionDays: row.CurrentRetentionDays, SupersededBaselineRetentionDays: row.SupersededBaselineRetentionDays, Version: int(row.Version)}
 }
 
 func mapVideoAdmission(row database.VideoAdmission) *graphql1.VideoAdmission {
@@ -581,7 +592,18 @@ func mapOriginVersion(row database.OriginVersion, details *originlist.Details) *
 	if details != nil {
 		preparationStatus, sourceAvailability, captureSubmitted, selectable = details.PreparationStatus, details.SourceAvailability, details.CaptureSubmitted, details.Selectable
 	}
-	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated}
+	var purpose, draftState *string
+	if row.Purpose != nil {
+		purpose = row.Purpose
+	}
+	if row.DraftState != nil {
+		draftState = row.DraftState
+	}
+	revision := 0
+	if details != nil {
+		revision = details.OriginRevision
+	}
+	return &graphql1.OriginVersion{ID: row.ID.String(), OriginID: row.OriginID.String(), VersionNumber: row.VersionNumber, OriginRevision: revision, Status: row.Status, MediaKind: mediaKind, VideoPreparationID: optionalID(row.VideoPreparationID), PreparationStatus: preparationStatus, CaptureSubmitted: captureSubmitted, Selectable: selectable, SourceAvailability: sourceAvailability, LimitedCoverage: mediaKind == "VIDEO" && row.VideoPlanID != nil, ScopeManifestDigest: digest, SupersedesID: optionalID(row.SupersedesID), ActivatedAt: activated, ActivatedBy: optionalID(row.ActivatedByMembershipID), Purpose: purpose, Source: optional(row.Source), SourceInspectionID: optionalID(row.SourceInspectionID), HasInventory: row.HasInventory, DraftState: draftState}
 }
 
 func (r *Resolver) projectOriginVersion(ctx context.Context, tenantID identity.ID, row database.OriginVersion) (*graphql1.OriginVersion, error) {
@@ -700,7 +722,15 @@ func mapAnalysisPrompt(row database.AnalysisPrompt) *graphql1.AnalysisPrompt {
 		MinimumConfidenceBPS int    `json:"minimumConfidenceBps"`
 	}
 	_ = json.Unmarshal(row.DefinitionJSON, &definition)
-	return &graphql1.AnalysisPrompt{AnalysisType: graphql1.AnalysisType(row.AnalysisType), SystemPrompt: definition.SystemPrompt, ModelAlias: definition.ModelAlias, MinimumConfidenceBps: definition.MinimumConfidenceBPS, CanonicalDigest: row.CanonicalDigest, Revision: int(row.Revision), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)}
+	return &graphql1.AnalysisPrompt{AnalysisType: graphql1.AnalysisType(row.AnalysisType), Task: graphql1.AnalysisPromptTask(row.Task), SystemPrompt: definition.SystemPrompt, ModelAlias: definition.ModelAlias, MinimumConfidenceBps: definition.MinimumConfidenceBPS, CanonicalDigest: row.CanonicalDigest, Revision: int(row.Revision), UpdatedAt: row.UpdatedAt.Format(time.RFC3339Nano)}
+}
+
+// analysisPromptTask maps the optional GraphQL task; an omitted task is FINDINGS.
+func analysisPromptTask(task *graphql1.AnalysisPromptTask) string {
+	if task == nil {
+		return string(graphql1.AnalysisPromptTaskFindings)
+	}
+	return string(*task)
 }
 
 func mapProject(view projectcore.View) *graphql1.Project {
@@ -754,6 +784,18 @@ func (r *Resolver) externalResponsibility(ctx context.Context) (identity.ID, ide
 		return identity.ID{}, identity.ID{}, unauthenticated()
 	}
 	return tenantID, responsibilityID, nil
+}
+
+func (r *Resolver) externalCounterparty(ctx context.Context) (identity.ID, identity.ID, error) {
+	credentials, ok := requestctx.ExternalCredentialsFromContext(ctx)
+	if !ok {
+		return identity.ID{}, identity.ID{}, unauthenticated()
+	}
+	owner, err := r.Counterparty.ValidateSession(ctx, credentials.SessionToken, credentials.CSRFToken)
+	if err != nil {
+		return identity.ID{}, identity.ID{}, err
+	}
+	return owner.TenantID, owner.InvitationID, nil
 }
 
 func externalOperationAuthError(ctx context.Context) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -33,11 +34,16 @@ func PresentError(ctx context.Context, err error) *gqlerror.Error {
 		correlationID = metadata.CorrelationID
 	}
 	public := MapError(err, correlationID)
+	extensions := map[string]any{"code": string(public.Code), "field": public.Field, "correlationId": public.CorrelationID}
+	var pending interface{ PendingRequirementKeys() []string }
+	if errors.As(err, &pending) {
+		extensions["pendingRequirementKeys"] = pending.PendingRequirementKeys()
+	}
 	if public.Code == apperror.Internal {
 		operation := graphqlOperationName(ctx)
 		slog.ErrorContext(ctx, "graphql resolver failure", "operation", operation, "correlationId", correlationID, "errorCode", string(public.Code))
 	}
-	return &gqlerror.Error{Message: public.Message, Extensions: map[string]any{"code": string(public.Code), "field": public.Field, "correlationId": public.CorrelationID}}
+	return &gqlerror.Error{Message: public.Message, Extensions: extensions}
 }
 
 func graphqlOperationName(ctx context.Context) (operation string) {

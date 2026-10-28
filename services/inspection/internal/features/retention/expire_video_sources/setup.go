@@ -23,6 +23,8 @@ const (
 	leaseDuration    = 2 * time.Minute
 )
 
+var ErrDeletionBlocked = errors.New("source deletion is blocked by an active reference or hold")
+
 type Dependencies struct {
 	DB      *gorm.DB
 	Store   objectstore.Store
@@ -58,8 +60,17 @@ func (e *Executor) RunDue(ctx context.Context, tenantID identity.ID, now time.Ti
 	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		var sources []database.VideoSource
 		query := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("tenant_id=? AND source_expiry_at IS NOT NULL AND source_expiry_at<=? AND (status='RETAINED' OR (status='DELETING' AND (delete_lease_until IS NULL OR delete_lease_until<=?)))", tenantID, now, now).
-			Order("source_expiry_at,id").Limit(limit)
+			Where(`tenant_id=? AND (
+				(status='RETAINED' AND retention_anchor='FIXED' AND source_expiry_at IS NOT NULL AND source_expiry_at<=?::timestamptz
+				 AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=media.video_sources.tenant_id AND h.active=true AND (h.source_media_id=media.video_sources.media_id
+				   OR h.inspection_id IN (SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id WHERE m.tenant_id=media.video_sources.tenant_id AND m.id=media.video_sources.media_id)
+				   OR h.origin_version_id IN (`+retentioncore.ReferencingVersionsFor("media.video_sources.tenant_id", "media.video_sources.media_id")+`)))
+				 AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=media.video_sources.tenant_id AND c.response='CONTESTED' AND c.resolution='OPEN' AND c.origin_version_id IN (`+retentioncore.ReferencingVersionsFor("media.video_sources.tenant_id", "media.video_sources.media_id")+`))
+				 AND NOT EXISTS (SELECT 1 FROM origins.origin_versions v WHERE v.tenant_id=media.video_sources.tenant_id AND v.status='ACTIVE' AND v.id IN (`+retentioncore.ReferencingVersionsFor("media.video_sources.tenant_id", "media.video_sources.media_id")+`))
+				 AND NOT EXISTS (SELECT 1 FROM media.video_source_leases l WHERE l.tenant_id=media.video_sources.tenant_id AND l.source_media_id=media.video_sources.media_id AND l.lease_until>?::timestamptz)
+				 AND NOT EXISTS (SELECT 1 FROM media.video_preparation_jobs p WHERE p.tenant_id=media.video_sources.tenant_id AND p.media_id=media.video_sources.media_id AND p.status='PROCESSING' AND p.lease_expires_at>?::timestamptz)
+				) OR (status='DELETING' AND (delete_lease_until IS NULL OR delete_lease_until<=?::timestamptz)))`, tenantID, now, now, now, now).
+			Order("COALESCE(source_expiry_at,delete_lease_until),id").Limit(limit)
 		if err := query.Find(&sources).Error; err != nil {
 			return err
 		}
@@ -70,6 +81,17 @@ func (e *Executor) RunDue(ctx context.Context, tenantID identity.ID, now time.Ti
 			if held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, source.MediaID); err != nil {
 				return err
 			} else if held {
+				if err := releaseStaleDeleteClaim(tx, source, now); err != nil {
+					return err
+				}
+				continue
+			}
+			if active, err := retentioncore.ActiveBaselineReferences(tx, tenantID, source.MediaID); err != nil {
+				return err
+			} else if active {
+				if err := releaseStaleDeleteClaim(tx, source, now); err != nil {
+					return err
+				}
 				continue
 			}
 			var active int64
@@ -107,6 +129,13 @@ func (e *Executor) RunDue(ctx context.Context, tenantID identity.ID, now time.Ti
 	return len(claimed), firstErr
 }
 
+func releaseStaleDeleteClaim(tx *gorm.DB, source database.VideoSource, now time.Time) error {
+	if source.Status != "DELETING" {
+		return nil
+	}
+	return tx.Model(&source).Updates(map[string]any{"status": "RETAINED", "delete_lease_token": nil, "delete_lease_until": nil, "updated_at": now}).Error
+}
+
 // DeleteRequested removes a source on an authorized scoped deletion request,
 // using the same fenced storage cleanup and retry state as scheduled expiry.
 func (e *Executor) DeleteRequested(ctx context.Context, tenantID, mediaID identity.ID) error {
@@ -124,12 +153,17 @@ func (e *Executor) DeleteRequested(ctx context.Context, tenantID, mediaID identi
 			return nil
 		}
 		if source.Status == "DELETING" && source.DeleteLeaseUntil != nil && source.DeleteLeaseUntil.After(now) {
-			return fmt.Errorf("source deletion lease is still active")
+			return fmt.Errorf("%w: source deletion lease is still active", ErrDeletionBlocked)
 		}
 		if held, err := retentioncore.EffectiveSourceHeld(tx, tenantID, mediaID); err != nil {
 			return err
 		} else if held {
-			return fmt.Errorf("source deletion blocked by legal hold")
+			return fmt.Errorf("%w: source hold", ErrDeletionBlocked)
+		}
+		if active, err := retentioncore.ActiveBaselineReferences(tx, tenantID, mediaID); err != nil {
+			return err
+		} else if active || source.RetentionAnchor == "ACTIVE_BASELINE" {
+			return fmt.Errorf("%w: active baseline", ErrDeletionBlocked)
 		}
 		var leases, preparing int64
 		if err := tx.WithContext(ctx).Model(&database.VideoSourceLease{}).Where("tenant_id=? AND source_media_id=? AND lease_until>?", tenantID, mediaID, now).Count(&leases).Error; err != nil {
@@ -139,7 +173,7 @@ func (e *Executor) DeleteRequested(ctx context.Context, tenantID, mediaID identi
 			return err
 		}
 		if leases > 0 || preparing > 0 {
-			return fmt.Errorf("source deletion blocked by active work")
+			return fmt.Errorf("%w: active work", ErrDeletionBlocked)
 		}
 		token := identity.NewID()
 		until := now.Add(leaseDuration)
@@ -168,14 +202,26 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 		limit = DefaultBatchSize
 	}
 	var preparations []database.VideoPreparationJob
+	now := e.deps.Now().UTC()
 	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
 		return tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 			Where(`tenant_id=? AND id IN (
 				SELECT ov.video_preparation_id FROM origins.origin_versions ov
 				WHERE ov.tenant_id=? AND ov.media_kind='VIDEO' AND ov.status IN ('INVALIDATED','SUPERSEDED')
+				AND (ov.status='INVALIDATED' OR (ov.superseded_at IS NOT NULL AND ov.superseded_at + (COALESCE((SELECT p.superseded_baseline_retention_days FROM media.video_policies p WHERE p.tenant_id=ov.tenant_id),365) * interval '1 day') <= ?))
+				AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+				AND NOT EXISTS (SELECT 1 FROM origins.origin_versions active WHERE active.tenant_id=ov.tenant_id AND active.video_preparation_id=ov.video_preparation_id AND active.status='ACTIVE')
 				AND NOT EXISTS (SELECT 1 FROM media.video_evidence_references r WHERE r.tenant_id=ov.tenant_id AND r.preparation_id=ov.video_preparation_id)
 				AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active=true)
-			)`, tenantID, tenantID).Order("id").Limit(limit).Find(&preparations).Error
+				AND EXISTS (SELECT 1 FROM media.video_frames f WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id)
+				AND NOT EXISTS (
+					SELECT 1 FROM media.video_frames f
+					JOIN origins.inventory_item_evidence e ON e.tenant_id=f.tenant_id AND e.frame_id=f.id
+					JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id
+					JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id
+					WHERE f.tenant_id=ov.tenant_id AND f.preparation_id=ov.video_preparation_id AND v.status <> 'DISCARDED'
+				)
+			)`, tenantID, tenantID, now).Order("id").Limit(limit).Find(&preparations).Error
 	})
 	if err != nil {
 		return 0, err
@@ -202,12 +248,49 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 			if held > 0 {
 				return nil
 			}
+			var activeBaseline int64
+			if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND video_preparation_id=? AND status='ACTIVE'", tenantID, preparation.ID).Count(&activeBaseline).Error; err != nil {
+				return err
+			}
+			if activeBaseline > 0 {
+				return nil
+			}
+			var protectedVersions int64
+			if err := tx.Raw(`SELECT count(*) FROM origins.origin_versions ov
+				WHERE ov.tenant_id=? AND ov.video_preparation_id=? AND ov.status IN ('INVALIDATED','SUPERSEDED')
+				AND ((ov.status='SUPERSEDED' AND (ov.superseded_at IS NULL OR ov.superseded_at + (COALESCE((SELECT p.superseded_baseline_retention_days FROM media.video_policies p WHERE p.tenant_id=ov.tenant_id),365) * interval '1 day') > ?))
+					OR EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+					OR EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active=true))`, tenantID, preparation.ID, now).Scan(&protectedVersions).Error; err != nil {
+				return err
+			}
+			if protectedVersions > 0 {
+				return nil
+			}
 			var frames []database.VideoFrame
 			if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Find(&frames).Error; err != nil {
 				return err
 			}
+			if len(frames) > 0 {
+				var referencedFrames int64
+				if err := tx.Table("origins.inventory_item_evidence e").
+					Joins("JOIN origins.inventory_items i ON i.tenant_id=e.tenant_id AND i.id=e.item_id").
+					Joins("JOIN origins.origin_versions v ON v.tenant_id=i.tenant_id AND v.id=i.origin_version_id").
+					Where("e.tenant_id=? AND e.frame_id IN ? AND v.status <> 'DISCARDED'", tenantID, frameIDs(frames)).Count(&referencedFrames).Error; err != nil {
+					return err
+				}
+				if referencedFrames > 0 {
+					return nil
+				}
+			}
 			for _, frame := range frames {
 				if err := e.deps.Store.Delete(ctx, frame.ObjectKey); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
+					return err
+				}
+			}
+			if len(frames) > 0 {
+				if err := tx.Exec(`DELETE FROM origins.inventory_item_evidence e USING origins.inventory_items i, origins.origin_versions v
+					WHERE e.tenant_id=? AND e.frame_id IN ? AND i.tenant_id=e.tenant_id AND i.id=e.item_id
+					AND v.tenant_id=i.tenant_id AND v.id=i.origin_version_id AND v.status='DISCARDED'`, tenantID, frameIDs(frames)).Error; err != nil {
 					return err
 				}
 			}
@@ -217,7 +300,7 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 			if err := tx.Where("tenant_id=? AND preparation_id=?", tenantID, preparation.ID).Delete(&database.VideoFrame{}).Error; err != nil {
 				return err
 			}
-			purged = true
+			purged = len(frames) > 0
 			return nil
 		})
 		if err != nil {
@@ -227,7 +310,94 @@ func (e *Executor) PurgeInactiveOriginBanks(ctx context.Context, tenantID identi
 			completed++
 		}
 	}
+	purgedVersions, err := e.purgeInactiveInventoryEvidence(ctx, tenantID, limit-completed, now)
+	return completed + purgedVersions, err
+}
+
+func (e *Executor) purgeInactiveInventoryEvidence(ctx context.Context, tenantID identity.ID, limit int, now time.Time) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var versionIDs []identity.ID
+	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+		// The due window and hold filters mirror the inventory branch of
+		// platform.discover_scheduler_tenants (migration v92), so a tenant is
+		// discovered exactly when this purge has work to do.
+		return tx.WithContext(ctx).Raw(`SELECT ov.id FROM origins.origin_versions ov
+			LEFT JOIN media.video_policies p ON p.tenant_id=ov.tenant_id
+			WHERE ov.tenant_id=? AND ov.has_inventory=true AND ov.responsibility_id IS NULL
+			AND ov.status IN ('SUPERSEDED','INVALIDATED','DISCARDED')
+			AND COALESCE(ov.superseded_at,ov.invalidated_at,ov.discarded_at,ov.activated_at,ov.created_at)
+				+ (CASE WHEN ov.status='SUPERSEDED' THEN COALESCE(p.superseded_baseline_retention_days,365) ELSE COALESCE(p.current_retention_days,30) END) * interval '1 day' <= ?
+			AND NOT EXISTS (SELECT 1 FROM origins.counterparty_invitations c WHERE c.tenant_id=ov.tenant_id AND c.origin_version_id=ov.id AND c.response='CONTESTED' AND c.resolution='OPEN')
+			AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.origin_version_id=ov.id AND h.active=true)
+			AND NOT EXISTS (SELECT 1 FROM schedules.schedules s WHERE s.tenant_id=ov.tenant_id AND s.status='ACTIVE' AND s.reference_version_id=ov.id)
+			AND NOT EXISTS (SELECT 1 FROM inspections.reference_snapshots r JOIN inspections.inspections i ON i.tenant_id=r.tenant_id AND i.id=r.inspection_id WHERE r.tenant_id=ov.tenant_id AND r.reference_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+			AND NOT EXISTS (SELECT 1 FROM analysis.inventory_jobs j JOIN inspections.inspections i ON i.tenant_id=j.tenant_id AND i.id=j.inspection_id WHERE j.tenant_id=ov.tenant_id AND j.origin_version_id=ov.id AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING'))
+			AND NOT EXISTS (SELECT 1 FROM retention.legal_holds h WHERE h.tenant_id=ov.tenant_id AND h.active=true AND (h.inspection_id=ov.source_inspection_id OR h.inspection_id IN (
+				SELECT r.inspection_id FROM inspections.responsibilities r JOIN media.media_objects m ON m.tenant_id=r.tenant_id AND m.responsibility_id=r.id
+				JOIN origins.inventory_item_evidence e ON e.tenant_id=m.tenant_id AND e.media_id=m.id JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id WHERE it.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id)))
+			AND NOT EXISTS (
+				SELECT 1 FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+				JOIN retention.legal_holds h ON h.tenant_id=e.tenant_id AND h.source_media_id=e.media_id AND h.active=true
+				WHERE e.tenant_id=ov.tenant_id AND it.origin_version_id=ov.id
+			)
+			AND EXISTS (SELECT 1 FROM origins.inventory_items i WHERE i.tenant_id=ov.tenant_id AND i.origin_version_id=ov.id)
+			ORDER BY ov.id LIMIT ? FOR UPDATE OF ov SKIP LOCKED`, tenantID, now, limit).Scan(&versionIDs).Error
+	})
+	if err != nil || len(versionIDs) == 0 {
+		return 0, err
+	}
+	completed := 0
+	for _, versionID := range versionIDs {
+		err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+			var version database.OriginVersion
+			if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND has_inventory=true AND responsibility_id IS NULL AND status IN ('SUPERSEDED','INVALIDATED','DISCARDED')", tenantID, versionID).First(&version).Error; err != nil {
+				return err
+			}
+			var protected int64
+			if err := tx.Raw(`SELECT
+				(SELECT count(*) FROM origins.counterparty_invitations c WHERE c.tenant_id=@tenant AND c.origin_version_id=@version AND c.response='CONTESTED' AND c.resolution='OPEN') +
+				(SELECT count(*) FROM retention.legal_holds h WHERE h.tenant_id=@tenant AND h.origin_version_id=@version AND h.active=true) +
+				(SELECT count(*) FROM schedules.schedules s WHERE s.tenant_id=@tenant AND s.status='ACTIVE' AND s.reference_version_id=@version) +
+				(SELECT count(*) FROM inspections.reference_snapshots r JOIN inspections.inspections i ON i.tenant_id=r.tenant_id AND i.id=r.inspection_id WHERE r.tenant_id=@tenant AND r.reference_version_id=@version AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING')) +
+				(SELECT count(*) FROM analysis.inventory_jobs j JOIN inspections.inspections i ON i.tenant_id=j.tenant_id AND i.id=j.inspection_id WHERE j.tenant_id=@tenant AND j.origin_version_id=@version AND i.status IN ('PLANNED','INVITED','IN_PROGRESS','SUBMITTED','ANALYZING')) +
+				(SELECT count(*) FROM origins.inventory_item_evidence e JOIN origins.inventory_items it ON it.tenant_id=e.tenant_id AND it.id=e.item_id
+					JOIN retention.legal_holds h ON h.tenant_id=e.tenant_id AND h.source_media_id=e.media_id AND h.active=true
+					WHERE e.tenant_id=@tenant AND it.origin_version_id=@version)`, map[string]any{"tenant": tenantID, "version": versionID}).Scan(&protected).Error; err != nil {
+				return err
+			}
+			if protected > 0 {
+				return nil
+			}
+			if err := tx.Exec("SET LOCAL app.retention_purge = 'on'").Error; err != nil {
+				return err
+			}
+			if err := tx.Exec(`DELETE FROM origins.inventory_item_evidence e USING origins.inventory_items i WHERE e.tenant_id=? AND i.tenant_id=e.tenant_id AND i.id=e.item_id AND i.origin_version_id=?`, tenantID, versionID).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("tenant_id=? AND origin_version_id=?", tenantID, versionID).Delete(&database.InventoryItem{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("tenant_id=? AND origin_version_id=?", tenantID, versionID).Delete(&database.InventoryEnvironment{}).Error; err != nil {
+				return err
+			}
+			completed++
+			return nil
+		})
+		if err != nil {
+			return completed, err
+		}
+	}
 	return completed, nil
+}
+
+func frameIDs(frames []database.VideoFrame) []identity.ID {
+	ids := make([]identity.ID, 0, len(frames))
+	for _, frame := range frames {
+		ids = append(ids, frame.ID)
+	}
+	return ids
 }
 
 type claim struct {
@@ -237,7 +407,24 @@ type claim struct {
 func (e *Executor) deleteClaim(ctx context.Context, c claim, now time.Time) error {
 	var media database.MediaObject
 	var derivatives []database.MediaDerivative
+	skipDeletion := false
 	err := (tenanttx.Runner{DB: e.deps.DB}).Within(ctx, c.tenantID, func(tx *gorm.DB) error {
+		var source database.VideoSource
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND media_id=? AND status='DELETING' AND delete_lease_token=?", c.tenantID, c.mediaID, c.token).First(&source).Error; err != nil {
+			return err
+		}
+		held, err := retentioncore.EffectiveSourceHeld(tx, c.tenantID, c.mediaID)
+		if err != nil {
+			return err
+		}
+		active, err := retentioncore.ActiveBaselineReferences(tx, c.tenantID, c.mediaID)
+		if err != nil {
+			return err
+		}
+		if held || active || source.RetentionAnchor == "ACTIVE_BASELINE" {
+			skipDeletion = true
+			return tx.WithContext(ctx).Model(&source).Updates(map[string]any{"status": "RETAINED", "delete_lease_token": nil, "delete_lease_until": nil, "updated_at": now}).Error
+		}
 		if err := tx.WithContext(ctx).Where("tenant_id=? AND id=?", c.tenantID, c.mediaID).First(&media).Error; err != nil {
 			return err
 		}
@@ -245,6 +432,9 @@ func (e *Executor) deleteClaim(ctx context.Context, c claim, now time.Time) erro
 	})
 	if err != nil {
 		return err
+	}
+	if skipDeletion {
+		return nil
 	}
 	keys := []string{media.ObjectKey}
 	for _, derivative := range derivatives {

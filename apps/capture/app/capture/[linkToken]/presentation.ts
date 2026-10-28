@@ -1,4 +1,6 @@
 import { CAPTURE_LOCATION_TIMEOUT_MS, MAX_GPS_ACCURACY_METERS, type CaptureLocationFailure } from "@/pwa/capture-location";
+import type { CameraFailure } from "@/pwa/camera-session";
+import { environmentTypeLabel } from "@/pwa/environment-flow";
 
 const statuses: Record<string, string> = { OPEN: "Aberta", ACCEPTANCE_REQUIRED: "Aguardando aceite", CONFIRMED: "Confirmada", PENDING: "Pendente", IN_PROGRESS: "Em andamento", SUBMITTED: "Enviada", EXPIRED: "Expirada", REVOKED: "Revogada", INVALIDATED: "Invalidada" };
 const sections: Record<string, string> = { property: "Imóvel", agency: "Imobiliária", participant: "Responsável pela vistoria" };
@@ -29,7 +31,7 @@ const mediaFeedbacks: Record<string, MediaFeedback> = {
   },
   ABORTED: {
     tone: "warning",
-    title: "Upload interrompido",
+    title: "Envio interrompido",
     message: "O envio desta imagem foi interrompido antes da conclusão.",
     guidance: "Verifique sua conexão e use “Retomar envio” para tentar novamente."
   },
@@ -47,8 +49,13 @@ const mediaFeedbacks: Record<string, MediaFeedback> = {
   }
 };
 export function presentCaptureStatus(value: string) { return statuses[value] ?? "Situação não reconhecida"; }
-export function presentRequirementSection(value: string) { return sections[value] ?? (value.trim() || "Seção não informada"); }
-export function presentRequirementLabel(value: string) { return labels[value] ?? (value || "Requisito não reconhecido"); }
+export function presentRequirementSection(value: string) { return sections[value] ?? environmentTypeLabel(value) ?? (value.trim() || "Seção não informada"); }
+export function presentRequirementLabel(value: string) { return labels[value] ?? environmentTypeLabel(value) ?? (value || "Requisito não reconhecido"); }
+export function presentRequirementOption(section: string, label: string) {
+  const presentedSection = presentRequirementSection(section);
+  const presentedLabel = presentRequirementLabel(label);
+  return presentedSection === presentedLabel ? presentedLabel : `${presentedSection}: ${presentedLabel}`;
+}
 export function presentComparisonMode(value: string) { return comparisons[value] ?? "Comparação não reconhecida"; }
 export function presentCaptureSource(value: string) { return sources[value] ?? "Origem não reconhecida"; }
 export function presentCaptureReference(value: string) { return referenceSources[value] ?? "Origem não reconhecida"; }
@@ -65,10 +72,43 @@ export function presentSubmissionBlock(input: { online: boolean; pending: number
 }
 export function presentUploadFailure(error: unknown): string {
   const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message?: unknown }).message ?? "") : error instanceof Error ? error.message : String(error ?? "");
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
   if (/media verification and screening are pending|media processing pending/i.test(message)) return "A foto foi recebida, mas a verificação ainda não terminou. Aguarde alguns segundos e toque em “Retomar envio”.";
+  if (/environment requirement is required/i.test(message)) return "O ambiente escolhido não está disponível para esta foto. Atualize a captura e tente novamente.";
   if (/required GPS must be accurate within the guided window/i.test(message)) return "O servidor recusou a localização desta foto por falta de precisão ou por estar fora do prazo de captura. Substitua a foto e confirme novamente com a localização atual.";
   if (/network|fetch/i.test(message)) return "Não foi possível concluir agora por causa da conexão. Verifique sua internet e toque em “Retomar envio”.";
-  return message || "Não foi possível concluir o envio. Toque em “Retomar envio” para tentar novamente.";
+  if (code === "UNAUTHENTICATED" || code === "SESSION_EXPIRED") return "Sua sessão expirou. Solicite um novo código para retomar o envio.";
+  return presentCaptureError(error, "Não foi possível enviar a foto. Ela continua salva neste dispositivo. Toque em “Retomar envio” para tentar novamente.");
+}
+
+export function presentCaptureError(error: unknown, fallback: string): string {
+  const message = typeof error === "object" && error !== null && "message" in error
+    ? String((error as { message?: unknown }).message ?? "")
+    : error instanceof Error ? error.message : "";
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  if (code === "UNAUTHENTICATED" || code === "SESSION_EXPIRED") return "Sua sessão expirou. Solicite um novo código para continuar.";
+  if (message === "Image decoding is unavailable") return "Este aparelho não conseguiu abrir a imagem. Escolha outra foto em um formato permitido.";
+  if (message === "Invalid image dimensions") return "A imagem está vazia ou danificada. Escolha outra foto.";
+  if (message === "Canvas is unavailable") return "Este navegador não conseguiu preparar a imagem. Use outro navegador ou tire uma nova foto.";
+  if (message === "camera-frame-unavailable") return "Não foi possível capturar a foto. Aguarde a imagem aparecer e tente de novo.";
+  if (/^(Use |Abra |Confira |Aguarde |Conecte-se|Grave novamente|Falha ao verificar vídeo|Não foi possível|A câmera |O dispositivo |Este vídeo |O vídeo |Este convite |A gravação |O arquivo |A foto |A API |A localização |Esta vistoria |Este requisito |O ambiente escolhido )/i.test(message)) return message;
+  return fallback;
+}
+
+/** Title and message for a camera failure, in pt-BR, with the next action. */
+export function presentCameraFailure(failure: CameraFailure, inAppBrowser: boolean): { title: string; message: string } {
+  if (inAppBrowser && ["denied", "unsupported", "unknown"].includes(failure)) {
+    return { title: "Abra no navegador do celular", message: "Este aplicativo não libera a câmera. Toque em ⋮ ou em Compartilhar e escolha Abrir no navegador." };
+  }
+  const messages: Record<CameraFailure, { title: string; message: string }> = {
+    denied: { title: "A câmera está bloqueada", message: "Permita o uso da câmera para este site: toque no cadeado ou em \"aA\" na barra de endereço, abra Configurações do site e escolha Permitir em Câmera. Depois toque em Tentar novamente." },
+    busy: { title: "A câmera está em uso", message: "Feche outros aplicativos que estejam usando a câmera, como chamadas de vídeo, e toque em Tentar novamente." },
+    unavailable: { title: "Não encontramos uma câmera disponível", message: "Verifique se o aparelho tem câmera traseira liberada. Você pode usar a câmera do aparelho pelo botão abaixo." },
+    insecure: { title: "Conexão não segura", message: "A câmera só funciona em uma conexão segura. Abra o link do convite exatamente como foi recebido." },
+    unsupported: { title: "Este navegador não abre a câmera", message: "Abra o link do convite no Safari ou no Chrome atualizado. Você também pode usar a câmera do aparelho pelo botão abaixo." },
+    unknown: { title: "Não foi possível abrir a câmera", message: "Toque em Tentar novamente. Se continuar, use a câmera do aparelho pelo botão abaixo." }
+  };
+  return messages[failure];
 }
 
 export function presentCaptureLocationFailure(failure: CaptureLocationFailure): string {
@@ -91,12 +131,12 @@ export function presentDraftPersistenceFailure(error: unknown): string {
 }
 
 export function presentUploadProgress(progress: { phase: string; percent: number; completedParts: number; totalParts: number }): string {
-  if (progress.phase === "preparing") return "Preparando upload";
+  if (progress.phase === "preparing") return "Preparando envio";
   if (progress.phase === "uploading") return progress.totalParts > 0 ? `Enviando partes (${progress.completedParts}/${progress.totalParts})` : "Enviando foto";
   if (progress.phase === "verifying") return "Aguardando verificação da foto";
   if (progress.phase === "saving") return "Salvando metadados";
-  if (progress.phase === "complete") return "Upload concluído";
-  return "Não foi possível concluir; retome o envio";
+  if (progress.phase === "complete") return "Envio concluído";
+  return "Não foi possível concluir o envio. Toque em “Retomar envio” para tentar novamente.";
 }
 
 export function presentReplacementNotice(deadlineAt?: string | null): string {
