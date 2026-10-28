@@ -68,12 +68,6 @@ func invitationDB(t *testing.T) (*gorm.DB, string) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.Exec(`CREATE TABLE platform.video_admission (id integer primary key,enabled boolean,version integer,changed_at datetime)`).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Exec(`INSERT INTO platform.video_admission (id,enabled,version,changed_at) VALUES (1,1,1,CURRENT_TIMESTAMP)`).Error; err != nil {
-		t.Fatal(err)
-	}
 	tenantID := identity.NewID()
 	token, err := security.NewScopedToken(tenantID)
 	if err != nil {

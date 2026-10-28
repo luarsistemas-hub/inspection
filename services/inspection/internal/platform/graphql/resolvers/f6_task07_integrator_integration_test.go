@@ -302,7 +302,7 @@ func TestVV_IT_351IntegratorRejectsRevokedInvitationAndExpiredSessionBeforeUploa
 
 func TestVV_IT_352RateLimitDoesNotExposeOtherTenantQueueMetadata(t *testing.T) {
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, 'IT-352 fixture', 'vv-it-352-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC()).Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, 'legacy disabled fixture', 'vv-it-352-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC()).Error; err != nil {
 		t.Fatal(err)
 	}
 	other, err := fx.h.SeedTask06Fixture(context.Background(), harness.Task06FixtureOptions{})

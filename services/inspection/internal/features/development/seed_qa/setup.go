@@ -31,7 +31,7 @@ var ErrLocalOnboardingMissing = errors.New("local admin onboarding missing")
 
 // Setup adds one fresh end-to-end QA scenario to the first active local admin
 // onboarding. Catalog rows are stable across runs; capture scenarios are not.
-func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string, enableVideoAdmission bool) (string, string, error) {
+func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind string) (string, string, error) {
 	if db == nil || strings.TrimSpace(issuer) == "" || strings.TrimSpace(captureBaseURL) == "" || (mediaKind != "PHOTO" && mediaKind != "VIDEO") {
 		return "", "", fmt.Errorf("slice %s: missing dependency", sliceName)
 	}
@@ -109,25 +109,6 @@ func Setup(ctx context.Context, db *gorm.DB, issuer, captureBaseURL, mediaKind s
 	llmCost := 0.015
 
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if mediaKind == "VIDEO" && enableVideoAdmission {
-			var admission database.VideoAdmission
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = 1").First(&admission).Error; err != nil {
-				return err
-			}
-			if !admission.Enabled {
-				admission.Enabled = true
-				admission.Version++
-				admission.ChangedBy = membership.IdentityID
-				admission.ChangedAt = now
-				admission.Reason = "Local QA video capture"
-				if err := tx.Save(&admission).Error; err != nil {
-					return err
-				}
-				if err := tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: tenant.ID, ActorID: membership.IdentityID, Action: "video.admission_configured", TargetType: "video_admission", TargetID: "1", Outcome: "ACCEPTED", Reason: admission.Reason, CorrelationID: "qa-seed-" + scenarioID.String(), OccurredAt: now}).Error; err != nil {
-					return err
-				}
-			}
-		}
 		stableRows := []any{
 			&database.PublicationPolicy{ID: ids.publicationPolicy, TenantID: tenant.ID, Mode: "MANUAL", Version: 1, CreatedAt: now, UpdatedAt: now},
 			&database.Participant{ID: ids.participant, TenantID: tenant.ID, BusinessUnitID: unit.ID, Name: "Participante QA", SegmentRole: "OWNER", Status: "ACTIVE", Version: 1, IdempotencyKey: "qa-seed-participant", CreatedAt: now, UpdatedAt: now},

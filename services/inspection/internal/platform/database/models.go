@@ -665,7 +665,7 @@ type VideoPolicy struct {
 
 func (VideoPolicy) TableName() string { return "media.video_policies" }
 
-// VideoAdmission is the versioned platform switch for creating new video work.
+// VideoAdmission keeps the retired platform switch schema available for rollback compatibility.
 type VideoAdmission struct {
 	ID          int         `gorm:"primaryKey"`
 	Enabled     bool        `gorm:"not null;default:false"`

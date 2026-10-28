@@ -14,12 +14,11 @@ duração máxima informada pela política local de vídeo.
 
 Configure `INSPECTION_LLM_MODE=live` e as credenciais LiteLLM/provedor em
 `.env.inspection`, depois inicie a stack. Confira o modo efetivo nos serviços
-locais antes de executar. O comando de seed habilita a admissão de vídeo apenas
-no ambiente local:
+locais antes de executar. Vídeo não exige uma ativação adicional no seed:
 
 ```sh
 ./scripts/local.sh up
-INSPECTION_QA_MEDIA_KIND=VIDEO INSPECTION_QA_ENABLE_VIDEO_ADMISSION=true ./scripts/local.sh seed
+INSPECTION_QA_MEDIA_KIND=VIDEO ./scripts/local.sh seed
 ```
 
 O Google Chrome precisa estar instalado para reproduzir os MP4/H.264 na prévia

@@ -39,11 +39,7 @@ func main() {
 	if scenario != "" {
 		log.Fatal("INSPECTION_QA_SCENARIO is no longer supported; leave it empty")
 	}
-	enableVideoAdmission := os.Getenv("INSPECTION_QA_ENABLE_VIDEO_ADMISSION") == "true"
-	if enableVideoAdmission && os.Getenv("INSPECTION_ENV") != "local" {
-		log.Fatal("QA video admission can only be enabled in the local environment")
-	}
-	url, inspectionID, err := seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, enableVideoAdmission)
+	url, inspectionID, err := seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind)
 	if errors.Is(err, seedqa.ErrLocalOnboardingMissing) {
 		apiURL := os.Getenv("INSPECTION_API_URL")
 		if apiURL == "" {
@@ -52,7 +48,7 @@ func main() {
 		if bootstrapErr := bootstrapLocalAdmin(ctx, apiURL, tokenIssuer, issuer, envOr("INSPECTION_SEED_USERNAME", "admin"), envOr("INSPECTION_SEED_PASSWORD", "admin")); bootstrapErr != nil {
 			log.Fatalf("local onboarding is missing and automatic bootstrap failed: %v", bootstrapErr)
 		}
-		url, inspectionID, err = seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind, enableVideoAdmission)
+		url, inspectionID, err = seedqa.Setup(ctx, db, issuer, captureBaseURL, mediaKind)
 	}
 	if err != nil {
 		log.Fatal(err)

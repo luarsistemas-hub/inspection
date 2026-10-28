@@ -175,7 +175,7 @@ func TestVV_IT_224RPT1AndEvidenceRemainPublishedAfterRC1(t *testing.T) {
 
 func TestVV_IT_003ActivePhotoTemplateV4DoesNotChangeVideoV1Capture(t *testing.T) {
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-	setFixedVideoAdmission(t, fx)
+	setHistoricalVideoAdmissionDisabled(t, fx)
 	inspectionID := createGuidanceInspection(t, fx, "CHECKLIST_ONLY", "vv-it-003-video-v1")
 	var inspection database.Inspection
 	if err := fx.h.AdminDB.Where("tenant_id=? AND id=?", fx.seed.TenantID, inspectionID).Take(&inspection).Error; err != nil {

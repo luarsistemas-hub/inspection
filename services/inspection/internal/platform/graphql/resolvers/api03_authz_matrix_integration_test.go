@@ -353,26 +353,22 @@ func TestAPI03CompetingAttemptRejectedIT406(t *testing.T) {
 	assertAPI03Rejected(t, response, "CONFLICT", `"beginVideoCapture":{`)
 }
 
-func TestAPI03SuspendedAdmissionRejectedIT407(t *testing.T) {
+func TestAPI03VideoConsentDoesNotRequireAdmissionIT407(t *testing.T) {
 	fixture := newAPI03FailureFixture(t, "acceptProcessing")
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
 		return tx.Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).Delete(&database.ProcessingAcceptance{}).Error
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=1").Updates(map[string]any{"enabled": false, "version": 2}).Error; err != nil {
-		t.Fatal(err)
-	}
 	query := `mutation { acceptProcessing(input:{disclosureVersion:"pt-BR-1",photoProcessing:true,videoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"it407-consent"}) { status } }`
 	response := executeAPI03WithCredentials(t, fixture, query)
-	assertAPI03Rejected(t, response, "INTEGRATION_DISABLED", `"acceptProcessing":{`)
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"status":"ACCEPTED"`) {
+		t.Fatalf("video consent was blocked by the historical admission row: %s", response)
+	}
 }
 
-func TestAPI03SuspendedAdmissionAllowsVideoConsentReacceptIT407(t *testing.T) {
+func TestAPI03VideoConsentReacceptanceRemainsAvailableIT407(t *testing.T) {
 	fixture := newAPI03FailureFixture(t, "acceptProcessing")
-	if err := suspendAPI03VideoAdmission(fixture); err != nil {
-		t.Fatal(err)
-	}
 	query := `mutation { acceptProcessing(input:{disclosureVersion:"pt-BR-1",photoProcessing:true,videoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"it407-reaccept"}) { status } }`
 	response := executeAPI03WithCredentials(t, fixture, query)
 	if !strings.Contains(response, `"status":"ACCEPTED"`) || strings.Contains(response, `"code":"INTEGRATION_DISABLED"`) {
@@ -380,14 +376,11 @@ func TestAPI03SuspendedAdmissionAllowsVideoConsentReacceptIT407(t *testing.T) {
 	}
 }
 
-func TestAPI03SuspendedAdmissionAllowsVideoRecaptureConsentIT368(t *testing.T) {
+func TestAPI03VideoRecaptureConsentRemainsAvailableIT368(t *testing.T) {
 	fixture := newAPI03FailureFixture(t, "acceptProcessing")
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
 		return tx.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", fixture.tenantID, fixture.responsibilityID).Update("kind", "RECAPTURE").Error
 	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := suspendAPI03VideoAdmission(fixture); err != nil {
 		t.Fatal(err)
 	}
 	query := `mutation { acceptProcessing(input:{disclosureVersion:"pt-BR-1",photoProcessing:true,videoProcessing:true,aiAnalysis:true,gpsUse:true,clientMutationId:"it368-recapture-consent"}) { status } }`
@@ -395,10 +388,6 @@ func TestAPI03SuspendedAdmissionAllowsVideoRecaptureConsentIT368(t *testing.T) {
 	if !strings.Contains(response, `"status":"ACCEPTED"`) || strings.Contains(response, `"code":"INTEGRATION_DISABLED"`) {
 		t.Fatalf("VIDEO recapture consent was blocked while admission was suspended: %s", response)
 	}
-}
-
-func suspendAPI03VideoAdmission(fixture api03FailureFixture) error {
-	return fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=1").Updates(map[string]any{"enabled": false, "version": 2}).Error
 }
 
 func TestAPI03ExpiredSessionRejectsAllOperationsIT408(t *testing.T) {

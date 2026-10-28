@@ -61,7 +61,7 @@ func TestAPI03InternalFailuresIT403(t *testing.T) {
 	}
 }
 
-func TestIT045DisabledVideoAdmissionRejectsEnvironmentClip(t *testing.T) {
+func TestIT045HistoricalDisabledAdmissionAllowsEnvironmentClip(t *testing.T) {
 	fixture := newAPI03FailureFixture(t, "beginVideoCapture")
 	requirementKey := "env:" + identity.NewID().String()
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {
@@ -70,13 +70,10 @@ func TestIT045DisabledVideoAdmissionRejectsEnvironmentClip(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=?", 1).Update("enabled", false).Error; err != nil {
-		t.Fatal(err)
-	}
 	query := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",requirementKey:"` + requirementKey + `",clientMutationId:"it045-env-disabled"}) { attempt { id } } }`
 	response := executeCaptureGraphQL(t, fixture.server, query, fixture.tenantID, fixture.credentials, true)
-	if !strings.Contains(response, `"code":"INTEGRATION_DISABLED"`) || strings.Contains(response, `"attempt":{`) {
-		t.Fatalf("IT-045 disabled admission response=%s", response)
+	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"attempt":{"id":"`) {
+		t.Fatalf("IT-045 historical disabled admission blocked environment capture: %s", response)
 	}
 }
 
@@ -217,14 +214,8 @@ func newAPI03FailureFixtureWithOptions(t *testing.T, operation string, options h
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Model(&database.VideoAdmission{}).Where("id=?", 1).Updates(map[string]any{"enabled": true, "version": 1}).Error; err != nil {
+	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at) VALUES (1, FALSE, 1, ?) ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC()).Error; err != nil {
 		t.Fatal(err)
-	}
-	var admission database.VideoAdmission
-	if err := h.AdminDB.Where("id=?", 1).First(&admission).Error; err != nil {
-		if err := h.AdminDB.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1, ChangedAt: time.Now().UTC()}).Error; err != nil {
-			t.Fatal(err)
-		}
 	}
 
 	pepper := []byte(strings.Repeat("p", 32))

@@ -45,8 +45,6 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 			for _, statement := range []string{
 				`CREATE TABLE schedules.schedules (id text PRIMARY KEY, tenant_id text, business_unit_id text, asset_id text, participant_id text, template_id text, template_version_id text, comparison_mode text, project_id text, stage_id text, reference_version_id text, r_rule text, timezone text, starts_at datetime, next_due_at datetime, deadline_minutes integer, reminder_offsets blob, status text, version integer, idempotency_key text, created_at datetime, updated_at datetime)`,
 				`CREATE TABLE schedules.occurrence_materializations (id text PRIMARY KEY, tenant_id text, schedule_id text, due_instant datetime, inspection_id text, event_id text, created_at datetime)`,
-				`CREATE TABLE platform.video_admission (id integer PRIMARY KEY, enabled numeric NOT NULL)`,
-				`INSERT INTO platform.video_admission (id, enabled) VALUES (1, 1)`,
 			} {
 				if err := db.Exec(statement).Error; err != nil {
 					t.Fatal(err)

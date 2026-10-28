@@ -49,7 +49,7 @@ func TestVV_IT_345DirectVideoUploadAboveOneGibibyteIsInvalidInput(t *testing.T) 
 
 func TestVV_IT_373HundredUnfinishedReceiptsRateLimitWithoutCompletion(t *testing.T) {
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, 'IT-373 fixture', 'vv-it-373-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC()).Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, 'IT-373 fixture', 'vv-it-373-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC()).Error; err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -142,7 +142,7 @@ func TestVV_IT_373HundredUnfinishedReceiptsRateLimitWithoutCompletion(t *testing
 func assertCurrentOnlyMediaUploadRejected(t *testing.T, label, closedStatus string, sizeBytes int64, code string) {
 	t.Helper()
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated IT-100 fixture", "IT-100").Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated IT-100 fixture", "IT-100").Error; err != nil {
 		t.Fatal(err)
 	}
 	nowForCreate := time.Now().UTC()

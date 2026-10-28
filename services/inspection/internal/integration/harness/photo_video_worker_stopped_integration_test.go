@@ -88,14 +88,10 @@ func TestPhotoComparisonSchedulingDoesNotDependOnVideoPreparation(t *testing.T) 
 }
 
 func TestPhotoFlowCompletesWhileVideoQueueHas100QueuedReceiptsIT366(t *testing.T) {
-	runPhotoFlowWithVideoAdmission(t, false)
+	runPhotoFlow(t)
 }
 
-func TestVV_IT_370PhotoReportCompletesWhileVideoAdmissionIsDisabled(t *testing.T) {
-	runPhotoFlowWithVideoAdmission(t, true)
-}
-
-func runPhotoFlowWithVideoAdmission(t *testing.T, disableVideoAdmission bool) (*Harness, Task06Fixture) {
+func runPhotoFlow(t *testing.T) (*Harness, Task06Fixture) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	h, err := NewFromEnv(ctx)
@@ -103,13 +99,6 @@ func runPhotoFlowWithVideoAdmission(t *testing.T, disableVideoAdmission bool) (*
 		t.Skipf("integration dependencies unavailable: %v", err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	if disableVideoAdmission {
-		now := time.Now().UTC()
-		if err := h.AdminDB.Exec(`INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 2, ?, 'IT-370 PHOTO independence', 'vv-it-370-disable', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE, version=2, changed_at=EXCLUDED.changed_at, reason=EXCLUDED.reason, mutation_id=EXCLUDED.mutation_id, payload_hash=''`, now).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-
 	contract, err := messaging.NewQueueContract("inspection.video", "analysis.video_comparison_requested.v1", 32)
 	if err != nil {
 		t.Fatal(err)

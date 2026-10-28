@@ -14,11 +14,11 @@ import (
 // TestVV_IT_354PhotoAnalysisCompletesWithVideoWorkerStopped runs the PHOTO
 // journey while the video queue has no consumer; its 100 receipts stay queued.
 func TestVV_IT_354PhotoAnalysisCompletesWithVideoWorkerStopped(t *testing.T) {
-	runPhotoFlowWithVideoAdmission(t, false)
+	runPhotoFlow(t)
 }
 
 func TestVV_IT_364CurrentOnlyPhotoAnalysisProceedsWithoutVideoOrigin(t *testing.T) {
-	h, fixture := runPhotoFlowWithVideoAdmission(t, false)
+	h, fixture := runPhotoFlow(t)
 	if err := h.WithinTenant(context.Background(), fixture.TenantID, func(tx *gorm.DB) error {
 		var videoOrigins, references int64
 		if err := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND media_kind='VIDEO' AND origin_id IN (SELECT id FROM origins.origins WHERE tenant_id=? AND asset_id=?)", fixture.TenantID, fixture.TenantID, fixture.AssetID).Count(&videoOrigins).Error; err != nil {
@@ -44,5 +44,5 @@ func TestVV_IT_364CurrentOnlyPhotoAnalysisProceedsWithoutVideoOrigin(t *testing.
 // receipts on the isolated video queue and completes photo P1 through the
 // ordinary worker path without consuming that queue.
 func TestVV_IT_161PhotoReachesReportWhileHundredVideosAreQueued(t *testing.T) {
-	runPhotoFlowWithVideoAdmission(t, false)
+	runPhotoFlow(t)
 }

@@ -76,7 +76,7 @@ func newAPI06Fixture(t *testing.T) api06Fixture {
 	server.SetErrorPresenter(graph.PresentError)
 	meta := requestctx.Metadata{TenantID: seed.TenantID, Principal: requestctx.Principal{IdentityID: seed.IdentityID, MembershipID: seed.MembershipID, TenantID: seed.TenantID, Roles: []string{auth.TenantAdmin}}, CorrelationID: "vv-api06"}
 	fx := api06Fixture{fixedOriginGraphQLFixture{ctx: requestctx.WithMetadata(ctx, meta), h: h, seed: seed, server: server, bus: bus, templateID: seed.TemplateID}}
-	setFixedVideoAdmission(t, fx.fixedOriginGraphQLFixture)
+	setHistoricalVideoAdmissionDisabled(t, fx.fixedOriginGraphQLFixture)
 	return fx
 }
 

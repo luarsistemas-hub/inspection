@@ -44,7 +44,6 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminLookupPostalCode": return { data: { lookupPostalCode: { found: true, postalCode: "01001000", street: "Praça da Sé", district: "Sé", city: "São Paulo", state: "SP", municipalityCode: "3550308" } } };
     case "AdminPublicationPolicy": return { data: { publicationPolicy: { mode: "MANUAL", version: 1 } } };
     case "AdminVideoPreparations": return { data: { videoPreparations: { nodes: [{ mediaId: "media-a", preparationId: "preparation-a", status: "FAILED", stage: "EXTRACTING", preparationVersion: 2, attempts: 3, processedFrames: 12, framesSampled: 80, framesRetained: 24, framesRepresentative: 6, errorCode: "STORE_UNAVAILABLE", retryable: true, sourceAvailable: true, firstFrameReadyAt: null, sourceExpiryAt: null }], pageInfo: pageInfo() } } };
-    case "AdminVideoAdmission": return { data: { videoAdmission: { enabled: false, version: 4, reason: "QA hold", changedAt: "2026-01-01T00:00:00Z" } } };
     case "AdminBaselinePolicy": return { data: { baselinePolicy: { contestationDeadlineDays: 5, version: 1 } } };
     case "AdminVideoPolicy": return { data: { videoPolicy: { maxDurationMinutes: 10, originRetentionDays: 30, currentRetentionDays: 30, supersededBaselineRetentionDays: 365, version: 1 } } };
     case "AdminTemplateVersion": return { data: { templateVersion: { id: "template-version-a", templateId: "template-a", versionNumber: 2, schemaVersion: 2, definition: { schemaVersion: 2, captureLayout: "ENVIRONMENTS", environmentCapture: { photo: { minimum: 1, maximum: 20 }, video: { maximumClips: 3 } }, suggestedEnvironmentTypes: ["LIVING_ROOM"], segmentVersionId: "segment-version-a", participantRoles: ["OWNER"], defaultComparisonMode: "COMPARE_ORIGIN_CURRENT", analysisType: "REAL_ESTATE", policy: { gpsRequired: false, geofenceMeters: 150, allowGallery: true } }, status: "ACTIVE", publishedAt: "2026-01-01T00:00:00Z" } } };
@@ -978,7 +977,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await navigateAdmin(page, "Operações de vídeo");
     await expect(page.locator("#page-title")).toHaveText("Operações de vídeo");
     await expect(page.getByText("STORE_UNAVAILABLE")).toBeVisible();
-    await expect(page.getByText("Admissão da plataforma")).toBeVisible();
+    await expect(page.getByText("Admissão da plataforma")).toHaveCount(0);
     await page.getByRole("button", { name: "Tentar novamente" }).click();
     await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminRetryVideoPreparation").length).toBe(1);
     expect(mocks.calls.find((call) => call.operation === "AdminRetryVideoPreparation")?.variables.input).toMatchObject({ mediaId: "media-a", expectedPreparationVersion: 2 });

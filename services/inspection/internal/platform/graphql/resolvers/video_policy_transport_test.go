@@ -576,7 +576,7 @@ func TestVideoUploadGraphQLUsesRealMediaSlicesAndPersistsReceiptIT624(t *testing
 	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenantID, ResponsibilityID: responsibilityID, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: templateVersionID, ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{"allowGallery":true}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1, ChangedAt: now}).Error; err != nil {
+	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: false, Version: 1, ChangedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 	client := &videoReceiptGraphQLClient{size: 10 * 1024 * 1024, contentType: "video/mp4", digest: strings.Repeat("a", 64)}

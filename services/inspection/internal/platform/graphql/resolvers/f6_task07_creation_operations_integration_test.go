@@ -20,7 +20,7 @@ import (
 
 func TestVV_IT_074CreateVideoFixedOriginInspectionIsAtomic(t *testing.T) {
 	fx := newFixedOriginGraphQLFixture(t, false)
-	setFixedVideoAdmission(t, fx)
+	setHistoricalVideoAdmissionDisabled(t, fx)
 	originVersionID := seedFixedVideoOrigin(t, fx)
 	response := executeFixedOriginEntryWithReference(t, fx, "createInspection", "vv-it-074", originVersionID.String())
 	var created struct {

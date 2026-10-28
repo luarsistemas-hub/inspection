@@ -85,7 +85,7 @@ func seedGuidanceOrigin(t *testing.T, fx fixedOriginGraphQLFixture, originID ide
 func createGuidanceInspection(t *testing.T, fx fixedOriginGraphQLFixture, mode, key string) identity.ID {
 	t.Helper()
 	now := time.Now().UTC()
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, 'guidance fixture', 'vv-guidance-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", now).Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, 'legacy disabled fixture', 'vv-guidance-admission', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", now).Error; err != nil {
 		t.Fatal(err)
 	}
 	query := `mutation { createInspection(input:{assetId:"` + fx.seed.AssetID.String() + `",participantId:"` + fx.seed.ParticipantID.String() + `",templateId:"` + fx.templateID.String() + `",comparisonMode:` + mode + `,dueAt:"` + now.Add(time.Hour).Format(time.RFC3339) + `",deadlineAt:"` + now.Add(24*time.Hour).Format(time.RFC3339) + `",reminderInstants:[],reason:"` + key + `",clientMutationId:"` + key + `"}) { inspection { id } } }`

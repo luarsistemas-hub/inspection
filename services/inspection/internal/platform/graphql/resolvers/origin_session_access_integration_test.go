@@ -54,7 +54,7 @@ func TestOriginExternalCaptureRejectsExpiredRevokedAndWrongParticipantSessionsIT
 
 func TestVV_IT_031OriginConsentUnlocksCaptureWithFifteenMinuteLimit(t *testing.T) {
 	fixture := newOriginSessionAccessFixture(t, "active consent")
-	if err := fixture.harness.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated VV IT-031 fixture", "vv-it031").Error; err != nil {
+	if err := fixture.harness.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated VV IT-031 fixture", "vv-it031").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := fixture.harness.WithinTenant(context.Background(), fixture.tenantID, func(tx *gorm.DB) error {

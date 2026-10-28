@@ -29,7 +29,6 @@ import (
 	"inspection/services/inspection/internal/platform/pagination"
 	"inspection/services/inspection/internal/platform/requestctx"
 	"inspection/services/inspection/internal/platform/tenanttx"
-	"inspection/services/inspection/internal/platform/video_admission"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -228,11 +227,6 @@ func (s Service) Create(ctx context.Context, in CreateInput) (View, error) {
 			return s.load(tx, &out)
 		} else if err != gorm.ErrRecordNotFound {
 			return err
-		}
-		if document.MediaKind() == "VIDEO" {
-			if err := video_admission.RequireEnabled(tx); err != nil {
-				return err
-			}
 		}
 		if err := projectcore.ValidateAssociation(tx, in.TenantID, in.AssetID, in.ProjectID, in.StageID); err != nil {
 			return err

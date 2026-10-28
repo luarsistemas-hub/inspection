@@ -850,7 +850,6 @@ type ComplexityRoot struct {
 		ConfigureMyNotificationPreferences     func(childComplexity int, input ConfigureNotificationPreferencesInput) int
 		ConfigurePublicationPolicy             func(childComplexity int, input ConfigurePublicationPolicyInput) int
 		ConfigureRetentionPolicy               func(childComplexity int, input ConfigureRetentionPolicyInput) int
-		ConfigureVideoAdmission                func(childComplexity int, input ConfigureVideoAdmissionInput) int
 		ConfigureVideoPolicy                   func(childComplexity int, input ConfigureVideoPolicyInput) int
 		ContestBaseline                        func(childComplexity int, input ContestBaselineInput) int
 		CorrectInspectionResponsibleEmail      func(childComplexity int, input CorrectInspectionResponsibleEmailInput) int
@@ -1350,7 +1349,6 @@ type ComplexityRoot struct {
 		TriageInspections                 func(childComplexity int, first *int, after *string, classification *string, status *string) int
 		TriageWorkspace                   func(childComplexity int, first *int, after *string, status *TriageReviewStatus, classification *string, search *string, assigneeID *string, reason *string) int
 		UsageSummary                      func(childComplexity int, from *string, to *string) int
-		VideoAdmission                    func(childComplexity int) int
 		VideoPolicy                       func(childComplexity int) int
 		VideoPreparation                  func(childComplexity int, mediaID string) int
 		VideoPreparationEvidence          func(childComplexity int, preparationID string, first *int, after *string) int
@@ -1878,19 +1876,6 @@ type ComplexityRoot struct {
 		PendingRequirementKeys func(childComplexity int) int
 	}
 
-	VideoAdmission struct {
-		ChangedAt func(childComplexity int) int
-		Enabled   func(childComplexity int) int
-		Reason    func(childComplexity int) int
-		Version   func(childComplexity int) int
-	}
-
-	VideoAdmissionPayload struct {
-		Admission        func(childComplexity int) int
-		ClientMutationID func(childComplexity int) int
-		UserErrors       func(childComplexity int) int
-	}
-
 	VideoAttempt struct {
 		AcquisitionSource  func(childComplexity int) int
 		AdmittedAt         func(childComplexity int) int
@@ -2086,7 +2071,6 @@ type MutationResolver interface {
 	RetryVideoPreparation(ctx context.Context, input RetryVideoPreparationInput) (*VideoPreparationPayload, error)
 	ReprocessVideoPreparation(ctx context.Context, input ReprocessVideoPreparationInput) (*VideoPreparationPayload, error)
 	ReanalyzeVideoInspection(ctx context.Context, input ReanalyzeVideoInspectionInput) (*ReanalyzeVideoInspectionPayload, error)
-	ConfigureVideoAdmission(ctx context.Context, input ConfigureVideoAdmissionInput) (*VideoAdmissionPayload, error)
 	CreateMediaUpload(ctx context.Context, input CreateMediaUploadInput) (*MediaUploadPayload, error)
 	PresignMediaParts(ctx context.Context, input PresignMediaPartsInput) (*PresignedPartsPayload, error)
 	CompleteMediaUpload(ctx context.Context, input CompleteMediaUploadInput) (*MediaPayload, error)
@@ -2173,7 +2157,6 @@ type QueryResolver interface {
 	LlmUsageTenants(ctx context.Context, search *string, first *int, after *string) (*TenantConnection, error)
 	ExternalCapture(ctx context.Context) (*ExternalCapture, error)
 	VideoPolicy(ctx context.Context) (*VideoPolicy, error)
-	VideoAdmission(ctx context.Context) (*VideoAdmission, error)
 	VideoUploadStatus(ctx context.Context, mediaID string) (*VideoUploadStatus, error)
 	VideoPreparation(ctx context.Context, mediaID string) (*VideoPreparationStatus, error)
 }
@@ -5865,17 +5848,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ConfigureRetentionPolicy(childComplexity, args["input"].(ConfigureRetentionPolicyInput)), true
-	case "Mutation.configureVideoAdmission":
-		if e.ComplexityRoot.Mutation.ConfigureVideoAdmission == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_configureVideoAdmission_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.ConfigureVideoAdmission(childComplexity, args["input"].(ConfigureVideoAdmissionInput)), true
 	case "Mutation.configureVideoPolicy":
 		if e.ComplexityRoot.Mutation.ConfigureVideoPolicy == nil {
 			break
@@ -8755,12 +8727,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.UsageSummary(childComplexity, args["from"].(*string), args["to"].(*string)), true
-	case "Query.videoAdmission":
-		if e.ComplexityRoot.Query.VideoAdmission == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Query.VideoAdmission(childComplexity), true
 	case "Query.videoPolicy":
 		if e.ComplexityRoot.Query.VideoPolicy == nil {
 			break
@@ -10917,50 +10883,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.UserError.PendingRequirementKeys(childComplexity), true
 
-	case "VideoAdmission.changedAt":
-		if e.ComplexityRoot.VideoAdmission.ChangedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmission.ChangedAt(childComplexity), true
-	case "VideoAdmission.enabled":
-		if e.ComplexityRoot.VideoAdmission.Enabled == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmission.Enabled(childComplexity), true
-	case "VideoAdmission.reason":
-		if e.ComplexityRoot.VideoAdmission.Reason == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmission.Reason(childComplexity), true
-	case "VideoAdmission.version":
-		if e.ComplexityRoot.VideoAdmission.Version == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmission.Version(childComplexity), true
-
-	case "VideoAdmissionPayload.admission":
-		if e.ComplexityRoot.VideoAdmissionPayload.Admission == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmissionPayload.Admission(childComplexity), true
-	case "VideoAdmissionPayload.clientMutationId":
-		if e.ComplexityRoot.VideoAdmissionPayload.ClientMutationID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmissionPayload.ClientMutationID(childComplexity), true
-	case "VideoAdmissionPayload.userErrors":
-		if e.ComplexityRoot.VideoAdmissionPayload.UserErrors == nil {
-			break
-		}
-
-		return e.ComplexityRoot.VideoAdmissionPayload.UserErrors(childComplexity), true
-
 	case "VideoAttempt.acquisitionSource":
 		if e.ComplexityRoot.VideoAttempt.AcquisitionSource == nil {
 			break
@@ -11431,7 +11353,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputConfigureNotificationPreferencesInput,
 		ec.unmarshalInputConfigurePublicationPolicyInput,
 		ec.unmarshalInputConfigureRetentionPolicyInput,
-		ec.unmarshalInputConfigureVideoAdmissionInput,
 		ec.unmarshalInputConfigureVideoPolicyInput,
 		ec.unmarshalInputContactInput,
 		ec.unmarshalInputContestBaselineInput,
@@ -11660,7 +11581,6 @@ type Query {
   llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
   videoPolicy: VideoPolicy!
-  videoAdmission: VideoAdmission!
   videoUploadStatus(mediaId: ID!): VideoUploadStatus!
   videoPreparation(mediaId: ID!): VideoPreparationStatus!
 }
@@ -11767,7 +11687,6 @@ type Mutation {
   retryVideoPreparation(input: RetryVideoPreparationInput!): VideoPreparationPayload!
   reprocessVideoPreparation(input: ReprocessVideoPreparationInput!): VideoPreparationPayload!
   reanalyzeVideoInspection(input: ReanalyzeVideoInspectionInput!): ReanalyzeVideoInspectionPayload!
-  configureVideoAdmission(input: ConfigureVideoAdmissionInput!): VideoAdmissionPayload!
   createMediaUpload(input: CreateMediaUploadInput!): MediaUploadPayload!
   presignMediaParts(input: PresignMediaPartsInput!): PresignedPartsPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
@@ -11921,8 +11840,6 @@ type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRet
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
 type VideoAttemptPayload { attempt: VideoAttempt userErrors: [UserError!]! clientMutationId: String! }
-type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason: String }
-type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
 type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
 type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
 type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! framesSampled: Int! framesRetained: Int! framesRepresentative: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
@@ -12178,7 +12095,6 @@ input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! 
 input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
 input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
 input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
-input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
 input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }
@@ -15595,32 +15511,6 @@ func (ec *executionContext) childFields_UserError(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type UserError", field.Name)
 }
 
-func (ec *executionContext) childFields_VideoAdmission(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "enabled":
-		return ec.fieldContext_VideoAdmission_enabled(ctx, field)
-	case "version":
-		return ec.fieldContext_VideoAdmission_version(ctx, field)
-	case "changedAt":
-		return ec.fieldContext_VideoAdmission_changedAt(ctx, field)
-	case "reason":
-		return ec.fieldContext_VideoAdmission_reason(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type VideoAdmission", field.Name)
-}
-
-func (ec *executionContext) childFields_VideoAdmissionPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-	switch field.Name {
-	case "admission":
-		return ec.fieldContext_VideoAdmissionPayload_admission(ctx, field)
-	case "userErrors":
-		return ec.fieldContext_VideoAdmissionPayload_userErrors(ctx, field)
-	case "clientMutationId":
-		return ec.fieldContext_VideoAdmissionPayload_clientMutationId(ctx, field)
-	}
-	return nil, fmt.Errorf("no field named %q was found under type VideoAdmissionPayload", field.Name)
-}
-
 func (ec *executionContext) childFields_VideoAttempt(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -16285,20 +16175,6 @@ func (ec *executionContext) field_Mutation_configureRetentionPolicy_args(ctx con
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ConfigureRetentionPolicyInput, error) {
 			return ec.unmarshalNConfigureRetentionPolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureRetentionPolicyInput(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_configureVideoAdmission_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
-		func(ctx context.Context, v any) (ConfigureVideoAdmissionInput, error) {
-			return ec.unmarshalNConfigureVideoAdmissionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureVideoAdmissionInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -35719,50 +35595,6 @@ func (ec *executionContext) fieldContext_Mutation_reanalyzeVideoInspection(ctx c
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_configureVideoAdmission(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Mutation_configureVideoAdmission(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().ConfigureVideoAdmission(ctx, fc.Args["input"].(ConfigureVideoAdmissionInput))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *VideoAdmissionPayload) graphql.Marshaler {
-			return ec.marshalNVideoAdmissionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmissionPayload(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Mutation_configureVideoAdmission(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_VideoAdmissionPayload(ctx, field)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_configureVideoAdmission_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Mutation_createMediaUpload(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45069,38 +44901,6 @@ func (ec *executionContext) fieldContext_Query_videoPolicy(_ context.Context, fi
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_videoAdmission(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Query_videoAdmission(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return ec.Resolvers.Query().VideoAdmission(ctx)
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *VideoAdmission) graphql.Marshaler {
-			return ec.marshalNVideoAdmission2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmission(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Query_videoAdmission(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_VideoAdmission(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Query_videoUploadStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53646,185 +53446,6 @@ func (ec *executionContext) fieldContext_UserError_pendingRequirementKeys(_ cont
 	return graphql.NewScalarFieldContext("UserError", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
-func (ec *executionContext) _VideoAdmission_enabled(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmission_enabled(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Enabled, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
-			return ec.marshalNBoolean2bool(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmission_enabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("VideoAdmission", field, false, false, errors.New("field of type Boolean does not have child fields"))
-}
-
-func (ec *executionContext) _VideoAdmission_version(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmission_version(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Version, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmission_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("VideoAdmission", field, false, false, errors.New("field of type Int does not have child fields"))
-}
-
-func (ec *executionContext) _VideoAdmission_changedAt(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmission_changedAt(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ChangedAt, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmission_changedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("VideoAdmission", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _VideoAdmission_reason(ctx context.Context, field graphql.CollectedField, obj *VideoAdmission) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmission_reason(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Reason, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmission_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("VideoAdmission", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
-func (ec *executionContext) _VideoAdmissionPayload_admission(ctx context.Context, field graphql.CollectedField, obj *VideoAdmissionPayload) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmissionPayload_admission(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Admission, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *VideoAdmission) graphql.Marshaler {
-			return ec.marshalOVideoAdmission2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmission(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmissionPayload_admission(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "VideoAdmissionPayload",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_VideoAdmission(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _VideoAdmissionPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *VideoAdmissionPayload) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmissionPayload_userErrors(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.UserErrors, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
-			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmissionPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "VideoAdmissionPayload",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_UserError(ctx, field)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _VideoAdmissionPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *VideoAdmissionPayload) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_VideoAdmissionPayload_clientMutationId(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ClientMutationID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_VideoAdmissionPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("VideoAdmissionPayload", field, false, false, errors.New("field of type String does not have child fields"))
-}
-
 func (ec *executionContext) _VideoAttempt_id(ctx context.Context, field graphql.CollectedField, obj *VideoAttempt) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -57856,57 +57477,6 @@ func (ec *executionContext) unmarshalInputConfigureRetentionPolicyInput(ctx cont
 				return it, err
 			}
 			it.SecurityDays = data
-		case "clientMutationId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ClientMutationID = data
-		}
-	}
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputConfigureVideoAdmissionInput(ctx context.Context, obj any) (ConfigureVideoAdmissionInput, error) {
-	var it ConfigureVideoAdmissionInput
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"enabled", "expectedVersion", "reason", "clientMutationId"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "enabled":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
-			data, err := ec.unmarshalNBoolean2bool(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Enabled = data
-		case "expectedVersion":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedVersion"))
-			data, err := ec.unmarshalNInt2int(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ExpectedVersion = data
-		case "reason":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reason"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Reason = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -68753,13 +68323,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "configureVideoAdmission":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_configureVideoAdmission(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "createMediaUpload":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createMediaUpload(ctx, field)
@@ -72857,28 +72420,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "videoAdmission":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_videoAdmission(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx,
-					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "videoUploadStatus":
 			field := field
 
@@ -76671,107 +76212,6 @@ func (ec *executionContext) _UserError(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
-var videoAdmissionImplementors = []string{"VideoAdmission"}
-
-func (ec *executionContext) _VideoAdmission(ctx context.Context, sel ast.SelectionSet, obj *VideoAdmission) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, videoAdmissionImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferredFieldSet := graphql.NewFieldSet(nil)
-	deferLabelToView := make(map[string]*graphql.FieldSetView)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("VideoAdmission")
-		case "enabled":
-			out.Values[i] = ec._VideoAdmission_enabled(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "version":
-			out.Values[i] = ec._VideoAdmission_version(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "changedAt":
-			out.Values[i] = ec._VideoAdmission_changedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "reason":
-			out.Values[i] = ec._VideoAdmission_reason(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
-
-	ec.ProcessDeferredGroup(graphql.DeferredGroup{
-		Defers:   deferLabelToView,
-		Path:     graphql.GetPath(ctx),
-		FieldSet: deferredFieldSet,
-		Context:  ctx,
-	})
-
-	return out
-}
-
-var videoAdmissionPayloadImplementors = []string{"VideoAdmissionPayload"}
-
-func (ec *executionContext) _VideoAdmissionPayload(ctx context.Context, sel ast.SelectionSet, obj *VideoAdmissionPayload) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, videoAdmissionPayloadImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferredFieldSet := graphql.NewFieldSet(nil)
-	deferLabelToView := make(map[string]*graphql.FieldSetView)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("VideoAdmissionPayload")
-		case "admission":
-			out.Values[i] = ec._VideoAdmissionPayload_admission(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
-			}
-		case "userErrors":
-			out.Values[i] = ec._VideoAdmissionPayload_userErrors(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "clientMutationId":
-			out.Values[i] = ec._VideoAdmissionPayload_clientMutationId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
-
-	ec.ProcessDeferredGroup(graphql.DeferredGroup{
-		Defers:   deferLabelToView,
-		Path:     graphql.GetPath(ctx),
-		FieldSet: deferredFieldSet,
-		Context:  ctx,
-	})
-
-	return out
-}
-
 var videoAttemptImplementors = []string{"VideoAttempt"}
 
 func (ec *executionContext) _VideoAttempt(ctx context.Context, sel ast.SelectionSet, obj *VideoAttempt) graphql.Marshaler {
@@ -78493,11 +77933,6 @@ func (ec *executionContext) unmarshalNConfigurePublicationPolicyInput2inspection
 
 func (ec *executionContext) unmarshalNConfigureRetentionPolicyInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureRetentionPolicyInput(ctx context.Context, v any) (ConfigureRetentionPolicyInput, error) {
 	res, err := ec.unmarshalInputConfigureRetentionPolicyInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNConfigureVideoAdmissionInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐConfigureVideoAdmissionInput(ctx context.Context, v any) (ConfigureVideoAdmissionInput, error) {
-	res, err := ec.unmarshalInputConfigureVideoAdmissionInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -81351,26 +80786,6 @@ func (ec *executionContext) unmarshalNVerifyOnboardingOtpInput2inspectionᚋserv
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNVideoAdmission2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmission(ctx context.Context, sel ast.SelectionSet, v *VideoAdmission) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._VideoAdmission(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNVideoAdmissionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmissionPayload(ctx context.Context, sel ast.SelectionSet, v *VideoAdmissionPayload) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._VideoAdmissionPayload(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNVideoAttemptPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAttemptPayload(ctx context.Context, sel ast.SelectionSet, v *VideoAttemptPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -82384,13 +81799,6 @@ func (ec *executionContext) marshalOTriageReviewStatus2ᚖinspectionᚋservices�
 		return graphql.Null
 	}
 	return v
-}
-
-func (ec *executionContext) marshalOVideoAdmission2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAdmission(ctx context.Context, sel ast.SelectionSet, v *VideoAdmission) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	return ec._VideoAdmission(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOVideoAttempt2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐVideoAttempt(ctx context.Context, sel ast.SelectionSet, v *VideoAttempt) graphql.Marshaler {

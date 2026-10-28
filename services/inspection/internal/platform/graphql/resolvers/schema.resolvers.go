@@ -7,9 +7,7 @@ package resolvers
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -117,7 +115,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // RequestOnboardingOtp is the resolver for the requestOnboardingOtp field.
@@ -1659,61 +1656,6 @@ func (r *mutationResolver) ReanalyzeVideoInspection(ctx context.Context, input g
 	result := raw.(reanalyzevideoinsp.Result)
 	planID, generation := result.PlanID.String(), result.Generation
 	return &graphql1.ReanalyzeVideoInspectionPayload{PlanID: &planID, Generation: &generation, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
-}
-
-// ConfigureVideoAdmission is the resolver for the configureVideoAdmission field.
-func (r *mutationResolver) ConfigureVideoAdmission(ctx context.Context, input graphql1.ConfigureVideoAdmissionInput) (*graphql1.VideoAdmissionPayload, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
-		return nil, err
-	}
-	reason := strings.TrimSpace(input.Reason)
-	if err := capturecore.ValidateDescription(reason, true); err != nil {
-		return nil, apperror.New(apperror.InvalidInput, "reason", "reason is required")
-	}
-	var row database.VideoAdmission
-	if strings.TrimSpace(input.ClientMutationID) == "" {
-		return nil, apperror.New(apperror.InvalidInput, "clientMutationId", "mutation id is required")
-	}
-	payloadDigestBytes := sha256.Sum256([]byte(fmt.Sprintf("%t:%s", input.Enabled, reason)))
-	payloadDigest := hex.EncodeToString(payloadDigestBytes[:])
-	withinTenant := r.WithinTenant
-	if withinTenant == nil {
-		withinTenant = (tenanttx.Runner{DB: r.DB}).Within
-	}
-	err := withinTenant(ctx, meta.TenantID, func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=1").First(&row).Error; err != nil {
-			return err
-		}
-		if row.MutationID == input.ClientMutationID {
-			if row.PayloadHash != payloadDigest {
-				return apperror.New(apperror.Conflict, "clientMutationId", "mutation payload changed")
-			}
-			return nil
-		}
-		if input.ExpectedVersion < 1 || row.Version != int64(input.ExpectedVersion) {
-			return apperror.New(apperror.Conflict, "expectedVersion", "video admission has changed")
-		}
-		now := time.Now().UTC()
-		row.Enabled = input.Enabled
-		row.Version++
-		row.ChangedBy = meta.Principal.IdentityID
-		row.ChangedAt = now
-		row.Reason = reason
-		row.MutationID = input.ClientMutationID
-		row.PayloadHash = payloadDigest
-		if err := tx.Save(&row).Error; err != nil {
-			return err
-		}
-		return tx.Create(&database.AuditEvent{ID: identity.NewID(), TenantID: meta.TenantID, ActorID: meta.Principal.IdentityID, Action: "video.admission_configured", TargetType: "video_admission", TargetID: "1", Outcome: "ACCEPTED", Reason: reason, CorrelationID: meta.CorrelationID, OccurredAt: now}).Error
-	})
-	if err != nil {
-		return nil, videoDatabaseFailure(err)
-	}
-	return &graphql1.VideoAdmissionPayload{Admission: mapVideoAdmission(row), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
 // CreateMediaUpload is the resolver for the createMediaUpload field.
@@ -4497,22 +4439,6 @@ func (r *queryResolver) VideoPolicy(ctx context.Context) (*graphql1.VideoPolicy,
 		return nil, err
 	}
 	return mapVideoPolicy(raw.(database.VideoPolicy)), nil
-}
-
-// VideoAdmission is the resolver for the videoAdmission field.
-func (r *queryResolver) VideoAdmission(ctx context.Context) (*graphql1.VideoAdmission, error) {
-	meta, ok := requestctx.FromContext(ctx)
-	if !ok {
-		return nil, unauthenticated()
-	}
-	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
-		return nil, err
-	}
-	var row database.VideoAdmission
-	if err := r.DB.WithContext(ctx).Where("id=1").First(&row).Error; err != nil {
-		return nil, videoDatabaseFailure(err)
-	}
-	return mapVideoAdmission(row), nil
 }
 
 // VideoUploadStatus is the resolver for the videoUploadStatus field.

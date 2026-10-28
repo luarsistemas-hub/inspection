@@ -51,7 +51,7 @@ func videoCaptureDB(t *testing.T) (*gorm.DB, identity.ID, identity.ID, time.Time
 	if err := db.Create(&database.CaptureDraft{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, Kind: "INSPECTION", MediaKind: "VIDEO", TemplateVersionID: templateVersionID, ReferencePayload: []byte(`{}`), PolicyPayload: []byte(`{}`), Requirements: []byte(`[]`), Status: "OPEN", Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: true, Version: 1}).Error; err != nil {
+	if err := db.Create(&database.VideoAdmission{ID: 1, Enabled: false, Version: 1}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&database.ProcessingAcceptance{ID: identity.NewID(), TenantID: tenant, ResponsibilityID: responsibility, DisclosureVersion: "v1", VideoProcessing: true, AIAnalysis: true, GPSUse: true, AcceptedAt: now}).Error; err != nil {
@@ -122,26 +122,23 @@ func TestCameraOnlyPolicyRejectsFileVideoCaptureIT132(t *testing.T) {
 	}
 }
 
-func TestAcceptedVideoAttemptReplayRemainsEligibleWhenAdmissionIsDisabledUT078(t *testing.T) {
+func TestVideoAttemptReplayAndNewCaptureIgnoreHistoricalAdmissionStateUT078(t *testing.T) {
 	db, tenant, responsibility, now := videoCaptureDB(t)
 	command := Command{TenantID: tenant, ResponsibilityID: responsibility, AcquisitionSource: "CAMERA", MutationID: "accepted-video-replay"}
 	accepted, err := admit(context.Background(), db, inlineWithin(db), command, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", false).Error; err != nil {
-		t.Fatal(err)
-	}
 	replayed, err := admit(context.Background(), db, inlineWithin(db), command, now.Add(time.Minute))
 	if err != nil || replayed.ID != accepted.ID || replayed.Status != "ACTIVE" {
-		t.Fatalf("accepted attempt could not resume after admission was disabled: accepted=%+v replayed=%+v err=%v", accepted, replayed, err)
+		t.Fatalf("accepted attempt could not resume with historical admission disabled: accepted=%+v replayed=%+v err=%v", accepted, replayed, err)
 	}
 	if err := db.Model(&database.VideoAttempt{}).Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Update("status", "EXPIRED").Error; err != nil {
 		t.Fatal(err)
 	}
 	newAttempt, err := admit(context.Background(), db, inlineWithin(db), Command{TenantID: tenant, ResponsibilityID: responsibility, AcquisitionSource: "CAMERA", MutationID: "accepted-video-after-disable"}, now.Add(time.Minute))
 	if err != nil || newAttempt.ID == accepted.ID {
-		t.Fatalf("already accepted video responsibility could not start a permitted capture after disable: attempt=%+v err=%v", newAttempt, err)
+		t.Fatalf("new video attempt was rejected by historical admission state: attempt=%+v err=%v", newAttempt, err)
 	}
 }
 

@@ -155,7 +155,7 @@ jobs:
             TestVV_IT_515RetentionMutationsPreserveOneExplicitVideoScope
             TestExpirySerializesPlaybackLeaseAndLegalHoldIT604
             TestVV_IT_354PhotoAnalysisCompletesWithVideoWorkerStopped
-            TestVV_IT_370PhotoReportCompletesWhileVideoAdmissionIsDisabled
+            TestVV_IT_457LegacyDisabledAdmissionAllowsNewVideoResponsibilities
             TestVideoQueueMigrationPreservesAcceptedMessages
           )
           printf -v required_regex '%s|' "${required[@]}"
@@ -335,8 +335,8 @@ jobs:
           candidate_actual="$(psql "$DATABASE_URL" -Atf /tmp/upgrade-check.sql)"
           [[ "$candidate_actual" == "$candidate_latest" ]] || { echo "upgraded schema version $candidate_actual did not match migrations.LatestVersion() $candidate_latest" >&2; exit 1; }
           admission="$(psql "$DATABASE_URL" -Atc 'SELECT enabled FROM platform.video_admission WHERE id=1')"
-          [[ "$admission" == f ]] || { echo "video admission must remain disabled after upgrade (got $admission)" >&2; exit 1; }
-          echo "Upgrade rehearsal passed: $base_actual -> $candidate_actual; migration repeated successfully; video admission disabled."
+          [[ "$admission" == f ]] || { echo "legacy admission row changed unexpectedly during upgrade (got $admission)" >&2; exit 1; }
+          echo "Upgrade rehearsal passed: $base_actual -> $candidate_actual; migration repeated successfully; the legacy admission row remains inert."
       - name: Capture PostgreSQL diagnostics on failure
         if: failure()
         env:

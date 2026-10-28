@@ -87,10 +87,10 @@ func TestQAVideoTemplateDeclaresVideoCapture(t *testing.T) {
 }
 
 func TestSetupRejectsMissingDependencies(t *testing.T) {
-	if _, _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "PHOTO", false); err == nil {
+	if _, _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "PHOTO"); err == nil {
 		t.Fatal("nil database accepted")
 	}
-	if _, _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "UNKNOWN", false); err == nil {
+	if _, _, err := Setup(context.Background(), nil, "issuer", "http://localhost:3003", "UNKNOWN"); err == nil {
 		t.Fatal("unknown media kind accepted")
 	}
 }

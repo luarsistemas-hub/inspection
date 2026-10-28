@@ -419,13 +419,6 @@ export type ConfigureRetentionPolicyInput = {
   securityDays: InputMaybe<Scalars['Int']['input']>;
 };
 
-export type ConfigureVideoAdmissionInput = {
-  clientMutationId: Scalars['String']['input'];
-  enabled: Scalars['Boolean']['input'];
-  expectedVersion: Scalars['Int']['input'];
-  reason: Scalars['String']['input'];
-};
-
 export type ConfigureVideoPolicyInput = {
   clientMutationId: Scalars['String']['input'];
   currentRetentionDays: Scalars['Int']['input'];
@@ -1368,7 +1361,6 @@ export type Mutation = {
   configureMyNotificationPreferences: NotificationPreferencesPayload;
   configurePublicationPolicy: PublicationPolicyPayload;
   configureRetentionPolicy: RetentionPolicyPayload;
-  configureVideoAdmission: VideoAdmissionPayload;
   configureVideoPolicy: VideoPolicyPayload;
   contestBaseline: CounterpartyResponsePayload;
   correctInspectionResponsibleEmail: ResponsibleEmailCorrectionPayload;
@@ -1566,11 +1558,6 @@ export type MutationConfigurePublicationPolicyArgs = {
 
 export type MutationConfigureRetentionPolicyArgs = {
   input: ConfigureRetentionPolicyInput;
-};
-
-
-export type MutationConfigureVideoAdmissionArgs = {
-  input: ConfigureVideoAdmissionInput;
 };
 
 
@@ -2525,7 +2512,6 @@ export type Query = {
   triageInspections: TriageInspectionConnection;
   triageWorkspace: TriageWorkspace;
   usageSummary: UsageSummary;
-  videoAdmission: VideoAdmission;
   videoPolicy: VideoPolicy;
   videoPreparation: VideoPreparationStatus;
   videoPreparationEvidence: VideoPreparationEvidenceConnection;
@@ -3775,21 +3761,6 @@ export type VerifyOnboardingOtpInput = {
   clientMutationId: Scalars['String']['input'];
   code: Scalars['String']['input'];
   sessionLocator: Scalars['String']['input'];
-};
-
-export type VideoAdmission = {
-  __typename?: 'VideoAdmission';
-  changedAt: Scalars['String']['output'];
-  enabled: Scalars['Boolean']['output'];
-  reason: Maybe<Scalars['String']['output']>;
-  version: Scalars['Int']['output'];
-};
-
-export type VideoAdmissionPayload = {
-  __typename?: 'VideoAdmissionPayload';
-  admission: Maybe<VideoAdmission>;
-  clientMutationId: Scalars['String']['output'];
-  userErrors: Array<UserError>;
 };
 
 export type VideoAttempt = {

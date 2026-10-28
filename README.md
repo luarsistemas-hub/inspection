@@ -46,18 +46,14 @@ em container e faz o bootstrap do Admin automaticamente quando necessário:
 ./scripts/local.sh seed
 ```
 
-Para validar vídeo somente na stack local, execute
-`INSPECTION_QA_MEDIA_KIND=VIDEO INSPECTION_QA_ENABLE_VIDEO_ADMISSION=true ./scripts/local.sh seed`.
-Essa opção habilita a admissão de vídeo no banco local e registra o motivo na
-auditoria; o padrão continua desabilitado. Isso não substitui os gates de
-admissão de produção, incluindo a validação em dispositivos físicos.
+Para validar vídeo na stack local, execute
+`INSPECTION_QA_MEDIA_KIND=VIDEO ./scripts/local.sh seed`.
 
 O seed aceita `INSPECTION_QA_SCENARIO=ORIGIN_VIDEO` para preparar um convite
 descartável de origem em vídeo e `INSPECTION_QA_SCENARIO=FIXED_ORIGIN_VIDEO`
 para criar uma O1 ativa com frames e scope sintéticos no MinIO. Ambos os
-cenários só são aceitos com `INSPECTION_ENV=local`; o convite VIDEO requer
-`INSPECTION_QA_ENABLE_VIDEO_ADMISSION=true`. A admissão continua desligada por
-padrão. Para gerar, sob demanda e fora do Git, o clipe preto de limite, use
+cenários só são aceitos com `INSPECTION_ENV=local`. Para gerar, sob demanda e
+fora do Git, o clipe preto de limite, use
 `./scripts/generate-video-boundary-clips.sh`; o script cria um diretório
 temporário se nenhum diretório de saída for informado.
 

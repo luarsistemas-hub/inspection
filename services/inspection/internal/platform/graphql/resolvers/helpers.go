@@ -397,15 +397,6 @@ func mapVideoPolicy(row database.VideoPolicy) *graphql1.VideoPolicy {
 	return &graphql1.VideoPolicy{MaxDurationMinutes: row.MaxDurationMinutes, OriginRetentionDays: row.OriginRetentionDays, CurrentRetentionDays: row.CurrentRetentionDays, SupersededBaselineRetentionDays: row.SupersededBaselineRetentionDays, Version: int(row.Version)}
 }
 
-func mapVideoAdmission(row database.VideoAdmission) *graphql1.VideoAdmission {
-	var reason *string
-	if row.Reason != "" {
-		value := row.Reason
-		reason = &value
-	}
-	return &graphql1.VideoAdmission{Enabled: row.Enabled, Version: int(row.Version), ChangedAt: row.ChangedAt.UTC().Format(time.RFC3339Nano), Reason: reason}
-}
-
 func mapTemplatePayload(view templatecore.View, mutationID string) *graphql1.TemplatePayload {
 	return &graphql1.TemplatePayload{Template: mapTemplate(view.Template), Version: mapTemplateVersion(view.Version), UserErrors: []*graphql1.UserError{}, ClientMutationID: mutationID}
 }

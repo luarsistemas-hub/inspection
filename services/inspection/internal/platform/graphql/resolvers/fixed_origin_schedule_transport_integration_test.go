@@ -73,7 +73,7 @@ func TestVV_IT_449ProtectedCreationOperationsRequireAuthentication(t *testing.T)
 	for _, entryPoint := range []string{"createInspection", "createSchedule", "planInspection"} {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, false)
-			setFixedVideoAdmission(t, fx)
+			setHistoricalVideoAdmissionDisabled(t, fx)
 			versionID := seedFixedVideoOrigin(t, fx)
 			query := fixedOriginEntryQuery(fx, entryPoint, "VV-IT-449-"+entryPoint, versionID.String())
 			response := executeFixedOriginRequest(t, fx, query, context.Background(), "", "")
@@ -86,7 +86,7 @@ func TestVV_IT_450CreationOperationsRequireManagementCapability(t *testing.T) {
 	for _, entryPoint := range []string{"createInspection", "createSchedule", "planInspection"} {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, false)
-			setFixedVideoAdmission(t, fx)
+			setHistoricalVideoAdmissionDisabled(t, fx)
 			versionID := seedFixedVideoOrigin(t, fx)
 			viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Roles: []string{auth.Viewer}}, CorrelationID: "vv-it-450"})
 			query := fixedOriginEntryQuery(fx, entryPoint, "VV-IT-450-"+entryPoint, versionID.String())
@@ -98,7 +98,7 @@ func TestVV_IT_450CreationOperationsRequireManagementCapability(t *testing.T) {
 
 func TestVV_IT_067OriginMutationsForbidViewer(t *testing.T) {
 	fx := newFixedOriginGraphQLFixture(t, false)
-	setFixedVideoAdmission(t, fx)
+	setHistoricalVideoAdmissionDisabled(t, fx)
 	versionID := seedFixedVideoOrigin(t, fx)
 	viewer := requestctx.WithMetadata(context.Background(), requestctx.Metadata{
 		TenantID: fx.seed.TenantID,
@@ -134,7 +134,7 @@ func TestVV_IT_067OriginMutationsForbidViewer(t *testing.T) {
 	}
 }
 
-func TestVV_IT_457SuspendedAdmissionRejectsNewVideoResponsibilities(t *testing.T) {
+func TestVV_IT_457LegacyDisabledAdmissionAllowsNewVideoResponsibilities(t *testing.T) {
 	fx := newFixedOriginGraphQLFixture(t, false)
 	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 2, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE, version=2", time.Now().UTC(), "IT-457 suspended admission", "vv-it-457").Error; err != nil {
 		t.Fatal(err)
@@ -145,8 +145,9 @@ func TestVV_IT_457SuspendedAdmissionRejectsNewVideoResponsibilities(t *testing.T
 			clientID := "VV-IT-457-" + entryPoint
 			query := fixedOriginEntryQuery(fx, entryPoint, clientID, versionID.String())
 			response := executeFixedOriginRequest(t, fx, query, fx.ctx, "", "")
-			assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-			assertFixedOriginNoSideEffects(t, fx, clientID)
+			if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"`+entryPoint+`":{`) {
+				t.Fatalf("historical disabled admission blocked %s: %s", entryPoint, response)
+			}
 		})
 	}
 }
@@ -261,7 +262,7 @@ func TestVV_IT_448VideoFixedOriginIsPinnedByEveryCreationOperation(t *testing.T)
 	for _, entryPoint := range []string{"createInspection", "createSchedule", "planInspection"} {
 		t.Run(entryPoint, func(t *testing.T) {
 			fx := newFixedOriginGraphQLFixture(t, false)
-			setFixedVideoAdmission(t, fx)
+			setHistoricalVideoAdmissionDisabled(t, fx)
 			originVersionID := seedFixedVideoOrigin(t, fx)
 			clientID := "VV-IT-448-" + entryPoint
 			query := fixedOriginEntryQuery(fx, entryPoint, clientID, originVersionID.String())
@@ -373,9 +374,9 @@ func seedFixedVideoOrigin(t *testing.T, fx fixedOriginGraphQLFixture) identity.I
 	return versionID
 }
 
-func setFixedVideoAdmission(t *testing.T, fx fixedOriginGraphQLFixture) {
+func setHistoricalVideoAdmissionDisabled(t *testing.T, fx fixedOriginGraphQLFixture) {
 	t.Helper()
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated VIDEO creation fixture", "vv-video-creation").Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "historical disabled row fixture", "vv-legacy-video-admission").Error; err != nil {
 		t.Fatal(err)
 	}
 }

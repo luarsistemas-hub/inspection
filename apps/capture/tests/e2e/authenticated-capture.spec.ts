@@ -12,7 +12,7 @@ const mailpitURL = process.env.PLAYWRIGHT_MAILPIT_URL ?? "http://localhost:8026"
 
 function seedCaptureURL(mediaKind: "PHOTO" | "VIDEO" = "PHOTO"): string {
   const workspace = resolve(process.cwd(), "../..");
-  const output = execFileSync("./scripts/local.sh", ["seed"], { cwd: workspace, encoding: "utf8", env: { ...process.env, INSPECTION_QA_MEDIA_KIND: mediaKind, INSPECTION_QA_ENABLE_VIDEO_ADMISSION: mediaKind === "VIDEO" ? "true" : "false" } });
+  const output = execFileSync("./scripts/local.sh", ["seed"], { cwd: workspace, encoding: "utf8", env: { ...process.env, INSPECTION_QA_MEDIA_KIND: mediaKind } });
   const url = output.match(/Capture URL: (\S+)/)?.[1];
   if (!url) throw new Error("local seed did not return a Capture URL");
   const seeded = new URL(url);

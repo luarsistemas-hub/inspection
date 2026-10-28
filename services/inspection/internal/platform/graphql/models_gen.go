@@ -382,13 +382,6 @@ type ConfigureRetentionPolicyInput struct {
 	ClientMutationID string `json:"clientMutationId"`
 }
 
-type ConfigureVideoAdmissionInput struct {
-	Enabled          bool   `json:"enabled"`
-	ExpectedVersion  int    `json:"expectedVersion"`
-	Reason           string `json:"reason"`
-	ClientMutationID string `json:"clientMutationId"`
-}
-
 type ConfigureVideoPolicyInput struct {
 	MaxDurationMinutes              int    `json:"maxDurationMinutes"`
 	OriginRetentionDays             int    `json:"originRetentionDays"`
@@ -2531,19 +2524,6 @@ type VerifyOnboardingOtpInput struct {
 	SessionLocator   string `json:"sessionLocator"`
 	Code             string `json:"code"`
 	ClientMutationID string `json:"clientMutationId"`
-}
-
-type VideoAdmission struct {
-	Enabled   bool    `json:"enabled"`
-	Version   int     `json:"version"`
-	ChangedAt string  `json:"changedAt"`
-	Reason    *string `json:"reason,omitempty"`
-}
-
-type VideoAdmissionPayload struct {
-	Admission        *VideoAdmission `json:"admission,omitempty"`
-	UserErrors       []*UserError    `json:"userErrors"`
-	ClientMutationID string          `json:"clientMutationId"`
 }
 
 type VideoAttempt struct {

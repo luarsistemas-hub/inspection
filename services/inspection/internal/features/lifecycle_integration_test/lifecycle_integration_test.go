@@ -191,40 +191,15 @@ func TestLifecycleIT101ToIT140IT201ToIT220IT380ToIT382(t *testing.T) {
 			t.Errorf("restore active template version: %v", err)
 		}
 	}()
-	var admission database.VideoAdmission
-	if err := admin.First(&admission, "id=1").Error; err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", admission.Enabled).Error; err != nil {
-			t.Errorf("restore video admission: %v", err)
-		}
-	}()
 	if err := admin.Model(&database.VideoAdmission{}).Where("id=1").Update("enabled", false).Error; err != nil {
 		t.Fatal(err)
 	}
-	var scheduleCount, inspectionCount int64
-	if err := admin.Model(&database.Schedule{}).Where("tenant_id=?", fixture.tenantID).Count(&scheduleCount).Error; err != nil {
-		t.Fatal(err)
+	if _, err := schedules.Create(ctx, schedulecore.Input{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: fixture.templateID, RRule: "FREQ=DAILY", Timezone: "UTC", StartsAt: fixture.now, DeadlineMinutes: 60, IdempotencyKey: "video-schedule-legacy-disabled"}); err != nil {
+		t.Fatalf("historical disabled admission blocked VIDEO schedule: %v", err)
 	}
-	if err := admin.Model(&database.Inspection{}).Where("tenant_id=?", fixture.tenantID).Count(&inspectionCount).Error; err != nil {
-		t.Fatal(err)
-	}
-	if _, err := schedules.Create(ctx, schedulecore.Input{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: fixture.templateID, RRule: "FREQ=DAILY", Timezone: "UTC", StartsAt: fixture.now, DeadlineMinutes: 60, IdempotencyKey: "video-schedule-disabled"}); errorCode(err) != apperror.IntegrationDisabled {
-		t.Fatalf("disabled VIDEO schedule error=%v, want INTEGRATION_DISABLED", err)
-	}
-	if _, err := inspections.Create(ctx, inspectioncore.CreateInput{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: &fixture.templateID, Source: inspectioncore.SourceManual, SourceKey: "video-inspection-disabled", Reason: "video admission integration", DueAt: fixture.now, DeadlineAt: fixture.now.Add(time.Hour)}); errorCode(err) != apperror.IntegrationDisabled {
-		t.Fatalf("disabled VIDEO inspection error=%v, want INTEGRATION_DISABLED", err)
-	}
-	var afterSchedules, afterInspections int64
-	if err := admin.Model(&database.Schedule{}).Where("tenant_id=?", fixture.tenantID).Count(&afterSchedules).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := admin.Model(&database.Inspection{}).Where("tenant_id=?", fixture.tenantID).Count(&afterInspections).Error; err != nil {
-		t.Fatal(err)
-	}
-	if afterSchedules != scheduleCount || afterInspections != inspectionCount {
-		t.Fatalf("disabled VIDEO creates persisted rows: schedules %d->%d inspections %d->%d", scheduleCount, afterSchedules, inspectionCount, afterInspections)
+	created, err := inspections.Create(ctx, inspectioncore.CreateInput{TenantID: fixture.tenantID, AssetID: fixture.assetID, ParticipantID: fixture.participantID, TemplateID: &fixture.templateID, Source: inspectioncore.SourceManual, SourceKey: "video-inspection-legacy-disabled", Reason: "video always available", DueAt: fixture.now, DeadlineAt: fixture.now.Add(time.Hour)})
+	if err != nil || created.Inspection.MediaKind != "VIDEO" {
+		t.Fatalf("historical disabled admission blocked VIDEO inspection: inspection=%+v err=%v", created.Inspection, err)
 	}
 }
 

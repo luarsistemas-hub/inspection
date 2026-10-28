@@ -4,67 +4,18 @@ package resolvers
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"inspection/libs/identity"
 	"inspection/services/inspection/internal/integration/harness"
-	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
-	graph "inspection/services/inspection/internal/platform/graphql"
-	"inspection/services/inspection/internal/platform/requestctx"
 
-	"github.com/99designs/gqlgen/graphql/handler"
 	"gorm.io/gorm"
 )
 
-func TestVV_IT_371AdmissionEnabledStringFailsGraphQLCoercion(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	before := configureVVAdmissionRow(t, fx, true, 7, "vv-it-371-baseline")
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture,
-		`mutation { configureVideoAdmission(input:{enabled:"x",expectedVersion:7,reason:"bad scalar",clientMutationId:"vv-it-371-invalid"}) { admission { enabled version } } }`, fx.ctx, "", "")
-	if !strings.Contains(response, "Boolean") && !strings.Contains(response, "Boolean!") {
-		t.Fatalf("GraphQL did not reject a string for enabled: %s", response)
-	}
-	var after database.VideoAdmission
-	if err := fx.h.AdminDB.Where("id=1").Take(&after).Error; err != nil {
-		t.Fatal(err)
-	}
-	if after.Enabled != before.Enabled || after.Version != before.Version || after.MutationID != before.MutationID {
-		t.Fatalf("coercion failure changed admission: before=%+v after=%+v", before, after)
-	}
-}
-
-func TestVV_IT_374TenantAdministratorCannotConfigurePlatformAdmission(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	before := configureVVAdmissionRow(t, fx, true, 2, "vv-it-374-baseline")
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture,
-		`mutation { configureVideoAdmission(input:{enabled:false,expectedVersion:2,reason:"tenant request",clientMutationId:"vv-it-374-denied"}) { admission { enabled version } } }`, fx.ctx, "", "")
-	assertFixedOriginTransportError(t, response, "FORBIDDEN")
-	var after database.VideoAdmission
-	if err := fx.h.AdminDB.Where("id=1").Take(&after).Error; err != nil {
-		t.Fatal(err)
-	}
-	if after.Enabled != before.Enabled || after.Version != before.Version || after.MutationID != before.MutationID {
-		t.Fatalf("tenant admin changed platform admission: before=%+v after=%+v", before, after)
-	}
-}
-
-func TestVV_IT_367DisableRejectsNewCurrentVideoResponsibilities(t *testing.T) {
-	fx := newFixedOriginGraphQLFixture(t, false)
-	setFixedVideoAdmission(t, fx)
-	originVersionID := seedFixedVideoOrigin(t, fx)
-	admissionFixture := api06Fixture{fixedOriginGraphQLFixture: fx}
-	disableVVAdmission(t, admissionFixture, "vv-it-367-current")
-	clientID := "vv-it-367-current-create"
-	response := executeFixedOriginEntryWithReference(t, fx, "createInspection", clientID, originVersionID.String())
-	assertFixedOriginTransportError(t, response, "INTEGRATION_DISABLED")
-	assertFixedOriginNoSideEffects(t, fx, clientID)
-}
-
-func TestVV_IT_379ResumeUsesCurrentPolicyAndKeepsT0PlusFiveDayDeadline(t *testing.T) {
+func TestVV_IT_379VideoCaptureUsesCurrentPolicyWithLegacyAdmissionDisabled(t *testing.T) {
 	// v1 pinned until template schema 1 is removed
 	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -78,23 +29,13 @@ func TestVV_IT_379ResumeUsesCurrentPolicyAndKeepsT0PlusFiveDayDeadline(t *testin
 	if err := fixture.harness.AdminDB.Exec(`INSERT INTO media.video_policies (tenant_id, max_duration_minutes, origin_retention_days, current_retention_days, version, last_mutation_id, last_payload_digest, updated_at) VALUES (?, 15, 30, 7, 2, 'vv-it-379-policy', '', ?) ON CONFLICT (tenant_id) DO UPDATE SET current_retention_days=7, version=2, updated_at=EXCLUDED.updated_at`, fixture.tenantID, now).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.harness.AdminDB.Exec(`INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 2, ?, 'suspended', 'vv-it-379-suspend', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE, version=2, changed_at=EXCLUDED.changed_at, reason=EXCLUDED.reason, mutation_id=EXCLUDED.mutation_id, payload_hash=''`, now).Error; err != nil {
+	if err := fixture.harness.AdminDB.Exec(`INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 2, ?, 'legacy disabled', 'vv-it-379-legacy', '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE, version=2, changed_at=EXCLUDED.changed_at, reason=EXCLUDED.reason, mutation_id=EXCLUDED.mutation_id, payload_hash=''`, now).Error; err != nil {
 		t.Fatal(err)
-	}
-	issuer, subject := "vv-it-379-issuer", "vv-it-379-operator"
-	principal := requestctx.Principal{IdentityID: fixture.identityID, TenantID: fixture.tenantID, Issuer: issuer, Subject: subject, Product: auth.AdminProduct, ProductEntitlements: []string{auth.AdminProduct}, Roles: []string{auth.TenantAdmin}}
-	operatorCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.tenantID, Principal: principal, CorrelationID: "vv-it-379"})
-	operator := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: fixture.harness.DB, Bus: fixture.bus, Authorizer: auth.Authorizer{}, SuperAdminIssuer: issuer, SuperAdminSubject: subject}}))
-	operator.SetErrorPresenter(graph.PresentError)
-	resume := `mutation { configureVideoAdmission(input:{enabled:true,expectedVersion:2,reason:"resume after one day",clientMutationId:"vv-it-379-resume"}) { admission { enabled version } } }`
-	resumed := executeVideoAdmissionGraphQL(t, operator, resume, operatorCtx)
-	if strings.Contains(resumed, `"errors"`) || !strings.Contains(resumed, `"enabled":true`) || !strings.Contains(resumed, `"version":3`) {
-		t.Fatalf("admission did not resume at T0+1d: %s", resumed)
 	}
 	begin := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",clientMutationId:"vv-it-379-current-attempt"}) { attempt { kind policyVersion status } } }`
 	started := executeAPI03WithCredentials(t, fixture, begin)
 	if strings.Contains(started, `"errors"`) || !strings.Contains(started, `"kind":"CURRENT"`) || !strings.Contains(started, `"policyVersion":2`) {
-		t.Fatalf("new attempt did not use the current VIDEO policy after resume: %s", started)
+		t.Fatalf("new VIDEO attempt did not use the current tenant policy: %s", started)
 	}
 	var source database.VideoSource
 	if err := fixture.harness.AdminDB.Where("tenant_id=? AND media_id=?", fixture.tenantID, mediaID).Take(&source).Error; err != nil {
@@ -105,10 +46,10 @@ func TestVV_IT_379ResumeUsesCurrentPolicyAndKeepsT0PlusFiveDayDeadline(t *testin
 	}
 }
 
-func TestVV_IT_368AcceptedVideoContinuesAndPermittedRecaptureKeepsVideoKind(t *testing.T) {
+func TestVV_IT_368VideoRecaptureRemainsAvailableWithLegacyAdmissionDisabled(t *testing.T) {
 	// v1 pinned until template schema 1 is removed
 	fixture := newAPI03FailureFixtureWithOptions(t, "beginVideoCapture", harness.Task06FixtureOptions{SchemaVersion: 1, RequirementKey: "room-1"})
-	if err := fixture.harness.AdminDB.Model(&database.VideoAdmission{}).Where("id=1").Updates(map[string]any{"enabled": false, "version": 2, "reason": "suspended after V1 acceptance", "mutation_id": "vv-it-368-suspend"}).Error; err != nil {
+	if err := fixture.harness.AdminDB.Exec(`INSERT INTO platform.video_admission (id, enabled, version, changed_at) VALUES (1, FALSE, 1, ?) ON CONFLICT (id) DO UPDATE SET enabled=FALSE`, time.Now().UTC()).Error; err != nil {
 		t.Fatal(err)
 	}
 	continueV1 := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",clientMutationId:"vv-it-368-accepted-v1"}) { attempt { kind status } } }`
@@ -130,20 +71,11 @@ func TestVV_IT_368AcceptedVideoContinuesAndPermittedRecaptureKeepsVideoKind(t *t
 	}); err != nil {
 		t.Fatal(err)
 	}
-	issuer, subject := "vv-it-368-issuer", "vv-it-368-operator"
-	principal := requestctx.Principal{IdentityID: fixture.identityID, TenantID: fixture.tenantID, Issuer: issuer, Subject: subject, Product: auth.AdminProduct, ProductEntitlements: []string{auth.AdminProduct}, Roles: []string{auth.TenantAdmin}}
-	operatorCtx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fixture.tenantID, Principal: principal, CorrelationID: "vv-it-368"})
-	operator := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: fixture.harness.DB, Bus: fixture.bus, Authorizer: auth.Authorizer{}, SuperAdminIssuer: issuer, SuperAdminSubject: subject}}))
-	operator.SetErrorPresenter(graph.PresentError)
-	resume := `mutation { configureVideoAdmission(input:{enabled:true,expectedVersion:2,reason:"resume accepted VIDEO work",clientMutationId:"vv-it-368-resume"}) { admission { enabled version } } }`
-	resumed := executeVideoAdmissionGraphQL(t, operator, resume, operatorCtx)
-	if strings.Contains(resumed, `"errors"`) || !strings.Contains(resumed, `"enabled":true`) {
-		t.Fatalf("VIDEO admission did not resume: %s", resumed)
-	}
+
 	newRecapture := `mutation { beginVideoCapture(input:{acquisitionSource:"CAMERA",clientMutationId:"vv-it-368-recapture"}) { attempt { kind status } } }`
 	recaptured := executeAPI03WithCredentials(t, fixture, newRecapture)
 	if strings.Contains(recaptured, `"errors"`) || !strings.Contains(recaptured, `"kind":"SUPPLEMENT"`) || !strings.Contains(recaptured, `"status":"ACTIVE"`) {
-		t.Fatalf("permitted recapture lost its VIDEO modality after resume: %s", recaptured)
+		t.Fatalf("permitted recapture lost its VIDEO modality: %s", recaptured)
 	}
 	var attempts []database.VideoAttempt
 	var draft database.CaptureDraft
@@ -186,108 +118,4 @@ func TestVV_IT_369StoppedPreparationRemainsPendingOrFailedInStatus(t *testing.T)
 			}
 		})
 	}
-}
-
-func TestVV_IT_376LostAdmissionDisableResponseRefreshesCommittedVersion(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	configureVVAdmissionRow(t, fx, true, 4, "vv-it-376-baseline")
-	operator, server := vvAdmissionOperator(fx, "vv-it-376")
-	fx.fixedOriginGraphQLFixture.server = server
-	mutation := `mutation { configureVideoAdmission(input:{enabled:false,expectedVersion:4,reason:"incident response",clientMutationId:"vv-it-376-disable"}) { admission { enabled version } } }`
-	_ = executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, mutation, operator, "", "") // Simulate a response lost after commit.
-	refreshed := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, `query { videoAdmission { enabled version } }`, operator, "", "")
-	if strings.Contains(refreshed, `"errors"`) || !strings.Contains(refreshed, `"enabled":false`) || !strings.Contains(refreshed, `"version":5`) {
-		t.Fatalf("authoritative refresh did not expose committed disable version: %s", refreshed)
-	}
-}
-
-func TestVV_IT_377AdmissionDisableReplayPreservesAuditAndSourceDeadline(t *testing.T) {
-	fx := newAPI06Fixture(t)
-	configureVVAdmissionRow(t, fx, true, 9, "vv-it-377-baseline")
-	origin, err := fx.h.SeedVideoOriginFixture(context.Background(), harness.VideoOriginFixtureOptions{Active: false})
-	if err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().UTC().Add(5 * 24 * time.Hour).Truncate(time.Microsecond)
-	if err := fx.h.AdminDB.Model(&database.VideoSource{}).Where("tenant_id=? AND media_id=?", origin.TenantID, origin.MediaID).Update("source_expiry_at", deadline).Error; err != nil {
-		t.Fatal(err)
-	}
-	operator, server := vvAdmissionOperator(fx, "vv-it-377")
-	fx.fixedOriginGraphQLFixture.server = server
-	mutation := `mutation { configureVideoAdmission(input:{enabled:false,expectedVersion:9,reason:"incident response",clientMutationId:"vv-it-377-disable"}) { admission { enabled version } } }`
-	first := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, mutation, operator, "", "")
-	if strings.Contains(first, `"errors"`) || !strings.Contains(first, `"version":10`) {
-		t.Fatalf("first disable failed: %s", first)
-	}
-	var auditBefore int64
-	if err := fx.h.AdminDB.Model(&database.AuditEvent{}).Where("action=? AND target_id=?", "video.admission_configured", "1").Count(&auditBefore).Error; err != nil {
-		t.Fatal(err)
-	}
-	_ = executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, mutation, operator, "", "")
-	var row database.VideoAdmission
-	var source database.VideoSource
-	var auditAfter int64
-	if err := fx.h.AdminDB.Where("id=1").Take(&row).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := fx.h.AdminDB.Where("tenant_id=? AND media_id=?", origin.TenantID, origin.MediaID).Take(&source).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := fx.h.AdminDB.Model(&database.AuditEvent{}).Where("action=? AND target_id=?", "video.admission_configured", "1").Count(&auditAfter).Error; err != nil {
-		t.Fatal(err)
-	}
-	if row.Enabled || row.Version != 10 || auditBefore != auditAfter || source.SourceExpiryAt == nil || !source.SourceExpiryAt.Equal(deadline) {
-		t.Fatalf("idempotent replay changed admission/audit/source deadline: admission=%+v audits=%d→%d expiry=%v", row, auditBefore, auditAfter, source.SourceExpiryAt)
-	}
-}
-
-func configureVVAdmissionRow(t *testing.T, fx api06Fixture, enabled bool, version int64, mutationID string) database.VideoAdmission {
-	t.Helper()
-	row := database.VideoAdmission{ID: 1, Enabled: enabled, Version: version, ChangedAt: time.Now().UTC(), MutationID: mutationID, PayloadHash: "baseline"}
-	if err := fx.h.AdminDB.Exec(`INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, ?, ?, ?, 'fixture', ?, 'baseline') ON CONFLICT (id) DO UPDATE SET enabled=EXCLUDED.enabled, version=EXCLUDED.version, changed_at=EXCLUDED.changed_at, reason=EXCLUDED.reason, mutation_id=EXCLUDED.mutation_id, payload_hash=EXCLUDED.payload_hash`, enabled, version, row.ChangedAt, mutationID).Error; err != nil {
-		t.Fatal(err)
-	}
-	return row
-}
-
-func disableVVAdmission(t *testing.T, fx api06Fixture, tag string) {
-	t.Helper()
-	baseline := configureVVAdmissionRow(t, fx, true, 1, tag+"-baseline")
-	operator, server := vvAdmissionOperator(fx, tag)
-	fx.fixedOriginGraphQLFixture.server = server
-	query := `mutation { configureVideoAdmission(input:{enabled:false,expectedVersion:` + fmt.Sprint(baseline.Version) + `,reason:"` + tag + `",clientMutationId:"` + tag + `-disable"}) { admission { enabled version } } }`
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, query, operator, "", "")
-	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"enabled":false`) || !strings.Contains(response, `"version":2`) {
-		t.Fatalf("platform operator could not disable admission: %s", response)
-	}
-}
-
-type vvOriginWorkCount struct{ Versions, Invitations, Responsibilities int64 }
-
-func vvOriginWorkCounts(t *testing.T, fx api06Fixture) vvOriginWorkCount {
-	t.Helper()
-	var count vvOriginWorkCount
-	queries := []struct {
-		model any
-		set   *int64
-	}{
-		{&database.OriginVersion{}, &count.Versions},
-		{&database.Invitation{}, &count.Invitations},
-		{&database.Responsibility{}, &count.Responsibilities},
-	}
-	for _, query := range queries {
-		if err := fx.h.AdminDB.Model(query.model).Where("tenant_id=?", fx.seed.TenantID).Count(query.set).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	return count
-}
-
-func vvAdmissionOperator(fx api06Fixture, tag string) (context.Context, *handler.Server) {
-	issuer, subject := "vv-platform-issuer", "vv-platform-operator"
-	principal := requestctx.Principal{IdentityID: fx.seed.IdentityID, TenantID: fx.seed.TenantID, Issuer: issuer, Subject: subject, Product: auth.AdminProduct, ProductEntitlements: []string{auth.AdminProduct}, Roles: []string{auth.TenantAdmin}}
-	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{TenantID: fx.seed.TenantID, Principal: principal, CorrelationID: tag})
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &Resolver{DB: fx.h.DB, Bus: fx.bus, Authorizer: auth.Authorizer{}, SuperAdminIssuer: issuer, SuperAdminSubject: subject}}))
-	server.SetErrorPresenter(graph.PresentError)
-	return ctx, server
 }

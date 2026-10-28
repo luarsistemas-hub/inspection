@@ -17,7 +17,6 @@ import (
 	"inspection/services/inspection/internal/platform/ratelimit"
 	"inspection/services/inspection/internal/platform/security"
 	"inspection/services/inspection/internal/platform/tenanttx"
-	"inspection/services/inspection/internal/platform/video_admission"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -96,11 +95,7 @@ func (s Service) AcceptProcessing(ctx context.Context, sessionToken, csrf string
 		if draft.MediaKind == "VIDEO" && draft.Kind != "RECAPTURE" {
 			var existing database.ProcessingAcceptance
 			err := tx.Select("id").Where("tenant_id=? AND responsibility_id=? AND video_processing=true", tenantID, session.ResponsibilityID).First(&existing).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if err := video_admission.RequireEnabled(tx); err != nil {
-					return err
-				}
-			} else if err != nil {
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
 		}

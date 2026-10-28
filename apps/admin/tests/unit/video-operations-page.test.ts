@@ -2,7 +2,7 @@ import * as React from "react";
 import { act, createElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { graphql, graphqlOptionalPermission } from "@/graphql/client";
+import { graphql } from "@/graphql/client";
 import { VideoOperationsPage } from "@/features/admin/video-operations-page";
 
 vi.mock("@/graphql/client", () => ({ graphql: vi.fn(), graphqlOptionalPermission: vi.fn() }));
@@ -28,10 +28,10 @@ describe("VideoOperationsPage", () => {
       if (operation === "AdminSensitiveContentScreeningStatus") return { sensitiveContentScreeningBypassed: false } as never;
       throw new Error(`Unexpected operation ${operation}`);
     });
-    vi.mocked(graphqlOptionalPermission).mockResolvedValue({ videoAdmission: null } as never);
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(VideoOperationsPage)); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(host.querySelector("article[aria-label='Preparação prep-a']")?.textContent).toContain("Quadros: 80 amostrados · 24 mantidos · 6 enviados à análise");
+    expect(host.textContent).not.toContain("Admissão da plataforma");
     await act(async () => { root.unmount(); });
   });
 });

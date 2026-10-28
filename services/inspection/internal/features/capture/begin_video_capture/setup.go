@@ -18,7 +18,6 @@ import (
 	"inspection/services/inspection/internal/platform/database"
 	"inspection/services/inspection/internal/platform/mediator"
 	"inspection/services/inspection/internal/platform/tenanttx"
-	"inspection/services/inspection/internal/platform/video_admission"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -137,9 +136,6 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 			}
 		}
 		if v2 || (len(requirements) > 0 && strings.HasPrefix(requirements[0].Key, "env:")) {
-			if err := video_admission.RequireEnabled(tx); err != nil {
-				return err
-			}
 			if !strings.HasPrefix(cmd.RequirementKey, "env:") {
 				return apperror.New(apperror.InvalidInput, "requirementKey", "environment video requirement is required")
 			}

@@ -112,7 +112,7 @@ func TestCreateInspectionVideoChecklistOnlyWithoutOriginHasNullReferenceIT093(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated VV IT-093 fixture", "vv-it093").Error; err != nil {
+	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated VV IT-093 fixture", "vv-it093").Error; err != nil {
 		t.Fatal(err)
 	}
 	templateID, versionID := identity.NewID(), identity.NewID()
@@ -173,7 +173,7 @@ func TestReplayCreateInspectionReturnsSameInspectionAndSingleInvitationIT084IT09
 	}{{"IT-084", "k6"}, {"IT-097", "k7"}} {
 		t.Run(tc.id, func(t *testing.T) {
 			fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-			if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated "+tc.id+" fixture", tc.id).Error; err != nil {
+			if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated "+tc.id+" fixture", tc.id).Error; err != nil {
 				t.Fatalf("enable video admission in disposable integration database: %v", err)
 			}
 			create := func() string {
@@ -287,7 +287,7 @@ func (f6DisabledNotifications) Send(context.Context, notificationcore.Notificati
 
 func TestCreateChecklistOnlyWithoutAssetBusinessUnitScopeReturnsNotFoundIT095(t *testing.T) {
 	fx := newInspectionModeGraphQLFixture(t, false, catalog.ChecklistOnly)
-	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated IT-095 fixture", "vv-it095").Error; err != nil {
+	if err := fx.h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated IT-095 fixture", "vv-it095").Error; err != nil {
 		t.Fatal(err)
 	}
 	meta, ok := requestctx.FromContext(fx.ctx)
@@ -526,7 +526,7 @@ func newOriginChecklistOnlyTransportFixture(t *testing.T) originChecklistOnlyTra
 	server.SetErrorPresenter(graph.PresentError)
 	principal := requestctx.Principal{IdentityID: member.IdentityID, MembershipID: member.ID, TenantID: origin.TenantID, Roles: []string{auth.TenantAdmin}}
 	operator := requestctx.WithMetadata(ctx, requestctx.Metadata{TenantID: origin.TenantID, Principal: principal, CorrelationID: "vv-it091-096"})
-	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "isolated IT-091/096 fixture", "vv-it091-096").Error; err != nil {
+	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, FALSE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC(), "isolated IT-091/096 fixture", "vv-it091-096").Error; err != nil {
 		t.Fatal(err)
 	}
 	return originChecklistOnlyTransportFixture{h: h, origin: origin, seed: seed, ctx: operator, server: server}

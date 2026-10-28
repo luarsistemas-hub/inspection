@@ -50,11 +50,9 @@ As métricas OCI são agregadas pelo coletor do host; consulte também logs do s
 5. Para regenerar o plano de comparação de uma inspeção, a API oferece `reanalyzeVideoInspection` com inspeção, plano esperado e chave de idempotência. Ela usa as submissões e a origem já fixadas; não redireciona o histórico para uma origem mais nova. A mutation existe no GraphQL, mas não é uma ação da tela Admin atual.
 6. Acompanhe a etapa/status no Admin e as métricas de fila até a conclusão. Preserve o código seguro e a geração resultante no registro do incidente.
 
-## Suspender e retomar novas admissões
+## Disponibilidade do vídeo
 
-Na tela **Operações de vídeo**, a seção **Admissão da plataforma** mostra o estado e a versão. Desativar/ativar exige motivo e versão esperada; a mutation é `configureVideoAdmission` e a consulta é `videoAdmission`. Em conflitos, recarregue o estado e avalie novamente. Esta é uma barreira para novo trabalho de modalidade vídeo, não uma pausa do worker.
-
-Desativar a admissão não cancela uploads, tentativas ou responsabilidades já aceitos: o trabalho aceito deve continuar seu ciclo normal, incluindo recaptura/regravação autorizada. Não desligue o worker como forma de suspender novas admissões. Para retomar, primeiro confirme capacidade, dependências e gates de release; então reative a admissão explicitamente. Em produção ela permanece desabilitada enquanto qualquer gate obrigatório estiver aberto.
+Vídeo está disponível para todos os tenants e não depende de uma ativação no Admin. Antes de publicar uma versão da API que permita novos fluxos de vídeo, confirme que o worker está implantado e saudável, que dependências e storage estão prontos e que os critérios de release foram aprovados. A tela **Operações de vídeo** continua disponível para acompanhar preparações, retries, retenção e exclusão.
 
 ## Expiração de fontes, leases, legal hold e deleção
 

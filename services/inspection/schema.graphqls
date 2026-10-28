@@ -60,7 +60,6 @@ type Query {
   llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
   videoPolicy: VideoPolicy!
-  videoAdmission: VideoAdmission!
   videoUploadStatus(mediaId: ID!): VideoUploadStatus!
   videoPreparation(mediaId: ID!): VideoPreparationStatus!
 }
@@ -167,7 +166,6 @@ type Mutation {
   retryVideoPreparation(input: RetryVideoPreparationInput!): VideoPreparationPayload!
   reprocessVideoPreparation(input: ReprocessVideoPreparationInput!): VideoPreparationPayload!
   reanalyzeVideoInspection(input: ReanalyzeVideoInspectionInput!): ReanalyzeVideoInspectionPayload!
-  configureVideoAdmission(input: ConfigureVideoAdmissionInput!): VideoAdmissionPayload!
   createMediaUpload(input: CreateMediaUploadInput!): MediaUploadPayload!
   presignMediaParts(input: PresignMediaPartsInput!): PresignedPartsPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): MediaPayload!
@@ -321,8 +319,6 @@ type VideoPolicy { maxDurationMinutes: Int! originRetentionDays: Int! currentRet
 type VideoPolicyPayload { policy: VideoPolicy userErrors: [UserError!]! clientMutationId: String! }
 type VideoAttempt { id: ID! kind: String! acquisitionSource: String! maxDurationSeconds: Int! maxBytes: Int! policyVersion: Int! admittedAt: String! expiresAt: String! status: String! }
 type VideoAttemptPayload { attempt: VideoAttempt userErrors: [UserError!]! clientMutationId: String! }
-type VideoAdmission { enabled: Boolean! version: Int! changedAt: String! reason: String }
-type VideoAdmissionPayload { admission: VideoAdmission userErrors: [UserError!]! clientMutationId: String! }
 type VideoReceivedPart { partNumber: Int! etag: String! sizeBytes: Int! }
 type VideoUploadStatus { mediaId: ID! status: String! expiresAt: String! receivedParts: [Int!]! confirmedParts: [VideoReceivedPart!]! missingParts: [Int!]! }
 type VideoPreparationStatus { mediaId: ID! preparationId: ID! status: String! stage: String! preparationVersion: Int! attempts: Int! processedFrames: Int! framesSampled: Int! framesRetained: Int! framesRepresentative: Int! errorCode: String! retryable: Boolean! sourceAvailable: Boolean! manifestDigest: String! firstFrameReadyAt: String sourceExpiryAt: String }
@@ -578,7 +574,6 @@ input ReopenProjectInput { projectId: ID! expectedVersion: Int! reason: String! 
 input AcceptProcessingInput { disclosureVersion: String! photoProcessing: Boolean! videoProcessing: Boolean = false aiAnalysis: Boolean! gpsUse: Boolean! clientMutationId: String! }
 input BeginVideoCaptureInput { acquisitionSource: String! requirementKey: String replacesMediaId: ID clientMutationId: String! }
 input ConfigureVideoPolicyInput { maxDurationMinutes: Int! originRetentionDays: Int! currentRetentionDays: Int! supersededBaselineRetentionDays: Int expectedVersion: Int! clientMutationId: String! }
-input ConfigureVideoAdmissionInput { enabled: Boolean! expectedVersion: Int! reason: String! clientMutationId: String! }
 input CreateMediaUploadInput { contentType: String! sizeBytes: Int! sha256: String! requirementKey: String attemptId: ID clientMutationId: String! }
 input PresignMediaPartsInput { mediaId: ID! partNumbers: [Int!]! clientMutationId: String! }
 input CompletedPartInput { partNumber: Int! etag: String! }

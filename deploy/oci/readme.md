@@ -8,7 +8,7 @@ Dispare o workflow manual contra um SHA candidato alcançável a partir de `main
 gh workflow run video-integration.yml -f source_sha=<40-hex-SHA>
 ```
 
-O input opcional `base_sha` usa por padrão `b4e9412209202cad7a280097e3d45e99e30b8560`, a versão de produção anterior ao vídeo. O aceite exige que cada teste Go obrigatório passe sem `skip`, que os dois specs Playwright do Capture terminem sem falhas inesperadas no Chromium (os skips explícitos de aparelhos físicos permanecem) e que o ensaio migre o schema-base até `migrations.LatestVersion()` duas vezes, mantendo `platform.video_admission.enabled = false`. Os três jobs usam serviços descartáveis do runner e não requerem secrets de produção.
+O input opcional `base_sha` usa por padrão `b4e9412209202cad7a280097e3d45e99e30b8560`, a versão de produção anterior ao vídeo. O aceite exige que cada teste Go obrigatório passe sem `skip`, que os dois specs Playwright do Capture terminem sem falhas inesperadas no Chromium (os skips explícitos de aparelhos físicos permanecem) e que o ensaio migre o schema-base até `migrations.LatestVersion()` duas vezes. Os três jobs usam serviços descartáveis do runner e não requerem secrets de produção.
 
 Este é o ponto de entrada operacional. Use-o para provisionar, publicar versões, diagnosticar, recuperar e parar o ambiente.
 
@@ -173,21 +173,21 @@ Os alarmes do runtime são recursos `oci_monitoring_alarm` da stack Resource Man
 
 ### Admissão e sequência de liberação
 
-Implantar o worker não habilita admissão de vídeo. Depois da migration, confira no banco `platform.video_admission.enabled = false`. A habilitação é feita por super admin pela mutation GraphQL existente `configureVideoAdmission`, com `enabled=true`, `expectedVersion` atual e `reason`; desabilitar admissão impede novas aceitações, mas não interrompe trabalho já aceito, que continua drenando pela fila.
+Vídeo fica disponível para todos os tenants após a publicação da API. Confirme que o worker e suas dependências estão saudáveis antes da publicação, pois novos fluxos podem começar imediatamente. A tabela legada `platform.video_admission` permanece somente para compatibilidade de rollback; não controla o runtime atual.
 
-Siga esta ordem para liberar vídeo:
+Siga esta ordem para publicar uma versão que disponibiliza vídeo:
 
 1. Rode **Actions → Video integration** para o SHA candidato e aguarde integração, Playwright e ensaio de upgrade passarem.
-2. Publique com `operation=deploy`, `scope=all` e admissão ainda desligada.
-3. Confira o schema em `migrations.LatestVersion()`, digests implantados contra o candidato, recibo, `COMPONENT_SOURCE_*`/`RUNTIME_CONFIG_SHA256`, readiness, smoke e métricas de vídeo.
-4. Homologue OCI, dispositivos e capacidade por 60 minutos de carga representativa. Exija p95 GraphQL ≤ 2 s, memória abaixo de 85% na média de 15 minutos, pelo menos 8 GiB livres no scratch e nenhum OOM, reinício inesperado ou trabalho perdido.
-5. Só após esses critérios, habilite admissão pela mutation `configureVideoAdmission`.
+2. Confirme que worker, storage, fila e provedor estão prontos para aceitar novas capturas de vídeo.
+3. Homologue OCI, dispositivos e capacidade por 60 minutos de carga representativa. Exija p95 GraphQL ≤ 2 s, memória abaixo de 85% na média de 15 minutos, pelo menos 8 GiB livres no scratch e nenhum OOM, reinício inesperado ou trabalho perdido.
+4. Publique com `operation=deploy`, `scope=all`; o vídeo estará disponível assim que a API receber a versão nova.
+5. Confira o schema em `migrations.LatestVersion()`, digests implantados contra o candidato, recibo, `COMPONENT_SOURCE_*`/`RUNTIME_CONFIG_SHA256`, readiness, smoke e métricas de vídeo.
 
 ### Falhas do executor supervisionado
 
 O Compose de produção provisiona LiteLLM como serviço privado na rede `app`. A URL `INSPECTION_LITELLM_URL=http://litellm:4000` é resolvida pelos containers; a porta 4000 não é publicada na VM. A imagem ARM64 está fixada por digest em `base-images.lock` e participa do recibo de composição como `LITELLM_IMAGE`. O worker aguarda o health check do gateway antes de iniciar.
 
-O `inspection-video-worker` é publicado como imagem independente `VIDEO_WORKER_IMAGE`, construída pelo stage `video-worker` de `deploy/oci/Go.Dockerfile`, com FFmpeg e ffprobe. O serviço não usa profile Compose e integra a composição reconciliada pelo plano v2. Implantar ou iniciar o container não habilita admissão de vídeos; a admissão permanece desativada no banco até a habilitação operacional por super admin.
+O `inspection-video-worker` é publicado como imagem independente `VIDEO_WORKER_IMAGE`, construída pelo stage `video-worker` de `deploy/oci/Go.Dockerfile`, com FFmpeg e ffprobe. O serviço não usa profile Compose e integra a composição reconciliada pelo plano v2. Vídeo fica disponível após a publicação da API; valide a saúde do worker antes desse passo.
 
 O worker tem limite de 2 GiB de memória e 1 CPU. O scratch usa `/srv/inspection/video-scratch` no volume persistente de dados, limitado pelo worker a 4 GiB; ele exige ao menos 8 GiB livres antes de aceitar trabalho. O endpoint autenticado do worker fica em `127.0.0.1:8091/metrics`; scheduler e API publicam métricas em loopback nas portas 8092 e 8093. A coleta e os alarmes estão descritos em “Host, métricas e alarmes”.
 

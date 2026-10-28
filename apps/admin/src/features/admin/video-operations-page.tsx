@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button, Field, Input, Select, Textarea } from "@inspection/design-system";
-import { graphql, graphqlOptionalPermission, type GraphQLFailure } from "@/graphql/client";
+import { graphql, type GraphQLFailure } from "@/graphql/client";
 import * as G from "@/graphql/generated";
 import { preparationFrameMetrics } from "./video-preparation-view";
 
@@ -12,10 +12,7 @@ const mutationId = () => `video-ops-${crypto.randomUUID()}`;
 export function VideoOperationsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState<G.AdminVideoPreparationsQuery["videoPreparations"]>();
-  const [admission, setAdmission] = useState<G.AdminVideoAdmissionQuery["videoAdmission"]>();
-  const [admissionAllowed, setAdmissionAllowed] = useState(false);
   const [screeningBypassed, setScreeningBypassed] = useState(false);
-  const [reason, setReason] = useState("");
   const [sourceMediaId, setSourceMediaId] = useState("");
   const [originVersionId, setOriginVersionId] = useState("");
   const [actionReason, setActionReason] = useState("");
@@ -34,7 +31,6 @@ export function VideoOperationsPage() {
 
   useEffect(() => {
     void load();
-    void graphqlOptionalPermission<G.AdminVideoAdmissionQuery>(G.AdminVideoAdmissionDocument).then((result) => { setAdmission(result.videoAdmission); setAdmissionAllowed(true); }).catch(() => { setAdmissionAllowed(false); });
     void graphql<G.AdminSensitiveContentScreeningStatusQuery>(G.AdminSensitiveContentScreeningStatusDocument).then((result) => setScreeningBypassed(result.sensitiveContentScreeningBypassed)).catch(() => setScreeningBypassed(false));
   }, [load]);
 
@@ -72,16 +68,10 @@ export function VideoOperationsPage() {
       setNotice("Operação registrada.");
     });
   };
-  const saveAdmission = () => {
-    if (!admission || !reason.trim()) { setError("Informe o motivo da alteração da admissão."); return; }
-    void run(async () => { const r = await graphql<G.AdminConfigureVideoAdmissionMutation>(G.AdminConfigureVideoAdmissionDocument, { input: { enabled: !admission.enabled, expectedVersion: admission.version, reason, clientMutationId: mutationId() } }); if (r.configureVideoAdmission.userErrors.length || !r.configureVideoAdmission.admission) throw new Error(r.configureVideoAdmission.userErrors[0]?.message ?? "Não foi possível alterar a admissão."); setAdmission(r.configureVideoAdmission.admission); setReason(""); });
-  };
-
   return <section aria-labelledby="video-operations-heading">
     <h2 id="video-operations-heading">Operações de vídeo</h2>
     <p role="status">{notice}</p>{error && <p role="alert">{error}</p>}
     {screeningBypassed && <p role="alert">Triagem de conteúdo sensível desativada.</p>}
-    {admissionAllowed && admission && <section aria-label="Admissão de vídeo da plataforma"><h3>Admissão da plataforma</h3><p>Estado: {admission.enabled ? "Ativada" : "Desativada"} · versão {admission.version}</p><Field label="Motivo"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field><Button disabled={busy || !reason.trim()} onClick={saveAdmission}>{admission.enabled ? "Desativar admissão" : "Ativar admissão"}</Button></section>}
     <h3>Preparações</h3><Field label="Filtrar por status"><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">Todos</option>{["QUEUED", "RUNNING", "FAILED", "READY"].map((s) => <option key={s}>{s}</option>)}</Select></Field>
     <div>{page?.nodes.map((row) => <article key={row.preparationId} aria-label={`Preparação ${row.preparationId}`}><h4>{row.stage} · {row.status}</h4><p>Fonte {row.mediaId} · tentativas {row.attempts} · quadros processados {row.processedFrames}</p><p>{preparationFrameMetrics(row)}</p><p>Erro seguro: {row.errorCode || "—"} · fonte {row.sourceAvailable ? "disponível" : "indisponível"}</p><Button disabled={busy || !row.retryable} onClick={() => retry(row)}>Tentar novamente</Button><Button disabled={busy} variant="secondary" onClick={() => reprocess(row)}>Reprocessar</Button></article>)}</div>
     {page?.pageInfo.hasNextPage && page.pageInfo.endCursor && <Button variant="secondary" onClick={() => void load(page.pageInfo.endCursor)}>Próxima página</Button>}

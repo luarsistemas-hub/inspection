@@ -51,7 +51,7 @@ func TestUT100UT101UT103UT104UT174InspectionCreatePinsRequirementsAndPromptSnaps
 			t.Fatal(err)
 		}
 	}
-	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at, reason, mutation_id, payload_hash) VALUES (1, TRUE, 1, ?, ?, ?, '') ON CONFLICT (id) DO UPDATE SET enabled=TRUE", time.Now().UTC(), "Task 3 isolated integration fixture", "task3-create-video").Error; err != nil {
+	if err := h.AdminDB.Exec("INSERT INTO platform.video_admission (id, enabled, version, changed_at) VALUES (1, FALSE, 1, ?) ON CONFLICT (id) DO UPDATE SET enabled=FALSE", time.Now().UTC()).Error; err != nil {
 		t.Fatal(err)
 	}
 
