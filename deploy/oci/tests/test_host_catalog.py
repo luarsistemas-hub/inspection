@@ -141,16 +141,24 @@ os.chmod(args[1], 0o755)
 import os, pathlib, shutil, sys
 args=sys.argv[1:]
 directory='-d' in args
+mode=None
 while args and args[0].startswith('-'):
     flag=args.pop(0)
-    if flag in ('-o','-g','-m'): args.pop(0)
+    if flag in ('-o','-g','-m'):
+        value=args.pop(0)
+        if flag == '-m': mode=int(value, 8)
 if directory:
-    pathlib.Path(args[-1]).mkdir(parents=True, exist_ok=True)
+    path=pathlib.Path(args[-1])
+    path.mkdir(parents=True, exist_ok=True)
+    if mode is not None: os.chmod(path, mode)
 else:
     shutil.copyfile(args[-2], args[-1])
     os.chmod(args[-1], int('755' if args[-2].endswith('.sh') else '644', 8))
 """)
         install.chmod(0o755)
+        chmod = bindir / "chmod"
+        chmod.write_text("#!/bin/sh\nexec /bin/chmod \"$@\"\n")
+        chmod.chmod(0o755)
         mv = bindir / "mv"
         mv.write_text("#!/bin/sh\nif [ \"$1\" = -Tf ]; then shift; fi\nexec /bin/mv -f \"$@\"\n")
         mv.chmod(0o755)
@@ -177,6 +185,20 @@ else:
         self.assertTrue(has_prepare_upgrade)
         self.assertTrue(has_ssh_launcher)
         self.assertTrue(has_publisher)
+
+    def test_installer_keeps_restricted_ssh_path_traversable(self):
+        with tempfile.TemporaryDirectory(prefix="inspection-install-permissions-") as directory:
+            root = pathlib.Path(directory)
+            source, target = self.installer_fixture(root)
+            host_tools = target.parent
+            host_tools.chmod(0o750)
+            target.chmod(0o750)
+            result = self.invoke_installer(root, source)
+            root_mode = host_tools.stat().st_mode & 0o777
+            target_mode = target.stat().st_mode & 0o777
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(root_mode, 0o755)
+        self.assertEqual(target_mode, 0o755)
 
     def test_installer_rejects_real_script_divergence(self):
         with tempfile.TemporaryDirectory(prefix="inspection-install-diverge-") as directory:

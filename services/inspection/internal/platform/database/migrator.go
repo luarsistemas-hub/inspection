@@ -63,7 +63,7 @@ func (m Migrator) Migrate(ctx context.Context) error {
 		return err
 	}
 	// v37 backfills prompt snapshot references, so the legacy FINDINGS seed must
-	// exist before planner execution. Inventory task seeds wait until v82 drops
+	// exist before planner execution. Inventory task seeds wait until v81 drops
 	// the old single-column unique indexes.
 	if err := ensureAnalysisPromptSeedTasks(db, []string{string(analysisprompt.Findings)}); err != nil {
 		return err
@@ -102,7 +102,7 @@ func (m Migrator) Migrate(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	// Prompt task uniqueness is introduced by v82. Seed only after the planner
+	// Prompt task uniqueness is introduced by v81. Seed only after the planner
 	// has removed the legacy single-column unique indexes on upgraded databases.
 	if err := ensureAnalysisPromptSeed(db); err != nil {
 		return err
