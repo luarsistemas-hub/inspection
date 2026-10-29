@@ -64,7 +64,7 @@ test("IT-110 shows camera permission recovery without a photo fallback", async (
   await installFakeGetUserMedia(page, { kind: "permission-denied" });
   await openCameraOnlyVideoInvite(page);
   await page.getByRole("button", { name: "Abrir câmera" }).click();
-  await expect(page.getByText("Câmera bloqueada. Libere o acesso nas configurações do navegador", { exact: false })).toBeVisible();
+  await expect(page.getByText("Câmera bloqueada. Libere o acesso nas configurações do navegador", { exact: false }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /foto|galeria|escolher vídeo/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
 });
@@ -73,7 +73,7 @@ test("IT-140 keeps camera-only admission invalid after NotReadableError", async 
   await installFakeGetUserMedia(page, { kind: "not-readable" });
   await openCameraOnlyVideoInvite(page);
   await page.getByRole("button", { name: "Abrir câmera" }).click();
-  await expect(page.getByText("A câmera está ocupada ou indisponível. Feche outros aplicativos e tente novamente.", { exact: true })).toBeVisible();
+  await expect(page.getByText("A câmera está ocupada ou indisponível. Feche outros aplicativos e tente novamente.", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /escolher vídeo/i })).toHaveCount(0);
   await expect(page.locator('input[type="file"][accept^="video/"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
@@ -96,7 +96,7 @@ test("IT-108 refuses an empty finalized recording", async ({ page }) => {
   await startVideoRecording(page);
   await expect(page.getByText(/00:/)).toBeVisible();
   await page.getByRole("button", { name: "Parar e revisar" }).click();
-  await expect(page.getByText("A gravação foi interrompida antes de salvar qualquer trecho", { exact: false })).toBeVisible();
+  await expect(page.getByText("A gravação foi interrompida antes de salvar qualquer trecho", { exact: false }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirmar e enviar" })).toHaveCount(0);
   await expect(page.getByText("Gravação incompleta; não há recuperação garantida")).toBeVisible();
 });

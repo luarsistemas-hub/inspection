@@ -67,7 +67,9 @@ test("câmera de vídeo em ambientes mantém a faixa desabilitada durante a grav
   await page.getByLabel("Análise por inteligência artificial").check();
   await page.getByLabel("Localização quando necessária").check();
   await page.getByRole("button", { name: "Aceitar e continuar" }).click();
-  await page.getByRole("button", { name: "Abrir câmera" }).click();
+  await page.getByRole("button", { name: "Gravar Sala", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Grave este ambiente" })).toBeVisible();
+  await page.getByRole("button", { name: "Gravar vídeo", exact: true }).click();
   const stage = page.getByRole("dialog", { name: "Câmera de vídeo · Sala" });
   await expect(stage.getByRole("group", { name: "Ambientes da vistoria" }).getByRole("button", { name: /Sala/ })).toBeEnabled();
   const activatePreview = stage.getByRole("button", { name: "Ativar prévia" });
@@ -351,7 +353,7 @@ test("IT-124 clears incomplete chunks before a new recording after storage quota
   await page.evaluate(() => (window as typeof window & { activeVideoRecorder?: MediaRecorder }).activeVideoRecorder?.requestData());
   await page.waitForTimeout(350);
   await page.evaluate(() => (window as typeof window & { activeVideoRecorder?: MediaRecorder }).activeVideoRecorder?.requestData());
-  await expect(page.getByText(/O dispositivo ficou sem espaço|Não foi possível salvar a gravação/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/O dispositivo ficou sem espaço|Não foi possível salvar a gravação/).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Abrir câmera" })).toBeEnabled();
   await startVideoRecording(page);
   await expect(page.getByText(/00:/)).toBeVisible();

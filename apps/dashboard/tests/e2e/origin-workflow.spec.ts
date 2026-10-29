@@ -113,10 +113,11 @@ test.describe("Dashboard origin management mock journey", () => {
     await form.getByRole("combobox", { name: "Modelo de vistoria" }).click();
     await page.getByRole("option", { name: /Modelo vídeo/ }).click();
     await expect(form.getByLabel("Comparação")).toHaveValue("FIXED_ORIGIN");
-    await expect(form.getByLabel("Origem")).toHaveValue("origin-version-a");
+    await expect.poll(() => calls.some((call) => call.operation === "DashboardOriginVersions" && call.variables.assetId === "asset-a")).toBe(true);
+    await expect(form.getByLabel("Origem", { exact: true })).toHaveValue("origin-version-a");
     await form.getByLabel("Comparação").selectOption("FIXED_ORIGIN");
-    await expect(form.getByRole("option", { name: /Versão 1.*anterior.*Vídeo/ })).toBeAttached();
-    await form.getByLabel("Origem").selectOption("origin-version-old");
+    await expect(form.getByRole("option", { name: /Versão 1.*anterior.*Inventário/ })).toBeAttached();
+    await form.getByLabel("Origem", { exact: true }).selectOption("origin-version-old");
     await form.getByLabel("Vencimento").fill("2030-05-10T12:00");
     await form.getByLabel("Prazo final").fill("2030-05-11T12:00");
     await form.getByRole("button", { name: "Planejar vistoria" }).click();

@@ -20,6 +20,7 @@ async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baseline
     const memberships = [{ id: "membership-a", tenantId: "tenant-a", name: "Operador QA", email: "operator@example.test", role, status: "ACTIVE" }];
     let data: Record<string, unknown> = {};
     if (operation === "DashboardGate" || operation === "DashboardMemberships") data = { me: { identityId: "identity-a", tenantId: "tenant-a", productEntitlements: ["DASHBOARD"], roles: [role], effectiveScopes: [{ kind: "Tenant", resourceId: "tenant-a" }], memberships }, tenant: { id: "tenant-a", name: "Operação QA", status: "ACTIVE" } };
+    if (operation === "MyNotifications") data = { myNotifications: { nodes: [], unreadCount: 0, pageInfo } };
     if (operation === "DashboardBaselineAsset") data = { asset: { id: "asset-a", name: "Apartamento QA", externalKey: "APT-1", businessUnitId: "unit-a" } };
     if (operation === "DashboardBaselineAssets") data = { assets: { nodes: [{ id: "asset-a", name: "Apartamento QA", externalKey: "APT-1", businessUnitId: "unit-a", segmentVersionId: "segment-a", templateId: "template-a", status: "ACTIVE", version: 1 }], pageInfo } };
     if (operation === "DashboardCustomerBaselineAssets" || operation === "CustomerPortfolio") data = { customerPortfolio: { nodes: [{ assetId: "asset-a", assetName: "Edifício QA", assetExternalKey: "QA-001", latestPublishedInspectionId: "inspection-published", projectId: null, publishedClassification: "ATTENTION", status: "ACTIVE", progress: 100, updatedAt: "2026-10-12T12:00:00Z" }], pageInfo } };
@@ -61,7 +62,13 @@ async function openBaselines(page: Page, role = "MANAGER", returnTo = "/baseline
   });
   await page.goto("/auth/callback?code=baselines-code&state=baselines-journey-state");
   await expect(page.getByRole("navigation", { name: "Painel" })).toBeVisible();
-  if (returnTo === "/baselines") await expect(page.getByRole("heading", { name: "Inventários dos imóveis" })).toBeVisible();
+  if (returnTo === "/baselines") {
+    await expect(page.getByRole("heading", { name: "Inventários", exact: true })).toBeVisible();
+    const versionHistory = page.locator("details.baseline-history-item");
+    for (let index = 0; index < await versionHistory.count(); index += 1) {
+      await versionHistory.nth(index).evaluate((element) => { (element as HTMLDetailsElement).open = true; });
+    }
+  }
   return calls;
 }
 
@@ -91,7 +98,8 @@ test("E2E-009 requests legacy-origin cataloging and starts a draft from a comple
   await page.getByRole("button", { name: "Catalogar origem existente" }).click();
   await expect(page.getByRole("heading", { name: "Revisar inventário" })).toBeVisible();
   await navigate(page, "Inventários");
-  await page.getByRole("button", { name: "Iniciar rascunho para revisão" }).click();
+  await page.getByRole("button", { name: "Escolher ação", exact: true }).click();
+  await page.getByRole("button", { name: "Iniciar rascunho", exact: true }).click();
   await expect(page).toHaveURL(/\/baselines\/review\/inspection-draft$/);
   await expect(page.getByText("O inventário está sendo preparado. Você pode voltar a esta página mais tarde.", { exact: true })).toBeVisible();
   expect(calls.map(({ operation }) => operation)).toEqual(expect.arrayContaining(["RequestOriginCataloging", "StartBaselineDraftFromInspection"]));
@@ -118,12 +126,16 @@ test("E2E-014 resolves contestation with a reason and exposes the adjustment dra
 
 test("E2E-014 accepting a contestation exposes its new draft for review", async ({ page }) => {
   const calls = await openBaselines(page);
-  await expect(page.getByRole("button", { name: "Revisar rascunho", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /^Revisar rascunho/ })).toHaveCount(1);
   await page.getByRole("button", { name: "Aceitar e criar rascunho", exact: true }).click();
   await expect(page.getByText("Contestação aceita; um novo rascunho foi criado.", { exact: true })).toBeVisible();
   await expect.poll(() => calls.filter(({ operation }) => operation === "ResolveBaselineContestation").length).toBe(1);
   expect(calls.find(({ operation }) => operation === "ResolveBaselineContestation")?.variables.input).toMatchObject({ outcome: "ACCEPT", reason: null });
-  await expect(page.getByRole("button", { name: "Revisar rascunho", exact: true })).toHaveCount(2);
+  const adjustmentDraft = page.locator("details.baseline-history-item").filter({ hasText: "Versão 4" });
+  await adjustmentDraft.locator("summary").click();
+  await expect(adjustmentDraft.getByRole("heading", { name: "Versão 4 · Ajuste de contestação", exact: true })).toBeVisible();
+  await adjustmentDraft.getByRole("button", { name: /^Revisar rascunho/ }).click();
+  await expect(page).toHaveURL(/\/baselines\/review\/adjustment-draft$/);
 });
 
 test("E2E-015 CUSTOMER_VIEWER sees the published baseline without review controls", async ({ page }, testInfo) => {
@@ -150,15 +162,16 @@ test("E2E-017 labels expired baseline source and E2E-018 discards a draft", asyn
   const calls = await openBaselines(page);
   await expect(page.getByText("original não disponível; quadro preservado")).toBeVisible();
   await navigate(page, "Inventários");
-  await page.getByRole("button", { name: "Revisar rascunho", exact: true }).click();
+  await page.getByRole("button", { name: /^Revisar rascunho/ }).click();
   await expect(page.getByRole("button", { name: "Descartar rascunho" })).toBeVisible();
   await page.getByRole("button", { name: "Descartar rascunho" }).click();
   const discardDialog = page.getByRole("dialog", { name: "Descartar rascunho" });
   await discardDialog.getByRole("button", { name: "Descartar rascunho", exact: true }).click();
   await expect(page).toHaveURL(/\/baselines$/);
   expect(calls.map(({ operation }) => operation)).toContain("DiscardBaselineDraft");
-  await expect(page.getByRole("button", { name: "Revisar rascunho", exact: true })).toHaveCount(0);
-  const discarded = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /^Versão 3 · / }) });
+  await expect(page.getByRole("button", { name: /^Revisar rascunho/ })).toHaveCount(0);
+  const discarded = page.locator("details.baseline-history-item").filter({ hasText: "Versão 3" });
+  await discarded.locator("summary").click();
   await expect(discarded.getByText("Descartada", { exact: true })).toBeVisible();
   await discarded.getByRole("button", { name: "Ver inventário", exact: true }).click();
   await expect(page).toHaveURL(/\/baselines\/review\/draft-a$/);

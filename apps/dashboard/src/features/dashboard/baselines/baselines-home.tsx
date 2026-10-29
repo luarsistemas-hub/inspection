@@ -73,7 +73,6 @@ export function BaselinesHome({ canReview, isCustomer, readHistory, canReadTrail
       if (!assetId) setStatus("Selecione um imóvel.");
       return;
     }
-    setVersions([]);
     setStatus("Carregando versões…");
     const result = await graphql<G.DashboardBaselineVersionsQuery, G.DashboardBaselineVersionsQueryVariables>(G.DashboardBaselineVersionsDocument, { assetId });
     setVersions(result.baselineVersions.nodes);
@@ -164,7 +163,7 @@ export function BaselinesHome({ canReview, isCustomer, readHistory, canReadTrail
       <div className="baselines-property-summary"><span>IMÓVEL</span><strong>{selectedAsset?.name || "Selecione um imóvel"}</strong></div>
       <Button type="button" variant="secondary" aria-expanded={showAssetPicker} aria-controls={showAssetPicker ? "baselines-asset-picker" : undefined} onClick={() => setShowAssetPicker((value) => !value)}>Trocar imóvel <span aria-hidden="true">⌄</span></Button>
       {showAssetPicker && <div id="baselines-asset-picker" className="baselines-asset-picker">
-        <Field label="Selecione um imóvel"><Select value={assetId} onChange={(event) => { setAssetId(event.target.value); setShowAssetPicker(false); }}><option value="">Selecione um imóvel</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</Select></Field>
+        <Field label="Selecione um imóvel"><Select value={assetId} onChange={(event) => { setVersions([]); setAssetId(event.target.value); setShowAssetPicker(false); }}><option value="">Selecione um imóvel</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</Select></Field>
         {assetsHaveMore && <Button type="button" variant="secondary" onClick={() => void loadAssets(assetAfter).catch((failure) => setError(failureText(failure)))}>Carregar mais imóveis</Button>}
       </div>}
     </div>
