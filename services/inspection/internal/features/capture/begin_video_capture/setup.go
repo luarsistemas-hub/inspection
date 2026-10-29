@@ -135,7 +135,9 @@ func admit(ctx context.Context, db *gorm.DB, within func(context.Context, identi
 				return err
 			}
 		}
-		if v2 || (len(requirements) > 0 && strings.HasPrefix(requirements[0].Key, "env:")) {
+		environmentCapture := v2 || (len(requirements) > 0 && strings.HasPrefix(requirements[0].Key, "env:"))
+		requirements = capturecore.ActiveRequirements(requirements)
+		if environmentCapture {
 			if !strings.HasPrefix(cmd.RequirementKey, "env:") {
 				return apperror.New(apperror.InvalidInput, "requirementKey", "environment video requirement is required")
 			}

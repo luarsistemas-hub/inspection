@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	requestcomparisons "inspection/services/inspection/internal/features/analysis/request_comparisons"
 	requestinventoryjobs "inspection/services/inspection/internal/features/analysis/request_inventory_jobs"
 	capturecore "inspection/services/inspection/internal/features/capture/core"
+	inventorycore "inspection/services/inspection/internal/features/inventory/core"
 	dispatchcapture "inspection/services/inspection/internal/features/invitations/dispatch_capture_invitation"
 	processuploadcompleted "inspection/services/inspection/internal/features/media/process_upload_completed"
 	processmedia "inspection/services/inspection/internal/features/media/process_verified"
@@ -30,6 +32,7 @@ import (
 	recordinapp "inspection/services/inspection/internal/features/notifications/record_in_app"
 	notificationrequest "inspection/services/inspection/internal/features/notifications/request"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
+	promoteorigin "inspection/services/inspection/internal/features/origins/promote_inspection_to_origin"
 	expirereplacement "inspection/services/inspection/internal/features/recapture/expire_video_replacement"
 	processdeadline "inspection/services/inspection/internal/features/recapture/process_deadline"
 	reportcore "inspection/services/inspection/internal/features/reports/core"
@@ -37,6 +40,7 @@ import (
 	handleclassified "inspection/services/inspection/internal/features/reports/handle_classified"
 	handlereportready "inspection/services/inspection/internal/features/reports/handle_report_ready"
 	renderpdf "inspection/services/inspection/internal/features/reports/render_pdf"
+	retentioncore "inspection/services/inspection/internal/features/retention/core"
 	purgedata "inspection/services/inspection/internal/features/retention/purge_data"
 	"inspection/services/inspection/internal/features/templates/catalog"
 	recordllmcall "inspection/services/inspection/internal/features/usage/record_llm_call"
@@ -58,7 +62,7 @@ import (
 // workerQueueDefinitions are the durable queues of the ordinary worker and
 // the event each one receives. Video condition requests are deliberately
 // absent: they belong to the dedicated video worker queue.
-var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"inventory-draft-ready", "inventory.draft_ready.v1"}, {"inventory-version-activated", "inventory.version_activated.v1"}, {"counterparty-responded", "counterparty.responded.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
+var workerQueueDefinitions = [][2]string{{"inspection-created", "inspection.created.v1"}, {"inspection-state", "inspection.state_changed.v1"}, {"participant-channel-projection", "participant.channel_verified.v1"}, {"notification-delivery-v2", "notification.delivery_requested.v2"}, {"notification-delivery-terminal", "notification.delivery_terminal.v1"}, {"inventory-draft-ready", "inventory.draft_ready.v1"}, {"inventory-version-activated", "inventory.version_activated.v1"}, {"counterparty-responded", "counterparty.responded.v1"}, {"origin-invitation", "origin.invitation_requested.v1"}, {"origin-promotion", "origin.promotion_requested.v1"}, {"inspection-origin-promotion", "origin.inspection_promotion_requested.v1"}, {"media-upload-completed", "media.upload_completed.v1"}, {"media-verification", "media.verified.v1"}, {"media-screening", "media.screened.v1"}, {"capture-submission", "capture.submitted.v1"}, {"capture-environment-removal", "capture.environment_removed.v1"}, {"recapture-request", "recapture.requested.v1"}, {"recapture-completion", "recapture.completed.v1"}, {"recapture-deadline", "recapture.deadline_reached.v1"}, {"video-replacement-deadline", "video_replacement.deadline_reached.v1"}, {"analysis-comparison-requested", "analysis.comparison_requested.v1"}, {"inspection.video", "analysis.video_comparison_requested.v1"}, {"analysis-comparison-completed", "analysis.comparison_completed.v1"}, {"inspection-classified", "inspection.classified.v1"}, {"report-snapshot-created", "report.snapshot_created.v1"}, {"report-ready", "report.ready.v1"}, {"project-stage-changed", "project.stage_changed.v1"}, {"retention-purge-due", "retention.purge_due.v1"}, {"retention-purged", "retention.purged.v1"}}
 
 // ordinaryQueueContracts drops the dedicated video condition queue: the
 // ordinary worker declares it for topology but never consumes video payloads.
@@ -220,6 +224,7 @@ func run() error {
 		return err
 	}
 	inventoryJobs := &inventoryexecutor.Executor{DB: runtimeDB, ClaimDB: db, Processor: inventoryProcessor, Now: time.Now}
+	promotionDeps := promoteorigin.ProcessDependencies{Inventory: inventorycore.Service{DB: runtimeDB, Retention: retentioncore.BaselineTransition{}}, Now: time.Now}
 	requestBuilder, err := buildrequest.Setup(buildrequest.Dependencies{Store: privateStore})
 	if err != nil {
 		return err
@@ -280,14 +285,29 @@ func run() error {
 		}
 		return requestJobs(ctx, tx, envelope)
 	}
-	promotionHandler := func(ctx context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
+	promotionID := func(envelope events.RawEnvelope) (identity.ID, error) {
 		var payload struct {
 			PromotionID identity.ID `json:"promotionId"`
 		}
 		if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.PromotionID == (identity.ID{}) {
-			return messaging.ErrPermanent
+			return identity.ID{}, messaging.ErrPermanent
 		}
-		return originpromote.Process(ctx, runtimeDB, privateStore, envelope.TenantID, payload.PromotionID)
+		return payload.PromotionID, nil
+	}
+	// The deprecated photo promotion keeps its own table and processor.
+	legacyPromotionHandler := func(ctx context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
+		id, err := promotionID(envelope)
+		if err != nil {
+			return err
+		}
+		return originpromote.Process(ctx, runtimeDB, privateStore, envelope.TenantID, id)
+	}
+	promotionHandler := func(ctx context.Context, _ *gorm.DB, envelope events.RawEnvelope) error {
+		id, err := promotionID(envelope)
+		if err != nil {
+			return err
+		}
+		return promoteorigin.Process(ctx, runtimeDB, promotionDeps, envelope.TenantID, id)
 	}
 	classifiedHandler, err := handleclassified.Setup(handleclassified.Dependencies{Notifications: notificationService, CreateSnapshot: createReport, Now: time.Now})
 	if err != nil {
@@ -334,7 +354,7 @@ func run() error {
 			return tx.WithContext(ctx).Create(&database.TriageCaseEvent{ID: identity.NewID(), TenantID: envelope.TenantID, CaseID: triage.ID, ActorID: envelope.TenantID, Kind: "ARCHIVED", Body: "Vistoria cancelada ou invalidada.", CreatedAt: now}).Error
 		},
 		"origin.invitation_requested.v1":        invitationHandler,
-		"origin.promotion_requested.v1":         promotionHandler,
+		"origin.promotion_requested.v1":         legacyPromotionHandler,
 		"media.upload_completed.v1":             uploadCompletedHandler,
 		"media.verified.v1":                     mediaHandler,
 		"recapture.deadline_reached.v1":         deadlineHandler,
@@ -346,7 +366,86 @@ func run() error {
 			}
 			return requestInventoryJobs(ctx, tx, envelope)
 		},
-		"inventory.draft_ready.v1":  inAppNotification,
+		"capture.environment_removed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			var payload events.CaptureEnvironmentRemovedPayload
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.ResponsibilityID == (identity.ID{}) || payload.RequirementKey == "" {
+				return messaging.ErrPermanent
+			}
+			var media []database.MediaObject
+			if err := tx.WithContext(ctx).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status='ABORTED'", envelope.TenantID, payload.ResponsibilityID, payload.RequirementKey).Find(&media).Error; err != nil {
+				return err
+			}
+			deleteKey := func(key string) error {
+				if key == "" {
+					return nil
+				}
+				err := privateStore.Delete(ctx, key)
+				if errors.Is(err, objectstore.ErrNotFound) {
+					return nil
+				}
+				return err
+			}
+			for _, item := range media {
+				var upload database.MultipartUpload
+				if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", envelope.TenantID, item.ID).Take(&upload).Error; err == nil {
+					if upload.UploadID != "" && upload.Status != "COMPLETED" && upload.Status != "ABORTED" {
+						if err := privateStore.Client.AbortMultipart(ctx, privateStore.Bucket, upload.ObjectKey, upload.UploadID); err != nil && !errors.Is(err, objectstore.ErrNotFound) {
+							return err
+						}
+						if err := tx.WithContext(ctx).Model(&upload).Update("status", "ABORTED").Error; err != nil {
+							return err
+						}
+					}
+				} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				if err := deleteKey(item.ObjectKey); err != nil {
+					return err
+				}
+				var derivatives []database.MediaDerivative
+				if err := tx.WithContext(ctx).Where("tenant_id=? AND media_id=?", envelope.TenantID, item.ID).Find(&derivatives).Error; err != nil {
+					return err
+				}
+				for _, derivative := range derivatives {
+					if err := deleteKey(derivative.ObjectKey); err != nil {
+						return err
+					}
+				}
+				var frames []database.VideoFrame
+				if err := tx.WithContext(ctx).Where("tenant_id=? AND source_media_id=?", envelope.TenantID, item.ID).Find(&frames).Error; err != nil {
+					return err
+				}
+				for _, frame := range frames {
+					if err := deleteKey(frame.ObjectKey); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		"origin.inspection_promotion_requested.v1": promotionHandler,
+		"inventory.draft_ready.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			if err := inAppNotification(ctx, tx, envelope); err != nil {
+				return err
+			}
+			var payload events.InventoryDraftReadyPayload
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.OriginVersionID == (identity.ID{}) {
+				return messaging.ErrPermanent
+			}
+			return promoteorigin.ProcessForDraft(ctx, runtimeDB, envelope.TenantID, payload.OriginVersionID, promotionDeps)
+		},
+		// A human may activate a promotion draft before the worker does; the
+		// activation event closes that promotion instead of leaving it open.
+		"inventory.version_activated.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
+			if err := consumeevents.HandleLifecycleEvent(ctx, tx, envelope); err != nil {
+				return err
+			}
+			var payload events.InventoryVersionActivatedPayload
+			if err := json.Unmarshal(envelope.Payload, &payload); err != nil || payload.OriginVersionID == (identity.ID{}) {
+				return messaging.ErrPermanent
+			}
+			return promoteorigin.ProcessForDraft(ctx, runtimeDB, envelope.TenantID, payload.OriginVersionID, promotionDeps)
+		},
 		"counterparty.responded.v1": inAppNotification,
 		"recapture.completed.v1": func(ctx context.Context, tx *gorm.DB, envelope events.RawEnvelope) error {
 			if err := requestJobs(ctx, tx, envelope); err != nil {
@@ -374,7 +473,7 @@ func run() error {
 		return err
 	}
 	return process.ServeWithBackground(cfg.HTTPAddress, mux, cfg.ShutdownTimeout, func(ctx context.Context) error {
-		errCh := make(chan error, 5)
+		errCh := make(chan error, 6)
 		go func() { errCh <- dispatch(ctx) }()
 		go func() { errCh <- consume(ctx) }()
 		go func() {
@@ -422,6 +521,21 @@ func run() error {
 				}
 				if worked && ctx.Err() == nil {
 					continue
+				}
+				select {
+				case <-ctx.Done():
+					errCh <- nil
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				if err := promoteorigin.Reconcile(ctx, runtimeDB, promotionDeps); err != nil && ctx.Err() == nil {
+					log.Printf("inspection origin promotion reconciliation failed: %v", err)
 				}
 				select {
 				case <-ctx.Done():

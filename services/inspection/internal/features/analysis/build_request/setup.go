@@ -103,6 +103,7 @@ func build(store objectstore.Store) processcomparison.RequestBuilder {
 		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 			return llm.StructuredRequest{}, fmt.Errorf("analysis: invalid requirement context")
 		}
+		requirements = capturecore.ActiveRequirements(requirements)
 		var requirement capturecore.Requirement
 		for _, candidate := range requirements {
 			if candidate.Key == job.RequirementKey {

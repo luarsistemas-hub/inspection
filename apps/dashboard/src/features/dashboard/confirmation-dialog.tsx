@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, type ReactNode } from "react";
 import { Confirmation, Dialog, Field, Textarea } from "@inspection/design-system";
 
 type ConfirmationDialogProps = {
@@ -13,6 +13,7 @@ type ConfirmationDialogProps = {
   consequence: string;
   confirmLabel: string;
   reasonLabel?: string;
+  children?: ReactNode;
 };
 
 /** Composes shared modal mechanics with the feature-owned action and reason. */
@@ -26,6 +27,7 @@ export function ConfirmationDialog({
   consequence,
   confirmLabel,
   reasonLabel,
+  children,
 }: ConfirmationDialogProps) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -59,6 +61,7 @@ export function ConfirmationDialog({
   return <Dialog isOpen={isOpen} isDismissable={!busy} onClose={() => { if (!busy) onClose(); }} title={title}>
     <div className="confirmation-dialog">
       {reasonLabel && <Field label={reasonLabel} error={error} required><Textarea value={reason} rows={3} onChange={(event) => setReason(event.target.value)} /></Field>}
+      {children}
       {!reasonLabel && error && <p className="warning" role="alert">{error}</p>}
       <Confirmation
         consequence={consequence}

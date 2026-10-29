@@ -24,9 +24,9 @@ import (
 	"inspection/services/inspection/internal/features/inventory/remove_environment"
 	"inspection/services/inspection/internal/features/inventory/request_cataloging"
 	"inspection/services/inspection/internal/features/inventory/split_item"
-	"inspection/services/inspection/internal/features/inventory/start_from_inspection"
 	"inspection/services/inspection/internal/features/inventory/trail"
 	"inspection/services/inspection/internal/features/inventory/upsert_environment"
+	promoteorigin "inspection/services/inspection/internal/features/origins/promote_inspection_to_origin"
 	retentionexpire "inspection/services/inspection/internal/features/retention/expire_video_sources"
 	"inspection/services/inspection/internal/integration/harness"
 	"inspection/services/inspection/internal/platform/auth"
@@ -274,44 +274,34 @@ func TestInventoryITRequestOriginCatalogingFromLegacyOrigin(t *testing.T) {
 }
 
 func TestInventoryITStartDraftFromCompletedInspection(t *testing.T) {
-	fx := newInventoryITFixture(t, auth.TenantAdmin)
-	sourceVersionID := identity.NewID()
-	inspectionID := identity.NewID()
-	if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
-		now := time.Now().UTC()
-		origin := database.Origin{ID: identity.NewID(), TenantID: fx.seed.TenantID, AssetID: fx.seed.AssetID, Version: 1, ActiveVersionID: &sourceVersionID, CreatedAt: now, UpdatedAt: now}
-		if err := tx.Create(&origin).Error; err != nil {
-			return err
-		}
-		purpose, ready := "MOVE_IN", "READY"
-		source := database.OriginVersion{ID: sourceVersionID, TenantID: fx.seed.TenantID, OriginID: origin.ID, VersionNumber: 1, Purpose: &purpose, Source: "CAPTURE", HasInventory: true, Status: "ACTIVE", DraftState: &ready, IdempotencyKey: "inventory-it-start-source-" + sourceVersionID.String(), CreatedAt: now}
-		if err := tx.Create(&source).Error; err != nil {
-			return err
-		}
-		envID := identity.NewID()
-		if err := tx.Create(&database.InventoryEnvironment{ID: envID, TenantID: fx.seed.TenantID, OriginVersionID: source.ID, IdentityID: identity.NewID(), TypeCode: "LIVING_ROOM", Name: "Sala", Expected: true, Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&database.InventoryItem{ID: identity.NewID(), TenantID: fx.seed.TenantID, OriginVersionID: source.ID, EnvironmentID: envID, IdentityID: identity.NewID(), TypeCode: "SOFA", Name: "Sofá", Condition: "GOOD", Observation: "OBSERVED", Origin: "MANUAL", Declared: true, Decision: "ACCEPTED", Version: 1, CreatedAt: now, UpdatedAt: now}).Error; err != nil {
-			return err
-		}
-		var inspection database.Inspection
-		if err := tx.Where("tenant_id=? AND id=?", fx.seed.TenantID, fx.seed.InspectionID).First(&inspection).Error; err != nil {
-			return err
-		}
-		inspection.ID = inspectionID
-		inspection.SourceKey = "inventory-it-start-" + inspectionID.String()
-		inspection.Status = "COMPLETED"
-		if err := tx.Create(&inspection).Error; err != nil {
-			return err
-		}
-		return tx.Create(&database.ReferenceSnapshot{ID: identity.NewID(), TenantID: fx.seed.TenantID, InspectionID: inspectionID, ReferenceVersionID: &sourceVersionID, ComparisonMode: "FIXED_ORIGIN", Payload: []byte(`{}`), CreatedAt: now}).Error
-	}); err != nil {
-		t.Fatal(err)
-	}
-	response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { startBaselineDraftFromInspection(input:{inspectionId:"%s",clientMutationId:"it-start-from-inspection"}) { version { id status source draftState } userErrors { code field } } }`, inspectionID), fx.ctx, "", "")
-	if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"userErrors":[]`) || !strings.Contains(response, `"status":"DRAFT"`) || !strings.Contains(response, `"source":"COMPARATIVE_INSPECTION"`) || !strings.Contains(response, `"draftState":"READY"`) {
-		t.Fatalf("startBaselineDraftFromInspection failed: %s", response)
+	for _, mode := range []string{"FIXED_ORIGIN", "CHECKLIST_ONLY"} {
+		t.Run(mode, func(t *testing.T) {
+			fx := newInventoryITFixtureWithOptions(t, auth.TenantAdmin, harness.Task06FixtureOptions{InspectionStatus: "COMPLETED", ComparisonMode: mode})
+			if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+				return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fx.seed.TenantID, fx.seed.InspectionID).Update("status", "COMPLETED").Error
+			}); err != nil {
+				t.Fatal(err)
+			}
+			response := executeFixedOriginRequest(t, fx.fixedOriginGraphQLFixture, fmt.Sprintf(`mutation { startBaselineDraftFromInspection(input:{inspectionId:"%s",clientMutationId:"it-start-from-inspection-%s"}) { version { id status source draftState } userErrors { code field } } }`, fx.seed.InspectionID, strings.ToLower(mode)), fx.ctx, "", "")
+			if strings.Contains(response, `"errors"`) || !strings.Contains(response, `"userErrors":[]`) || !strings.Contains(response, `"source":"INSPECTION_PROMOTION"`) {
+				t.Fatalf("startBaselineDraftFromInspection failed: %s", response)
+			}
+			var draft database.OriginVersion
+			if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+				return tx.Where("tenant_id=? AND source_inspection_id=? AND source='INSPECTION_PROMOTION' AND status='DRAFT'", fx.seed.TenantID, fx.seed.InspectionID).Take(&draft).Error
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var copiedItems int64
+			if err := fx.h.WithinTenant(fx.ctx, fx.seed.TenantID, func(tx *gorm.DB) error {
+				return tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND origin_version_id=?", fx.seed.TenantID, draft.ID).Count(&copiedItems).Error
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if copiedItems != 0 {
+				t.Fatalf("draft copied %d items from the reference/comparison", copiedItems)
+			}
+		})
 	}
 }
 
@@ -530,12 +520,18 @@ type inventoryITSeed struct {
 }
 
 func newInventoryITFixture(t *testing.T, role string) api06Fixture {
+	return newInventoryITFixtureWithOptions(t, role, harness.Task06FixtureOptions{})
+}
+
+func newInventoryITFixtureWithOptions(t *testing.T, role string, options harness.Task06FixtureOptions) api06Fixture {
 	t.Helper()
-	fx := newAPI06Fixture(t)
+	fx := newAPI06FixtureWithOptions(t, options)
 	service := core.Service{DB: fx.h.DB, Within: fx.h.WithinTenant}
 	setups := []func() error{
 		func() error { return request_cataloging.Setup(fx.bus, service) },
-		func() error { return start_from_inspection.Setup(fx.bus, service) },
+		func() error {
+			return promoteorigin.Setup(promoteorigin.Dependencies{DB: fx.h.DB, Bus: fx.bus, Authorizer: auth.Authorizer{}, Inventory: service})
+		},
 		func() error { return decide_items.Setup(fx.bus, service) },
 		func() error { return activate_version.Setup(fx.bus, service) },
 		func() error { return discard_draft.Setup(fx.bus, service) },

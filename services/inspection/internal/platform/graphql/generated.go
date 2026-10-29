@@ -568,6 +568,53 @@ type ComplexityRoot struct {
 		UnknownCostCalls  func(childComplexity int) int
 	}
 
+	InspectionOriginPromotionActiveOrigin struct {
+		HasInventory  func(childComplexity int) int
+		ID            func(childComplexity int) int
+		MediaKind     func(childComplexity int) int
+		VersionNumber func(childComplexity int) int
+	}
+
+	InspectionOriginPromotionConflictingDraft struct {
+		DraftState         func(childComplexity int) int
+		ID                 func(childComplexity int) int
+		OwnInspection      func(childComplexity int) int
+		Source             func(childComplexity int) int
+		SourceInspectionID func(childComplexity int) int
+	}
+
+	InspectionOriginPromotionImpediment struct {
+		Code    func(childComplexity int) int
+		Message func(childComplexity int) int
+	}
+
+	InspectionOriginPromotionOperation struct {
+		CompletedAt         func(childComplexity int) int
+		DraftVersionID      func(childComplexity int) int
+		FailureCode         func(childComplexity int) int
+		FailureReason       func(childComplexity int) int
+		ID                  func(childComplexity int) int
+		OriginVersion       func(childComplexity int) int
+		Purpose             func(childComplexity int) int
+		ReplacedDraftID     func(childComplexity int) int
+		RequestedAt         func(childComplexity int) int
+		Retryable           func(childComplexity int) int
+		Status              func(childComplexity int) int
+		SupersededVersionID func(childComplexity int) int
+	}
+
+	InspectionOriginPromotionStatusView struct {
+		ActiveOrigin            func(childComplexity int) int
+		AutomaticCatalogSkipped func(childComplexity int) int
+		ConfirmationDigest      func(childComplexity int) int
+		ConflictingDraft        func(childComplexity int) int
+		CurrentPromotion        func(childComplexity int) int
+		Eligible                func(childComplexity int) int
+		GeneratedVersionActive  func(childComplexity int) int
+		Impediments             func(childComplexity int) int
+		InspectionID            func(childComplexity int) int
+	}
+
 	InspectionPayload struct {
 		ClientMutationID func(childComplexity int) int
 		Inspection       func(childComplexity int) int
@@ -876,6 +923,7 @@ type ComplexityRoot struct {
 		PlanInspection                         func(childComplexity int, input PlanInspectionInput) int
 		PresignMediaParts                      func(childComplexity int, input PresignMediaPartsInput) int
 		PromoteInspectionPhotos                func(childComplexity int, input PromoteInspectionPhotosInput) int
+		PromoteInspectionToOrigin              func(childComplexity int, input PromoteInspectionToOriginInput) int
 		PromoteInspectionVideo                 func(childComplexity int, input PromoteInspectionVideoInput) int
 		PublishReport                          func(childComplexity int, input PublishReportInput) int
 		PublishSegmentDefinition               func(childComplexity int, input PublishSegmentDefinitionInput) int
@@ -1281,6 +1329,13 @@ type ComplexityRoot struct {
 		Status        func(childComplexity int) int
 	}
 
+	PromoteInspectionToOriginPayload struct {
+		ClientMutationID func(childComplexity int) int
+		OriginVersion    func(childComplexity int) int
+		Promotion        func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	PublicationPolicy struct {
 		Mode    func(childComplexity int) int
 		Version func(childComplexity int) int
@@ -1310,6 +1365,7 @@ type ComplexityRoot struct {
 		ExternalCapture                   func(childComplexity int) int
 		Inspection                        func(childComplexity int, id string) int
 		InspectionLLMUsage                func(childComplexity int, inspectionID string, mode *LLMExecutionMode, first *int, after *string) int
+		InspectionOriginPromotion         func(childComplexity int, inspectionID string) int
 		Inspections                       func(childComplexity int, first *int, after *string, history *bool, search *string, statusGroup *InspectionStatusGroup) int
 		InventoryDraft                    func(childComplexity int, originVersionID string) int
 		InventoryTrail                    func(childComplexity int, originVersionID string) int
@@ -1610,6 +1666,8 @@ type ComplexityRoot struct {
 
 	Schedule struct {
 		AssetID                func(childComplexity int) int
+		BlockedAt              func(childComplexity int) int
+		BlockedReason          func(childComplexity int) int
 		BusinessUnitID         func(childComplexity int) int
 		DeadlineMinutes        func(childComplexity int) int
 		ID                     func(childComplexity int) int
@@ -2040,6 +2098,7 @@ type MutationResolver interface {
 	CloseOriginInvitation(ctx context.Context, input CloseOriginInvitationInput) (*OriginVersionPayload, error)
 	PromoteInspectionPhotos(ctx context.Context, input PromoteInspectionPhotosInput) (*OriginPromotionPayload, error)
 	PromoteInspectionVideo(ctx context.Context, input PromoteInspectionVideoInput) (*OriginVersionPayload, error)
+	PromoteInspectionToOrigin(ctx context.Context, input PromoteInspectionToOriginInput) (*PromoteInspectionToOriginPayload, error)
 	DecideInventoryItems(ctx context.Context, input DecideInventoryItemsInput) (*InventoryItemsPayload, error)
 	BulkAcceptInventoryEnvironment(ctx context.Context, input BulkAcceptInventoryEnvironmentInput) (*BulkAcceptInventoryEnvironmentPayload, error)
 	AddInventoryItem(ctx context.Context, input AddInventoryItemInput) (*InventoryItemPayload, error)
@@ -2124,6 +2183,7 @@ type QueryResolver interface {
 	CounterpartyBaseline(ctx context.Context) (*CounterpartyBaseline, error)
 	InventoryTrail(ctx context.Context, originVersionID string) (*InventoryTrail, error)
 	OriginPromotion(ctx context.Context, inspectionID string) (*OriginPromotion, error)
+	InspectionOriginPromotion(ctx context.Context, inspectionID string) (*InspectionOriginPromotionStatusView, error)
 	Schedules(ctx context.Context, first *int, after *string) (*ScheduleConnection, error)
 	Projects(ctx context.Context, first *int, after *string) (*ProjectConnection, error)
 	Project(ctx context.Context, id string) (*Project, error)
@@ -4484,6 +4544,203 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.InspectionLLMUsage.UnknownCostCalls(childComplexity), true
 
+	case "InspectionOriginPromotionActiveOrigin.hasInventory":
+		if e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.HasInventory == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.HasInventory(childComplexity), true
+	case "InspectionOriginPromotionActiveOrigin.id":
+		if e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.ID(childComplexity), true
+	case "InspectionOriginPromotionActiveOrigin.mediaKind":
+		if e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.MediaKind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.MediaKind(childComplexity), true
+	case "InspectionOriginPromotionActiveOrigin.versionNumber":
+		if e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.VersionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionActiveOrigin.VersionNumber(childComplexity), true
+
+	case "InspectionOriginPromotionConflictingDraft.draftState":
+		if e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.DraftState == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.DraftState(childComplexity), true
+	case "InspectionOriginPromotionConflictingDraft.id":
+		if e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.ID(childComplexity), true
+	case "InspectionOriginPromotionConflictingDraft.ownInspection":
+		if e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.OwnInspection == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.OwnInspection(childComplexity), true
+	case "InspectionOriginPromotionConflictingDraft.source":
+		if e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.Source(childComplexity), true
+	case "InspectionOriginPromotionConflictingDraft.sourceInspectionId":
+		if e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.SourceInspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionConflictingDraft.SourceInspectionID(childComplexity), true
+
+	case "InspectionOriginPromotionImpediment.code":
+		if e.ComplexityRoot.InspectionOriginPromotionImpediment.Code == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionImpediment.Code(childComplexity), true
+	case "InspectionOriginPromotionImpediment.message":
+		if e.ComplexityRoot.InspectionOriginPromotionImpediment.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionImpediment.Message(childComplexity), true
+
+	case "InspectionOriginPromotionOperation.completedAt":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.CompletedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.CompletedAt(childComplexity), true
+	case "InspectionOriginPromotionOperation.draftVersionId":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.DraftVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.DraftVersionID(childComplexity), true
+	case "InspectionOriginPromotionOperation.failureCode":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.FailureCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.FailureCode(childComplexity), true
+	case "InspectionOriginPromotionOperation.failureReason":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.FailureReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.FailureReason(childComplexity), true
+	case "InspectionOriginPromotionOperation.id":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.ID(childComplexity), true
+	case "InspectionOriginPromotionOperation.originVersion":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.OriginVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.OriginVersion(childComplexity), true
+	case "InspectionOriginPromotionOperation.purpose":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.Purpose(childComplexity), true
+	case "InspectionOriginPromotionOperation.replacedDraftId":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.ReplacedDraftID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.ReplacedDraftID(childComplexity), true
+	case "InspectionOriginPromotionOperation.requestedAt":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.RequestedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.RequestedAt(childComplexity), true
+	case "InspectionOriginPromotionOperation.retryable":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.Retryable == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.Retryable(childComplexity), true
+	case "InspectionOriginPromotionOperation.status":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.Status(childComplexity), true
+	case "InspectionOriginPromotionOperation.supersededVersionId":
+		if e.ComplexityRoot.InspectionOriginPromotionOperation.SupersededVersionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionOperation.SupersededVersionID(childComplexity), true
+
+	case "InspectionOriginPromotionStatusView.activeOrigin":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.ActiveOrigin == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.ActiveOrigin(childComplexity), true
+	case "InspectionOriginPromotionStatusView.automaticCatalogSkipped":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.AutomaticCatalogSkipped == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.AutomaticCatalogSkipped(childComplexity), true
+	case "InspectionOriginPromotionStatusView.confirmationDigest":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.ConfirmationDigest == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.ConfirmationDigest(childComplexity), true
+	case "InspectionOriginPromotionStatusView.conflictingDraft":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.ConflictingDraft == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.ConflictingDraft(childComplexity), true
+	case "InspectionOriginPromotionStatusView.currentPromotion":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.CurrentPromotion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.CurrentPromotion(childComplexity), true
+	case "InspectionOriginPromotionStatusView.eligible":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.Eligible == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.Eligible(childComplexity), true
+	case "InspectionOriginPromotionStatusView.generatedVersionActive":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.GeneratedVersionActive == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.GeneratedVersionActive(childComplexity), true
+	case "InspectionOriginPromotionStatusView.impediments":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.Impediments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.Impediments(childComplexity), true
+	case "InspectionOriginPromotionStatusView.inspectionId":
+		if e.ComplexityRoot.InspectionOriginPromotionStatusView.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.InspectionOriginPromotionStatusView.InspectionID(childComplexity), true
+
 	case "InspectionPayload.clientMutationId":
 		if e.ComplexityRoot.InspectionPayload.ClientMutationID == nil {
 			break
@@ -6134,6 +6391,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PromoteInspectionPhotos(childComplexity, args["input"].(PromoteInspectionPhotosInput)), true
+	case "Mutation.promoteInspectionToOrigin":
+		if e.ComplexityRoot.Mutation.PromoteInspectionToOrigin == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_promoteInspectionToOrigin_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PromoteInspectionToOrigin(childComplexity, args["input"].(PromoteInspectionToOriginInput)), true
 	case "Mutation.promoteInspectionVideo":
 		if e.ComplexityRoot.Mutation.PromoteInspectionVideo == nil {
 			break
@@ -8128,6 +8396,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ProjectTimelineEntry.Status(childComplexity), true
 
+	case "PromoteInspectionToOriginPayload.clientMutationId":
+		if e.ComplexityRoot.PromoteInspectionToOriginPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PromoteInspectionToOriginPayload.ClientMutationID(childComplexity), true
+	case "PromoteInspectionToOriginPayload.originVersion":
+		if e.ComplexityRoot.PromoteInspectionToOriginPayload.OriginVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PromoteInspectionToOriginPayload.OriginVersion(childComplexity), true
+	case "PromoteInspectionToOriginPayload.promotion":
+		if e.ComplexityRoot.PromoteInspectionToOriginPayload.Promotion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PromoteInspectionToOriginPayload.Promotion(childComplexity), true
+	case "PromoteInspectionToOriginPayload.userErrors":
+		if e.ComplexityRoot.PromoteInspectionToOriginPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PromoteInspectionToOriginPayload.UserErrors(childComplexity), true
+
 	case "PublicationPolicy.mode":
 		if e.ComplexityRoot.PublicationPolicy.Mode == nil {
 			break
@@ -8332,6 +8625,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.InspectionLLMUsage(childComplexity, args["inspectionId"].(string), args["mode"].(*LLMExecutionMode), args["first"].(*int), args["after"].(*string)), true
+	case "Query.inspectionOriginPromotion":
+		if e.ComplexityRoot.Query.InspectionOriginPromotion == nil {
+			break
+		}
+
+		args, err := ec.field_Query_inspectionOriginPromotion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.InspectionOriginPromotion(childComplexity, args["inspectionId"].(string)), true
 	case "Query.inspections":
 		if e.ComplexityRoot.Query.Inspections == nil {
 			break
@@ -9825,6 +10129,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Schedule.AssetID(childComplexity), true
+	case "Schedule.blockedAt":
+		if e.ComplexityRoot.Schedule.BlockedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Schedule.BlockedAt(childComplexity), true
+	case "Schedule.blockedReason":
+		if e.ComplexityRoot.Schedule.BlockedReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Schedule.BlockedReason(childComplexity), true
 	case "Schedule.businessUnitId":
 		if e.ComplexityRoot.Schedule.BusinessUnitID == nil {
 			break
@@ -11392,6 +11708,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPresignMediaPartsInput,
 		ec.unmarshalInputProjectTransitionInput,
 		ec.unmarshalInputPromoteInspectionPhotosInput,
+		ec.unmarshalInputPromoteInspectionToOriginInput,
 		ec.unmarshalInputPromoteInspectionVideoInput,
 		ec.unmarshalInputPublishReportInput,
 		ec.unmarshalInputPublishSegmentDefinitionInput,
@@ -11547,7 +11864,8 @@ type Query {
   baselinePolicy: BaselinePolicy!
 	counterpartyBaseline: CounterpartyBaseline!
 	inventoryTrail(originVersionId: ID!): InventoryTrail!
-  originPromotion(inspectionId: ID!): OriginPromotion
+  originPromotion(inspectionId: ID!): OriginPromotion @deprecated(reason: "Use inspectionOriginPromotion.")
+  inspectionOriginPromotion(inspectionId: ID!): InspectionOriginPromotionStatusView!
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
@@ -11654,8 +11972,9 @@ type Mutation {
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   closeOriginInvitation(input: CloseOriginInvitationInput!): OriginVersionPayload!
-  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
-  promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload!
+  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload! @deprecated(reason: "Use promoteInspectionToOrigin.")
+  promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload! @deprecated(reason: "Use promoteInspectionToOrigin.")
+  promoteInspectionToOrigin(input: PromoteInspectionToOriginInput!): PromoteInspectionToOriginPayload!
   decideInventoryItems(input: DecideInventoryItemsInput!): InventoryItemsPayload!
   bulkAcceptInventoryEnvironment(input: BulkAcceptInventoryEnvironmentInput!): BulkAcceptInventoryEnvironmentPayload!
   addInventoryItem(input: AddInventoryItemInput!): InventoryItemPayload!
@@ -11738,6 +12057,7 @@ type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeV
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! isVideo: Boolean! mediaKind: String! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
+enum InspectionOriginPromotionStatus { PREPARING ACTIVATING COMPLETED FAILED CANCELED NEEDS_CONFIRMATION }
 enum AnalysisPromptTask { FINDINGS INVENTORY_CATALOG INVENTORY_COMPARE }
 enum CaptureComparisonMode { CHECKLIST_ONLY FIXED_ORIGIN }
 type AnalysisPrompt { analysisType: AnalysisType! task: AnalysisPromptTask! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
@@ -11791,13 +12111,20 @@ input DiscardBaselineDraftInput { originVersionId: ID! clientMutationId: String!
 input RequestOriginCatalogingInput { assetId: ID! clientMutationId: String! }
 input RetryInventoryDraftInput { originVersionId: ID! clientMutationId: String! }
 input StartBaselineDraftFromInspectionInput { inspectionId: ID! clientMutationId: String! }
+input PromoteInspectionToOriginInput { inspectionId: ID! clientMutationId: String! purpose: String = "INVENTORY_UPDATE" replaceDraftId: ID confirmationDigest: String! }
 type InventoryItemsPayload { items: [InventoryItem!]! emptyEnvironments: [ID!]! userErrors: [UserError!]! clientMutationId: String! }
 type InventoryItemPayload { item: InventoryItem userErrors: [UserError!]! clientMutationId: String! }
 type InventoryEnvironmentPayload { environment: InventoryEnvironment userErrors: [UserError!]! clientMutationId: String! }
 type BulkAcceptInventoryEnvironmentPayload { acceptedCount: Int! userErrors: [UserError!]! clientMutationId: String! }
 type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
-type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
+type InspectionOriginPromotionImpediment { code: String! message: String! }
+type InspectionOriginPromotionOperation { id: ID! status: InspectionOriginPromotionStatus! purpose: String! failureCode: String failureReason: String retryable: Boolean! originVersion: OriginVersion supersededVersionId: ID draftVersionId: ID replacedDraftId: ID requestedAt: String completedAt: String }
+type InspectionOriginPromotionActiveOrigin { id: ID! versionNumber: Int! mediaKind: String! hasInventory: Boolean! }
+type InspectionOriginPromotionConflictingDraft { id: ID! source: String! sourceInspectionId: ID draftState: String ownInspection: Boolean! }
+type InspectionOriginPromotionStatusView { inspectionId: ID! eligible: Boolean! impediments: [InspectionOriginPromotionImpediment!]! activeOrigin: InspectionOriginPromotionActiveOrigin conflictingDraft: InspectionOriginPromotionConflictingDraft automaticCatalogSkipped: Boolean! confirmationDigest: String! currentPromotion: InspectionOriginPromotionOperation generatedVersionActive: Boolean! }
+type PromoteInspectionToOriginPayload { clientMutationId: String! promotion: InspectionOriginPromotionOperation originVersion: OriginVersion userErrors: [UserError!]! }
+type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! blockedReason: String blockedAt: String }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 enum InspectionStatusGroup { PLANNING EXECUTION ATTENTION COMPLETED CLOSED }
 enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQUESTED }
@@ -12102,7 +12429,7 @@ input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clie
 input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
 input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON replacesMediaId: ID clientMutationId: String! }
 input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String reasonCode: String reasonText: String expectedVersion: Int clientMutationId: String! }
-input DeclareCaptureEnvironmentInput { typeCode: String! name: String! clientMutationId: String! }
+input DeclareCaptureEnvironmentInput { typeCode: String name: String requirementKey: String remove: Boolean = false clientMutationId: String! }
 input RecordCaptureQualityWarningInput { requirementKey: String! code: String! ignored: Boolean! clientMutationId: String! }
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }
@@ -13229,6 +13556,100 @@ func (ec *executionContext) childFields_InspectionLLMUsage(ctx context.Context, 
 		return ec.fieldContext_InspectionLLMUsage_pageInfo(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type InspectionLLMUsage", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionOriginPromotionActiveOrigin(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InspectionOriginPromotionActiveOrigin_id(ctx, field)
+	case "versionNumber":
+		return ec.fieldContext_InspectionOriginPromotionActiveOrigin_versionNumber(ctx, field)
+	case "mediaKind":
+		return ec.fieldContext_InspectionOriginPromotionActiveOrigin_mediaKind(ctx, field)
+	case "hasInventory":
+		return ec.fieldContext_InspectionOriginPromotionActiveOrigin_hasInventory(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionOriginPromotionActiveOrigin", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionOriginPromotionConflictingDraft(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InspectionOriginPromotionConflictingDraft_id(ctx, field)
+	case "source":
+		return ec.fieldContext_InspectionOriginPromotionConflictingDraft_source(ctx, field)
+	case "sourceInspectionId":
+		return ec.fieldContext_InspectionOriginPromotionConflictingDraft_sourceInspectionId(ctx, field)
+	case "draftState":
+		return ec.fieldContext_InspectionOriginPromotionConflictingDraft_draftState(ctx, field)
+	case "ownInspection":
+		return ec.fieldContext_InspectionOriginPromotionConflictingDraft_ownInspection(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionOriginPromotionConflictingDraft", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionOriginPromotionImpediment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "code":
+		return ec.fieldContext_InspectionOriginPromotionImpediment_code(ctx, field)
+	case "message":
+		return ec.fieldContext_InspectionOriginPromotionImpediment_message(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionOriginPromotionImpediment", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionOriginPromotionOperation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_InspectionOriginPromotionOperation_id(ctx, field)
+	case "status":
+		return ec.fieldContext_InspectionOriginPromotionOperation_status(ctx, field)
+	case "purpose":
+		return ec.fieldContext_InspectionOriginPromotionOperation_purpose(ctx, field)
+	case "failureCode":
+		return ec.fieldContext_InspectionOriginPromotionOperation_failureCode(ctx, field)
+	case "failureReason":
+		return ec.fieldContext_InspectionOriginPromotionOperation_failureReason(ctx, field)
+	case "retryable":
+		return ec.fieldContext_InspectionOriginPromotionOperation_retryable(ctx, field)
+	case "originVersion":
+		return ec.fieldContext_InspectionOriginPromotionOperation_originVersion(ctx, field)
+	case "supersededVersionId":
+		return ec.fieldContext_InspectionOriginPromotionOperation_supersededVersionId(ctx, field)
+	case "draftVersionId":
+		return ec.fieldContext_InspectionOriginPromotionOperation_draftVersionId(ctx, field)
+	case "replacedDraftId":
+		return ec.fieldContext_InspectionOriginPromotionOperation_replacedDraftId(ctx, field)
+	case "requestedAt":
+		return ec.fieldContext_InspectionOriginPromotionOperation_requestedAt(ctx, field)
+	case "completedAt":
+		return ec.fieldContext_InspectionOriginPromotionOperation_completedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionOriginPromotionOperation", field.Name)
+}
+
+func (ec *executionContext) childFields_InspectionOriginPromotionStatusView(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_inspectionId(ctx, field)
+	case "eligible":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_eligible(ctx, field)
+	case "impediments":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_impediments(ctx, field)
+	case "activeOrigin":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_activeOrigin(ctx, field)
+	case "conflictingDraft":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_conflictingDraft(ctx, field)
+	case "automaticCatalogSkipped":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_automaticCatalogSkipped(ctx, field)
+	case "confirmationDigest":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_confirmationDigest(ctx, field)
+	case "currentPromotion":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_currentPromotion(ctx, field)
+	case "generatedVersionActive":
+		return ec.fieldContext_InspectionOriginPromotionStatusView_generatedVersionActive(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type InspectionOriginPromotionStatusView", field.Name)
 }
 
 func (ec *executionContext) childFields_InspectionPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -14449,6 +14870,20 @@ func (ec *executionContext) childFields_ProjectTimelineEntry(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type ProjectTimelineEntry", field.Name)
 }
 
+func (ec *executionContext) childFields_PromoteInspectionToOriginPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "clientMutationId":
+		return ec.fieldContext_PromoteInspectionToOriginPayload_clientMutationId(ctx, field)
+	case "promotion":
+		return ec.fieldContext_PromoteInspectionToOriginPayload_promotion(ctx, field)
+	case "originVersion":
+		return ec.fieldContext_PromoteInspectionToOriginPayload_originVersion(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_PromoteInspectionToOriginPayload_userErrors(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PromoteInspectionToOriginPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_PublicationPolicy(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "mode":
@@ -15011,6 +15446,10 @@ func (ec *executionContext) childFields_Schedule(ctx context.Context, field grap
 		return ec.fieldContext_Schedule_status(ctx, field)
 	case "version":
 		return ec.fieldContext_Schedule_version(ctx, field)
+	case "blockedReason":
+		return ec.fieldContext_Schedule_blockedReason(ctx, field)
+	case "blockedAt":
+		return ec.fieldContext_Schedule_blockedAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Schedule", field.Name)
 }
@@ -16547,6 +16986,20 @@ func (ec *executionContext) field_Mutation_promoteInspectionPhotos_args(ctx cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_promoteInspectionToOrigin_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (PromoteInspectionToOriginInput, error) {
+			return ec.unmarshalNPromoteInspectionToOriginInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionToOriginInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_promoteInspectionVideo_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -17630,6 +18083,20 @@ func (ec *executionContext) field_Query_inspectionLLMUsage_args(ctx context.Cont
 		return nil, err
 	}
 	args["after"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_inspectionOriginPromotion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inspectionId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["inspectionId"] = arg0
 	return args, nil
 }
 
@@ -27705,6 +28172,787 @@ func (ec *executionContext) fieldContext_InspectionLLMUsage_pageInfo(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _InspectionOriginPromotionActiveOrigin_id(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionActiveOrigin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionActiveOrigin_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionActiveOrigin_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionActiveOrigin", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionActiveOrigin_versionNumber(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionActiveOrigin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionActiveOrigin_versionNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.VersionNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionActiveOrigin_versionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionActiveOrigin", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionActiveOrigin_mediaKind(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionActiveOrigin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionActiveOrigin_mediaKind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.MediaKind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionActiveOrigin_mediaKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionActiveOrigin", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionActiveOrigin_hasInventory(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionActiveOrigin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionActiveOrigin_hasInventory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HasInventory, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionActiveOrigin_hasInventory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionActiveOrigin", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft_id(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionConflictingDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionConflictingDraft_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionConflictingDraft_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionConflictingDraft", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft_source(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionConflictingDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionConflictingDraft_source(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionConflictingDraft_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionConflictingDraft", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft_sourceInspectionId(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionConflictingDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionConflictingDraft_sourceInspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SourceInspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionConflictingDraft_sourceInspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionConflictingDraft", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft_draftState(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionConflictingDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionConflictingDraft_draftState(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DraftState, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionConflictingDraft_draftState(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionConflictingDraft", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft_ownInspection(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionConflictingDraft) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionConflictingDraft_ownInspection(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OwnInspection, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionConflictingDraft_ownInspection(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionConflictingDraft", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionImpediment_code(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionImpediment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionImpediment_code(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Code, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionImpediment_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionImpediment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionImpediment_message(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionImpediment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionImpediment_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionImpediment_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionImpediment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_id(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_status(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v InspectionOriginPromotionStatus) graphql.Marshaler {
+			return ec.marshalNInspectionOriginPromotionStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type InspectionOriginPromotionStatus does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_purpose(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_purpose(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_failureCode(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_failureCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailureCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_failureCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_failureReason(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_failureReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FailureReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_failureReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_retryable(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_retryable(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Retryable, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_retryable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_originVersion(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_originVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersion) graphql.Marshaler {
+			return ec.marshalOOriginVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_originVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InspectionOriginPromotionOperation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_supersededVersionId(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_supersededVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SupersededVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_supersededVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_draftVersionId(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_draftVersionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DraftVersionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_draftVersionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_replacedDraftId(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_replacedDraftId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReplacedDraftID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_replacedDraftId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_requestedAt(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_requestedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequestedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_requestedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation_completedAt(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionOperation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionOperation_completedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CompletedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionOperation_completedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionOperation", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_inspectionId(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionStatusView", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_eligible(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_eligible(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Eligible, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_eligible(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionStatusView", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_impediments(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_impediments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Impediments, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*InspectionOriginPromotionImpediment) graphql.Marshaler {
+			return ec.marshalNInspectionOriginPromotionImpediment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionImpedimentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_impediments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InspectionOriginPromotionStatusView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionImpediment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_activeOrigin(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_activeOrigin(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveOrigin, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionOriginPromotionActiveOrigin) graphql.Marshaler {
+			return ec.marshalOInspectionOriginPromotionActiveOrigin2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionActiveOrigin(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_activeOrigin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InspectionOriginPromotionStatusView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionActiveOrigin(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_conflictingDraft(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_conflictingDraft(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConflictingDraft, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionOriginPromotionConflictingDraft) graphql.Marshaler {
+			return ec.marshalOInspectionOriginPromotionConflictingDraft2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionConflictingDraft(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_conflictingDraft(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InspectionOriginPromotionStatusView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionConflictingDraft(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_automaticCatalogSkipped(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_automaticCatalogSkipped(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AutomaticCatalogSkipped, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_automaticCatalogSkipped(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionStatusView", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_confirmationDigest(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_confirmationDigest(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ConfirmationDigest, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_confirmationDigest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionStatusView", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_currentPromotion(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_currentPromotion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPromotion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionOriginPromotionOperation) graphql.Marshaler {
+			return ec.marshalOInspectionOriginPromotionOperation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionOperation(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_currentPromotion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InspectionOriginPromotionStatusView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionOperation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView_generatedVersionActive(ctx context.Context, field graphql.CollectedField, obj *InspectionOriginPromotionStatusView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_InspectionOriginPromotionStatusView_generatedVersionActive(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GeneratedVersionActive, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_InspectionOriginPromotionStatusView_generatedVersionActive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("InspectionOriginPromotionStatusView", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _InspectionPayload_inspection(ctx context.Context, field graphql.CollectedField, obj *InspectionPayload) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34225,6 +35473,50 @@ func (ec *executionContext) fieldContext_Mutation_promoteInspectionVideo(ctx con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_promoteInspectionVideo_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_promoteInspectionToOrigin(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_promoteInspectionToOrigin(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PromoteInspectionToOrigin(ctx, fc.Args["input"].(PromoteInspectionToOriginInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PromoteInspectionToOriginPayload) graphql.Marshaler {
+			return ec.marshalNPromoteInspectionToOriginPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionToOriginPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_promoteInspectionToOrigin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PromoteInspectionToOriginPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_promoteInspectionToOrigin_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -42313,6 +43605,125 @@ func (ec *executionContext) fieldContext_ProjectTimelineEntry_occurredAt(_ conte
 	return graphql.NewScalarFieldContext("ProjectTimelineEntry", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _PromoteInspectionToOriginPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *PromoteInspectionToOriginPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PromoteInspectionToOriginPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PromoteInspectionToOriginPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PromoteInspectionToOriginPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _PromoteInspectionToOriginPayload_promotion(ctx context.Context, field graphql.CollectedField, obj *PromoteInspectionToOriginPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PromoteInspectionToOriginPayload_promotion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Promotion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionOriginPromotionOperation) graphql.Marshaler {
+			return ec.marshalOInspectionOriginPromotionOperation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionOperation(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PromoteInspectionToOriginPayload_promotion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PromoteInspectionToOriginPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionOperation(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PromoteInspectionToOriginPayload_originVersion(ctx context.Context, field graphql.CollectedField, obj *PromoteInspectionToOriginPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PromoteInspectionToOriginPayload_originVersion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OriginVersion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OriginVersion) graphql.Marshaler {
+			return ec.marshalOOriginVersion2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐOriginVersion(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PromoteInspectionToOriginPayload_originVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PromoteInspectionToOriginPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OriginVersion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PromoteInspectionToOriginPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *PromoteInspectionToOriginPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PromoteInspectionToOriginPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PromoteInspectionToOriginPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PromoteInspectionToOriginPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PublicationPolicy_mode(ctx context.Context, field graphql.CollectedField, obj *PublicationPolicy) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -43512,6 +44923,50 @@ func (ec *executionContext) fieldContext_Query_originPromotion(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_originPromotion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_inspectionOriginPromotion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_inspectionOriginPromotion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().InspectionOriginPromotion(ctx, fc.Args["inspectionId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *InspectionOriginPromotionStatusView) graphql.Marshaler {
+			return ec.marshalNInspectionOriginPromotionStatusView2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionStatusView(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_inspectionOriginPromotion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_InspectionOriginPromotionStatusView(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_inspectionOriginPromotion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -49600,6 +51055,52 @@ func (ec *executionContext) _Schedule_version(ctx context.Context, field graphql
 }
 func (ec *executionContext) fieldContext_Schedule_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Schedule_blockedReason(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Schedule_blockedReason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BlockedReason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Schedule_blockedReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Schedule_blockedAt(ctx context.Context, field graphql.CollectedField, obj *Schedule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Schedule_blockedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BlockedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Schedule_blockedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Schedule", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ScheduleConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *ScheduleConnection) (ret graphql.Marshaler) {
@@ -58344,7 +59845,11 @@ func (ec *executionContext) unmarshalInputDeclareCaptureEnvironmentInput(ctx con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"typeCode", "name", "clientMutationId"}
+	if _, present := asMap["remove"]; !present {
+		asMap["remove"] = false
+	}
+
+	fieldsInOrder := [...]string{"typeCode", "name", "requirementKey", "remove", "clientMutationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -58353,18 +59858,32 @@ func (ec *executionContext) unmarshalInputDeclareCaptureEnvironmentInput(ctx con
 		switch k {
 		case "typeCode":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("typeCode"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.TypeCode = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Name = data
+		case "requirementKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("requirementKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RequirementKey = data
+		case "remove":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("remove"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Remove = data
 		case "clientMutationId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -59877,6 +61396,68 @@ func (ec *executionContext) unmarshalInputPromoteInspectionPhotosInput(ctx conte
 				return it, err
 			}
 			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputPromoteInspectionToOriginInput(ctx context.Context, obj any) (PromoteInspectionToOriginInput, error) {
+	var it PromoteInspectionToOriginInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["purpose"]; !present {
+		asMap["purpose"] = "INVENTORY_UPDATE"
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "clientMutationId", "purpose", "replaceDraftId", "confirmationDigest"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		case "purpose":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("purpose"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Purpose = data
+		case "replaceDraftId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("replaceDraftId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ReplaceDraftID = data
+		case "confirmationDigest":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("confirmationDigest"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ConfirmationDigest = data
 		}
 	}
 	return it, nil
@@ -65997,6 +67578,331 @@ func (ec *executionContext) _InspectionLLMUsage(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var inspectionOriginPromotionActiveOriginImplementors = []string{"InspectionOriginPromotionActiveOrigin"}
+
+func (ec *executionContext) _InspectionOriginPromotionActiveOrigin(ctx context.Context, sel ast.SelectionSet, obj *InspectionOriginPromotionActiveOrigin) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionOriginPromotionActiveOriginImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionOriginPromotionActiveOrigin")
+		case "id":
+			out.Values[i] = ec._InspectionOriginPromotionActiveOrigin_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "versionNumber":
+			out.Values[i] = ec._InspectionOriginPromotionActiveOrigin_versionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mediaKind":
+			out.Values[i] = ec._InspectionOriginPromotionActiveOrigin_mediaKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hasInventory":
+			out.Values[i] = ec._InspectionOriginPromotionActiveOrigin_hasInventory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inspectionOriginPromotionConflictingDraftImplementors = []string{"InspectionOriginPromotionConflictingDraft"}
+
+func (ec *executionContext) _InspectionOriginPromotionConflictingDraft(ctx context.Context, sel ast.SelectionSet, obj *InspectionOriginPromotionConflictingDraft) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionOriginPromotionConflictingDraftImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionOriginPromotionConflictingDraft")
+		case "id":
+			out.Values[i] = ec._InspectionOriginPromotionConflictingDraft_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "source":
+			out.Values[i] = ec._InspectionOriginPromotionConflictingDraft_source(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceInspectionId":
+			out.Values[i] = ec._InspectionOriginPromotionConflictingDraft_sourceInspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "draftState":
+			out.Values[i] = ec._InspectionOriginPromotionConflictingDraft_draftState(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "ownInspection":
+			out.Values[i] = ec._InspectionOriginPromotionConflictingDraft_ownInspection(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inspectionOriginPromotionImpedimentImplementors = []string{"InspectionOriginPromotionImpediment"}
+
+func (ec *executionContext) _InspectionOriginPromotionImpediment(ctx context.Context, sel ast.SelectionSet, obj *InspectionOriginPromotionImpediment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionOriginPromotionImpedimentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionOriginPromotionImpediment")
+		case "code":
+			out.Values[i] = ec._InspectionOriginPromotionImpediment_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._InspectionOriginPromotionImpediment_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inspectionOriginPromotionOperationImplementors = []string{"InspectionOriginPromotionOperation"}
+
+func (ec *executionContext) _InspectionOriginPromotionOperation(ctx context.Context, sel ast.SelectionSet, obj *InspectionOriginPromotionOperation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionOriginPromotionOperationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionOriginPromotionOperation")
+		case "id":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purpose":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failureCode":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_failureCode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "failureReason":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_failureReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "retryable":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_retryable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "originVersion":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_originVersion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "supersededVersionId":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_supersededVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "draftVersionId":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_draftVersionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "replacedDraftId":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_replacedDraftId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "requestedAt":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_requestedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "completedAt":
+			out.Values[i] = ec._InspectionOriginPromotionOperation_completedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var inspectionOriginPromotionStatusViewImplementors = []string{"InspectionOriginPromotionStatusView"}
+
+func (ec *executionContext) _InspectionOriginPromotionStatusView(ctx context.Context, sel ast.SelectionSet, obj *InspectionOriginPromotionStatusView) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, inspectionOriginPromotionStatusViewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InspectionOriginPromotionStatusView")
+		case "inspectionId":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "eligible":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_eligible(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "impediments":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_impediments(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "activeOrigin":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_activeOrigin(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "conflictingDraft":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_conflictingDraft(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "automaticCatalogSkipped":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_automaticCatalogSkipped(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "confirmationDigest":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_confirmationDigest(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currentPromotion":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_currentPromotion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "generatedVersionActive":
+			out.Values[i] = ec._InspectionOriginPromotionStatusView_generatedVersionActive(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var inspectionPayloadImplementors = []string{"InspectionPayload"}
 
 func (ec *executionContext) _InspectionPayload(ctx context.Context, sel ast.SelectionSet, obj *InspectionPayload) graphql.Marshaler {
@@ -68102,6 +70008,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "promoteInspectionVideo":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_promoteInspectionVideo(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "promoteInspectionToOrigin":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_promoteInspectionToOrigin(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -71011,6 +72924,59 @@ func (ec *executionContext) _ProjectTimelineEntry(ctx context.Context, sel ast.S
 	return out
 }
 
+var promoteInspectionToOriginPayloadImplementors = []string{"PromoteInspectionToOriginPayload"}
+
+func (ec *executionContext) _PromoteInspectionToOriginPayload(ctx context.Context, sel ast.SelectionSet, obj *PromoteInspectionToOriginPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, promoteInspectionToOriginPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PromoteInspectionToOriginPayload")
+		case "clientMutationId":
+			out.Values[i] = ec._PromoteInspectionToOriginPayload_clientMutationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "promotion":
+			out.Values[i] = ec._PromoteInspectionToOriginPayload_promotion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "originVersion":
+			out.Values[i] = ec._PromoteInspectionToOriginPayload_originVersion(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._PromoteInspectionToOriginPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var publicationPolicyImplementors = []string{"PublicationPolicy"}
 
 func (ec *executionContext) _PublicationPolicy(ctx context.Context, sel ast.SelectionSet, obj *PublicationPolicy) graphql.Marshaler {
@@ -71683,6 +73649,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}()
 				res = ec._Query_originPromotion(ctx, field)
 				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "inspectionOriginPromotion":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_inspectionOriginPromotion(ctx, field)
+				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
 				return res
@@ -74391,6 +76379,16 @@ func (ec *executionContext) _Schedule(ctx context.Context, sel ast.SelectionSet,
 		case "version":
 			out.Values[i] = ec._Schedule_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "blockedReason":
+			out.Values[i] = ec._Schedule_blockedReason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "blockedAt":
+			out.Values[i] = ec._Schedule_blockedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -78496,6 +80494,52 @@ func (ec *executionContext) marshalNInspectionLLMUsage2ᚖinspectionᚋservices�
 	return ec._InspectionLLMUsage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInspectionOriginPromotionImpediment2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionImpedimentᚄ(ctx context.Context, sel ast.SelectionSet, v []*InspectionOriginPromotionImpediment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNInspectionOriginPromotionImpediment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionImpediment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInspectionOriginPromotionImpediment2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionImpediment(ctx context.Context, sel ast.SelectionSet, v *InspectionOriginPromotionImpediment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InspectionOriginPromotionImpediment(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNInspectionOriginPromotionStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionStatus(ctx context.Context, v any) (InspectionOriginPromotionStatus, error) {
+	var res InspectionOriginPromotionStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInspectionOriginPromotionStatus2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionStatus(ctx context.Context, sel ast.SelectionSet, v InspectionOriginPromotionStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNInspectionOriginPromotionStatusView2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionStatusView(ctx context.Context, sel ast.SelectionSet, v *InspectionOriginPromotionStatusView) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InspectionOriginPromotionStatusView(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInspectionPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionPayload(ctx context.Context, sel ast.SelectionSet, v *InspectionPayload) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -79587,6 +81631,21 @@ func (ec *executionContext) unmarshalNProjectTransitionInput2inspectionᚋservic
 func (ec *executionContext) unmarshalNPromoteInspectionPhotosInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionPhotosInput(ctx context.Context, v any) (PromoteInspectionPhotosInput, error) {
 	res, err := ec.unmarshalInputPromoteInspectionPhotosInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNPromoteInspectionToOriginInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionToOriginInput(ctx context.Context, v any) (PromoteInspectionToOriginInput, error) {
+	res, err := ec.unmarshalInputPromoteInspectionToOriginInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPromoteInspectionToOriginPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionToOriginPayload(ctx context.Context, sel ast.SelectionSet, v *PromoteInspectionToOriginPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._PromoteInspectionToOriginPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNPromoteInspectionVideoInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐPromoteInspectionVideoInput(ctx context.Context, v any) (PromoteInspectionVideoInput, error) {
@@ -81286,6 +83345,27 @@ func (ec *executionContext) marshalOInspectionAttention2ᚖinspectionᚋservices
 		return graphql.Null
 	}
 	return ec._InspectionAttention(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInspectionOriginPromotionActiveOrigin2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionActiveOrigin(ctx context.Context, sel ast.SelectionSet, v *InspectionOriginPromotionActiveOrigin) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InspectionOriginPromotionActiveOrigin(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInspectionOriginPromotionConflictingDraft2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionConflictingDraft(ctx context.Context, sel ast.SelectionSet, v *InspectionOriginPromotionConflictingDraft) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InspectionOriginPromotionConflictingDraft(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOInspectionOriginPromotionOperation2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionOriginPromotionOperation(ctx context.Context, sel ast.SelectionSet, v *InspectionOriginPromotionOperation) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._InspectionOriginPromotionOperation(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOInspectionStatusGroup2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐInspectionStatusGroup(ctx context.Context, v any) (*InspectionStatusGroup, error) {

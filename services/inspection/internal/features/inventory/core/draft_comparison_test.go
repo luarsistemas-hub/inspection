@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"inspection/libs/identity"
@@ -96,18 +95,7 @@ func (s comparisonScenario) start(t *testing.T) (database.OriginVersion, []datab
 	return draft, items
 }
 
-func (s comparisonScenario) copiedSink(t *testing.T, items []database.InventoryItem) database.InventoryItem {
-	t.Helper()
-	for _, item := range items {
-		if item.IdentityID == s.itemIdentity {
-			return item
-		}
-	}
-	t.Fatalf("copied sink missing from %+v", items)
-	return database.InventoryItem{}
-}
-
-func TestStartFromInspectionImportsOnlyTheCurrentGeneration(t *testing.T) {
+func TestStartFromInspectionDoesNotImportReferenceOrComparisonItems(t *testing.T) {
 	s := newComparisonScenario(t)
 	key := "env:" + s.envIdentity.String()
 	stale := s.job(t, key, 1, s.envIdentity)
@@ -116,15 +104,12 @@ func TestStartFromInspectionImportsOnlyTheCurrentGeneration(t *testing.T) {
 	current := s.job(t, key, 2, s.envIdentity)
 	s.itemResult(t, current, "PRESENT_UNCHANGED", "GOOD")
 	_, items := s.start(t)
-	if len(items) != 1 {
-		t.Fatalf("draft items = %+v, want only the baseline sink", items)
-	}
-	if sink := s.copiedSink(t, items); sink.Decision != "ACCEPTED" || len(sink.Suggested) != 0 {
-		t.Fatalf("stale condition change leaked into the draft: %+v", sink)
+	if len(items) != 0 {
+		t.Fatalf("draft items = %+v, want no reference or comparison items", items)
 	}
 }
 
-func TestStartFromInspectionAttachesConfirmedCurrentEvidence(t *testing.T) {
+func TestStartFromInspectionDoesNotImportComparisonEvidence(t *testing.T) {
 	s := newComparisonScenario(t)
 	job := s.job(t, "env:"+s.envIdentity.String(), 1, s.envIdentity)
 	s.itemResult(t, job, "CONDITION_CHANGED", "FAIR")
@@ -132,27 +117,18 @@ func TestStartFromInspectionAttachesConfirmedCurrentEvidence(t *testing.T) {
 	s.pair(t, job, confirmedPhoto, true)
 	s.pair(t, job, uncertainPhoto, false)
 	_, items := s.start(t)
-	sink := s.copiedSink(t, items)
-	if sink.Decision != "PENDING" || !strings.Contains(string(sink.Suggested), `"condition":"FAIR"`) {
-		t.Fatalf("condition suggestion missing: %+v", sink)
-	}
-	var evidence []database.InventoryItemEvidence
-	if err := s.db.Where("tenant_id=? AND item_id=?", s.tenant, sink.ID).Order("position").Find(&evidence).Error; err != nil {
-		t.Fatal(err)
-	}
-	if len(evidence) != 2 || evidence[0].MediaID != confirmedPhoto || evidence[1].MediaID != s.originEvidence || evidence[0].Position >= evidence[1].Position {
-		t.Fatalf("evidence = %+v, want the confirmed current photo first and the historical photo kept", evidence)
+	if len(items) != 0 {
+		t.Fatalf("comparison items and evidence were imported: %+v", items)
 	}
 }
 
-func TestStartFromInspectionSuggestsObservedImprovement(t *testing.T) {
+func TestStartFromInspectionDoesNotImportObservedImprovements(t *testing.T) {
 	s := newComparisonScenario(t)
 	job := s.job(t, "env:"+s.envIdentity.String(), 1, s.envIdentity)
 	s.itemResult(t, job, "IMPROVED", "NEW")
 	_, items := s.start(t)
-	sink := s.copiedSink(t, items)
-	if sink.Condition != "GOOD" || sink.Decision != "PENDING" || !strings.Contains(string(sink.Suggested), `"condition":"NEW"`) {
-		t.Fatalf("improvement not sent to review: %+v", sink)
+	if len(items) != 0 {
+		t.Fatalf("comparison improvements were imported: %+v", items)
 	}
 }
 
@@ -170,19 +146,11 @@ func TestStartFromInspectionCreatesEnvironmentAddedDuringCapture(t *testing.T) {
 	}
 	s.outside(t, s.job(t, key, 1, added), "Mesa de trabalho")
 	draft, items := s.start(t)
-	if len(items) != 2 {
-		t.Fatalf("draft items = %+v, want the sink and the new environment's item", items)
+	if len(items) != 0 {
+		t.Fatalf("comparison items were imported: %+v", items)
 	}
 	var env database.InventoryEnvironment
-	if err := s.db.Where("tenant_id=? AND origin_version_id=? AND identity_id=?", s.tenant, draft.ID, added).Take(&env).Error; err != nil {
-		t.Fatalf("added environment missing: %v", err)
-	}
-	if env.Name != "Escritório" || env.TypeCode != "OFFICE" || !env.AddedDuringCapture || env.Decision != "PENDING" {
-		t.Fatalf("added environment = %+v", env)
-	}
-	for _, item := range items {
-		if item.Name == "Mesa de trabalho" && item.EnvironmentID != env.ID {
-			t.Fatalf("outside item not placed in the added environment: %+v", item)
-		}
+	if err := s.db.Where("tenant_id=? AND origin_version_id=? AND identity_id=?", s.tenant, draft.ID, added).Take(&env).Error; err == nil {
+		t.Fatalf("captured environment from comparison results was imported: %+v", env)
 	}
 }

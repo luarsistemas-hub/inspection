@@ -621,6 +621,42 @@ type OriginPromotion struct {
 
 func (OriginPromotion) TableName() string { return "origins.promotions" }
 
+// InspectionOriginPromotion stores a resumable request to promote a completed inspection.
+type InspectionOriginPromotion struct {
+	ID                      identity.ID  `gorm:"type:uuid;primaryKey"`
+	TenantID                identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inspection_origin_promotion_request,priority:1"`
+	AssetID                 identity.ID  `gorm:"type:uuid;not null"`
+	OriginID                identity.ID  `gorm:"type:uuid;not null"`
+	InspectionID            identity.ID  `gorm:"type:uuid;not null;uniqueIndex:uq_inspection_origin_promotion_request,priority:2"`
+	ClientMutationID        string       `gorm:"size:200;not null;uniqueIndex:uq_inspection_origin_promotion_request,priority:3"`
+	RequestedBy             identity.ID  `gorm:"type:uuid;not null"`
+	Purpose                 string       `gorm:"size:40;not null"`
+	Status                  string       `gorm:"size:24;not null;index:idx_inspection_origin_promotion_reconciliation,priority:1"`
+	FailureCode             *string      `gorm:"size:64"`
+	FailureReason           *string      `gorm:"type:text"`
+	Retryable               bool         `gorm:"not null;default:false"`
+	SourceKind              string       `gorm:"size:8;not null"`
+	CaptureDraftID          identity.ID  `gorm:"type:uuid;not null"`
+	AnalysisGeneration      *int         `gorm:"type:integer"`
+	VideoPlanID             *identity.ID `gorm:"type:uuid"`
+	CatalogPromptSnapshotID *identity.ID `gorm:"type:uuid"`
+	CatalogGeneration       *int         `gorm:"type:integer"`
+	DraftVersionID          *identity.ID `gorm:"type:uuid"`
+	ReplacedDraftID         *identity.ID `gorm:"type:uuid"`
+	ReplacedDraftStateSeen  *string      `gorm:"size:16"`
+	ExpectedOriginVersion   int          `gorm:"not null"`
+	SupersededVersionID     *identity.ID `gorm:"type:uuid"`
+	OriginVersionID         *identity.ID `gorm:"type:uuid"`
+	ConfirmationDigest      string       `gorm:"size:128;not null"`
+	Attempts                int          `gorm:"not null;default:0"`
+	CreatedAt               time.Time    `gorm:"not null"`
+	UpdatedAt               time.Time    `gorm:"not null;index:idx_inspection_origin_promotion_reconciliation,priority:2"`
+	StartedAt               *time.Time
+	CompletedAt             *time.Time
+}
+
+func (InspectionOriginPromotion) TableName() string { return "origins.inspection_origin_promotions" }
+
 type MediaObject struct {
 	ID               identity.ID     `gorm:"type:uuid;primaryKey"`
 	TenantID         identity.ID     `gorm:"type:uuid;not null;index:idx_media_tenant_responsibility,priority:1;uniqueIndex:idx_media_create_idempotency,priority:1"`
@@ -1080,8 +1116,10 @@ type Schedule struct {
 	DeadlineMinutes    int             `gorm:"not null"`
 	ReminderOffsets    json.RawMessage `gorm:"type:jsonb;not null"`
 	Status             string          `gorm:"size:16;not null;index:idx_schedules_due,priority:2"`
-	Version            int64           `gorm:"not null;default:1"`
-	IdempotencyKey     string          `gorm:"size:200;not null;uniqueIndex:idx_schedule_idempotency,priority:2"`
+	BlockedReason      *string         `gorm:"type:text"`
+	BlockedAt          *time.Time
+	Version            int64  `gorm:"not null;default:1"`
+	IdempotencyKey     string `gorm:"size:200;not null;uniqueIndex:idx_schedule_idempotency,priority:2"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -1365,32 +1403,33 @@ func (InventoryEnvironment) TableName() string { return "origins.inventory_envir
 
 // InventoryItem is a versioned asset item and its review state.
 type InventoryItem struct {
-	ID              identity.ID `gorm:"type:uuid;primaryKey"`
-	TenantID        identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:1"`
-	OriginVersionID identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:2"`
-	EnvironmentID   identity.ID `gorm:"type:uuid;not null;index"`
-	IdentityID      identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:3"`
-	TypeCode        string      `gorm:"size:40;not null"`
-	Name            string      `gorm:"size:80;not null"`
-	Material        *string     `gorm:"size:200"`
-	Color           *string     `gorm:"size:100"`
-	Quantity        *int
-	Condition       string  `gorm:"size:24;not null"`
-	Observation     string  `gorm:"size:24;not null;default:OBSERVED"`
-	Limitation      *string `gorm:"size:200"`
-	ConfidenceBps   *int
-	Origin          string          `gorm:"size:16;not null;default:AI"`
-	Declared        bool            `gorm:"not null;default:false"`
-	Decision        string          `gorm:"size:16;not null;default:PENDING"`
-	RejectionReason *string         `gorm:"size:32"`
-	RejectionText   *string         `gorm:"size:500"`
-	Suggested       json.RawMessage `gorm:"type:jsonb"`
-	MergedIntoID    *identity.ID    `gorm:"type:uuid"`
-	DecidedBy       *identity.ID    `gorm:"type:uuid"`
-	DecidedAt       *time.Time
-	Version         int `gorm:"not null;default:1"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                        identity.ID `gorm:"type:uuid;primaryKey"`
+	TenantID                  identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:1"`
+	OriginVersionID           identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:2"`
+	EnvironmentID             identity.ID `gorm:"type:uuid;not null;index"`
+	IdentityID                identity.ID `gorm:"type:uuid;not null;uniqueIndex:uq_inventory_item_identity,priority:3"`
+	TypeCode                  string      `gorm:"size:40;not null"`
+	Name                      string      `gorm:"size:80;not null"`
+	Material                  *string     `gorm:"size:200"`
+	Color                     *string     `gorm:"size:100"`
+	Quantity                  *int
+	Condition                 string  `gorm:"size:24;not null"`
+	Observation               string  `gorm:"size:24;not null;default:OBSERVED"`
+	Limitation                *string `gorm:"size:200"`
+	ConfidenceBps             *int
+	Origin                    string          `gorm:"size:16;not null;default:AI"`
+	Declared                  bool            `gorm:"not null;default:false"`
+	Decision                  string          `gorm:"size:16;not null;default:PENDING"`
+	RejectionReason           *string         `gorm:"size:32"`
+	RejectionText             *string         `gorm:"size:500"`
+	Suggested                 json.RawMessage `gorm:"type:jsonb"`
+	MergedIntoID              *identity.ID    `gorm:"type:uuid"`
+	DecidedBy                 *identity.ID    `gorm:"type:uuid"`
+	AutoAcceptedByPromotionID *identity.ID    `gorm:"type:uuid"`
+	DecidedAt                 *time.Time
+	Version                   int `gorm:"not null;default:1"`
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
 }
 
 func (InventoryItem) TableName() string { return "origins.inventory_items" }

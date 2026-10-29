@@ -691,9 +691,11 @@ type DecideInventoryItemsInput struct {
 }
 
 type DeclareCaptureEnvironmentInput struct {
-	TypeCode         string `json:"typeCode"`
-	Name             string `json:"name"`
-	ClientMutationID string `json:"clientMutationId"`
+	TypeCode         *string `json:"typeCode,omitempty"`
+	Name             *string `json:"name,omitempty"`
+	RequirementKey   *string `json:"requirementKey,omitempty"`
+	Remove           *bool   `json:"remove,omitempty"`
+	ClientMutationID string  `json:"clientMutationId"`
 }
 
 type DeclareCaptureImpossibilityInput struct {
@@ -847,6 +849,53 @@ type InspectionLLMUsage struct {
 	CoverageComplete  bool             `json:"coverageComplete"`
 	Calls             []*LLMCallUsage  `json:"calls"`
 	PageInfo          *PageInfo        `json:"pageInfo"`
+}
+
+type InspectionOriginPromotionActiveOrigin struct {
+	ID            string `json:"id"`
+	VersionNumber int    `json:"versionNumber"`
+	MediaKind     string `json:"mediaKind"`
+	HasInventory  bool   `json:"hasInventory"`
+}
+
+type InspectionOriginPromotionConflictingDraft struct {
+	ID                 string  `json:"id"`
+	Source             string  `json:"source"`
+	SourceInspectionID *string `json:"sourceInspectionId,omitempty"`
+	DraftState         *string `json:"draftState,omitempty"`
+	OwnInspection      bool    `json:"ownInspection"`
+}
+
+type InspectionOriginPromotionImpediment struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type InspectionOriginPromotionOperation struct {
+	ID                  string                          `json:"id"`
+	Status              InspectionOriginPromotionStatus `json:"status"`
+	Purpose             string                          `json:"purpose"`
+	FailureCode         *string                         `json:"failureCode,omitempty"`
+	FailureReason       *string                         `json:"failureReason,omitempty"`
+	Retryable           bool                            `json:"retryable"`
+	OriginVersion       *OriginVersion                  `json:"originVersion,omitempty"`
+	SupersededVersionID *string                         `json:"supersededVersionId,omitempty"`
+	DraftVersionID      *string                         `json:"draftVersionId,omitempty"`
+	ReplacedDraftID     *string                         `json:"replacedDraftId,omitempty"`
+	RequestedAt         *string                         `json:"requestedAt,omitempty"`
+	CompletedAt         *string                         `json:"completedAt,omitempty"`
+}
+
+type InspectionOriginPromotionStatusView struct {
+	InspectionID            string                                     `json:"inspectionId"`
+	Eligible                bool                                       `json:"eligible"`
+	Impediments             []*InspectionOriginPromotionImpediment     `json:"impediments"`
+	ActiveOrigin            *InspectionOriginPromotionActiveOrigin     `json:"activeOrigin,omitempty"`
+	ConflictingDraft        *InspectionOriginPromotionConflictingDraft `json:"conflictingDraft,omitempty"`
+	AutomaticCatalogSkipped bool                                       `json:"automaticCatalogSkipped"`
+	ConfirmationDigest      string                                     `json:"confirmationDigest"`
+	CurrentPromotion        *InspectionOriginPromotionOperation        `json:"currentPromotion,omitempty"`
+	GeneratedVersionActive  bool                                       `json:"generatedVersionActive"`
 }
 
 type InspectionPayload struct {
@@ -1648,6 +1697,21 @@ type PromoteInspectionPhotosInput struct {
 	ClientMutationID     string   `json:"clientMutationId"`
 }
 
+type PromoteInspectionToOriginInput struct {
+	InspectionID       string  `json:"inspectionId"`
+	ClientMutationID   string  `json:"clientMutationId"`
+	Purpose            *string `json:"purpose,omitempty"`
+	ReplaceDraftID     *string `json:"replaceDraftId,omitempty"`
+	ConfirmationDigest string  `json:"confirmationDigest"`
+}
+
+type PromoteInspectionToOriginPayload struct {
+	ClientMutationID string                              `json:"clientMutationId"`
+	Promotion        *InspectionOriginPromotionOperation `json:"promotion,omitempty"`
+	OriginVersion    *OriginVersion                      `json:"originVersion,omitempty"`
+	UserErrors       []*UserError                        `json:"userErrors"`
+}
+
 type PromoteInspectionVideoInput struct {
 	InspectionID     string `json:"inspectionId"`
 	ClientMutationID string `json:"clientMutationId"`
@@ -2102,6 +2166,8 @@ type Schedule struct {
 	ReminderOffsetsMinutes []int   `json:"reminderOffsetsMinutes"`
 	Status                 string  `json:"status"`
 	Version                int     `json:"version"`
+	BlockedReason          *string `json:"blockedReason,omitempty"`
+	BlockedAt              *string `json:"blockedAt,omitempty"`
 }
 
 type ScheduleConnection struct {
@@ -2908,6 +2974,69 @@ func (e *InspectionAttentionKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e InspectionAttentionKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type InspectionOriginPromotionStatus string
+
+const (
+	InspectionOriginPromotionStatusPreparing         InspectionOriginPromotionStatus = "PREPARING"
+	InspectionOriginPromotionStatusActivating        InspectionOriginPromotionStatus = "ACTIVATING"
+	InspectionOriginPromotionStatusCompleted         InspectionOriginPromotionStatus = "COMPLETED"
+	InspectionOriginPromotionStatusFailed            InspectionOriginPromotionStatus = "FAILED"
+	InspectionOriginPromotionStatusCanceled          InspectionOriginPromotionStatus = "CANCELED"
+	InspectionOriginPromotionStatusNeedsConfirmation InspectionOriginPromotionStatus = "NEEDS_CONFIRMATION"
+)
+
+var AllInspectionOriginPromotionStatus = []InspectionOriginPromotionStatus{
+	InspectionOriginPromotionStatusPreparing,
+	InspectionOriginPromotionStatusActivating,
+	InspectionOriginPromotionStatusCompleted,
+	InspectionOriginPromotionStatusFailed,
+	InspectionOriginPromotionStatusCanceled,
+	InspectionOriginPromotionStatusNeedsConfirmation,
+}
+
+func (e InspectionOriginPromotionStatus) IsValid() bool {
+	switch e {
+	case InspectionOriginPromotionStatusPreparing, InspectionOriginPromotionStatusActivating, InspectionOriginPromotionStatusCompleted, InspectionOriginPromotionStatusFailed, InspectionOriginPromotionStatusCanceled, InspectionOriginPromotionStatusNeedsConfirmation:
+		return true
+	}
+	return false
+}
+
+func (e InspectionOriginPromotionStatus) String() string {
+	return string(e)
+}
+
+func (e *InspectionOriginPromotionStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InspectionOriginPromotionStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InspectionOriginPromotionStatus", str)
+	}
+	return nil
+}
+
+func (e InspectionOriginPromotionStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *InspectionOriginPromotionStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e InspectionOriginPromotionStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

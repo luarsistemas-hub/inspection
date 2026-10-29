@@ -44,6 +44,10 @@ type api06Fixture struct {
 }
 
 func newAPI06Fixture(t *testing.T) api06Fixture {
+	return newAPI06FixtureWithOptions(t, harness.Task06FixtureOptions{})
+}
+
+func newAPI06FixtureWithOptions(t *testing.T, options harness.Task06FixtureOptions) api06Fixture {
 	t.Helper()
 	if os.Getenv("INSPECTION_TEST_DATABASE_URL") == "" || os.Getenv("INSPECTION_TEST_RUNTIME_DATABASE_URL") == "" {
 		t.Skip("isolated PostgreSQL and runtime-role URLs are required")
@@ -54,7 +58,7 @@ func newAPI06Fixture(t *testing.T) api06Fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = h.Close() })
-	baseline, err := h.SeedInventoryBaseline(ctx, harness.Task06FixtureOptions{})
+	baseline, err := h.SeedInventoryBaseline(ctx, options)
 	if err != nil {
 		t.Fatal(err)
 	}

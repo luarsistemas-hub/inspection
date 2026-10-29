@@ -52,7 +52,7 @@ func TestFoundationCatalog_IT001ToIT007AndIT040(t *testing.T) {
 		t.Fatalf("max migration=%d, catalog=%d, want the catalog maximum (>= 86)", latest, migrations.LatestVersion())
 	}
 	t.Run("IT001 migration catalog and forced RLS", func(t *testing.T) {
-		for _, table := range []string{"origins.inventory_environments", "origins.inventory_items", "origins.inventory_item_evidence", "origins.inventory_decisions", "analysis.inventory_jobs", "analysis.inventory_evidence_pairs", "analysis.inventory_item_results", "origins.counterparty_invitations", "origins.baseline_policies"} {
+		for _, table := range []string{"origins.inventory_environments", "origins.inventory_items", "origins.inventory_item_evidence", "origins.inventory_decisions", "analysis.inventory_jobs", "analysis.inventory_evidence_pairs", "analysis.inventory_item_results", "origins.counterparty_invitations", "origins.baseline_policies", "origins.inspection_origin_promotions"} {
 			var enabled, forced bool
 			var policy string
 			if err := admin.Raw(`SELECT c.relrowsecurity,c.relforcerowsecurity,coalesce(p.polname,'') FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_policy p ON p.polrelid=c.oid AND p.polname='tenant_isolation' WHERE n.nspname||'.'||c.relname=?`, table).Row().Scan(&enabled, &forced, &policy); err != nil {

@@ -200,8 +200,11 @@ func (e *Executor) complete(ctx context.Context, r lease) error {
 			return err
 		}
 		var current database.InventoryJob
-		if err := tx.Select("error_code").Where("tenant_id=? AND id=?", r.job.TenantID, r.job.ID).Take(&current).Error; err != nil {
+		if err := tx.Where("tenant_id=? AND id=?", r.job.TenantID, r.job.ID).Take(&current).Error; err != nil {
 			return err
+		}
+		if current.Status == "CANCELED" {
+			return nil
 		}
 		updates := map[string]any{"status": "SUCCEEDED", "lease_token": nil, "lease_until": nil, "updated_at": now, "error_code": successfulErrorCode(current.ErrorCode)}
 		result := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND id=? AND status='RUNNING' AND lease_token=?", r.job.TenantID, r.job.ID, r.token).Updates(updates)

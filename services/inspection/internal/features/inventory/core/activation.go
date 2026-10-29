@@ -22,6 +22,21 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 		return result, apperror.New(apperror.InvalidInput, "expectedOriginVersion", "expected origin version is required")
 	}
 	err := s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
+		var err error
+		result, err = s.ActivateWithin(ctx, tx, in)
+		return err
+	})
+	return result, err
+}
+
+// ActivateWithin activates a ready draft using the caller's existing transaction.
+func (s Service) ActivateWithin(ctx context.Context, tx *gorm.DB, in ActivateInput) (database.OriginVersion, error) {
+	var result database.OriginVersion
+	if in.ExpectedOriginVersion <= 0 {
+		return result, apperror.New(apperror.InvalidInput, "expectedOriginVersion", "expected origin version is required")
+	}
+	tx = tx.WithContext(ctx)
+	err := func() error {
 		if err := tx.Where("tenant_id=? AND id=? AND has_inventory", in.TenantID, in.OriginVersionID).First(&result).Error; err != nil {
 			return apperror.New(apperror.NotFound, "originVersionId", "inventory version not found")
 		}
@@ -73,7 +88,7 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 		if err := activeItems.Where("inventory_items.decision IN ('ACCEPTED','EDITED','ADDED')").Count(&included).Error; err != nil {
 			return err
 		}
-		if included == 0 {
+		if included == 0 && !in.AllowEmptyItems {
 			return apperror.New(apperror.InvalidState, "originVersionId", "NO_INCLUDED_ITEMS")
 		}
 		for query, dest := range map[string]*int64{"REJECTED": &rejected, "PENDING": &pending} {
@@ -142,7 +157,7 @@ func (s Service) Activate(ctx context.Context, in ActivateInput) (database.Origi
 			}
 		}
 		return messaging.AddOutbox(tx, inventoryEvent(in.TenantID, result.ID, now))
-	})
+	}()
 	return result, err
 }
 
@@ -160,7 +175,7 @@ func retainInventoryVideoEvidence(tx *gorm.DB, tenantID, versionID identity.ID, 
 	}
 	for _, preparationID := range preparationIDs {
 		reference := database.VideoEvidenceReference{ID: identity.NewID(), TenantID: tenantID, PreparationID: preparationID, OwnerType: "ORIGIN_VERSION", OwnerID: versionID, CreatedAt: now}
-		if err := tx.Where("tenant_id=? AND preparation_id=? AND owner_type=? AND owner_id=?", tenantID, preparationID, reference.OwnerType, versionID).FirstOrCreate(&reference).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&reference).Error; err != nil {
 			return err
 		}
 	}

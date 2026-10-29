@@ -92,7 +92,7 @@ func resolve(tx *gorm.DB, query Query) (Result, error) {
 	}
 	if err := tx.Where("tenant_id=? AND id=? AND origin_id=?", query.TenantID, *selectedID, origin.ID).Take(&result.Version).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return Result{}, apperror.New(apperror.NotFound, "", "resource not found")
+			return Result{}, apperror.New(apperror.NotFound, "referenceVersionId", "resource not found")
 		}
 		return Result{}, err
 	}

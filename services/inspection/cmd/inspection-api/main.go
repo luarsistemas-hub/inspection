@@ -37,6 +37,7 @@ import (
 	capturedeclareenvironment "inspection/services/inspection/internal/features/capture/declare_environment"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
 	capturefinalize "inspection/services/inspection/internal/features/capture/finalize_submission"
+	capturemanageenvironment "inspection/services/inspection/internal/features/capture/manage_environment"
 	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
@@ -70,7 +71,6 @@ import (
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
 	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
 	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
-	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
 	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
 	inventoryupsertenv "inspection/services/inspection/internal/features/inventory/upsert_environment"
 	acceptprocessing "inspection/services/inspection/internal/features/invitations/accept_processing"
@@ -101,6 +101,7 @@ import (
 	origininvalidate "inspection/services/inspection/internal/features/origins/invalidate_version"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
 	originpromote "inspection/services/inspection/internal/features/origins/promote_inspection"
+	originpromotetoorigin "inspection/services/inspection/internal/features/origins/promote_inspection_to_origin"
 	originpromotevideo "inspection/services/inspection/internal/features/origins/promote_inspection_video"
 	originresolve "inspection/services/inspection/internal/features/origins/resolve_reference"
 	deactivateparticipant "inspection/services/inspection/internal/features/participants/deactivate_participant"
@@ -449,6 +450,9 @@ func run() error {
 		func() error {
 			return originpromotevideo.Setup(originpromotevideo.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},
+		func() error {
+			return originpromotetoorigin.Setup(originpromotetoorigin.Dependencies{DB: db, Bus: bus, Authorizer: authorizer, Inventory: inventoryService})
+		},
 		func() error { return inventorydecide.Setup(bus, inventoryService) },
 		func() error { return inventorybulk.Setup(bus, inventoryService) },
 		func() error { return inventoryadd.Setup(bus, inventoryService) },
@@ -460,7 +464,6 @@ func run() error {
 		func() error { return inventorydiscard.Setup(bus, inventoryService) },
 		func() error { return inventoryrequest.Setup(bus, inventoryService) },
 		func() error { return inventoryretry.Setup(bus, inventoryService) },
-		func() error { return inventorystart.Setup(bus, inventoryService) },
 		func() error { return inventorydraft.Setup(bus, inventoryService) },
 		func() error { return inventorybaseline.Setup(bus, inventoryService) },
 		func() error { return inventorytrail.Setup(bus, inventoryService) },
@@ -501,6 +504,9 @@ func run() error {
 		},
 		func() error {
 			return capturedeclareenvironment.Setup(capturedeclareenvironment.Dependencies{Bus: bus, Service: captureService})
+		},
+		func() error {
+			return capturemanageenvironment.Setup(capturemanageenvironment.Dependencies{Bus: bus, Service: captureService})
 		},
 		func() error {
 			return capturequalitywarning.Setup(capturequalitywarning.Dependencies{Bus: bus, Service: captureService})

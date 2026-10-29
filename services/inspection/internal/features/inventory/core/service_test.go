@@ -20,10 +20,14 @@ func TestService_CreateDraft(t *testing.T) {
 	tests := []struct {
 		name       string
 		seed       func(*gorm.DB, identity.ID, identity.ID) error
+		source     string
+		inspection identity.ID
 		wantError  apperror.Code
 		wantStatus string
 	}{
 		{name: "UT-010 happy", wantStatus: "DRAFT"},
+		{name: "UT-012 inspection promotion starts preparing", source: "INSPECTION_PROMOTION", inspection: identity.NewID(), wantStatus: "DRAFT"},
+		{name: "UT-013 inspection promotion requires inspection", source: "INSPECTION_PROMOTION", wantError: apperror.InvalidInput},
 		{name: "UT-011 open draft conflict", seed: func(db *gorm.DB, tenant, asset identity.ID) error {
 			origin := database.Origin{ID: identity.NewID(), TenantID: tenant, AssetID: asset, Version: 1}
 			if err := db.Create(&origin).Error; err != nil {
@@ -43,7 +47,15 @@ func TestService_CreateDraft(t *testing.T) {
 			}
 			service := Service{Now: func() time.Time { return time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC) }}
 			tx := db.Begin()
-			version, err := service.CreateDraft(tx, DraftInput{TenantID: tenant, AssetID: asset, Source: "CAPTURE", SourceInspectionID: identity.NewID()})
+			source := tt.source
+			if source == "" {
+				source = "CAPTURE"
+			}
+			inspection := tt.inspection
+			if source == "CAPTURE" && inspection == (identity.ID{}) {
+				inspection = identity.NewID()
+			}
+			version, err := service.CreateDraft(tx, DraftInput{TenantID: tenant, AssetID: asset, Source: source, SourceInspectionID: inspection})
 			if tt.wantError != "" {
 				tx.Rollback()
 				if !apperror.Is(err, tt.wantError) {
@@ -72,6 +84,18 @@ func TestService_CreateDraft(t *testing.T) {
 			}
 			if version.Status != tt.wantStatus || !version.HasInventory || version.DraftState == nil || *version.DraftState != "PREPARING" {
 				t.Fatalf("unexpected draft: %+v", version)
+			}
+			if source == "INSPECTION_PROMOTION" {
+				if version.Source != source || version.SourceInspectionID == nil || *version.SourceInspectionID != inspection {
+					t.Fatalf("promotion draft source was not preserved: %+v", version)
+				}
+				var itemCount int64
+				if err := tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND origin_version_id=?", tenant, version.ID).Count(&itemCount).Error; err != nil {
+					t.Fatal(err)
+				}
+				if itemCount != 0 {
+					t.Fatalf("promotion draft unexpectedly copied %d inventory items", itemCount)
+				}
 			}
 			if err := tx.Commit().Error; err != nil {
 				t.Fatal(err)
@@ -205,7 +229,7 @@ func inventoryTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE origins.origins (id text primary key, tenant_id text, asset_id text, active_version_id text, version integer, created_at datetime, updated_at datetime, UNIQUE(tenant_id,asset_id))`,
 		`CREATE TABLE origins.origin_versions (id text primary key, tenant_id text, origin_id text, version_number integer, responsibility_id text, purpose text, source text, source_inspection_id text, source_version_id text, has_inventory numeric, draft_state text, activated_by_membership_id text, discarded_at datetime, supersedes_id text, status text, media_kind text, video_preparation_id text, video_plan_id text, scope_manifest_digest text, idempotency_key text, created_at datetime, submitted_at datetime, activated_at datetime, superseded_at datetime, invalidated_at datetime, UNIQUE(tenant_id,origin_id,version_number), UNIQUE(idempotency_key))`,
 		`CREATE TABLE origins.inventory_environments (id text primary key, tenant_id text, origin_version_id text, identity_id text, type_code text, name text, expected numeric, added_during_capture numeric, requirement_key text, decision text, position integer, version integer, created_at datetime, updated_at datetime)`,
-		`CREATE TABLE origins.inventory_items (id text primary key, tenant_id text, origin_version_id text, environment_id text, identity_id text, type_code text, name text, material text, color text, quantity integer, condition text, observation text, limitation text, confidence_bps integer, origin text, declared numeric, decision text, rejection_reason text, rejection_text text, suggested json, merged_into_id text, decided_by text, decided_at datetime, version integer, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE origins.inventory_items (id text primary key, tenant_id text, origin_version_id text, environment_id text, identity_id text, type_code text, name text, material text, color text, quantity integer, condition text, observation text, limitation text, confidence_bps integer, origin text, declared numeric, decision text, rejection_reason text, rejection_text text, suggested json, merged_into_id text, decided_by text, auto_accepted_by_promotion_id text, decided_at datetime, version integer, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE origins.inventory_item_evidence (id text primary key, tenant_id text, item_id text, kind text, media_id text, frame_id text, region json, position integer, created_at datetime)`,
 		`CREATE TABLE origins.inventory_decisions (id text primary key, tenant_id text, origin_version_id text, target_type text, target_id text, action text, before json, after json, reason text, actor_membership_id text, occurred_at datetime, created_at datetime)`,
 		`CREATE TABLE origins.origin_evidence (id text, tenant_id text, origin_version_id text, media_id text, category text, description text, attention_items json, created_at datetime)`,

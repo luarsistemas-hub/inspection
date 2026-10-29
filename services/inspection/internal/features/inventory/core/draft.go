@@ -22,8 +22,11 @@ func (s Service) CreateDraft(tx *gorm.DB, in DraftInput) (database.OriginVersion
 	if in.Source == "" {
 		in.Source = "CAPTURE"
 	}
-	if in.Source != "CAPTURE" && in.Source != "LEGACY_ORIGIN" && in.Source != "COMPARATIVE_INSPECTION" && in.Source != "CONTESTATION" {
+	if in.Source != "CAPTURE" && in.Source != "LEGACY_ORIGIN" && in.Source != "COMPARATIVE_INSPECTION" && in.Source != "CONTESTATION" && in.Source != "INSPECTION_PROMOTION" {
 		return database.OriginVersion{}, apperror.New(apperror.InvalidInput, "source", "unknown draft source")
+	}
+	if in.Source == "INSPECTION_PROMOTION" && in.SourceInspectionID == (identity.ID{}) {
+		return database.OriginVersion{}, apperror.New(apperror.InvalidInput, "sourceInspectionId", "source inspection is required")
 	}
 	now := s.now()
 	var origin database.Origin
@@ -219,7 +222,7 @@ func (s Service) RetryDraft(ctx context.Context, tenantID, versionID, actor iden
 	return result, err
 }
 
-// StartFromInspection starts a next-version draft pinned to a completed comparison.
+// StartFromInspection starts an inspection-only draft without importing its reference inventory.
 func (s Service) StartFromInspection(ctx context.Context, tenantID, inspectionID, actor identity.ID) (database.OriginVersion, error) {
 	var result database.OriginVersion
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
@@ -230,30 +233,9 @@ func (s Service) StartFromInspection(ctx context.Context, tenantID, inspectionID
 		if inspection.Status != "COMPLETED" {
 			return apperror.New(apperror.InvalidState, "inspectionId", "inspection must be completed")
 		}
-		var snapshot database.ReferenceSnapshot
-		if err := tx.Where("tenant_id=? AND inspection_id=?", tenantID, inspectionID).First(&snapshot).Error; err != nil || snapshot.ReferenceVersionID == nil {
-			return apperror.New(apperror.InvalidState, "inspectionId", "inspection has no inventory reference")
-		}
-		var source database.OriginVersion
-		if err := tx.Where("tenant_id=? AND id=? AND has_inventory AND status IN ('ACTIVE','SUPERSEDED')", tenantID, *snapshot.ReferenceVersionID).First(&source).Error; err != nil {
-			return apperror.New(apperror.InvalidState, "inspectionId", "inspection has no inventory reference")
-		}
 		var err error
-		result, err = s.CreateDraft(tx, DraftInput{TenantID: tenantID, AssetID: inspection.AssetID, Source: "COMPARATIVE_INSPECTION", SourceInspectionID: inspection.ID, SourceVersionID: source.ID, ActorMembershipID: actor})
-		if err != nil {
-			return err
-		}
-		if err := s.importComparison(tx, tenantID, inspection.ID, result.ID); err != nil {
-			return err
-		}
-		var active database.Origin
-		if err := tx.Where("tenant_id=? AND asset_id=?", tenantID, inspection.AssetID).First(&active).Error; err == nil && active.ActiveVersionID != nil && *active.ActiveVersionID != source.ID {
-			var newer database.OriginVersion
-			if err := tx.Where("tenant_id=? AND id=?", tenantID, *active.ActiveVersionID).First(&newer).Error; err == nil && newer.VersionNumber > source.VersionNumber {
-				result.SourceVersionID = &source.ID
-			}
-		}
-		return nil
+		result, err = s.CreateDraft(tx, DraftInput{TenantID: tenantID, AssetID: inspection.AssetID, Source: "INSPECTION_PROMOTION", SourceInspectionID: inspection.ID, ActorMembershipID: actor})
+		return err
 	})
 	return result, err
 }

@@ -750,8 +750,10 @@ export type DecideInventoryItemsInput = {
 
 export type DeclareCaptureEnvironmentInput = {
   clientMutationId: Scalars['String']['input'];
-  name: Scalars['String']['input'];
-  typeCode: Scalars['String']['input'];
+  name: InputMaybe<Scalars['String']['input']>;
+  remove: InputMaybe<Scalars['Boolean']['input']>;
+  requirementKey: InputMaybe<Scalars['String']['input']>;
+  typeCode: InputMaybe<Scalars['String']['input']>;
 };
 
 export type DeclareCaptureImpossibilityInput = {
@@ -921,6 +923,66 @@ export type InspectionLlmUsage = {
   pageInfo: PageInfo;
   unknownCacheCalls: Scalars['Int']['output'];
   unknownCostCalls: Scalars['Int']['output'];
+};
+
+export type InspectionOriginPromotionActiveOrigin = {
+  __typename?: 'InspectionOriginPromotionActiveOrigin';
+  hasInventory: Scalars['Boolean']['output'];
+  id: Scalars['ID']['output'];
+  mediaKind: Scalars['String']['output'];
+  versionNumber: Scalars['Int']['output'];
+};
+
+export type InspectionOriginPromotionConflictingDraft = {
+  __typename?: 'InspectionOriginPromotionConflictingDraft';
+  draftState: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  ownInspection: Scalars['Boolean']['output'];
+  source: Scalars['String']['output'];
+  sourceInspectionId: Maybe<Scalars['ID']['output']>;
+};
+
+export type InspectionOriginPromotionImpediment = {
+  __typename?: 'InspectionOriginPromotionImpediment';
+  code: Scalars['String']['output'];
+  message: Scalars['String']['output'];
+};
+
+export type InspectionOriginPromotionOperation = {
+  __typename?: 'InspectionOriginPromotionOperation';
+  completedAt: Maybe<Scalars['String']['output']>;
+  draftVersionId: Maybe<Scalars['ID']['output']>;
+  failureCode: Maybe<Scalars['String']['output']>;
+  failureReason: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  originVersion: Maybe<OriginVersion>;
+  purpose: Scalars['String']['output'];
+  replacedDraftId: Maybe<Scalars['ID']['output']>;
+  requestedAt: Maybe<Scalars['String']['output']>;
+  retryable: Scalars['Boolean']['output'];
+  status: InspectionOriginPromotionStatus;
+  supersededVersionId: Maybe<Scalars['ID']['output']>;
+};
+
+export type InspectionOriginPromotionStatus =
+  | 'ACTIVATING'
+  | 'CANCELED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'NEEDS_CONFIRMATION'
+  | 'PREPARING';
+
+export type InspectionOriginPromotionStatusView = {
+  __typename?: 'InspectionOriginPromotionStatusView';
+  activeOrigin: Maybe<InspectionOriginPromotionActiveOrigin>;
+  automaticCatalogSkipped: Scalars['Boolean']['output'];
+  confirmationDigest: Scalars['String']['output'];
+  conflictingDraft: Maybe<InspectionOriginPromotionConflictingDraft>;
+  currentPromotion: Maybe<InspectionOriginPromotionOperation>;
+  eligible: Scalars['Boolean']['output'];
+  generatedVersionActive: Scalars['Boolean']['output'];
+  impediments: Array<InspectionOriginPromotionImpediment>;
+  inspectionId: Scalars['ID']['output'];
 };
 
 export type InspectionPayload = {
@@ -1386,7 +1448,10 @@ export type Mutation = {
   mergeInventoryItems: InventoryItemPayload;
   planInspection: PlanInspectionPayload;
   presignMediaParts: PresignedPartsPayload;
+  /** @deprecated Use promoteInspectionToOrigin. */
   promoteInspectionPhotos: OriginPromotionPayload;
+  promoteInspectionToOrigin: PromoteInspectionToOriginPayload;
+  /** @deprecated Use promoteInspectionToOrigin. */
   promoteInspectionVideo: OriginVersionPayload;
   publishReport: ReportPublicationPayload;
   publishSegmentDefinition: SegmentDefinitionPayload;
@@ -1688,6 +1753,11 @@ export type MutationPresignMediaPartsArgs = {
 
 export type MutationPromoteInspectionPhotosArgs = {
   input: PromoteInspectionPhotosInput;
+};
+
+
+export type MutationPromoteInspectionToOriginArgs = {
+  input: PromoteInspectionToOriginInput;
 };
 
 
@@ -2415,6 +2485,22 @@ export type PromoteInspectionPhotosInput = {
   mediaIds: Array<Scalars['ID']['input']>;
 };
 
+export type PromoteInspectionToOriginInput = {
+  clientMutationId: Scalars['String']['input'];
+  confirmationDigest: Scalars['String']['input'];
+  inspectionId: Scalars['ID']['input'];
+  purpose: InputMaybe<Scalars['String']['input']>;
+  replaceDraftId: InputMaybe<Scalars['ID']['input']>;
+};
+
+export type PromoteInspectionToOriginPayload = {
+  __typename?: 'PromoteInspectionToOriginPayload';
+  clientMutationId: Scalars['String']['output'];
+  originVersion: Maybe<OriginVersion>;
+  promotion: Maybe<InspectionOriginPromotionOperation>;
+  userErrors: Array<UserError>;
+};
+
 export type PromoteInspectionVideoInput = {
   clientMutationId: Scalars['String']['input'];
   inspectionId: Scalars['ID']['input'];
@@ -2473,6 +2559,7 @@ export type Query = {
   externalCapture: ExternalCapture;
   inspection: Maybe<Inspection>;
   inspectionLLMUsage: InspectionLlmUsage;
+  inspectionOriginPromotion: InspectionOriginPromotionStatusView;
   inspections: InspectionConnection;
   inventoryDraft: Maybe<InventoryDraft>;
   inventoryTrail: InventoryTrail;
@@ -2486,6 +2573,7 @@ export type Query = {
   onboardingDefinition: OnboardingDefinition;
   onboardingSession: Maybe<OnboardingSession>;
   onboardingStatus: Maybe<OnboardingStatus>;
+  /** @deprecated Use inspectionOriginPromotion. */
   originPromotion: Maybe<OriginPromotion>;
   originVersions: OriginVersionConnection;
   participant: Maybe<Participant>;
@@ -2609,6 +2697,11 @@ export type QueryInspectionLlmUsageArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   inspectionId: Scalars['ID']['input'];
   mode?: InputMaybe<LlmExecutionMode>;
+};
+
+
+export type QueryInspectionOriginPromotionArgs = {
+  inspectionId: Scalars['ID']['input'];
 };
 
 
@@ -3268,6 +3361,8 @@ export type SaveCaptureMetadataInput = {
 export type Schedule = {
   __typename?: 'Schedule';
   assetId: Scalars['ID']['output'];
+  blockedAt: Maybe<Scalars['String']['output']>;
+  blockedReason: Maybe<Scalars['String']['output']>;
   businessUnitId: Scalars['ID']['output'];
   deadlineMinutes: Scalars['Int']['output'];
   id: Scalars['ID']['output'];

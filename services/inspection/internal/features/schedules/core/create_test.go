@@ -93,12 +93,14 @@ func TestCreateFixedOriginAuthorizesBeforeResolvingOrigin(t *testing.T) {
 
 func TestCreateFixedOriginRequiresActiveOrigin(t *testing.T) {
 	fixture, bus := newFixedOriginFixture(t)
+	requestedID := identity.NewID()
+	fixture.input.ReferenceVersionID = &requestedID
 	fixture.originErr = apperror.New(apperror.InvalidInput, "referenceVersionId", "active origin is required")
 	_, err := (Service{Bus: bus, Authorizer: auth.Authorizer{}}).Create(principalContext(fixture.input.TenantID, auth.TenantAdmin), fixture.input)
 	if !errors.Is(err, fixture.originErr) {
 		t.Fatalf("Create error = %v, want %v", err, fixture.originErr)
 	}
-	if fixture.originAsks != 1 || fixture.lastQuery.VersionID != nil || fixture.lastQuery.AssetID != fixture.input.AssetID {
+	if fixture.originAsks != 1 || fixture.lastQuery.VersionID == nil || *fixture.lastQuery.VersionID != requestedID || fixture.lastQuery.AssetID != fixture.input.AssetID {
 		t.Fatalf("origin query = %+v after %d asks", fixture.lastQuery, fixture.originAsks)
 	}
 }
@@ -127,6 +129,8 @@ func TestResolveFixedOriginValidatesExplicitVersionWithoutChangingMediaKind(t *t
 
 func TestCreateFixedOriginRejectsPhotoOriginForVideoTemplate(t *testing.T) {
 	fixture, bus := newFixedOriginFixtureWithVideo(t, true)
+	requestedID := identity.NewID()
+	fixture.input.ReferenceVersionID = &requestedID
 	_, err := (Service{Bus: bus, Authorizer: auth.Authorizer{}}).Create(principalContext(fixture.input.TenantID, auth.TenantAdmin), fixture.input)
 	var appErr *apperror.Error
 	if !errors.As(err, &appErr) || appErr.Code != apperror.InvalidInput {

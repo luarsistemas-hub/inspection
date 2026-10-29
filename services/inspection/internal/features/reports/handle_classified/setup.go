@@ -281,6 +281,11 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		if err != nil {
 			return err
 		}
+		promotedEvidence, err := promotedOriginReportEvidence(ctx, tx, envelope.TenantID, reference.ReferenceVersionID, requirements, evidence)
+		if err != nil {
+			return err
+		}
+		evidence = append(promotedEvidence, evidence...)
 		result, err := deps.CreateSnapshot(ctx, generatesnapshot.Input{TenantID: envelope.TenantID, InspectionID: payload.InspectionID, VideoPlanID: videoPlanID, ProjectID: inspection.ProjectID, Mode: mode, Classification: class.Classification, TemplateVersionID: inspection.TemplateVersionID.String(), ReferenceVersionID: referenceVersionID, PromptDigest: promptSnapshot.CanonicalDigest, ReasonCodes: payload.ReasonCodes, Timeline: timeline, Coverage: map[string]string{}, Context: context, Requirements: requirements, Findings: findings, Evidence: evidence, Inventory: inventorySection})
 		if errors.Is(err, generatesnapshot.ErrFrameIntegrity) {
 			return messaging.ErrPermanent
@@ -611,6 +616,7 @@ func reportRequirementsFromCapture(raw []byte) ([]reportcore.Requirement, error)
 	if err := json.Unmarshal(raw, &captured); err != nil {
 		return nil, err
 	}
+	captured = capturecore.ActiveRequirements(captured)
 	requirements := make([]reportcore.Requirement, 0, len(captured))
 	for _, value := range captured {
 		requirements = append(requirements, reportcore.Requirement{Key: value.Key, Section: value.Section, Label: value.Label, Instructions: value.Instructions})

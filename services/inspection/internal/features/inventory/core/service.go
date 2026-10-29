@@ -137,6 +137,8 @@ type ActivateInput struct {
 	Purpose                                      string
 	ExpectedOriginVersion                        int64
 	CounterpartyParticipantIDs                   []identity.ID
+	// AllowEmptyItems permits an explicit inspection promotion to activate an environment-only origin.
+	AllowEmptyItems bool
 }
 
 // ItemCounts are stored on activation audit events.

@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -72,6 +74,10 @@ type ReminderDispatch struct {
 	RemindAt                      time.Time
 }
 
+const originRetryBackoff = 5 * time.Minute
+
+const blockedOriginUnavailable = "ORIGIN_UNAVAILABLE"
+
 type Service struct {
 	DB             *gorm.DB
 	Within         func(context.Context, identity.ID, func(*gorm.DB) error) error
@@ -117,10 +123,12 @@ func (s Service) Create(ctx context.Context, in Input) (database.Schedule, error
 	if _, err := s.Authorizer.Authorize(ctx, in.TenantID, []string{auth.TenantAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: asset.BusinessUnitID}, true); err != nil {
 		return database.Schedule{}, err
 	}
-	if mode == catalog.FixedOrigin {
+	if mode == catalog.FixedOrigin && in.ReferenceVersionID != nil {
 		// Validate that an active origin exists without pinning it: each occurrence
 		// resolves the origin active at its own creation, so a later promotion does
-		// not break the remaining recurrences.
+		// not break the remaining recurrences. A nil version deliberately defers
+		// validation until occurrence creation, so the schedule can follow a future
+		// active origin.
 		if err := resolveFixedOrigin(ctx, s.Bus, in, document.MediaKind()); err != nil {
 			return database.Schedule{}, err
 		}
@@ -177,7 +185,7 @@ func (s Service) Update(ctx context.Context, in UpdateInput) (database.Schedule,
 		return database.Schedule{}, apperror.New(apperror.InvalidInput, "rrule", err.Error())
 	}
 	offsets, _ := json.Marshal(in.ReminderOffsetsMinutes)
-	err = (tenanttx.Runner{DB: s.DB}).Within(ctx, in.TenantID, func(tx *gorm.DB) error {
+	err = s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
 		r := tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND version=? AND status='ACTIVE'", in.TenantID, in.ScheduleID, in.ExpectedVersion).Updates(map[string]any{"r_rule": strings.TrimSpace(in.RRule), "timezone": strings.TrimSpace(in.Timezone), "starts_at": in.StartsAt.UTC(), "next_due_at": next.UTC(), "deadline_minutes": in.DeadlineMinutes, "reminder_offsets": offsets, "version": in.ExpectedVersion + 1, "updated_at": now})
 		if r.Error != nil {
 			return r.Error
@@ -253,7 +261,10 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 	}
 	var due []database.Schedule
 	err := s.within(ctx, tenantID, func(tx *gorm.DB) error {
-		return tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("tenant_id=? AND status='ACTIVE' AND next_due_at<=?", tenantID, now.UTC()).Order("next_due_at ASC").Limit(limit).Find(&due).Error
+		// updated_at is refreshed after each failed retry. This backs off blocked
+		// schedules without changing blocked_at, which records the original incident.
+		eligible := tx.Where("blocked_reason IS NULL OR updated_at < ?", now.UTC().Add(-originRetryBackoff))
+		return tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("tenant_id=? AND status='ACTIVE' AND next_due_at<=?", tenantID, now.UTC()).Where(eligible).Order("next_due_at ASC").Limit(limit).Find(&due).Error
 	})
 	if err != nil {
 		return nil, err
@@ -272,6 +283,13 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 		}
 		raw, err := s.Bus.Send(ctx, createoccurrence.Command{TenantID: tenantID, AssetID: schedule.AssetID, ParticipantID: schedule.ParticipantID, TemplateID: &schedule.TemplateID, TemplateVersionID: schedule.TemplateVersionID, ComparisonMode: catalog.ComparisonMode(schedule.ComparisonMode), ReferenceVersionID: schedule.ReferenceVersionID, ProjectID: schedule.ProjectID, StageID: schedule.StageID, Source: inspectioncore.SourceScheduled, SourceKey: schedule.ID.String() + "/" + dueAt.Format(time.RFC3339Nano), DueAt: dueAt, DeadlineAt: deadline, ReminderInstants: reminders})
 		if err != nil {
+			if unavailableOrigin(err) {
+				if blockErr := s.blockOrigin(ctx, tenantID, schedule); blockErr != nil {
+					return results, blockErr
+				}
+				log.Printf("schedule materialization blocked: scheduleId=%s tenantId=%s reason=%s", schedule.ID, tenantID, blockedOriginUnavailable)
+				continue
+			}
 			return results, err
 		}
 		inspection := raw.(inspectioncore.View)
@@ -300,7 +318,7 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 					return err
 				}
 			}
-			return tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND next_due_at=?", tenantID, schedule.ID, dueAt).Updates(map[string]any{"next_due_at": next.UTC(), "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error
+			return tx.Model(&database.Schedule{}).Where("tenant_id=? AND id=? AND next_due_at=?", tenantID, schedule.ID, dueAt).Updates(map[string]any{"next_due_at": next.UTC(), "blocked_reason": nil, "blocked_at": nil, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error
 		})
 		if err != nil {
 			return results, err
@@ -308,6 +326,29 @@ func (s Service) MaterializeDue(ctx context.Context, tenantID identity.ID, now t
 		results = append(results, Materialization{Schedule: schedule, Inspection: inspection, DueInstant: dueAt, EventID: eventID})
 	}
 	return results, nil
+}
+
+func unavailableOrigin(err error) bool {
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) {
+		return false
+	}
+	switch appErr.Code {
+	// Conflict covers a pinned reference whose origin moved to another version.
+	case apperror.InvalidState, apperror.InvalidInput, apperror.NotFound, apperror.Conflict:
+		return appErr.Field == "referenceVersionId" || appErr.Field == "originVersionId" || appErr.Field == "originId"
+	default:
+		return false
+	}
+}
+
+func (s Service) blockOrigin(ctx context.Context, tenantID identity.ID, schedule database.Schedule) error {
+	now := s.now()
+	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
+		return tx.Model(&database.Schedule{}).
+			Where("tenant_id=? AND id=? AND next_due_at=?", tenantID, schedule.ID, schedule.NextDueAt).
+			Updates(map[string]any{"blocked_reason": blockedOriginUnavailable, "blocked_at": gorm.Expr("COALESCE(blocked_at, ?)", now), "updated_at": now}).Error
+	})
 }
 
 func (s Service) DispatchDueReminders(ctx context.Context, tenantID identity.ID, now time.Time, limit int) ([]ReminderDispatch, error) {
@@ -405,7 +446,7 @@ func (s Service) prerequisites(ctx context.Context, tenantID, assetID, participa
 }
 
 func (s Service) withSchedule(ctx context.Context, tenantID, scheduleID identity.ID, fn func(*gorm.DB, *database.Schedule) error) error {
-	return (tenanttx.Runner{DB: s.DB}).Within(ctx, tenantID, func(tx *gorm.DB) error {
+	return s.within(ctx, tenantID, func(tx *gorm.DB) error {
 		var row database.Schedule
 		if err := tx.Where("tenant_id=? AND id=?", tenantID, scheduleID).First(&row).Error; err != nil {
 			return apperror.New(apperror.NotFound, "scheduleId", "schedule not found")

@@ -135,6 +135,7 @@ func (d Dependencies) load(ctx context.Context, query Query) ([]Item, error) {
 		if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 			return err
 		}
+		requirements = capturecore.ActiveRequirements(requirements)
 		if err := json.Unmarshal(draft.ReferencePayload, &pinned); err != nil {
 			return err
 		}

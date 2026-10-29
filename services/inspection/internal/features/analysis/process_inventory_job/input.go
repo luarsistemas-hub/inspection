@@ -135,11 +135,71 @@ func (p *Processor) load(ctx context.Context, job database.InventoryJob) (jobInp
 		if err := json.Unmarshal(answer.MediaIDs, &mediaIDs); err != nil {
 			return fmt.Errorf("%w: invalid answer media", messaging.ErrPermanent)
 		}
-		current, err := loadMediaInputs(tx, job.TenantID, mediaIDs, job.RequirementKey, in.inspection.MediaKind == "VIDEO")
+		var current []evidenceInput
+		if job.Kind == "CATALOG" && in.inspection.MediaKind == "VIDEO" {
+			planID := catalogPlanID(tx, job.TenantID, in.inspection, job.OriginVersionID)
+			if planID != nil {
+				current, err = loadPlannedVideoInputs(tx, job.TenantID, *planID, job.RequirementKey, mediaIDs)
+				if err == nil && len(current) == 0 {
+					current, err = loadMediaInputs(tx, job.TenantID, mediaIDs, job.RequirementKey, true)
+				}
+			} else {
+				current, err = loadMediaInputs(tx, job.TenantID, mediaIDs, job.RequirementKey, true)
+			}
+		} else {
+			current, err = loadMediaInputs(tx, job.TenantID, mediaIDs, job.RequirementKey, in.inspection.MediaKind == "VIDEO")
+		}
 		in.current = current
 		return err
 	})
 	return in, err
+}
+
+func catalogPlanID(tx *gorm.DB, tenant identity.ID, inspection database.Inspection, draftID identity.ID) *identity.ID {
+	var promotion database.InspectionOriginPromotion
+	if tx.Where("tenant_id=? AND draft_version_id=? AND video_plan_id IS NOT NULL", tenant, draftID).Order("created_at DESC").Take(&promotion).Error == nil {
+		return promotion.VideoPlanID
+	}
+	if inspection.ActiveVideoPlanID == nil {
+		return nil
+	}
+	var plan database.VideoPlan
+	if tx.Where("tenant_id=? AND id=? AND inspection_id=? AND status='SEALED'", tenant, *inspection.ActiveVideoPlanID, inspection.ID).Take(&plan).Error != nil {
+		return nil
+	}
+	return &plan.ID
+}
+
+func loadPlannedVideoInputs(tx *gorm.DB, tenant, planID identity.ID, requirementKey string, mediaIDs []identity.ID) ([]evidenceInput, error) {
+	var preparations []database.VideoPlanPreparation
+	if len(mediaIDs) == 0 {
+		return nil, nil
+	}
+	if err := tx.Table("analysis.video_plan_preparations AS vpp").
+		Select("vpp.*").
+		Joins("JOIN media.video_preparation_jobs AS vpj ON vpj.tenant_id=vpp.tenant_id AND vpj.id=vpp.preparation_id").
+		Where("vpp.tenant_id=? AND vpp.plan_id=? AND (vpp.requirement_key=? OR (vpp.requirement_key IS NULL AND vpj.media_id IN ?))", tenant, planID, requirementKey, mediaIDs).
+		Find(&preparations).Error; err != nil {
+		return nil, err
+	}
+	var out []evidenceInput
+	for _, planned := range preparations {
+		var prep database.VideoPreparationJob
+		if err := tx.Where("tenant_id=? AND id=? AND status='READY'", tenant, planned.PreparationID).Take(&prep).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		frames, err := representativeFrames(tx, tenant, prep.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, frame := range frames {
+			out = append(out, frameInput(frame, prep.MediaID, requirementKey))
+		}
+	}
+	return out, nil
 }
 
 // loadCapture returns the submitted requirement and answer for the job's
@@ -156,6 +216,7 @@ func loadCapture(tx *gorm.DB, job database.InventoryJob) (*capturecore.Requireme
 	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 		return nil, nil, fmt.Errorf("%w: invalid capture requirements", messaging.ErrPermanent)
 	}
+	requirements = capturecore.ActiveRequirements(requirements)
 	var requirement *capturecore.Requirement
 	for i := range requirements {
 		if requirements[i].Key == job.RequirementKey {

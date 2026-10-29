@@ -755,7 +755,7 @@ func (e *Executor) persistScreening(ctx context.Context, r reservation, m databa
 			return err
 		}
 		if status == "BLOCKED" {
-			if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", r.job.TenantID, m.ID).Update("status", "SCREENED").Error; err != nil {
+			if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status NOT IN ('ABORTED','PURGED')", r.job.TenantID, m.ID).Update("status", "SCREENED").Error; err != nil {
 				return err
 			}
 		}
@@ -1040,6 +1040,7 @@ func (e *Executor) representativeLimit(ctx context.Context, r reservation, media
 	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 		return 0, err
 	}
+	requirements = capturecore.ActiveRequirements(requirements)
 	for _, requirement := range requirements {
 		if requirement.Key == *attempt.RequirementKey {
 			return representativeBudget(requirement.MaximumMedia), nil
@@ -1237,6 +1238,7 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 			if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 				return err
 			}
+			requirements = capturecore.ActiveRequirements(requirements)
 			for _, req := range requirements {
 				if req.Key == *attempt.RequirementKey {
 					fixedEnvironment = req.EnvironmentName
@@ -1389,7 +1391,8 @@ func (e *Executor) discoverAndSeal(ctx context.Context, r reservation, m databas
 		if result.RowsAffected != 1 {
 			return errLeaseLost
 		}
-		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", r.job.TenantID, m.ID).Update("status", "READY").Error; err != nil {
+		// A clip whose environment was removed mid-preparation stays aborted.
+		if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=? AND status NOT IN ('ABORTED','PURGED')", r.job.TenantID, m.ID).Update("status", "READY").Error; err != nil {
 			return err
 		}
 		eventID := identity.NewDeterministicID("inspection/media-video-prepared", r.job.ID.String())

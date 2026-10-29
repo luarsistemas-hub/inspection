@@ -86,9 +86,19 @@ func (p *Processor) Process(ctx context.Context, job database.InventoryJob, fenc
 func (p *Processor) Failed(ctx context.Context, tx *gorm.DB, job database.InventoryJob, _ string) error {
 	switch job.Kind {
 	case "CATALOG":
+		var current database.InventoryJob
+		if err := tx.WithContext(ctx).Select("status").Where("tenant_id=? AND id=?", job.TenantID, job.ID).Take(&current).Error; err != nil {
+			return err
+		}
+		if current.Status == "CANCELED" {
+			return nil
+		}
 		var version database.OriginVersion
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", job.TenantID, job.OriginVersionID).Take(&version).Error; err != nil {
 			return err
+		}
+		if version.Status != "DRAFT" {
+			return tx.WithContext(ctx).Model(&database.InventoryJob{}).Where("tenant_id=? AND id=? AND status='FAILED'", job.TenantID, job.ID).Updates(map[string]any{"status": "CANCELED", "lease_token": nil, "lease_until": nil, "updated_at": p.deps.Now().UTC()}).Error
 		}
 		var pending int64
 		if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND kind='CATALOG' AND id<>? AND status NOT IN ('SUCCEEDED','FAILED','CANCELED')", job.TenantID, job.OriginVersionID, job.ID).Count(&pending).Error; err != nil {
@@ -129,9 +139,19 @@ func (p *Processor) Succeeded(ctx context.Context, tx *gorm.DB, job database.Inv
 	if job.Kind != "CATALOG" {
 		return nil
 	}
+	var current database.InventoryJob
+	if err := tx.WithContext(ctx).Select("status").Where("tenant_id=? AND id=?", job.TenantID, job.ID).Take(&current).Error; err != nil {
+		return err
+	}
+	if current.Status == "CANCELED" {
+		return nil
+	}
 	var version database.OriginVersion
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", job.TenantID, job.OriginVersionID).Take(&version).Error; err != nil {
 		return err
+	}
+	if version.Status != "DRAFT" {
+		return tx.WithContext(ctx).Model(&database.InventoryJob{}).Where("tenant_id=? AND id=? AND status='SUCCEEDED'", job.TenantID, job.ID).Updates(map[string]any{"status": "CANCELED", "lease_token": nil, "lease_until": nil, "updated_at": p.deps.Now().UTC()}).Error
 	}
 	var pending int64
 	if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND kind='CATALOG' AND status NOT IN ('SUCCEEDED','FAILED','CANCELED')", job.TenantID, job.OriginVersionID).Count(&pending).Error; err != nil {

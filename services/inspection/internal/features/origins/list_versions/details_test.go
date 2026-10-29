@@ -23,13 +23,15 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.MediaObject{}, &database.VideoPreparationJob{}, &database.VideoSource{}, &database.VideoScopeItem{}, &database.VideoFrame{}, &database.CaptureDraft{}} {
+	for _, model := range []any{&database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.MediaObject{}, &database.VideoPreparationJob{}, &database.VideoSource{}, &database.VideoScopeItem{}, &database.VideoFrame{}, &database.CaptureDraft{}} {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatal(err)
 		}
 	}
 	tenantID, now := identity.NewID(), time.Now().UTC()
 	photoOriginID, videoOriginID, photoID, pendingPhotoID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
+	inventoryPhotoOriginID, inventoryVideoOriginID, rejectedOriginID := identity.NewID(), identity.NewID(), identity.NewID()
+	inventoryPhotoID, inventoryVideoID, rejectedID := identity.NewID(), identity.NewID(), identity.NewID()
 	queuedID, queuedMediaID, queuedJobID := identity.NewID(), identity.NewID(), identity.NewID()
 	readyID, readyMediaID, readyJobID, frameID := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
 	photoResp, pendingPhotoResponsibility, queuedResponsibility, readyResponsibility := identity.NewID(), identity.NewID(), identity.NewID(), identity.NewID()
@@ -39,10 +41,16 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 		{ID: pendingPhotoID, TenantID: tenantID, OriginID: photoOriginID, VersionNumber: 2, ResponsibilityID: identity.Ptr(pendingPhotoResponsibility), Status: "DRAFT", MediaKind: "PHOTO", IdempotencyKey: "photo-pending", CreatedAt: now},
 		{ID: queuedID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 1, ResponsibilityID: identity.Ptr(queuedResponsibility), Status: "DRAFT", MediaKind: "VIDEO", IdempotencyKey: "queued", CreatedAt: now},
 		{ID: readyID, TenantID: tenantID, OriginID: videoOriginID, VersionNumber: 2, ResponsibilityID: identity.Ptr(readyResponsibility), Status: "ACTIVE", MediaKind: "VIDEO", VideoPreparationID: &readyJobID, ScopeManifestDigest: manifest, IdempotencyKey: "ready", CreatedAt: now},
+		{ID: inventoryPhotoID, TenantID: tenantID, OriginID: inventoryPhotoOriginID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "PHOTO", HasInventory: true, IdempotencyKey: "inventory-photo", CreatedAt: now},
+		{ID: inventoryVideoID, TenantID: tenantID, OriginID: inventoryVideoOriginID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "VIDEO", HasInventory: true, IdempotencyKey: "inventory-video", CreatedAt: now},
+		{ID: rejectedID, TenantID: tenantID, OriginID: rejectedOriginID, VersionNumber: 1, Status: "ACTIVE", MediaKind: "PHOTO", HasInventory: true, IdempotencyKey: "rejected", CreatedAt: now},
 	}
 	for _, origin := range []database.Origin{
 		{ID: photoOriginID, TenantID: tenantID, ActiveVersionID: &photoID, Version: 2, CreatedAt: now, UpdatedAt: now},
 		{ID: videoOriginID, TenantID: tenantID, ActiveVersionID: &readyID, Version: 2, CreatedAt: now, UpdatedAt: now},
+		{ID: inventoryPhotoOriginID, TenantID: tenantID, ActiveVersionID: &inventoryPhotoID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		{ID: inventoryVideoOriginID, TenantID: tenantID, ActiveVersionID: &inventoryVideoID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		{ID: rejectedOriginID, TenantID: tenantID, ActiveVersionID: &rejectedID, Version: 1, CreatedAt: now, UpdatedAt: now},
 	} {
 		if err := db.Create(&origin).Error; err != nil {
 			t.Fatal(err)
@@ -64,6 +72,9 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 	}
 	for _, row := range []any{
 		&database.OriginEvidence{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: photoID, MediaID: identity.NewID(), Category: "room", Description: "room", CreatedAt: now},
+		&database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: inventoryPhotoID, IdentityID: identity.NewID(), TypeCode: "ROOM", Name: "Sala", Decision: "PENDING", Version: 1},
+		&database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: inventoryVideoID, IdentityID: identity.NewID(), TypeCode: "ROOM", Name: "Sala", Decision: "ACCEPTED", Version: 1},
+		&database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: rejectedID, IdentityID: identity.NewID(), TypeCode: "ROOM", Name: "Sala", Decision: "REJECTED", Version: 1},
 		&database.MediaObject{ID: queuedMediaID, TenantID: tenantID, ResponsibilityID: queuedResponsibility, ObjectKey: "origin/queued", ContentType: "video/mp4", SHA256: strings.Repeat("b", 64), SizeBytes: 1, Status: "RECEIVED", MediaKind: "VIDEO", CreatedAt: now},
 		&database.VideoPreparationJob{ID: queuedJobID, TenantID: tenantID, MediaID: queuedMediaID, Status: "QUEUED", Phase: "RECEIVED", NextAttemptAt: now, CreatedAt: now},
 		&database.VideoSource{ID: identity.NewID(), TenantID: tenantID, MediaID: queuedMediaID, Container: "mp4", Codec: "h264", PixelFormat: "yuv420p", ColorTransfer: "bt709", DurationMicros: 1, Width: 1, Height: 1, FrameRate: 30, Status: "RETAINED", CreatedAt: now, UpdatedAt: now},
@@ -93,5 +104,11 @@ func TestLoadDetailsProjectsPhotoAndVideoReadinessInBatches(t *testing.T) {
 	}
 	if !details[readyID].Selectable || details[readyID].PreparationStatus == nil || *details[readyID].PreparationStatus != "READY" || details[readyID].SourceAvailability == nil || *details[readyID].SourceAvailability != "EXPIRED" {
 		t.Fatalf("ready VIDEO projection=%+v", details[readyID])
+	}
+	if !details[inventoryPhotoID].Selectable || !details[inventoryVideoID].Selectable {
+		t.Fatalf("inventory projections: PHOTO=%+v VIDEO=%+v", details[inventoryPhotoID], details[inventoryVideoID])
+	}
+	if details[rejectedID].Selectable {
+		t.Fatalf("rejected inventory projection=%+v", details[rejectedID])
 	}
 }

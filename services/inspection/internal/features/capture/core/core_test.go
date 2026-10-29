@@ -75,6 +75,13 @@ func TestEnvironmentCompletenessUT111UT112UT113UT114UT124(t *testing.T) {
 	if err != nil || !result.Complete || result.Satisfied != 2 {
 		t.Fatalf("captured and impossible environments = %+v, %v", result, err)
 	}
+	result, err = Evaluate([]Requirement{
+		{Key: "env:retained", Required: true, Expected: true, MinimumMedia: 1},
+		{Key: "env:removed", Required: true, AddedDuringCapture: true, Deleted: true, MinimumMedia: 1},
+	}, []Answer{{RequirementKey: "env:retained", ReadyMedia: 1}}, false)
+	if err != nil || !result.Complete || result.Total != 1 {
+		t.Fatalf("removed environment affected completeness = %+v, %v", result, err)
+	}
 	result, err = Evaluate(nil, nil, false)
 	if !apperror.Is(err, apperror.InvalidState) || len(result.PendingKeys) != 0 || err.Error() != "capture has no applicable requirements" {
 		t.Fatalf("empty environment list = %+v, %v", result, err)
@@ -164,6 +171,41 @@ func TestB14DeclareEnvironmentReplayAtSixtyRequirementsIsIdempotent(t *testing.T
 	replay, err := service.DeclareEnvironment(context.Background(), input)
 	if err != nil || replay.Key != created.Key || replay.EnvironmentName != created.EnvironmentName {
 		t.Fatalf("idempotent retry at limit returned %+v, want %+v: %v", replay, created, err)
+	}
+}
+
+func TestDeclareEnvironmentReplayAfterRemovalKeepsOneRequirement(t *testing.T) {
+	db, service, tenant, responsibility := environmentFixture(t, "OPEN", nil)
+	if err := db.Model(&database.CaptureDraft{}).Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Update("media_kind", "VIDEO").Error; err != nil {
+		t.Fatal(err)
+	}
+	input := DeclareEnvironmentInput{TenantID: tenant, ResponsibilityID: responsibility, TypeCode: "BEDROOM", Name: "Quarto", ClientMutationID: "replay-after-removal"}
+	created, err := service.DeclareEnvironment(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ManageEnvironment(context.Background(), ManageEnvironmentInput{TenantID: tenant, ResponsibilityID: responsibility, RequirementKey: created.Key, Remove: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DeclareEnvironment(context.Background(), input); !apperror.Is(err, apperror.Conflict) {
+		t.Fatalf("replay after removal = %v, want Conflict", err)
+	}
+	var draft database.CaptureDraft
+	if err := db.Where("tenant_id=? AND responsibility_id=?", tenant, responsibility).Take(&draft).Error; err != nil {
+		t.Fatal(err)
+	}
+	var requirements []Requirement
+	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
+		t.Fatal(err)
+	}
+	matches := 0
+	for _, requirement := range requirements {
+		if requirement.Key == created.Key {
+			matches++
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("requirements with key %s = %d, want 1", created.Key, matches)
 	}
 }
 

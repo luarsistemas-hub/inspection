@@ -17,8 +17,6 @@ function inspection(id: string, status: string, dueAt: string): InspectionRecord
     source: "MANUAL", sourceReason: null, stateReason: null, status, mediaKind: "PHOTO",
     comparisonMode: "CHECKLIST_ONLY", referenceVersionId: null, referenceVersionNumber: null,
     referenceMediaKind: null, referenceVersionStatus: null, referenceIsActive: null,
-    originPromotionStatus: null, originPromotionFailure: null, promotedOriginVersionId: null,
-    promotedOriginVersionNumber: null, promotedOriginMediaKind: null, promotedOriginIsActive: null,
     evidenceCount: 2, dueAt, deadlineAt: dueAt, reminderInstants: [], version: 1,
     assetName: "Imóvel", assetAddress: "Rua QA", assetExternalKey: "QA-1", participantName: "Elvio", attention: null,
   };

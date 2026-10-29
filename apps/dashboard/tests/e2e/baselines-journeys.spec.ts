@@ -91,8 +91,7 @@ test("E2E-009 requests legacy-origin cataloging and starts a draft from a comple
   await page.getByRole("button", { name: "Catalogar origem existente" }).click();
   await expect(page.getByRole("heading", { name: "Revisar inventário" })).toBeVisible();
   await navigate(page, "Inventários");
-  await page.getByLabel("Vistoria concluída").selectOption("inspection-a");
-  await page.getByRole("button", { name: "Criar rascunho desta vistoria" }).click();
+  await page.getByRole("button", { name: "Iniciar rascunho para revisão" }).click();
   await expect(page).toHaveURL(/\/baselines\/review\/inspection-draft$/);
   await expect(page.getByText("O inventário está sendo preparado. Você pode voltar a esta página mais tarde.", { exact: true })).toBeVisible();
   expect(calls.map(({ operation }) => operation)).toEqual(expect.arrayContaining(["RequestOriginCataloging", "StartBaselineDraftFromInspection"]));

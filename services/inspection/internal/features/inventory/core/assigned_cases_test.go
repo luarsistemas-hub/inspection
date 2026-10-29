@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"inspection/libs/identity"
@@ -444,23 +443,8 @@ func TestService_AssignedComparativeDraftCases(t *testing.T) {
 		if err := db.Where("tenant_id=? AND origin_version_id=?", tenant, draft.ID).Order("name").Find(&items).Error; err != nil {
 			t.Fatal(err)
 		}
-		if len(items) != 2 {
-			t.Fatalf("wanted copied changed item and outside item, got %+v", items)
-		}
-		var changed, outside *database.InventoryItem
-		for i := range items {
-			if items[i].Name == "Pia" {
-				changed = &items[i]
-			}
-			if items[i].Name == "Cadeira nova" {
-				outside = &items[i]
-			}
-		}
-		if changed == nil || changed.Decision != "PENDING" || !strings.Contains(string(changed.Suggested), `"condition":"FAIR"`) {
-			t.Fatalf("changed item suggestion missing: %+v", changed)
-		}
-		if outside == nil || outside.Decision != "PENDING" || outside.Origin != "AI" || outside.EnvironmentID == (identity.ID{}) {
-			t.Fatalf("outside inventory item missing: %+v", outside)
+		if len(items) != 0 {
+			t.Fatalf("comparison inventory was imported into inspection-only draft: %+v", items)
 		}
 	})
 	t.Run("UT-014 comparison draft stays pinned and warns when newer baseline is active", func(t *testing.T) {
@@ -486,15 +470,15 @@ func TestService_AssignedComparativeDraftCases(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if draft.SourceVersionID == nil || *draft.SourceVersionID != pinnedID {
-			t.Fatalf("draft was not pinned to inspected version: %+v", draft)
+		if draft.SourceVersionID != nil {
+			t.Fatalf("draft retained the reference version: %+v", draft)
 		}
 		view, err := testService(db).InventoryDraft(context.Background(), tenant, draft.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(view.Warnings) != 1 || view.Warnings[0] != "NEWER_VERSION_EXISTS" {
-			t.Fatalf("newer baseline warning missing: %+v", view.Warnings)
+		if len(view.Warnings) != 0 {
+			t.Fatalf("inspection-only draft should not report a reference warning: %+v", view.Warnings)
 		}
 	})
 }

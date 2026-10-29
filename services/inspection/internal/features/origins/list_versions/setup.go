@@ -165,12 +165,17 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 	responsibilityIDs := make([]identity.ID, 0, len(versions))
 	originIDs := make([]identity.ID, 0, len(versions))
 	photoIDs := make([]identity.ID, 0, len(versions))
+	inventoryIDs := make([]identity.ID, 0, len(versions))
 	for _, version := range versions {
 		details[version.ID] = Details{}
 		if version.ResponsibilityID != nil {
 			responsibilityIDs = append(responsibilityIDs, *version.ResponsibilityID)
 		}
 		originIDs = append(originIDs, version.OriginID)
+		if version.HasInventory {
+			inventoryIDs = append(inventoryIDs, version.ID)
+			continue
+		}
 		if version.MediaKind != "VIDEO" {
 			photoIDs = append(photoIDs, version.ID)
 			continue
@@ -190,6 +195,7 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 	var scope []database.VideoScopeItem
 	var frames []database.VideoFrame
 	var photos []database.OriginEvidence
+	var environments []database.InventoryEnvironment
 	var drafts []database.CaptureDraft
 	var origins []database.Origin
 	var err error
@@ -210,6 +216,11 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 		}
 		if len(photoIDs) > 0 {
 			if err := tx.Where("tenant_id=? AND origin_version_id IN ?", tenantID, photoIDs).Find(&photos).Error; err != nil {
+				return err
+			}
+		}
+		if len(inventoryIDs) > 0 {
+			if err := tx.Where("tenant_id=? AND origin_version_id IN ? AND decision<>'REJECTED'", tenantID, inventoryIDs).Find(&environments).Error; err != nil {
 				return err
 			}
 		}
@@ -247,6 +258,10 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 	for _, row := range photos {
 		photoCount[row.OriginVersionID]++
 	}
+	environmentCount := make(map[identity.ID]int, len(environments))
+	for _, row := range environments {
+		environmentCount[row.OriginVersionID]++
+	}
 	draftSubmittedByResponsibility := make(map[identity.ID]bool, len(drafts))
 	for _, draft := range drafts {
 		draftSubmittedByResponsibility[draft.ResponsibilityID] = draft.Status == "SUBMITTED"
@@ -257,6 +272,11 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 			item.CaptureSubmitted = draftSubmittedByResponsibility[*version.ResponsibilityID]
 		}
 		details[version.ID] = item
+		if version.HasInventory {
+			item.Selectable = version.Status == "ACTIVE" && activeByOrigin[version.OriginID] == version.ID && environmentCount[version.ID] > 0 && environmentCount[version.ID] <= 60
+			details[version.ID] = item
+			continue
+		}
 		if version.MediaKind != "VIDEO" {
 			item.Selectable = version.Status == "ACTIVE" && activeByOrigin[version.OriginID] == version.ID && photoCount[version.ID] > 0 && photoCount[version.ID] <= 6
 			details[version.ID] = item
@@ -325,7 +345,7 @@ func loadDetails(ctx context.Context, within func(context.Context, identity.ID, 
 		}
 	}
 	for _, version := range versions {
-		if version.MediaKind != "VIDEO" {
+		if version.HasInventory || version.MediaKind != "VIDEO" {
 			continue
 		}
 		mediaRow, hasMedia := database.MediaObject{}, false

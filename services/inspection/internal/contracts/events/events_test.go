@@ -36,10 +36,12 @@ func TestUT041RegistryRejectsUnsafeContracts(t *testing.T) {
 
 func TestInventoryEventContracts_IT039(t *testing.T) {
 	valid := map[string]map[string]any{
-		"inventory.job_requested.v1":     {"jobId": identity.NewID(), "inspectionId": identity.NewID()},
-		"inventory.draft_ready.v1":       {"originVersionId": identity.NewID()},
-		"inventory.version_activated.v1": {"originVersionId": identity.NewID()},
-		"counterparty.responded.v1":      {"counterpartyInvitationId": identity.NewID(), "originVersionId": identity.NewID()},
+		"inventory.job_requested.v1":               {"jobId": identity.NewID(), "inspectionId": identity.NewID()},
+		"inventory.draft_ready.v1":                 {"originVersionId": identity.NewID()},
+		"origin.inspection_promotion_requested.v1": {"promotionId": identity.NewID()},
+		"inventory.version_activated.v1":           {"originVersionId": identity.NewID()},
+		"counterparty.responded.v1":                {"counterpartyInvitationId": identity.NewID(), "originVersionId": identity.NewID()},
+		"capture.environment_removed.v1":           {"responsibilityId": identity.NewID(), "requirementKey": "env:new:example"},
 	}
 	for eventType, goodPayload := range valid {
 		t.Run(eventType, func(t *testing.T) {

@@ -39,12 +39,12 @@ func Open(t testing.TB) *gorm.DB {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	for _, schema := range []string{"inspections", "templates", "capture", "origins", "analysis", "media", "messaging", "assets", "reports"} {
+	for _, schema := range []string{"inspections", "templates", "capture", "origins", "analysis", "media", "messaging", "assets", "reports", "audit"} {
 		if err := db.Exec("ATTACH DATABASE ':memory:' AS " + schema).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	models := []any{&database.Inspection{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}}
+	models := []any{&database.Inspection{}, &database.TemplateVersion{}, &database.CaptureDraft{}, &database.RequirementAnswer{}, &database.Responsibility{}, &database.ReferenceSnapshot{}, &database.Origin{}, &database.OriginVersion{}, &database.OriginEvidence{}, &database.InventoryEnvironment{}, &database.InventoryItem{}, &database.InventoryItemEvidence{}, &database.InventoryJob{}, &database.InventoryEvidencePair{}, &database.InventoryItemResult{}, &database.AnalysisPromptSnapshot{}, &database.MediaObject{}, &database.MediaDerivative{}, &database.VideoPreparationJob{}, &database.VideoFrame{}, &database.VideoSource{}, &database.OutboxIntent{}, &database.AnalysisRun{}, &database.FindingRecord{}, &database.ComparisonJob{}, &database.ClassificationRun{}, &database.AuditEvent{}}
 	for _, model := range models {
 		if err := db.AutoMigrate(model); err != nil && !strings.Contains(err.Error(), "no such table: main.") {
 			t.Fatalf("migrate %T: %v", model, err)

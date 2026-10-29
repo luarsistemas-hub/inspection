@@ -193,6 +193,7 @@ func (c *comparisonEnvironments) loadRequirements(tx *gorm.DB) error {
 	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 		return fmt.Errorf("capture requirements: %w", err)
 	}
+	requirements = capturecore.ActiveRequirements(requirements)
 	for _, requirement := range requirements {
 		c.requirements[requirement.Key] = requirement
 	}

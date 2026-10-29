@@ -70,6 +70,12 @@ type CaptureVideoClip struct {
 	MediaID        identity.ID `json:"mediaId"`
 }
 
+// CaptureEnvironmentRemovedPayload scopes asynchronous cleanup to one open capture slot.
+type CaptureEnvironmentRemovedPayload struct {
+	ResponsibilityID identity.ID `json:"responsibilityId"`
+	RequirementKey   string      `json:"requirementKey"`
+}
+
 // InventoryJobRequestedPayload announces a due inventory analysis job.
 type InventoryJobRequestedPayload struct {
 	JobID        identity.ID `json:"jobId"`
@@ -79,6 +85,11 @@ type InventoryJobRequestedPayload struct {
 // InventoryDraftReadyPayload announces that a baseline draft can be reviewed.
 type InventoryDraftReadyPayload struct {
 	OriginVersionID identity.ID `json:"originVersionId"`
+}
+
+// InspectionPromotionRequestedPayload identifies one explicit origin promotion.
+type InspectionPromotionRequestedPayload struct {
+	PromotionID identity.ID `json:"promotionId"`
 }
 
 // InventoryVersionActivatedPayload announces a newly active baseline version.
@@ -177,6 +188,12 @@ func (r *Registry) Validate(data []byte) (RawEnvelope, error) {
 			media[clip.MediaID] = true
 		}
 	}
+	if envelope.Type == "capture.environment_removed.v1" {
+		var payload CaptureEnvironmentRemovedPayload
+		if err := decodePayload(envelope.Payload, &payload); err != nil || payload.ResponsibilityID == (identity.ID{}) || !strings.HasPrefix(payload.RequirementKey, "env:") {
+			return RawEnvelope{}, fmt.Errorf("%w: capture environment removed payload", ErrInvalidEnvelope)
+		}
+	}
 	if valid, ok := inventoryPayloadValidators[envelope.Type]; ok && !valid(envelope.Payload) {
 		return RawEnvelope{}, fmt.Errorf("%w: %s payload", ErrInvalidEnvelope, envelope.Type)
 	}
@@ -193,6 +210,10 @@ var inventoryPayloadValidators = map[string]func(json.RawMessage) bool{
 	"inventory.draft_ready.v1": func(raw json.RawMessage) bool {
 		var payload InventoryDraftReadyPayload
 		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.OriginVersionID)
+	},
+	"origin.inspection_promotion_requested.v1": func(raw json.RawMessage) bool {
+		var payload InspectionPromotionRequestedPayload
+		return decodePayload(raw, &payload) == nil && nonZeroIDs(payload.PromotionID)
 	},
 	"inventory.version_activated.v1": func(raw json.RawMessage) bool {
 		var payload InventoryVersionActivatedPayload
@@ -279,8 +300,9 @@ func DefaultRegistry() *Registry {
 	for _, name := range []string{
 		"participant.channel_verified.v1", "origin.invitation_requested.v1", "inspection.created.v1",
 		"origin.promotion_requested.v1",
+		"origin.inspection_promotion_requested.v1",
 		"inspection.state_changed.v1", "media.upload_completed.v1", "media.verified.v1", "media.screened.v1", "media.received.v1",
-		"capture.submitted.v1", "capture.video_submitted.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1", "video_replacement.deadline_reached.v1",
+		"capture.submitted.v1", "capture.video_submitted.v1", "capture.environment_removed.v1", "recapture.requested.v1", "recapture.completed.v1", "recapture.deadline_reached.v1", "video_replacement.deadline_reached.v1",
 		"analysis.comparison_requested.v1", "analysis.video_comparison_requested.v1", "analysis.comparison_completed.v1", "inspection.classified.v1",
 		"inventory.job_requested.v1", "inventory.draft_ready.v1", "inventory.version_activated.v1", "counterparty.responded.v1",
 		"media.video_prepared.v1", "report.snapshot_created.v1", "report.ready.v1", "notification.delivery_terminal.v1", "project.stage_changed.v1", "retention.purge_due.v1", "retention.purged.v1",

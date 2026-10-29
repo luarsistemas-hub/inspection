@@ -650,7 +650,12 @@ func mapSchedule(row database.Schedule) *graphql1.Schedule {
 	if row.TemplateVersionID != nil {
 		templateVersionID = row.TemplateVersionID.String()
 	}
-	return &graphql1.Schedule{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: templateVersionID, ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), ReferenceVersionID: optionalID(row.ReferenceVersionID), Rrule: row.RRule, Timezone: row.Timezone, StartsAt: row.StartsAt.Format(time.RFC3339Nano), NextDueAt: row.NextDueAt.Format(time.RFC3339Nano), DeadlineMinutes: row.DeadlineMinutes, ReminderOffsetsMinutes: offsets, Status: row.Status, Version: int(row.Version)}
+	var blockedAt *string
+	if row.BlockedAt != nil {
+		value := row.BlockedAt.UTC().Format(time.RFC3339Nano)
+		blockedAt = &value
+	}
+	return &graphql1.Schedule{ID: row.ID.String(), BusinessUnitID: row.BusinessUnitID.String(), AssetID: row.AssetID.String(), ParticipantID: row.ParticipantID.String(), TemplateID: row.TemplateID.String(), TemplateVersionID: templateVersionID, ProjectID: optionalID(row.ProjectID), StageID: optionalID(row.StageID), ReferenceVersionID: optionalID(row.ReferenceVersionID), Rrule: row.RRule, Timezone: row.Timezone, StartsAt: row.StartsAt.Format(time.RFC3339Nano), NextDueAt: row.NextDueAt.Format(time.RFC3339Nano), DeadlineMinutes: row.DeadlineMinutes, ReminderOffsetsMinutes: offsets, Status: row.Status, Version: int(row.Version), BlockedReason: row.BlockedReason, BlockedAt: blockedAt}
 }
 
 func mapInspection(view inspectioncore.View) *graphql1.Inspection {

@@ -127,10 +127,16 @@ async function configurePhotoCapture(page: import("@playwright/test").Page, init
 }
 
 async function declareEnvironment(page: import("@playwright/test").Page, type: string, name: string) {
-  await page.getByLabel("Tipo de ambiente").selectOption(type);
+  await expect(page.locator(".capture-environment-add")).toBeVisible();
+  const tiled = await page.locator(".capture-environment-types").isVisible();
+  if (tiled) {
+    const tile = page.locator(`.capture-environment-type[aria-pressed]`).filter({ hasText: type === "LIVING_ROOM" ? "Sala de estar" : type === "KITCHEN" ? "Cozinha" : type === "OTHER" ? "Outro" : type });
+    await tile.click();
+  } else await page.getByLabel("Tipo de ambiente").selectOption(type);
+  if (!(await page.getByLabel("Nome do ambiente").isVisible())) await page.locator(".capture-environment-name summary").click();
   await page.getByLabel("Nome do ambiente").fill(name);
-  await page.getByRole("button", { name: "Continuar", exact: true }).click();
-  await expect(page.getByRole("button", { name: new RegExp(name) }).last()).toBeVisible();
+  await page.getByRole("button", { name: tiled ? "Adicionar ambiente" : "Continuar", exact: true }).click();
+  await expect(tiled ? page.getByRole("heading", { name, exact: true }) : page.getByRole("button", { name: new RegExp(name) }).last()).toBeVisible();
 }
 
 test("E2E-001 OTP, consent, declare environments, ignore dark warning, impossibility and submit", async ({ page }) => {
@@ -176,7 +182,24 @@ test("E2E-002 records Sala and Cozinha clips, re-records Cozinha and submits env
     if (query.includes("externalCapture")) return respond({ externalCapture: external });
     if (query.includes("acceptProcessing")) return respond({ acceptProcessing: { status: "ACCEPTED", userErrors: [] } });
     if (query.includes("declareCaptureEnvironment")) {
-      const input = variables.input ?? {}; const typeCode = String(input.typeCode); const name = String(input.name); const key = `env:${typeCode.toLowerCase()}:${name.toLowerCase()}`;
+      const input = variables.input ?? {};
+      if (typeof input.requirementKey === "string") {
+        const key = input.requirementKey;
+        const environmentRows = external.environments as Array<Record<string, unknown>>;
+        const requirementRows = external.requirements as Array<Record<string, unknown>>;
+        const environmentItem = environmentRows.find((item) => item.requirementKey === key);
+        if (input.remove === true) {
+          (external as Record<string, unknown>).environments = environmentRows.filter((item) => item.requirementKey !== key);
+          (external as Record<string, unknown>).requirements = requirementRows.filter((item) => item.key !== key);
+          return respond({ declareCaptureEnvironment: { environment: { ...environmentItem, status: "REMOVAL_PENDING" }, userErrors: [] } });
+        }
+        const name = String(input.name);
+        if (environmentItem) environmentItem.name = name;
+        const requirement = requirementRows.find((item) => item.key === key);
+        if (requirement) { requirement.environmentName = name; requirement.label = name; }
+        return respond({ declareCaptureEnvironment: { environment: environmentItem, userErrors: [] } });
+      }
+      const typeCode = String(input.typeCode); const name = String(input.name); const key = `env:${typeCode.toLowerCase()}:${name.toLowerCase()}`;
       (external as Record<string, unknown>).requirements = [...external.requirements as unknown[], requirement(key, name, typeCode, true, "VIDEO")];
       (external as Record<string, unknown>).environments = [...external.environments as unknown[], environment(key, name, typeCode, true)];
       return respond({ declareCaptureEnvironment: { environment: environment(key, name, typeCode, true), userErrors: [] } });
@@ -196,13 +219,15 @@ test("E2E-002 records Sala and Cozinha clips, re-records Cozinha and submits env
   });
   const assertRuntime = installRuntimeGuards(page);
   await authenticateCapture(page, "video-cataloging");
-  await expect(page.getByRole("heading", { name: "Um clipe por ambiente" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Por onde vamos começar?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Gravar vídeo" })).toHaveCount(0);
   await declareEnvironment(page, "LIVING_ROOM", "Sala");
+  await expect(page.getByRole("button", { name: "Gravar Sala" })).toBeEnabled();
+  await page.getByRole("button", { name: "Adicionar ambiente", exact: false }).click();
   await declareEnvironment(page, "KITCHEN", "Cozinha");
   const record = async (room: string) => {
-    const environmentButton = page.getByRole("button", { name: new RegExp(`${room} ·`) });
-    await expect(environmentButton).toBeEnabled();
-    await environmentButton.click();
+    await page.getByRole("button", { name: `Gravar ${room}` }).click();
+    await page.getByRole("button", { name: "Gravar vídeo" }).click();
     await startVideoRecording(page);
     await expect(page.getByRole("status").filter({ hasText: "Gravando." })).toBeVisible();
     await page.waitForTimeout(2200);
@@ -210,27 +235,34 @@ test("E2E-002 records Sala and Cozinha clips, re-records Cozinha and submits env
     await expect(page.getByRole("heading", { name: "Revise a gravação" })).toBeVisible();
     await page.getByRole("button", { name: "Confirmar e enviar" }).click();
     await expect(page.locator(".inspection-status").getByText("Vídeo recebido", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: new RegExp(`${room} · 1/3 · Concluído`) })).toBeEnabled();
+    await page.getByRole("button", { name: "Todos os ambientes" }).click();
+    await expect(page.getByRole("button", { name: "Ver e gerenciar vídeos" }).last()).toBeEnabled();
   };
   await record("Sala");
   await record("Cozinha");
-  const cozinhaItem = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: /Cozinha · 1\/3 · Concluído/ }) });
-  await cozinhaItem.getByRole("button", { name: "Gravar novamente" }).click();
+  await page.locator(".capture-video-room").filter({ hasText: "Cozinha" }).getByRole("button", { name: "Ver e gerenciar vídeos" }).click();
+  await page.getByRole("button", { name: "Substituir último vídeo" }).click();
   await startVideoRecording(page);
   await expect(page.getByRole("status").filter({ hasText: "Gravando." })).toBeVisible();
   await page.waitForTimeout(2200);
   await page.getByRole("button", { name: "Parar e revisar" }).click();
   await page.getByRole("button", { name: "Confirmar e enviar" }).click();
   await expect(page.locator(".inspection-status").getByText("Vídeo recebido", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Cozinha · 1\/3 · Concluído/ })).toBeEnabled();
-  await expect(cozinhaItem.getByRole("button", { name: "Gravar novamente" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Substituir último vídeo" })).toHaveCount(1);
   expect(replacementMediaIds).toEqual([null, null, "video-2"]);
-  await page.getByRole("button", { name: /Sala/ }).click();
-  await expect(page.getByRole("button", { name: "Enviar vistoria" })).toBeEnabled();
-  await page.getByRole("button", { name: "Enviar vistoria" }).click();
-  await expect(page.getByRole("heading", { name: "Recebemos sua confirmação" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Gravar novamente" })).toHaveCount(0);
-  await expect(page.getByRole("list", { name: "Ambientes registrados" }).getByRole("listitem")).toHaveText(["Sala", "Cozinha"]);
+  await page.getByRole("button", { name: "Renomear Cozinha" }).click();
+  await page.getByLabel("Nome do ambiente").fill("Cozinha reformada");
+  await page.getByRole("button", { name: "Salvar nome" }).click();
+  await expect(page.getByRole("heading", { name: "Cozinha reformada" })).toBeVisible();
+  await page.getByRole("button", { name: "Todos os ambientes" }).click();
+  await page.getByRole("button", { name: "Remover Sala" }).click();
+  await page.getByRole("button", { name: "Remover ambiente" }).click();
+  await expect(page.getByRole("heading", { name: "Sala", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Revisar vistoria" }).click();
+  await expect(page.getByRole("heading", { name: "Revise sua vistoria" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirmar vistoria" }).click();
+  await expect(page.getByRole("heading", { name: "Vistoria enviada" })).toBeVisible();
+  await expect(page.getByText("Cozinha reformada")).toBeVisible();
   await assertRuntime();
 });
 
@@ -254,8 +286,9 @@ test("UT-339 unsupported video recorder offers impossibility and renders no phot
     throw new Error(`Unexpected operation ${query.slice(0, 90)}`);
   });
   await authenticateCapture(page, "unsupported-environment-video");
-  await expect(page.getByText(/Safari ou Chrome atualizado/)).toBeVisible();
   await declareEnvironment(page, "OTHER", "Depósito");
+  await page.getByRole("button", { name: "Gravar Depósito" }).click();
+  await expect(page.getByText(/Safari ou Chrome atualizado/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Declarar impossibilidade" })).toBeVisible();
   await expect(page.locator('input[type="file"][accept*="image/"]')).toHaveCount(0);
 });

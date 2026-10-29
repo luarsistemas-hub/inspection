@@ -129,6 +129,17 @@ func (p *Processor) catalog(ctx context.Context, job database.InventoryJob, in j
 		evidence = append(evidence, envEvidence...)
 	}
 	return fenced(func(tx *gorm.DB) error {
+		var jobState database.InventoryJob
+		if err := tx.Select("status").Where("tenant_id=? AND id=?", job.TenantID, job.ID).Take(&jobState).Error; err != nil {
+			return err
+		}
+		var draftState database.OriginVersion
+		if err := tx.Select("status").Where("tenant_id=? AND id=?", job.TenantID, job.OriginVersionID).Take(&draftState).Error; err != nil {
+			return err
+		}
+		if jobState.Status == "CANCELED" || draftState.Status != "DRAFT" {
+			return nil
+		}
 		if err := clearCatalogSuggestions(tx, job, in); err != nil {
 			return err
 		}

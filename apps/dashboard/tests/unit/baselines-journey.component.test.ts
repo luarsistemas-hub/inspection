@@ -55,8 +55,8 @@ describe("BaselinesJourney rendered states", () => {
     });
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(BaselinesJourney, { canReview: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect([...host.querySelectorAll(".baseline-item h4")].map((heading) => heading.textContent)).toEqual(["Segundo pela API", "Primeiro pela API"]);
-    expect(host.textContent).toContain("Incluídos: 0 · rejeitados: 0 · não revisados: 2");
+    expect([...host.querySelectorAll(".baseline-room-item span")].map((name) => name.textContent)).toEqual(["Segundo pela API", "Primeiro pela API"]);
+    expect(host.textContent).toContain("0 incluídos · 0 rejeitados · 2 não revisados");
     await act(async () => { root.unmount(); });
   });
 
@@ -67,7 +67,7 @@ describe("BaselinesJourney rendered states", () => {
       if (operation === "DashboardBaselineAssets") return { assets: { nodes: [{ id: "asset-a", name: "Imóvel QA", externalKey: "QA" }], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
       if (operation === "DashboardReviewers") return { memberships: { nodes: [{ id: "membership-7", tenantId: "tenant-a", name: "Gestora QA", email: "gestora@example.test", role: "MANAGER", status: "ACTIVE", scopes: [] }], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
       if (operation === "DashboardCounterpartyOptions") return { participants: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
-      if (operation === "DashboardBaselineVersions") return { baselineVersions: { nodes: [{ id: "version-a", originId: "origin-a", versionNumber: 3, status: "ACTIVE", mediaKind: "PHOTO", activatedAt: "2026-10-20T12:00:00Z", activatedBy: "membership-7", purpose: "MOVE_IN", source: "CAPTURE", sourceInspectionId: null, hasInventory: true, draftState: "READY", sourceAvailability: "EXPIRED", counts: { included: 18, rejected: 2, notReviewed: 0 }, contestationSummary: { pending: 0, acknowledged: 1, contested: 2, open: 0, noResponse: 1 }, counterpartyInvitations: [] }], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
+      if (operation === "DashboardBaselineVersions") return { baselineVersions: { nodes: [{ id: "draft-a", originId: "origin-a", versionNumber: 4, status: "DRAFT", mediaKind: "PHOTO", activatedAt: null, activatedBy: null, purpose: null, source: "CAPTURE", sourceInspectionId: null, hasInventory: true, draftState: "READY", sourceAvailability: "AVAILABLE", counts: { included: 0, rejected: 0, notReviewed: 0 }, contestationSummary: { pending: 0, acknowledged: 0, contested: 0, open: 0, noResponse: 0 }, counterpartyInvitations: [] }, { id: "version-a", originId: "origin-a", versionNumber: 3, status: "ACTIVE", mediaKind: "PHOTO", activatedAt: "2026-10-20T12:00:00Z", activatedBy: "membership-7", purpose: "MOVE_IN", source: "CAPTURE", sourceInspectionId: null, hasInventory: true, draftState: "READY", sourceAvailability: "EXPIRED", counts: { included: 18, rejected: 2, notReviewed: 0 }, contestationSummary: { pending: 0, acknowledged: 1, contested: 2, open: 0, noResponse: 1 }, counterpartyInvitations: [] }], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
       if (operation === "Inspections") return { inspections: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } } } as never;
       throw new Error(`Unexpected operation ${operation}`);
     });
@@ -101,13 +101,13 @@ describe("BaselinesJourney rendered states", () => {
     });
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(BaselinesJourney, { canReview: true })); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Aceitar Sofá")?.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.getAttribute("aria-label") === "Aceitar Sofá")?.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Atualize antes de tentar novamente");
     const update = [...host.querySelectorAll("button")].find((button) => button.textContent === "Atualizar");
     expect(update).toBeTruthy();
     await act(async () => { update?.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(draftReads).toBe(2);
-    expect([...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Aceitar Sofá")?.disabled).toBe(true);
+    expect([...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.getAttribute("aria-label") === "Aceitar Sofá")?.disabled).toBe(true);
     await act(async () => { root.unmount(); });
   });
 
@@ -121,7 +121,7 @@ describe("BaselinesJourney rendered states", () => {
     });
     const host = document.createElement("div"); const root = createRoot(host);
     await act(async () => { root.render(createElement(BaselinesJourney, { canReview: false, isCustomer: true, readHistory: false })); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(host.textContent).toContain("Inventários dos imóveis");
+    expect(host.textContent).toContain("Imóvel QA");
     expect(host.textContent).toContain("Sofá");
     expect(host.textContent).not.toContain("Catalogar origem existente");
     expect(host.textContent).not.toContain("Ativar inventário");

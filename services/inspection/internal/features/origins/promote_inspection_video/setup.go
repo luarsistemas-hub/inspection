@@ -42,7 +42,7 @@ func Setup(d Dependencies) error {
 	return d.Bus.RegisterCommand(Command{}, func(ctx context.Context, raw any) (any, error) {
 		command := raw.(Command)
 		if command.TenantID == (identity.ID{}) || command.InspectionID == (identity.ID{}) || command.ClientMutationID == "" {
-			return nil, apperror.New(apperror.InvalidInput, "input", "inspection and client mutation id are required")
+			return nil, apperror.New(apperror.InvalidInput, "input", "A vistoria e o identificador da solicitação são obrigatórios.")
 		}
 		var inspection database.Inspection
 		var asset database.Asset
@@ -52,7 +52,7 @@ func Setup(d Dependencies) error {
 			}
 			return tx.Where("tenant_id=? AND id=?", command.TenantID, inspection.AssetID).Take(&asset).Error
 		}); errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+			return nil, apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 		} else if err != nil {
 			return nil, err
 		}
@@ -63,12 +63,12 @@ func Setup(d Dependencies) error {
 		err := (tenanttx.Runner{DB: d.DB}).Within(ctx, command.TenantID, func(tx *gorm.DB) error {
 			var current database.Inspection
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", command.TenantID, command.InspectionID).Take(&current).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+				return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 			} else if err != nil {
 				return err
 			}
 			if current.Status != "COMPLETED" || current.MediaKind != "VIDEO" {
-				return apperror.New(apperror.InvalidState, "inspectionId", "completed video inspection is required")
+				return apperror.New(apperror.InvalidState, "inspectionId", "É necessário concluir a vistoria em vídeo antes de usá-la como origem.")
 			}
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=?", command.TenantID, current.AssetID).Take(&asset).Error; err != nil {
 				return err
@@ -79,24 +79,37 @@ func Setup(d Dependencies) error {
 			} else if err != gorm.ErrRecordNotFound {
 				return err
 			}
-			var media database.MediaObject
-			if err := tx.Model(&database.MediaObject{}).Joins("JOIN inspections.responsibilities r ON r.tenant_id=media_objects.tenant_id AND r.id=media_objects.responsibility_id").Where("media_objects.tenant_id=? AND r.inspection_id=? AND media_objects.media_kind='VIDEO'", command.TenantID, current.ID).Take(&media).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "inspectionId", "video source is unavailable")
-			}
-			var preparation database.VideoPreparationJob
-			if err := tx.Where("tenant_id=? AND media_id=? AND status='READY' AND manifest_digest<>''", command.TenantID, media.ID).Order("created_at DESC, id DESC").Take(&preparation).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "inspectionId", "video frame bank is not ready")
+			if current.ActiveVideoPlanID == nil {
+				return apperror.New(apperror.InvalidState, "inspectionId", "A análise do vídeo ainda não foi concluída. Aguarde a finalização e tente novamente.")
 			}
 			var analysisPlan database.VideoPlan
-			if err := tx.Where("tenant_id=? AND inspection_id=? AND current_preparation_id=? AND status='SEALED'", command.TenantID, current.ID, preparation.ID).Order("generation DESC").Take(&analysisPlan).Error; err != nil {
-				return apperror.New(apperror.InvalidState, "inspectionId", "sealed video analysis plan is not ready")
+			if err := tx.Where("tenant_id=? AND id=? AND inspection_id=? AND status='SEALED'", command.TenantID, *current.ActiveVideoPlanID, current.ID).Take(&analysisPlan).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "inspectionId", "A análise do vídeo ainda não foi concluída. Aguarde a finalização e tente novamente.")
+			}
+			var planPreparations []database.VideoPlanPreparation
+			if err := tx.Where("tenant_id=? AND plan_id=? AND role IN ?", command.TenantID, analysisPlan.ID, []string{"MAIN", "SUPPLEMENT"}).Find(&planPreparations).Error; err != nil {
+				return err
+			}
+			if len(planPreparations) > 1 {
+				return apperror.New(apperror.InvalidState, "inspectionId", "Esta vistoria tem mais de um vídeo. Use a ação “Usar esta vistoria como origem” para promover todos os dados.")
+			}
+			if len(planPreparations) == 0 {
+				return apperror.New(apperror.InvalidState, "inspectionId", "A preparação dos quadros do vídeo ainda não foi concluída. Tente novamente em alguns instantes.")
+			}
+			var preparation database.VideoPreparationJob
+			if err := tx.Where("tenant_id=? AND id=? AND status='READY' AND manifest_digest<>''", command.TenantID, planPreparations[0].PreparationID).Take(&preparation).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "inspectionId", "A preparação dos quadros do vídeo ainda não foi concluída. Tente novamente em alguns instantes.")
+			}
+			var media database.MediaObject
+			if err := tx.Where("tenant_id=? AND id=? AND media_kind='VIDEO'", command.TenantID, preparation.MediaID).Take(&media).Error; err != nil {
+				return apperror.New(apperror.InvalidState, "inspectionId", "O vídeo da vistoria não está disponível.")
 			}
 			var source database.VideoSource
 			if err := tx.Where("tenant_id=? AND media_id=?", command.TenantID, media.ID).Take(&source).Error; err != nil || source.FirstFrameReadyAt == nil || (source.RetentionAnchor != "ACTIVE_BASELINE" && source.SourceExpiryAt == nil) {
-				return apperror.New(apperror.InvalidState, "inspectionId", "video source has no retained evidence anchor")
+				return apperror.New(apperror.InvalidState, "inspectionId", "Não foi possível localizar uma referência válida para as evidências retidas do vídeo.")
 			}
 			if source.ScreeningStatus != "APPROVED" && source.ScreeningStatus != "DISABLED" {
-				return apperror.New(apperror.InvalidState, "inspectionId", "video source has not passed screening")
+				return apperror.New(apperror.InvalidState, "inspectionId", "O vídeo ainda não foi aprovado na verificação de segurança.")
 			}
 			var frames, scope int64
 			if err := tx.Model(&database.VideoFrame{}).Where("tenant_id=? AND source_media_id=? AND preparation_id=? AND sha256<>'' AND object_key<>''", command.TenantID, media.ID, preparation.ID).Count(&frames).Error; err != nil {
@@ -106,7 +119,7 @@ func Setup(d Dependencies) error {
 				return err
 			}
 			if frames == 0 || scope == 0 {
-				return apperror.New(apperror.InvalidState, "inspectionId", "video origin has no usable retained scope")
+				return apperror.New(apperror.InvalidState, "inspectionId", "A origem do vídeo não possui evidências retidas disponíveis para uso.")
 			}
 			var origin database.Origin
 			originErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND asset_id=?", command.TenantID, current.AssetID).Take(&origin).Error

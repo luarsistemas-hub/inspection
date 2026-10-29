@@ -49,6 +49,18 @@ func TestService_AssignedActivationCases(t *testing.T) {
 			t.Fatalf("expected empty environment was dropped: env=%+v itemCount=%d version=%+v", stored, count, row)
 		}
 	})
+	t.Run("inspection promotion activates without catalog items", func(t *testing.T) {
+		db := inventoryTestDB(t)
+		tenant, version, _, actor := seedReadyDraft(t, db)
+		seedActivationAsset(t, db, tenant, version)
+		row, err := testService(db).Activate(context.Background(), ActivateInput{TenantID: tenant, OriginVersionID: version, ActorMembershipID: actor, Purpose: "MOVE_IN", ExpectedOriginVersion: 1, AllowEmptyItems: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if row.Status != "ACTIVE" {
+			t.Fatalf("empty inspection promotion status=%s; want ACTIVE", row.Status)
+		}
+	})
 
 	t.Run("UT-060 activates and supersedes prior baseline with counts", func(t *testing.T) {
 		db := inventoryTestDB(t)

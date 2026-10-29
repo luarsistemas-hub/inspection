@@ -129,7 +129,7 @@ func Create(ctx context.Context, db *gorm.DB, input Input, now time.Time) (Resul
 			return err
 		}
 		if input.VideoPlanID != nil {
-			if err := verifyPlanFrameEvidence(ctx, tx, input.TenantID, *input.VideoPlanID, snapshot.Evidence); err != nil {
+			if err := verifyPlanFrameEvidence(ctx, tx, input.TenantID, *input.VideoPlanID, input.ReferenceVersionID, snapshot.Evidence); err != nil {
 				return err
 			}
 		}
@@ -259,7 +259,7 @@ func setSnapshotTenant(tx *gorm.DB, tenantID identity.ID) error {
 // verifyPlanFrameEvidence accepts only frames that belong to an item of the
 // plan, directly or through a result carried from an earlier generation, with
 // the same preparation and digest as the stored frame.
-func verifyPlanFrameEvidence(ctx context.Context, tx *gorm.DB, tenantID, planID identity.ID, evidence []report.Evidence) error {
+func verifyPlanFrameEvidence(ctx context.Context, tx *gorm.DB, tenantID, planID identity.ID, referenceVersionID string, evidence []report.Evidence) error {
 	for _, item := range evidence {
 		if item.EvidenceKind != "VIDEO_FRAME" {
 			continue
@@ -279,10 +279,40 @@ func verifyPlanFrameEvidence(ctx context.Context, tx *gorm.DB, tenantID, planID 
 			return err
 		}
 		if members == 0 {
-			return ErrFrameIntegrity
+			if item.Role != "REFERENCE" {
+				return ErrFrameIntegrity
+			}
+			promoted, err := promotedOriginFrameMember(ctx, tx, tenantID, referenceVersionID, frameID, preparationID, item)
+			if err != nil {
+				return err
+			}
+			if !promoted {
+				return ErrFrameIntegrity
+			}
 		}
 	}
 	return nil
+}
+
+// promotedOriginFrameMember accepts a frame from the inspection promoted to
+// the pinned origin only while that origin still retains its preparation.
+func promotedOriginFrameMember(ctx context.Context, tx *gorm.DB, tenantID identity.ID, referenceVersionID string, frameID, preparationID identity.ID, item report.Evidence) (bool, error) {
+	versionID, err := identity.ParseID(referenceVersionID)
+	if err != nil {
+		return false, nil
+	}
+	var members int64
+	err = tx.WithContext(ctx).Table("analysis.video_plan_item_frames AS membership").
+		Joins("JOIN analysis.video_plan_items AS plan_item ON plan_item.tenant_id=membership.tenant_id AND plan_item.id=membership.plan_item_id").
+		Joins("JOIN origins.inspection_origin_promotions AS promotion ON promotion.tenant_id=plan_item.tenant_id AND promotion.video_plan_id=plan_item.plan_id").
+		Joins("JOIN media.video_frames AS frame ON frame.tenant_id=membership.tenant_id AND frame.id=membership.frame_id").
+		Joins("JOIN media.video_evidence_references AS hold ON hold.tenant_id=frame.tenant_id AND hold.preparation_id=frame.preparation_id").
+		Where("membership.tenant_id=? AND membership.frame_id=? AND membership.role='CURRENT'", tenantID, frameID).
+		Where("(plan_item.requirement_key=? OR plan_item.requirement_key IN (SELECT environment.requirement_key FROM origins.inventory_environments AS environment WHERE environment.tenant_id=? AND environment.origin_version_id=? AND 'env:' || CAST(environment.identity_id AS text)=?)) AND frame.preparation_id=? AND frame.sha256=?", item.RequirementKey, tenantID, versionID, item.RequirementKey, preparationID, item.FrameDigest).
+		Where("promotion.origin_version_id=? AND promotion.status='COMPLETED' AND promotion.source_kind='VIDEO'", versionID).
+		Where("hold.owner_type='ORIGIN_VERSION' AND hold.owner_id=?", versionID).
+		Count(&members).Error
+	return members > 0, err
 }
 
 func persistSnapshotEvidenceReferences(ctx context.Context, db *gorm.DB, tenantID, snapshotID identity.ID, evidence []report.Evidence, now time.Time) error {

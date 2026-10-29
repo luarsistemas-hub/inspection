@@ -19,10 +19,10 @@ import (
 	inventoryrequest "inspection/services/inspection/internal/features/inventory/request_cataloging"
 	inventoryretry "inspection/services/inspection/internal/features/inventory/retry_draft"
 	inventorysplit "inspection/services/inspection/internal/features/inventory/split_item"
-	inventorystart "inspection/services/inspection/internal/features/inventory/start_from_inspection"
 	inventorytrail "inspection/services/inspection/internal/features/inventory/trail"
 	inventoryupsertenv "inspection/services/inspection/internal/features/inventory/upsert_environment"
 	originlist "inspection/services/inspection/internal/features/origins/list_versions"
+	promoteorigin "inspection/services/inspection/internal/features/origins/promote_inspection_to_origin"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -602,7 +602,7 @@ func (r *mutationResolver) startBaselineDraftFromInspection(ctx context.Context,
 		}
 		return nil, e
 	}
-	rowRaw, e := r.Bus.Send(ctx, inventorystart.Command{TenantID: meta.TenantID, InspectionID: inspectionID, ActorID: meta.Principal.MembershipID})
+	rowRaw, e := r.Bus.Send(ctx, promoteorigin.PrepareDraftCommand{TenantID: meta.TenantID, InspectionID: inspectionID, ActorID: meta.Principal.MembershipID})
 	if e != nil {
 		out.UserErrors, err = mutationInventoryError(e, input.ClientMutationID)
 		if err != nil {

@@ -78,6 +78,12 @@ func TestVV_IT_061PromoteVideoPreservesPreparationAndPlanLineage(t *testing.T) {
 		if err := tx.Create(&plan).Error; err != nil {
 			return err
 		}
+		if err := tx.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: firstReady}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Update("active_video_plan_id", planID).Error; err != nil {
+			return err
+		}
 		return tx.Model(&database.MediaObject{}).Where("tenant_id=? AND id=?", fixture.TenantID, mediaID).Update("status", "READY").Error
 	}); err != nil {
 		t.Fatal(err)
@@ -180,7 +186,13 @@ func TestVV_IT_069PromotionRollsBackOriginReferenceAfterLateFailure(t *testing.T
 		if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", Landmarks: json.RawMessage(`[]`), CreatedAt: firstReady}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: manifest, Status: "SEALED", SealedAt: &firstReady, CreatedAt: firstReady}).Error
+		if err := tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: manifest, Status: "SEALED", SealedAt: &firstReady, CreatedAt: firstReady}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: firstReady}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Update("active_video_plan_id", planID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

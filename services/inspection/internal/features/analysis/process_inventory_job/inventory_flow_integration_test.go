@@ -413,6 +413,41 @@ func TestIT010PhotoCatalogingProducesReadyDraftAndInAppNotice(t *testing.T) {
 	}
 }
 
+func TestITPromotionFencesCatalogWriteAfterDraftReplacement(t *testing.T) {
+	f := newFlow(t, "PHOTO")
+	key := "env:new:" + identity.NewID().String()
+	f.requirements(inventorytest.EnvironmentRequirement(key, "LIVING_ROOM", "Sala", true))
+	f.answer(key, []identity.ID{f.photo(key)}, "")
+	f.script(nil, oneItemCatalog(t, "Sofá"))
+	f.submitPhotos()
+	jobs := f.jobs()
+	if len(jobs) != 1 {
+		t.Fatalf("catalog jobs=%d, want 1", len(jobs))
+	}
+	job := jobs[0]
+	var draft database.OriginVersion
+	f.within(func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND id=?", f.seed.TenantID, job.OriginVersionID).Take(&draft).Error
+	})
+	f.within(func(tx *gorm.DB) error {
+		if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND id=?", f.seed.TenantID, job.ID).Update("status", "CANCELED").Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=?", f.seed.TenantID, draft.ID).Updates(map[string]any{"status": "DISCARDED", "discarded_at": f.now()}).Error
+	})
+	job.Status = "RUNNING"
+	if err := f.processor.Process(f.ctx, job, func(write func(*gorm.DB) error) error { return f.h.WithinTenant(f.ctx, f.seed.TenantID, write) }); err != nil {
+		t.Fatalf("late catalog result returned error: %v", err)
+	}
+	var count int64
+	f.within(func(tx *gorm.DB) error {
+		return tx.Model(&database.InventoryItem{}).Where("tenant_id=? AND origin_version_id=?", f.seed.TenantID, draft.ID).Count(&count).Error
+	})
+	if count != 0 {
+		t.Fatalf("late catalog write created %d inventory items", count)
+	}
+}
+
 func TestIT020LegacyPhotoOriginCatalogingBuildsDraftFromOriginEvidence(t *testing.T) {
 	f := newFlow(t, "PHOTO")
 	legacy, now := identity.NewID(), f.now()

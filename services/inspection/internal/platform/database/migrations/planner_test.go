@@ -35,6 +35,64 @@ func TestLatestVersionUsesFoundationCatalog(t *testing.T) {
 	}
 }
 
+func TestInspectionOriginPromotionMigrationIsTenantScopedAndNonMutating(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 94 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "inspection_origin_promotions" || !step.Compatible {
+		t.Fatalf("unexpected promotion migration: %+v", step)
+	}
+	for _, required := range []string{
+		"CREATE TABLE origins.inspection_origin_promotions",
+		"uq_inspection_origin_promotion_request ON origins.inspection_origin_promotions(tenant_id,inspection_id,client_mutation_id)",
+		"WHERE status IN ('PREPARING','ACTIVATING')",
+		"idx_inspection_origin_promotion_reconciliation ON origins.inspection_origin_promotions(status,updated_at)",
+		"FOREIGN KEY(tenant_id,asset_id) REFERENCES assets.assets(tenant_id,id)",
+		"FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id)",
+		"FOREIGN KEY(tenant_id,draft_version_id) REFERENCES origins.origin_versions(tenant_id,id)",
+		"FOREIGN KEY(catalog_prompt_snapshot_id) REFERENCES analysis.prompt_snapshots(id)",
+		"chk_origin_version_source CHECK(source IN ('CAPTURE','LEGACY_ORIGIN','COMPARATIVE_INSPECTION','CONTESTATION','INSPECTION_PROMOTION'))",
+		"auto_accepted_by_promotion_id uuid",
+		"blocked_reason text",
+		"blocked_at timestamptz",
+		"ENABLE ROW LEVEL SECURITY",
+		"FORCE ROW LEVEL SECURITY",
+		"GRANT SELECT,INSERT,UPDATE ON origins.inspection_origin_promotions TO inspection_runtime",
+	} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("promotion migration is missing %q", required)
+		}
+	}
+	if strings.Contains(step.SQL, "\nUPDATE ") || strings.Contains(step.SQL, "\nDELETE FROM ") {
+		t.Fatal("promotion migration must not mutate existing rows")
+	}
+	if LatestVersion() != 95 {
+		t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+	}
+}
+
+func TestInspectionOriginPromotionReconciliationDiscoveryIsRuntimeScoped(t *testing.T) {
+	var step Step
+	for _, candidate := range Foundation() {
+		if candidate.Version == 95 {
+			step = candidate
+			break
+		}
+	}
+	if step.Name != "inspection_origin_promotion_reconciliation" || !step.Compatible {
+		t.Fatalf("unexpected reconciliation migration: %+v", step)
+	}
+	for _, required := range []string{"SECURITY DEFINER", "p.status='PREPARING'", "p.status='ACTIVATING'", "GRANT EXECUTE ON FUNCTION platform.discover_inspection_origin_promotion_tenants(timestamptz) TO inspection_runtime"} {
+		if !strings.Contains(step.SQL, required) {
+			t.Errorf("reconciliation migration missing %q", required)
+		}
+	}
+}
+
 func TestBaselineRetentionRepairMigrationUsesSuccessorActivationAndDiscoversWork(t *testing.T) {
 	var step Step
 	for _, candidate := range Foundation() {
@@ -163,8 +221,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}
@@ -190,8 +248,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}
@@ -211,8 +269,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}
@@ -237,8 +295,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}
@@ -277,8 +335,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}
@@ -302,8 +360,8 @@ func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.
 				t.Fatalf("display-name migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 93 {
-			t.Fatalf("LatestVersion()=%d, want 93", LatestVersion())
+		if LatestVersion() != 95 {
+			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
 		}
 		return
 	}

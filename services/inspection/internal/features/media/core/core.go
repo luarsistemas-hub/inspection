@@ -160,6 +160,7 @@ func (s Service) CreateWithRequirement(ctx context.Context, tenantID, responsibi
 					}
 				}
 			}
+			requirements = capturecore.ActiveRequirements(requirements)
 		}
 		if v2 {
 			maximum := catalog.MaxEnvironmentPhotos

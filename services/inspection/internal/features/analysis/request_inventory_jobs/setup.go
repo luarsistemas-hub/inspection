@@ -84,8 +84,36 @@ func Setup(deps Dependencies) (func(context.Context, *gorm.DB, events.RawEnvelop
 		err := Request(ctx, tx, envelope.TenantID, inspectionID, deps.Now().UTC())
 		if apperror.Is(err, apperror.Conflict) {
 			// Another flow owns the asset's open inventory draft. The legacy
-			// comparison handlers share this delivery, so this must not fail it.
-			log.Printf("inventory jobs skipped for inspection %s: asset already has an open inventory draft", inspectionID)
+			// comparison handlers share this delivery, so this must not fail it;
+			// the skip audit is best-effort when that draft already closed.
+			recordSkip := func() error {
+				var inspection database.Inspection
+				if lookupErr := tx.WithContext(ctx).Where("tenant_id=? AND id=?", envelope.TenantID, inspectionID).Take(&inspection).Error; lookupErr != nil {
+					return lookupErr
+				}
+				var origin database.Origin
+				if lookupErr := tx.WithContext(ctx).Where("tenant_id=? AND asset_id=?", envelope.TenantID, inspection.AssetID).Take(&origin).Error; lookupErr != nil {
+					return lookupErr
+				}
+				var draft database.OriginVersion
+				if lookupErr := tx.WithContext(ctx).Where("tenant_id=? AND origin_id=? AND status='DRAFT' AND has_inventory", envelope.TenantID, origin.ID).Take(&draft).Error; lookupErr != nil {
+					return lookupErr
+				}
+				var existing int64
+				if lookupErr := tx.WithContext(ctx).Model(&database.AuditEvent{}).Where("tenant_id=? AND action='inventory.catalog_skipped' AND target_type='INSPECTION' AND target_id=?", envelope.TenantID, inspectionID.String()).Count(&existing).Error; lookupErr != nil {
+					return lookupErr
+				}
+				if existing == 0 {
+					if lookupErr := tx.WithContext(ctx).Create(&database.AuditEvent{ID: identity.NewID(), TenantID: envelope.TenantID, ActorID: envelope.TenantID, Action: "inventory.catalog_skipped", TargetType: "INSPECTION", TargetID: inspectionID.String(), Outcome: "BLOCKED", Reason: draft.ID.String(), CorrelationID: "inventory-catalog-skipped:" + inspectionID.String(), OccurredAt: deps.Now().UTC()}).Error; lookupErr != nil {
+						return lookupErr
+					}
+				}
+				log.Printf("inventory jobs skipped for inspection %s: conflicting draft %s", inspectionID, draft.ID)
+				return nil
+			}
+			if skipErr := recordSkip(); skipErr != nil && !errors.Is(skipErr, gorm.ErrRecordNotFound) {
+				return skipErr
+			}
 			return nil
 		}
 		return err
@@ -127,6 +155,7 @@ func Request(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.I
 	if err := json.Unmarshal(capture.Requirements, &requirements); err != nil {
 		return messaging.ErrPermanent
 	}
+	requirements = capturecore.ActiveRequirements(requirements)
 	var answers []database.RequirementAnswer
 	if err := tx.Where("tenant_id=? AND draft_id=?", tenantID, capture.ID).Find(&answers).Error; err != nil {
 		return err
@@ -161,7 +190,7 @@ func Request(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.I
 	if pinned != nil {
 		return requestCompare(tx, tenantID, inspection, *pinned, requirements, captured, now)
 	}
-	return requestCatalog(tx, tenantID, inspection, requirements, captured, now)
+	return requestCatalog(ctx, tx, tenantID, inspection, requirements, captured, now)
 }
 
 // preparationsTerminal reports whether the latest preparation of every clip of
@@ -169,7 +198,7 @@ func Request(ctx context.Context, tx *gorm.DB, tenantID, inspectionID identity.I
 // must not hold the other environments back.
 func preparationsTerminal(tx *gorm.DB, tenantID identity.ID, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer) (bool, error) {
 	for _, requirement := range requirements {
-		mediaIDs, ok, err := capturedMedia(requirement, captured)
+		mediaIDs, ok, err := CapturedMedia(requirement, captured)
 		if err != nil {
 			return false, err
 		}
@@ -195,8 +224,8 @@ func preparationsTerminal(tx *gorm.DB, tenantID identity.ID, requirements []capt
 	return true, nil
 }
 
-// capturedMedia returns the media of an answered, possible environment.
-func capturedMedia(requirement capturecore.Requirement, captured map[string]database.RequirementAnswer) ([]identity.ID, bool, error) {
+// CapturedMedia returns the media of an answered, possible environment.
+func CapturedMedia(requirement capturecore.Requirement, captured map[string]database.RequirementAnswer) ([]identity.ID, bool, error) {
 	if !strings.HasPrefix(requirement.Key, "env:") {
 		return nil, false, nil
 	}
@@ -230,7 +259,7 @@ func requestCompare(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 		if !requirement.AddedDuringCapture {
 			continue
 		}
-		if _, ok, err := capturedMedia(requirement, captured); err != nil || !ok {
+		if _, ok, err := CapturedMedia(requirement, captured); err != nil || !ok {
 			if err != nil {
 				return err
 			}
@@ -246,15 +275,36 @@ func requestCompare(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 
 // requestCatalog opens (or reuses) the CAPTURE draft of this inspection and one
 // CATALOG job per captured environment. Impossible environments get no job.
-func requestCatalog(tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, now time.Time) error {
+func requestCatalog(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, now time.Time) error {
 	version, err := captureDraft(tx, tenantID, inspection, now)
 	if err != nil {
 		return err
 	}
+	count, err := CreateCatalogJobs(ctx, tx, tenantID, inspection, version.ID, requirements, captured, 1, inspection.InventoryPromptSnapshotID, now)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	updated := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='DRAFT' AND draft_state='PREPARING'", tenantID, version.ID).Update("draft_state", "READY")
+	if updated.Error != nil || updated.RowsAffected != 1 {
+		return updated.Error
+	}
+	return inventorycore.EmitDraftReady(tx, tenantID, version.ID, inspection.ID, now)
+}
+
+// CreateCatalogJobs creates capture environments and CATALOG jobs for a chosen draft.
+func CreateCatalogJobs(ctx context.Context, tx *gorm.DB, tenantID identity.ID, inspection database.Inspection, draftID identity.ID, requirements []capturecore.Requirement, captured map[string]database.RequirementAnswer, generation int, promptSnapshotID *identity.ID, now time.Time) (int, error) {
+	if generation < 1 || draftID == (identity.ID{}) {
+		return 0, apperror.New(apperror.InvalidInput, "draftId", "rascunho e geração são obrigatórios")
+	}
+	tx = tx.WithContext(ctx)
+	jobs := 0
 	for position, requirement := range requirements {
-		if _, ok, err := capturedMedia(requirement, captured); err != nil || !ok {
+		if _, ok, err := CapturedMedia(requirement, captured); err != nil || !ok {
 			if err != nil {
-				return err
+				return 0, err
 			}
 			continue
 		}
@@ -267,33 +317,23 @@ func requestCatalog(tx *gorm.DB, tenantID identity.ID, inspection database.Inspe
 			typeCode = "OTHER"
 		}
 		key := requirement.Key
-		env := database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: version.ID, IdentityID: addedEnvironmentIdentity(inspection.ID, requirement), TypeCode: typeCode, Name: name, Expected: requirement.Expected, AddedDuringCapture: requirement.AddedDuringCapture, RequirementKey: &key, Decision: "PENDING", Position: position, Version: 1, CreatedAt: now, UpdatedAt: now}
+		env := database.InventoryEnvironment{ID: identity.NewID(), TenantID: tenantID, OriginVersionID: draftID, IdentityID: addedEnvironmentIdentity(inspection.ID, requirement), TypeCode: typeCode, Name: name, Expected: requirement.Expected, AddedDuringCapture: requirement.AddedDuringCapture, RequirementKey: &key, Decision: "PENDING", Position: position, Version: 1, CreatedAt: now, UpdatedAt: now}
 		var existing database.InventoryEnvironment
-		if err := tx.Where("tenant_id=? AND origin_version_id=? AND requirement_key=?", tenantID, version.ID, key).Take(&existing).Error; err == nil {
+		if err := tx.Where("tenant_id=? AND origin_version_id=? AND requirement_key=?", tenantID, draftID, key).Take(&existing).Error; err == nil {
 			env = existing
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
+			return 0, err
 		} else if err := tx.Create(&env).Error; err != nil {
-			return err
+			return 0, err
 		}
 		identityID := env.IdentityID
-		if err := createJob(tx, tenantID, inspection, version.ID, "CATALOG", key, &identityID, now); err != nil {
-			return err
+		job := database.InventoryJob{ID: identity.NewID(), TenantID: tenantID, InspectionID: inspection.ID, OriginVersionID: draftID, Kind: "CATALOG", RequirementKey: key, Generation: generation, Status: "PENDING", NextAttemptAt: now, EnvironmentIdentityID: &identityID, PromptSnapshotID: promptSnapshotID, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&job).Error; err != nil {
+			return 0, err
 		}
+		jobs++
 	}
-	var jobs int64
-	if err := tx.Model(&database.InventoryJob{}).Where("tenant_id=? AND origin_version_id=? AND kind='CATALOG'", tenantID, version.ID).Count(&jobs).Error; err != nil {
-		return err
-	}
-	if jobs > 0 {
-		return nil
-	}
-	// Nothing was captured: the empty draft is immediately reviewable.
-	updated := tx.Model(&database.OriginVersion{}).Where("tenant_id=? AND id=? AND status='DRAFT' AND draft_state='PREPARING'", tenantID, version.ID).Update("draft_state", "READY")
-	if updated.Error != nil || updated.RowsAffected != 1 {
-		return updated.Error
-	}
-	return inventorycore.EmitDraftReady(tx, tenantID, version.ID, inspection.ID, now)
+	return jobs, nil
 }
 
 // captureDraft returns the inspection's own draft, creating it on first use.

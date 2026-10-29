@@ -33,6 +33,7 @@ Every row must end in one of these verified outcomes:
 | 13 | `originVersions` | Admin | Missing UI | Paginated origin lineage with source/provenance, active/invalid state, media availability, and audit. |
 | 37 | `analysisPrompt` | Admin | Used | Read the global versioned analysis prompt and fixed execution configuration. |
 | 36 | `originPromotion` | Dashboard | Used | Tenant admin or manager reviews eligible completed onboarding photos and the durable promotion state. |
+| 80 | `inspectionOriginPromotion` | Dashboard | New contract | Tenant admin or manager reviews promotion eligibility and current operation state for one completed inspection. |
 | 14 | `schedules` | Dashboard | Missing UI | Operational schedule collection with due/status filters and create/update/cancel journeys. |
 | 15 | `projects` | Dashboard | Missing UI | Project collection with status, scope, asset, participant, stage progress, and pagination. |
 | 16 | `project` | Dashboard | Partial ID detail | Complete project detail with stages, transitions, inspections, report context, and allowed actions. |
@@ -152,6 +153,7 @@ Every row must end in one of these verified outcomes:
 | 77 | `discardBaselineDraft` | Dashboard | New contract | Reviewers discard a draft while preserving its audit history. |
 | 78 | `requestOriginCataloging` | Dashboard | New contract | Reviewers request a catalog draft from an existing legacy origin. |
 | 79 | `startBaselineDraftFromInspection` | Dashboard | New contract | Reviewers start a draft from a completed comparative inspection. |
+| 81 | `promoteInspectionToOrigin` | Dashboard | New contract | Tenant admin or manager starts an idempotent promotion from one completed inspection. |
 | 80 | `retryInventoryDraft` | Dashboard | New contract | Reviewers retry an eligible failed inventory preparation. |
 | 81 | `resolveBaselineContestation` | Dashboard | New contract | Authorized operators accept a contestation into a new draft or decline it with a reason. |
 | 82 | `resendCounterpartyInvitation` | Dashboard | New contract | Authorized operators retry delivery after a failed counterparty invitation. |

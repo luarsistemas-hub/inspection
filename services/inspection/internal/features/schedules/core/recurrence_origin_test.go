@@ -43,7 +43,7 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 				t.Fatal(err)
 			}
 			for _, statement := range []string{
-				`CREATE TABLE schedules.schedules (id text PRIMARY KEY, tenant_id text, business_unit_id text, asset_id text, participant_id text, template_id text, template_version_id text, comparison_mode text, project_id text, stage_id text, reference_version_id text, r_rule text, timezone text, starts_at datetime, next_due_at datetime, deadline_minutes integer, reminder_offsets blob, status text, version integer, idempotency_key text, created_at datetime, updated_at datetime)`,
+				`CREATE TABLE schedules.schedules (id text PRIMARY KEY, tenant_id text, business_unit_id text, asset_id text, participant_id text, template_id text, template_version_id text, comparison_mode text, project_id text, stage_id text, reference_version_id text, r_rule text, timezone text, starts_at datetime, next_due_at datetime, deadline_minutes integer, reminder_offsets blob, status text, blocked_reason text, blocked_at datetime, version integer, idempotency_key text, created_at datetime, updated_at datetime)`,
 				`CREATE TABLE schedules.occurrence_materializations (id text PRIMARY KEY, tenant_id text, schedule_id text, due_instant datetime, inspection_id text, event_id text, created_at datetime)`,
 			} {
 				if err := db.Exec(statement).Error; err != nil {
@@ -75,7 +75,9 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 			registerQuery(templateresolve.Query{}, func(context.Context, any) (any, error) {
 				return templateresolve.Result{Version: database.TemplateVersion{ID: identity.NewID(), DefinitionJSON: definition}}, nil
 			})
+			originResolveCalls := 0
 			registerQuery(originresolve.Query{}, func(_ context.Context, raw any) (any, error) {
+				originResolveCalls++
 				query := raw.(originresolve.Query)
 				if query.AssetID != assetID || query.MediaKind != mediaKind || query.VersionID != nil {
 					t.Fatalf("origin query = %+v, want asset %s, media kind %s, and no pinned version", query, assetID, mediaKind)
@@ -112,6 +114,9 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 			if created.ReferenceVersionID != nil {
 				t.Fatalf("created schedule pinned origin %s; want nil", *created.ReferenceVersionID)
 			}
+			if originResolveCalls != 0 {
+				t.Fatalf("creation resolved the active origin %d times; want deferred resolution", originResolveCalls)
+			}
 			if _, err := bus.Ask(context.Background(), originresolve.Query{TenantID: tenantID, AssetID: assetID, MediaKind: mediaKind}); err != nil {
 				t.Fatalf("initial active origin %s was not resolvable: %v", originID, err)
 			}
@@ -125,6 +130,13 @@ func TestMaterializeFixedOriginResolvesActiveOriginForEachVideoAndPhotoOccurrenc
 			}
 			if resolvedByOccurrence != activeOriginID || materialized[0].Inspection.Reference.ReferenceVersionID == nil || *materialized[0].Inspection.Reference.ReferenceVersionID != activeOriginID {
 				t.Fatalf("materialized reference=%v, resolved=%s, active=%s; want current active origin", materialized[0].Inspection.Reference.ReferenceVersionID, resolvedByOccurrence, activeOriginID)
+			}
+			updated, err := service.Update(principalContext(tenantID, auth.TenantAdmin), UpdateInput{TenantID: tenantID, ScheduleID: created.ID, ExpectedVersion: created.Version + 1, RRule: "FREQ=DAILY", Timezone: "UTC", StartsAt: startsAt, DeadlineMinutes: 60})
+			if err != nil {
+				t.Fatalf("update tracking schedule: %v", err)
+			}
+			if updated.ReferenceVersionID != nil {
+				t.Fatalf("updated schedule pinned origin %s; want nil", *updated.ReferenceVersionID)
 			}
 		})
 	}

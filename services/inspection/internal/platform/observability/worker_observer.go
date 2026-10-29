@@ -79,8 +79,9 @@ func (o WorkerObserver) AfterTransaction(ctx context.Context, envelope events.Ra
 			"error", boundedError(observation.Err),
 		)
 	}
-	if envelope.Type == "origin.promotion_requested.v1" && observation.Err != nil {
+	if (envelope.Type == "origin.promotion_requested.v1" || envelope.Type == "origin.inspection_promotion_requested.v1") && observation.Err != nil {
 		slog.ErrorContext(ctx, "origin promotion processing failed",
+			"eventType", envelope.Type,
 			"eventId", envelope.ID.String(),
 			"correlationId", envelope.CorrelationID,
 			"attempt", CorrelationFromContext(ctx).Attempt,

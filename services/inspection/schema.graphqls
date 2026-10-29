@@ -26,7 +26,8 @@ type Query {
   baselinePolicy: BaselinePolicy!
 	counterpartyBaseline: CounterpartyBaseline!
 	inventoryTrail(originVersionId: ID!): InventoryTrail!
-  originPromotion(inspectionId: ID!): OriginPromotion
+  originPromotion(inspectionId: ID!): OriginPromotion @deprecated(reason: "Use inspectionOriginPromotion.")
+  inspectionOriginPromotion(inspectionId: ID!): InspectionOriginPromotionStatusView!
   schedules(first: Int = 25, after: String): ScheduleConnection!
   projects(first: Int = 25, after: String): ProjectConnection!
   project(id: ID!): Project
@@ -133,8 +134,9 @@ type Mutation {
   activateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   invalidateOriginVersion(input: OriginVersionInput!): OriginVersionPayload!
   closeOriginInvitation(input: CloseOriginInvitationInput!): OriginVersionPayload!
-  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload!
-  promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload!
+  promoteInspectionPhotos(input: PromoteInspectionPhotosInput!): OriginPromotionPayload! @deprecated(reason: "Use promoteInspectionToOrigin.")
+  promoteInspectionVideo(input: PromoteInspectionVideoInput!): OriginVersionPayload! @deprecated(reason: "Use promoteInspectionToOrigin.")
+  promoteInspectionToOrigin(input: PromoteInspectionToOriginInput!): PromoteInspectionToOriginPayload!
   decideInventoryItems(input: DecideInventoryItemsInput!): InventoryItemsPayload!
   bulkAcceptInventoryEnvironment(input: BulkAcceptInventoryEnvironmentInput!): BulkAcceptInventoryEnvironmentPayload!
   addInventoryItem(input: AddInventoryItemInput!): InventoryItemPayload!
@@ -217,6 +219,7 @@ type Template { id: ID! key: String! name: String! segmentVersionId: ID! activeV
 type TemplateVersion { id: ID! templateId: ID! versionNumber: Int! schemaVersion: Int! definition: JSON! isVideo: Boolean! mediaKind: String! canonicalDigest: String! status: String! publishedAt: String! }
 type TemplateConnection { nodes: [Template!]! pageInfo: PageInfo! }
 enum AnalysisType { REAL_ESTATE }
+enum InspectionOriginPromotionStatus { PREPARING ACTIVATING COMPLETED FAILED CANCELED NEEDS_CONFIRMATION }
 enum AnalysisPromptTask { FINDINGS INVENTORY_CATALOG INVENTORY_COMPARE }
 enum CaptureComparisonMode { CHECKLIST_ONLY FIXED_ORIGIN }
 type AnalysisPrompt { analysisType: AnalysisType! task: AnalysisPromptTask! systemPrompt: String! modelAlias: String! minimumConfidenceBps: Int! canonicalDigest: String! revision: Int! updatedAt: String! }
@@ -270,13 +273,20 @@ input DiscardBaselineDraftInput { originVersionId: ID! clientMutationId: String!
 input RequestOriginCatalogingInput { assetId: ID! clientMutationId: String! }
 input RetryInventoryDraftInput { originVersionId: ID! clientMutationId: String! }
 input StartBaselineDraftFromInspectionInput { inspectionId: ID! clientMutationId: String! }
+input PromoteInspectionToOriginInput { inspectionId: ID! clientMutationId: String! purpose: String = "INVENTORY_UPDATE" replaceDraftId: ID confirmationDigest: String! }
 type InventoryItemsPayload { items: [InventoryItem!]! emptyEnvironments: [ID!]! userErrors: [UserError!]! clientMutationId: String! }
 type InventoryItemPayload { item: InventoryItem userErrors: [UserError!]! clientMutationId: String! }
 type InventoryEnvironmentPayload { environment: InventoryEnvironment userErrors: [UserError!]! clientMutationId: String! }
 type BulkAcceptInventoryEnvironmentPayload { acceptedCount: Int! userErrors: [UserError!]! clientMutationId: String! }
 type OriginPromotionMedia { id: ID! description: String! url: String }
 type OriginPromotion { inspectionId: ID! status: String! failureReason: String originVersionId: ID selectedMediaIds: [ID!]! eligibleMedia: [OriginPromotionMedia!]! }
-type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! }
+type InspectionOriginPromotionImpediment { code: String! message: String! }
+type InspectionOriginPromotionOperation { id: ID! status: InspectionOriginPromotionStatus! purpose: String! failureCode: String failureReason: String retryable: Boolean! originVersion: OriginVersion supersededVersionId: ID draftVersionId: ID replacedDraftId: ID requestedAt: String completedAt: String }
+type InspectionOriginPromotionActiveOrigin { id: ID! versionNumber: Int! mediaKind: String! hasInventory: Boolean! }
+type InspectionOriginPromotionConflictingDraft { id: ID! source: String! sourceInspectionId: ID draftState: String ownInspection: Boolean! }
+type InspectionOriginPromotionStatusView { inspectionId: ID! eligible: Boolean! impediments: [InspectionOriginPromotionImpediment!]! activeOrigin: InspectionOriginPromotionActiveOrigin conflictingDraft: InspectionOriginPromotionConflictingDraft automaticCatalogSkipped: Boolean! confirmationDigest: String! currentPromotion: InspectionOriginPromotionOperation generatedVersionActive: Boolean! }
+type PromoteInspectionToOriginPayload { clientMutationId: String! promotion: InspectionOriginPromotionOperation originVersion: OriginVersion userErrors: [UserError!]! }
+type Schedule { id: ID! businessUnitId: ID! assetId: ID! participantId: ID! templateId: ID! templateVersionId: ID! referenceVersionId: ID projectId: ID stageId: ID rrule: String! timezone: String! startsAt: String! nextDueAt: String! deadlineMinutes: Int! reminderOffsetsMinutes: [Int!]! status: String! version: Int! blockedReason: String blockedAt: String }
 type ScheduleConnection { nodes: [Schedule!]! pageInfo: PageInfo! }
 enum InspectionStatusGroup { PLANNING EXECUTION ATTENTION COMPLETED CLOSED }
 enum InspectionAttentionKind { PRIVACY_REVIEW PREPARATION_FAILED REPLACEMENT_REQUESTED }
@@ -581,7 +591,7 @@ input CompleteMediaUploadInput { mediaId: ID! parts: [CompletedPartInput!]! clie
 input CaptureGPSInput { latitude: Float! longitude: Float! accuracyMeters: Float! capturedAt: String! windowStartedAt: String! }
 input SaveCaptureMetadataInput { mediaId: ID! requirementKey: String! description: String! captureSource: String! gps: CaptureGPSInput deviceContext: JSON replacesMediaId: ID clientMutationId: String! }
 input DeclareCaptureImpossibilityInput { requirementKey: String! reason: String reasonCode: String reasonText: String expectedVersion: Int clientMutationId: String! }
-input DeclareCaptureEnvironmentInput { typeCode: String! name: String! clientMutationId: String! }
+input DeclareCaptureEnvironmentInput { typeCode: String name: String requirementKey: String remove: Boolean = false clientMutationId: String! }
 input RecordCaptureQualityWarningInput { requirementKey: String! code: String! ignored: Boolean! clientMutationId: String! }
 input SubmitCaptureInput { confirmIncomplete: Boolean! clientMutationId: String! }
 input RecaptureItemInput { requirementKey: String! originalMediaId: ID reason: String! }

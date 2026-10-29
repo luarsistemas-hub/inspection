@@ -220,6 +220,7 @@ func captureRequirements(ctx context.Context, tx *gorm.DB, tenantID, inspectionI
 	if err := json.Unmarshal(draft.Requirements, &requirements); err != nil {
 		return nil, err
 	}
+	requirements = capturecore.ActiveRequirements(requirements)
 	return requirements, nil
 }
 

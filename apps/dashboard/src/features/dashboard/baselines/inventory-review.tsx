@@ -30,6 +30,8 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
   const [participantsAfter, setParticipantsAfter] = useState<string | null>(null);
   const [participantsHaveMore, setParticipantsHaveMore] = useState(false);
   const [activationParticipantIds, setActivationParticipantIds] = useState<string[]>([]);
+  const [selectedReviewItemId, setSelectedReviewItemId] = useState<string>();
+  const [selectedReviewEnvironmentId, setSelectedReviewEnvironmentId] = useState<string>();
   const [rejectingItem, setRejectingItem] = useState<ReviewItem>();
   const [editingItem, setEditingItem] = useState<ReviewItem>();
   const [mergingItem, setMergingItem] = useState<ReviewItem>();
@@ -137,6 +139,15 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
   });
   const activationSummary = draft ? buildActivationSummary(draft.environments.flatMap((environment) => environment.items), draft.progress.pending) : { included: 0, rejected: 0, notReviewed: 0 };
   const eligibleCounterparties = participants.filter((participant) => participant.businessUnitId === businessUnitId);
+  const reviewGroups = draft ? buildReviewGroups(draft) : [];
+  const selectedEnvironment = reviewGroups.find((environment) => environment.id === selectedReviewEnvironmentId)
+    ?? reviewGroups.find((environment) => environment.items.some((item) => item.id === selectedReviewItemId))
+    ?? reviewGroups.find((environment) => environment.items.some((item) => item.decision === "PENDING"))
+    ?? reviewGroups[0];
+  const selectedReviewItem = selectedEnvironment?.items.find((item) => item.id === selectedReviewItemId)
+    ?? selectedEnvironment?.items.find((item) => item.decision === "PENDING")
+    ?? selectedEnvironment?.items[0];
+  const selectedItemIndex = selectedEnvironment?.items.findIndex((item) => item.id === selectedReviewItem?.id) ?? -1;
 
   return <section className="baseline-review" aria-labelledby="baseline-review-heading">
     <div className="baseline-review-heading">
@@ -151,55 +162,99 @@ export function InventoryReview({ reviewId }: { reviewId: string }) {
           : <>
             {draft.version.draftState === "FAILED" && <div role="alert"><p>Não foi possível preparar este inventário.</p><Button variant="secondary" disabled={busy} onClick={() => void retry()}>Tentar novamente</Button></div>}
             {draft.warnings.map((warning) => <p className="baseline-warning" key={warning}>{warning}</p>)}
-            {buildReviewGroups(draft).map((environment) => <section className="baseline-environment" key={environment.id} aria-label={environment.name}>
-              <header>
-                <h3>{environment.name}</h3>
-                <span>{environment.expected ? "Ambiente esperado" : "Ambiente adicional"} · {environmentTypeLabel(environment.typeCode)} · {environment.items.length} itens</span>
-                <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setBulkEnvironment(environment))}>Aceitar itens confiáveis</Button>
-              </header>
-              {environment.items.map((item) => <article className="baseline-item" key={item.id}>
-                <EvidenceStrip item={item} frameLabel="Quadro de vídeo de" />
-                <div className="baseline-item-detail">
-                  <p className="baseline-confidence">{item.confidenceBps == null ? "Sem confiança informada" : `Confiança ${Math.round(item.confidenceBps / 100)}%`} · {item.declared ? "Declarado" : decisionLabel(item.decision)}</p>
-                  <h4>{item.name}</h4>
-                  <p>{itemTypeLabel(item.typeCode)} · {conditionLabel(item.condition)}</p>
-                  <details><summary>Definições das condições</summary><ul>{conditionOptions.map(([, definition]) => <li key={definition}>{definition}</li>)}</ul></details>
-                  <p>{itemAttributes(item)}</p>
-                  <div className="baseline-item-actions">
-                    <Button disabled={busy || item.decision === "ACCEPTED"} onClick={() => void decide(item, "ACCEPT")}>Aceitar {item.name}</Button>
-                    <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setRejectingItem(item))}>Rejeitar {item.name}</Button>
-                    <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingItem(item))}>Editar {item.name}</Button>
-                    <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setMergingItem(item))}>Mesclar {item.name}</Button>
-                    <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setSplittingItem(item))}>Dividir {item.name}</Button>
+            <div className="baseline-review-workspace">
+              <aside className="baseline-review-rooms" aria-label="Navegação dos ambientes">
+                <div className="baseline-review-rooms-heading"><h3>Ambientes</h3><span>{reviewGroups.length}</span></div>
+                {reviewGroups.map((environment) => {
+                  const isSelectedEnvironment = environment.id === selectedEnvironment?.id;
+                  return <section className={`baseline-review-room${isSelectedEnvironment ? " is-selected" : ""}`} key={environment.id}>
+                    <button type="button" className="baseline-room-select" aria-current={isSelectedEnvironment ? "true" : undefined} onClick={() => {
+                      const nextItem = environment.items.find((item) => item.decision === "PENDING") ?? environment.items[0];
+                      setSelectedReviewEnvironmentId(environment.id);
+                      setSelectedReviewItemId(nextItem?.id);
+                    }}>
+                      <strong>{environment.name}</strong>
+                      <span>{environment.items.length} {environment.items.length === 1 ? "item" : "itens"} · {environment.items.filter((item) => item.decision === "PENDING").length} pendentes</span>
+                    </button>
+                    <ul className="baseline-room-items" aria-label={`Itens de ${environment.name}`}>
+                      {environment.items.map((item) => <li key={item.id}>
+                        <button type="button" className="baseline-room-item" aria-current={item.id === selectedReviewItem?.id ? "true" : undefined} onClick={() => { setSelectedReviewEnvironmentId(environment.id); setSelectedReviewItemId(item.id); }}>
+                          <span>{item.name}</span><small>{decisionLabel(item.decision)}</small>
+                        </button>
+                      </li>)}
+                    </ul>
+                    <details className="baseline-room-actions">
+                      <summary>Ações do ambiente</summary>
+                      <div>
+                        <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setBulkEnvironment(environment))}>Aceitar itens confiáveis</Button>
+                        <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingEnvironment(environment))}>Editar ambiente</Button>
+                        <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setRemovingEnvironment(environment))}>Remover ambiente</Button>
+                      </div>
+                    </details>
+                  </section>;
+                })}
+                <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingEnvironment(null))}>Adicionar ambiente</Button>
+              </aside>
+              <section className="baseline-review-item-panel" aria-label="Item selecionado" aria-live="polite">
+                {selectedReviewItem && selectedEnvironment ? <>
+                  <header className="baseline-review-item-heading">
+                    <div><p>{selectedEnvironment.name} · Item {selectedItemIndex + 1} de {selectedEnvironment.items.length}</p><h3>{selectedReviewItem.name}</h3></div>
+                    <span className={`baseline-item-status baseline-item-status--${selectedReviewItem.decision.toLowerCase()}`}>{decisionLabel(selectedReviewItem.decision)}</span>
+                  </header>
+                  <div className="baseline-review-item-content">
+                    <EvidenceStrip item={selectedReviewItem} frameLabel="Quadro de vídeo de" />
+                    <div className="baseline-item-detail">
+                      <p>{itemTypeLabel(selectedReviewItem.typeCode)} · {conditionLabel(selectedReviewItem.condition)}</p>
+                      <p>{itemAttributes(selectedReviewItem)}</p>
+                      <p className="baseline-confidence">{selectedReviewItem.confidenceBps == null ? "Sem confiança informada" : `Confiança ${Math.round(selectedReviewItem.confidenceBps / 100)}%`} · {selectedReviewItem.declared ? "Declarado" : decisionLabel(selectedReviewItem.decision)}</p>
+                      <details><summary>Definições das condições</summary><ul>{conditionOptions.map(([, definition]) => <li key={definition}>{definition}</li>)}</ul></details>
+                    </div>
                   </div>
-                </div>
-              </article>)}
-              <form className="baseline-add-item" onSubmit={(event) => addDeclaredItem(event, environment.id)}>
-                <strong>Adicionar item</strong>
-                <Field label="Nome do item"><Input name="name" required /></Field>
-                <Field label="Tipo"><Select name="typeCode" defaultValue="OTHER">{itemTypeOptions.map(([code, label]) => <option value={code} key={code}>{label}</option>)}</Select></Field>
-                <Field label="Condição"><Select name="condition" defaultValue="GOOD">{conditionOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select></Field>
-                <fieldset className="baseline-evidence-choices"><legend>Evidências existentes (opcional)</legend>
-                  {environment.items.flatMap((item) => item.evidence.map((evidence) => <label className="baseline-choice" key={evidence.id}>
-                    <input type="checkbox" name="evidenceIds" value={evidence.id} />{item.name} · {evidence.kind === "VIDEO_FRAME" ? "Quadro de vídeo" : "Foto"}{evidence.timestampMs != null ? ` · ${formatEvidenceTime(evidence.timestampMs)}` : ""}
-                  </label>))}
-                </fieldset>
-                <Button type="submit" disabled={busy}>Adicionar item</Button>
-              </form>
-              <div className="baseline-environment-actions">
-                <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingEnvironment(environment))}>Editar ambiente</Button>
-                <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setRemovingEnvironment(environment))}>Remover ambiente</Button>
-              </div>
-            </section>)}
-            <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingEnvironment(null))}>Adicionar ambiente esperado</Button>
+                  <div className="baseline-item-actions">
+                    <Button aria-label={`Aceitar ${selectedReviewItem.name}`} disabled={busy || selectedReviewItem.decision === "ACCEPTED"} onClick={() => void decide(selectedReviewItem, "ACCEPT")}>Aceitar item</Button>
+                    <Button aria-label={`Rejeitar ${selectedReviewItem.name}`} variant="secondary" disabled={busy} onClick={() => openDialog(() => setRejectingItem(selectedReviewItem))}>Rejeitar</Button>
+                    <Button aria-label={`Editar ${selectedReviewItem.name}`} variant="secondary" disabled={busy} onClick={() => openDialog(() => setEditingItem(selectedReviewItem))}>Editar item</Button>
+                    <details className="baseline-item-more"><summary>Mais ações</summary><div>
+                      <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setMergingItem(selectedReviewItem))}>Mesclar</Button>
+                      <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setSplittingItem(selectedReviewItem))}>Dividir</Button>
+                    </div></details>
+                  </div>
+                </> : <div className="baseline-review-empty-item"><h3>Nenhum item para revisar</h3><p>Adicione um item ou crie um ambiente para começar.</p></div>}
+                {selectedEnvironment && <details className="baseline-add-disclosure">
+                  <summary>+ Adicionar item em {selectedEnvironment.name}</summary>
+                  <form className="baseline-add-item" onSubmit={(event) => addDeclaredItem(event, selectedEnvironment.id)}>
+                    <div className="baseline-add-item-heading"><strong>Adicionar item</strong><p>Inclua algo que não apareceu na vistoria.</p></div>
+                    <div className="baseline-add-item-fields">
+                      <Field label="Nome do item"><Input name="name" required /></Field>
+                      <Field label="Tipo"><Select name="typeCode" defaultValue="OTHER">{itemTypeOptions.map(([code, label]) => <option value={code} key={code}>{label}</option>)}</Select></Field>
+                      <Field label="Condição"><Select name="condition" defaultValue="GOOD">{conditionOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select></Field>
+                    </div>
+                    {selectedEnvironment.items.some((item) => item.evidence.length) && <fieldset className="baseline-evidence-choices"><legend>Evidências existentes (opcional)</legend>
+                      {selectedEnvironment.items.flatMap((item) => item.evidence.map((evidence) => <label className="baseline-choice" key={evidence.id}>
+                        <input type="checkbox" name="evidenceIds" value={evidence.id} />{item.name} · {evidence.kind === "VIDEO_FRAME" ? "Quadro de vídeo" : "Foto"}{evidence.timestampMs != null ? ` · ${formatEvidenceTime(evidence.timestampMs)}` : ""}
+                      </label>))}
+                    </fieldset>}
+                    <Button type="submit" disabled={busy}>Adicionar item</Button>
+                  </form>
+                </details>}
+              </section>
+            </div>
             <section className="baseline-activation">
-              <h3>Ativar versão</h3>
-              <p>Incluídos: {activationSummary.included} · rejeitados: {activationSummary.rejected} · não revisados: {activationSummary.notReviewed}</p>
-              <Field label="Propósito da versão"><Select value={purpose} onChange={(event) => setPurpose(event.target.value)}><option value="">Selecione</option>{purposeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-              <Field label="Convidar pessoas para revisar esta versão"><Select multiple value={activationParticipantIds} onChange={(event) => setActivationParticipantIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{eligibleCounterparties.map((participant) => <option key={participant.id} value={participant.id}>{participant.name}</option>)}</Select></Field>
-              {participantsHaveMore && <Button type="button" variant="secondary" disabled={busy} onClick={() => void loadParticipants(participantsAfter).catch((failure) => setError(failureText(failure)))}>Carregar mais pessoas</Button>}
-              <Button disabled={busy || !purpose} onClick={() => openDialog(() => setConfirmActivation(true))}>Ativar inventário</Button>
-              <Button variant="secondary" disabled={busy} onClick={() => openDialog(() => setConfirmDiscard(true))}>Descartar rascunho</Button>
+              <header className="baseline-activation-heading"><div><span>FINALIZAR</span><h3>Ativar versão</h3><p>{activationSummary.included} incluídos · {activationSummary.rejected} rejeitados · {activationSummary.notReviewed} não revisados</p></div>
+                <Button disabled={busy || !purpose} onClick={() => openDialog(() => setConfirmActivation(true))}>Ativar inventário</Button>
+              </header>
+              <div className="baseline-activation-controls">
+                <Field label="Propósito da versão"><Select value={purpose} onChange={(event) => setPurpose(event.target.value)}><option value="">Selecione</option>{purposeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
+                <details className="baseline-invite-disclosure"><summary>Convidar pessoas (opcional){activationParticipantIds.length > 0 ? ` · ${activationParticipantIds.length} selecionada(s)` : ""}</summary>
+                  <fieldset className="baseline-evidence-choices"><legend>Pessoas da unidade</legend>
+                    {eligibleCounterparties.length ? eligibleCounterparties.map((participant) => <label className="baseline-choice" key={participant.id}>
+                      <input type="checkbox" checked={activationParticipantIds.includes(participant.id)} onChange={(event) => setActivationParticipantIds((current) => event.target.checked ? [...current, participant.id] : current.filter((id) => id !== participant.id))} />{participant.name}
+                    </label>) : <p>Nenhuma pessoa disponível para convite.</p>}
+                    {participantsHaveMore && <Button type="button" variant="secondary" disabled={busy} onClick={() => void loadParticipants(participantsAfter).catch((failure) => setError(failureText(failure)))}>Carregar mais pessoas</Button>}
+                  </fieldset>
+                </details>
+              </div>
+              <Button className="baseline-discard-action" variant="secondary" disabled={busy} onClick={() => openDialog(() => setConfirmDiscard(true))}>Descartar rascunho</Button>
             </section>
           </>}
     <FormDialog isOpen={Boolean(rejectingItem)} onClose={() => setRejectingItem(undefined)} title="Rejeitar item" busy={busy} error={error}>

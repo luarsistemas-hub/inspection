@@ -57,7 +57,7 @@ describe("EnvironmentDeclaration", () => {
     await act(async () => { root.render(createElement(EnvironmentDeclaration, { busy: false, onDeclare })); });
 
     const select = container.querySelector<HTMLSelectElement>("select")!;
-    const name = container.querySelector<HTMLInputElement>('input[aria-label="Nome do ambiente"]')!;
+    let name = container.querySelector<HTMLInputElement>('input[aria-label="Nome do ambiente"]')!;
     const button = [...container.querySelectorAll("button")].find((item) => item.textContent === "Continuar")!;
     const change = (element: HTMLInputElement | HTMLSelectElement, value: string, eventName: string) => {
       const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
@@ -65,16 +65,16 @@ describe("EnvironmentDeclaration", () => {
       element.dispatchEvent(new Event(eventName, { bubbles: true }));
     };
 
-    await act(async () => {
-      change(select, "OTHER", "change");
-      change(name, "Depósito", "input");
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await act(async () => { change(select, "OTHER", "change"); });
+    name = container.querySelector<HTMLInputElement>('input[aria-label="Nome do ambiente"]')!;
+    await act(async () => { change(name, "Depósito", "input"); });
+    await act(async () => { button.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     expect(onDeclare).toHaveBeenCalledWith("OTHER", "Depósito");
     expect(name.value).toBe("");
     expect(container.textContent).not.toContain("Informe o nome do ambiente.");
 
     await act(async () => { change(select, "KITCHEN", "change"); });
+    name = container.querySelector<HTMLInputElement>('input[aria-label="Nome do ambiente"]')!;
     await act(async () => { change(name, "Cozinha", "input"); });
     await act(async () => { finishDeclaration("env:sala"); await Promise.resolve(); });
     expect(name.value).toBe("Cozinha");

@@ -44,6 +44,20 @@ type SubmissionFinalizer interface {
 // decodeRequirements treats the v1 template-definition payload as an empty
 // legacy requirement list and decodes v2 capture requirement arrays.
 func decodeRequirements(raw json.RawMessage) ([]Requirement, error) {
+	requirements, err := decodeAllRequirements(raw)
+	if err != nil {
+		return nil, err
+	}
+	return ActiveRequirements(requirements), nil
+}
+
+// ActiveRequirements drops environments removed during capture. Removed
+// entries stay persisted only so a replayed declaration can be refused.
+func ActiveRequirements(requirements []Requirement) []Requirement {
+	return slices.DeleteFunc(requirements, func(requirement Requirement) bool { return requirement.Deleted })
+}
+
+func decodeAllRequirements(raw json.RawMessage) ([]Requirement, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || trimmed[0] != '[' {
 		return nil, nil
@@ -79,6 +93,13 @@ type DeclareEnvironmentInput struct {
 	TenantID, ResponsibilityID identity.ID
 	TypeCode, Name             string
 	ClientMutationID           string
+}
+
+// ManageEnvironmentInput renames or removes an environment added during capture.
+type ManageEnvironmentInput struct {
+	TenantID, ResponsibilityID identity.ID
+	RequirementKey, Name       string
+	Remove                     bool
 }
 
 // RecordQualityWarningInput records a non-blocking client-side quality result.
@@ -171,7 +192,7 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 		if limits == nil {
 			limits = catalog.DefaultEnvironmentCapture()
 		}
-		requirements, err := decodeRequirements(draft.Requirements)
+		requirements, err := decodeAllRequirements(draft.Requirements)
 		if err != nil {
 			return err
 		}
@@ -180,7 +201,16 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 			keyID = identity.NewDeterministicID("capture-environment", in.ResponsibilityID.String()+":"+in.ClientMutationID)
 		}
 		key := "env:new:" + keyID.String()
+		activeCount := 0
 		for _, existing := range requirements {
+			// A replay of a removed environment must not append a second requirement with its key.
+			if existing.Key == key && existing.Deleted {
+				return apperror.New(apperror.Conflict, "clientMutationId", "environment was removed")
+			}
+			if existing.Deleted {
+				continue
+			}
+			activeCount++
 			if existing.Key == key {
 				if existing.EnvironmentTypeCode != in.TypeCode || existing.EnvironmentName != in.Name {
 					return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was reused with different environment data")
@@ -192,7 +222,7 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 				return apperror.New(apperror.Conflict, "name", "DUPLICATE_ENVIRONMENT")
 			}
 		}
-		if len(requirements) >= 60 {
+		if activeCount >= 60 {
 			return apperror.New(apperror.InvalidInput, "environments", "LIMIT_ENVIRONMENTS")
 		}
 		id := keyID
@@ -209,6 +239,89 @@ func (s Service) DeclareEnvironment(ctx context.Context, in DeclareEnvironmentIn
 		return tx.Model(&draft).Updates(map[string]any{"requirements": encoded, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error
 	})
 	return created, err
+}
+
+// ManageEnvironment renames an added environment or soft-deletes it and its media.
+func (s Service) ManageEnvironment(ctx context.Context, in ManageEnvironmentInput) (Requirement, error) {
+	in.Name = strings.Join(strings.Fields(strings.TrimSpace(in.Name)), " ")
+	var updated Requirement
+	err := s.within(ctx, in.TenantID, func(tx *gorm.DB) error {
+		var draft database.CaptureDraft
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND responsibility_id=?", in.TenantID, in.ResponsibilityID).First(&draft).Error; err != nil {
+			return apperror.New(apperror.NotFound, "responsibility", "capture not found")
+		}
+		if draft.Status != "OPEN" || draft.MediaKind != "VIDEO" || draft.Kind == "RECAPTURE" {
+			return apperror.New(apperror.InvalidState, "responsibility", "environment cannot be changed")
+		}
+		requirements, err := decodeAllRequirements(draft.Requirements)
+		if err != nil {
+			return err
+		}
+		index := -1
+		for i := range requirements {
+			if requirements[i].Key == in.RequirementKey {
+				index = i
+				break
+			}
+		}
+		if index < 0 || !strings.HasPrefix(in.RequirementKey, "env:") || !requirements[index].AddedDuringCapture {
+			return apperror.New(apperror.InvalidInput, "requirementKey", "only environments added during capture can be changed")
+		}
+		updated = requirements[index]
+		if in.Remove {
+			if updated.Deleted {
+				return nil
+			}
+			updated.Deleted = true
+			requirements[index] = updated
+			encodedRequirements, err := json.Marshal(requirements)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&draft).Updates(map[string]any{"requirements": encodedRequirements, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error; err != nil {
+				return err
+			}
+			var media []database.MediaObject
+			if err := tx.Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Find(&media).Error; err != nil {
+				return err
+			}
+			if len(media) > 0 {
+				if err := tx.Model(&database.MediaObject{}).Where("tenant_id=? AND responsibility_id=? AND requirement_key=? AND status NOT IN ?", in.TenantID, in.ResponsibilityID, in.RequirementKey, []string{"ABORTED", "PURGED"}).Update("status", "ABORTED").Error; err != nil {
+					return err
+				}
+				if err := tx.Model(&database.RequirementAnswer{}).Where("tenant_id=? AND draft_id=? AND requirement_key=?", in.TenantID, draft.ID, in.RequirementKey).Updates(map[string]any{"media_ids": json.RawMessage(`[]`), "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error; err != nil {
+					return err
+				}
+				eventID := identity.NewID()
+				if err := messaging.AddOutbox(tx, events.Envelope[map[string]any]{ID: eventID, Type: "capture.environment_removed.v1", SchemaVersion: 1, OccurredAt: s.now(), TenantID: in.TenantID, AggregateID: in.ResponsibilityID, CorrelationID: "capture-environment-remove-" + eventID.String(), Payload: map[string]any{"responsibilityId": in.ResponsibilityID, "requirementKey": in.RequirementKey}}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if updated.Deleted {
+			return apperror.New(apperror.InvalidState, "requirementKey", "environment was removed")
+		}
+		if err := inventoryvocabulary.ValidateEnvironment(updated.EnvironmentTypeCode, in.Name); err != nil {
+			return apperror.New(apperror.InvalidInput, "name", "environment name is invalid")
+		}
+		for _, existing := range requirements {
+			if existing.Deleted || existing.Key == updated.Key {
+				continue
+			}
+			if strings.EqualFold(existing.EnvironmentTypeCode, updated.EnvironmentTypeCode) && normalizedEnvironmentName(existing.EnvironmentName) == normalizedEnvironmentName(in.Name) {
+				return apperror.New(apperror.Conflict, "name", "DUPLICATE_ENVIRONMENT")
+			}
+		}
+		updated.EnvironmentName, updated.Label = in.Name, in.Name
+		requirements[index] = updated
+		encodedRequirements, err := json.Marshal(requirements)
+		if err != nil {
+			return err
+		}
+		return tx.Model(&draft).Updates(map[string]any{"requirements": encodedRequirements, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error
+	})
+	return updated, err
 }
 
 func normalizedEnvironmentName(value string) string {

@@ -19,3 +19,12 @@ func TestUnit_InventoryVersionActivationEventHasDurableWorkerQueue(t *testing.T)
 	}
 	t.Fatal("inventory activation outbox event has no durable worker queue")
 }
+
+func TestUnit_InspectionOriginPromotionHasDurableWorkerQueue(t *testing.T) {
+	for _, definition := range workerQueueDefinitions {
+		if definition[0] == "inspection-origin-promotion" && definition[1] == "origin.inspection_promotion_requested.v1" {
+			return
+		}
+	}
+	t.Fatal("inspection origin promotion event has no durable worker queue")
+}

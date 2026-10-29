@@ -2478,6 +2478,86 @@ ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS environment_display
 ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS component_display_name varchar(120);
 ALTER TABLE media.video_scope_items ADD COLUMN IF NOT EXISTS view_display_name varchar(120);
 `},
+		{Version: 94, Name: "inspection_origin_promotions", Compatible: true, SQL: `
+CREATE UNIQUE INDEX IF NOT EXISTS uq_asset_tenant_id ON assets.assets(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_origin_tenant_id ON origins.origins(tenant_id,id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_capture_draft_tenant_id ON capture.capture_drafts(tenant_id,id);
+CREATE TABLE origins.inspection_origin_promotions (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  asset_id uuid NOT NULL,
+  origin_id uuid NOT NULL,
+  inspection_id uuid NOT NULL,
+  client_mutation_id text NOT NULL,
+  requested_by uuid NOT NULL,
+  purpose text NOT NULL,
+  status text NOT NULL,
+  failure_code text,
+  failure_reason text,
+  retryable boolean NOT NULL DEFAULT false,
+  source_kind text NOT NULL,
+  capture_draft_id uuid NOT NULL,
+  analysis_generation integer,
+  video_plan_id uuid,
+  catalog_prompt_snapshot_id uuid,
+  catalog_generation integer,
+  draft_version_id uuid,
+  replaced_draft_id uuid,
+  replaced_draft_state_seen text,
+  expected_origin_version integer NOT NULL,
+  superseded_version_id uuid,
+  origin_version_id uuid,
+  confirmation_digest text NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  started_at timestamptz,
+  completed_at timestamptz,
+  CONSTRAINT chk_inspection_origin_promotion_status CHECK(status IN ('PREPARING','ACTIVATING','COMPLETED','FAILED','CANCELED','NEEDS_CONFIRMATION')),
+  CONSTRAINT chk_inspection_origin_promotion_source_kind CHECK(source_kind IN ('PHOTO','VIDEO')),
+  CONSTRAINT chk_inspection_origin_promotion_purpose CHECK(purpose IN ('MOVE_IN','CONSTRUCTION_HANDOVER','POST_RENOVATION','INVENTORY_UPDATE','CONTESTATION_ADJUSTMENT')),
+  CONSTRAINT chk_inspection_origin_promotion_attempts CHECK(attempts >= 0),
+  CONSTRAINT uq_inspection_origin_promotion_tenant_id UNIQUE(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_asset FOREIGN KEY(tenant_id,asset_id) REFERENCES assets.assets(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_origin FOREIGN KEY(tenant_id,origin_id) REFERENCES origins.origins(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_inspection FOREIGN KEY(tenant_id,inspection_id) REFERENCES inspections.inspections(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_requester FOREIGN KEY(tenant_id,requested_by) REFERENCES access.memberships(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_capture_draft FOREIGN KEY(tenant_id,capture_draft_id) REFERENCES capture.capture_drafts(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_video_plan FOREIGN KEY(tenant_id,video_plan_id) REFERENCES analysis.video_plans(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_prompt FOREIGN KEY(catalog_prompt_snapshot_id) REFERENCES analysis.prompt_snapshots(id),
+  CONSTRAINT fk_inspection_origin_promotion_draft FOREIGN KEY(tenant_id,draft_version_id) REFERENCES origins.origin_versions(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_replaced_draft FOREIGN KEY(tenant_id,replaced_draft_id) REFERENCES origins.origin_versions(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_superseded FOREIGN KEY(tenant_id,superseded_version_id) REFERENCES origins.origin_versions(tenant_id,id),
+  CONSTRAINT fk_inspection_origin_promotion_result FOREIGN KEY(tenant_id,origin_version_id) REFERENCES origins.origin_versions(tenant_id,id)
+);
+CREATE UNIQUE INDEX uq_inspection_origin_promotion_request ON origins.inspection_origin_promotions(tenant_id,inspection_id,client_mutation_id);
+CREATE UNIQUE INDEX uq_inspection_origin_promotion_active_asset ON origins.inspection_origin_promotions(tenant_id,asset_id) WHERE status IN ('PREPARING','ACTIVATING');
+CREATE INDEX idx_inspection_origin_promotion_reconciliation ON origins.inspection_origin_promotions(status,updated_at);
+ALTER TABLE origins.origin_versions DROP CONSTRAINT IF EXISTS chk_origin_version_source;
+ALTER TABLE origins.origin_versions ADD CONSTRAINT chk_origin_version_source CHECK(source IN ('CAPTURE','LEGACY_ORIGIN','COMPARATIVE_INSPECTION','CONTESTATION','INSPECTION_PROMOTION'));
+ALTER TABLE origins.inventory_items ADD COLUMN IF NOT EXISTS auto_accepted_by_promotion_id uuid;
+ALTER TABLE origins.inventory_items DROP CONSTRAINT IF EXISTS fk_inventory_item_auto_accepted_promotion;
+ALTER TABLE origins.inventory_items ADD CONSTRAINT fk_inventory_item_auto_accepted_promotion FOREIGN KEY(tenant_id,auto_accepted_by_promotion_id) REFERENCES origins.inspection_origin_promotions(tenant_id,id);
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS blocked_reason text;
+ALTER TABLE schedules.schedules ADD COLUMN IF NOT EXISTS blocked_at timestamptz;
+ALTER TABLE origins.inspection_origin_promotions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE origins.inspection_origin_promotions FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON origins.inspection_origin_promotions USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid) WITH CHECK (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+GRANT SELECT,INSERT,UPDATE ON origins.inspection_origin_promotions TO inspection_runtime;
+`},
+		{Version: 95, Name: "inspection_origin_promotion_reconciliation", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION platform.discover_inspection_origin_promotion_tenants(p_stale_before timestamptz)
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+  SELECT DISTINCT p.tenant_id
+  FROM origins.inspection_origin_promotions p
+  LEFT JOIN origins.origin_versions v ON v.tenant_id=p.tenant_id AND v.id=p.draft_version_id
+  WHERE (p.status='PREPARING' AND v.status='DRAFT' AND v.draft_state IN ('READY','FAILED'))
+     OR (p.status='PREPARING' AND v.status='DISCARDED')
+     OR (p.status='ACTIVATING' AND p.updated_at<=p_stale_before)
+$$;
+REVOKE ALL ON FUNCTION platform.discover_inspection_origin_promotion_tenants(timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.discover_inspection_origin_promotion_tenants(timestamptz) TO inspection_runtime;
+`},
 	}
 }
 

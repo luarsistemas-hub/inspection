@@ -42,6 +42,7 @@ type Requirement struct {
 	EnvironmentName       string `json:"environmentName,omitempty"`
 	AddedDuringCapture    bool   `json:"addedDuringCapture,omitempty"`
 	Expected              bool   `json:"expected,omitempty"`
+	Deleted               bool   `json:"deleted,omitempty"`
 }
 
 // VideoMainRequirement returns the canonical participant upload slot for a video capture.
@@ -106,6 +107,9 @@ func Evaluate(requirements []Requirement, answers []Answer, confirmIncomplete bo
 	}
 	result := Completeness{}
 	for _, requirement := range requirements {
+		if requirement.Deleted {
+			continue
+		}
 		if !requirement.Required {
 			continue
 		}

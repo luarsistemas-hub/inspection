@@ -204,6 +204,7 @@ export function SchedulesJourney({
             <span>Próxima ocorrência prevista · {formatScheduleDateTime(item.nextDueAt)}</span>
             <span>Repetição · {presentScheduleFrequency(item.rrule)}</span>
             <span>Prazo · {item.deadlineMinutes} minutos · lembretes {presentReminders(item.reminderOffsetsMinutes)}</span>
+            {item.blockedReason && <span role="status">{scheduleBlockedMessage(item.blockedReason, item.blockedAt)}</span>}
           </div>
           {canMutate && <div className="actions"><button className="secondary" onClick={() => { setEditError(""); setEditItem(item); }}>Editar recorrência</button><button className="secondary" onClick={() => setCancelItem(item)}>Cancelar recorrência</button></div>}
         </li>)}
@@ -280,6 +281,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
   const [participantId, setParticipantId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [referenceVersionId, setReferenceVersionId] = useState("");
+  const [followsActiveOrigin, setFollowsActiveOrigin] = useState(true);
   const [comparisonMode, setComparisonMode] = useState("CHECKLIST_ONLY");
   const [frequency, setFrequency] = useState("MONTHLY");
   const [startsAt, setStartsAt] = useState("");
@@ -300,7 +302,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       participantId,
       templateId,
       comparisonMode,
-      referenceVersionId: comparisonMode === "FIXED_ORIGIN" ? referenceVersionId : null,
+      referenceVersionId: comparisonMode === "FIXED_ORIGIN" && !followsActiveOrigin ? referenceVersionId : null,
       rrule: `FREQ=${frequency}`,
       startsAt,
       timezone: scheduleTimezone,
@@ -316,8 +318,12 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       <EntityRelationshipField kind="asset" label="Imóvel" value={assetId} onChange={(value) => { setAssetId(value); setParticipantId(""); setTemplateId(""); setReferenceVersionId(""); }} options={options} required />
       <EntityRelationshipField kind="participant" label="Responsável pela vistoria" value={participantId} onChange={setParticipantId} options={options} required disabled={!assetId} />
       <EntityRelationshipField kind="template" label="Modelo de vistoria" value={templateId} onChange={(value) => { setTemplateId(value); setReferenceVersionId(""); }} options={options} segmentVersionId={asset?.segmentVersionId} required disabled={!assetId} />
-      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value); setReferenceVersionId(""); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com {mediaKind === "VIDEO" ? "vídeo" : "fotos"} de referência do imóvel</option></select></label>
-      {comparisonMode === "FIXED_ORIGIN" && <FixedOriginSelector assetId={assetId} mediaKind={mediaKind} value={referenceVersionId} onChange={setReferenceVersionId} />}
+      <label>Comparação<select aria-label="Comparação" value={comparisonMode} onChange={(event) => { setComparisonMode(event.target.value); setReferenceVersionId(""); setFollowsActiveOrigin(true); }}><option value="CHECKLIST_ONLY">Somente checklist</option><option value="FIXED_ORIGIN">Comparar com a origem do imóvel</option></select></label>
+      {comparisonMode === "FIXED_ORIGIN" && <fieldset><legend>Origem da comparação</legend>
+        <label><input type="radio" name="schedule-origin-mode" checked={followsActiveOrigin} onChange={() => { setFollowsActiveOrigin(true); setReferenceVersionId(""); }} /> Acompanhar origem ativa</label>
+        <label><input type="radio" name="schedule-origin-mode" checked={!followsActiveOrigin} onChange={() => setFollowsActiveOrigin(false)} /> Fixar esta versão</label>
+        {!followsActiveOrigin && <FixedOriginSelector assetId={assetId} mediaKind={mediaKind} value={referenceVersionId} onChange={setReferenceVersionId} />}
+      </fieldset>}
     </fieldset>
     <fieldset className="schedule-form-section">
       <legend>Quando acontece</legend>
@@ -325,7 +331,7 @@ function CreateScheduleForm({ options, onSubmit, busy }: { options: FormOptionsS
       <label>Repetir<select aria-label="Repetir" value={frequency} onChange={(event) => setFrequency(event.target.value)}>{frequencies.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     </fieldset>
     <ScheduleNotices deadlineMinutes={deadlineMinutes} onDeadlineChange={setDeadlineMinutes} reminders={reminders} onRemindersChange={setReminders} validationError={validationError} />
-    <button type="submit" disabled={busy || comparisonMode === "FIXED_ORIGIN" && !referenceVersionId}>Criar agenda</button>
+    <button type="submit" disabled={busy || comparisonMode === "FIXED_ORIGIN" && !followsActiveOrigin && !referenceVersionId}>Criar agenda</button>
   </form>;
 }
 
@@ -419,6 +425,11 @@ export function formatScheduleDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Data indisponível";
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: scheduleTimezone }).format(date);
+}
+
+export function scheduleBlockedMessage(reason: string, blockedAt?: string | null) {
+  if (reason === "ORIGIN_UNAVAILABLE") return `Sem origem válida${blockedAt ? ` desde ${formatScheduleDateTime(blockedAt)}` : ""}. A agenda tentará novamente automaticamente.`;
+  return `A agenda está pendente e tentará novamente automaticamente.${blockedAt ? ` Desde ${formatScheduleDateTime(blockedAt)}.` : ""}`;
 }
 
 export function instantToLocalDateTime(value: string, timezone = scheduleTimezone): string {

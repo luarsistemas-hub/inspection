@@ -246,6 +246,13 @@ func TestOpenDraftOfAnotherFlowDoesNotFailTheDelivery(t *testing.T) {
 	if len(jobsOf(t, seed)) != 0 {
 		t.Fatal("jobs attached to another flow's draft")
 	}
+	var audit database.AuditEvent
+	if err := seed.DB.Where("tenant_id=? AND action='inventory.catalog_skipped' AND target_type='INSPECTION' AND target_id=?", seed.Tenant, seed.Inspection.String()).Take(&audit).Error; err != nil {
+		t.Fatalf("catalog skip was not recorded: %v", err)
+	}
+	if audit.Reason == "" {
+		t.Fatal("catalog skip audit does not identify the conflicting draft")
+	}
 }
 
 func deliver(t *testing.T, seed *inventorytest.Seed, eventType string) {

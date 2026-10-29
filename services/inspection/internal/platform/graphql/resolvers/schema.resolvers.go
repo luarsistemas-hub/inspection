@@ -32,6 +32,7 @@ import (
 	capturecore "inspection/services/inspection/internal/features/capture/core"
 	capturedeclareenvironment "inspection/services/inspection/internal/features/capture/declare_environment"
 	capturedeclare "inspection/services/inspection/internal/features/capture/declare_impossibility"
+	capturemanageenvironment "inspection/services/inspection/internal/features/capture/manage_environment"
 	capturequalitywarning "inspection/services/inspection/internal/features/capture/record_quality_warning"
 	capturereferences "inspection/services/inspection/internal/features/capture/reference_items"
 	capturesave "inspection/services/inspection/internal/features/capture/save_metadata"
@@ -1058,6 +1059,11 @@ func (r *mutationResolver) PromoteInspectionVideo(ctx context.Context, input gra
 	return &graphql1.OriginVersionPayload{Version: version, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// PromoteInspectionToOrigin is the resolver for the promoteInspectionToOrigin field.
+func (r *mutationResolver) PromoteInspectionToOrigin(ctx context.Context, input graphql1.PromoteInspectionToOriginInput) (*graphql1.PromoteInspectionToOriginPayload, error) {
+	return r.promoteInspectionToOrigin(ctx, input)
+}
+
 // DecideInventoryItems is the resolver for the decideInventoryItems field.
 func (r *mutationResolver) DecideInventoryItems(ctx context.Context, input graphql1.DecideInventoryItemsInput) (*graphql1.InventoryItemsPayload, error) {
 	return r.decideInventoryItems(ctx, input)
@@ -1806,7 +1812,28 @@ func (r *mutationResolver) DeclareCaptureEnvironment(ctx context.Context, input 
 	if err != nil {
 		return nil, err
 	}
-	raw, err := r.Bus.Send(ctx, capturedeclareenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, TypeCode: input.TypeCode, Name: input.Name, ClientMutationID: input.ClientMutationID})
+	if input.RequirementKey != nil {
+		name := ""
+		if input.Name != nil {
+			name = *input.Name
+		}
+		remove := input.Remove != nil && *input.Remove
+		raw, err := r.Bus.Send(ctx, capturemanageenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, RequirementKey: *input.RequirementKey, Name: name, Remove: remove})
+		if err != nil {
+			return nil, err
+		}
+		req := raw.(capturecore.Requirement)
+		status := "PENDING"
+		if req.Deleted {
+			status = "REMOVAL_PENDING"
+		}
+		env := &graphql1.CaptureEnvironment{RequirementKey: req.Key, IdentityID: req.EnvironmentIdentityID, TypeCode: req.EnvironmentTypeCode, Name: req.EnvironmentName, Expected: req.Expected, AddedDuringCapture: req.AddedDuringCapture, MediaCount: 0, Status: status}
+		return &graphql1.CaptureEnvironmentPayload{Environment: env, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+	}
+	if input.TypeCode == nil || input.Name == nil {
+		return nil, apperror.New(apperror.InvalidInput, "typeCode", "environment type and name are required")
+	}
+	raw, err := r.Bus.Send(ctx, capturedeclareenvironment.Command{TenantID: tenantID, ResponsibilityID: responsibilityID, TypeCode: *input.TypeCode, Name: *input.Name, ClientMutationID: input.ClientMutationID})
 	if err != nil {
 		return nil, err
 	}
@@ -2975,6 +3002,11 @@ func (r *queryResolver) OriginPromotion(ctx context.Context, inspectionID string
 		}
 	}
 	return view, nil
+}
+
+// InspectionOriginPromotion is the resolver for the inspectionOriginPromotion field.
+func (r *queryResolver) InspectionOriginPromotion(ctx context.Context, inspectionID string) (*graphql1.InspectionOriginPromotionStatusView, error) {
+	return r.inspectionOriginPromotion(ctx, inspectionID)
 }
 
 // Schedules is the resolver for the schedules field.

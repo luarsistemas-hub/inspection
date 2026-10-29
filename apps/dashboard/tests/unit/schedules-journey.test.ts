@@ -5,6 +5,7 @@ import {
   presentScheduleFrequency,
   scheduleEditValues,
   scheduleFrequencyValue,
+  scheduleBlockedMessage,
   validateScheduleSettings,
 } from "@/features/dashboard/schedules-journey";
 
@@ -42,6 +43,11 @@ describe("schedule presentation and form rules", () => {
     const instant = "2026-09-26T12:00:00.000Z";
     expect(instantToLocalDateTime(instant)).toBe("2026-09-26T09:00");
     expect(formatScheduleDateTime(instant)).toContain("09:00");
+  });
+
+  it("explains blocked origin schedules in Portuguese with their first blocked time", () => {
+    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE", "2026-09-26T12:00:00.000Z")).toContain("Sem origem válida desde");
+    expect(scheduleBlockedMessage("ORIGIN_UNAVAILABLE")).toBe("Sem origem válida. A agenda tentará novamente automaticamente.");
   });
 
   it("accepts zero, one, or several distinct reminder offsets within the deadline", () => {

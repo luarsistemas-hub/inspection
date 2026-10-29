@@ -66,7 +66,13 @@ func TestVV_IT_063PromotionExtendsExpiryFromFirstReadiness(t *testing.T) {
 		if err := tx.Create(&database.VideoScopeItem{ID: identity.NewID(), TenantID: fixture.TenantID, PreparationID: preparationID, FrameID: frameID, EnvironmentCandidate: "kitchen", ComponentLabel: "sink", ViewLabel: "wide", Visibility: "VISIBLE", Landmarks: json.RawMessage(`[]`), CreatedAt: t0}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: digest, Status: "SEALED", SealedAt: &t0, NextAttemptAt: t0, CreatedAt: t0}).Error
+		if err := tx.Create(&database.VideoPlan{ID: planID, TenantID: fixture.TenantID, InspectionID: fixture.InspectionID, SubmissionID: submissionID, CurrentPreparationID: preparationID, Generation: 1, PlanDigest: digest, Status: "SEALED", SealedAt: &t0, NextAttemptAt: t0, CreatedAt: t0}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&database.VideoPlanPreparation{TenantID: fixture.TenantID, PlanID: planID, PreparationID: preparationID, Role: "MAIN", CreatedAt: t0}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&database.Inspection{}).Where("tenant_id=? AND id=?", fixture.TenantID, fixture.InspectionID).Update("active_video_plan_id", planID).Error
 	}); err != nil {
 		t.Fatal(err)
 	}

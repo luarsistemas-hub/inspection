@@ -58,8 +58,10 @@ export type CreateMediaUploadInput = {
 
 export type DeclareCaptureEnvironmentInput = {
   clientMutationId: string;
-  name: string;
-  typeCode: string;
+  name: string | null | undefined;
+  remove: boolean | null | undefined;
+  requirementKey: string | null | undefined;
+  typeCode: string | null | undefined;
 };
 
 export type DeclareCaptureImpossibilityInput = {

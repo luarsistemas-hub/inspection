@@ -9,7 +9,7 @@ import (
 	"inspection/services/inspection/internal/platform/mediator"
 )
 
-// Command starts a draft from a completed comparative inspection.
+// Command starts an inspection-only draft from any completed inspection.
 type Command struct{ TenantID, InspectionID, ActorID identity.ID }
 
 // Setup registers draft creation from an inspection.
