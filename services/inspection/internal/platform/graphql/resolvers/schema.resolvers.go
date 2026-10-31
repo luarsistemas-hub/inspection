@@ -102,6 +102,8 @@ import (
 	getgloballlmusage "inspection/services/inspection/internal/features/usage/get_global_llm_usage"
 	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
 	listllmusagetenants "inspection/services/inspection/internal/features/usage/list_llm_usage_tenants"
+	llmusagebyinspection "inspection/services/inspection/internal/features/usage/llm_usage_by_inspection"
+	llmusagebytenant "inspection/services/inspection/internal/features/usage/llm_usage_by_tenant"
 	"inspection/services/inspection/internal/platform/apperror"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/database"
@@ -4083,7 +4085,7 @@ func (r *queryResolver) UsageSummary(ctx context.Context, from *string, to *stri
 }
 
 // InspectionLLMUsage is the resolver for the inspectionLLMUsage field.
-func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID string, mode *graphql1.LLMExecutionMode, first *int, after *string) (*graphql1.InspectionLLMUsage, error) {
+func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID string, mode *graphql1.LLMExecutionMode, includeTestData *bool, first *int, after *string) (*graphql1.InspectionLLMUsage, error) {
 	meta, ok := requestctx.FromContext(ctx)
 	if !ok {
 		return nil, unauthenticated()
@@ -4100,7 +4102,7 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 		modeValue = strings.ToLower(string(*mode))
 	}
 	raw, err := r.Bus.Ask(ctx, getinspectionllmusage.Query{
-		TenantID: meta.TenantID, InspectionID: parsedInspectionID, Mode: modeValue,
+		TenantID: meta.TenantID, InspectionID: parsedInspectionID, Mode: modeValue, IncludeTestData: includeTestData != nil && *includeTestData,
 		First: intValue(first), After: stringValue(after),
 	})
 	if err != nil {
@@ -4117,8 +4119,8 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 		IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens),
 		OutputTokens: int(view.OutputTokens), CachedInputTokens: int(view.CachedInputTokens),
 		CacheHitCalls: view.CacheHitCalls, KnownCacheCalls: view.KnownCacheCalls, UnknownCacheCalls: view.UnknownCacheCalls,
-		KnownReportedCost: view.KnownReportedCost,
-		UnknownCostCalls:  view.UnknownCostCalls, CostComplete: view.CostComplete,
+		KnownReportedCost: view.KnownReportedCost, KnownReportedCostDecimal: view.KnownReportedCostDecimal,
+		UnknownCostCalls: view.UnknownCostCalls, UncertainCostCalls: view.UncertainCostCalls, ErrorWithoutCostCalls: view.ErrorWithoutCostCalls, UnverifiedCostCalls: view.UnverifiedCostCalls, CostComplete: view.CostComplete,
 		CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.LLMCallUsage, 0, len(view.Calls)),
 		PageInfo: pageInfo(view.EndCursor, view.HasNextPage),
 	}
@@ -4135,9 +4137,21 @@ func (r *queryResolver) InspectionLLMUsage(ctx context.Context, inspectionID str
 			CallID: call.CallID.String(), JobID: call.JobID.String(), EventID: call.EventID.String(), ExecutionID: call.ExecutionID.String(),
 			CorrelationID: call.CorrelationID, Attempt: call.Attempt, ReplayGeneration: call.ReplayGeneration,
 			Mode: callMode, ComparisonMode: call.ComparisonMode, ModelAlias: call.ModelAlias,
-			State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome,
+			State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome, CostState: graphql1.LLMCostState(strings.ToUpper(call.CostState)),
 			TransportDelivered: call.TransportDelivered, ReportedCost: call.ReportedCost,
-			StartedAt: call.StartedAt.UTC().Format(time.RFC3339Nano),
+			ReportedCostDecimal: call.ReportedCostDecimal,
+			StartedAt:           call.StartedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if call.GatewayCallID != "" {
+			value := call.GatewayCallID
+			mapped.GatewayCallID = &value
+		}
+		if call.CostSource != "" {
+			value := graphql1.LLMUsageCostSource(strings.ToUpper(call.CostSource))
+			if value == "ERROR_MISSING" {
+				value = graphql1.LLMUsageCostSourceErrorWithoutCost
+			}
+			mapped.CostSource = &value
 		}
 		if call.Provider != "" {
 			value := call.Provider
@@ -4199,6 +4213,8 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 	}
 	query := getgloballlmusage.Query{First: intValue(first), After: stringValue(after)}
 	if filter != nil {
+		query.IncludeTestData = filter.IncludeTestData != nil && *filter.IncludeTestData
+		query.WithoutInspection = filter.WithoutInspection != nil && *filter.WithoutInspection
 		var err error
 		query.From, query.To, err = parseOptionalWindow(filter.From, filter.To)
 		if err != nil {
@@ -4228,13 +4244,32 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 		return nil, err
 	}
 	view := raw.(getgloballlmusage.Result)
-	response := &graphql1.LLMUsage{From: view.From.Format(time.RFC3339Nano), To: view.To.Format(time.RFC3339Nano), AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls, IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens), OutputTokens: int(view.OutputTokens), CachedInputTokens: int(view.CachedInputTokens), CacheHitCalls: view.CacheHitCalls, KnownCacheCalls: view.KnownCacheCalls, UnknownCacheCalls: view.UnknownCacheCalls, KnownReportedCost: view.KnownReportedCost, UnknownCostCalls: view.UnknownCostCalls, CostComplete: view.CostComplete, CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.GlobalLLMCallUsage, 0, len(view.Calls)), PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}
+	response := &graphql1.LLMUsage{From: view.From.Format(time.RFC3339Nano), To: view.To.Format(time.RFC3339Nano), AttemptedCalls: view.AttemptedCalls, DeliveredCalls: view.DeliveredCalls, IncompleteCalls: view.IncompleteCalls, InputTokens: int(view.InputTokens), OutputTokens: int(view.OutputTokens), CachedInputTokens: int(view.CachedInputTokens), CacheHitCalls: view.CacheHitCalls, KnownCacheCalls: view.KnownCacheCalls, UnknownCacheCalls: view.UnknownCacheCalls, KnownReportedCost: view.KnownReportedCost, KnownReportedCostDecimal: view.KnownReportedCostDecimal, UnknownCostCalls: view.UnknownCostCalls, UncertainCostCalls: view.UncertainCostCalls, ErrorWithoutCostCalls: view.ErrorWithoutCostCalls, UnverifiedCostCalls: view.UnverifiedCostCalls, CostComplete: view.CostComplete, CoverageComplete: view.CoverageComplete, Calls: make([]*graphql1.GlobalLLMCallUsage, 0, len(view.Calls)), PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}
 	if view.CoverageStartedAt != nil {
 		value := view.CoverageStartedAt.UTC().Format(time.RFC3339Nano)
 		response.CoverageStartedAt = &value
 	}
 	for _, call := range view.Calls {
-		mapped := &graphql1.GlobalLLMCallUsage{CallID: call.CallID.String(), TenantID: call.TenantID.String(), TenantName: call.TenantName, InspectionID: call.InspectionID.String(), JobID: call.JobID.String(), EventID: call.EventID.String(), ExecutionID: call.ExecutionID.String(), CorrelationID: call.CorrelationID, Attempt: call.Attempt, ReplayGeneration: call.ReplayGeneration, Mode: graphql1.LLMExecutionMode(strings.ToUpper(call.Mode)), ComparisonMode: call.ComparisonMode, ModelAlias: call.ModelAlias, State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome, TransportDelivered: call.TransportDelivered, ReportedCost: call.ReportedCost, StartedAt: call.StartedAt.UTC().Format(time.RFC3339Nano)}
+		mapped := &graphql1.GlobalLLMCallUsage{CallID: call.CallID.String(), TenantID: call.TenantID.String(), TenantName: call.TenantName, JobID: call.JobID.String(), EventID: call.EventID.String(), ExecutionID: call.ExecutionID.String(), CorrelationID: call.CorrelationID, Attempt: call.Attempt, ReplayGeneration: call.ReplayGeneration, Mode: graphql1.LLMExecutionMode(strings.ToUpper(call.Mode)), ComparisonMode: call.ComparisonMode, ModelAlias: call.ModelAlias, State: graphql1.LLMCallState(call.State), TechnicalOutcome: call.TechnicalOutcome, TransportDelivered: call.TransportDelivered, ReportedCost: call.ReportedCost, CostState: graphql1.LLMCostState(strings.ToUpper(call.CostState)), StartedAt: call.StartedAt.UTC().Format(time.RFC3339Nano)}
+		if call.InspectionID != nil {
+			value := call.InspectionID.String()
+			mapped.InspectionID = &value
+		}
+		if call.GatewayCallID != "" {
+			value := call.GatewayCallID
+			mapped.GatewayCallID = &value
+		}
+		if call.ReportedCostDecimal != "" {
+			value := call.ReportedCostDecimal
+			mapped.ReportedCostDecimal = &value
+		}
+		if call.CostSource != "" {
+			value := graphql1.LLMUsageCostSource(strings.ToUpper(call.CostSource))
+			if value == "ERROR_MISSING" {
+				value = graphql1.LLMUsageCostSourceErrorWithoutCost
+			}
+			mapped.CostSource = &value
+		}
 		if call.Provider != "" {
 			value := call.Provider
 			mapped.Provider = &value
@@ -4282,6 +4317,89 @@ func (r *queryResolver) LlmUsage(ctx context.Context, filter *graphql1.LLMUsageF
 		response.Calls = append(response.Calls, mapped)
 	}
 	return response, nil
+}
+
+// LlmUsageByTenant resolves the paginated tenant cost aggregates.
+func (r *queryResolver) LlmUsageByTenant(ctx context.Context, filter *graphql1.LLMUsageFilter, first *int, after *string) (*graphql1.LLMUsageTenantConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	q := llmusagebytenant.Query{First: intValue(first), After: stringValue(after)}
+	if filter != nil {
+		q.IncludeTestData = filter.IncludeTestData != nil && *filter.IncludeTestData
+		var err error
+		q.From, q.To, err = parseOptionalWindow(filter.From, filter.To)
+		if err != nil {
+			return nil, err
+		}
+		q.Provider, q.Model, q.ModelAlias, q.Outcome = stringValue(filter.Provider), stringValue(filter.Model), stringValue(filter.ModelAlias), stringValue(filter.TechnicalOutcome)
+		if filter.Mode != nil {
+			q.Mode = strings.ToLower(string(*filter.Mode))
+		}
+		if filter.State != nil {
+			q.State = string(*filter.State)
+		}
+		if filter.Cost != nil {
+			q.Cost = strings.ToLower(string(*filter.Cost))
+		}
+	}
+	raw, err := r.Bus.Ask(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(llmusagebytenant.Result)
+	nodes := make([]*graphql1.LLMUsageTenant, 0, len(view.Nodes))
+	for _, n := range view.Nodes {
+		nodes = append(nodes, &graphql1.LLMUsageTenant{TenantID: n.TenantID, TenantName: n.TenantName, AttemptedCalls: n.AttemptedCalls, DeliveredCalls: n.DeliveredCalls, InputTokens: n.InputTokens, OutputTokens: n.OutputTokens, KnownReportedCostDecimal: n.KnownCostDecimal, ConfirmedCostCalls: n.ConfirmedCostCalls, UnknownCostCalls: n.UnknownCostCalls, UncertainCostCalls: n.UncertainCostCalls, ErrorWithoutCostCalls: n.ErrorWithoutCostCalls, UnverifiedCostCalls: n.UnverifiedCostCalls, CostComplete: n.CostComplete, CoverageComplete: n.CoverageComplete})
+	}
+	return &graphql1.LLMUsageTenantConnection{Nodes: nodes, PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}, nil
+}
+
+// LlmUsageByInspection resolves the paginated inspection cost aggregates.
+func (r *queryResolver) LlmUsageByInspection(ctx context.Context, tenantID string, filter *graphql1.LLMUsageFilter, first *int, after *string) (*graphql1.LLMUsageInspectionConnection, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	if _, err := auth.AuthorizeSuperAdmin(ctx, r.Authorizer, meta.TenantID, r.SuperAdminIssuer, r.SuperAdminSubject); err != nil {
+		return nil, err
+	}
+	id, err := identity.ParseID(tenantID)
+	if err != nil {
+		return nil, invalidID("tenantId")
+	}
+	q := llmusagebyinspection.Query{TenantID: id, First: intValue(first), After: stringValue(after)}
+	if filter != nil {
+		q.IncludeTestData = filter.IncludeTestData != nil && *filter.IncludeTestData
+		q.From, q.To, err = parseOptionalWindow(filter.From, filter.To)
+		if err != nil {
+			return nil, err
+		}
+		q.Provider, q.Model, q.ModelAlias, q.Outcome = stringValue(filter.Provider), stringValue(filter.Model), stringValue(filter.ModelAlias), stringValue(filter.TechnicalOutcome)
+		if filter.Mode != nil {
+			q.Mode = strings.ToLower(string(*filter.Mode))
+		}
+		if filter.State != nil {
+			q.State = string(*filter.State)
+		}
+		if filter.Cost != nil {
+			q.Cost = strings.ToLower(string(*filter.Cost))
+		}
+	}
+	raw, err := r.Bus.Ask(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	view := raw.(llmusagebyinspection.Result)
+	nodes := make([]*graphql1.LLMUsageInspection, 0, len(view.Nodes))
+	for _, n := range view.Nodes {
+		nodes = append(nodes, &graphql1.LLMUsageInspection{InspectionID: n.InspectionID, InspectionLabel: n.Label, AttemptedCalls: n.AttemptedCalls, DeliveredCalls: n.DeliveredCalls, InputTokens: n.InputTokens, OutputTokens: n.OutputTokens, KnownReportedCostDecimal: n.KnownCostDecimal, ConfirmedCostCalls: n.ConfirmedCostCalls, UnknownCostCalls: n.UnknownCostCalls, UncertainCostCalls: n.UncertainCostCalls, ErrorWithoutCostCalls: n.ErrorWithoutCostCalls, UnverifiedCostCalls: n.UnverifiedCostCalls, CostComplete: n.CostComplete, CoverageComplete: n.CoverageComplete})
+	}
+	return &graphql1.LLMUsageInspectionConnection{Nodes: nodes, PageInfo: pageInfo(view.EndCursor, view.HasNextPage)}, nil
 }
 
 // LlmUsageTenants is the resolver for the llmUsageTenants field.

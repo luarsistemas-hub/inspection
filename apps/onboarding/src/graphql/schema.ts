@@ -818,15 +818,18 @@ export type GlobalLlmCallUsage = {
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
   correlationId: Scalars['String']['output'];
+  costSource: Maybe<LlmUsageCostSource>;
+  costState: LlmCostState;
   durationMs: Maybe<Scalars['Int']['output']>;
   eventId: Scalars['ID']['output'];
   executionId: Scalars['ID']['output'];
   finishedAt: Maybe<Scalars['String']['output']>;
+  gatewayCallId: Maybe<Scalars['String']['output']>;
   gatewayRequestId: Maybe<Scalars['String']['output']>;
   httpStatus: Maybe<Scalars['Int']['output']>;
   imageCount: Maybe<Scalars['Int']['output']>;
   inputTokens: Maybe<Scalars['Int']['output']>;
-  inspectionId: Scalars['ID']['output'];
+  inspectionId: Maybe<Scalars['ID']['output']>;
   jobId: Scalars['ID']['output'];
   mode: LlmExecutionMode;
   model: Maybe<Scalars['String']['output']>;
@@ -835,6 +838,7 @@ export type GlobalLlmCallUsage = {
   provider: Maybe<Scalars['String']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
+  reportedCostDecimal: Maybe<Scalars['String']['output']>;
   requestBodyBytes: Maybe<Scalars['Int']['output']>;
   startedAt: Scalars['String']['output'];
   state: LlmCallState;
@@ -913,16 +917,20 @@ export type InspectionLlmUsage = {
   coverageComplete: Scalars['Boolean']['output'];
   coverageStartedAt: Maybe<Scalars['String']['output']>;
   deliveredCalls: Scalars['Int']['output'];
+  errorWithoutCostCalls: Scalars['Int']['output'];
   incompleteCalls: Scalars['Int']['output'];
   inputTokens: Scalars['Int']['output'];
   inspectionId: Scalars['ID']['output'];
   knownCacheCalls: Scalars['Int']['output'];
   knownReportedCost: Scalars['Float']['output'];
+  knownReportedCostDecimal: Scalars['String']['output'];
   mode: LlmExecutionMode;
   outputTokens: Scalars['Int']['output'];
   pageInfo: PageInfo;
+  uncertainCostCalls: Scalars['Int']['output'];
   unknownCacheCalls: Scalars['Int']['output'];
   unknownCostCalls: Scalars['Int']['output'];
+  unverifiedCostCalls: Scalars['Int']['output'];
 };
 
 export type InspectionOriginPromotionActiveOrigin = {
@@ -1232,10 +1240,13 @@ export type LlmCallUsage = {
   callId: Scalars['ID']['output'];
   comparisonMode: Scalars['String']['output'];
   correlationId: Scalars['String']['output'];
+  costSource: Maybe<LlmUsageCostSource>;
+  costState: LlmCostState;
   durationMs: Maybe<Scalars['Int']['output']>;
   eventId: Scalars['ID']['output'];
   executionId: Scalars['ID']['output'];
   finishedAt: Maybe<Scalars['String']['output']>;
+  gatewayCallId: Maybe<Scalars['String']['output']>;
   gatewayRequestId: Maybe<Scalars['String']['output']>;
   httpStatus: Maybe<Scalars['Int']['output']>;
   imageCount: Maybe<Scalars['Int']['output']>;
@@ -1248,12 +1259,21 @@ export type LlmCallUsage = {
   provider: Maybe<Scalars['String']['output']>;
   replayGeneration: Scalars['Int']['output'];
   reportedCost: Maybe<Scalars['Float']['output']>;
+  reportedCostDecimal: Maybe<Scalars['String']['output']>;
   requestBodyBytes: Maybe<Scalars['Int']['output']>;
   startedAt: Scalars['String']['output'];
   state: LlmCallState;
   technicalOutcome: Scalars['String']['output'];
   transportDelivered: Maybe<Scalars['Boolean']['output']>;
 };
+
+export type LlmCostState =
+  | 'CONFIRMED'
+  | 'ERROR_WITHOUT_COST'
+  | 'NOT_SENT'
+  | 'UNCERTAIN'
+  | 'UNKNOWN'
+  | 'UNVERIFIED';
 
 export type LlmExecutionMode =
   | 'LIVE'
@@ -1269,25 +1289,43 @@ export type LlmUsage = {
   coverageComplete: Scalars['Boolean']['output'];
   coverageStartedAt: Maybe<Scalars['String']['output']>;
   deliveredCalls: Scalars['Int']['output'];
+  errorWithoutCostCalls: Scalars['Int']['output'];
   from: Scalars['String']['output'];
   incompleteCalls: Scalars['Int']['output'];
   inputTokens: Scalars['Int']['output'];
   knownCacheCalls: Scalars['Int']['output'];
   knownReportedCost: Scalars['Float']['output'];
+  knownReportedCostDecimal: Scalars['String']['output'];
   outputTokens: Scalars['Int']['output'];
   pageInfo: PageInfo;
   to: Scalars['String']['output'];
+  uncertainCostCalls: Scalars['Int']['output'];
   unknownCacheCalls: Scalars['Int']['output'];
   unknownCostCalls: Scalars['Int']['output'];
+  unverifiedCostCalls: Scalars['Int']['output'];
 };
 
+export type LlmUsageCostSource =
+  | 'BODY'
+  | 'ERROR_WITHOUT_COST'
+  | 'HEADER'
+  | 'NOT_SENT'
+  | 'UNCERTAIN'
+  | 'UNKNOWN'
+  | 'UNVERIFIED';
+
 export type LlmUsageCostState =
+  | 'ERROR_WITHOUT_COST'
   | 'INFORMED'
-  | 'MISSING';
+  | 'MISSING'
+  | 'NOT_SENT'
+  | 'UNCERTAIN'
+  | 'UNVERIFIED';
 
 export type LlmUsageFilter = {
   cost: InputMaybe<LlmUsageCostState>;
   from: InputMaybe<Scalars['String']['input']>;
+  includeTestData: InputMaybe<Scalars['Boolean']['input']>;
   inspectionId: InputMaybe<Scalars['ID']['input']>;
   mode: InputMaybe<LlmExecutionMode>;
   model: InputMaybe<Scalars['String']['input']>;
@@ -1297,6 +1335,55 @@ export type LlmUsageFilter = {
   technicalOutcome: InputMaybe<Scalars['String']['input']>;
   tenantId: InputMaybe<Scalars['ID']['input']>;
   to: InputMaybe<Scalars['String']['input']>;
+  withoutInspection: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type LlmUsageInspection = {
+  __typename?: 'LLMUsageInspection';
+  attemptedCalls: Scalars['Int']['output'];
+  confirmedCostCalls: Scalars['Int']['output'];
+  costComplete: Scalars['Boolean']['output'];
+  coverageComplete: Scalars['Boolean']['output'];
+  deliveredCalls: Scalars['Int']['output'];
+  errorWithoutCostCalls: Scalars['Int']['output'];
+  inputTokens: Scalars['Int']['output'];
+  inspectionId: Maybe<Scalars['ID']['output']>;
+  inspectionLabel: Scalars['String']['output'];
+  knownReportedCostDecimal: Scalars['String']['output'];
+  outputTokens: Scalars['Int']['output'];
+  uncertainCostCalls: Scalars['Int']['output'];
+  unknownCostCalls: Scalars['Int']['output'];
+  unverifiedCostCalls: Scalars['Int']['output'];
+};
+
+export type LlmUsageInspectionConnection = {
+  __typename?: 'LLMUsageInspectionConnection';
+  nodes: Array<LlmUsageInspection>;
+  pageInfo: PageInfo;
+};
+
+export type LlmUsageTenant = {
+  __typename?: 'LLMUsageTenant';
+  attemptedCalls: Scalars['Int']['output'];
+  confirmedCostCalls: Scalars['Int']['output'];
+  costComplete: Scalars['Boolean']['output'];
+  coverageComplete: Scalars['Boolean']['output'];
+  deliveredCalls: Scalars['Int']['output'];
+  errorWithoutCostCalls: Scalars['Int']['output'];
+  inputTokens: Scalars['Int']['output'];
+  knownReportedCostDecimal: Scalars['String']['output'];
+  outputTokens: Scalars['Int']['output'];
+  tenantId: Scalars['ID']['output'];
+  tenantName: Scalars['String']['output'];
+  uncertainCostCalls: Scalars['Int']['output'];
+  unknownCostCalls: Scalars['Int']['output'];
+  unverifiedCostCalls: Scalars['Int']['output'];
+};
+
+export type LlmUsageTenantConnection = {
+  __typename?: 'LLMUsageTenantConnection';
+  nodes: Array<LlmUsageTenant>;
+  pageInfo: PageInfo;
 };
 
 export type LegalHoldInput = {
@@ -2570,6 +2657,8 @@ export type Query = {
   inventoryDraft: Maybe<InventoryDraft>;
   inventoryTrail: InventoryTrail;
   llmUsage: LlmUsage;
+  llmUsageByInspection: LlmUsageInspectionConnection;
+  llmUsageByTenant: LlmUsageTenantConnection;
   llmUsageTenants: TenantConnection;
   lookupPostalCode: PostalAddressLookup;
   me: Me;
@@ -2701,6 +2790,7 @@ export type QueryInspectionArgs = {
 export type QueryInspectionLlmUsageArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
+  includeTestData?: InputMaybe<Scalars['Boolean']['input']>;
   inspectionId: Scalars['ID']['input'];
   mode?: InputMaybe<LlmExecutionMode>;
 };
@@ -2731,6 +2821,21 @@ export type QueryInventoryTrailArgs = {
 
 
 export type QueryLlmUsageArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  filter: InputMaybe<LlmUsageFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryLlmUsageByInspectionArgs = {
+  after: InputMaybe<Scalars['String']['input']>;
+  filter: InputMaybe<LlmUsageFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  tenantId: Scalars['ID']['input'];
+};
+
+
+export type QueryLlmUsageByTenantArgs = {
   after: InputMaybe<Scalars['String']['input']>;
   filter: InputMaybe<LlmUsageFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;

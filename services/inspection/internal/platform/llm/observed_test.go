@@ -25,6 +25,7 @@ func (s observedGatewayStub) CompleteStructured(context.Context, StructuredReque
 type observedLedgerStub struct {
 	startErr, finishErr error
 	starts, finishes    int
+	finish              CallFinish
 }
 
 func (s *observedLedgerStub) Start(context.Context, CallStart) error {
@@ -32,8 +33,9 @@ func (s *observedLedgerStub) Start(context.Context, CallStart) error {
 	return s.startErr
 }
 
-func (s *observedLedgerStub) Finish(context.Context, CallFinish) error {
+func (s *observedLedgerStub) Finish(_ context.Context, finish CallFinish) error {
 	s.finishes++
+	s.finish = finish
 	return s.finishErr
 }
 
@@ -82,6 +84,19 @@ func TestObservedGatewayLogsSuccessfulCallAndUsage(t *testing.T) {
 	}
 	if !strings.Contains(metrics.Prometheus(), "inspection_llm_inflight") || !strings.Contains(metrics.Prometheus(), " 0\n") {
 		t.Fatalf("inflight gauge did not return to zero: %s", metrics.Prometheus())
+	}
+}
+
+func TestObservedGatewayPersistsLiteLLMDecimalProvenance(t *testing.T) {
+	cost := "0.00000012"
+	ledger := &observedLedgerStub{}
+	inner := observedGatewayStub{result: StructuredResult{TransportDelivered: true, GatewayCallID: "gateway-1", ReportedCostDecimal: &cost, CostSource: "header"}}
+	ctx := observability.WithCorrelation(context.Background(), observability.Correlation{TenantID: "tenant"})
+	if _, err := (ObservedGateway{Inner: inner, Ledger: ledger}).CompleteStructured(ctx, StructuredRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if ledger.finishes != 1 || ledger.finish.GatewayCallID != "gateway-1" || ledger.finish.CostSource != "header" || ledger.finish.ReportedCostDecimal == nil || *ledger.finish.ReportedCostDecimal != cost {
+		t.Fatalf("LiteLLM cost metadata was not persisted: %+v", ledger.finish)
 	}
 }
 

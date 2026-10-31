@@ -37,11 +37,14 @@ type StructuredResult struct {
 	JSON                              []byte
 	GatewayRequestID, Provider, Model string
 	CallID                            string
+	GatewayCallID                     string
 	InputTokens, OutputTokens         *int64
 	CachedInputTokens                 *int64
 	RequestBodyBytes                  int64
 	InvalidCachedInputTokens          bool
 	Cost                              *float64
+	ReportedCostDecimal               *string
+	CostSource                        string
 	Latency                           time.Duration
 	HTTPStatus                        int
 	TransportDelivered                bool
@@ -65,16 +68,18 @@ type CallStart struct {
 // CallFinish contains provider metadata available after a transport attempt.
 // Nil token and cost values remain unknown rather than being estimated.
 type CallFinish struct {
-	CallID, Provider, Model, GatewayRequestID, TechnicalOutcome string
-	InputTokens, OutputTokens                                   *int64
-	CachedInputTokens                                           *int64
-	ImageCount                                                  int
-	RequestBodyBytes                                            int64
-	Cost                                                        *float64
-	TransportDelivered                                          bool
-	HTTPStatus                                                  int
-	Duration                                                    time.Duration
-	FinishedAt                                                  time.Time
+	CallID, Provider, Model, GatewayRequestID, GatewayCallID, TechnicalOutcome string
+	InputTokens, OutputTokens                                                  *int64
+	CachedInputTokens                                                          *int64
+	ImageCount                                                                 int
+	RequestBodyBytes                                                           int64
+	Cost                                                                       *float64
+	ReportedCostDecimal                                                        *string
+	CostSource                                                                 string
+	TransportDelivered                                                         bool
+	HTTPStatus                                                                 int
+	Duration                                                                   time.Duration
+	FinishedAt                                                                 time.Time
 }
 
 // CallLedger persists one operational row for each gateway invocation.

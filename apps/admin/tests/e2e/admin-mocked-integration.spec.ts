@@ -55,7 +55,9 @@ const defaultReply = (operation: string): GraphQLReply => {
     case "AdminHistory": return { data: { auditEvents: { nodes: [{ id: "history-a", action: "UPDATED", targetType: "Asset", targetId: "asset-a", outcome: "SUCCEEDED", reason: "fixture history", correlationId: "correlation-a", occurredAt: "2026-01-01T00:00:00Z" }], pageInfo: pageInfo() } } };
     case "AdminAnalysisPrompt": return { data: { analysisPrompt: { analysisType: "REAL_ESTATE", systemPrompt: "Descreva somente evidências observáveis.", modelAlias: "inspection-vision", minimumConfidenceBps: 7000, canonicalDigest: "digest-a", revision: 1, updatedAt: "2026-01-01T00:00:00Z" } } };
     case "AdminLLMUsageTenants": return { data: { llmUsageTenants: { nodes: [{ id: "tenant-a", name: "Minha operação", language: "pt-BR", defaultTimezone: "America/Sao_Paulo", status: "ACTIVE", version: 1 }], pageInfo: pageInfo() } } };
-    case "AdminLLMUsage": return { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 0, deliveredCalls: 0, incompleteCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 0, knownReportedCost: 0, unknownCostCalls: 0, costComplete: true, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: true, calls: [], pageInfo: pageInfo() } } };
+    case "AdminLLMUsageByTenant": return { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Minha operação", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0.00000012", confirmedCostCalls: 1, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } };
+    case "AdminLLMUsageByInspection": return { data: { llmUsageByInspection: { nodes: [{ inspectionId: "inspection-a", inspectionLabel: "Vistoria QA", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0.00000012", confirmedCostCalls: 1, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } };
+    case "AdminLLMUsage": return { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 0, deliveredCalls: 0, incompleteCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 0, knownReportedCost: 0, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: true, calls: [], pageInfo: pageInfo() } } };
     case "AdminCreateBusinessUnit": return { data: { createBusinessUnit: { businessUnit: { id: "unit-created", code: "UN01", name: "Unidade Norte", status: "ACTIVE", version: 1 }, userErrors: [], clientMutationId: "unit-mutation" } } };
     case "AdminInviteInternalUser": return { data: { inviteInternalUser: { membership: { id: "member-created", role: "EMPLOYEE", status: "ACTIVE", version: 1, scopes: [] }, userErrors: [], clientMutationId: "invite-mutation" } } };
     case "AdminUpsertParticipant": return { data: { upsertParticipant: { participant: { id: "participant-created", name: "Ana QA", status: "ACTIVE", version: 1, contacts: [] }, userErrors: [], clientMutationId: "participant-mutation" } } };
@@ -115,9 +117,9 @@ async function loginIntoFirstAccess(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Criar operação local" })).toBeVisible();
 }
 
-function usageReply(tenantName: string, inspectionId: string): GraphQLReply {
-  const call = { callId: `call-${tenantName}`, tenantId: tenantName === "Tenant A" ? "tenant-a" : "tenant-b", tenantName, inspectionId, jobId: "job-a", eventId: "event-a", executionId: "execution-a", correlationId: "correlation-a", attempt: 1, replayGeneration: 0, mode: "LIVE", comparisonMode: "LIVE", modelAlias: "inspection-vision", provider: "mock", model: "mock-vision", gatewayRequestId: "request-a", state: "FINISHED", technicalOutcome: "SUCCESS", transportDelivered: true, httpStatus: 200, inputTokens: 10, outputTokens: 5, cachedInputTokens: 0, imageCount: 1, requestBodyBytes: 100, reportedCost: 0, durationMs: 10, startedAt: "2026-01-01T00:00:00Z", finishedAt: "2026-01-01T00:00:01Z" };
-  return { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 1, deliveredCalls: 1, incompleteCalls: 0, inputTokens: 10, outputTokens: 5, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 0, knownReportedCost: 0, unknownCostCalls: 0, costComplete: true, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: true, calls: [call], pageInfo: pageInfo() } } };
+function usageReply(tenantName: string, inspectionId: string | null): GraphQLReply {
+  const call = { callId: `call-${tenantName}`, tenantId: tenantName === "Tenant A" ? "tenant-a" : "tenant-b", tenantName, inspectionId, jobId: "job-a", eventId: "event-a", executionId: "execution-a", correlationId: "correlation-a", attempt: 1, replayGeneration: 0, mode: "LIVE", comparisonMode: "LIVE", modelAlias: "inspection-vision", provider: "mock", model: "mock-vision", gatewayRequestId: "request-a", gatewayCallId: "gateway-a", reportedCostDecimal: "0.000000000000", costSource: "HEADER", costState: "CONFIRMED", state: "FINISHED", technicalOutcome: "SUCCESS", transportDelivered: true, httpStatus: 200, inputTokens: 10, outputTokens: 5, cachedInputTokens: 0, imageCount: 1, requestBodyBytes: 100, reportedCost: 0, durationMs: 10, startedAt: "2026-01-01T00:00:00Z", finishedAt: "2026-01-01T00:00:01Z" };
+  return { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 1, deliveredCalls: 1, incompleteCalls: 0, inputTokens: 10, outputTokens: 5, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 0, knownReportedCost: 0, knownReportedCostDecimal: "0", uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, unknownCostCalls: 0, costComplete: true, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: true, calls: [call], pageInfo: pageInfo() } } };
 }
 
 test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM provider)", () => {
@@ -916,16 +918,16 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
     await end.fill("2026-02-01T10:00");
     await expect(page.getByText("O início deve ocorrer antes do fim.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Aplicar" })).toBeDisabled();
-    expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsage")).toHaveLength(1);
+    expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsageByTenant")).toHaveLength(1);
   });
 
   test("IT-072 distinguishes incomplete coverage from confirmed zero usage", async ({ page }) => {
     const mocks = await installMocks(page);
-    mocks.enqueue("AdminLLMUsage", { data: { llmUsage: { from: "2026-01-01T00:00:00Z", to: "2026-01-02T00:00:00Z", attemptedCalls: 0, deliveredCalls: 0, incompleteCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheHitCalls: 0, knownCacheCalls: 0, unknownCacheCalls: 1, knownReportedCost: null, unknownCostCalls: 1, costComplete: false, coverageStartedAt: "2026-01-01T00:00:00Z", coverageComplete: false, calls: [], pageInfo: pageInfo() } } });
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Tenant parcial", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 3, outputTokens: 0, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 1, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: false, coverageComplete: false }], pageInfo: pageInfo() } } });
     await loginAsMockAdmin(page, "/llm-usage");
     await expect(page.getByText("Cobertura histórica parcial")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Nenhuma chamada encontrada" })).toBeVisible();
-    expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsage")).toHaveLength(1);
+    await expect(page.getByRole("button", { name: "Tenant parcial" })).toBeVisible();
+    expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsageByTenant")).toHaveLength(1);
   });
 
   test("IT-073 hides global usage and cost details from a membership without cost access", async ({ page }) => {
@@ -939,35 +941,78 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
 
   test("IT-074 discards a delayed result for a previous tenant filter", async ({ page }) => {
     const mocks = await installMocks(page);
-    mocks.enqueue("AdminLLMUsage", usageReply("Tenant A", "inspection-old"), usageReply("Tenant A", "inspection-a"), usageReply("Tenant B", "inspection-b"));
-    const tenantChoices = (nodes: Array<{ id: string; name: string }>) => ({ data: { llmUsageTenants: { nodes: nodes.map((tenant) => ({ ...tenant, language: "pt-BR", defaultTimezone: "UTC", status: "ACTIVE", version: 1 })), pageInfo: pageInfo() } } });
-    const tenantA = { id: "tenant-a", name: "Tenant A" }; const tenantB = { id: "tenant-b", name: "Tenant B" };
-    mocks.enqueue("AdminLLMUsageTenants", tenantChoices([tenantA, tenantB]), tenantChoices([tenantA, tenantB]), tenantChoices([tenantB]), tenantChoices([tenantB]));
-    const releaseOldRequest = mocks.hold("AdminLLMUsage");
+    const releasePreviousFilter = mocks.hold("AdminLLMUsageByTenant");
+    mocks.enqueue("AdminLLMUsageByTenant",
+      { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-old", tenantName: "Tenant do filtro anterior", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0", confirmedCostCalls: 1, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } },
+    );
+    await loginAsMockAdmin(page, "/llm-usage");
+    await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminLLMUsageByTenant").length).toBe(1);
+
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-new", tenantName: "Tenant do filtro atual", attemptedCalls: 2, deliveredCalls: 2, inputTokens: 20, outputTokens: 10, knownReportedCostDecimal: "0", confirmedCostCalls: 2, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } });
+    await page.locator(".llm-usage-advanced-filters > summary").click();
+    await page.getByLabel("Provedor").fill("litellm");
+    await page.getByRole("button", { name: "Aplicar" }).click();
+    await expect.poll(() => mocks.calls.filter((call) => call.operation === "AdminLLMUsageByTenant").length).toBe(2);
+    await expect(page.getByRole("button", { name: "Tenant do filtro atual" })).toBeVisible();
+
+    releasePreviousFilter();
+    await expect(page.getByRole("button", { name: "Tenant do filtro atual" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tenant do filtro anterior" })).toHaveCount(0);
+  });
+
+  test("IT-078 navigates tenant to inspection to call using aggregate queries", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Tenant A", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0.00000012", confirmedCostCalls: 1, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } });
+    mocks.enqueue("AdminLLMUsageByInspection", { data: { llmUsageByInspection: { nodes: [{ inspectionId: "inspection-a", inspectionLabel: "Vistoria A", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0.00000012", confirmedCostCalls: 1, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } });
+    mocks.enqueue("AdminLLMUsage", usageReply("Tenant A", "inspection-a"));
+    await loginAsMockAdmin(page, "/llm-usage");
+    await page.getByRole("button", { name: "Tenant A" }).click();
+    await expect(page).toHaveURL(/tenantId=tenant-a/);
+    await page.getByRole("button", { name: "Vistoria A" }).click();
+    await expect(page).toHaveURL(/inspectionId=inspection-a/);
+    await expect(page.getByRole("list", { name: "Chamadas de LLM" })).toContainText("Tenant A");
+    expect(mocks.calls.some((call) => call.operation === "AdminLLMUsageByTenant")).toBe(true);
+    expect(mocks.calls.some((call) => call.operation === "AdminLLMUsageByInspection")).toBe(true);
+    expect(mocks.calls.some((call) => call.operation === "AdminLLMUsage")).toBe(true);
+  });
+
+  test("IT-076 opens calls from the no-inspection bucket", async ({ page }) => {
+    const mocks = await installMocks(page);
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Tenant A", attemptedCalls: 2, deliveredCalls: 1, inputTokens: 4, outputTokens: 0, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 1, uncertainCostCalls: 1, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: false, coverageComplete: false }], pageInfo: pageInfo() } } });
+    mocks.enqueue("AdminLLMUsageByInspection", { data: { llmUsageByInspection: { nodes: [{ inspectionId: null, inspectionLabel: "Sem vistoria", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 4, outputTokens: 0, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 1, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: false, coverageComplete: false }], pageInfo: pageInfo() } } });
+    mocks.enqueue("AdminLLMUsage", usageReply("Tenant A", null));
+    await loginAsMockAdmin(page, "/llm-usage");
+    await page.getByRole("button", { name: "Tenant A" }).click();
+    await page.getByRole("button", { name: "Abrir consumo de Sem vistoria" }).click();
+    await expect(page).toHaveURL(/withoutInspection=true/);
+    await expect(page.getByRole("list", { name: "Chamadas de LLM" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Vistorias do tenant" })).toBeVisible();
+    const call = mocks.calls.find((entry) => entry.operation === "AdminLLMUsage");
+    expect(call?.variables.filter).toMatchObject({ tenantId: "tenant-a", withoutInspection: true });
+  });
+
+  test("IT-077 propagates provider to aggregate filters", async ({ page }) => {
+    const mocks = await installMocks(page);
     await loginAsMockAdmin(page, "/llm-usage");
     await page.locator(".llm-usage-advanced-filters > summary").click();
-    const tenant = page.getByRole("textbox", { name: "Tenant", exact: true });
-    await tenant.fill("Tenant A");
-    await page.getByRole("button", { name: "Tenant A · tenant-a" }).click();
+    await page.getByLabel("Provedor").fill("litellm");
     await page.getByRole("button", { name: "Aplicar" }).click();
-    await expect(collectionRows(page).filter({ hasText: "Tenant A" })).toBeVisible();
-    await tenant.fill("Tenant B");
-    await page.getByRole("button", { name: "Tenant B · tenant-b" }).click();
-    await page.getByRole("button", { name: "Aplicar" }).click();
-    await expect(collectionRows(page).filter({ hasText: "Tenant B" })).toBeVisible();
-    releaseOldRequest();
-    await expect(collectionRows(page).filter({ hasText: "Tenant B" })).toBeVisible();
-    await expect(collectionRows(page).filter({ hasText: "Tenant A" })).toHaveCount(0);
+    await expect.poll(() => mocks.calls.filter((entry) => entry.operation === "AdminLLMUsageByTenant").length).toBeGreaterThan(1);
+    const latest = mocks.calls.filter((entry) => entry.operation === "AdminLLMUsageByTenant").at(-1);
+    expect((latest?.variables as { filter?: { provider?: string } }).filter?.provider).toBe("litellm");
   });
 
   test("IT-075 replaces prior usage with a clear refresh failure", async ({ page }) => {
     const mocks = await installMocks(page);
-    mocks.enqueue("AdminLLMUsage", usageReply("Tenant A", "inspection-a"), { errors: [{ message: "Falha ao atualizar o consumo.", extensions: { code: "INTERNAL" } }] });
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Tenant A", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } }, { errors: [{ message: "Falha ao atualizar o consumo.", extensions: { code: "INTERNAL" } }] });
+    mocks.enqueue("AdminLLMUsageByTenant", { data: { llmUsageByTenant: { nodes: [{ tenantId: "tenant-a", tenantName: "Tenant recuperado", attemptedCalls: 1, deliveredCalls: 1, inputTokens: 10, outputTokens: 5, knownReportedCostDecimal: "0", confirmedCostCalls: 0, unknownCostCalls: 0, uncertainCostCalls: 0, errorWithoutCostCalls: 0, unverifiedCostCalls: 0, costComplete: true, coverageComplete: true }], pageInfo: pageInfo() } } });
     await loginAsMockAdmin(page, "/llm-usage");
     await expect(collectionRows(page).filter({ hasText: "Tenant A" })).toBeVisible();
     await page.getByRole("button", { name: "Atualizar" }).click();
     await expect(page.getByRole("alert").getByText("Falha ao atualizar o consumo.")).toBeVisible();
-    await expect(page.getByRole("table", { name: "Chamadas de LLM" })).toHaveCount(0);
+    expect(mocks.calls.filter((call) => call.operation === "AdminLLMUsageByTenant")).toHaveLength(2);
+    await page.getByRole("button", { name: "Tentar novamente" }).click();
+    await expect(page.getByRole("button", { name: "Tenant recuperado" })).toBeVisible();
   });
 
   test("video operations filters preparations and confirms a retry", async ({ page }) => {

@@ -1,5 +1,5 @@
 {
-  "schemaSha256": "f66922c3bcdca92cf6e4652faa050ce6ad98aa0660e4de665b0da54db826f127",
+  "schemaSha256": "75598a198e5053e09651fe44e568410ab1f3baebbaff492bf0eee9debfe9e0ec",
   "capabilities": [
     {
       "root": "Query.me",
@@ -947,39 +947,32 @@
       "evidence": "IT-001"
     },
     {
-      "root": "Mutation.resendInspectionInvitation",
-      "owner": "Dashboard",
-      "persona": "manager, employee, or internal viewer",
-      "journey": "Resend a pending inspection capture invitation by email while the inspection remains in planning.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.counterpartyBaseline",
-      "owner": "Capture",
-      "persona": "COUNTERPARTY",
-      "journey": "Counterparties read the customer-safe baseline projection, response state, deadline, and resolution.",
-      "evidence": "IT-046"
-    },
-    {
-      "root": "Mutation.requestCounterpartyOtp",
-      "owner": "Capture",
-      "persona": "external participant",
-      "journey": "Counterparties request an OTP for a scoped baseline invitation.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Mutation.verifyCounterpartyOtp",
-      "owner": "Capture",
-      "persona": "external participant",
-      "journey": "Counterparties verify an OTP and receive a counterparty-only session.",
-      "evidence": "IT-001"
-    },
-    {
       "root": "Mutation.acknowledgeBaseline",
       "owner": "Capture",
       "persona": "COUNTERPARTY",
       "journey": "Counterparties acknowledge an active baseline once before its deadline.",
       "evidence": "IT-046"
+    },
+    {
+      "root": "Mutation.beginVideoCapture",
+      "owner": "Capture",
+      "persona": "authorized inspection participant",
+      "journey": "Admit one consented video attempt with server-frozen duration and size limits.",
+      "evidence": "IT-402"
+    },
+    {
+      "root": "Mutation.completeInternalUserActivation",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Verified new users create a password; existing users accept without changing theirs.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.configureVideoPolicy",
+      "owner": "Admin",
+      "persona": "tenant administrator",
+      "journey": "Version and audit tenant video duration and retention limits.",
+      "evidence": "IT-389"
     },
     {
       "root": "Mutation.contestBaseline",
@@ -1003,73 +996,10 @@
       "evidence": "IT-001"
     },
     {
-      "root": "Query.sensitiveContentScreeningBypassed",
-      "owner": "Admin",
-      "persona": "administrative user",
-      "journey": "Tenant administrator sees whether any worker has disabled sensitive content screening.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.segmentDefinitionVersion",
-      "owner": "Admin",
-      "persona": "administrative user",
-      "journey": "Read the selected segment version schema so asset registration and completion validate and submit its required attributes.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.reports",
-      "owner": "Dashboard",
-      "persona": "manager, employee, or internal viewer",
-      "journey": "Paginated latest generated reports with scoped search and classification filters.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.llmUsage",
-      "owner": "Admin",
-      "persona": "super administrator",
-      "journey": "Global paginated LLM consumption with tenant, provider, model, execution, outcome, state, cost, and historical coverage filters.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.llmUsageTenants",
-      "owner": "Admin",
-      "persona": "super administrator",
-      "journey": "Protected tenant search used to scope the global LLM consumption view without relying on the active tenant header.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.triageWorkspace",
-      "owner": "Dashboard",
-      "persona": "authenticated internal reviewer",
-      "journey": "Search and paginate scoped risk cases with matching review-state counts and filters.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.triageCase",
-      "owner": "Dashboard",
-      "persona": "authorized internal reviewer",
-      "journey": "Load the selected case report, signed evidence, findings, and durable review history.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.triageAssignees",
-      "owner": "Dashboard",
-      "persona": "authorized internal reviewer",
-      "journey": "List active reviewers eligible for the selected inspection business unit.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Mutation.updateTriageCase",
-      "owner": "Dashboard",
-      "persona": "authorized internal reviewer",
-      "journey": "Version-safe, idempotent assignment, notes, review decisions, reopen, and workflow transitions.",
-      "evidence": "IT-001"
-    },
-    {
-      "root": "Query.lookupPostalCode",
-      "owner": "Admin and onboarding",
-      "persona": "authorized administrator or onboarding applicant",
-      "journey": "Looks up Brazilian postal address components to assist manual address registration.",
+      "root": "Mutation.requestCounterpartyOtp",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties request an OTP for a scoped baseline invitation.",
       "evidence": "IT-001"
     },
     {
@@ -1080,17 +1010,17 @@
       "evidence": "IT-001"
     },
     {
-      "root": "Mutation.verifyInternalUserActivationOtp",
-      "owner": "Admin",
-      "persona": "administrative user",
-      "journey": "Only the delivered, unexpired email code advances the invitation activation.",
+      "root": "Mutation.requestVideoReplacement",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Request a new video from the participant for an inspection needing attention, with a reason and deadline.",
       "evidence": "IT-001"
     },
     {
-      "root": "Mutation.completeInternalUserActivation",
-      "owner": "Admin",
-      "persona": "administrative user",
-      "journey": "Verified new users create a password; existing users accept without changing theirs.",
+      "root": "Mutation.resendInspectionInvitation",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Resend a pending inspection capture invitation by email while the inspection remains in planning.",
       "evidence": "IT-001"
     },
     {
@@ -1098,6 +1028,125 @@
       "owner": "Admin",
       "persona": "administrative user",
       "journey": "Retry invitation delivery while preserving the single tenant membership.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.updateTriageCase",
+      "owner": "Dashboard",
+      "persona": "authorized internal reviewer",
+      "journey": "Version-safe, idempotent assignment, notes, review decisions, reopen, and workflow transitions.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.verifyCounterpartyOtp",
+      "owner": "Capture",
+      "persona": "external participant",
+      "journey": "Counterparties verify an OTP and receive a counterparty-only session.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Mutation.verifyInternalUserActivationOtp",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Only the delivered, unexpired email code advances the invitation activation.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.counterpartyBaseline",
+      "owner": "Capture",
+      "persona": "COUNTERPARTY",
+      "journey": "Counterparties read the customer-safe baseline projection, response state, deadline, and resolution.",
+      "evidence": "IT-046"
+    },
+    {
+      "root": "Query.llmUsage",
+      "owner": "Admin",
+      "persona": "super administrator",
+      "journey": "Global paginated LLM consumption with tenant, provider, model, execution, outcome, state, cost, and historical coverage filters.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.llmUsageByInspection",
+      "owner": "Admin",
+      "persona": "super admin",
+      "journey": "Paginated LLM cost totals by inspection, including calls without an inspection.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.llmUsageByTenant",
+      "owner": "Admin",
+      "persona": "super admin",
+      "journey": "Paginated LLM cost totals by tenant with shared filters and coverage state.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.llmUsageTenants",
+      "owner": "Admin",
+      "persona": "super administrator",
+      "journey": "Protected tenant search used to scope the global LLM consumption view without relying on the active tenant header.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.lookupPostalCode",
+      "owner": "Admin and onboarding",
+      "persona": "authorized administrator or onboarding applicant",
+      "journey": "Looks up Brazilian postal address components to assist manual address registration.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.reports",
+      "owner": "Dashboard",
+      "persona": "manager, employee, or internal viewer",
+      "journey": "Paginated latest generated reports with scoped search and classification filters.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.segmentDefinitionVersion",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Read the selected segment version schema so asset registration and completion validate and submit its required attributes.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.sensitiveContentScreeningBypassed",
+      "owner": "Admin",
+      "persona": "administrative user",
+      "journey": "Tenant administrator sees whether any worker has disabled sensitive content screening.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.sensitiveMediaOriginal",
+      "owner": "Dashboard",
+      "persona": "manager or tenant administrator",
+      "journey": "View a short lived sensitive original after recording the internal reviewer and request correlation.",
+      "evidence": "A2"
+    },
+    {
+      "root": "Query.sensitiveMediaReviews",
+      "owner": "Dashboard",
+      "persona": "manager or tenant administrator",
+      "journey": "List blocked undecided media in the caller's tenant and inspection scope with cursor pagination.",
+      "evidence": "A1"
+    },
+    {
+      "root": "Query.triageAssignees",
+      "owner": "Dashboard",
+      "persona": "authorized internal reviewer",
+      "journey": "List active reviewers eligible for the selected inspection business unit.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.triageCase",
+      "owner": "Dashboard",
+      "persona": "authorized internal reviewer",
+      "journey": "Load the selected case report, signed evidence, findings, and durable review history.",
+      "evidence": "IT-001"
+    },
+    {
+      "root": "Query.triageWorkspace",
+      "owner": "Dashboard",
+      "persona": "authenticated internal reviewer",
+      "journey": "Search and paginate scoped risk cases with matching review-state counts and filters.",
       "evidence": "IT-001"
     },
     {
@@ -1113,41 +1162,6 @@
       "persona": "authenticated capture participant",
       "journey": "Reconcile server-confirmed multipart parts for the active video capture.",
       "evidence": "IT-423"
-    },
-    {
-      "root": "Mutation.beginVideoCapture",
-      "owner": "Capture",
-      "persona": "authorized inspection participant",
-      "journey": "Admit one consented video attempt with server-frozen duration and size limits.",
-      "evidence": "IT-402"
-    },
-    {
-      "root": "Mutation.configureVideoPolicy",
-      "owner": "Admin",
-      "persona": "tenant administrator",
-      "journey": "Version and audit tenant video duration and retention limits.",
-      "evidence": "IT-389"
-    },
-    {
-      "root": "Query.sensitiveMediaReviews",
-      "owner": "Dashboard",
-      "persona": "manager or tenant administrator",
-      "journey": "List blocked undecided media in the caller's tenant and inspection scope with cursor pagination.",
-      "evidence": "A1"
-    },
-    {
-      "root": "Query.sensitiveMediaOriginal",
-      "owner": "Dashboard",
-      "persona": "manager or tenant administrator",
-      "journey": "View a short lived sensitive original after recording the internal reviewer and request correlation.",
-      "evidence": "A2"
-    },
-    {
-      "root": "Mutation.requestVideoReplacement",
-      "owner": "Dashboard",
-      "persona": "manager, employee, or internal viewer",
-      "journey": "Request a new video from the participant for an inspection needing attention, with a reason and deadline.",
-      "evidence": "IT-001"
     }
   ],
   "products": [
@@ -1157,227 +1171,237 @@
         {
           "name": "AdminAccess",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminActivateTemplateVersion",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminAnalysisPrompt",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminApplyVideoLegalHold",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminAssets",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminAudit",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminBaselinePolicy",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminCatalogs",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminCompleteInternalUserActivation",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminConfigurePublicationPolicy",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminConfigureVideoPolicy",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminCorrectInspectionResponsibleEmail",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminCreateBusinessUnit",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminGate",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminHistory",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminIdentity",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminInspectionLLMUsage",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminInviteInternalUser",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminLLMUsage",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
+        },
+        {
+          "name": "AdminLLMUsageByInspection",
+          "type": "query",
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
+        },
+        {
+          "name": "AdminLLMUsageByTenant",
+          "type": "query",
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminLLMUsageTenants",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminLookupPostalCode",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminNotificationDeliveries",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminOrganization",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminPublicationPolicy",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminPublishTemplateVersion",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminRecordVideoDeletionRequest",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminRegisterAsset",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminReleaseVideoLegalHold",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminReprocessVideoPreparation",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminRequestInternalUserActivationOtp",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminResendInternalUserInvitation",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminRetentionPolicies",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminRetryVideoPreparation",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminSegmentDefinitionVersion",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminSensitiveContentScreeningStatus",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminTemplateVersion",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminUpdateAnalysisPrompt",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminUpdateAsset",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminUpdateBaselinePolicy",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminUpsertParticipant",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminVerifyInternalUserActivationOtp",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminVideoPolicy",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminVideoPreparationEvidence",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "AdminVideoPreparations",
           "type": "query",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         },
         {
           "name": "BootstrapTenant",
           "type": "mutation",
-          "documentSha256": "b0233c33793a2f679723bab75cf2ad8e8bec5b42b5767785c1952764f4468407"
+          "documentSha256": "b68a53774954b2fa0f8ed1a4adb98e550686765101a42a5c419e4edc5194b9a6"
         }
       ]
     },

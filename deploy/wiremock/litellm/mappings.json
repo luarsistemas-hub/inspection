@@ -13,7 +13,8 @@
     "status": 200,
     "headers": {
       "Content-Type": "application/json",
-      "X-LiteLLM-Call-ID": "stub-request-1"
+      "X-LiteLLM-Call-ID": "stub-request-1",
+      "X-LiteLLM-Response-Cost": "0"
     },
     "jsonBody": {
       "id": "stub-request-1",

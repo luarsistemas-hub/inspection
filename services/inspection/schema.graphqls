@@ -56,8 +56,10 @@ type Query {
   myNotifications(unreadOnly: Boolean = false, kind: String, projectId: ID, first: Int = 25, after: String): RecipientNotificationConnection!
   retentionPolicies: RetentionPolicyConnection!
   usageSummary(from: String, to: String): UsageSummary!
-  inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, first: Int = 25, after: String): InspectionLLMUsage!
+  inspectionLLMUsage(inspectionId: ID!, mode: LLMExecutionMode = LIVE, includeTestData: Boolean = false, first: Int = 25, after: String): InspectionLLMUsage!
   llmUsage(filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsage!
+  llmUsageByTenant(filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsageTenantConnection!
+  llmUsageByInspection(tenantId: ID!, filter: LLMUsageFilter, first: Int = 25, after: String): LLMUsageInspectionConnection!
   llmUsageTenants(search: String, first: Int = 25, after: String): TenantConnection!
   externalCapture: ExternalCapture!
   videoPolicy: VideoPolicy!
@@ -430,8 +432,10 @@ type RetentionPolicyConnection { nodes: [RetentionPolicy!]! pageInfo: PageInfo! 
 type UsageSummary { from: String! to: String! requests: Int! inputTokens: Int! outputTokens: Int! cost: Float }
 enum LLMExecutionMode { LIVE MOCK }
 enum LLMCallState { STARTED FINISHED }
-enum LLMUsageCostState { INFORMED MISSING }
-input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState }
+enum LLMUsageCostState { INFORMED MISSING UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
+enum LLMUsageCostSource { HEADER BODY UNKNOWN ERROR_WITHOUT_COST UNVERIFIED UNCERTAIN NOT_SENT }
+enum LLMCostState { CONFIRMED UNKNOWN UNCERTAIN ERROR_WITHOUT_COST UNVERIFIED NOT_SENT }
+input LLMUsageFilter { from: String to: String tenantId: ID inspectionId: ID withoutInspection: Boolean = false provider: String model: String modelAlias: String mode: LLMExecutionMode = LIVE technicalOutcome: String state: LLMCallState cost: LLMUsageCostState includeTestData: Boolean = false }
 type LLMUsage {
   from: String!
   to: String!
@@ -445,18 +449,26 @@ type LLMUsage {
   knownCacheCalls: Int!
   unknownCacheCalls: Int!
   knownReportedCost: Float!
+  knownReportedCostDecimal: String!
   unknownCostCalls: Int!
+  uncertainCostCalls: Int!
+  errorWithoutCostCalls: Int!
+  unverifiedCostCalls: Int!
   costComplete: Boolean!
   coverageStartedAt: String
   coverageComplete: Boolean!
   calls: [GlobalLLMCallUsage!]!
   pageInfo: PageInfo!
 }
+type LLMUsageTenant { tenantId: ID! tenantName: String! attemptedCalls: Int! deliveredCalls: Int! inputTokens: Int! outputTokens: Int! knownReportedCostDecimal: String! confirmedCostCalls: Int! unknownCostCalls: Int! uncertainCostCalls: Int! errorWithoutCostCalls: Int! unverifiedCostCalls: Int! costComplete: Boolean! coverageComplete: Boolean! }
+type LLMUsageTenantConnection { nodes: [LLMUsageTenant!]! pageInfo: PageInfo! }
+type LLMUsageInspection { inspectionId: ID inspectionLabel: String! attemptedCalls: Int! deliveredCalls: Int! inputTokens: Int! outputTokens: Int! knownReportedCostDecimal: String! confirmedCostCalls: Int! unknownCostCalls: Int! uncertainCostCalls: Int! errorWithoutCostCalls: Int! unverifiedCostCalls: Int! costComplete: Boolean! coverageComplete: Boolean! }
+type LLMUsageInspectionConnection { nodes: [LLMUsageInspection!]! pageInfo: PageInfo! }
 type GlobalLLMCallUsage {
   callId: ID!
   tenantId: ID!
   tenantName: String!
-  inspectionId: ID!
+  inspectionId: ID
   jobId: ID!
   eventId: ID!
   executionId: ID!
@@ -469,6 +481,10 @@ type GlobalLLMCallUsage {
   provider: String
   model: String
   gatewayRequestId: String
+  gatewayCallId: String
+  reportedCostDecimal: String
+  costSource: LLMUsageCostSource
+  costState: LLMCostState!
   state: LLMCallState!
   technicalOutcome: String!
   transportDelivered: Boolean
@@ -496,7 +512,11 @@ type InspectionLLMUsage {
   knownCacheCalls: Int!
   unknownCacheCalls: Int!
   knownReportedCost: Float!
+  knownReportedCostDecimal: String!
   unknownCostCalls: Int!
+  uncertainCostCalls: Int!
+  errorWithoutCostCalls: Int!
+  unverifiedCostCalls: Int!
   costComplete: Boolean!
   coverageStartedAt: String
   coverageComplete: Boolean!
@@ -517,6 +537,10 @@ type LLMCallUsage {
   provider: String
   model: String
   gatewayRequestId: String
+  gatewayCallId: String
+  reportedCostDecimal: String
+  costSource: LLMUsageCostSource
+  costState: LLMCostState!
   state: LLMCallState!
   technicalOutcome: String!
   transportDelivered: Boolean

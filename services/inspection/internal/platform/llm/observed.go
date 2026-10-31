@@ -79,8 +79,9 @@ func (g ObservedGateway) CompleteStructured(ctx context.Context, request Structu
 	if g.Ledger != nil {
 		finishContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		finishErr := g.Ledger.Finish(finishContext, CallFinish{
-			CallID: callID, Provider: result.Provider, Model: result.Model, GatewayRequestID: result.GatewayRequestID,
+			CallID: callID, Provider: result.Provider, Model: result.Model, GatewayRequestID: result.GatewayRequestID, GatewayCallID: result.GatewayCallID,
 			TechnicalOutcome: outcome, InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, Cost: result.Cost,
+			ReportedCostDecimal: result.ReportedCostDecimal, CostSource: result.CostSource,
 			CachedInputTokens: result.CachedInputTokens, ImageCount: len(request.Images), RequestBodyBytes: result.RequestBodyBytes,
 			TransportDelivered: result.TransportDelivered, HTTPStatus: result.HTTPStatus, Duration: duration, FinishedAt: time.Now().UTC(),
 		})

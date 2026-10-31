@@ -216,6 +216,7 @@
 .admin-focus-row[data-focused="true"] { border-radius: .5rem; border-block-end-color: transparent; background: var(--focus-selected); }
 .admin-focus-row-main { display: grid; gap: .18rem; min-inline-size: 0; }
 .admin-focus-row-main > span { color: var(--inspection-muted); font-size: .74rem; overflow-wrap: anywhere; }
+.llm-aggregate-status { font-size: .72rem; }
 .admin-focus-row-side { display: flex; align-items: center; gap: .6rem; }
 .admin-focus-row-side time { color: var(--inspection-brand-strong); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .admin-focus-row-side .inspection-status { flex: none; max-inline-size: 9rem; }

@@ -14,3 +14,9 @@ model_list:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+
+router_settings:
+  num_retries: 0
+
+litellm_settings:
+  request_timeout: 25

@@ -36,7 +36,8 @@ func TestLedgerPersistsStartAndFinishWithPartialUsage(t *testing.T) {
 	inputTokens := int64(17)
 	cachedTokens, imageCount, requestBytes := int64(5), 3, int64(4096)
 	if err := ledger.Finish(ctx, llm.CallFinish{
-		CallID: callID.String(), Provider: "provider", Model: "model", GatewayRequestID: "request",
+		CallID: callID.String(), Provider: "provider", Model: "model", GatewayRequestID: "request", GatewayCallID: "litellm-call-1",
+		ReportedCostDecimal: stringPtr("0.00000012"), CostSource: "header",
 		TechnicalOutcome: "success", TransportDelivered: true, HTTPStatus: 200, InputTokens: &inputTokens,
 		CachedInputTokens: &cachedTokens, ImageCount: imageCount, RequestBodyBytes: requestBytes,
 		Duration: 1500 * time.Millisecond, FinishedAt: startedAt.Add(2 * time.Second),
@@ -50,13 +51,18 @@ func TestLedgerPersistsStartAndFinishWithPartialUsage(t *testing.T) {
 	if row.State != "FINISHED" || row.TechnicalOutcome != "success" || row.Provider != "provider" || row.Model != "model" || row.GatewayRequestID != "request" {
 		t.Fatalf("unexpected ledger row: %+v", row)
 	}
-	if row.TransportDelivered == nil || !*row.TransportDelivered || row.InputTokens == nil || *row.InputTokens != inputTokens || row.CachedInputTokens == nil || *row.CachedInputTokens != cachedTokens || row.ImageCount == nil || *row.ImageCount != imageCount || row.RequestBodyBytes == nil || *row.RequestBodyBytes != requestBytes || row.OutputTokens != nil || row.ReportedCost != nil {
+	if row.GatewayCallID != "litellm-call-1" || row.CostSource == nil || *row.CostSource != "header" || row.ReportedCost == nil {
+		t.Fatalf("cost provenance was not preserved: %+v", row)
+	}
+	if row.TransportDelivered == nil || !*row.TransportDelivered || row.InputTokens == nil || *row.InputTokens != inputTokens || row.CachedInputTokens == nil || *row.CachedInputTokens != cachedTokens || row.ImageCount == nil || *row.ImageCount != imageCount || row.RequestBodyBytes == nil || *row.RequestBodyBytes != requestBytes || row.OutputTokens != nil {
 		t.Fatalf("partial usage was not preserved: %+v", row)
 	}
 	if row.HTTPStatus == nil || *row.HTTPStatus != 200 || row.DurationMS == nil || *row.DurationMS != 1500 {
 		t.Fatalf("technical metadata was not preserved: %+v", row)
 	}
 }
+
+func stringPtr(value string) *string { return &value }
 
 func TestOriginVideoScopeLedgerAllowsMissingInspection(t *testing.T) {
 	db := ledgerDB(t)

@@ -5,6 +5,12 @@ exec:
 model:
   filename: internal/platform/graphql/models_gen.go
 models:
+  Query:
+    fields:
+      llmUsageByTenant:
+        resolver: true
+      llmUsageByInspection:
+        resolver: true
   JSON:
     model:
       - github.com/99designs/gqlgen/graphql.Map

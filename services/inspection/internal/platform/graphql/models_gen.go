@@ -748,35 +748,39 @@ type ExternalSessionPayload struct {
 }
 
 type GlobalLLMCallUsage struct {
-	CallID             string           `json:"callId"`
-	TenantID           string           `json:"tenantId"`
-	TenantName         string           `json:"tenantName"`
-	InspectionID       string           `json:"inspectionId"`
-	JobID              string           `json:"jobId"`
-	EventID            string           `json:"eventId"`
-	ExecutionID        string           `json:"executionId"`
-	CorrelationID      string           `json:"correlationId"`
-	Attempt            int              `json:"attempt"`
-	ReplayGeneration   int              `json:"replayGeneration"`
-	Mode               LLMExecutionMode `json:"mode"`
-	ComparisonMode     string           `json:"comparisonMode"`
-	ModelAlias         string           `json:"modelAlias"`
-	Provider           *string          `json:"provider,omitempty"`
-	Model              *string          `json:"model,omitempty"`
-	GatewayRequestID   *string          `json:"gatewayRequestId,omitempty"`
-	State              LLMCallState     `json:"state"`
-	TechnicalOutcome   string           `json:"technicalOutcome"`
-	TransportDelivered *bool            `json:"transportDelivered,omitempty"`
-	HTTPStatus         *int             `json:"httpStatus,omitempty"`
-	InputTokens        *int             `json:"inputTokens,omitempty"`
-	OutputTokens       *int             `json:"outputTokens,omitempty"`
-	CachedInputTokens  *int             `json:"cachedInputTokens,omitempty"`
-	ImageCount         *int             `json:"imageCount,omitempty"`
-	RequestBodyBytes   *int             `json:"requestBodyBytes,omitempty"`
-	ReportedCost       *float64         `json:"reportedCost,omitempty"`
-	DurationMs         *int             `json:"durationMs,omitempty"`
-	StartedAt          string           `json:"startedAt"`
-	FinishedAt         *string          `json:"finishedAt,omitempty"`
+	CallID              string              `json:"callId"`
+	TenantID            string              `json:"tenantId"`
+	TenantName          string              `json:"tenantName"`
+	InspectionID        *string             `json:"inspectionId,omitempty"`
+	JobID               string              `json:"jobId"`
+	EventID             string              `json:"eventId"`
+	ExecutionID         string              `json:"executionId"`
+	CorrelationID       string              `json:"correlationId"`
+	Attempt             int                 `json:"attempt"`
+	ReplayGeneration    int                 `json:"replayGeneration"`
+	Mode                LLMExecutionMode    `json:"mode"`
+	ComparisonMode      string              `json:"comparisonMode"`
+	ModelAlias          string              `json:"modelAlias"`
+	Provider            *string             `json:"provider,omitempty"`
+	Model               *string             `json:"model,omitempty"`
+	GatewayRequestID    *string             `json:"gatewayRequestId,omitempty"`
+	GatewayCallID       *string             `json:"gatewayCallId,omitempty"`
+	ReportedCostDecimal *string             `json:"reportedCostDecimal,omitempty"`
+	CostSource          *LLMUsageCostSource `json:"costSource,omitempty"`
+	CostState           LLMCostState        `json:"costState"`
+	State               LLMCallState        `json:"state"`
+	TechnicalOutcome    string              `json:"technicalOutcome"`
+	TransportDelivered  *bool               `json:"transportDelivered,omitempty"`
+	HTTPStatus          *int                `json:"httpStatus,omitempty"`
+	InputTokens         *int                `json:"inputTokens,omitempty"`
+	OutputTokens        *int                `json:"outputTokens,omitempty"`
+	CachedInputTokens   *int                `json:"cachedInputTokens,omitempty"`
+	ImageCount          *int                `json:"imageCount,omitempty"`
+	RequestBodyBytes    *int                `json:"requestBodyBytes,omitempty"`
+	ReportedCost        *float64            `json:"reportedCost,omitempty"`
+	DurationMs          *int                `json:"durationMs,omitempty"`
+	StartedAt           string              `json:"startedAt"`
+	FinishedAt          *string             `json:"finishedAt,omitempty"`
 }
 
 type Inspection struct {
@@ -831,24 +835,28 @@ type InspectionConnection struct {
 }
 
 type InspectionLLMUsage struct {
-	InspectionID      string           `json:"inspectionId"`
-	Mode              LLMExecutionMode `json:"mode"`
-	AttemptedCalls    int              `json:"attemptedCalls"`
-	DeliveredCalls    int              `json:"deliveredCalls"`
-	IncompleteCalls   int              `json:"incompleteCalls"`
-	InputTokens       int              `json:"inputTokens"`
-	OutputTokens      int              `json:"outputTokens"`
-	CachedInputTokens int              `json:"cachedInputTokens"`
-	CacheHitCalls     int              `json:"cacheHitCalls"`
-	KnownCacheCalls   int              `json:"knownCacheCalls"`
-	UnknownCacheCalls int              `json:"unknownCacheCalls"`
-	KnownReportedCost float64          `json:"knownReportedCost"`
-	UnknownCostCalls  int              `json:"unknownCostCalls"`
-	CostComplete      bool             `json:"costComplete"`
-	CoverageStartedAt *string          `json:"coverageStartedAt,omitempty"`
-	CoverageComplete  bool             `json:"coverageComplete"`
-	Calls             []*LLMCallUsage  `json:"calls"`
-	PageInfo          *PageInfo        `json:"pageInfo"`
+	InspectionID             string           `json:"inspectionId"`
+	Mode                     LLMExecutionMode `json:"mode"`
+	AttemptedCalls           int              `json:"attemptedCalls"`
+	DeliveredCalls           int              `json:"deliveredCalls"`
+	IncompleteCalls          int              `json:"incompleteCalls"`
+	InputTokens              int              `json:"inputTokens"`
+	OutputTokens             int              `json:"outputTokens"`
+	CachedInputTokens        int              `json:"cachedInputTokens"`
+	CacheHitCalls            int              `json:"cacheHitCalls"`
+	KnownCacheCalls          int              `json:"knownCacheCalls"`
+	UnknownCacheCalls        int              `json:"unknownCacheCalls"`
+	KnownReportedCost        float64          `json:"knownReportedCost"`
+	KnownReportedCostDecimal string           `json:"knownReportedCostDecimal"`
+	UnknownCostCalls         int              `json:"unknownCostCalls"`
+	UncertainCostCalls       int              `json:"uncertainCostCalls"`
+	ErrorWithoutCostCalls    int              `json:"errorWithoutCostCalls"`
+	UnverifiedCostCalls      int              `json:"unverifiedCostCalls"`
+	CostComplete             bool             `json:"costComplete"`
+	CoverageStartedAt        *string          `json:"coverageStartedAt,omitempty"`
+	CoverageComplete         bool             `json:"coverageComplete"`
+	Calls                    []*LLMCallUsage  `json:"calls"`
+	PageInfo                 *PageInfo        `json:"pageInfo"`
 }
 
 type InspectionOriginPromotionActiveOrigin struct {
@@ -1112,67 +1120,121 @@ type InviteOriginCaptureInput struct {
 }
 
 type LLMCallUsage struct {
-	CallID             string           `json:"callId"`
-	JobID              string           `json:"jobId"`
-	EventID            string           `json:"eventId"`
-	ExecutionID        string           `json:"executionId"`
-	CorrelationID      string           `json:"correlationId"`
-	Attempt            int              `json:"attempt"`
-	ReplayGeneration   int              `json:"replayGeneration"`
-	Mode               LLMExecutionMode `json:"mode"`
-	ComparisonMode     string           `json:"comparisonMode"`
-	ModelAlias         string           `json:"modelAlias"`
-	Provider           *string          `json:"provider,omitempty"`
-	Model              *string          `json:"model,omitempty"`
-	GatewayRequestID   *string          `json:"gatewayRequestId,omitempty"`
-	State              LLMCallState     `json:"state"`
-	TechnicalOutcome   string           `json:"technicalOutcome"`
-	TransportDelivered *bool            `json:"transportDelivered,omitempty"`
-	HTTPStatus         *int             `json:"httpStatus,omitempty"`
-	InputTokens        *int             `json:"inputTokens,omitempty"`
-	OutputTokens       *int             `json:"outputTokens,omitempty"`
-	CachedInputTokens  *int             `json:"cachedInputTokens,omitempty"`
-	ImageCount         *int             `json:"imageCount,omitempty"`
-	RequestBodyBytes   *int             `json:"requestBodyBytes,omitempty"`
-	ReportedCost       *float64         `json:"reportedCost,omitempty"`
-	DurationMs         *int             `json:"durationMs,omitempty"`
-	StartedAt          string           `json:"startedAt"`
-	FinishedAt         *string          `json:"finishedAt,omitempty"`
+	CallID              string              `json:"callId"`
+	JobID               string              `json:"jobId"`
+	EventID             string              `json:"eventId"`
+	ExecutionID         string              `json:"executionId"`
+	CorrelationID       string              `json:"correlationId"`
+	Attempt             int                 `json:"attempt"`
+	ReplayGeneration    int                 `json:"replayGeneration"`
+	Mode                LLMExecutionMode    `json:"mode"`
+	ComparisonMode      string              `json:"comparisonMode"`
+	ModelAlias          string              `json:"modelAlias"`
+	Provider            *string             `json:"provider,omitempty"`
+	Model               *string             `json:"model,omitempty"`
+	GatewayRequestID    *string             `json:"gatewayRequestId,omitempty"`
+	GatewayCallID       *string             `json:"gatewayCallId,omitempty"`
+	ReportedCostDecimal *string             `json:"reportedCostDecimal,omitempty"`
+	CostSource          *LLMUsageCostSource `json:"costSource,omitempty"`
+	CostState           LLMCostState        `json:"costState"`
+	State               LLMCallState        `json:"state"`
+	TechnicalOutcome    string              `json:"technicalOutcome"`
+	TransportDelivered  *bool               `json:"transportDelivered,omitempty"`
+	HTTPStatus          *int                `json:"httpStatus,omitempty"`
+	InputTokens         *int                `json:"inputTokens,omitempty"`
+	OutputTokens        *int                `json:"outputTokens,omitempty"`
+	CachedInputTokens   *int                `json:"cachedInputTokens,omitempty"`
+	ImageCount          *int                `json:"imageCount,omitempty"`
+	RequestBodyBytes    *int                `json:"requestBodyBytes,omitempty"`
+	ReportedCost        *float64            `json:"reportedCost,omitempty"`
+	DurationMs          *int                `json:"durationMs,omitempty"`
+	StartedAt           string              `json:"startedAt"`
+	FinishedAt          *string             `json:"finishedAt,omitempty"`
 }
 
 type LLMUsage struct {
-	From              string                `json:"from"`
-	To                string                `json:"to"`
-	AttemptedCalls    int                   `json:"attemptedCalls"`
-	DeliveredCalls    int                   `json:"deliveredCalls"`
-	IncompleteCalls   int                   `json:"incompleteCalls"`
-	InputTokens       int                   `json:"inputTokens"`
-	OutputTokens      int                   `json:"outputTokens"`
-	CachedInputTokens int                   `json:"cachedInputTokens"`
-	CacheHitCalls     int                   `json:"cacheHitCalls"`
-	KnownCacheCalls   int                   `json:"knownCacheCalls"`
-	UnknownCacheCalls int                   `json:"unknownCacheCalls"`
-	KnownReportedCost float64               `json:"knownReportedCost"`
-	UnknownCostCalls  int                   `json:"unknownCostCalls"`
-	CostComplete      bool                  `json:"costComplete"`
-	CoverageStartedAt *string               `json:"coverageStartedAt,omitempty"`
-	CoverageComplete  bool                  `json:"coverageComplete"`
-	Calls             []*GlobalLLMCallUsage `json:"calls"`
-	PageInfo          *PageInfo             `json:"pageInfo"`
+	From                     string                `json:"from"`
+	To                       string                `json:"to"`
+	AttemptedCalls           int                   `json:"attemptedCalls"`
+	DeliveredCalls           int                   `json:"deliveredCalls"`
+	IncompleteCalls          int                   `json:"incompleteCalls"`
+	InputTokens              int                   `json:"inputTokens"`
+	OutputTokens             int                   `json:"outputTokens"`
+	CachedInputTokens        int                   `json:"cachedInputTokens"`
+	CacheHitCalls            int                   `json:"cacheHitCalls"`
+	KnownCacheCalls          int                   `json:"knownCacheCalls"`
+	UnknownCacheCalls        int                   `json:"unknownCacheCalls"`
+	KnownReportedCost        float64               `json:"knownReportedCost"`
+	KnownReportedCostDecimal string                `json:"knownReportedCostDecimal"`
+	UnknownCostCalls         int                   `json:"unknownCostCalls"`
+	UncertainCostCalls       int                   `json:"uncertainCostCalls"`
+	ErrorWithoutCostCalls    int                   `json:"errorWithoutCostCalls"`
+	UnverifiedCostCalls      int                   `json:"unverifiedCostCalls"`
+	CostComplete             bool                  `json:"costComplete"`
+	CoverageStartedAt        *string               `json:"coverageStartedAt,omitempty"`
+	CoverageComplete         bool                  `json:"coverageComplete"`
+	Calls                    []*GlobalLLMCallUsage `json:"calls"`
+	PageInfo                 *PageInfo             `json:"pageInfo"`
 }
 
 type LLMUsageFilter struct {
-	From             *string            `json:"from,omitempty"`
-	To               *string            `json:"to,omitempty"`
-	TenantID         *string            `json:"tenantId,omitempty"`
-	InspectionID     *string            `json:"inspectionId,omitempty"`
-	Provider         *string            `json:"provider,omitempty"`
-	Model            *string            `json:"model,omitempty"`
-	ModelAlias       *string            `json:"modelAlias,omitempty"`
-	Mode             *LLMExecutionMode  `json:"mode,omitempty"`
-	TechnicalOutcome *string            `json:"technicalOutcome,omitempty"`
-	State            *LLMCallState      `json:"state,omitempty"`
-	Cost             *LLMUsageCostState `json:"cost,omitempty"`
+	From              *string            `json:"from,omitempty"`
+	To                *string            `json:"to,omitempty"`
+	TenantID          *string            `json:"tenantId,omitempty"`
+	InspectionID      *string            `json:"inspectionId,omitempty"`
+	WithoutInspection *bool              `json:"withoutInspection,omitempty"`
+	Provider          *string            `json:"provider,omitempty"`
+	Model             *string            `json:"model,omitempty"`
+	ModelAlias        *string            `json:"modelAlias,omitempty"`
+	Mode              *LLMExecutionMode  `json:"mode,omitempty"`
+	TechnicalOutcome  *string            `json:"technicalOutcome,omitempty"`
+	State             *LLMCallState      `json:"state,omitempty"`
+	Cost              *LLMUsageCostState `json:"cost,omitempty"`
+	IncludeTestData   *bool              `json:"includeTestData,omitempty"`
+}
+
+type LLMUsageInspection struct {
+	InspectionID             *string `json:"inspectionId,omitempty"`
+	InspectionLabel          string  `json:"inspectionLabel"`
+	AttemptedCalls           int     `json:"attemptedCalls"`
+	DeliveredCalls           int     `json:"deliveredCalls"`
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	KnownReportedCostDecimal string  `json:"knownReportedCostDecimal"`
+	ConfirmedCostCalls       int     `json:"confirmedCostCalls"`
+	UnknownCostCalls         int     `json:"unknownCostCalls"`
+	UncertainCostCalls       int     `json:"uncertainCostCalls"`
+	ErrorWithoutCostCalls    int     `json:"errorWithoutCostCalls"`
+	UnverifiedCostCalls      int     `json:"unverifiedCostCalls"`
+	CostComplete             bool    `json:"costComplete"`
+	CoverageComplete         bool    `json:"coverageComplete"`
+}
+
+type LLMUsageInspectionConnection struct {
+	Nodes    []*LLMUsageInspection `json:"nodes"`
+	PageInfo *PageInfo             `json:"pageInfo"`
+}
+
+type LLMUsageTenant struct {
+	TenantID                 string `json:"tenantId"`
+	TenantName               string `json:"tenantName"`
+	AttemptedCalls           int    `json:"attemptedCalls"`
+	DeliveredCalls           int    `json:"deliveredCalls"`
+	InputTokens              int    `json:"inputTokens"`
+	OutputTokens             int    `json:"outputTokens"`
+	KnownReportedCostDecimal string `json:"knownReportedCostDecimal"`
+	ConfirmedCostCalls       int    `json:"confirmedCostCalls"`
+	UnknownCostCalls         int    `json:"unknownCostCalls"`
+	UncertainCostCalls       int    `json:"uncertainCostCalls"`
+	ErrorWithoutCostCalls    int    `json:"errorWithoutCostCalls"`
+	UnverifiedCostCalls      int    `json:"unverifiedCostCalls"`
+	CostComplete             bool   `json:"costComplete"`
+	CoverageComplete         bool   `json:"coverageComplete"`
+}
+
+type LLMUsageTenantConnection struct {
+	Nodes    []*LLMUsageTenant `json:"nodes"`
+	PageInfo *PageInfo         `json:"pageInfo"`
 }
 
 type LegalHoldInput struct {
@@ -3171,6 +3233,69 @@ func (e LLMCallState) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type LLMCostState string
+
+const (
+	LLMCostStateConfirmed        LLMCostState = "CONFIRMED"
+	LLMCostStateUnknown          LLMCostState = "UNKNOWN"
+	LLMCostStateUncertain        LLMCostState = "UNCERTAIN"
+	LLMCostStateErrorWithoutCost LLMCostState = "ERROR_WITHOUT_COST"
+	LLMCostStateUnverified       LLMCostState = "UNVERIFIED"
+	LLMCostStateNotSent          LLMCostState = "NOT_SENT"
+)
+
+var AllLLMCostState = []LLMCostState{
+	LLMCostStateConfirmed,
+	LLMCostStateUnknown,
+	LLMCostStateUncertain,
+	LLMCostStateErrorWithoutCost,
+	LLMCostStateUnverified,
+	LLMCostStateNotSent,
+}
+
+func (e LLMCostState) IsValid() bool {
+	switch e {
+	case LLMCostStateConfirmed, LLMCostStateUnknown, LLMCostStateUncertain, LLMCostStateErrorWithoutCost, LLMCostStateUnverified, LLMCostStateNotSent:
+		return true
+	}
+	return false
+}
+
+func (e LLMCostState) String() string {
+	return string(e)
+}
+
+func (e *LLMCostState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LLMCostState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LLMCostState", str)
+	}
+	return nil
+}
+
+func (e LLMCostState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LLMCostState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LLMCostState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type LLMExecutionMode string
 
 const (
@@ -3226,21 +3351,94 @@ func (e LLMExecutionMode) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type LLMUsageCostSource string
+
+const (
+	LLMUsageCostSourceHeader           LLMUsageCostSource = "HEADER"
+	LLMUsageCostSourceBody             LLMUsageCostSource = "BODY"
+	LLMUsageCostSourceUnknown          LLMUsageCostSource = "UNKNOWN"
+	LLMUsageCostSourceErrorWithoutCost LLMUsageCostSource = "ERROR_WITHOUT_COST"
+	LLMUsageCostSourceUnverified       LLMUsageCostSource = "UNVERIFIED"
+	LLMUsageCostSourceUncertain        LLMUsageCostSource = "UNCERTAIN"
+	LLMUsageCostSourceNotSent          LLMUsageCostSource = "NOT_SENT"
+)
+
+var AllLLMUsageCostSource = []LLMUsageCostSource{
+	LLMUsageCostSourceHeader,
+	LLMUsageCostSourceBody,
+	LLMUsageCostSourceUnknown,
+	LLMUsageCostSourceErrorWithoutCost,
+	LLMUsageCostSourceUnverified,
+	LLMUsageCostSourceUncertain,
+	LLMUsageCostSourceNotSent,
+}
+
+func (e LLMUsageCostSource) IsValid() bool {
+	switch e {
+	case LLMUsageCostSourceHeader, LLMUsageCostSourceBody, LLMUsageCostSourceUnknown, LLMUsageCostSourceErrorWithoutCost, LLMUsageCostSourceUnverified, LLMUsageCostSourceUncertain, LLMUsageCostSourceNotSent:
+		return true
+	}
+	return false
+}
+
+func (e LLMUsageCostSource) String() string {
+	return string(e)
+}
+
+func (e *LLMUsageCostSource) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LLMUsageCostSource(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LLMUsageCostSource", str)
+	}
+	return nil
+}
+
+func (e LLMUsageCostSource) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LLMUsageCostSource) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LLMUsageCostSource) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type LLMUsageCostState string
 
 const (
-	LLMUsageCostStateInformed LLMUsageCostState = "INFORMED"
-	LLMUsageCostStateMissing  LLMUsageCostState = "MISSING"
+	LLMUsageCostStateInformed         LLMUsageCostState = "INFORMED"
+	LLMUsageCostStateMissing          LLMUsageCostState = "MISSING"
+	LLMUsageCostStateUncertain        LLMUsageCostState = "UNCERTAIN"
+	LLMUsageCostStateErrorWithoutCost LLMUsageCostState = "ERROR_WITHOUT_COST"
+	LLMUsageCostStateUnverified       LLMUsageCostState = "UNVERIFIED"
+	LLMUsageCostStateNotSent          LLMUsageCostState = "NOT_SENT"
 )
 
 var AllLLMUsageCostState = []LLMUsageCostState{
 	LLMUsageCostStateInformed,
 	LLMUsageCostStateMissing,
+	LLMUsageCostStateUncertain,
+	LLMUsageCostStateErrorWithoutCost,
+	LLMUsageCostStateUnverified,
+	LLMUsageCostStateNotSent,
 }
 
 func (e LLMUsageCostState) IsValid() bool {
 	switch e {
-	case LLMUsageCostStateInformed, LLMUsageCostStateMissing:
+	case LLMUsageCostStateInformed, LLMUsageCostStateMissing, LLMUsageCostStateUncertain, LLMUsageCostStateErrorWithoutCost, LLMUsageCostStateUnverified, LLMUsageCostStateNotSent:
 		return true
 	}
 	return false

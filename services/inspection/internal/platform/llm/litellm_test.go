@@ -45,6 +45,55 @@ func TestHTTPGatewayUsesAliasSchemaAndAuthorizedImages(t *testing.T) {
 	}
 }
 
+func TestHTTPGatewayUsesValidatedLiteLLMHeadersForCostAndCallID(t *testing.T) {
+	for _, tc := range []struct {
+		name, cost           string
+		status               int
+		body                 string
+		wantCost, wantSource string
+	}{
+		{"small scientific decimal", "1.2e-05", http.StatusOK, `{"choices":[{"message":{"content":"{}"}}]}`, "0.000012", "header"},
+		{"valid zero", "0", http.StatusOK, `{"choices":[{"message":{"content":"{}"}}]}`, "0", "header"},
+		{"invalid falls back to body", "NaN", http.StatusOK, `{"choices":[{"message":{"content":"{}"}}],"cost":0.125}`, "0.125", "body"},
+		{"valid on malformed body", "0.00000001", http.StatusOK, `{`, "0.00000001", "header"},
+		{"valid on HTTP error", "0.25", http.StatusTooManyRequests, `{}`, "0.25", "header"},
+		{"error without cost", "", http.StatusServiceUnavailable, `{}`, "", "error_missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("x-litellm-call-id", "gateway-call-17")
+				if tc.cost != "" {
+					w.Header().Set("x-litellm-response-cost", tc.cost)
+				}
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			result, err := (HTTPGateway{BaseURL: server.URL}).CompleteStructured(context.Background(), validRequest())
+			if result.GatewayCallID != "gateway-call-17" || result.CostSource != tc.wantSource || (tc.wantCost == "" && result.ReportedCostDecimal != nil) || (tc.wantCost != "" && (result.ReportedCostDecimal == nil || *result.ReportedCostDecimal != tc.wantCost)) {
+				t.Fatalf("result=%#v err=%v", result, err)
+			}
+			if tc.status >= 400 && err == nil {
+				t.Fatalf("status=%d err=%v", tc.status, err)
+			}
+		})
+	}
+}
+
+func TestValidDecimalCostRejectsInvalidAndNegativeValues(t *testing.T) {
+	for _, raw := range []string{"", "NaN", "Inf", "None", "-0", "-0.1", "1e100", "1/3", "0x1p-3", "123456789"} {
+		if _, ok := validDecimalCost(raw); ok {
+			t.Errorf("accepted invalid cost %q", raw)
+		}
+	}
+	for raw, want := range map[string]string{"0": "0", "1.2e-05": "0.000012", "12.3400": "12.34"} {
+		got, ok := validDecimalCost(raw)
+		if !ok || got != want {
+			t.Errorf("validDecimalCost(%q) = %q, %v; want %q, true", raw, got, ok, want)
+		}
+	}
+}
+
 func TestHTTPGatewayRejectsInvalidCachedTokenCountsWithoutFailingResponse(t *testing.T) {
 	for _, cached := range []string{"-1", "4", `"four"`, "1.5"} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

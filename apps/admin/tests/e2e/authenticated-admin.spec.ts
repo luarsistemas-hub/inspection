@@ -132,13 +132,18 @@ test.describe("authenticated Admin against the local stack", () => {
     const localDateTime = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     await start.fill(localDateTime(from));
     await end.fill(localDateTime(to));
-    await page.getByLabel("Tenant").fill("Minha operação");
-    const tenantChoice = page.getByRole("button", { name: /Minha operação ·/ });
-    await expect(tenantChoice).toBeVisible();
-    await tenantChoice.click();
     await page.getByLabel("Modo").selectOption("LIVE");
+    await page.getByLabel("Alias do modelo").fill("qa-inspection-vision");
+    await page.getByLabel("Incluir dados de teste").check();
     await page.getByRole("button", { name: "Aplicar" }).click();
+    const tenantAggregates = page.getByRole("region", { name: "Consumo por tenants" });
+    await tenantAggregates.getByRole("button", { name: "Abrir consumo de Minha operação", exact: true }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("tenantId")).toBeTruthy();
+    const inspectionAggregates = page.getByRole("region", { name: "Consumo por vistorias" });
+    const inspectionChoice = inspectionAggregates.getByRole("button", { name: /^Abrir consumo de [0-9a-f]{8}-[0-9a-f-]{27,}$/i }).first();
+    await expect(inspectionChoice).toBeVisible();
+    await inspectionChoice.click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("inspectionId")).toBeTruthy();
 
     const calls = page.getByRole("list", { name: "Chamadas de LLM" });
     const seededCall = calls.getByRole("listitem").filter({ hasText: "qa-inspection-vision" });
@@ -147,7 +152,9 @@ test.describe("authenticated Admin against the local stack", () => {
     const initialDetail = page.getByRole("dialog", { name: /Detalhes da chamada/ });
     const inspectionId = await initialDetail.locator("dt").filter({ hasText: "Inspection ID" }).locator("xpath=following-sibling::dd").innerText();
     await initialDetail.getByRole("button", { name: "Fechar detalhe" }).click();
-    const inspectionFilter = page.getByLabel("Inspection ID");
+    const advancedFilters = page.locator(".llm-usage-advanced-filters");
+    await expect(advancedFilters).toHaveAttribute("open", "");
+    const inspectionFilter = advancedFilters.getByLabel("Inspection ID");
     await inspectionFilter.fill(inspectionId);
     await expect(inspectionFilter).toHaveValue(inspectionId);
     await inspectionFilter.press("Enter");
@@ -179,8 +186,7 @@ test.describe("authenticated Admin against the local stack", () => {
         await page.locator(".llm-usage-advanced-filters > summary").click();
         await page.getByRole("combobox", { name: "Modo" }).selectOption("MOCK");
         await page.getByRole("button", { name: "Aplicar" }).click();
-        await expect(page.getByLabel("Resumo do consumo de LLM")).toBeVisible();
-        await expect(page.getByRole("list", { name: "Chamadas de LLM" }).or(page.getByRole("heading", { name: "Nenhuma chamada encontrada" }))).toBeVisible();
+        await expect(page.getByRole("region", { name: "Consumo por tenants" }).or(page.getByRole("list", { name: "Chamadas de LLM" })).or(page.getByRole("heading", { name: "Nenhuma chamada encontrada" }))).toBeVisible();
       } else await expect(page.locator(".status-line")).toContainText("atualizado");
       await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
     }

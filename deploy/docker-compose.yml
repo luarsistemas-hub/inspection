@@ -601,6 +601,7 @@ services:
   # Live use is explicitly opt-in through the llm-live Compose profile. The
   # worker receives only the gateway master key; provider credentials stay here.
   litellm:
+    # Pin a published version after validating it against the OCI digest. The local tag remains latest until that digest/version is confirmed.
     image: docker.litellm.ai/berriai/litellm:latest
     profiles: ["llm-live"]
     command: ["--config", "/app/config.yaml", "--port", "4000", "--log_config", "/app/logging.json"]

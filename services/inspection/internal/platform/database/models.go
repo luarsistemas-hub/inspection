@@ -1804,6 +1804,8 @@ type LLMCallRecord struct {
 	Mode, ComparisonMode, ModelAlias  string       `gorm:"size:64;not null"`
 	PromptDigest                      string       `gorm:"size:200;not null"`
 	Provider, Model, GatewayRequestID string       `gorm:"size:200;not null"`
+	GatewayCallID                     string       `gorm:"size:200;not null;default:''"`
+	CostSource                        *string      `gorm:"size:24"`
 	State, TechnicalOutcome           string       `gorm:"size:64;not null"`
 	TransportDelivered                *bool
 	HTTPStatus                        *int

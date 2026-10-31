@@ -2558,6 +2558,147 @@ $$;
 REVOKE ALL ON FUNCTION platform.discover_inspection_origin_promotion_tenants(timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.discover_inspection_origin_promotion_tenants(timestamptz) TO inspection_runtime;
 `},
+		{Version: 96, Name: "llm_gateway_cost_provenance", Compatible: true, SQL: `
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS gateway_call_id varchar(200) NOT NULL DEFAULT '';
+ALTER TABLE usage.llm_calls ADD COLUMN IF NOT EXISTS cost_source varchar(24);
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_cost_source;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_cost_source
+  CHECK (cost_source IS NULL OR cost_source IN ('header','body','unknown','error_missing'));
+ALTER TABLE usage.llm_calls DROP CONSTRAINT IF EXISTS chk_llm_call_header_cost;
+ALTER TABLE usage.llm_calls ADD CONSTRAINT chk_llm_call_header_cost
+  CHECK (cost_source IS DISTINCT FROM 'header' OR reported_cost IS NOT NULL);
+CREATE OR REPLACE FUNCTION usage.llm_cost_state(p_state text,p_delivered boolean,p_status bigint,p_outcome text,p_source text)
+RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+ SELECT CASE
+  WHEN p_state='STARTED' THEN 'uncertain'
+  WHEN p_state='FINISHED' AND p_delivered IS NOT TRUE THEN CASE WHEN p_outcome IN ('timeout','cancelled','transport') THEN 'uncertain' ELSE 'not_sent' END
+  WHEN p_source='header' THEN 'confirmed'
+  WHEN p_source='unknown' AND p_delivered IS TRUE AND p_status BETWEEN 200 AND 299 THEN 'unknown'
+  WHEN p_source='error_missing' THEN 'error_without_cost'
+  ELSE 'unverified' END
+$$;
+`},
+		{Version: 97, Name: "llm_cost_coverage_reader_v1", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION usage.read_llm_cost_coverage_v1(
+  p_from timestamptz, p_to timestamptz, p_tenant_id uuid, p_inspection_id uuid,p_without_inspection boolean,
+  p_provider text, p_model text, p_model_alias text, p_mode text, p_outcome text, p_state text,
+  p_cost_state text, p_include_test_data boolean
+) RETURNS TABLE(attempted_calls bigint, delivered_calls bigint, incomplete_calls bigint, input_tokens bigint,
+  output_tokens bigint, cached_input_tokens bigint, cache_hit_calls bigint, known_cache_calls bigint,
+  unknown_cache_calls bigint, known_cost_decimal text, unknown_cost_calls bigint, uncertain_cost_calls bigint,
+  error_without_cost_calls bigint, unverified_cost_calls bigint, cost_coverage_started_at timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,platform,pg_catalog AS $function$
+  SELECT count(*)::bigint, count(*) FILTER (WHERE l.transport_delivered IS TRUE)::bigint,
+    count(*) FILTER (WHERE l.state='STARTED')::bigint,
+    coalesce(sum(l.input_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+    coalesce(sum(l.output_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+    coalesce(sum(l.cached_input_tokens) FILTER (WHERE l.transport_delivered IS TRUE),0)::bigint,
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens>0),
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NOT NULL),
+    count(*) FILTER (WHERE l.transport_delivered IS TRUE AND l.cached_input_tokens IS NULL),
+    coalesce(sum(l.reported_cost) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed'),0)::text,
+    count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unknown'),
+    count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='uncertain'),
+    count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='error_without_cost'),
+    count(*) FILTER (WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unverified'),
+    max(sm.applied_at)
+  FROM usage.llm_calls l LEFT JOIN platform.schema_migrations sm ON sm.version=96
+  WHERE l.started_at>=p_from AND l.started_at<p_to
+    AND (p_include_test_data OR l.provider IS DISTINCT FROM 'qa')
+    AND (p_tenant_id IS NULL OR l.tenant_id=p_tenant_id)
+    AND (p_inspection_id IS NULL OR l.inspection_id=p_inspection_id) AND (NOT p_without_inspection OR l.inspection_id IS NULL)
+    AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%')
+    AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%')
+    AND (p_model_alias IS NULL OR l.model_alias ILIKE '%'||p_model_alias||'%')
+    AND (p_mode IS NULL OR l.mode=p_mode)
+    AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%')
+    AND (p_state IS NULL OR l.state=p_state)
+    AND (p_cost_state IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost_state WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost_state END)
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_cost_coverage_v1(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_cost_coverage_v1(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,boolean) TO inspection_runtime;
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_calls_v3(
+  p_from timestamptz,p_to timestamptz,p_tenant_id uuid,p_inspection_id uuid,p_without_inspection boolean,p_provider text,p_model text,
+  p_model_alias text,p_mode text,p_outcome text,p_state text,p_cost_state text,p_after_started_at timestamptz,
+  p_after_call_id uuid,p_limit integer,p_include_test_data boolean
+) RETURNS TABLE(call_id uuid,tenant_id uuid,tenant_name text,inspection_id uuid,job_id uuid,event_id uuid,
+  execution_id uuid,correlation_id varchar,attempt integer,replay_generation integer,mode varchar,
+  comparison_mode varchar,model_alias varchar,provider varchar,model varchar,gateway_request_id varchar,
+  state varchar,technical_outcome varchar,transport_delivered boolean,http_status bigint,input_tokens bigint,
+  output_tokens bigint,reported_cost numeric,duration_ms bigint,started_at timestamptz,finished_at timestamptz,
+  cached_input_tokens bigint,image_count integer,request_body_bytes bigint,gateway_call_id varchar,cost_source varchar,reported_cost_decimal text,cost_state text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,tenancy,platform,pg_catalog AS $function$
+ SELECT l.call_id,l.tenant_id,t.name::text,l.inspection_id,l.job_id,l.event_id,l.execution_id,l.correlation_id,
+  l.attempt,l.replay_generation,l.mode,l.comparison_mode,l.model_alias,l.provider,l.model,l.gateway_request_id,
+  l.state,l.technical_outcome,l.transport_delivered,l.http_status,l.input_tokens,l.output_tokens,l.reported_cost,
+  l.duration_ms,l.started_at,l.finished_at,l.cached_input_tokens,l.image_count,l.request_body_bytes,l.gateway_call_id,l.cost_source,l.reported_cost::text,usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)
+ FROM usage.llm_calls l JOIN tenancy.tenants t ON t.id=l.tenant_id
+ WHERE l.started_at>=p_from AND l.started_at<p_to AND (p_include_test_data OR l.provider IS DISTINCT FROM 'qa')
+  AND (p_tenant_id IS NULL OR l.tenant_id=p_tenant_id) AND (p_inspection_id IS NULL OR l.inspection_id=p_inspection_id) AND (NOT p_without_inspection OR l.inspection_id IS NULL)
+  AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%')
+  AND (p_model_alias IS NULL OR l.model_alias ILIKE '%'||p_model_alias||'%') AND (p_mode IS NULL OR l.mode=p_mode)
+  AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_state IS NULL OR l.state=p_state)
+  AND (p_cost_state IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost_state WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost_state END)
+  AND (p_after_started_at IS NULL OR l.started_at<p_after_started_at OR (l.started_at=p_after_started_at AND l.call_id<p_after_call_id))
+ ORDER BY l.started_at DESC,l.call_id DESC LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_calls_v3(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_calls_v3(timestamptz,timestamptz,uuid,uuid,boolean,text,text,text,text,text,text,text,timestamptz,uuid,integer,boolean) TO inspection_runtime;
+`},
+		{Version: 98, Name: "llm_usage_tenant_inspection_aggregates", Compatible: true, SQL: `
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_by_tenant_v1(
+ p_from timestamptz,p_to timestamptz,p_provider text,p_model text,p_alias text,p_outcome text,p_mode text,p_state text,p_cost text,p_include_test boolean,p_after_name text,p_after_id uuid,p_limit integer
+) RETURNS TABLE(tenant_id uuid,tenant_name text,attempted_calls bigint,delivered_calls bigint,input_tokens bigint,output_tokens bigint,known_cost_decimal text,confirmed_cost_calls bigint,unknown_cost_calls bigint,uncertain_cost_calls bigint,error_without_cost_calls bigint,unverified_cost_calls bigint,cost_complete boolean,coverage_complete boolean)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,tenancy,platform,pg_catalog AS $function$
+ WITH grouped AS (
+  SELECT t.id,t.name,count(*) attempted,count(*) FILTER(WHERE l.transport_delivered IS TRUE) delivered,
+   coalesce(sum(l.input_tokens) FILTER(WHERE l.transport_delivered IS TRUE),0)::bigint input,
+   coalesce(sum(l.output_tokens) FILTER(WHERE l.transport_delivered IS TRUE),0)::bigint output,
+   coalesce(sum(l.reported_cost) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed'),0)::text cost,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed') confirmed,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unknown') unknowns,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='uncertain') uncertain,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='error_without_cost') errors,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unverified') unverified,
+   max(costcov.applied_at) cost_cutoff
+  FROM usage.llm_calls l JOIN tenancy.tenants t ON t.id=l.tenant_id LEFT JOIN platform.schema_migrations costcov ON costcov.version=96
+  WHERE l.started_at>=p_from AND l.started_at<p_to AND (p_include_test OR l.provider IS DISTINCT FROM 'qa')
+   AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%') AND (p_alias IS NULL OR l.model_alias ILIKE '%'||p_alias||'%')
+   AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_mode IS NULL OR l.mode=p_mode) AND (p_state IS NULL OR l.state=p_state)
+   AND (p_cost IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost END)
+  GROUP BY t.id,t.name
+ ) SELECT id,name,attempted,delivered,input,output,cost,confirmed,unknowns,uncertain,errors,unverified,
+   (unknowns=0 AND uncertain=0 AND unverified=0), (cost_cutoff IS NOT NULL AND p_from>=cost_cutoff AND unverified=0)
+ FROM grouped WHERE p_after_name IS NULL OR (name,id)>(p_after_name,p_after_id) ORDER BY name,id LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_by_tenant_v1(timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,text,uuid,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_by_tenant_v1(timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,text,uuid,integer) TO inspection_runtime;
+CREATE OR REPLACE FUNCTION usage.read_llm_usage_by_inspection_v1(
+ p_tenant uuid,p_from timestamptz,p_to timestamptz,p_provider text,p_model text,p_alias text,p_outcome text,p_mode text,p_state text,p_cost text,p_include_test boolean,p_after_started timestamptz,p_after_without boolean,p_after_id uuid,p_limit integer
+) RETURNS TABLE(inspection_id uuid,inspection_label text,last_started_at timestamptz,attempted_calls bigint,delivered_calls bigint,input_tokens bigint,output_tokens bigint,known_cost_decimal text,confirmed_cost_calls bigint,unknown_cost_calls bigint,uncertain_cost_calls bigint,error_without_cost_calls bigint,unverified_cost_calls bigint,cost_complete boolean,coverage_complete boolean)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=usage,platform,pg_catalog AS $function$
+ WITH grouped AS (
+  SELECT l.inspection_id,max(l.started_at) last_started,count(*) attempted,count(*) FILTER(WHERE l.transport_delivered IS TRUE) delivered,
+   coalesce(sum(l.input_tokens) FILTER(WHERE l.transport_delivered IS TRUE),0)::bigint input,coalesce(sum(l.output_tokens) FILTER(WHERE l.transport_delivered IS TRUE),0)::bigint output,
+   coalesce(sum(l.reported_cost) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed'),0)::text cost,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='confirmed') confirmed,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unknown') unknowns,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='uncertain') uncertain,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='error_without_cost') errors,
+   count(*) FILTER(WHERE usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)='unverified') unverified,max(costcov.applied_at) cutoff
+  FROM usage.llm_calls l LEFT JOIN platform.schema_migrations costcov ON costcov.version=96
+  WHERE l.tenant_id=p_tenant AND l.started_at>=p_from AND l.started_at<p_to AND (p_include_test OR l.provider IS DISTINCT FROM 'qa')
+   AND (p_provider IS NULL OR l.provider ILIKE '%'||p_provider||'%') AND (p_model IS NULL OR l.model ILIKE '%'||p_model||'%') AND (p_alias IS NULL OR l.model_alias ILIKE '%'||p_alias||'%') AND (p_outcome IS NULL OR l.technical_outcome ILIKE '%'||p_outcome||'%') AND (p_mode IS NULL OR l.mode=p_mode) AND (p_state IS NULL OR l.state=p_state)
+   AND (p_cost IS NULL OR usage.llm_cost_state(l.state,l.transport_delivered,l.http_status,l.technical_outcome,l.cost_source)=CASE p_cost WHEN 'informed' THEN 'confirmed' WHEN 'missing' THEN 'unknown' ELSE p_cost END)
+  GROUP BY l.inspection_id
+ ) SELECT inspection_id,coalesce(inspection_id::text,'Sem vistoria'),last_started,attempted,delivered,input,output,cost,confirmed,unknowns,uncertain,errors,unverified,
+   (unknowns=0 AND uncertain=0 AND unverified=0),(cutoff IS NOT NULL AND p_from>=cutoff AND unverified=0)
+ FROM grouped WHERE (p_after_started IS NULL AND NOT p_after_without) OR (p_after_started IS NULL AND p_after_without AND inspection_id IS NOT NULL) OR (p_after_started IS NOT NULL AND NOT p_after_without AND inspection_id IS NOT NULL AND (last_started<p_after_started OR (last_started=p_after_started AND inspection_id>p_after_id)))
+ ORDER BY (inspection_id IS NOT NULL),last_started DESC,inspection_id LIMIT p_limit
+$function$;
+REVOKE ALL ON FUNCTION usage.read_llm_usage_by_inspection_v1(uuid,timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,timestamptz,boolean,uuid,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION usage.read_llm_usage_by_inspection_v1(uuid,timestamptz,timestamptz,text,text,text,text,text,text,text,boolean,timestamptz,boolean,uuid,integer) TO inspection_runtime;
+`},
 	}
 }
 

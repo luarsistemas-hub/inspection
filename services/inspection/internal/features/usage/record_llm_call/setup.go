@@ -102,6 +102,8 @@ func (l ledger) Finish(ctx context.Context, finish llm.CallFinish) error {
 		"provider":            finish.Provider,
 		"model":               finish.Model,
 		"gateway_request_id":  finish.GatewayRequestID,
+		"gateway_call_id":     finish.GatewayCallID,
+		"cost_source":         nullableText(finish.CostSource),
 		"state":               "FINISHED",
 		"technical_outcome":   finish.TechnicalOutcome,
 		"transport_delivered": &transportDelivered,
@@ -111,7 +113,7 @@ func (l ledger) Finish(ctx context.Context, finish llm.CallFinish) error {
 		"cached_input_tokens": finish.CachedInputTokens,
 		"image_count":         optionalInt(finish.ImageCount),
 		"request_body_bytes":  optionalInt64(finish.RequestBodyBytes),
-		"reported_cost":       finish.Cost,
+		"reported_cost":       finish.ReportedCostDecimal,
 		"duration_ms":         durationMS,
 		"finished_at":         finishedAt,
 		"updated_at":          finishedAt,
@@ -132,6 +134,13 @@ func (l ledger) Finish(ctx context.Context, finish llm.CallFinish) error {
 		return llm.NewError(llm.CodeLedgerPersistence, 0, err)
 	}
 	return nil
+}
+
+func nullableText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func (l ledger) withTenant(ctx context.Context, tenantID identity.ID, fn func(*gorm.DB) error) error {

@@ -1,9 +1,24 @@
 package migrations
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestLegacyMigrationChecksumsThrough95AreImmutable(t *testing.T) {
+	const want = "a8a433a04f55dd8dc3656ef9dec1d8f21b381d0c83a317a992f011f91762b6dd"
+	h := sha256.New()
+	for _, step := range Foundation() {
+		if step.Version <= 95 {
+			_, _ = fmt.Fprintf(h, "%d:%s\n", step.Version, step.Checksum())
+		}
+	}
+	if got := fmt.Sprintf("%x", h.Sum(nil)); got != want {
+		t.Fatalf("legacy migration checksum aggregate changed: got %s, want %s", got, want)
+	}
+}
 
 func TestPlannerContractsUT056UT057(t *testing.T) {
 	steps := []Step{{Version: 2, Name: "b", SQL: "SELECT 2", Compatible: true}, {Version: 1, Name: "a", SQL: "SELECT 1", Compatible: true}}
@@ -70,8 +85,8 @@ func TestInspectionOriginPromotionMigrationIsTenantScopedAndNonMutating(t *testi
 	if strings.Contains(step.SQL, "\nUPDATE ") || strings.Contains(step.SQL, "\nDELETE FROM ") {
 		t.Fatal("promotion migration must not mutate existing rows")
 	}
-	if LatestVersion() != 95 {
-		t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+	if LatestVersion() != 98 {
+		t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 	}
 }
 
@@ -221,8 +236,8 @@ func TestVideoPreparationProfileGenerationMigrationReplacesPerMediaUniqueness(t 
 				t.Fatalf("preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}
@@ -248,8 +263,8 @@ func TestVideoPlanPreparationMigrationStoresTenantScopedLineage(t *testing.T) {
 				t.Fatalf("video plan preparation migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}
@@ -269,8 +284,8 @@ func TestVideoCoverageMigrationCreatesTenantFencedDurableJobs(t *testing.T) {
 				t.Fatalf("coverage migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}
@@ -295,8 +310,8 @@ func TestVideoPlanIdentityIndexesIncludeTenantAndID(t *testing.T) {
 				t.Fatalf("identity index migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}
@@ -335,8 +350,8 @@ func TestRetentionVideoPurgeMigrationGrantsOnlyRequiredDeletes(t *testing.T) {
 		if strings.Contains(step.SQL, "GRANT ALL") || strings.Contains(step.SQL, "UPDATE") || strings.Contains(step.SQL, "INSERT") {
 			t.Fatalf("retention purge migration grants privileges beyond DELETE: %s", step.SQL)
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}
@@ -360,8 +375,8 @@ func TestVideoScopeDisplayNamesMigrationAddsNullablePortugueseLabels(t *testing.
 				t.Fatalf("display-name migration missing %q", required)
 			}
 		}
-		if LatestVersion() != 95 {
-			t.Fatalf("LatestVersion()=%d, want 95", LatestVersion())
+		if LatestVersion() != 98 {
+			t.Fatalf("LatestVersion()=%d, want 98", LatestVersion())
 		}
 		return
 	}

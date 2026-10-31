@@ -149,6 +149,8 @@ import (
 	getgloballlmusage "inspection/services/inspection/internal/features/usage/get_global_llm_usage"
 	getinspectionllmusage "inspection/services/inspection/internal/features/usage/get_inspection_llm_usage"
 	listllmusagetenants "inspection/services/inspection/internal/features/usage/list_llm_usage_tenants"
+	llmusagbyinspection "inspection/services/inspection/internal/features/usage/llm_usage_by_inspection"
+	llmusagbytenant "inspection/services/inspection/internal/features/usage/llm_usage_by_tenant"
 	"inspection/services/inspection/internal/platform/auth"
 	"inspection/services/inspection/internal/platform/config"
 	"inspection/services/inspection/internal/platform/database"
@@ -403,6 +405,8 @@ func run() error {
 		func() error {
 			return listllmusagetenants.Setup(listllmusagetenants.Dependencies{DB: db, Bus: bus})
 		},
+		func() error { return llmusagbytenant.Setup(llmusagbytenant.Dependencies{DB: db, Bus: bus}) },
+		func() error { return llmusagbyinspection.Setup(llmusagbyinspection.Dependencies{DB: db, Bus: bus}) },
 		func() error {
 			return schedulecreate.Setup(schedulecreate.Dependencies{DB: db, Bus: bus, Authorizer: authorizer})
 		},

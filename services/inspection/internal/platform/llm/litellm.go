@@ -8,7 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,6 +23,8 @@ type HTTPGateway struct {
 	APIKey  string
 	Client  *http.Client
 }
+
+var decimalCostPattern = regexp.MustCompile(`^\+?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`)
 
 func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredRequest) (StructuredResult, error) {
 	if g.BaseURL == "" || request.ModelAlias == "" || request.PromptDigest == "" || request.SystemPrompt == "" || request.UserPrompt == "" || len(request.JSONSchema) == 0 || len(request.Images) == 0 {
@@ -93,6 +98,15 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		return StructuredResult{Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(code, 0, err)
 	}
 	defer response.Body.Close()
+	resultMetadata := StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}
+	resultMetadata.GatewayCallID = strings.TrimSpace(response.Header.Get("x-litellm-call-id"))
+	resultMetadata.CostSource = "unknown"
+	if rawCost := strings.TrimSpace(response.Header.Get("x-litellm-response-cost")); rawCost != "" {
+		if decimal, ok := validDecimalCost(rawCost); ok {
+			resultMetadata.ReportedCostDecimal = &decimal
+			resultMetadata.CostSource = "header"
+		}
+	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		code := CodeProviderHTTP
@@ -101,7 +115,10 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 		} else if response.StatusCode == http.StatusTooManyRequests {
 			code = CodeRateLimit
 		}
-		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(code, response.StatusCode, fmt.Errorf("provider response status %d", response.StatusCode))
+		if resultMetadata.ReportedCostDecimal == nil {
+			resultMetadata.CostSource = "error_missing"
+		}
+		return resultMetadata, NewError(code, response.StatusCode, fmt.Errorf("provider response status %d", response.StatusCode))
 	}
 	var wire struct {
 		ID, Model string
@@ -122,9 +139,21 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 2<<20))
 	if err := decoder.Decode(&wire); err != nil {
-		return StructuredResult{HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}, NewError(CodeMalformedResponse, response.StatusCode, fmt.Errorf("malformed structured response"))
+		return resultMetadata, NewError(CodeMalformedResponse, response.StatusCode, fmt.Errorf("malformed structured response"))
 	}
-	result := StructuredResult{GatewayRequestID: wire.ID, Provider: wire.Provider, Model: wire.Model, InputTokens: wire.Usage.PromptTokens, OutputTokens: wire.Usage.CompletionTokens, Cost: wire.Cost, HTTPStatus: response.StatusCode, TransportDelivered: true, Latency: time.Since(started), RequestBodyBytes: int64(len(body))}
+	result := resultMetadata
+	result.GatewayRequestID, result.Provider, result.Model = wire.ID, wire.Provider, wire.Model
+	result.InputTokens, result.OutputTokens = wire.Usage.PromptTokens, wire.Usage.CompletionTokens
+	result.Cost = wire.Cost
+	if result.ReportedCostDecimal == nil && wire.Cost != nil {
+		legacy := strconv.FormatFloat(*wire.Cost, 'f', -1, 64)
+		if decimal, ok := validDecimalCost(legacy); ok {
+			result.ReportedCostDecimal, result.CostSource = &decimal, "body"
+		}
+	}
+	if result.ReportedCostDecimal == nil && result.CostSource == "" {
+		result.CostSource = "unknown"
+	}
 	if wire.Usage.PromptTokensDetails != nil && len(wire.Usage.PromptTokensDetails.CachedTokens) > 0 && string(wire.Usage.PromptTokensDetails.CachedTokens) != "null" {
 		var cached int64
 		if decodeErr := json.Unmarshal(wire.Usage.PromptTokensDetails.CachedTokens, &cached); decodeErr != nil || cached < 0 || (wire.Usage.PromptTokens != nil && cached > *wire.Usage.PromptTokens) {
@@ -138,6 +167,57 @@ func (g HTTPGateway) CompleteStructured(ctx context.Context, request StructuredR
 	}
 	result.JSON = []byte(wire.Choices[0].Message.Content)
 	return result, nil
+}
+
+func validDecimalCost(raw string) (string, bool) {
+	if !decimalCostPattern.MatchString(raw) {
+		return "", false
+	}
+	mantissa, exponentText, hasExponent := strings.Cut(strings.ToLower(raw), "e")
+	exponent := 0
+	if hasExponent {
+		parsed, err := strconv.Atoi(exponentText)
+		if err != nil || parsed < -100 || parsed > 100 {
+			return "", false
+		}
+		exponent = parsed
+	}
+	mantissa = strings.TrimPrefix(mantissa, "+")
+	whole, fraction, hasFraction := strings.Cut(mantissa, ".")
+	if !hasFraction {
+		fraction = ""
+	}
+	digits := whole + fraction
+	if digits == "" {
+		return "", false
+	}
+	numerator, ok := new(big.Int).SetString(digits, 10)
+	if !ok {
+		return "", false
+	}
+	scale := len(fraction) - exponent
+	denominator := big.NewInt(1)
+	if scale > 0 {
+		denominator.Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
+	} else if scale < 0 {
+		numerator.Mul(numerator, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(-scale)), nil))
+	}
+	decimal := new(big.Rat).SetFrac(numerator, denominator).FloatString(12)
+	if len(strings.SplitN(decimal, ".", 2)[0]) > 8 {
+		return "", false
+	}
+	integer, fractional, hasDecimal := strings.Cut(decimal, ".")
+	if hasDecimal {
+		fractional = strings.TrimRight(fractional, "0")
+		decimal = integer
+		if fractional != "" {
+			decimal += "." + fractional
+		}
+	}
+	if decimal == "" {
+		decimal = "0"
+	}
+	return decimal, true
 }
 
 func isInventoryMode(mode string) bool {
