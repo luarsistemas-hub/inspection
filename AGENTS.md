@@ -97,6 +97,16 @@ scripts; não há leitura automática de arquivos `.env`.
 
 ## Implementação e estilo
 
+- Escreva em português do Brasil todo texto exibido ao usuário: rótulos,
+  botões, estados, validações, confirmações, notificações, emails e mensagens
+  de sucesso ou erro. Isso inclui `userErrors` do GraphQL e mensagens seguras
+  produzidas pelo backend que a UI possa apresentar.
+- Nunca repasse diretamente à interface mensagens de bibliotecas, banco de
+  dados, providers ou exceções técnicas. Para falhas internas, apresente uma
+  mensagem genérica em português e mantenha detalhes somente nos logs.
+- Antes de concluir um fluxo novo ou alterado, siga o erro da origem até a UI
+  e confira o texto efetivamente apresentado. Códigos, nomes de campos,
+  identificadores de API e logs técnicos podem permanecer em inglês.
 - Formate todo arquivo Go alterado com `gofmt`.
 - Siga a organização padrão de imports do Go: standard library, imports do
   módulo `inspection`, depois dependências externas.

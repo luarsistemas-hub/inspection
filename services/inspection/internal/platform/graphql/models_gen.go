@@ -2063,6 +2063,19 @@ type ResendCounterpartyInvitationInput struct {
 	ClientMutationID         string `json:"clientMutationId"`
 }
 
+type ResendInspectionInvitationInput struct {
+	InspectionID     string `json:"inspectionId"`
+	ClientMutationID string `json:"clientMutationId"`
+}
+
+type ResendInspectionInvitationPayload struct {
+	InspectionID     *string      `json:"inspectionId,omitempty"`
+	InvitationID     *string      `json:"invitationId,omitempty"`
+	DeliveryStatus   *string      `json:"deliveryStatus,omitempty"`
+	UserErrors       []*UserError `json:"userErrors"`
+	ClientMutationID string       `json:"clientMutationId"`
+}
+
 type ResendInternalUserInvitationInput struct {
 	MembershipID     string `json:"membershipId"`
 	ClientMutationID string `json:"clientMutationId"`

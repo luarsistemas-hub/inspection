@@ -51,9 +51,12 @@ func Wrap(code Code, cause error) *Error { return &Error{Code: code, Cause: caus
 func Public(err error) (Code, string, string) {
 	var appErr *Error
 	if errors.As(err, &appErr) {
+		if appErr.Code == Internal {
+			return Internal, appErr.Field, "Não foi possível concluir a operação."
+		}
 		return appErr.Code, appErr.Field, appErr.Safe
 	}
-	return Internal, "", "internal error"
+	return Internal, "", "Não foi possível concluir a operação."
 }
 
 // Is reports whether err carries the given public code.

@@ -49,24 +49,24 @@ type Result struct {
 
 func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 	if s.DB == nil || s.Notifications == nil || strings.TrimSpace(s.CaptureBaseURL) == "" {
-		return Result{}, apperror.New(apperror.DependencyUnavailable, "correction", "correction unavailable")
+		return Result{}, apperror.New(apperror.DependencyUnavailable, "correction", "Não foi possível corrigir o email agora.")
 	}
 	if in.TenantID == (identity.ID{}) || in.InspectionID == (identity.ID{}) || in.ResponsibilityID == (identity.ID{}) {
-		return Result{}, apperror.New(apperror.InvalidInput, "inspectionId", "inspection is required")
+		return Result{}, apperror.New(apperror.InvalidInput, "inspectionId", "Informe uma vistoria válida.")
 	}
 	if strings.TrimSpace(in.IdempotencyKey) == "" || strings.TrimSpace(in.Source) == "" {
-		return Result{}, apperror.New(apperror.InvalidInput, "clientMutationId", "client mutation id is required")
+		return Result{}, apperror.New(apperror.InvalidInput, "clientMutationId", "Identifique a solicitação de correção.")
 	}
 	if in.ExpectedResponsibilityVersion <= 0 {
-		return Result{}, apperror.New(apperror.InvalidInput, "expectedResponsibilityVersion", "responsibility version is required")
+		return Result{}, apperror.New(apperror.InvalidInput, "expectedResponsibilityVersion", "Informe a versão do responsável pela vistoria.")
 	}
 	email, err := participantcore.Normalize("EMAIL", in.Email)
 	if err != nil {
-		return Result{}, apperror.New(apperror.InvalidInput, "email", "invalid email")
+		return Result{}, apperror.New(apperror.InvalidInput, "email", "Informe um email válido.")
 	}
 	confirmation, err := participantcore.Normalize("EMAIL", in.EmailConfirmation)
 	if err != nil || confirmation != email {
-		return Result{}, apperror.New(apperror.InvalidInput, "emailConfirmation", "email confirmation does not match")
+		return Result{}, apperror.New(apperror.InvalidInput, "emailConfirmation", "A confirmação do email não corresponde ao endereço informado.")
 	}
 	if s.Now == nil {
 		s.Now = time.Now
@@ -81,7 +81,7 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 		var existing database.Invitation
 		if err := tx.Where("tenant_id=? AND idempotency_key=?", in.TenantID, in.IdempotencyKey).First(&existing).Error; err == nil {
 			if existing.ResponsibilityID != in.ResponsibilityID {
-				return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
+				return apperror.New(apperror.Conflict, "clientMutationId", "Esta solicitação já foi usada para outra correção.")
 			}
 			if err := s.loadResult(tx, in.TenantID, in.InspectionID, email, existing, &result); err != nil {
 				return err
@@ -94,22 +94,22 @@ func (s Service) Correct(ctx context.Context, in Input) (Result, error) {
 
 		var responsibility database.Responsibility
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id=? AND id=? AND inspection_id=?", in.TenantID, in.ResponsibilityID, in.InspectionID).First(&responsibility).Error; err != nil {
-			return apperror.New(apperror.NotFound, "inspectionId", "inspection responsibility not found")
+			return apperror.New(apperror.NotFound, "inspectionId", "Responsável pela vistoria não encontrado.")
 		}
 		if responsibility.Status != "PENDING" {
-			return apperror.New(apperror.InvalidState, "responsibleEmail", "responsible email can no longer be changed")
+			return apperror.New(apperror.InvalidState, "responsibleEmail", "O email do responsável não pode mais ser alterado.")
 		}
 		if responsibility.Version != in.ExpectedResponsibilityVersion {
-			return apperror.New(apperror.Conflict, "expectedResponsibilityVersion", "stale responsibility version")
+			return apperror.New(apperror.Conflict, "expectedResponsibilityVersion", "Os dados do responsável mudaram. Atualize a página e tente novamente.")
 		}
 
 		var inspection database.Inspection
 		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, in.InspectionID).First(&inspection).Error; err != nil {
-			return apperror.New(apperror.NotFound, "inspectionId", "inspection not found")
+			return apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
 		}
 		now := s.Now().UTC()
 		if !now.Before(inspection.DeadlineAt) {
-			return apperror.New(apperror.InvalidState, "inspectionId", "inspection deadline has passed")
+			return apperror.New(apperror.InvalidState, "inspectionId", "O prazo da vistoria venceu. Não é possível corrigir o email do responsável.")
 		}
 		var participant database.Participant
 		if err := tx.Where("tenant_id=? AND id=?", in.TenantID, responsibility.ParticipantID).First(&participant).Error; err != nil {
@@ -230,14 +230,14 @@ func (s Service) loadResult(tx *gorm.DB, tenantID, inspectionID identity.ID, ema
 		return err
 	}
 	if responsibility.InspectionID != inspectionID {
-		return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
+		return apperror.New(apperror.Conflict, "clientMutationId", "Esta solicitação já foi usada para outra correção.")
 	}
 	var destinations []invitationDelivery
 	if err := json.Unmarshal(invitation.DeliveryIntents, &destinations); err != nil {
 		return err
 	}
 	if len(destinations) != 1 || destinations[0].Channel != "EMAIL" || destinations[0].Destination != email {
-		return apperror.New(apperror.Conflict, "clientMutationId", "client mutation id was already used")
+		return apperror.New(apperror.Conflict, "clientMutationId", "Esta solicitação já foi usada para outra correção.")
 	}
 	var delivery database.Delivery
 	err := tx.Where("tenant_id=? AND invitation_id=?", tenantID, invitation.ID).Order("created_at desc").First(&delivery).Error

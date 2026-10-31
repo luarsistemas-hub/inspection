@@ -945,6 +945,7 @@ type ComplexityRoot struct {
 		RequestRecapture                       func(childComplexity int, input RequestRecaptureInput) int
 		RequestVideoReplacement                func(childComplexity int, input RequestVideoReplacementInput) int
 		ResendCounterpartyInvitation           func(childComplexity int, input ResendCounterpartyInvitationInput) int
+		ResendInspectionInvitation             func(childComplexity int, input ResendInspectionInvitationInput) int
 		ResendInternalUserInvitation           func(childComplexity int, input ResendInternalUserInvitationInput) int
 		ResolveBaselineContestation            func(childComplexity int, input ResolveBaselineContestationInput) int
 		RetryInventoryDraft                    func(childComplexity int, input RetryInventoryDraftInput) int
@@ -1618,6 +1619,14 @@ type ComplexityRoot struct {
 		Status         func(childComplexity int) int
 	}
 
+	ResendInspectionInvitationPayload struct {
+		ClientMutationID func(childComplexity int) int
+		DeliveryStatus   func(childComplexity int) int
+		InspectionID     func(childComplexity int) int
+		InvitationID     func(childComplexity int) int
+		UserErrors       func(childComplexity int) int
+	}
+
 	ResponsibleEmailCorrection struct {
 		CanCorrectResponsibleEmail func(childComplexity int) int
 		DeliveryID                 func(childComplexity int) int
@@ -2118,6 +2127,7 @@ type MutationResolver interface {
 	PlanInspection(ctx context.Context, input PlanInspectionInput) (*PlanInspectionPayload, error)
 	CancelInspection(ctx context.Context, input InspectionTransitionInput) (*InspectionPayload, error)
 	InvalidateInspection(ctx context.Context, input InvalidateInspectionInput) (*InspectionPayload, error)
+	ResendInspectionInvitation(ctx context.Context, input ResendInspectionInvitationInput) (*ResendInspectionInvitationPayload, error)
 	CreateProject(ctx context.Context, input CreateProjectInput) (*ProjectPayload, error)
 	AddExceptionalStage(ctx context.Context, input AddExceptionalStageInput) (*ProjectPayload, error)
 	StartProjectStage(ctx context.Context, input StartProjectStageInput) (*ProjectPayload, error)
@@ -6633,6 +6643,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResendCounterpartyInvitation(childComplexity, args["input"].(ResendCounterpartyInvitationInput)), true
+	case "Mutation.resendInspectionInvitation":
+		if e.ComplexityRoot.Mutation.ResendInspectionInvitation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resendInspectionInvitation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResendInspectionInvitation(childComplexity, args["input"].(ResendInspectionInvitationInput)), true
 	case "Mutation.resendInternalUserInvitation":
 		if e.ComplexityRoot.Mutation.ResendInternalUserInvitation == nil {
 			break
@@ -9949,6 +9970,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ReportTimelineEntry.Status(childComplexity), true
 
+	case "ResendInspectionInvitationPayload.clientMutationId":
+		if e.ComplexityRoot.ResendInspectionInvitationPayload.ClientMutationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResendInspectionInvitationPayload.ClientMutationID(childComplexity), true
+	case "ResendInspectionInvitationPayload.deliveryStatus":
+		if e.ComplexityRoot.ResendInspectionInvitationPayload.DeliveryStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResendInspectionInvitationPayload.DeliveryStatus(childComplexity), true
+	case "ResendInspectionInvitationPayload.inspectionId":
+		if e.ComplexityRoot.ResendInspectionInvitationPayload.InspectionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResendInspectionInvitationPayload.InspectionID(childComplexity), true
+	case "ResendInspectionInvitationPayload.invitationId":
+		if e.ComplexityRoot.ResendInspectionInvitationPayload.InvitationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResendInspectionInvitationPayload.InvitationID(childComplexity), true
+	case "ResendInspectionInvitationPayload.userErrors":
+		if e.ComplexityRoot.ResendInspectionInvitationPayload.UserErrors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ResendInspectionInvitationPayload.UserErrors(childComplexity), true
+
 	case "ResponsibleEmailCorrection.canCorrectResponsibleEmail":
 		if e.ComplexityRoot.ResponsibleEmailCorrection.CanCorrectResponsibleEmail == nil {
 			break
@@ -11730,6 +11782,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputRequestRecaptureInput,
 		ec.unmarshalInputRequestVideoReplacementInput,
 		ec.unmarshalInputResendCounterpartyInvitationInput,
+		ec.unmarshalInputResendInspectionInvitationInput,
 		ec.unmarshalInputResendInternalUserInvitationInput,
 		ec.unmarshalInputResolveBaselineContestationInput,
 		ec.unmarshalInputRetryInventoryDraftInput,
@@ -11994,6 +12047,7 @@ type Mutation {
 	planInspection(input: PlanInspectionInput!): PlanInspectionPayload!
   cancelInspection(input: InspectionTransitionInput!): InspectionPayload!
   invalidateInspection(input: InvalidateInspectionInput!): InspectionPayload!
+  resendInspectionInvitation(input: ResendInspectionInvitationInput!): ResendInspectionInvitationPayload!
   createProject(input: CreateProjectInput!): ProjectPayload!
   addExceptionalStage(input: AddExceptionalStageInput!): ProjectPayload!
   startProjectStage(input: StartProjectStageInput!): ProjectPayload!
@@ -12410,6 +12464,7 @@ input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String!
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
 input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
 input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
+input ResendInspectionInvitationInput { inspectionId: ID! clientMutationId: String! }
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
 input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
@@ -12474,6 +12529,7 @@ type InspectionPayload { inspection: Inspection userErrors: [UserError!]! client
 input CorrectInspectionResponsibleEmailInput { inspectionId: ID!, email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
 type ResponsibleEmailCorrection { inspectionId: ID!, responsibilityId: ID!, invitationId: ID!, deliveryId: ID, deliveryStatus: String!, responsibilityStatus: String!, responsibilityVersion: Int!, recipientMasked: String!, canCorrectResponsibleEmail: Boolean! }
 type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection, userErrors: [UserError!]!, clientMutationId: String! }
+type ResendInspectionInvitationPayload { inspectionId: ID, invitationId: ID, deliveryStatus: String, userErrors: [UserError!]!, clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type PlanInspectionPayload { inspection: Inspection schedule: Schedule project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }
@@ -15318,6 +15374,22 @@ func (ec *executionContext) childFields_ReportTimelineEntry(ctx context.Context,
 	return nil, fmt.Errorf("no field named %q was found under type ReportTimelineEntry", field.Name)
 }
 
+func (ec *executionContext) childFields_ResendInspectionInvitationPayload(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "inspectionId":
+		return ec.fieldContext_ResendInspectionInvitationPayload_inspectionId(ctx, field)
+	case "invitationId":
+		return ec.fieldContext_ResendInspectionInvitationPayload_invitationId(ctx, field)
+	case "deliveryStatus":
+		return ec.fieldContext_ResendInspectionInvitationPayload_deliveryStatus(ctx, field)
+	case "userErrors":
+		return ec.fieldContext_ResendInspectionInvitationPayload_userErrors(ctx, field)
+	case "clientMutationId":
+		return ec.fieldContext_ResendInspectionInvitationPayload_clientMutationId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ResendInspectionInvitationPayload", field.Name)
+}
+
 func (ec *executionContext) childFields_ResponsibleEmailCorrection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "inspectionId":
@@ -17286,6 +17358,20 @@ func (ec *executionContext) field_Mutation_resendCounterpartyInvitation_args(ctx
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (ResendCounterpartyInvitationInput, error) {
 			return ec.unmarshalNResendCounterpartyInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendCounterpartyInvitationInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_resendInspectionInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ResendInspectionInvitationInput, error) {
+			return ec.unmarshalNResendInspectionInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInspectionInvitationInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -36359,6 +36445,50 @@ func (ec *executionContext) fieldContext_Mutation_invalidateInspection(ctx conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_resendInspectionInvitation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_resendInspectionInvitation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResendInspectionInvitation(ctx, fc.Args["input"].(ResendInspectionInvitationInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ResendInspectionInvitationPayload) graphql.Marshaler {
+			return ec.marshalNResendInspectionInvitationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInspectionInvitationPayload(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_resendInspectionInvitation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ResendInspectionInvitationPayload(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resendInspectionInvitation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createProject(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -49959,6 +50089,130 @@ func (ec *executionContext) fieldContext_ReportTimelineEntry_position(_ context.
 	return graphql.NewScalarFieldContext("ReportTimelineEntry", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
+func (ec *executionContext) _ResendInspectionInvitationPayload_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ResendInspectionInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResendInspectionInvitationPayload_inspectionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InspectionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ResendInspectionInvitationPayload_inspectionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResendInspectionInvitationPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResendInspectionInvitationPayload_invitationId(ctx context.Context, field graphql.CollectedField, obj *ResendInspectionInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResendInspectionInvitationPayload_invitationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InvitationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ResendInspectionInvitationPayload_invitationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResendInspectionInvitationPayload", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ResendInspectionInvitationPayload_deliveryStatus(ctx context.Context, field graphql.CollectedField, obj *ResendInspectionInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResendInspectionInvitationPayload_deliveryStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliveryStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ResendInspectionInvitationPayload_deliveryStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResendInspectionInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ResendInspectionInvitationPayload_userErrors(ctx context.Context, field graphql.CollectedField, obj *ResendInspectionInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResendInspectionInvitationPayload_userErrors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UserErrors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*UserError) graphql.Marshaler {
+			return ec.marshalNUserError2ᚕᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐUserErrorᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResendInspectionInvitationPayload_userErrors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ResendInspectionInvitationPayload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_UserError(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ResendInspectionInvitationPayload_clientMutationId(ctx context.Context, field graphql.CollectedField, obj *ResendInspectionInvitationPayload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ResendInspectionInvitationPayload_clientMutationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ClientMutationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ResendInspectionInvitationPayload_clientMutationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ResendInspectionInvitationPayload", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _ResponsibleEmailCorrection_inspectionId(ctx context.Context, field graphql.CollectedField, obj *ResponsibleEmailCorrection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -62422,6 +62676,43 @@ func (ec *executionContext) unmarshalInputResendCounterpartyInvitationInput(ctx 
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputResendInspectionInvitationInput(ctx context.Context, obj any) (ResendInspectionInvitationInput, error) {
+	var it ResendInspectionInvitationInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"inspectionId", "clientMutationId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "inspectionId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("inspectionId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InspectionID = data
+		case "clientMutationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientMutationId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientMutationID = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputResendInternalUserInvitationInput(ctx context.Context, obj any) (ResendInternalUserInvitationInput, error) {
 	var it ResendInternalUserInvitationInput
 	if obj == nil {
@@ -70152,6 +70443,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "resendInspectionInvitation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resendInspectionInvitation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createProject":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createProject(ctx, field)
@@ -75922,6 +76220,64 @@ func (ec *executionContext) _ReportTimelineEntry(ctx context.Context, sel ast.Se
 			}
 		case "position":
 			out.Values[i] = ec._ReportTimelineEntry_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var resendInspectionInvitationPayloadImplementors = []string{"ResendInspectionInvitationPayload"}
+
+func (ec *executionContext) _ResendInspectionInvitationPayload(ctx context.Context, sel ast.SelectionSet, obj *ResendInspectionInvitationPayload) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, resendInspectionInvitationPayloadImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ResendInspectionInvitationPayload")
+		case "inspectionId":
+			out.Values[i] = ec._ResendInspectionInvitationPayload_inspectionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "invitationId":
+			out.Values[i] = ec._ResendInspectionInvitationPayload_invitationId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deliveryStatus":
+			out.Values[i] = ec._ResendInspectionInvitationPayload_deliveryStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "userErrors":
+			out.Values[i] = ec._ResendInspectionInvitationPayload_userErrors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clientMutationId":
+			out.Values[i] = ec._ResendInspectionInvitationPayload_clientMutationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -82061,6 +82417,21 @@ func (ec *executionContext) unmarshalNRequestVideoReplacementInput2inspectionᚋ
 func (ec *executionContext) unmarshalNResendCounterpartyInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendCounterpartyInvitationInput(ctx context.Context, v any) (ResendCounterpartyInvitationInput, error) {
 	res, err := ec.unmarshalInputResendCounterpartyInvitationInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNResendInspectionInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInspectionInvitationInput(ctx context.Context, v any) (ResendInspectionInvitationInput, error) {
+	res, err := ec.unmarshalInputResendInspectionInvitationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNResendInspectionInvitationPayload2ᚖinspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInspectionInvitationPayload(ctx context.Context, sel ast.SelectionSet, v *ResendInspectionInvitationPayload) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ResendInspectionInvitationPayload(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNResendInternalUserInvitationInput2inspectionᚋservicesᚋinspectionᚋinternalᚋplatformᚋgraphqlᚐResendInternalUserInvitationInput(ctx context.Context, v any) (ResendInternalUserInvitationInput, error) {

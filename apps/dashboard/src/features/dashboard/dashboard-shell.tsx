@@ -23,7 +23,7 @@ import { useNotifications } from "@/features/notifications/use-notifications";
 import { deliveryPresentation } from "@/features/notifications/delivery-status";
 import { AccountMenu, AdaptiveNavigation, Dialog, Icon, IconButton, InfoDisclosure, PageHeader, Textarea, ThemeSelector, type AdaptiveNavigationItem } from "@inspection/design-system";
 import {
-  AddExceptionalStageDocument, CancelInspectionDocument, CloseProjectDocument, CreateProjectDocument, PlanInspectionDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
+  AddExceptionalStageDocument, CancelInspectionDocument, CloseProjectDocument, CreateProjectDocument, PlanInspectionDocument, ResendInspectionInvitationDocument, CustomerEvidenceDocument, CustomerPortfolioDocument, CustomerReportDocument,
   CustomerTimelineDocument, DashboardGateDocument, DashboardMembershipsDocument, InvalidateInspectionDocument, ProjectDetailDocument,
   InvalidateReportPublicationDocument, ProjectsDocument, ProjectTimelineDocument, PublishReportDocument, ReopenProjectDocument, ReportDownloadDocument, RequestRecaptureDocument, InspectionDetailDocument, InspectionsDocument, SkipProjectStageDocument, StartProjectStageDocument,
   type CustomerEvidenceQuery, type CustomerPortfolioQuery, type CustomerReportQuery, type DashboardGateQuery, type DashboardMembershipsQuery, type DashboardReviewersQuery, type InspectionDetailQuery, type InspectionStatusGroup, type InspectionsQuery, type InspectionsQueryVariables, type ProjectsQuery, type ReportDownloadQuery,
@@ -178,6 +178,7 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
   const [createOpen, setCreateOpen] = useState(false); const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState(""); const createOpenerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (params.get("create") === "1") setCreateOpen(true); }, [params]);
   const [invalidating, setInvalidating] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [recapturing, setRecapturing] = useState<InspectionsQuery["inspections"]["nodes"][number]>(); const [canceling, setCanceling] = useState<InspectionsQuery["inspections"]["nodes"][number]>();
+  const [resendingInspectionId, setResendingInspectionId] = useState<string>();
   const busyRef = useRef(false); const listRequest = useRef(0); const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const returnToCollection = () => { const next = new URLSearchParams(params.toString()); next.delete("inspectionId"); const search = next.toString(); router.replace(search ? `/inspections?${search}` : "/inspections", { scroll: false }); };
   const openInspection = (inspection: InspectionsQuery["inspections"]["nodes"][number]) => { const next = new URLSearchParams(params.toString()); next.set("inspectionId", inspection.id); router.replace(`/inspections?${next}`, { scroll: false }); };
@@ -206,7 +207,24 @@ function InspectionsJourney({ canMutate, canPromoteOrigin, options }: { canMutat
   const submitSearch = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); void load({ search: query, group: statusGroup, immediate: true }); };
   const mutate = async (document: typeof PlanInspectionDocument | typeof CancelInspectionDocument | typeof InvalidateInspectionDocument, input: Record<string, unknown>): Promise<string | undefined> => { try { const result = await graphql(document as never, { input } as never); const payload = Object.values(result as Record<string, unknown>)[0] as { userErrors?: Array<{ message: string; code: string }> }; if (payload.userErrors?.length) { const error = formatMutationErrors(payload.userErrors); setMessage(error); return error; } setMessage("Vistoria salva. Atualizando dados…"); await load(); return undefined; } catch (error) { const failure = formatFailure(error); setMessage(failure); return failure; } };
   const createInspection = async (input: Record<string, unknown>) => { if (busyRef.current) return; busyRef.current = true; setCreating(true); setCreateError(""); const error = await mutate(PlanInspectionDocument, input); busyRef.current = false; setCreating(false); if (error) setCreateError(error); else setCreateOpen(false); };
-  const actions: InspectionActionHandlers | undefined = canMutate ? { onCancel: setCanceling, onInvalidate: setInvalidating, onRecapture: setRecapturing } : undefined;
+  const resendInvitation = async (inspection: InspectionsQuery["inspections"]["nodes"][number]) => {
+    if (resendingInspectionId) return;
+    setResendingInspectionId(inspection.id);
+    try {
+      const result = await graphql(ResendInspectionInvitationDocument, { input: { inspectionId: inspection.id, clientMutationId: mutationId() } });
+      if (result.resendInspectionInvitation.userErrors.length) {
+        setMessage(formatMutationErrors(result.resendInspectionInvitation.userErrors));
+        return;
+      }
+      setMessage("Email do convite reenviado. Atualizando vistorias…");
+      await load();
+    } catch (error) {
+      setMessage(formatFailure(error));
+    } finally {
+      setResendingInspectionId(undefined);
+    }
+  };
+  const actions: InspectionActionHandlers | undefined = canMutate ? { onCancel: setCanceling, onInvalidate: setInvalidating, onRecapture: setRecapturing, onResendInvitation: (inspection) => void resendInvitation(inspection), resendingInspectionId } : undefined;
   const inspections = data?.inspections.nodes ?? [];
   const focusedInspection = inspections.find((inspection) => inspection.id === focusedInspectionId) ?? inspections[0];
   return <div className="feature inspection-journey"><div className="inspection-page-heading"><div><p className="inspection-breadcrumb">Operação / Vistorias</p><InfoDisclosure label="vistorias" heading={<h1>Vistorias</h1>}>Acompanhe os registros pela lista, pela situação ou pelo prazo.</InfoDisclosure></div>{canMutate && <button ref={createOpenerRef} onClick={() => { setCreateError(""); setCreateOpen(true); }}>Nova vistoria</button>}</div>

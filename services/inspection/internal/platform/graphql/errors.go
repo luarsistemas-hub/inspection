@@ -69,9 +69,9 @@ func MapError(err error, correlationID string) PublicError {
 
 func publicMessage(code apperror.Code) string {
 	if code == apperror.Internal {
-		return "internal error"
+		return "Não foi possível concluir a operação."
 	}
-	return "request failed"
+	return "Não foi possível concluir a solicitação."
 }
 
 type Cursor struct {

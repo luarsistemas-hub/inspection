@@ -279,8 +279,8 @@ main > section > .actions h1 { margin: 0; }
 .inspection-row-actions { display: flex; align-items: center; justify-content: center; gap: var(--inspection-space-1); }
 .inspection-action-menu { position: relative; inline-size: fit-content; }
 .inspection-action-menu > summary { min-block-size: 2.25rem; padding: var(--inspection-space-1) var(--inspection-space-2); color: var(--inspection-muted); font-size: .78rem; cursor: pointer; }
-.inspection-action-menu > div { z-index: 2; display: flex; flex-wrap: wrap; gap: var(--inspection-space-2); padding-block-start: var(--inspection-space-2); }
-.inspection-action-menu button { min-block-size: 2.25rem; padding: var(--inspection-space-1) var(--inspection-space-2); font-size: .75rem; }
+.inspection-action-menu > div { z-index: 2; display: grid; grid-template-columns: repeat(2, max-content); gap: .35rem; padding-block-start: var(--inspection-space-2); }
+.inspection-action-menu button { min-block-size: 2rem; padding: .3rem .55rem; font-size: .7rem; }
 .inspection-record-card { display: grid; gap: var(--inspection-space-1); min-inline-size: 0; padding: var(--inspection-space-3); border: 1px solid var(--inspection-border); border-radius: var(--inspection-radius); background: var(--inspection-surface-raised); overflow-wrap: anywhere; }
 .inspection-record-card > span { color: var(--inspection-muted); font-size: .75rem; }
 .inspection-record-card .inspection-record-kicker { font: .68rem/1.4 var(--inspection-font-mono); text-transform: uppercase; }

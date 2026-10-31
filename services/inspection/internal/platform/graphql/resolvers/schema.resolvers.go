@@ -1417,6 +1417,42 @@ func (r *mutationResolver) InvalidateInspection(ctx context.Context, input graph
 	return &graphql1.InspectionPayload{Inspection: mapInspection(view), UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
 }
 
+// ResendInspectionInvitation is the resolver for the resendInspectionInvitation field.
+func (r *mutationResolver) ResendInspectionInvitation(ctx context.Context, input graphql1.ResendInspectionInvitationInput) (*graphql1.ResendInspectionInvitationPayload, error) {
+	meta, ok := requestctx.FromContext(ctx)
+	if !ok {
+		return nil, unauthenticated()
+	}
+	inspectionID, err := identity.ParseID(input.InspectionID)
+	if err != nil {
+		return nil, invalidID("inspectionId")
+	}
+	var inspection database.Inspection
+	if err := (tenanttx.Runner{DB: r.DB}).Within(ctx, meta.TenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND id=?", meta.TenantID, inspectionID).First(&inspection).Error
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := r.Authorizer.Authorize(ctx, meta.TenantID, []string{auth.TenantAdmin, auth.ParticipationAdmin, auth.Manager}, &requestctx.Scope{Kind: "BUSINESS_UNIT", ID: inspection.BusinessUnitID}, true); err != nil {
+		if apperror.Is(err, apperror.Forbidden) {
+			return nil, apperror.New(apperror.Forbidden, "", "Você não tem permissão para reenviar este convite.")
+		}
+		if apperror.Is(err, apperror.Unauthenticated) {
+			return nil, unauthenticated()
+		}
+		if apperror.Is(err, apperror.NotFound) {
+			return nil, apperror.New(apperror.NotFound, "inspectionId", "Vistoria não encontrada.")
+		}
+		return nil, err
+	}
+	result, err := r.ResendCaptureInvitation.Resend(ctx, meta.TenantID, inspectionID, meta.Principal.IdentityID, "admin:"+input.ClientMutationID, requestctx.IdempotencyKey(ctx, input.ClientMutationID))
+	if err != nil {
+		return &graphql1.ResendInspectionInvitationPayload{UserErrors: []*graphql1.UserError{userErrorFrom(err)}, ClientMutationID: input.ClientMutationID}, nil
+	}
+	inspectionIDValue, invitationIDValue, status := result.InspectionID.String(), result.InvitationID.String(), result.DeliveryStatus
+	return &graphql1.ResendInspectionInvitationPayload{InspectionID: &inspectionIDValue, InvitationID: &invitationIDValue, DeliveryStatus: &status, UserErrors: []*graphql1.UserError{}, ClientMutationID: input.ClientMutationID}, nil
+}
+
 // CreateProject is the resolver for the createProject field.
 func (r *mutationResolver) CreateProject(ctx context.Context, input graphql1.CreateProjectInput) (*graphql1.ProjectPayload, error) {
 	meta, ok := requestctx.FromContext(ctx)

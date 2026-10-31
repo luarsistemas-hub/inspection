@@ -156,6 +156,7 @@ type Mutation {
 	planInspection(input: PlanInspectionInput!): PlanInspectionPayload!
   cancelInspection(input: InspectionTransitionInput!): InspectionPayload!
   invalidateInspection(input: InvalidateInspectionInput!): InspectionPayload!
+  resendInspectionInvitation(input: ResendInspectionInvitationInput!): ResendInspectionInvitationPayload!
   createProject(input: CreateProjectInput!): ProjectPayload!
   addExceptionalStage(input: AddExceptionalStageInput!): ProjectPayload!
   startProjectStage(input: StartProjectStageInput!): ProjectPayload!
@@ -572,6 +573,7 @@ input UpdateScheduleInput { scheduleId: ID! expectedVersion: Int! rrule: String!
 input CancelScheduleInput { scheduleId: ID! expectedVersion: Int! clientMutationId: String! }
 input CreateInspectionInput { assetId: ID! participantId: ID! templateId: ID comparisonMode: CaptureComparisonMode! referenceVersionId: ID reviewerMembershipId: ID projectId: ID stageId: ID dueAt: String! deadlineAt: String! reminderInstants: [String!]! reason: String! clientMutationId: String! }
 input InspectionTransitionInput { inspectionId: ID! expectedVersion: Int! clientMutationId: String! }
+input ResendInspectionInvitationInput { inspectionId: ID! clientMutationId: String! }
 input InvalidateInspectionInput { inspectionId: ID! expectedVersion: Int! reason: String! clientMutationId: String! }
 input PlannedProjectStageInput { key: String! label: String! plannedAt: String }
 input CreateProjectInput { assetId: ID! name: String! orderedStages: Boolean = false stages: [PlannedProjectStageInput!]! clientMutationId: String! }
@@ -636,6 +638,7 @@ type InspectionPayload { inspection: Inspection userErrors: [UserError!]! client
 input CorrectInspectionResponsibleEmailInput { inspectionId: ID!, email: String!, emailConfirmation: String!, expectedResponsibilityVersion: Int!, clientMutationId: String! }
 type ResponsibleEmailCorrection { inspectionId: ID!, responsibilityId: ID!, invitationId: ID!, deliveryId: ID, deliveryStatus: String!, responsibilityStatus: String!, responsibilityVersion: Int!, recipientMasked: String!, canCorrectResponsibleEmail: Boolean! }
 type ResponsibleEmailCorrectionPayload { correction: ResponsibleEmailCorrection, userErrors: [UserError!]!, clientMutationId: String! }
+type ResendInspectionInvitationPayload { inspectionId: ID, invitationId: ID, deliveryStatus: String, userErrors: [UserError!]!, clientMutationId: String! }
 type ProjectPayload { project: Project userErrors: [UserError!]! clientMutationId: String! }
 type PlanInspectionPayload { inspection: Inspection schedule: Schedule project: Project userErrors: [UserError!]! clientMutationId: String! }
 type CapturePayload { status: String! userErrors: [UserError!]! clientMutationId: String! }

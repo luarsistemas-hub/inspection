@@ -31,7 +31,7 @@ import (
 )
 
 func unauthenticated() error {
-	return apperror.New(apperror.Unauthenticated, "", "authentication required")
+	return apperror.New(apperror.Unauthenticated, "", "Autenticação necessária.")
 }
 
 func originUnavailableError() *graphql1.UserError {
@@ -58,11 +58,11 @@ func parsePlannedStages(inputs []*graphql1.PlannedProjectStageInput) ([]projectc
 }
 
 func invalidID(field string) error {
-	return apperror.New(apperror.InvalidInput, field, "invalid identifier")
+	return apperror.New(apperror.InvalidInput, field, "Identificador inválido.")
 }
 
 func graphql1Error(field string) error {
-	return apperror.New(apperror.InvalidInput, field, "invalid value")
+	return apperror.New(apperror.InvalidInput, field, "Valor inválido.")
 }
 
 func internalRole(meta requestctx.Metadata, allowed ...string) error {

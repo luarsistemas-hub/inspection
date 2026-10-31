@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -75,4 +75,53 @@ test("E2E-011 triage only renders Requer atenção and Crítica", async ({ page 
   const queue = page.getByRole("region", { name: "Casos para revisão" });
   await expect(queue.getByRole("listitem").filter({ hasText: "Atenção QA" }).getByText("Requer atenção", { exact: true })).toBeVisible();
   await expect(queue.getByRole("listitem").filter({ hasText: "Crítica QA" }).getByText("Crítica", { exact: true })).toBeVisible();
+});
+
+test("report inventory offers compact cards and a readable list", async ({ page }, testInfo) => {
+  if (testInfo.project.name !== "mobile") await page.setViewportSize({ width: 1280, height: 1000 });
+  await authenticate(page);
+  await page.route("**/graphql", async (route) => {
+    const request = route.request().postDataJSON() as { query: string };
+    if (!request.query.includes("query ReportWorkspace")) return route.fallback();
+    const names = ["Armários planejados", "Churrasqueira", "Cooktop", "Forno micro-ondas"];
+    const types = ["CABINET", "OTHER", "STOVE_COOKTOP", "APPLIANCE_OTHER"];
+    const problems = names.map((name, index) => ({ environment: "Cozinha", type: types[index], name, status: "NOT_OBSERVED", conditionBefore: "GOOD", conditionAfter: null, reason: index === 1 ? "Ambiente não capturado." : "Não foi encontrada uma vista correspondente.", pairs: [] }));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { report: {
+      id: "snapshot-layout", inspectionId: "inspection-critical", projectId: null, version: 1, classification: "ATTENTION", advisory: "Resumo da vistoria.", pdfStatus: "READY",
+      context: { asset: { id: "asset-a", name: "Imóvel QA", externalKey: "QA-1", address: "Rua Gustavo Zimmer, 227 — Vargem do Bom Jesus — Florianópolis/SC — CEP 88056-613" }, participant: { id: "person-a", name: "Pessoa QA" }, template: { id: "template-a", name: "Padrão", version: 2 }, inspection: { stageLabel: "Saída" } },
+      inventory: { referenceVersionNumber: 4, purpose: "INVENTORY_UPDATE", coverage: { expectedItems: 7, assessedItems: 3, notObserved: 4, environmentsNotCaptured: [], environmentsAddedDuringCapture: [] }, problems, informational: [] },
+      requirements: [], evidence: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } }, findings: [
+        { title: "Marcas de sujidade e desgaste na parede", description: "Marcas visíveis", severity: "LOW", recommendedAction: "Avaliar limpeza", evidenceIds: [] },
+        { title: "Obstrução parcial do nicho e armário", description: "Vista parcialmente obstruída", severity: "LOW", recommendedAction: "Revisar imagem", evidenceIds: [] },
+      ],
+    } } }) });
+  });
+  await page.getByRole("button", { name: "Abrir detalhes do laudo de Imóvel QA" }).click();
+  const report = page.getByRole("dialog", { name: "Laudo de vistoria" });
+  const layout = report.getByRole("group", { name: "Visualização dos itens" });
+  const notObserved = report.locator(".report-inventory-disclosure");
+  await expect(notObserved.locator("summary")).toHaveText("Itens não observados (4)");
+  await expect(notObserved).not.toHaveAttribute("open");
+  await expect(report.getByRole("heading", { name: "Armários planejados" })).toBeHidden();
+  await notObserved.locator("summary").click();
+  await expect(report.getByRole("heading", { name: "Armários planejados" })).toBeVisible();
+  await expect(notObserved).toHaveAttribute("open", "");
+  await expect(layout.getByRole("button", { name: "Cartões" })).toHaveAttribute("aria-pressed", "true");
+  const columns = await report.locator(".report-inventory-items").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
+  expect(columns).toBe((page.viewportSize()?.width ?? 0) <= 768 ? 1 : 2);
+  const previewDir = process.env.INSPECTION_REPORT_PREVIEWS;
+  if (previewDir) {
+    mkdirSync(previewDir, { recursive: true });
+    await report.screenshot({ path: resolve(previewDir, `${testInfo.project.name}-cartoes.png`) });
+    await report.locator(".report-inventory").screenshot({ path: resolve(previewDir, `${testInfo.project.name}-cartoes-itens.png`) });
+  }
+  await layout.getByRole("button", { name: "Lista" }).click();
+  await expect(layout.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
+  await expect(report.locator(".report-inventory-entry")).toHaveCount(4);
+  if (previewDir) {
+    await report.screenshot({ path: resolve(previewDir, `${testInfo.project.name}-lista.png`) });
+    await report.locator(".report-inventory").screenshot({ path: resolve(previewDir, `${testInfo.project.name}-lista-itens.png`) });
+  }
+  await notObserved.locator("summary").click();
+  await expect(report.getByRole("heading", { name: "Armários planejados" })).toBeHidden();
 });

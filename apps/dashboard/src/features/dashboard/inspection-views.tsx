@@ -15,6 +15,8 @@ export type InspectionActionHandlers = {
   onCancel: (inspection: InspectionRecord) => void;
   onInvalidate: (inspection: InspectionRecord) => void;
   onRecapture: (inspection: InspectionRecord) => void;
+  onResendInvitation: (inspection: InspectionRecord) => void;
+  resendingInspectionId?: string;
 };
 
 export const inspectionViewOptions: Array<{ value: InspectionView; label: string }> = [
@@ -190,7 +192,7 @@ function InspectionStatus({ status }: { status: string }) {
 
 function InspectionActions({ inspection, actions }: { inspection: InspectionRecord; actions?: InspectionActionHandlers }) {
   if (!actions) return null;
-  return <details className="inspection-action-menu"><summary>Ações</summary><div><button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button>{canRequestInspectionRecapture(inspection) && <button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar complemento</button>}</div></details>;
+  return <details className="inspection-action-menu"><summary>Ações</summary><div>{["PLANNED", "INVITED"].includes(inspection.status) && <button type="button" className="secondary" disabled={actions.resendingInspectionId === inspection.id} onClick={() => actions.onResendInvitation(inspection)}>{actions.resendingInspectionId === inspection.id ? "Reenviando…" : "Reenviar email"}</button>}<button type="button" onClick={() => actions.onCancel(inspection)}>Cancelar</button><button type="button" className="secondary" onClick={() => actions.onInvalidate(inspection)}>Invalidar</button>{canRequestInspectionRecapture(inspection) && <button type="button" className="secondary" onClick={() => actions.onRecapture(inspection)}>Solicitar complemento</button>}</div></details>;
 }
 
 function EmptyInspections() {

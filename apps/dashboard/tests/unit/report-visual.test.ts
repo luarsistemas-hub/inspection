@@ -56,6 +56,43 @@ describe("Report evidence presentation", () => {
     expect(managerDocument.querySelector(".report-publication-menu summary")?.getAttribute("aria-label")).toBe("Gerenciar publicação");
   });
 
+  it("switches between compact cards and a list without hiding inventory details", async () => {
+    const report = {
+      ...reportWith([], [], []),
+      inventory: {
+        referenceVersionNumber: 4,
+        purpose: "INVENTORY_UPDATE",
+        coverage: { expectedItems: 2, assessedItems: 1, notObserved: 1, environmentsNotCaptured: [], environmentsAddedDuringCapture: [] },
+        problems: [
+          { environment: "Cozinha", type: "CABINET", name: "Armários planejados", status: "NOT_OBSERVED", conditionBefore: "GOOD", conditionAfter: null, reason: "Não foi encontrada uma vista correspondente.", pairs: [] },
+          { environment: "Cozinha", type: "SINK", name: "Pia", status: "MISSING", conditionBefore: "GOOD", conditionAfter: null, reason: "Item não encontrado.", pairs: [] },
+        ],
+        informational: [],
+      },
+    } as ComponentProps<typeof ReportVisual>["report"];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => { root.render(createElement(ReportVisual, { report, onDownload: () => {} })); });
+    expect(host.querySelector(".report-inventory--cards")).not.toBeNull();
+    expect(host.querySelector('[aria-label="Visualização dos itens"]')).not.toBeNull();
+    const hiddenItems = host.querySelector<HTMLDetailsElement>(".report-inventory-disclosure");
+    expect(hiddenItems?.open).toBe(false);
+    expect(hiddenItems?.querySelector("summary")?.textContent).toBe("Itens não observados (1)");
+    expect(host.querySelector(".report-inventory-items")?.textContent).toContain("Pia");
+    expect(host.querySelector(".report-inventory-items")?.textContent).not.toContain("Armários planejados");
+    await act(async () => { hiddenItems?.querySelector("summary")?.click(); });
+    expect(hiddenItems?.open).toBe(true);
+    expect(host.textContent).toContain("Não foi encontrada uma vista correspondente.");
+    const listButton = [...host.querySelectorAll<HTMLButtonElement>(".report-inventory-layout button")].find((button) => button.textContent === "Lista");
+    await act(async () => { listButton?.click(); });
+    expect(host.querySelector(".report-inventory--list")).not.toBeNull();
+    expect(listButton?.getAttribute("aria-pressed")).toBe("true");
+    expect(host.textContent).toContain("Armários planejados");
+    await act(async () => { hiddenItems?.querySelector("summary")?.click(); });
+    expect(hiddenItems?.open).toBe(false);
+    await act(async () => { root.unmount(); });
+  });
+
   it("UT-354 and UT-356 render a NORMAL v2 summary and separate added environments", () => {
     const report = { ...reportWith([], [], []), classification: "NORMAL", inventory: { referenceVersionNumber: 2, purpose: "MOVE_IN", coverage: { expectedItems: 24, assessedItems: 18, notObserved: 0, environmentsNotCaptured: [], environmentsAddedDuringCapture: ["Depósito"] }, problems: [], informational: [] } } as ComponentProps<typeof ReportVisual>["report"];
     const markup = renderToStaticMarkup(createElement(ReportVisual, { report, onDownload: () => {} }));

@@ -14,6 +14,7 @@ import (
 	inspectioncore "inspection/services/inspection/internal/features/inspections/core"
 	invitationcore "inspection/services/inspection/internal/features/invitations/core"
 	responsibleemail "inspection/services/inspection/internal/features/invitations/correct_responsible_email"
+	resendcapture "inspection/services/inspection/internal/features/invitations/resend_capture_invitation"
 	adminactivation "inspection/services/inspection/internal/features/onboarding/admin_activation"
 	onboardingcomplete "inspection/services/inspection/internal/features/onboarding/complete"
 	deliverystatus "inspection/services/inspection/internal/features/onboarding/delivery_status"
@@ -48,6 +49,7 @@ type Resolver struct {
 	UserActivation           activateinternal.Service
 	OnboardingBootstrap      onboardingbootstrap.Service
 	ResponsibleEmail         responsibleemail.Service
+	ResendCaptureInvitation  resendcapture.Service
 	OnboardingDeliveryStatus deliverystatus.Service
 	OwnerProvider            keycloak.OwnerIdentityProvider
 	OwnerIssuer              string

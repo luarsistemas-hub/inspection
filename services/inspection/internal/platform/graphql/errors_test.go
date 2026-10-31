@@ -18,7 +18,7 @@ func TestPresentErrorLogsInternalCauseWithoutLeakingIt(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	ctx := requestctx.WithMetadata(context.Background(), requestctx.Metadata{CorrelationID: "corr-qa"})
 	public := PresentError(ctx, errors.New("postgres password=secret"))
-	if public.Message != "internal error" || public.Extensions["correlationId"] != "corr-qa" || public.Extensions["code"] != string(apperror.Internal) {
+	if public.Message != "Não foi possível concluir a operação." || public.Extensions["correlationId"] != "corr-qa" || public.Extensions["code"] != string(apperror.Internal) {
 		t.Fatalf("unexpected public error: %+v", public)
 	}
 	logged := output.String()
@@ -45,7 +45,7 @@ func TestErrorMapperContractsUT042UT043(t *testing.T) {
 		}
 	}
 	unknown := MapError(errors.New("postgres password=secret"), "corr")
-	if unknown.Code != apperror.Internal || unknown.Message != "internal error" {
+	if unknown.Code != apperror.Internal || unknown.Message != "Não foi possível concluir a operação." {
 		t.Fatalf("unknown leak: %+v", unknown)
 	}
 }

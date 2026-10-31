@@ -39,7 +39,7 @@ func TestFailureInjectionAtDatabaseBoundary(t *testing.T) {
 			if code != tc.want {
 				t.Fatalf("code = %s, want %s (error %v)", code, tc.want, err)
 			}
-			if tc.mode == "internal" && (safe != "internal error" || strings.Contains(safe, Secret)) {
+			if tc.mode == "internal" && (safe != "Não foi possível concluir a operação." || strings.Contains(safe, Secret)) {
 				t.Fatalf("internal error was not safely presented: %q", safe)
 			}
 		})

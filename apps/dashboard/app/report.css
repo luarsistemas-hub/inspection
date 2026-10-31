@@ -46,10 +46,10 @@
 .report-header--internal .report-address {
   margin: 0;
   color: var(--inspection-ink);
-  font-family: var(--inspection-font-display);
-  font-size: 1.6rem;
-  font-weight: 600;
-  line-height: 1.25;
+  font-family: var(--inspection-font-sans);
+  font-size: clamp(1.05rem, 1.2vw, 1.25rem);
+  font-weight: 650;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .report-header--internal .report-version {
@@ -395,6 +395,48 @@
 .report-video-source-switch button { min-block-size: 2.5rem; padding: .4rem .8rem; border: 1px solid var(--inspection-border); border-radius: .5rem; background: var(--inspection-surface-raised); color: var(--inspection-muted); cursor: pointer; }
 .report-video-source-switch button[aria-pressed="true"] { border-color: var(--inspection-brand); color: var(--inspection-brand); background: var(--inspection-surface-container); }
 .report-video-time-note { color: var(--inspection-muted); font-size: .82rem; }
+/* Two reading densities for the internal inventory comparison. */
+.report-inventory-items { display: grid; gap: 1rem; }
+.report-dialog-body .report-inventory {
+  gap: .75rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border-block-end: 1px solid var(--inspection-border);
+}
+.report-dialog-body .report-inventory > header { align-items: end; }
+.report-dialog-body .report-inventory > header h3 { margin: .3rem 0; font-size: 1.25rem; }
+.report-dialog-body .report-inventory > header p { margin: 0; }
+.report-dialog-body .report-inventory > header > strong { color: var(--inspection-ink); font-size: .85rem; }
+.report-inventory-layout { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; color: var(--inspection-muted); font-size: .78rem; }
+.report-inventory-layout > div { display: inline-flex; gap: .2rem; padding: .2rem; border: 1px solid var(--inspection-border); border-radius: .6rem; background: var(--inspection-surface); }
+.report-inventory-layout button { min-block-size: 2rem; padding: .3rem .7rem; border: 0; border-radius: .4rem; background: transparent; color: var(--inspection-muted); font: 600 .78rem/1.3 var(--inspection-font-sans); cursor: pointer; }
+.report-inventory-layout button:hover:not(:disabled) { background: var(--inspection-surface-container); color: var(--inspection-ink); }
+.report-inventory-layout button[aria-pressed="true"],
+.report-inventory-layout button[aria-pressed="true"]:hover:not(:disabled) { background: var(--inspection-brand); color: var(--inspection-on-brand); }
+.report-inventory-layout button:focus-visible { outline: var(--inspection-focus-ring); outline-offset: 2px; }
+.report-dialog-body .report-inventory-coverage { margin: 0; color: var(--inspection-muted); font-size: .82rem; }
+.report-inventory-disclosure { border-block-start: 1px solid var(--inspection-border); }
+.report-inventory-disclosure > summary { padding: .7rem 0; color: var(--inspection-ink); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.report-inventory-disclosure > summary::marker { color: var(--inspection-brand); }
+.report-inventory-disclosure > summary:focus-visible { outline: var(--inspection-focus-ring); outline-offset: 2px; }
+.report-inventory-disclosure > .report-inventory-items { padding-block: .15rem .75rem; }
+.report-dialog-body .report-inventory-items { display: grid; gap: .65rem; }
+.report-dialog-body .report-inventory--cards .report-inventory-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.report-dialog-body .report-inventory-entry { align-content: start; gap: .55rem; min-inline-size: 0; padding: .85rem 1rem; border-color: var(--inspection-border); border-radius: .65rem; }
+.report-dialog-body .report-inventory-entry-copy { display: grid; gap: .3rem; min-inline-size: 0; }
+.report-dialog-body .report-inventory-entry p { margin: 0; }
+.report-dialog-body .report-inventory-entry-location { color: var(--inspection-muted); font-size: .76rem; }
+.report-dialog-body .report-inventory-entry-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .3rem .7rem; }
+.report-dialog-body .report-inventory-entry h4 { margin: 0; color: var(--inspection-ink); font: 650 .95rem/1.35 var(--inspection-font-sans); }
+.report-dialog-body .report-inventory-entry-status { flex: 0 0 auto; color: var(--inspection-warning); font-size: .74rem; font-weight: 650; }
+.report-dialog-body .report-inventory-entry-condition { color: var(--inspection-muted); font-size: .78rem; line-height: 1.4; }
+.report-dialog-body .report-inventory-entry-reason { color: var(--inspection-ink); font-size: .82rem; line-height: 1.4; }
+.report-dialog-body .report-inventory-entry-no-image { color: var(--inspection-muted); font-size: .75rem; }
+.report-dialog-body .report-inventory--list .report-inventory-items { gap: 0; border-block-start: 1px solid var(--inspection-border); }
+.report-dialog-body .report-inventory--list .report-inventory-entry { grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; padding: .7rem .35rem; border: 0; border-radius: 0; border-block-end: 1px solid var(--inspection-border); }
+.report-dialog-body .report-inventory--list .report-inventory-entry-title { justify-content: flex-start; }
+.report-dialog-body .report-inventory--list .report-inventory-entry-no-image { align-self: center; white-space: nowrap; }
+.report-dialog-body .report-inventory--list .report-inventory-pairs { grid-column: 1 / -1; }
+
 @media (max-width: 48rem) {
   .inspection-dialog--wide:has(.report-dialog-body) {
     padding: max(.5rem, env(safe-area-inset-top)) 0 max(.5rem, env(safe-area-inset-bottom));
@@ -405,7 +447,11 @@
   }
   .inspection-dialog--wide:has(.report-dialog-body) .inspection-dialog__header h2 { font-size: 1.12rem; }
   .report-dialog-body .report-header--internal { padding: 1rem; }
-  .report-header--internal .report-address { font-size: 1.4rem; }
+  .report-header--internal .report-address { font-size: 1.05rem; }
+  .report-dialog-body .report-inventory { padding: 1rem; }
+  .report-dialog-body .report-inventory--cards .report-inventory-items { grid-template-columns: minmax(0, 1fr); }
+  .report-dialog-body .report-inventory--list .report-inventory-entry { grid-template-columns: minmax(0, 1fr); }
+  .report-dialog-body .report-inventory--list .report-inventory-entry-no-image { white-space: normal; }
   .report-download-full { display: none; }
   .report-download-short { display: inline; }
   .report-download-button,
