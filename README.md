@@ -66,6 +66,8 @@ Mailpit local em <http://localhost:8026>.
 ./scripts/local.sh status
 ./scripts/local.sh logs inspection-api
 ./scripts/local.sh migrate
+./scripts/install-git-hooks.sh
+./scripts/pre-push.sh
 ./scripts/local.sh down
 ./scripts/local.sh down -v
 ./scripts/verify.sh

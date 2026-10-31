@@ -1473,6 +1473,7 @@ export type Mutation = {
   requestRecapture: RecapturePayload;
   requestVideoReplacement: VideoReplacementPayload;
   resendCounterpartyInvitation: CounterpartyInvitationPayload;
+  resendInspectionInvitation: ResendInspectionInvitationPayload;
   resendInternalUserInvitation: MembershipPayload;
   resolveBaselineContestation: CounterpartyInvitationPayload;
   retryInventoryDraft: OriginVersionPayload;
@@ -1863,6 +1864,11 @@ export type MutationRequestVideoReplacementArgs = {
 
 export type MutationResendCounterpartyInvitationArgs = {
   input: ResendCounterpartyInvitationInput;
+};
+
+
+export type MutationResendInspectionInvitationArgs = {
+  input: ResendInspectionInvitationInput;
 };
 
 
@@ -3265,6 +3271,20 @@ export type RequestVideoReplacementInput = {
 export type ResendCounterpartyInvitationInput = {
   clientMutationId: Scalars['String']['input'];
   counterpartyInvitationId: Scalars['ID']['input'];
+};
+
+export type ResendInspectionInvitationInput = {
+  clientMutationId: Scalars['String']['input'];
+  inspectionId: Scalars['ID']['input'];
+};
+
+export type ResendInspectionInvitationPayload = {
+  __typename?: 'ResendInspectionInvitationPayload';
+  clientMutationId: Scalars['String']['output'];
+  deliveryStatus: Maybe<Scalars['String']['output']>;
+  inspectionId: Maybe<Scalars['ID']['output']>;
+  invitationId: Maybe<Scalars['ID']['output']>;
+  userErrors: Array<UserError>;
 };
 
 export type ResendInternalUserInvitationInput = {

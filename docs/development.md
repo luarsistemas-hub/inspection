@@ -11,6 +11,23 @@ for product in admin dashboard capture onboarding; do (cd "apps/$product" && npm
 node scripts/lib/design-system-migration.mjs validate --inventory docs/design-system/migration-inventory.json
 ```
 
+Ative os hooks versionados uma vez por clone:
+
+```sh
+./scripts/install-git-hooks.sh
+```
+
+Antes de cada push, o hook executa `./scripts/pre-push.sh`. Esse gate regenera
+os contratos GraphQL, exige que os artefatos gerados já estejam no commit e
+executa os testes unitários do Go, Design System, Admin, Dashboard, Capture e
+Onboarding. Os comandos também podem ser executados manualmente:
+
+```sh
+./scripts/check-generated.sh
+./scripts/test-unit.sh
+./scripts/pre-push.sh
+```
+
 O CI valida o inventário, as orientações de uso e as exceções do design system. A evidência manual de acessibilidade permanece pendente e é exigida pelos gates completos `./scripts/verify.sh` e `./scripts/parity-gate.sh`; esses comandos falham até que os resultados reais sejam registrados em `docs/design-system/accessibility-evidence.json`.
 
 Testes PostgreSQL exigem `INSPECTION_TEST_DATABASE_URL`; testes com tag `integration` usam Postgres, RabbitMQ e providers locais. O harness em `services/inspection/internal/integration/harness` oferece fixtures, test auth e esperas de outbox/inbox. Playwright exige navegadores (`npx playwright install chromium webkit`). A CI executa codegen, gofmt, vet, builds, auditoria npm, Vitest, Playwright, Compose e validação Compozy.

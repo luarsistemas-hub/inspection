@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+workspace=$(git rev-parse --show-toplevel)
+exec "$workspace/scripts/pre-push.sh"
