@@ -20,10 +20,14 @@ COMPOSE_SERVICES = {name: spec["service"] for name, spec in CATALOG_DATA["compon
 INFRA_KEYS = ("POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE")
 COMPOSITION_KEYS = set(IMAGE_KEYS.values()) | set(INFRA_KEYS)
 PREVIOUS_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE"}
-LEGACY_OPTIONAL_COMPOSITION_KEYS = COMPOSITION_KEYS - {"VIDEO_WORKER_IMAGE"}
-LEGACY_OLD_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE"}
+LEGACY_NO_TRANSCRIPTION_COMPOSITION_KEYS = COMPOSITION_KEYS - {"TRANSCRIPTION_WORKER_IMAGE"}
+LEGACY_NO_TRANSCRIPTION_OLD_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}
+LEGACY_NO_VIDEO_COMPOSITION_KEYS = COMPOSITION_KEYS - {"VIDEO_WORKER_IMAGE"}
+LEGACY_NO_VIDEO_OLD_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE"}
+LEGACY_OPTIONAL_COMPOSITION_KEYS = COMPOSITION_KEYS - {"VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}
+LEGACY_OLD_COMPOSITION_KEYS = COMPOSITION_KEYS - {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}
 IMAGE_REF = re.compile(r"[^\s@]+@sha256:[a-f0-9]{64}\Z")
-GO_COMPONENTS = {"api", "worker", "scheduler", "video-worker", "operations"}
+GO_COMPONENTS = {"api", "worker", "scheduler", "video-worker", "transcription-worker", "operations"}
 DATABASE_COMPATIBILITY_PATHS = ("services/inspection/internal/platform/database/migrations", "services/inspection/internal/features/analysis/seed_prompt", "services/inspection/internal/features/templates/catalog/seeds.go", "services/inspection/cmd/inspection-seed", "services/inspection/cmd/inspection-prompt-seed")
 CONTRACT_COMPATIBILITY_PATHS = ("services/inspection/schema.graphqls", "services/inspection/internal/platform/graphql", "services/inspection/internal/contracts/events")
 PUBLIC_PROFILE_KEYS = {
@@ -191,16 +195,19 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str] | No
     legacy_keys = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", *(set(INFRA_KEYS) - {"LITELLM_IMAGE"})}
     if set(active) == legacy_keys:
         legacy = active["API_IMAGE"]
-        active = {**active, **{IMAGE_KEYS[name]: legacy for name in GO_COMPONENTS - {"video-worker"}}}
-    if set(active) and set(active) not in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS, LEGACY_OLD_COMPOSITION_KEYS):
+        active = {**active, **{IMAGE_KEYS[name]: legacy for name in GO_COMPONENTS - {"video-worker", "transcription-worker"}}}
+    accepted_receipts = {frozenset(keys) for keys in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS, LEGACY_OLD_COMPOSITION_KEYS,
+                         LEGACY_NO_TRANSCRIPTION_COMPOSITION_KEYS, LEGACY_NO_TRANSCRIPTION_OLD_COMPOSITION_KEYS,
+                         LEGACY_NO_VIDEO_COMPOSITION_KEYS, LEGACY_NO_VIDEO_OLD_COMPOSITION_KEYS)}
+    if active and frozenset(active) not in accepted_receipts:
         missing = sorted(COMPOSITION_KEYS - set(active))
         raise ValueError("active state is incomplete: " + ", ".join(missing))
     if any(not IMAGE_REF.fullmatch(value) for value in active.values()):
         raise ValueError("active state contains a mutable or invalid image reference")
-    if active and ("VIDEO_WORKER_IMAGE" not in active or "LITELLM_IMAGE" not in active) and set(targets) != set(COMPONENTS):
-        raise ValueError("upgrading a pre-video or legacy receipt requires selecting the complete ten-component composition")
+    if active and ("VIDEO_WORKER_IMAGE" not in active or "TRANSCRIPTION_WORKER_IMAGE" not in active or "LITELLM_IMAGE" not in active) and set(targets) != set(COMPONENTS):
+        raise ValueError("upgrading a legacy receipt requires selecting the complete eleven-component composition")
     if not active and set(targets) != set(COMPONENTS):
-        raise ValueError("first deployment must select all ten components")
+        raise ValueError("first deployment must select all eleven components")
     if active and "LITELLM_IMAGE" not in active and "worker" not in targets:
         raise ValueError("introducing the LiteLLM gateway requires selecting worker")
 
@@ -217,7 +224,7 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str] | No
     for component, item in candidate_components.items():
         if component in targets:
             desired[IMAGE_KEYS[component]] = item["image"]
-    if set(desired) not in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS, LEGACY_OLD_COMPOSITION_KEYS):
+    if frozenset(desired) not in accepted_receipts:
         raise ValueError("candidate composition is incomplete")
 
     database_change = database_impact != "none"
@@ -265,16 +272,25 @@ def create_plan(active: dict[str, str], candidate: dict, targets: list[str] | No
 
 
 def create_rollback_plan(active: dict[str, str], previous: dict[str, str], targets: list[str], deployment_id: str | None = None, source_sha: str = "", *, active_sources: dict[str, str] | None = None, previous_sources: dict[str, str] | None = None, runtime_config_sha: str | None = None, active_runtime_config_sha: str | None = None) -> dict:
-    if set(active) not in (COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS) or set(previous) not in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS, LEGACY_OLD_COMPOSITION_KEYS):
+    accepted_receipts = {frozenset(keys) for keys in (COMPOSITION_KEYS, PREVIOUS_COMPOSITION_KEYS, LEGACY_OPTIONAL_COMPOSITION_KEYS, LEGACY_OLD_COMPOSITION_KEYS,
+                         LEGACY_NO_TRANSCRIPTION_COMPOSITION_KEYS, LEGACY_NO_TRANSCRIPTION_OLD_COMPOSITION_KEYS,
+                         LEGACY_NO_VIDEO_COMPOSITION_KEYS, LEGACY_NO_VIDEO_OLD_COMPOSITION_KEYS)}
+    if frozenset(active) not in accepted_receipts or frozenset(previous) not in accepted_receipts:
         raise ValueError("rollback requires complete current and previous image receipts")
     if not targets or set(targets) - set(COMPONENTS) or len(set(targets)) != len(targets):
         raise ValueError("rollback targets must be unique known components")
     if any(not IMAGE_REF.fullmatch(value) for value in previous.values()):
         raise ValueError("previous composition contains a non-digest image")
     if set(targets) & GO_COMPONENTS:
-        targets = [name for name in COMPONENTS if name in (set(targets) | GO_COMPONENTS)]
+        coordinated = set(GO_COMPONENTS)
+        for worker in ("video-worker", "transcription-worker"):
+            if IMAGE_KEYS[worker] not in active and IMAGE_KEYS[worker] not in previous:
+                coordinated.discard(worker)
+        targets = [name for name in COMPONENTS if name in (set(targets) | coordinated)]
     if "VIDEO_WORKER_IMAGE" in active and "VIDEO_WORKER_IMAGE" not in previous and set(targets) & GO_COMPONENTS:
         raise ValueError("rollback target has no video-worker image; rollback is unsupported")
+    if "TRANSCRIPTION_WORKER_IMAGE" in active and "TRANSCRIPTION_WORKER_IMAGE" not in previous and set(targets) & GO_COMPONENTS:
+        raise ValueError("rollback target has no transcription-worker image; rollback is unsupported")
     if not active_runtime_config_sha or not runtime_config_sha or active_runtime_config_sha != runtime_config_sha:
         raise ValueError("automatic rollback requires matching runtime configuration hashes; create a corrective plan")
     if not re.fullmatch(r"[a-f0-9]{40}", source_sha):
@@ -301,6 +317,7 @@ def create_rollback_plan(active: dict[str, str], previous: dict[str, str], targe
         "targets": targets,
         "desiredImages": desired,
         "rollbackTargetHasVideoWorker": "VIDEO_WORKER_IMAGE" in previous,
+        "rollbackTargetHasTranscriptionWorker": "TRANSCRIPTION_WORKER_IMAGE" in previous,
         **({"componentSources": component_sources} if component_sources is not None else {}),
         "operations": {"runMigration": False, "runSeed": False},
         "compatibility": {"databaseChange": "none", "contractChange": "recovery"},

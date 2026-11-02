@@ -327,6 +327,29 @@ services:
     cpus: 1.0
     networks: [data, app]
 
+  inspection-transcription-worker:
+    image: ${TRANSCRIPTION_WORKER_IMAGE:?immutable transcription worker image digest required}
+    logging: *default-logging
+    restart: unless-stopped
+    stop_grace_period: 90s
+    environment:
+      <<: *runtime-env
+      INSPECTION_DATABASE_URL: ${INSPECTION_DISPATCHER_DATABASE_URL:?secret worker DSN required}
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      dragonfly: { condition: service_healthy }
+      litellm: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: 1.0
+    networks: [data, app]
+
   admin:
     image: ${ADMIN_IMAGE:?immutable Admin image digest required}
     logging: *default-logging

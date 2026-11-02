@@ -52,6 +52,7 @@ class ExportStateTests(unittest.TestCase):
             blocked_result = subprocess.run(["bash", str(target), "blocked"], env={**os.environ, "PATH": f"{root}/bin:{os.environ['PATH']}", "INSPECTION_RELEASES_ROOT": str(root / "opt/inspection/releases")}, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("VIDEO_WORKER_IMAGE=ghcr.io/example/inspection-video-worker@sha256:" + "a" * 64, result.stdout)
+        self.assertIn("TRANSCRIPTION_WORKER_IMAGE=ghcr.io/example/inspection-transcription-worker@sha256:" + "a" * 64, result.stdout)
         self.assertIn("COMPONENT_SOURCE_VIDEO_WORKER=" + "c" * 40, result.stdout)
         self.assertIn("RUNTIME_CONFIG_SHA256=" + "f" * 64, result.stdout)
         self.assertEqual(blocked_result.returncode, 0, blocked_result.stderr)

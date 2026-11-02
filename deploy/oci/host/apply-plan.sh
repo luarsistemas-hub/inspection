@@ -102,7 +102,7 @@ import json,sys
 plan=json.load(open(sys.argv[1], encoding="utf-8"))
 components=set(json.load(open(sys.argv[2], encoding="utf-8"))["components"])
 if set(plan["targets"]) != components:
-    raise SystemExit("Recovery requires all ten components")
+    raise SystemExit("Recovery requires all eleven components")
 PY
 fi
 
@@ -147,7 +147,8 @@ for line in open(sys.argv[1], encoding="utf-8"):
 legacy = {"API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE"}
 if set(values) == legacy:
     for key in ("WORKER_IMAGE", "SCHEDULER_IMAGE", "OPERATIONS_IMAGE"): values[key] = values["API_IMAGE"]
-if values and set(values) not in (image_keys, image_keys-{"VIDEO_WORKER_IMAGE"}, image_keys-{"VIDEO_WORKER_IMAGE", "LITELLM_IMAGE"}): raise SystemExit("active image receipt is incomplete; synchronize state")
+omissions = ({frozenset(), frozenset({"LITELLM_IMAGE"}), frozenset({"TRANSCRIPTION_WORKER_IMAGE"}), frozenset({"TRANSCRIPTION_WORKER_IMAGE","LITELLM_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","LITELLM_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","TRANSCRIPTION_WORKER_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","TRANSCRIPTION_WORKER_IMAGE","LITELLM_IMAGE"})})
+if values and frozenset(image_keys - set(values)) not in omissions: raise SystemExit("active image receipt is incomplete; synchronize state")
 print(hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
 PY
 )"
@@ -236,7 +237,7 @@ while IFS= read -r component; do
   [[ -n "$value" ]] && changed_images+=("$value")
 done < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["targets"]))' "$plan_path")
 go_selected=0
-for component in api worker scheduler video-worker operations; do
+for component in api worker scheduler video-worker transcription-worker operations; do
   if python3 - "$plan_path" "$component" <<'PY'
 import json,sys
 raise SystemExit(0 if sys.argv[2] in json.load(open(sys.argv[1]))["targets"] else 1)
@@ -246,6 +247,9 @@ done
 if [[ "$operation" == recovery ]]; then go_selected=1; fi
 if [[ "$operation" == rollback && "$go_selected" == 1 && -s "$old_receipt" && "$(grep -c '^VIDEO_WORKER_IMAGE=' "$old_receipt")" -gt 0 && "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1])).get("rollbackTargetHasVideoWorker", False)).lower())' "$plan_path")" != true ]]; then
   echo 'Rollback target has no video-worker image; refusing to leave accepted video work without a worker.' >&2; exit 1
+fi
+if [[ "$operation" == rollback && "$go_selected" == 1 && -s "$old_receipt" && "$(grep -c '^TRANSCRIPTION_WORKER_IMAGE=' "$old_receipt")" -gt 0 && "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1])).get("rollbackTargetHasTranscriptionWorker", False)).lower())' "$plan_path")" != true ]]; then
+  echo 'Rollback target has no transcription-worker image; refusing to leave accepted transcription work without a worker.' >&2; exit 1
 fi
 migration=0
 if [[ "$operation" != rollback && "$go_selected" == 1 ]]; then migration=1; fi

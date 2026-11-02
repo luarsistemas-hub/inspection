@@ -39,7 +39,7 @@ transfer_release() {
     grep -qx \"RELEASE_SHA=$release\" \"\$manifest\"
     grep -qx \"BUNDLE_SHA256=\$(awk 'NR==1 {print \$1}' \"\$checksum\")\" \"\$manifest\"
     for key in $catalog_image_keys; do
-      if [[ \$key == WORKER_IMAGE || \$key == SCHEDULER_IMAGE || \$key == OPERATIONS_IMAGE || \$key == LITELLM_IMAGE || \$key == VIDEO_WORKER_IMAGE ]] && ! grep -q ^\$key= \$manifest; then continue; fi
+      if [[ \$key == WORKER_IMAGE || \$key == SCHEDULER_IMAGE || \$key == OPERATIONS_IMAGE || \$key == LITELLM_IMAGE || \$key == VIDEO_WORKER_IMAGE || \$key == TRANSCRIPTION_WORKER_IMAGE ]] && ! grep -q ^\$key= \$manifest; then continue; fi
       value=\$(grep -m1 \"^\$key=\" \"\$manifest\" | cut -d= -f2-)
       [[ \"\$value\" =~ ^[^[:space:]@]+@sha256:[a-f0-9]{64}$ ]] || { echo \"Invalid digest-pinned image reference: \$key\" >&2; exit 1; }
       [[ \$(grep -c \"^\$key=\" \"\$manifest\") == 1 ]] || { echo \"Duplicate or missing image reference: \$key\" >&2; exit 1; }
@@ -239,8 +239,8 @@ PY
     fi
     require_host
     if [[ "$1" == deploy || "$1" == rollback ]]; then
-      if ssh_host "sudo grep -q '^VIDEO_WORKER_IMAGE=' /etc/inspection/releases/current.env"; then
-        echo 'Legacy deploy/rollback is disabled for video-enabled receipts; use plan/apply.' >&2
+      if ssh_host "sudo grep -Eq '^(VIDEO_WORKER|TRANSCRIPTION_WORKER)_IMAGE=' /etc/inspection/releases/current.env"; then
+        echo 'Legacy deploy/rollback is disabled for worker-enabled receipts; use plan/apply.' >&2
         exit 1
       fi
     fi
@@ -296,7 +296,7 @@ for manifest in /etc/inspection/releases/current.env /etc/inspection/releases/pr
   done < "$manifest"
   image_count=$((${#seen[@]} - 1))
   valid=0
-  for omitted in '' VIDEO_WORKER_IMAGE 'VIDEO_WORKER_IMAGE LITELLM_IMAGE'; do
+  for omitted in '' LITELLM_IMAGE TRANSCRIPTION_WORKER_IMAGE 'TRANSCRIPTION_WORKER_IMAGE LITELLM_IMAGE' VIDEO_WORKER_IMAGE 'VIDEO_WORKER_IMAGE LITELLM_IMAGE' 'VIDEO_WORKER_IMAGE TRANSCRIPTION_WORKER_IMAGE' 'VIDEO_WORKER_IMAGE TRANSCRIPTION_WORKER_IMAGE LITELLM_IMAGE'; do
     expected=("")
     for key in "${image_keys[@]}"; do
       [[ -n "$key" ]] || continue

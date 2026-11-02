@@ -605,6 +605,7 @@ test.describe("Admin deterministic feature integration (mocked GraphQL; no LLM p
   test("address form fits small screens with enlarged text and both themes", async ({ page }) => {
     await installMocks(page);
     await loginAsMockAdmin(page, "/assets");
+    await expect(page.getByRole("button", { name: "Registrar imóvel" })).toBeVisible();
     await page.setViewportSize({ width: 320, height: 900 });
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
     for (const theme of ["light", "dark"]) {

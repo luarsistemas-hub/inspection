@@ -9,8 +9,8 @@ release_dir="/opt/inspection/releases/$release"
 release_env="/etc/inspection/releases/$release.env"
 [[ -d "$release_dir/deploy/oci" && -s "$release_env" ]] || { echo "Release bundle or manifest is missing" >&2; exit 1; }
 grep -qx "RELEASE_SHA=$release" "$release_env" || { echo "Release manifest SHA does not match" >&2; exit 1; }
-if [[ -s /etc/inspection/releases/current.env ]] && grep -q '^VIDEO_WORKER_IMAGE=' /etc/inspection/releases/current.env; then
-  echo 'Legacy deploy/rollback is disabled for video-enabled receipts; use plan/apply.' >&2
+if [[ -s /etc/inspection/releases/current.env ]] && grep -Eq '^(VIDEO_WORKER|TRANSCRIPTION_WORKER)_IMAGE=' /etc/inspection/releases/current.env; then
+  echo 'Legacy deploy/rollback is disabled for worker-enabled receipts; use plan/apply.' >&2
   exit 1
 fi
 
@@ -35,7 +35,7 @@ if [[ -f "$block_path" ]]; then install -m 0600 "$block_path" "$previous_block";
 
 phase=preflight
 block_reason=""
-app_services=(inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding caddy)
+app_services=(inspection-api inspection-worker inspection-scheduler inspection-transcription-worker admin dashboard capture onboarding caddy)
 atomic_link() {
   local target="$1" link="$2" temporary="${2}.new.$$"
   ln -s "$target" "$temporary"
@@ -82,7 +82,7 @@ on_exit() {
     else
       block_reason="Deployment failed during $phase; application services remain stopped."
       write_block
-      docker compose --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml" stop inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding caddy >/dev/null 2>&1 || true
+      docker compose --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml" stop inspection-api inspection-worker inspection-scheduler inspection-transcription-worker admin dashboard capture onboarding caddy >/dev/null 2>&1 || true
       echo "Release $release was not promoted. Services remain stopped and a deployment block was recorded; do not restart until schema compatibility is verified." >&2
     fi
   fi

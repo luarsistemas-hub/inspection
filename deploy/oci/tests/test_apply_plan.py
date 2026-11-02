@@ -55,9 +55,9 @@ class ApplyPlanTests(unittest.TestCase):
         runtime_hash = PLANNER.runtime_config_sha256(candidate.parents[1])
         (root / "opt/inspection/current").symlink_to(previous)
         images = {name.upper().replace("-", "_") + "_IMAGE": "example.test/" + name + "@sha256:" + "b" * 64
-                  for name in ("api", "worker", "scheduler", "video-worker", "operations", "admin", "dashboard",
+                  for name in ("api", "worker", "scheduler", "video-worker", "transcription-worker", "operations", "admin", "dashboard",
                                "capture", "onboarding", "keycloak", "postgres", "dragonfly", "rabbitmq", "caddy", "litellm")}
-        old_images = {key: value for key, value in images.items() if key not in {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE"}}
+        old_images = {key: value for key, value in images.items() if key not in {"LITELLM_IMAGE", "VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}}
         if video_active:
             old_images.update({key: images[key] for key in ("LITELLM_IMAGE", "VIDEO_WORKER_IMAGE")})
         receipt = "DEPLOYMENT_ID=previous\nSOURCE_SHA=" + "f" * 40 + "\n" + ("" if missing_runtime else "RUNTIME_CONFIG_SHA256=" + runtime_hash + "\n") + "".join(f"{k}={v}\n" for k, v in old_images.items())
@@ -91,7 +91,7 @@ class ApplyPlanTests(unittest.TestCase):
         plan = {"schemaVersion":schema_version, "operation":operation, "deploymentId": "deploy-test-1", "sourceSha": RELEASE,
                 "targets": targets, "desiredImages": images, "runtimeConfigSha256":runtime_hash,
                 **({"recoveryOf":recovery_ref} if operation == "recovery" else {}),
-                "componentSources": {name:"b"*40 for name in ("api","worker","scheduler","video-worker","operations","admin","dashboard","capture","onboarding","keycloak")},
+                "componentSources": {name:"b"*40 for name in ("api","worker","scheduler","video-worker","transcription-worker","operations","admin","dashboard","capture","onboarding","keycloak")},
                 "expectedActiveStateSha256": digest(old_images), "operations": {"runMigration": migration or operation == "recovery"}}
         if operation == "rollback":
             plan["rollbackTargetHasVideoWorker"] = not destination_no_video
@@ -123,10 +123,10 @@ exec /bin/mv -f "$@"
 """)
         executable("bin/docker", """#!/bin/bash
 printf '%s\\n' "$*" >> "$TRACE"
-if [[ $REAL_SMOKE == 1 && $* == *'config --services'* ]]; then printf '%s\\n' inspection-api inspection-worker inspection-scheduler inspection-video-worker inspection-operations admin dashboard capture onboarding keycloak caddy litellm; exit 0; fi
+if [[ $REAL_SMOKE == 1 && $* == *'config --services'* ]]; then printf '%s\\n' inspection-api inspection-worker inspection-scheduler inspection-video-worker inspection-transcription-worker inspection-operations admin dashboard capture onboarding keycloak caddy litellm; exit 0; fi
 if [[ $* == *'config --services'* ]]; then printf '%s\\n' inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding keycloak caddy litellm; exit 0; fi
 if [[ $REAL_SMOKE == 1 && $* == *'config --environment'* ]]; then
-  for image in API_IMAGE WORKER_IMAGE SCHEDULER_IMAGE VIDEO_WORKER_IMAGE OPERATIONS_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE KEYCLOAK_IMAGE; do echo "$image=example.test/image@sha256:bbbb"; done
+  for image in API_IMAGE WORKER_IMAGE SCHEDULER_IMAGE VIDEO_WORKER_IMAGE TRANSCRIPTION_WORKER_IMAGE OPERATIONS_IMAGE ADMIN_IMAGE DASHBOARD_IMAGE CAPTURE_IMAGE ONBOARDING_IMAGE KEYCLOAK_IMAGE; do echo "$image=example.test/image@sha256:bbbb"; done
   exit 0
 fi
 if [[ $* == *'ps -q '* ]]; then echo container1; exit 0; fi
@@ -137,7 +137,7 @@ if [[ $* == inspect\\ --format* ]]; then
 fi
 if [[ $* == *'image inspect --format'* ]]; then
   if [[ $FAILURE == digest ]]; then echo 'wrong@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; else
-    for service in api worker scheduler video-worker operations admin dashboard capture onboarding keycloak; do echo "example.test/$service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; done
+    for service in api worker scheduler video-worker transcription-worker operations admin dashboard capture onboarding keycloak; do echo "example.test/$service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; done
     echo 'docker.io/example/caddy_image@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
   fi
   exit 0

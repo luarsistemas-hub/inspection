@@ -15,15 +15,16 @@ REPO = pathlib.Path(__file__).resolve().parents[3]
 
 
 class DeployProtocolTests(unittest.TestCase):
-    def test_catalog_is_the_ten_component_service_and_image_registry(self):
+    def test_catalog_is_the_eleven_component_service_and_image_registry(self):
         catalog = json.loads((REPO / "deploy/oci/components.json").read_text())["components"]
-        self.assertEqual(len(catalog), 10)
+        self.assertEqual(len(catalog), 11)
         self.assertEqual({item["image"] for item in catalog.values()}, {
-            "API_IMAGE", "WORKER_IMAGE", "SCHEDULER_IMAGE", "VIDEO_WORKER_IMAGE", "OPERATIONS_IMAGE",
+            "API_IMAGE", "WORKER_IMAGE", "SCHEDULER_IMAGE", "VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE", "OPERATIONS_IMAGE",
             "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "KEYCLOAK_IMAGE",
         })
         self.assertIsNone(catalog["operations"]["service"])
         self.assertEqual(catalog["video-worker"]["service"], "inspection-video-worker")
+        self.assertEqual(catalog["transcription-worker"]["service"], "inspection-transcription-worker")
 
     def test_component_paths_and_compatibility_prefixes_exist(self):
         catalog = json.loads((REPO / "deploy/oci/components.json").read_text())
@@ -202,7 +203,7 @@ else:
         catalog = json.loads((REPO / "deploy/oci/components.json").read_text())["components"]
         image_keys = sorted({item["image"] for item in catalog.values()} | {"POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE", "LITELLM_IMAGE"})
         legacy_keys = ["API_IMAGE", "KEYCLOAK_IMAGE", "ADMIN_IMAGE", "DASHBOARD_IMAGE", "CAPTURE_IMAGE", "ONBOARDING_IMAGE", "POSTGRES_IMAGE", "DRAGONFLY_IMAGE", "RABBITMQ_IMAGE", "CADDY_IMAGE"]
-        generations = [image_keys, [key for key in image_keys if key != "VIDEO_WORKER_IMAGE"], [key for key in image_keys if key not in {"VIDEO_WORKER_IMAGE", "LITELLM_IMAGE"}], legacy_keys]
+        generations = [image_keys, [key for key in image_keys if key != "TRANSCRIPTION_WORKER_IMAGE"], [key for key in image_keys if key not in {"TRANSCRIPTION_WORKER_IMAGE", "LITELLM_IMAGE"}], [key for key in image_keys if key not in {"VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}], [key for key in image_keys if key not in {"VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE", "LITELLM_IMAGE"}], legacy_keys]
         with tempfile.TemporaryDirectory(prefix="inspection-cleanup-images-") as directory:
             root = pathlib.Path(directory)
             receipts = root / "etc/inspection/releases"
@@ -235,11 +236,11 @@ esac
             rejected = subprocess.run(["bash", str(script), *image_keys], env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}, text=True, capture_output=True)
             self.assertNotEqual(rejected.returncode, 0)
 
-    def test_publish_and_sync_require_fifteen_image_references(self):
+    def test_publish_and_sync_require_sixteen_image_references(self):
         publish = (REPO / ".github/workflows/publish.yml").read_text()
         sync = (REPO / ".github/workflows/sync-production-state.yml").read_text()
-        self.assertIn("grep -c '_IMAGE=' active.env)\" -eq 15", publish)
-        self.assertIn('[[ "$image_count" -eq 13 || "$image_count" -eq 14 || "$image_count" -eq 15 ]]', sync)
+        self.assertIn("grep -c '_IMAGE=' active.env)\" -eq 16", publish)
+        self.assertIn('[[ "$image_count" -ge 13 && "$image_count" -le 16 ]]', sync)
 
 
 if __name__ == "__main__":

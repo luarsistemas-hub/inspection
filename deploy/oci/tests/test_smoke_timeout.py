@@ -40,7 +40,7 @@ class SmokeTimeoutTests(unittest.TestCase):
                 docker = root / "bin/docker"
                 docker.write_text("""#!/bin/bash
 if [[ "$*" == *' config --services' ]]; then
-  if [[ "$SMOKE_OMIT_VIDEO" == yes ]]; then printf 'inspection-api\\ninspection-worker\\ninspection-scheduler\\nadmin\\ndashboard\\ncapture\\nonboarding\\nkeycloak\\n'; else printf 'inspection-api\\ninspection-worker\\ninspection-scheduler\\ninspection-video-worker\\nadmin\\ndashboard\\ncapture\\nonboarding\\nkeycloak\\n'; fi
+  if [[ "$SMOKE_OMIT_VIDEO" == yes ]]; then printf 'inspection-api\\ninspection-worker\\ninspection-scheduler\\ninspection-transcription-worker\\nadmin\\ndashboard\\ncapture\\nonboarding\\nkeycloak\\n'; else printf 'inspection-api\\ninspection-worker\\ninspection-scheduler\\ninspection-video-worker\\ninspection-transcription-worker\\nadmin\\ndashboard\\ncapture\\nonboarding\\nkeycloak\\n'; fi
   exit 0
 fi
 if [[ "$*" == *' config --environment' ]]; then printf 'VIDEO_WORKER_IMAGE=example\\n'; exit 0; fi
@@ -49,6 +49,11 @@ if [[ "$*" == *' exec -T inspection-video-worker '* ]]; then
   [[ "$SMOKE_FAIL" != ffmpeg || "$*" != *' ffmpeg -version'* ]] || exit 1
   [[ "$SMOKE_FAIL" != ffprobe || "$*" != *' ffprobe -version'* ]] || exit 1
   [[ "$SMOKE_FAIL" != scratch || "$*" != *'var/lib/inspection-video-scratch'* ]] || exit 1
+  exit 0
+fi
+if [[ "$*" == *' exec -T inspection-transcription-worker '* ]]; then
+  [[ "$SMOKE_FAIL" != ffmpeg || "$*" != *' ffmpeg -version'* ]] || exit 1
+  [[ "$SMOKE_FAIL" != ffprobe || "$*" != *' ffprobe -version'* ]] || exit 1
   exit 0
 fi
 if [[ "$*" == *'.State.Health'* ]]; then echo healthy; exit 0; fi
@@ -133,7 +138,7 @@ exit 7
         executable("sleep", "#!/bin/sh\n/bin/sleep .1\n")
         script = (REPO / "deploy/oci/host/smoke.sh").read_text()
         script = script.replace("/etc/inspection", str(root / "etc/inspection"))
-        script = script.replace("SECONDS + 300", "SECONDS + 2")
+        script = script.replace("SECONDS + 300", "SECONDS + 5")
         smoke = tools / "smoke.sh"
         smoke.write_text(script)
         env = {
@@ -142,7 +147,7 @@ exit 7
             "CURL_TRACE": str(root / "curl.log"),
             "INSPECTION_COMPOSE_FILE": str(root / "compose.yaml"),
         }
-        result = subprocess.run(["bash", str(smoke)], env=env, text=True, capture_output=True, timeout=8)
+        result = subprocess.run(["bash", str(smoke)], env=env, text=True, capture_output=True, timeout=12)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Smoke check timed out: Admin", result.stderr)
         attempts = (root / "curl.log").read_text().count("https://admin.example.test/")

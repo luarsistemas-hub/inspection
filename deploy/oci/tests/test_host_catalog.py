@@ -42,7 +42,7 @@ class HostCatalogTests(unittest.TestCase):
             docker = bindir / "docker"
             docker.write_text("""#!/bin/bash
 case "$*" in
-  *'config --services'*) printf '%s\\n' inspection-api inspection-worker inspection-scheduler inspection-video-worker inspection-operations admin dashboard capture onboarding keycloak caddy litellm; exit 0 ;;
+  *'config --services'*) printf '%s\\n' inspection-api inspection-worker inspection-scheduler inspection-video-worker inspection-transcription-worker inspection-operations admin dashboard capture onboarding keycloak caddy litellm; exit 0 ;;
   *'config --environment'*) echo API_IMAGE=example.test/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; exit 0 ;;
   *'ps -q'*) echo container-id; exit 0 ;;
 esac

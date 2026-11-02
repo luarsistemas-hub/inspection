@@ -36,9 +36,9 @@ class AffectedTests(unittest.TestCase):
         unknown = sorted(path for path in candidates if not classified(path))
         self.assertEqual(unknown, [], f"Unclassified changed path(s): {unknown}")
 
-    def test_design_system_selects_all_frontends(self):
+    def test_all_scope_selects_all_components(self):
         result = affected.resolve("", "", "all")
-        self.assertEqual(len(result["targets"]), 10)
+        self.assertEqual(len(result["targets"]), 11)
 
     def test_unknown_component_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unknown component"):
@@ -93,7 +93,7 @@ class AffectedTests(unittest.TestCase):
 
         self.assertEqual(
             result["targets"],
-            ["api", "operations", "scheduler", "video-worker", "worker"],
+            ["api", "operations", "scheduler", "transcription-worker", "video-worker", "worker"],
         )
 
     def test_listed_go_source_uses_its_dependency_component(self):

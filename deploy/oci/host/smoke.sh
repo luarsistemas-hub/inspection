@@ -106,6 +106,10 @@ if printf '%s\n' "${services[@]}" | grep -Fxq inspection-video-worker; then
   unset metrics_token
   grep -Eq '^inspection_video_[a-zA-Z0-9_]*(\{|[[:space:]])' <<< "$video_metrics_body" || { echo 'Video worker authenticated metrics smoke check failed.' >&2; exit 1; }
 fi
+if printf '%s\n' "${services[@]}" | grep -Fxq inspection-transcription-worker; then
+  "${compose[@]}" exec -T inspection-transcription-worker ffmpeg -version >/dev/null
+  "${compose[@]}" exec -T inspection-transcription-worker ffprobe -version >/dev/null
+fi
 id="$("${compose[@]}" ps -q caddy)"
 [[ -n "$id" ]] && [[ "$(docker inspect --format '{{.State.Status}}' "$id")" == running ]] || { echo "Caddy is not running" >&2; exit 1; }
 

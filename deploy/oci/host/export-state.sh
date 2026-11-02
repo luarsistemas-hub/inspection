@@ -46,7 +46,8 @@ for line in open(sys.argv[1], encoding="utf-8"):
 legacy={"API_IMAGE","KEYCLOAK_IMAGE","ADMIN_IMAGE","DASHBOARD_IMAGE","CAPTURE_IMAGE","ONBOARDING_IMAGE","POSTGRES_IMAGE","DRAGONFLY_IMAGE","RABBITMQ_IMAGE","CADDY_IMAGE"}
 if set(values)==legacy:
     for name in ("WORKER_IMAGE","SCHEDULER_IMAGE","OPERATIONS_IMAGE"): values[name]=values["API_IMAGE"]
-if set(values) not in (images, images-{"VIDEO_WORKER_IMAGE"}, images-{"LITELLM_IMAGE","VIDEO_WORKER_IMAGE"}): raise SystemExit("deployment receipt is incomplete; synchronize manually")
+omissions = ({frozenset(), frozenset({"LITELLM_IMAGE"}), frozenset({"TRANSCRIPTION_WORKER_IMAGE"}), frozenset({"TRANSCRIPTION_WORKER_IMAGE","LITELLM_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","LITELLM_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","TRANSCRIPTION_WORKER_IMAGE"}), frozenset({"VIDEO_WORKER_IMAGE","TRANSCRIPTION_WORKER_IMAGE","LITELLM_IMAGE"})})
+if frozenset(images - set(values)) not in omissions: raise SystemExit("deployment receipt is incomplete; synchronize manually")
 sources={}
 for line in open(sys.argv[1], encoding="utf-8"):
     key, sep, value=line.rstrip("\n").partition("=")

@@ -108,10 +108,19 @@ class PlannerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "matching runtime configuration"):
             planner.create_rollback_plan(self.active, previous, ["admin"], source_sha="a"*40,
                 runtime_config_sha="1"*64, active_runtime_config_sha="2"*64)
-        no_video = {key:value for key,value in previous.items() if key != "VIDEO_WORKER_IMAGE"}
+        no_video = {key:value for key,value in previous.items() if key not in {"VIDEO_WORKER_IMAGE", "TRANSCRIPTION_WORKER_IMAGE"}}
         with self.assertRaisesRegex(ValueError, "no video-worker"):
             planner.create_rollback_plan(self.active, no_video, ["worker"], source_sha="a"*40,
                 runtime_config_sha="1"*64, active_runtime_config_sha="1"*64)
+
+    def test_rollback_before_transcription_component_was_added(self):
+        active = {key: value for key, value in self.active.items() if key != "TRANSCRIPTION_WORKER_IMAGE"}
+        previous = {key: value.replace("d" * 64, "f" * 64) for key, value in active.items()}
+        config_hash = "9" * 64
+        plan = planner.create_rollback_plan(active, previous, ["worker"], source_sha="a"*40,
+            runtime_config_sha=config_hash, active_runtime_config_sha=config_hash)
+        self.assertNotIn("transcription-worker", plan["targets"])
+        self.assertNotIn("TRANSCRIPTION_WORKER_IMAGE", plan["desiredImages"])
 
     def test_runtime_config_hash_is_stable_and_ignores_themes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -129,7 +138,7 @@ class PlannerTests(unittest.TestCase):
 
     def test_first_gateway_deployment_requires_worker_and_tracks_image(self):
         old_active = {key: value for key, value in self.active.items() if key != "LITELLM_IMAGE"}
-        with self.assertRaisesRegex(ValueError, "complete ten-component"):
+        with self.assertRaisesRegex(ValueError, "complete eleven-component"):
             planner.create_plan(old_active, self.candidate, ["admin"])
         plan = planner.create_plan(old_active, self.candidate, scope="all")
         self.assertEqual(plan["expectedActiveStateSha256"], planner.canonical_hash(old_active))
@@ -143,7 +152,7 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(admin["desiredImages"]["LITELLM_IMAGE"], self.active["LITELLM_IMAGE"])
         self.assertEqual(worker["desiredImages"]["LITELLM_IMAGE"], self.candidate["infrastructure"]["LITELLM_IMAGE"])
 
-    def test_all_scope_selects_ten_components_and_go_scope_expands_to_five(self):
+    def test_all_scope_selects_eleven_components_and_go_scope_expands_to_six(self):
         with patch.object(planner, "infer_compatibility", return_value={"databaseChange":"none", "contractChange":"compatible"}):
             all_plan = planner.create_plan(self.active, self.candidate, scope="all", active_sources=self.sources)
             go_plan = planner.create_plan(self.active, self.candidate, ["video-worker"], active_sources=self.sources)
@@ -197,7 +206,7 @@ class PlannerTests(unittest.TestCase):
 
     def test_video_receipt_upgrade_requires_all_components_and_plan_is_v2(self):
         old = {key: value for key, value in self.active.items() if key != "VIDEO_WORKER_IMAGE"}
-        with self.assertRaisesRegex(ValueError, "complete ten-component"):
+        with self.assertRaisesRegex(ValueError, "complete eleven-component"):
             planner.create_plan(old, self.candidate, ["admin"], active_sources=self.sources)
         plan = planner.create_plan(old, self.candidate, scope="all", active_sources=self.sources)
         self.assertEqual(plan["schemaVersion"], 2)

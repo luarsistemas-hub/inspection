@@ -285,6 +285,6 @@ jobs:
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" 'export-state current' > active.env
           grep -qx "DEPLOYMENT_ID=$DEPLOYMENT_ID" active.env
           grep -qx "PLAN_SHA256=$PLAN_SHA" active.env
-          test "$(grep -c '_IMAGE=' active.env)" -eq 15
+          test "$(grep -c '_IMAGE=' active.env)" -eq 16
           # The receipt records the deployed source SHA; the release tag points to the default branch.
           gh release create "state-$DEPLOYMENT_ID" active.env --repo "${GITHUB_REPOSITORY}" --title "state-$DEPLOYMENT_ID" --notes "Host-verified active composition after applying plan $PLAN_SHA."
