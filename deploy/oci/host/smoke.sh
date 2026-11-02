@@ -4,7 +4,11 @@ source /etc/inspection/public.env
 
 compose_file="${INSPECTION_COMPOSE_FILE:-/opt/inspection/current/compose.yaml}"
 compose_env="${INSPECTION_COMPOSE_ENV:-/etc/inspection/compose.env}"
-compose=(docker compose --env-file "$compose_env" -f "$compose_file")
+script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+script_dir="$(dirname "$script_path")"
+source "$script_dir/compose-profiles.sh"
+mapfile -t compose_profiles < <(inspection_compose_profile_args "$compose_env")
+compose=(docker compose "${compose_profiles[@]}" --env-file "$compose_env" -f "$compose_file")
 deadline=$((SECONDS + 300))
 
 retry_http() {
@@ -44,8 +48,6 @@ retry_storage_cors() {
   return 1
 }
 
-script_path="$(readlink -f "${BASH_SOURCE[0]}")"
-script_dir="$(dirname "$script_path")"
 catalog_helper="$script_dir/component-catalog.sh"
 if [[ ! -s "$catalog_helper" ]]; then
   host_tools_version="$(basename "$script_dir")"
@@ -59,7 +61,9 @@ inspection_resolve_component_catalog "$script_path"
 catalog="$INSPECTION_RESOLVED_COMPONENT_CATALOG"
 compose_services="$("${compose[@]}" config --services)"
 compose_environment="$("${compose[@]}" config --environment)"
-service_output="$(python3 - "$catalog" "$compose_services" "$compose_environment" <<'PY'
+transcription_enabled=1
+[[ "$(inspection_env_value "$compose_env" INSPECTION_TRANSCRIPTION_WORKER)" == 0 ]] && transcription_enabled=0
+service_output="$(python3 - "$catalog" "$compose_services" "$compose_environment" "$transcription_enabled" <<'PY'
 import json, sys
 try:
     components=json.load(open(sys.argv[1], encoding="utf-8"))["components"]
@@ -68,7 +72,8 @@ except (OSError, ValueError, KeyError, TypeError) as exc:
 if not isinstance(components, dict) or not components or any(not isinstance(item, dict) or not isinstance(item.get("image"), str) or not isinstance(item.get("service"), (str, type(None))) for item in components.values()):
     raise SystemExit("component catalog must define image and service for every component")
 services=set(sys.argv[2].splitlines())
-environment={line.partition("=")[0] for line in sys.argv[3].splitlines() if "=" in line}
+environment={line.partition("=")[0]: line.partition("=")[2] for line in sys.argv[3].splitlines() if "=" in line}
+transcription_enabled=sys.argv[4] != "0"
 required=[]
 for name, item in components.items():
     service=item["service"]
@@ -76,7 +81,7 @@ for name, item in components.items():
         continue
     if service in services:
         required.append(service)
-    elif item["image"] in environment:
+    elif item["image"] in environment and not (service == "inspection-transcription-worker" and not transcription_enabled):
         raise SystemExit(f"Compose image {item['image']} is configured but service {service!r} is missing")
 print("\n".join(required))
 PY

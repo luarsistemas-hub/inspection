@@ -8,6 +8,7 @@ mode="${2:-}"
 release_dir="/opt/inspection/releases/$release"
 release_env="/etc/inspection/releases/$release.env"
 [[ -d "$release_dir/deploy/oci" && -s "$release_env" ]] || { echo "Release bundle or manifest is missing" >&2; exit 1; }
+source "$release_dir/deploy/oci/host/compose-profiles.sh"
 grep -qx "RELEASE_SHA=$release" "$release_env" || { echo "Release manifest SHA does not match" >&2; exit 1; }
 if [[ -s /etc/inspection/releases/current.env ]] && grep -Eq '^(VIDEO_WORKER|TRANSCRIPTION_WORKER)_IMAGE=' /etc/inspection/releases/current.env; then
   echo 'Legacy deploy/rollback is disabled for worker-enabled receipts; use plan/apply.' >&2
@@ -35,7 +36,13 @@ if [[ -f "$block_path" ]]; then install -m 0600 "$block_path" "$previous_block";
 
 phase=preflight
 block_reason=""
-app_services=(inspection-api inspection-worker inspection-scheduler inspection-transcription-worker admin dashboard capture onboarding caddy)
+app_services=(inspection-api inspection-worker inspection-scheduler admin dashboard capture onboarding caddy)
+previous_app_services=()
+previous_profile_args=()
+if [[ "$had_compose_env" == 1 ]]; then
+  mapfile -t previous_app_services < <(inspection_app_services "$previous_compose_env")
+  mapfile -t previous_profile_args < <(inspection_compose_profile_args "$previous_compose_env")
+fi
 atomic_link() {
   local target="$1" link="$2" temporary="${2}.new.$$"
   ln -s "$target" "$temporary"
@@ -69,7 +76,7 @@ restore_pre_mutation() {
   fi
   if [[ -n "$previous_target" ]]; then atomic_link "$previous_target" /opt/inspection/current; fi
   if [[ "$phase" == app_stopping && "$mode" != --rollback && "$had_block" == 0 && "$had_compose_env" == 1 && -n "$previous_target" && -f "$previous_target/compose.yaml" ]]; then
-    docker compose --env-file /etc/inspection/compose.env -f "$previous_target/compose.yaml" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}" >/dev/null 2>&1 \
+    docker compose "${previous_profile_args[@]}" --env-file /etc/inspection/compose.env -f "$previous_target/compose.yaml" up -d --no-deps --wait --wait-timeout 300 "${previous_app_services[@]}" >/dev/null 2>&1 \
       || echo "Could not resume the previous release. Inspect ops.sh status and recover manually." >&2
   fi
 }
@@ -82,7 +89,7 @@ on_exit() {
     else
       block_reason="Deployment failed during $phase; application services remain stopped."
       write_block
-      docker compose --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml" stop inspection-api inspection-worker inspection-scheduler inspection-transcription-worker admin dashboard capture onboarding caddy >/dev/null 2>&1 || true
+      docker compose --profile transcription --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml" stop inspection-api inspection-worker inspection-scheduler inspection-transcription-worker admin dashboard capture onboarding caddy >/dev/null 2>&1 || true
       echo "Release $release was not promoted. Services remain stopped and a deployment block was recorded; do not restart until schema compatibility is verified." >&2
     fi
   fi
@@ -92,12 +99,14 @@ on_exit() {
 trap on_exit EXIT
 
 INSPECTION_RELEASE_ENV="$release_env" INSPECTION_BUNDLE_DIR="$release_dir/deploy/oci" /usr/local/sbin/inspection-secrets-refresh
+mapfile -t app_services < <(inspection_app_services /etc/inspection/compose.env)
+mapfile -t compose_profiles < <(inspection_compose_profile_args /etc/inspection/compose.env)
 ghcr_user="$(cat /etc/inspection/secrets.d/GHCR_USERNAME)"
 ghcr_token="$(cat /etc/inspection/secrets.d/GHCR_READ_TOKEN)"
 printf '%s' "$ghcr_token" | docker login ghcr.io --username "$ghcr_user" --password-stdin >/dev/null
 unset ghcr_token
 
-dc=(docker compose --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml")
+dc=(docker compose "${compose_profiles[@]}" --env-file /etc/inspection/compose.env -f "$release_dir/deploy/oci/compose.yaml")
 "${dc[@]}" config --quiet
 "${dc[@]}" pull
 
@@ -107,7 +116,7 @@ if [[ "$mode" == --rollback ]]; then
   phase=app_stopping
   write_block
   if [[ -n "$previous_target" && -f "$previous_target/compose.yaml" ]]; then
-    docker compose --env-file "$previous_compose_env" -f "$previous_target/compose.yaml" stop "${app_services[@]}"
+    docker compose "${previous_profile_args[@]}" --env-file "$previous_compose_env" -f "$previous_target/compose.yaml" stop "${previous_app_services[@]}"
   fi
   phase=rollback_starting
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${app_services[@]}"
@@ -117,7 +126,10 @@ else
   phase=app_stopping
   write_block
   if [[ -n "$previous_target" && -f "$previous_target/compose.yaml" && "$had_compose_env" == 1 ]]; then
-    docker compose --env-file "$previous_compose_env" -f "$previous_target/compose.yaml" stop inspection-api inspection-worker inspection-scheduler
+    docker compose "${previous_profile_args[@]}" --env-file "$previous_compose_env" -f "$previous_target/compose.yaml" stop inspection-api inspection-worker inspection-scheduler
+    if printf '%s\n' "${previous_app_services[@]}" | grep -Fxq inspection-transcription-worker; then
+      docker compose --profile transcription --env-file "$previous_compose_env" -f "$previous_target/compose.yaml" stop inspection-transcription-worker >/dev/null 2>&1 || true
+    fi
   fi
   phase=dependencies
   write_block

@@ -21,7 +21,7 @@ Comandos:
   help             mostra esta ajuda
 
 Variáveis úteis: INSPECTION_ENV_FILE, INSPECTION_STARTUP_TIMEOUT (segundos),
-INSPECTION_VIDEO_WORKER=0 e INSPECTION_TRANSCRIPTION_WORKER=1.
+INSPECTION_VIDEO_WORKER=0 e INSPECTION_TRANSCRIPTION_WORKER=0.
 EOF
 }
 
@@ -58,11 +58,9 @@ compose() {
     0) ;;
     *) die "INSPECTION_VIDEO_WORKER deve ser 0 ou 1" ;;
   esac
-  case "${INSPECTION_TRANSCRIPTION_WORKER:-0}" in
-    1) profiles+=(--profile transcription) ;;
-    0) ;;
-    *) die "INSPECTION_TRANSCRIPTION_WORKER deve ser 0 ou 1" ;;
-  esac
+  if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-1}" != 0 ]]; then
+    profiles+=(--profile transcription)
+  fi
   if [[ -z "$llm_url" ]]; then
     if [[ "${INSPECTION_LLM_MODE:-mock}" == "live" ]]; then
       llm_url="http://litellm:4000"
@@ -170,7 +168,7 @@ case "${1:-help}" in
       if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
         check_port "${INSPECTION_VIDEO_WORKER_PORT:-8091}" "worker de vídeo"
       fi
-      if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-0}" != 0 ]]; then
+      if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-1}" != 0 ]]; then
         check_port "${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}" "worker de transcrição"
       fi
     fi
@@ -185,7 +183,7 @@ case "${1:-help}" in
     if [[ "${INSPECTION_VIDEO_WORKER:-1}" != 0 ]]; then
       wait_http "http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health" "Worker de vídeo"
     fi
-    if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-0}" != 0 ]]; then
+    if [[ "${INSPECTION_TRANSCRIPTION_WORKER:-1}" != 0 ]]; then
       wait_http "http://localhost:${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}/readyz" "Worker de transcrição"
     fi
     ;;
@@ -239,7 +237,7 @@ URLs locais:
   Capture        http://localhost:${INSPECTION_CAPTURE_PORT:-3003}
   Onboarding     http://localhost:${INSPECTION_ONBOARDING_PORT:-3004}
   Video worker   http://localhost:${INSPECTION_VIDEO_WORKER_PORT:-8091}/health
-  Transcription  http://localhost:${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}/healthz (opcional: INSPECTION_TRANSCRIPTION_WORKER=1)
+  Transcription  http://localhost:${INSPECTION_TRANSCRIPTION_WORKER_PORT:-8092}/healthz (desative com INSPECTION_TRANSCRIPTION_WORKER=0)
   GraphQL        http://localhost:${INSPECTION_API_PORT:-8080}/graphql
   Health/ready   http://localhost:${INSPECTION_API_PORT:-8080}/healthz | /readyz
   Keycloak       http://localhost:8081 (credenciais em .env.inspection)

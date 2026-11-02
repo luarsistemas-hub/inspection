@@ -42,6 +42,7 @@ class ApplyPlanTests(unittest.TestCase):
             (directory / "keycloak-realm.json").write_text("{}\n")
         (candidate / "host").mkdir()
         (candidate / "host/component-catalog.sh").write_bytes((SOURCE.parent / "component-catalog.sh").read_bytes())
+        (candidate / "host/compose-profiles.sh").write_bytes((SOURCE.parent / "compose-profiles.sh").read_bytes())
         (candidate / "host/install-host-tools.sh").write_bytes((SOURCE.parent / "install-host-tools.sh").read_bytes())
         (candidate / "host/prepare-upgrade.sh").write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$PREPARE_TRACE"\n[ "$FAILURE" != video-preflight ]\n')
         (candidate / "host/prepare-upgrade.sh").chmod(0o755)

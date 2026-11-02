@@ -13,11 +13,15 @@ isso não representa aprovação dos gates físicos ou de modelo.
 
 ## Subir e verificar o worker local
 
-Com a infraestrutura local já inicializada, habilite o perfil dedicado:
+Com a infraestrutura local já inicializada, o worker dedicado é iniciado por
+padrão:
 
 ```sh
-INSPECTION_TRANSCRIPTION_WORKER=1 ./scripts/local.sh up
+./scripts/local.sh up
 ```
+
+Defina `INSPECTION_TRANSCRIPTION_WORKER=0` para desativá-lo. Quando a variável
+está ausente ou contém outro valor, o perfil de transcrição fica habilitado.
 
 O perfil é gravado no job pela admissão conforme o catálogo; não configure
 `INSPECTION_TRANSCRIPTION_PROFILE` no worker. O worker respeita o perfil

@@ -22,6 +22,7 @@ class SmokeTimeoutTests(unittest.TestCase):
                 tools.mkdir(parents=True)
                 (tools / "components.json").write_bytes((REPO / "deploy/oci/components.json").read_bytes())
                 (tools / "component-catalog.sh").write_bytes((REPO / "deploy/oci/host/component-catalog.sh").read_bytes())
+                (tools / "compose-profiles.sh").write_bytes((REPO / "deploy/oci/host/compose-profiles.sh").read_bytes())
                 (root / "compose.yaml").write_text("services: {}\n")
                 (root / "bin").mkdir()
                 (root / "etc/inspection/public.env").write_text(
@@ -114,6 +115,7 @@ exit 0
         tools.mkdir(parents=True)
         (tools / "components.json").write_bytes((REPO / "deploy/oci/components.json").read_bytes())
         (tools / "component-catalog.sh").write_bytes((REPO / "deploy/oci/host/component-catalog.sh").read_bytes())
+        (tools / "compose-profiles.sh").write_bytes((REPO / "deploy/oci/host/compose-profiles.sh").read_bytes())
         (root / "compose.yaml").write_text("services: {}\n")
 
         def executable(name, content):

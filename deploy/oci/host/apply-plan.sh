@@ -10,6 +10,7 @@ catalog_helper="$release_dir/deploy/oci/host/component-catalog.sh"
 [[ -s "$catalog_helper" ]] || { echo 'Component catalog resolver is missing from the candidate release.' >&2; exit 1; }
 # shellcheck source=deploy/oci/host/component-catalog.sh
 source "$catalog_helper"
+source "$release_dir/deploy/oci/host/compose-profiles.sh"
 INSPECTION_COMPONENT_CATALOG="${INSPECTION_COMPONENT_CATALOG:-$release_dir/deploy/oci/components.json}"
 inspection_resolve_component_catalog "$(readlink -f "${BASH_SOURCE[0]}")"
 catalog_path="$INSPECTION_RESOLVED_COMPONENT_CATALOG"
@@ -188,6 +189,7 @@ for line in open(images_path, encoding="ascii"):
     key, value = line.rstrip("\n").split("=", 1)
     values[key] = value
 with open(path, "w", encoding="utf-8") as out:
+    values["INSPECTION_TRANSCRIPTION_WORKER"] = os.environ.get("INSPECTION_TRANSCRIPTION_WORKER", "1")
     for key in sorted(values): out.write(f"{key}={values[key]}\n")
 os.chmod(path, 0o600)
 PY
@@ -224,9 +226,18 @@ fi
 phase=preflight
 migration_started=0
 services_stopped=0
-dc=(docker compose --env-file "$stage_env" -f "$release_dir/deploy/oci/compose.yaml")
+mapfile -t compose_profiles < <(inspection_compose_profile_args "$stage_env")
+mapfile -t old_compose_profiles < <(inspection_compose_profile_args "$old_env")
+dc=(docker compose "${compose_profiles[@]}" --env-file "$stage_env" -f "$release_dir/deploy/oci/compose.yaml")
 compose_services=()
-while IFS= read -r service; do [[ -n "$service" ]] && compose_services+=("$service"); done < "$targets_file"
+while IFS= read -r service; do
+  [[ -n "$service" ]] || continue
+  if [[ "$service" == inspection-transcription-worker ]] && ! inspection_transcription_active "$stage_env"; then continue; fi
+  compose_services+=("$service")
+done < "$targets_file"
+if inspection_transcription_active "$stage_env" && ! printf '%s\n' "${compose_services[@]}" | grep -Fxq inspection-transcription-worker; then
+  compose_services+=(inspection-transcription-worker)
+fi
 gateway_selected=0
 if grep -qx inspection-worker "$targets_file"; then gateway_selected=1; fi
 changed_images=()
@@ -301,10 +312,10 @@ on_exit() {
     fi
     if [[ "$operation" == recovery ]]; then
       if [[ "$migration_started" == 0 && "$phase" != promoting && -s "$old_env" && "${#compose_services[@]}" -gt 0 ]]; then
-        old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
+        old_services="$(docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
         recover_services=()
         for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && recover_services+=("$service"); done
-        if [[ "${#recover_services[@]}" -gt 0 ]] && docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1; then
+        if [[ "${#recover_services[@]}" -gt 0 ]] && docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1; then
           block "Recovery failed before migrations; previous services were restored; inspect diagnostics."
         else
           block "Recovery failed before migrations and previous services could not be restored; inspect diagnostics."
@@ -326,11 +337,11 @@ on_exit() {
         fi
       fi
       services_recovered=1
-      old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
+      old_services="$(docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services 2>/dev/null)"
       recover_services=()
       for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && recover_services+=("$service"); done
       if [[ "${#recover_services[@]}" -gt 0 ]]; then
-        docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1 || services_recovered=0
+        docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml up -d --no-deps --wait --wait-timeout 300 "${recover_services[@]}" >/dev/null 2>&1 || services_recovered=0
       fi
       if [[ "$gateway_recovered" == 1 && "$services_recovered" == 1 ]]; then
         rm -f "$block_path"
@@ -385,18 +396,22 @@ if [[ "$gateway_selected" == 1 ]]; then
   "${dc[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 300 litellm
 fi
 
+if ! inspection_transcription_active "$stage_env" && [[ -s "$old_env" ]]; then
+  docker compose --profile transcription --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop inspection-transcription-worker >/dev/null 2>&1 || true
+fi
+
 if [[ "$migration" == 1 ]]; then
   if [[ "${#compose_services[@]}" -gt 0 ]]; then
     phase=services
     block 'Stopping the coordinated Go services before database migration.'
     if [[ -s "$old_env" ]]; then
-      old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
+      old_services="$(docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
       stop_services=()
       for service in "${compose_services[@]}"; do
         grep -Fxq "$service" <<< "$old_services" && stop_services+=("$service")
       done
       if [[ "${#stop_services[@]}" -gt 0 ]]; then
-        docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"
+        docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"
         services_stopped=1
       fi
     fi
@@ -412,10 +427,10 @@ if [[ "${#compose_services[@]}" -gt 0 ]]; then
   phase=services
   [[ "$migration_started" == 1 ]] || block 'Selected services are updating.'
   if [[ "$services_stopped" == 0 && -s "$old_env" ]]; then
-    old_services="$(docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
+    old_services="$(docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml config --services)"
     stop_services=()
     for service in "${compose_services[@]}"; do grep -Fxq "$service" <<< "$old_services" && stop_services+=("$service"); done
-    if [[ "${#stop_services[@]}" -gt 0 ]]; then docker compose --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"; fi
+    if [[ "${#stop_services[@]}" -gt 0 ]]; then docker compose "${old_compose_profiles[@]}" --env-file "$old_env" -f /opt/inspection/current/compose.yaml stop "${stop_services[@]}"; fi
   fi
   "${dc[@]}" up -d --no-deps --wait --wait-timeout 300 "${compose_services[@]}"
   phase=smoke

@@ -166,6 +166,7 @@ PY
     for script in "$root/ops.sh" "$root"/host/*.sh; do bash -n "$script"; done
     python3 -m py_compile "$root"/*.py "$root"/host/*.py
     docker compose --env-file "$root/compose.env.example" -f "$root/compose.yaml" config --quiet
+    docker compose --profile transcription --env-file "$root/compose.env.example" -f "$root/compose.yaml" config --quiet
     ;;
   package)
     command -v zip >/dev/null
@@ -259,7 +260,7 @@ PY
       ssh_host "sudo /usr/local/sbin/inspection-deploy '$release' --rollback"
     fi
     ;;
-  status) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml ps; sudo df -h / /srv/inspection; sudo docker system df; sudo test ! -e /etc/inspection/deployment-blocked || sudo cat /etc/inspection/deployment-blocked; sudo systemctl --no-pager status inspection-secrets-refresh.service' ;;
+  status) ssh_host 'sudo docker compose --profile transcription --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml ps; sudo df -h / /srv/inspection; sudo docker system df; sudo test ! -e /etc/inspection/deployment-blocked || sudo cat /etc/inspection/deployment-blocked; sudo systemctl --no-pager status inspection-secrets-refresh.service' ;;
   cleanup-images) ssh_host "sudo bash -s -- $catalog_image_keys" <<'REMOTE'
 set -euo pipefail
 keep=("")
@@ -327,9 +328,23 @@ for image_id in "${image_ids[@]}"; do
 done
 REMOTE
     ;;
-  logs) service="${2:-}"; [[ "$service" =~ ^[a-z0-9_-]+$ ]] || { usage; exit 2; }; ssh_host "sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml logs --tail=200 $service" ;;
-  restart) service="${2:-}"; [[ "$service" =~ ^($catalog_services)$ ]] || { usage; exit 2; }; ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service" ;;
+  logs)
+    service="${2:-}"; [[ "$service" =~ ^[a-z0-9_-]+$ ]] || { usage; exit 2; }
+    if [[ "$service" == inspection-transcription-worker ]]; then
+      ssh_host "sudo docker compose --profile transcription --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml logs --tail=200 $service"
+    else
+      ssh_host "sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml logs --tail=200 $service"
+    fi
+    ;;
+  restart)
+    service="${2:-}"; [[ "$service" =~ ^($catalog_services)$ ]] || { usage; exit 2; }
+    if [[ "$service" == inspection-transcription-worker ]]; then
+      ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo bash -c 'source /opt/inspection/host-tools/current/compose-profiles.sh; inspection_transcription_active /etc/inspection/compose.env || { echo \"Transcription worker is disabled or has no selected image.\" >&2; exit 1; }; exec docker compose --profile transcription --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service'"
+    else
+      ssh_host "sudo test ! -e /etc/inspection/deployment-blocked || { echo 'Deployment is blocked; verify schema compatibility and deploy forward.' >&2; exit 1; }; sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml restart $service"
+    fi
+    ;;
   smoke) ssh_host 'sudo /usr/local/sbin/inspection-smoke' ;;
-  stop) ssh_host 'sudo docker compose --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml stop' ;;
+  stop) ssh_host 'sudo docker compose --profile transcription --env-file /etc/inspection/compose.env -f /opt/inspection/current/compose.yaml stop' ;;
   *) usage; exit 2 ;;
 esac

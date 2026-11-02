@@ -328,7 +328,8 @@ services:
     networks: [data, app]
 
   inspection-transcription-worker:
-    image: ${TRANSCRIPTION_WORKER_IMAGE:?immutable transcription worker image digest required}
+    image: ${TRANSCRIPTION_WORKER_IMAGE:-inspection/transcription-worker:disabled}
+    profiles: ["transcription"]
     logging: *default-logging
     restart: unless-stopped
     stop_grace_period: 90s
