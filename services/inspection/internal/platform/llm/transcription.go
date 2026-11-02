@@ -27,7 +27,7 @@ var TranscriptionProfiles = map[string]TranscriptionProfile{
 }
 
 // DefaultTranscriptionProfile is the independently selected audio profile.
-const DefaultTranscriptionProfile = "GEMINI_2_5_FLASH_LITE"
+const DefaultTranscriptionProfile = "GEMINI_3_5_FLASH_LITE"
 
 // ResolveTranscriptionProfile validates the dedicated worker's configured alias.
 func ResolveTranscriptionProfile(key string) (TranscriptionProfile, error) {
