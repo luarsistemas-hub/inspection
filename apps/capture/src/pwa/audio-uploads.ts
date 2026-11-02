@@ -92,7 +92,15 @@ async function performUpload(source: AudioDraft): Promise<AudioDraft> {
     if (!proof || Date.parse(intent.expiresAt) <= Date.now()) throw new VoiceFlowError("UPLOAD_EXPIRED", "O acesso temporário para envio expirou. Tente novamente.");
     if (draft.noteId && draft.noteId !== noteId) throw new VoiceFlowError("NOTE_MISMATCH", "O servidor retornou uma anotação diferente da salva neste dispositivo.");
     await updateAudioDraft({ ...draft, noteId, state: "PENDING_UPLOAD" });
-    const response = await fetch(intent.url, { method: intent.method || "PUT", body: draft.audio, headers: intent.headers });
+    // The proof identifies the upload to our API; it is not a storage request header.
+    const uploadHeaders = new Headers(intent.headers);
+    uploadHeaders.delete("x-upload-proof");
+    let response: Response;
+    try {
+      response = await fetch(intent.url, { method: intent.method || "PUT", body: draft.audio, headers: uploadHeaders });
+    } catch {
+      throw new VoiceFlowError("UPLOAD_CONNECTION_FAILED", "Não foi possível conectar ao armazenamento da anotação. Ela continua salva neste dispositivo.");
+    }
     if (!response.ok) throw new VoiceFlowError("UPLOAD_FAILED", "Não foi possível enviar a anotação. Ela continua salva neste dispositivo.");
     const completed = await graphql(CompleteAudioNoteUploadDocument, { input: { noteId, uploadProof: proof, clientMutationId: `${draft.id}:complete` } });
     throwOnUserErrors(completed.completeAudioNoteUpload);

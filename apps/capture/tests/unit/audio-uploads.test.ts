@@ -9,13 +9,13 @@ const audio = () => new Blob(["voice"], { type: "audio/webm" });
 const note = (overrides: Partial<AudioDraft> = {}): AudioDraft => ({ id: "note-1", responsibilityId, requirementKey: "env:living", disclosureVersion: "pt-BR-1", consentVersion: "voice-v1", target: { kind: "PHOTO", photoDraftId: "photo-draft-1" }, durationMs: 800, contentType: "audio/webm", sizeBytes: 5, sha256: "c".repeat(64), state: "PENDING_UPLOAD", audio: audio(), createdAt: "2026-11-01T00:00:00Z", ...overrides });
 const photo = (overrides: Partial<CaptureDraft> = {}): CaptureDraft => ({ id: "photo-draft-1", responsibilityId, blob: new Blob(["img"], { type: "image/png" }), sha256: "d".repeat(64), uploadId: "upload-1", mediaId: "photo-1", mediaStatus: "READY", metadataSaved: true, parts: [{ number: 1, etag: "etag", complete: true }], metadata: { requirementKey: "env:living", description: "", source: "camera", capturedAt: "2026-11-01T00:00:00Z" }, ...overrides });
 
-type Calls = { create: Array<Record<string, unknown>>; complete: Array<Record<string, unknown>>; put: number; query: number };
+type Calls = { create: Array<Record<string, unknown>>; complete: Array<Record<string, unknown>>; put: number; putHeaders: Array<HeadersInit | undefined>; query: number };
 /** A programmable fake of the GraphQL endpoint and the private object store. */
 function server(options: { createFailure?: { code: string; message: string }; completeFailure?: { code: string; message: string }; putStatus?: number; offline?: boolean; existingStatus?: string } = {}) {
-  const calls: Calls = { create: [], complete: [], put: 0, query: 0 };
+  const calls: Calls = { create: [], complete: [], put: 0, putHeaders: [], query: 0 };
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     if (options.offline) throw new TypeError("Failed to fetch");
-    if (init?.method === "PUT") { calls.put += 1; return new Response(null, { status: options.putStatus ?? 200 }); }
+    if (init?.method === "PUT") { calls.put += 1; calls.putHeaders.push(init.headers); return new Response(null, { status: options.putStatus ?? 200 }); }
     const body = JSON.parse(String(init?.body)) as { query: string; variables: { input?: Record<string, unknown> } };
     const ok = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200 });
     if (body.query.includes("CreateAudioNoteUpload")) {
@@ -49,6 +49,7 @@ describe("audio note upload", () => {
     expect(received).toMatchObject({ state: "RECEIVED", noteId: "server-note", audio: undefined });
     expect(calls.create[0]).toMatchObject({ clientNoteId: "note-1", photoMediaId: "photo-1", videoAttemptId: null, startMs: null, endMs: null, consentVersion: "voice-v1", clientMutationId: "note-1:create" });
     expect(calls.complete[0]).toMatchObject({ noteId: "server-note", uploadProof: "proof", clientMutationId: "note-1:complete" });
+    expect(new Headers(calls.putHeaders[0]).has("x-upload-proof")).toBe(false);
     const [stored] = await listAudioDrafts(responsibilityId);
     expect(stored).toMatchObject({ state: "RECEIVED", audio: undefined, target: { kind: "PHOTO", photoDraftId: "photo-draft-1", mediaId: "photo-1" } });
   });
