@@ -59,6 +59,59 @@ func TestSetupQueuesOneNewGeneration(t *testing.T) {
 	}
 }
 
+func TestSetupAllowsRecoveryAfterProviderConfigurationFailures(t *testing.T) {
+	db := retryDB(t)
+	tenant, note := identity.NewID(), identity.NewID()
+	inspection := identity.NewID()
+	now := time.Now().UTC()
+	if err := db.Exec(`INSERT INTO transcription.audio_notes(tenant_id,id,inspection_id,status,version,audio_deletion_status,duration_ms,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, tenant, note, inspection, "FAILED", 4, "PENDING", 1000, now.Add(-time.Hour), now).Error; err != nil {
+		t.Fatal(err)
+	}
+	for generation := 1; generation <= 3; generation++ {
+		if err := db.Exec(`INSERT INTO transcription.jobs(tenant_id,id,note_id,generation,status,created_at) VALUES(?,?,?,?,?,?)`, tenant, identity.NewID(), note, generation, "FAILED", now.Add(-time.Hour)).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Exec(`INSERT INTO transcription.tenant_policies VALUES(?,?,?,?,?)`, tenant, 10, 60000, 10, 60000).Error; err != nil {
+		t.Fatal(err)
+	}
+	deps := Dependencies{DB: db, Within: retryWithin(db)}
+	cmd := Command{TenantID: tenant, NoteID: note, ExpectedVersion: 4, ClientMutationID: "recovered-profile"}
+	if err := Setup(context.Background(), deps, cmd); err != nil {
+		t.Fatalf("recovery retry after three failed generations: %v", err)
+	}
+	var generation int
+	if err := db.Raw(`SELECT max(generation) FROM transcription.jobs WHERE tenant_id=? AND note_id=?`, tenant, note).Row().Scan(&generation); err != nil {
+		t.Fatal(err)
+	}
+	if generation != 4 {
+		t.Fatalf("recovery generation=%d, want 4", generation)
+	}
+}
+
+func TestSetupRejectsRetriesAfterRecoveryGeneration(t *testing.T) {
+	db := retryDB(t)
+	tenant, note := identity.NewID(), identity.NewID()
+	inspection := identity.NewID()
+	now := time.Now().UTC()
+	if err := db.Exec(`INSERT INTO transcription.audio_notes(tenant_id,id,inspection_id,status,version,audio_deletion_status,duration_ms,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`, tenant, note, inspection, "FAILED", 4, "PENDING", 1000, now.Add(-time.Hour), now).Error; err != nil {
+		t.Fatal(err)
+	}
+	for generation := 1; generation <= maxJobGenerations; generation++ {
+		if err := db.Exec(`INSERT INTO transcription.jobs(tenant_id,id,note_id,generation,status,created_at) VALUES(?,?,?,?,?,?)`, tenant, identity.NewID(), note, generation, "FAILED", now.Add(-time.Hour)).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Exec(`INSERT INTO transcription.tenant_policies VALUES(?,?,?,?,?)`, tenant, 10, 60000, 10, 60000).Error; err != nil {
+		t.Fatal(err)
+	}
+	deps := Dependencies{DB: db, Within: retryWithin(db)}
+	cmd := Command{TenantID: tenant, NoteID: note, ExpectedVersion: 4, ClientMutationID: "recovery-limit"}
+	if err := Setup(context.Background(), deps, cmd); err == nil {
+		t.Fatal("retry beyond the recovery generation succeeded")
+	}
+}
+
 func TestSetupRejectsUnavailableStateAndDependencies(t *testing.T) {
 	db := retryDB(t)
 	tenant, note := identity.NewID(), identity.NewID()

@@ -34,6 +34,8 @@ type Command struct {
 	IsParticipant    bool
 }
 
+const maxJobGenerations = 4
+
 // Setup creates one new generation and its outbox event for a recoverable note.
 func Setup(ctx context.Context, deps Dependencies, cmd Command) error {
 	if deps.DB == nil || cmd.TenantID == (identity.ID{}) || cmd.NoteID == (identity.ID{}) || cmd.ExpectedVersion < 1 || cmd.ClientMutationID == "" {
@@ -167,7 +169,7 @@ func Setup(ctx context.Context, deps Dependencies, cmd Command) error {
 		if err := tx.Raw("SELECT coalesce(max(generation),0)+1 FROM transcription.jobs WHERE tenant_id=? AND note_id=?", cmd.TenantID, cmd.NoteID).Scan(&generation).Error; err != nil {
 			return err
 		}
-		if generation > 3 {
+		if generation > maxJobGenerations {
 			return apperror.New(apperror.RetryUnavailable, "noteId", "O limite de tentativas foi atingido.")
 		}
 		now := time.Now().UTC()
