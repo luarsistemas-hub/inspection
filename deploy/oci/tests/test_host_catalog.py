@@ -23,6 +23,7 @@ class HostCatalogTests(unittest.TestCase):
             host.mkdir(parents=True)
             shutil.copy2(OCI / "components.json", release_oci / "components.json")
             shutil.copy2(HOST / "component-catalog.sh", host / "component-catalog.sh")
+            shutil.copy2(HOST / "compose-profiles.sh", host / "compose-profiles.sh")
             smoke = HOST / "smoke.sh"
             script = smoke.read_text().replace("/etc/inspection", str(root / "etc/inspection"))
             target = host / "smoke.sh"

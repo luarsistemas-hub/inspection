@@ -1,5 +1,6 @@
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
 SOURCE = REPO / "deploy/oci/host/deploy-release.sh"
+HOST = REPO / "deploy/oci/host"
 RELEASE = "a" * 40
 
 
@@ -23,6 +25,7 @@ class DeployReleaseTests(unittest.TestCase):
         candidate = root / "opt/inspection/releases" / RELEASE / "deploy/oci"
         candidate.mkdir(parents=True)
         (candidate / "host").mkdir()
+        shutil.copy2(HOST / "compose-profiles.sh", candidate / "host/compose-profiles.sh")
         (candidate / "host/smoke.sh").write_text('#!/bin/bash\n[ "$FAILURE" != smoke ]\n')
         (candidate / "host/smoke.sh").chmod(0o755)
         (previous / "compose.yaml").write_text("name: inspection\n")
